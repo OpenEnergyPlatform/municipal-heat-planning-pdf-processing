@@ -8,6 +8,7 @@ from docpipe.extraction import runner
 from docpipe.extraction.pipeline import Source
 from docpipe.extraction.runner import _parameter_payload, _parse_reply, stale
 from docpipe.extraction.spec import load
+from tests.prompt_ceilings import with_max_tokens
 
 SPEC = load({"parameters": [{
     "uri": "OEO_00050016",
@@ -15,7 +16,7 @@ SPEC = load({"parameters": [{
     "description": "Endenergieverbrauch je Energieträger, Sektor und Jahr, "
                    "wie im Plan bilanziert.",
     "unit_target": "OEO_00050008",
-    "units_accepted": {"MWh/a": 1.0},
+    "units_accepted": {"MWh/a": {"factor": 1.0, "names_period": True}},
     "axes": {"carrier": {"vocabulary": {"OEO_00000292": ["Erdgas", "Gas"]}},
              "year": {"type": "int"}},
     "example": {"source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
@@ -54,6 +55,61 @@ def test_parameter_payload_offers_classes_not_a_flat_label_list():
     assert "example" in payload and payload["units_accepted"] == ["MWh/a"]
 
 
+def _row_that_a_top_up_re_read(slots):
+    """A stored row as it is after a top-up: every coordinate with its
+    evidence, and the ones the top-up read pointing at its entry."""
+    row = {"value": 42005, "unit": "MWh/a", "quote": "Erdgas | 42.005"}
+    for position, slot in enumerate(slots, start=1):
+        row.update({slot.name: "x", f"{slot.name}_state": "read",
+                    f"{slot.name}_raw": "wort", f"{slot.name}_quote": "stelle",
+                    f"{slot.name}_source": ["table", 1],
+                    f"{slot.name}_producer": position})
+    return row
+
+
+def test_who_read_a_coordinate_is_not_echoed_to_the_model():
+    """A row the harvest read earlier is handed back as `prior`, so the model
+    does not return the same value from the next passage. A key that says
+    which pass re-read a coordinate says nothing about the value, and shown it
+    would change a request the harvest never wrote it for."""
+    from docpipe.extraction import fields
+    slots = fields.axis_slots(SPEC.parameters[0])
+    row = _row_that_a_top_up_re_read(slots)
+    assert [k for k in row if k.endswith("_producer")], "the row carries them"
+    (shown,) = runner._prior_payload([row])
+    assert not [k for k in shown if k.endswith("_producer")]
+    assert shown["value"] == 42005, "and the filter did not empty the row"
+    # the filter is the suffix list: a key it does not name is echoed
+    (control,) = runner._prior_payload([{**row, "carrier_note": 1}])
+    assert control["carrier_note"] == 1
+
+
+@pytest.mark.parametrize("profile", ["kwp", "scenarios"])
+def test_a_rows_request_is_the_same_whether_or_not_a_row_carries_a_pointer(
+        profile, monkeypatch):
+    """The harvest writes no pointer, so the requests of both profiles are
+    what they were. A top-up that wrote one must not change them either."""
+    import json as _json
+    from pathlib import Path
+    from docpipe.extraction import fields
+    from docpipe.extraction.pipeline import WorkItem, group_items
+    monkeypatch.setenv("DOCPIPE_PROFILE", profile)
+    spec = load(Path(__file__).resolve().parent.parent / "profiles" / profile
+                / "extraction_spec.json")
+    parameter = next(p for p in spec.parameters if fields.axis_slots(p))
+    batch = group_items([WorkItem(7, parameter, Source(
+        "table", 1, "| Erdgas | 42.005 | MWh/a |", {"page": 3}))])[0]
+    slots = fields.axis_slots(parameter)
+    with_pointer = _row_that_a_top_up_re_read(slots)
+    without = {k: v for k, v in with_pointer.items()
+               if not k.endswith("_producer")}
+    sent = [_json.dumps(runner._batch_payload(batch, [row], spec),
+                        ensure_ascii=False, indent=2)
+            for row in (with_pointer, without)]
+    assert sent[0] == sent[1]
+    assert "_producer" not in sent[0]
+
+
 def test_everything_is_stale_without_a_stamp(tmp_path):
     assert stale(tmp_path / "none.json", {"a": "1"}) == ["a"]
 
@@ -69,6 +125,214 @@ def test_only_a_changed_ontology_key_is_stale(tmp_path):
     assert stale(stamp, {**stored, "model": "other", "anchors": "b",
                          "extraction/field": "g"}) == []
     assert stale(stamp, {**stored, "axis/p/carrier": "2"}) == ["axis/p/carrier"]
+
+
+# ---------------------------------------------------------------------------
+# Another PDF under the same name
+#
+# Promised: a stamp that records another sha256 than the one the run reads
+# makes the document stale exactly as a changed ontology key does (named in a
+# warning, skipped, re-read only with --force-stale, then stamped anew), AND a
+# stamp that does not carry the key is not compared, AND neither is a run whose
+# database records no checksum.
+# ---------------------------------------------------------------------------
+def _pdf(sha, size=10):
+    return {"sha256": sha * 64, "bytes": size}
+
+
+def _runner_warnings(caplog):
+    return [r for r in caplog.records
+            if r.levelname == "WARNING" and r.name == runner.log.name]
+
+
+def test_another_sha256_than_the_stored_one_is_stale_and_the_size_alone_is_not(
+        tmp_path):
+    stamp = tmp_path / "s.json"
+    stored = {"axis/p/carrier": "1", "document": _pdf("a")}
+    stamp.write_text(json.dumps(stored), encoding="utf-8")
+    assert stale(stamp, stored) == []
+    assert stale(stamp, {**stored, "document": _pdf("b")}) == ["document"]
+    # the size is recorded and never compared
+    assert stale(stamp, {**stored, "document": _pdf("a", size=99)}) == []
+    # beside an ontology key, both are named
+    assert stale(stamp, {"axis/p/carrier": "2", "document": _pdf("b")}) \
+        == ["axis/p/carrier", "document"]
+
+
+@pytest.mark.parametrize("stored, current", [
+    ({"axis/p/carrier": "1"}, {"document": _pdf("b")}),     # a stamp from before
+    ({"document": _pdf("a")}, {}),                          # a database with none
+    ({"document": None}, {"document": _pdf("b")}),
+    ({"document": {"bytes": 3}}, {"document": _pdf("b")}),  # no sha256 stored
+    ({"document": _pdf("a")}, {"document": {"bytes": 3}}),  # none read
+])
+def test_a_document_that_one_side_cannot_name_is_not_compared(
+        tmp_path, stored, current):
+    """Otherwise the first run after the key arrived would report every stored
+    document stale: about 93 GPU hours over a sentence the stamps never held."""
+    stamp = tmp_path / "s.json"
+    stamp.write_text(json.dumps({"axis/p/carrier": "1", **stored}),
+                     encoding="utf-8")
+    assert stale(stamp, {"axis/p/carrier": "1", **current}) == []
+
+
+def test_a_stamp_that_cannot_be_read_names_no_other_pdf(tmp_path):
+    stamp = tmp_path / "s.json"
+    assert stale(stamp, {"a": "1", "document": _pdf("a")}) == ["a"]
+    stamp.write_text("{broken", encoding="utf-8")
+    assert stale(stamp, {"a": "1", "document": _pdf("a")}) == ["a"]
+
+
+def _harvested_from(tmp_path, monkeypatch, content):
+    """plan_x harvested once while the database says `content` of it."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    monkeypatch.setattr(runner, "DOCUMENT_CONTENT", dict(content))
+    calls = []
+
+    def retrieve(query, document_id, exclude):
+        return [] if ("table", 1) in exclude else \
+            [Source("table", 1, "| Erdgas | 42.005 | MWh/a |", {"page": 3})]
+
+    def harvest(batch, prior=None):
+        calls.extend(i.source.owner_id for i in batch.items)
+        return {"tuples": [{"source": "Q1", "value": 42005, "unit_raw": "MWh/a",
+                            "carrier": "Erdgas", "quote": "Erdgas | 42.005"}],
+                "status": "complete", "need_more": []}
+
+    deps = {"retrieve": _per_probe(retrieve), "harvest": harvest}
+    args = (7, "plan_x", tmp_path, SPEC, "sha-1", ["{label}"], deps)
+    runner.run_document(*args)
+    assert calls == [1]
+    return args, calls
+
+
+def test_a_document_with_another_pdf_is_named_skipped_and_redone_only_when_asked(
+        tmp_path, monkeypatch, caplog):
+    args, calls = _harvested_from(tmp_path, monkeypatch,
+                                  {"plan_x": _pdf("a")})
+    stamp = tmp_path / "plan_x.stamp.json"
+    assert json.loads(stamp.read_text())["document"] == _pdf("a")
+
+    # the same file again: current, said so, nothing redone
+    with caplog.at_level("INFO", logger="docpipe.extraction.runner"):
+        runner.run_document(*args)
+    assert calls == [1] and "is current" in caplog.text
+    caplog.clear()
+
+    # another file under the same name
+    runner.DOCUMENT_CONTENT["plan_x"] = _pdf("b")
+    with caplog.at_level("INFO", logger="docpipe.extraction.runner"):
+        runner.run_document(*args)
+    assert calls == [1], "stale without --force-stale only warns"
+    warned = _runner_warnings(caplog)
+    assert len(warned) == 1 and "plan_x" in warned[0].getMessage()
+    assert "another PDF" in warned[0].getMessage()
+    assert "--force-stale" in warned[0].getMessage()
+    assert "is current" not in caplog.text
+    # and the stamp still says what it read
+    assert json.loads(stamp.read_text())["document"] == _pdf("a")
+
+    # redone on request, and stamped anew
+    runner.run_document(*args, force_stale=True)
+    assert calls == [1, 1]
+    assert json.loads(stamp.read_text())["document"] == _pdf("b")
+    caplog.clear()
+    with caplog.at_level("INFO", logger="docpipe.extraction.runner"):
+        runner.run_document(*args)
+    assert calls == [1, 1] and "is current" in caplog.text
+    assert not _runner_warnings(caplog)
+
+
+def test_the_warning_names_the_ontology_key_and_the_pdf_when_both_moved(
+        tmp_path, monkeypatch, caplog):
+    args, calls = _harvested_from(tmp_path, monkeypatch,
+                                  {"plan_x": _pdf("a")})
+    runner.DOCUMENT_CONTENT["plan_x"] = _pdf("b")
+    real = runner.fingerprints
+    monkeypatch.setattr(runner, "fingerprints", lambda spec: {
+        **real(spec), "axis/OEO_00050016/carrier": "moved"})
+    caplog.clear()
+    with caplog.at_level("WARNING", logger="docpipe.extraction.runner"):
+        runner.run_document(*args)
+    assert calls == [1]
+    (warned,) = [r.getMessage() for r in caplog.records]
+    assert "older axis/OEO_00050016/carrier" in warned
+    assert "another PDF" in warned
+
+
+def test_a_stamp_from_before_the_key_is_not_made_stale_by_it(
+        tmp_path, monkeypatch, caplog):
+    """The corpus on disk carries no `document`. Compared, every one of its
+    stamps would read stale on the first run after the upgrade."""
+    args, calls = _harvested_from(tmp_path, monkeypatch, {})
+    stamp = tmp_path / "plan_x.stamp.json"
+    assert "document" not in json.loads(stamp.read_text())
+    runner.DOCUMENT_CONTENT["plan_x"] = _pdf("b")
+    with caplog.at_level("INFO", logger="docpipe.extraction.runner"):
+        runner.run_document(*args)
+    assert calls == [1] and "is current" in caplog.text
+    assert not _runner_warnings(caplog)
+
+
+def test_a_database_that_records_no_checksum_leaves_the_document_current(
+        tmp_path, monkeypatch, caplog):
+    args, calls = _harvested_from(tmp_path, monkeypatch,
+                                  {"plan_x": _pdf("a")})
+    runner.DOCUMENT_CONTENT.clear()
+    with caplog.at_level("INFO", logger="docpipe.extraction.runner"):
+        runner.run_document(*args)
+    assert calls == [1] and "is current" in caplog.text
+
+
+def test_a_harvests_stamp_lists_only_the_harvest(tmp_path, monkeypatch):
+    """Nothing new in a harvest: the position a top-up points at is the one
+    after the harvest's own entry, and a file's rows carry no `_producer` (held
+    in tests/test_extraction_fieldwise.py, where rows are filled)."""
+    _args, _calls = _harvested_from(tmp_path, monkeypatch, {})
+    stamp = json.loads((tmp_path / "plan_x.stamp.json").read_text())
+    assert [p["pass"] for p in stamp["producers"]] == ["harvest"]
+    rows = [json.loads(line) for line in
+            (tmp_path / "plan_x.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()]
+    assert not [k for r in rows for k in r if k.endswith("_producer")]
+
+
+def test_the_pdf_a_run_names_is_the_database_s_and_nothing_when_it_has_none(
+        monkeypatch):
+    monkeypatch.setattr(runner, "DOCUMENT_CONTENT", {"plan_x": _pdf("a")})
+    assert runner.document_current("plan_x") == {"document": _pdf("a")}
+    assert runner.document_current("plan_y") == {}, "no checksum, no claim"
+
+
+@pytest.mark.parametrize("stored, current, moved", [
+    ({"document": _pdf("a")}, {"document": _pdf("b")}, True),
+    ({"document": _pdf("a")}, {"document": _pdf("a")}, False),
+    ({"document": _pdf("a")}, {"document": _pdf("a", size=99)}, False),
+    ({}, {"document": _pdf("b")}, False),                   # a stamp from before
+    ({"document": _pdf("a")}, {}, False),                   # a database with none
+    ({"document": "a" * 64}, {"document": _pdf("b")}, False),   # not a record
+])
+def test_a_pdf_has_moved_only_when_both_sides_name_another_sha256(
+        stored, current, moved):
+    assert runner.document_moved(stored, current) is moved
+
+
+def test_a_stale_pdf_leaves_nothing_to_harvest_and_the_run_does_not_fail(
+        tmp_path, monkeypatch):
+    """What `main` counts: the document is left out of the run, which is the
+    same "nothing to harvest" it ends on, with exit code 0, for any other stale
+    key. --force-stale puts it back."""
+    args, _calls = _harvested_from(tmp_path, monkeypatch,
+                                   {"plan_x": _pdf("a")})
+    documents = [(7, "plan_x.pdf")]
+    assert runner.documents_to_harvest(documents, tmp_path, "sha-1",
+                                       spec=SPEC) == []
+    runner.DOCUMENT_CONTENT["plan_x"] = _pdf("b")
+    assert runner.documents_to_harvest(documents, tmp_path, "sha-1",
+                                       spec=SPEC) == []
+    assert runner.documents_to_harvest(documents, tmp_path, "sha-1", spec=SPEC,
+                                       force_stale=True) == documents
 
 
 def _per_probe(fn):
@@ -156,12 +420,6 @@ def test_a_source_the_model_never_answered_is_a_visible_hole(tmp_path, monkeypat
             (tmp_path / "plan_y.jsonl").read_text(encoding="utf-8").splitlines()]
     assert rows and rows[0]["kind"] == "refusal"
     assert rows[0]["claim"]["_harvest_failed"] is True
-
-
-def test_candidate_tokens_cover_units_label_and_vocabulary():
-    from docpipe.extraction.runner import _candidate_tokens
-    tokens = _candidate_tokens(SPEC.parameters[0])
-    assert {"MWh/a", "Endenergieverbrauch", "Erdgas", "Gas"} <= set(tokens)
 
 
 def test_serialize_walks_only_accepted_tuples(tmp_path):
@@ -404,6 +662,26 @@ def test_the_image_root_follows_the_pdf_root():
         == Path("data/kwp/pdf/processed")
 
 
+def test_the_help_of_pdf_root_says_what_the_option_does(capsys):
+    """It once promised a digit-exact native check, which no code does: the
+    option places a section's quote on its page and says where the crops are.
+    Each sentence of the help is held against the call that does it."""
+    from pathlib import Path
+
+    with pytest.raises(SystemExit):
+        runner.main(["--help"])
+    said = " ".join(capsys.readouterr().out.split())
+    assert "digit-exact" not in said
+    assert "the flag not_located" in said
+    assert "Tables and figures are not compared with the PDF" in said
+    assert "ROOT/processed" in said
+    # "Without it no quote is looked up"
+    assert runner.make_locate(Path("none.db"), None) is None
+    # "the crops are read from ROOT/processed unless --image-root is given"
+    assert runner.resolve_image_root(Path("data/pdf"), Path("elsewhere")) \
+        == Path("data/pdf/processed")
+
+
 def test_the_context_budget_holds_a_full_window_and_a_crop():
     """The number goes to --max-model-len as a floor. It has to cover the
     largest request the run can actually build, or the server rejects it."""
@@ -414,6 +692,79 @@ def test_the_context_budget_holds_a_full_window_and_a_crop():
     budget = runner.context_budget(Prompt())
     assert budget > runner.MAX_SOURCE_CHARS // 3 + 4096
     assert budget > 1200, "the crop counts too"
+
+
+def test_the_context_budget_counts_every_list_a_reading_request_carries():
+    """A request planned for no parameter sends every parameter's class
+    lists at once. The budget measured the widest single parameter, and a
+    profile with four lists outgrew it without a number changing."""
+    from docpipe.extraction.spec import load as load_spec
+
+    class Prompt:
+        text = "wort " * 500
+        meta = {"max_tokens": 4096}
+
+    def spec(lists: int):
+        classes = {f"https://example.org/c{n}": [f"class number {n}"]
+                   for n in range(200)}
+        example = {"source": "The study covers class number 1 in full.",
+                   "tuples": [{"value": "class number 1",
+                               "quote": "The study covers class number 1 in "
+                                        "full."}]}
+        return load_spec({"parameters": [
+            {"uri": f"tag_{index}", "label": f"Tag {index}",
+             "description": "One of the classes the study is tagged with, "
+                            "chosen from the list.",
+             "value_type": "category", "vocabulary": classes,
+             "example": example} for index in range(lists)]})
+
+    one, four = spec(1), spec(4)
+    grown = runner.context_budget(Prompt(), four) \
+        - runner.context_budget(Prompt(), one)
+    carried = len(json.dumps(runner._quantities_payload(four))) \
+        - len(json.dumps(runner._quantities_payload(one)))
+    assert carried > 10000, "the fixture has to carry real lists"
+    # A single parameter rides with its example, which the list of all of
+    # them leaves out: that is the thousand characters of slack.
+    assert grown >= (carried - 1000) // 3, (
+        "three more lists in every reading request, and the budget did not "
+        "grow by them")
+
+
+def test_the_context_budget_counts_the_widest_single_parameter():
+    """The other shape of a request: planned for one parameter, it carries
+    that parameter whole, with the class list of every axis. The list of all
+    parameters leaves the axes out, so a budget measured on it alone would
+    undersize the request for a parameter whose axis is the long list."""
+    from docpipe.extraction.spec import load as load_spec
+
+    class Prompt:
+        text = "wort " * 500
+        meta = {"max_tokens": 4096}
+
+    def spec(classes: int):
+        kinds = {f"https://example.org/c{n}": [f"class number {n}"]
+                 for n in range(classes)}
+        quote = "The measure of class number 1 is a new grid."
+        return load_spec({"parameters": [
+            {"uri": "measure", "label": "Measure",
+             "description": "A measure, of one of the kinds in the list.",
+             "value_type": "text", "axes": {"kind": {"vocabulary": kinds}},
+             "example": {"source": quote, "tuples": [
+                 {"value": "a new grid", "kind": "class number 1",
+                  "quote": quote}]}}]})
+
+    short, long = spec(200), spec(600)
+    assert runner._quantities_payload(short) \
+        == runner._quantities_payload(long), "the axis is in neither"
+    grown = runner.context_budget(Prompt(), long) \
+        - runner.context_budget(Prompt(), short)
+    carried = len(json.dumps(runner._parameter_payload(long.parameters[0]))) \
+        - len(json.dumps(runner._parameter_payload(short.parameters[0])))
+    assert carried > 8000, "the fixture has to carry a real list"
+    assert grown >= carried // 3 - 1, (
+        "four hundred more classes on an axis, and the budget did not grow "
+        "by them")
 
 
 def test_a_refused_request_is_not_retried(monkeypatch):
@@ -514,7 +865,8 @@ def test_anchors_that_never_arrive_leave_the_templates_alone():
     spec = load({"parameters": [{
         "uri": "OEO_00050016", "label": "Endenergieverbrauch",
         "description": "the energy delivered to and consumed by end users",
-        "unit_target": "OEO_00050008", "units_accepted": {"MWh/a": 1.0},
+        "unit_target": "OEO_00050008", "units_accepted": {
+            "MWh/a": {"factor": 1.0, "names_period": True}},
         "axes": {"year": {"type": "int", "question": "Welches Jahr?"}},
         "example": {"source": "| x | 5 | MWh/a |",
                     "tuples": [{"value": 5, "unit_raw": "MWh/a"}]}}]})
@@ -764,14 +1116,21 @@ def test_a_truncated_reply_is_never_read_as_an_answer(monkeypatch):
         "nothing from a cut-off reply is kept")
 
 
-# What the server is started with, not what the model could hold. The model
-# this stage runs against holds 262,144 tokens natively, and serving that
-# would spend on KV cache what the run wants for parallelism: 128 requests in
-# flight is what makes a corpus finish, and every one of them fits in 32k.
-# A budget over what IS served is not a tuning question, it is a run that
-# never begins — the request is refused mid-run and the document keeps
-# nothing.
+# What the server is started with at least, not what the model could hold.
+# The model this stage runs against holds 262,144 tokens natively, and serving
+# that would spend on KV cache what the run wants for parallelism: 128
+# requests in flight is what makes a corpus finish. The job serves the larger
+# of this and the profile's own budget, so a budget above it is a wider
+# window and fewer requests in flight, not a refused request.
 SERVED_WINDOW = 32768
+# The widest window a profile may ask the job to serve. Decided 2026-10-03
+# for the scenarios profile, whose reading requests carry the platform's four
+# class lists: a quarter above the usual window is the price of offering the
+# lists whole, and beyond it the lists would have to be cut instead.
+WINDOW_CEILING = 40960
+# The profile whose corpus is large enough that the window is its throughput.
+# It stays inside the usual one.
+WITHIN_SERVED = ("kwp",)
 
 # For the sizing assertion below. A source that yields at all yields 12 tuples
 # at the 90th percentile, measured over the finished pilots. Characters per
@@ -783,34 +1142,44 @@ CHARS_PER_TOKEN = 2.62
 
 
 def _profile_specs():
-    """Every profile that has an extraction spec, as (name, Spec, prompt)."""
+    """Every profile that has an extraction spec, as (name, Spec, framed):
+    whether the profile names frame axes, which decides if its harvest sends
+    a frame request."""
     import json
     import os
     from pathlib import Path
+    from docpipe.extraction import fields
     from docpipe.extraction.spec import load as load_spec
+    from docpipe.profile import load_profile
     root = Path(__file__).resolve().parent.parent / "profiles"
     for spec_file in sorted(root.glob("*/extraction_spec.json")):
         name = spec_file.parent.name
         os.environ["DOCPIPE_PROFILE"] = name
-        yield (name,
-               load_spec(json.loads(spec_file.read_text(encoding="utf-8"))),
-               runner.prompts.load("extraction/harvest"))
+        spec = load_spec(json.loads(spec_file.read_text(encoding="utf-8")))
+        yield (name, spec, bool(fields.frame_slots(
+            spec, load_profile(name).component("extraction", "FRAME") or ())))
 
 
 def test_every_profile_fits_the_window_it_will_be_served(monkeypatch):
     """The test that was missing. max_tokens lives in a prompt's frontmatter
     and BATCH_SOURCES lives in this module, and until a pilot burned five GPUs
     nothing had ever compared them. The job script serves
-    max(context_budget, 32768) as --max-model-len, so a budget over the
-    model's own ceiling is a server that refuses to start."""
+    max(request_budget, 32768) as --max-model-len, so a budget that grows
+    unnoticed is a window that grows unnoticed, and a run that loses the
+    parallelism it was sized for."""
     monkeypatch.setenv("DOCPIPE_PROFILE", "kwp")
     checked = 0
-    for name, spec, prompt in _profile_specs():
-        budget = runner.context_budget(prompt, spec)
-        assert budget <= SERVED_WINDOW, (
-            f"{name}: budget {budget} over the {SERVED_WINDOW} the model holds")
-        assert budget > int(prompt.meta["max_tokens"]), (
-            f"{name}: the answer cannot be the whole request")
+    for name, spec, framed in _profile_specs():
+        budget = runner.request_budget(spec, framed)
+        limit = SERVED_WINDOW if name in WITHIN_SERVED else WINDOW_CEILING
+        assert budget <= limit, (
+            f"{name}: budget {budget} over the {limit} this profile may ask "
+            f"the job to serve")
+        for prompt_id in runner.sent_prompt_ids(framed):
+            assert budget > int(runner.prompts.load(
+                prompt_id).meta["max_tokens"]), (
+                f"{name}: the answer of {prompt_id} cannot be the whole "
+                f"request")
         checked += 1
     assert checked >= 2, "the profiles stopped being found"
 
@@ -821,8 +1190,8 @@ def test_the_answer_budget_covers_a_full_batch(monkeypatch):
     source per request 4096 was already marginal; at six it was the defect
     that killed a pilot."""
     monkeypatch.setenv("DOCPIPE_PROFILE", "kwp")
-    for name, spec, prompt in _profile_specs():
-        fitted = runner.fit_batch_sources(prompt, spec)
+    for name, spec, _framed in _profile_specs():
+        fitted = runner.batch_sources_for(spec)
         assert fitted >= 1, f"{name}: not even one source fits the answer budget"
         # Sizing is the profile's own: the spec's example IS the contract the
         # prompt shows the model, so a batch that fits it is a batch the model
@@ -831,8 +1200,159 @@ def test_the_answer_budget_covers_a_full_batch(monkeypatch):
         if fitted < runner.BATCH_SOURCES:
             # It fits because it was made to. Check the next size up really
             # does not, or the clamp is just pessimism.
-            bigger = runner.fit_batch_sources(prompt, spec, wanted=fitted + 1)
+            bigger = runner.fit_batch_sources(
+                runner.prompts.load(runner.ROWS_PROMPT_ID), spec,
+                wanted=fitted + 1)
             assert bigger == fitted, f"{name}: the clamp is too tight"
+
+
+# What a prompt's max_tokens does to the two numbers a run takes from the
+# prompts it sends. Promised: the sources per request follow the rows request
+# AND no other, the window follows the largest of the requests the run sends
+# AND nothing it does not send. Each half is asserted by itself, with a case
+# that breaks it by construction: a prompt given a ceiling of its own.
+
+def _spec_of(name, monkeypatch):
+    # First, so that the variable `_profile_specs` sets is put back as it was.
+    monkeypatch.setenv("DOCPIPE_PROFILE", name)
+    for found, spec, framed in _profile_specs():
+        if found == name:
+            monkeypatch.setenv("DOCPIPE_PROFILE", name)
+            return spec, framed
+    raise AssertionError(f"no profile {name}")
+
+
+@pytest.mark.parametrize("name, sources", [("kwp", 6), ("scenarios", 3)])
+def test_the_sources_per_request_of_a_profile_are_the_ones_its_rows_prompt_allows(
+        monkeypatch, name, sources):
+    spec, _framed = _spec_of(name, monkeypatch)
+    assert runner.batch_sources_for(spec) == sources
+
+
+@pytest.mark.parametrize("name", ["kwp", "scenarios"])
+def test_the_sources_per_request_ignore_every_prompt_but_the_rows_one(
+        monkeypatch, name):
+    spec, framed = _spec_of(name, monkeypatch)
+    before = runner.batch_sources_for(spec)
+    others = [pid for pid in (*runner.PROMPT_IDS, runner.REVIEW_PROMPT_ID)
+              if pid != runner.ROWS_PROMPT_ID]
+    with_max_tokens(monkeypatch, {pid: 1024 for pid in others})
+    assert runner.batch_sources_for(spec) == before
+
+
+@pytest.mark.parametrize("name", ["kwp", "scenarios"])
+def test_a_rows_prompt_that_may_write_less_takes_sources_from_the_batch(
+        monkeypatch, name):
+    """The case that violates the half above by construction: the same ceiling
+    on the rows prompt is the one that moves the number, down to one source."""
+    spec, _framed = _spec_of(name, monkeypatch)
+    with_max_tokens(monkeypatch, {runner.ROWS_PROMPT_ID: 1024})
+    assert runner.batch_sources_for(spec) == 1
+
+
+def test_the_window_is_the_largest_of_the_requests_the_run_sends(monkeypatch):
+    for name in ("kwp", "scenarios"):
+        spec, framed = _spec_of(name, monkeypatch)
+        each = {pid: runner.context_budget(runner.prompts.load(pid), spec)
+                for pid in runner.sent_prompt_ids(framed)}
+        assert runner.request_budget(spec, framed) == max(each.values()), name
+        assert len(each) == (5 if framed else 4), each
+
+
+def test_the_window_follows_the_prompt_that_asks_for_the_most(monkeypatch):
+    """Built to fail: each request kind in turn answers more than any other,
+    and the window has to move to it, by the same amount."""
+    spec, framed = _spec_of("kwp", monkeypatch)
+    base = {pid: runner.context_budget(runner.prompts.load(pid), spec)
+            for pid in runner.sent_prompt_ids(framed)}
+    for pid in runner.sent_prompt_ids(framed):
+        with_max_tokens(monkeypatch, {pid: 30000})
+        grown = runner.context_budget(runner.prompts.load(pid), spec)
+        assert grown > max(base.values())
+        assert runner.request_budget(spec, framed) == grown, pid
+
+
+def test_a_frame_request_counts_for_a_framed_profile_and_for_no_other(
+        monkeypatch):
+    """The frame prompt is sent only when the profile has frame axes. A huge
+    one moves the window of a framed profile, and leaves an unframed
+    profile's alone: nothing there ever asks for a frame."""
+    spec, framed = _spec_of("kwp", monkeypatch)
+    assert framed
+    plain = runner.request_budget(spec, False)
+    with_max_tokens(monkeypatch, {runner.FRAME_PROMPT_ID: 30000})
+    huge = runner.context_budget(runner.prompts.load(runner.FRAME_PROMPT_ID),
+                                 spec)
+    assert runner.request_budget(spec, True) == huge
+    assert runner.request_budget(spec, False) == plain < huge
+    spec, framed = _spec_of("scenarios", monkeypatch)
+    assert not framed
+    assert runner.request_budget(spec, framed) == runner.request_budget(
+        spec, False)
+
+
+def test_a_prompt_no_request_carries_does_not_size_the_window(monkeypatch):
+    """The queries and the review are not sent by a harvest as one of its
+    requests: a huge one changes nothing."""
+    spec, framed = _spec_of("kwp", monkeypatch)
+    base = runner.request_budget(spec, framed)
+    with_max_tokens(monkeypatch, {runner.QUERIES_PROMPT_ID: 30000,
+                                   runner.REVIEW_PROMPT_ID: 30000})
+    assert runner.request_budget(spec, framed) == base
+
+
+def _printed(tmp_path, capsys) -> int:
+    code = runner.main([str(tmp_path / "db"), str(tmp_path / "ix"),
+                        str(tmp_path / "out"), "--print-context-budget"])
+    assert code == 0
+    return int(capsys.readouterr().out.split()[-1])
+
+
+@pytest.mark.parametrize("name, widest", [("kwp", runner.FIELD_PROMPT_ID),
+                                          ("scenarios", runner.ROWS_PROMPT_ID)])
+def test_the_command_prints_the_window_of_the_requests_it_sends(
+        monkeypatch, capsys, tmp_path, name, widest):
+    """`--print-context-budget` is what the job serves the model with: the
+    largest request of the run, which for kwp is the field request and for
+    scenarios the rows request."""
+    spec, framed = _spec_of(name, monkeypatch)
+    printed = _printed(tmp_path, capsys)
+    assert printed == runner.request_budget(spec, framed)
+    assert printed == runner.context_budget(runner.prompts.load(widest), spec)
+
+
+@pytest.mark.parametrize("name", ["kwp", "scenarios"])
+def test_the_printed_window_moves_with_the_largest_prompt(
+        monkeypatch, capsys, tmp_path, name):
+    """Built to fail: the prompt the number rests on is given a ceiling of
+    30000 tokens, and a command that took its number from anywhere else would
+    print the old one."""
+    spec, framed = _spec_of(name, monkeypatch)
+    before = _printed(tmp_path, capsys)
+    with_max_tokens(monkeypatch, {pid: 30000
+                                   for pid in runner.sent_prompt_ids(framed)})
+    after = _printed(tmp_path, capsys)
+    assert after > before
+    assert after == runner.request_budget(spec, framed)
+
+
+def test_the_printed_window_counts_the_frame_request_of_a_framed_profile_only(
+        monkeypatch, capsys, tmp_path):
+    """The command hands `request_budget` whether the profile has frame axes.
+    Built to fail: a frame prompt of 30000 tokens is the largest request of a
+    framed profile, so its window is that prompt's budget; for a profile with
+    no frame axes it is not a request and the printed window stays. A command
+    that always said 'no frame' would print the old number for the first."""
+    spec, framed = _spec_of("kwp", monkeypatch)
+    assert framed
+    with_max_tokens(monkeypatch, {runner.FRAME_PROMPT_ID: 30000})
+    huge = runner.context_budget(runner.prompts.load(runner.FRAME_PROMPT_ID),
+                                 spec)
+    assert _printed(tmp_path, capsys) == huge
+    spec, framed = _spec_of("scenarios", monkeypatch)
+    assert not framed
+    assert _printed(tmp_path, capsys) == runner.request_budget(spec, False)
+    assert _printed(tmp_path, capsys) < huge
 
 
 def test_the_computed_switch_can_never_be_shared():
@@ -1659,7 +2179,7 @@ def _spec(**changes):
             "Endenergieverbrauch je Energieträger, Sektor und Jahr, "
             "wie im Plan bilanziert."),
         "unit_target": "OEO_00050008",
-        "units_accepted": {"MWh/a": 1.0},
+        "units_accepted": {"MWh/a": {"factor": 1.0, "names_period": True}},
         "axes": {"carrier": {"vocabulary": dict(
                      {"OEO_00000292": ["Erdgas", "Gas"]},
                      **({"OEO_00000203": ["Klaergas"]}
@@ -1835,7 +2355,8 @@ def test_a_coordinate_the_spec_no_longer_asks_is_reported(tmp_path,
         "uri": "OEO_00050016", "label": "Endenergieverbrauch",
         "description": "Endenergieverbrauch je Energieträger, Sektor und "
                        "Jahr, wie im Plan bilanziert.",
-        "unit_target": "OEO_00050008", "units_accepted": {"MWh/a": 1.0},
+        "unit_target": "OEO_00050008", "units_accepted": {
+            "MWh/a": {"factor": 1.0, "names_period": True}},
         "axes": {"carrier": {"vocabulary": {"OEO_00000292": ["Erdgas",
                                                              "Gas"]}}},
         "example": {"source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
@@ -1949,7 +2470,7 @@ def test_the_written_summary_does_not_grade_where_a_passage_stands(
         "description": "Endenergieverbrauch je Energietraeger und Jahr, wie "
                        "im Plan bilanziert.",
         "unit_target": "OEO_00050008",
-        "units_accepted": {"MWh/a": 1.0},
+        "units_accepted": {"MWh/a": {"factor": 1.0, "names_period": True}},
         "axes": {"carrier": {"vocabulary": {"OEO_00000292": ["Erdgas"]}},
                  "year": {"type": "int"}},
         "example": {"source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
@@ -1989,7 +2510,7 @@ def test_a_parameter_nobody_answered_still_ends_with_a_state(tmp_path,
          "description": "Endenergieverbrauch je Jahr, so wie ihn der Plan "
                         "selbst bilanziert.",
          "unit_target": "OEO_00050008",
-         "units_accepted": {"MWh/a": 1.0},
+         "units_accepted": {"MWh/a": {"factor": 1.0, "names_period": True}},
          "axes": {"year": {"type": "int"}},
          "example": {"source": "| 42.005 | MWh/a | im Jahr 2020 |",
                      "tuples": [{"value": 42005, "unit_raw": "MWh/a"}]}},
@@ -2341,3 +2862,235 @@ def test_each_unreadable_reply_raises_the_temperature_of_the_retry():
     assert runner.retry_temperature(0, 2) == pytest.approx(
         2 * runner.RETRY_TEMPERATURE_STEP)
     assert runner.retry_temperature(0.95, 3) == 1.0
+
+import inspect
+
+
+# ---------------------------------------------------------------------------
+# Run robustness (audit of corpus_m5, 2026-09-23)
+# ---------------------------------------------------------------------------
+
+def _client_that(monkeypatch, errors, reply='{"answers": {}}'):
+    """A client whose create raises each of `errors` in turn and then
+    answers `reply`; every create's keyword arguments are recorded."""
+    calls = []
+    queue = list(errors)
+
+    class _Msg:
+        def __init__(self, content):
+            self.content = content
+            self.reasoning_content = ""
+
+    class _Choice:
+        def __init__(self, content):
+            self.message = _Msg(content)
+            self.finish_reason = "stop"
+
+    class _Resp:
+        def __init__(self, content):
+            self.choices = [_Choice(content)]
+            self.usage = None
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    calls.append(kw)
+                    if queue:
+                        raise queue.pop(0)
+                    return _Resp(reply)
+
+    monkeypatch.setattr(runner, "_client", lambda: _Client())
+    monkeypatch.setattr(runner.time, "sleep", lambda s: None)
+    return calls
+
+
+def _timeout(_monkeypatch=None):
+    from tests.conftest import api_error
+    return api_error("timed out", timeout=True)
+
+
+def _refused(_monkeypatch=None):
+    from tests.conftest import api_error
+    return api_error("no server", connection=True)
+
+
+def test_a_retry_after_a_timeout_waits_less_than_the_first_attempt(monkeypatch):
+    """A request the server never answered in its 1,800 s was retried with
+    the same 1,800 s: three attempts held a worker for 90 minutes on one
+    window. The retry gets the shorter budget; a connection refused at once
+    is not a timeout and keeps the client's own."""
+    from docpipe.extraction import fields
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
+    calls = _client_that(monkeypatch, [_timeout(monkeypatch)])
+    assert runner.make_field_asker()([], [], slot) == {"answers": {}}
+    assert "timeout" not in calls[0]
+    assert calls[1]["timeout"] == runner.RETRY_TIMEOUT
+    calls = _client_that(monkeypatch, [_refused(monkeypatch)])
+    assert runner.make_field_asker()([], [], slot) == {"answers": {}}
+    assert all("timeout" not in kw for kw in calls)
+    # The rows harvester walks the same path.
+    assert "RETRY_TIMEOUT" in inspect.getsource(runner.make_harvester)
+
+
+def test_the_field_pool_gives_up_on_a_dead_server_like_the_rows_pool(
+        monkeypatch):
+    """The rows pool has always had the streak; the field pool, 192 threads
+    of it, went on spending its retries against a server that was gone."""
+    from docpipe.extraction import fields
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
+    gave_up = []
+    dead = runner.DeadStreak(2)
+
+    def asker():
+        # The asker takes its client when it is made, so one per stubbed
+        # client; the streak is the run's and outlives them all.
+        return runner.make_field_asker(
+            dead=dead, on_give_up=lambda: gave_up.append(True))
+
+    calls = _client_that(monkeypatch, [_refused(monkeypatch)
+                                       for _ in range(runner.MAX_RETRIES)])
+    # No reply, as for any request that got nothing: the sweep goes on, and
+    # it is the streak that ends the run.
+    assert asker()([], [], slot) is None
+    assert len(calls) == runner.MAX_RETRIES
+    assert gave_up == [], "one request short of the streak"
+    calls = _client_that(monkeypatch, [_refused(monkeypatch)
+                                       for _ in range(runner.MAX_RETRIES)])
+    assert asker()([], [], slot) is None
+    assert gave_up == [True]
+    # An answer clears the streak.
+    dead = runner.DeadStreak(2)
+    gave_up = []
+    calls = _client_that(monkeypatch, [_refused(monkeypatch)])
+    assert asker()([], [], slot) == {"answers": {}}
+    assert not dead.hit(), "cleared by the answer, so this is the first miss"
+
+
+def test_the_retry_count_and_the_retry_timeout_are_run_settings():
+    """MAX_RETRIES was a constant: a run against a server that answers
+    slowly could not trade retries for throughput without a code change."""
+    import os
+    source = inspect.getsource(runner)
+    assert 'MAX_RETRIES = int(os.environ.get("EXTRACT_MAX_RETRIES"' in source
+    assert 'RETRY_TIMEOUT = int(os.environ.get("EXTRACT_RETRY_TIMEOUT"' in source
+    assert runner.MAX_RETRIES == int(os.environ.get("EXTRACT_MAX_RETRIES", "3"))
+    assert runner.RETRY_TIMEOUT == int(
+        os.environ.get("EXTRACT_RETRY_TIMEOUT", "600"))
+
+
+def test_documents_come_largest_first():
+    """Admission is bounded and a document lasts as long as its slowest
+    sweep. In filename order the tail of a run belonged to whichever plans
+    sort last: one long plan alone on four cards for hours."""
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        "CREATE TABLE Documents (id INTEGER PRIMARY KEY, filename TEXT,"
+        " is_current INTEGER);"
+        "CREATE TABLE Sections (id INTEGER PRIMARY KEY, document INTEGER);")
+    conn.executemany("INSERT INTO Documents VALUES (?, ?, 1)",
+                     [(1, "a.pdf"), (2, "b.pdf"), (3, "c.pdf"), (4, "d.pdf")])
+    conn.execute("INSERT INTO Documents VALUES (5, 'old.pdf', 0)")
+    conn.executemany("INSERT INTO Sections (document) VALUES (?)",
+                     [(1,)] * 2 + [(2,)] * 5 + [(3,)] * 2 + [(5,)] * 9)
+    conn.commit()
+    assert runner._documents(conn) == [
+        (2, "b.pdf"), (1, "a.pdf"), (3, "c.pdf"), (4, "d.pdf")]
+
+
+def test_a_page_is_laid_out_once_for_every_quote_on_it(tmp_path, monkeypatch):
+    """Sixty-four documents finish together and every located quote used to
+    queue behind whichever miss was laying out a page. A hit is a dict
+    lookup; only a miss enters MuPDF."""
+    import sqlite3
+    from docpipe.inference import pdf_locate
+    laid_out = []
+    monkeypatch.setattr(pdf_locate, "page_words",
+                        lambda path, page: laid_out.append(page) or ["w"])
+    monkeypatch.setattr(pdf_locate, "rects_from_words",
+                        lambda words, quote: [[0, 0, 1, 1]])
+    monkeypatch.delenv("EXTRACT_LOCATE", raising=False)
+    db = tmp_path / "plans.sqlite"
+    conn = sqlite3.connect(str(db))
+    conn.executescript("CREATE TABLE Documents (id INTEGER PRIMARY KEY,"
+                       " filename TEXT);"
+                       "INSERT INTO Documents VALUES (7, 'plan.pdf');")
+    conn.commit()
+    conn.close()
+    (tmp_path / "plan.pdf").write_bytes(b"%PDF-1.4")
+    locate = runner.make_locate(db, tmp_path)
+    source = Source("table", 1, "| Erdgas |", {"document_id": 7, "page": 3})
+    assert locate(source, "Erdgas") == [[0, 0, 1, 1]]
+    assert locate(source, "Erdgas 2022") == [[0, 0, 1, 1]]
+    assert laid_out == [3]
+
+
+# ---------------------------------------------------------------------------
+# The lists a document closes
+# ---------------------------------------------------------------------------
+
+def test_the_value_request_offers_the_documents_own_lists(monkeypatch):
+    """A category whose list depends on the document (the scenarios a
+    publication documents, the regions it names) is a choice only when the
+    request shows that list. The plan filled it and searched with it; the
+    value request was built from the run's spec and showed nothing."""
+    from pathlib import Path
+    from docpipe.extraction.pipeline import Source, WorkItem, group_items
+    from docpipe.extraction.spec import load as load_spec
+    monkeypatch.setenv("DOCPIPE_PROFILE", "scenarios")
+    spec = load_spec(json.loads(
+        (Path(__file__).resolve().parent.parent / "profiles" / "scenarios"
+         / "extraction_spec.json").read_text(encoding="utf-8")))
+    lists = {"scenario_label": {"EN_NPi2100": ["EN_NPi2100"]},
+             "scenario_region": {"https://example.org/region/Germany":
+                                 ["Germany"]}}
+    filled = runner.fill_dynamic_axes(spec, lists)
+    text = "The Current Policies scenario (CurPol) covers Germany."
+    seen = _stub_client(monkeypatch, [json.dumps(
+        {"tuples": [], "status": "complete", "need_more": []})] * 2, "stop")
+    harvest = runner.make_harvester(spec=spec)
+
+    def request(own):
+        batch = group_items([WorkItem(7, None, Source(
+            "section", 1, text, {"document_id": 7, "page": 3}))],
+            max_sources=runner.BATCH_SOURCES)[0]
+        batch.spec = own
+        harvest(batch, [])
+        user = seen[-1][1]["content"]
+        return user if isinstance(user, str) else "".join(
+            part.get("text", "") for part in user)
+
+    with_lists = request(filled)
+    assert '"EN_NPi2100"' in with_lists and '"Germany"' in with_lists
+    without = request(None)
+    assert '"EN_NPi2100"' not in without, "the run's spec holds no such list"
+
+
+def test_the_halves_of_a_cut_off_request_keep_the_documents_lists(monkeypatch):
+    """A reply cut off at the answer limit is asked again in two halves.
+    Each half is a request of the same document and offers the same lists."""
+    from pathlib import Path
+    from docpipe.extraction.pipeline import Source, WorkItem, group_items
+    from docpipe.extraction.spec import load as load_spec
+    monkeypatch.setenv("DOCPIPE_PROFILE", "scenarios")
+    spec = load_spec(json.loads(
+        (Path(__file__).resolve().parent.parent / "profiles" / "scenarios"
+         / "extraction_spec.json").read_text(encoding="utf-8")))
+    filled = runner.fill_dynamic_axes(
+        spec, {"scenario_label": {"EN_NPi2100": ["EN_NPi2100"]}})
+    text = "The Current Policies scenario (CurPol) covers Germany."
+    batch = group_items([WorkItem(7, None, Source(
+        "section", n, text, {"document_id": 7, "page": n}))
+        for n in range(2)], max_sources=runner.BATCH_SOURCES)[0]
+    batch.spec = filled
+    done = json.dumps({"tuples": [], "status": "complete", "need_more": []})
+    seen = _stub_client(monkeypatch, ['{"tuples": [', done, done], "length")
+    runner.make_harvester(spec=spec)(batch, [])
+    assert len(seen) == 3, "the whole request, then one per half"
+    for messages in seen:
+        user = messages[1]["content"]
+        user = user if isinstance(user, str) else "".join(
+            part.get("text", "") for part in user)
+        assert '"EN_NPi2100"' in user

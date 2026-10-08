@@ -7,8 +7,8 @@ one whose quote does not — including one that never had a quote at all — is
 removed rather than left standing as if it had been checked.
 
 And the stamps go with it, because a file rewritten by a rule its run never
-applied is not that run's output. Leaving the stamp is how 205 plans kept a
-whole-tuple harvest through a field-wise corpus run.
+applied is not that run's output. Leaving the stamp is how 205 plans kept an
+old harvest through a corpus run meant to redo them.
 """
 import json
 from pathlib import Path
@@ -69,7 +69,7 @@ def test_a_year_whose_caption_names_no_year_does_not_stay(tmp_path):
 
 
 def test_a_coordinate_with_no_quote_at_all_does_not_stay(tmp_path):
-    """What the whole-tuple contract produced: a coordinate and no passage.
+    """A coordinate and no passage, as an older harvest holds it.
 
     It was never checked and cannot be, so it does not get to look like a
     reading that was.
@@ -160,10 +160,15 @@ def test_a_rewritten_harvest_gets_a_rewritten_summary(tmp_path):
     assert len(rows) == 3 and rows[-1]["kind"] == "summary", "still last"
     assert rows[-1]["document_id"] == 857 and rows[-1]["tuples"] == 2
     # The first quote carries the wording and stays; the second does not and
-    # goes, and the coordinate is left for the next run to read. Neither is a
-    # doubt about the value, and the stale line claimed two.
-    assert rows[-1]["levels"] == {"A": 2, "B": 0, "C": 0}
-    assert rows[-1]["reasons"] == {}
+    # goes, and the coordinate is left for the next run to read -- which is
+    # a doubt about that value until the next run reads it (unanswered
+    # lowers the level, owner decision 2026-09-23). The stale line claimed
+    # two unbacked carriers; the rebuilt one says what the tuples now say.
+    assert rows[-1]["reasons"]["unanswered:carrier"] == 1
+    assert "unbacked:carrier" not in rows[-1]["reasons"]
+    # Every level is recomputed: the fixture's rows carry no other
+    # coordinate, so both are C for those.
+    assert rows[-1]["levels"] == {"A": 0, "B": 0, "C": 2}
 
 def test_a_recheck_does_not_turn_a_parameter_state_into_a_refusal(tmp_path):
     """This pass rewrites the tuples and rebuilds the summary from them, and

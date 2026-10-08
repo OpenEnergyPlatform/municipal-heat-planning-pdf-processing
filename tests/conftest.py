@@ -76,6 +76,9 @@ def _usage_db_outside_the_repo(tmp_path_factory):
 # profile — so importing one without a profile is an error, not a default.
 # Tests that care about another profile pass it explicitly.
 os.environ["DOCPIPE_PROFILE"] = "kwp"
+# And no project file: a docpipe.toml lying in or above the checkout is the
+# developer's, and the suite must not run under its settings.
+os.environ["DOCPIPE_CONFIG"] = ""
 
 
 # Which of the heavy libraries below are stand-ins rather than the real
@@ -123,6 +126,9 @@ class _StubAPIError(Exception):
 class _StubAPITimeoutError(_StubAPIError):
     pass
 
+class _StubAPIConnectionError(_StubAPIError):
+    pass
+
 
 class _DummyOpenAI:  # constructible vLLM client stand-in (never called under test)
     def __init__(self, *args, **kwargs):
@@ -138,11 +144,15 @@ _ensure_stub("openai", attrs={
     "OpenAI": _DummyOpenAI,
     "APIError": _StubAPIError,
     "APITimeoutError": _StubAPITimeoutError,
+    "APIConnectionError": _StubAPIConnectionError,
 })
 
 
-def api_error(message="boom", timeout=False):
+def api_error(message="boom", timeout=False, connection=False):
     """An `openai` error, built the way the INSTALLED openai wants it.
+
+    *timeout* is the request the server never answered in its budget,
+    *connection* the one it refused at once; the runner tells them apart.
 
     The stub above takes a message and nothing else. The real library's
     `APIError.__init__` takes `(message, request, *, body)` and raises
@@ -152,9 +162,12 @@ def api_error(message="boom", timeout=False):
     library is the one the run happens on, and this failed there and nowhere
     else for as long as the suite was only ever run here.
     """
-    kind = _real_openai().APITimeoutError if timeout else _real_openai().APIError
+    openai = _real_openai()
+    kind = (openai.APITimeoutError if timeout
+            else openai.APIConnectionError if connection else openai.APIError)
     for build in (lambda: kind(message, request=None, body=None),
                   lambda: kind(request=None),
+                  lambda: kind(message=message, request=None),
                   lambda: kind(message)):
         try:
             return build()
@@ -239,6 +252,15 @@ def _no_real_sleep(monkeypatch):
     import docpipe.visuals.vision as vis
     monkeypatch.setattr(s4.time, "sleep", lambda *a, **k: None)
     monkeypatch.setattr(vis.time, "sleep", lambda *a, **k: None)
+
+
+@pytest.fixture(autouse=True)
+def _no_served_window_from_another_test(monkeypatch):
+    """The window a preflight reported belongs to the test that ran it. A
+    stage sizes the room of a cut-off unit from it, so one that outlived its
+    test would change the request another test counts."""
+    import docpipe.llm_preflight as preflight
+    monkeypatch.setattr(preflight, "_WINDOWS", {})
 
 
 # ---------------------------------------------------------------------------

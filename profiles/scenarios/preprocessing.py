@@ -28,6 +28,14 @@ TITLE_EXCLUDE_PREFIXES = (
     "plate",
 )
 
+# What opens a caption (docpipe/captions.py): a word, a number, a colon. The
+# pattern the core carried before it asked the profile, kept word for word so
+# that every caption decision for this corpus stays what it was. The English
+# forms without a colon ("Table 1", "Fig. 2") are the built-in profile's.
+CAPTION_START = (
+    r"(?:^|(?<=[\s\]]))([A-ZÄÖÜ][A-Za-zÄÖÜäöüß.]{2,14}\s+\d+(?:[-.–]\d+)*\s*:)",
+)
+
 # Journal and IPCC captions are not labels: panel descriptions, data sources
 # and scenario legends routinely run 60-150 words, where a municipal heat plan
 # sits at 8. Set high enough that those survive as captions instead of being
@@ -37,6 +45,25 @@ CAPTION_MAX_WORDS = 160
 # How a figure/table list entry opens ("Figure 3 Global emissions 27").
 DIRECTORY_FIGTAB_WORDS = ("Figure", "Table", r"Fig\.", r"Tab\.", "Box")
 
+# What a table of contents or a list of figures calls itself: such a title
+# lowers the bar for the directory drop. The four words stage 3 has always
+# used, so no decision moves.
+DIRECTORY_TITLE_WORDS = ("inhalt", "verzeichnis", "contents", "directory")
+
 # Bibliography titles → routed to the Stage-4 [LITERATURE] BibTeX path.
 BIBLIOGRAPHY_TITLE_WORDS = ("references", "bibliography", "works cited",
                             "literature cited")
+
+
+# The one line of the user's turn when a page without a text layer is read
+# by the vision model; the system prompt is prompts/preprocessing/
+# page_transcribe.md.
+PAGE_REQUEST = "Page {page}. Return the text of this page."
+
+# What the text before a document's first heading is called, and a part of a
+# split section that has no title of its own. German, although the corpus is
+# English: these two words are stored with every section of the corpus as it
+# was processed, and stage 3 finds its own front section by the first of
+# them. Changing them is a rebuild of stage 3.
+FRONT_SECTION_TITLE = "Dokument"
+PART_TITLE = "Abschnitt"

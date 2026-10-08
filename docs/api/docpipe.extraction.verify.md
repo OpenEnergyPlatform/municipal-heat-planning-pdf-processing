@@ -59,10 +59,24 @@ Fields:
 
 ## Functions
 
+### decimal_mark
+
+```python
+def decimal_mark() -> str
+```
+
+How the documents of the ambient profile write the decimal: "," or
+".". The profile says it (`extraction.py: DECIMAL_MARK`); one that does
+not is read with the comma, as every corpus was before this was asked.
+
+It decides only what the digits leave open. '1.036.767,8' reads the same
+under both. '3,251' is 3.251 where the comma is the decimal mark and
+3251 where the point is, and no rule about digits can tell which.
+
 ### canonical_number
 
 ```python
-def canonical_number(raw) -> Optional[str]
+def canonical_number(raw, decimal: Optional[str] = None) -> Optional[str]
 ```
 
 One spelling for a number, whatever locale wrote it.
@@ -70,6 +84,9 @@ One spelling for a number, whatever locale wrote it.
 '1.036.767,8', '1,036,767.8' and '1036767.8' all become '1036767.8'.
 Digit-exact comparison then reduces to string equality — no float
 round-tripping, which matters for 9-digit kWh values.
+
+*decimal* is the mark the documents write the decimal with; without it,
+the ambient profile's (`decimal_mark`).
 
 ### numbers_in
 

@@ -18,7 +18,9 @@ def _parameter():
         "description": "Endenergieverbrauch je Energieträger, Sektor und "
                        "Jahr, wie im Plan bilanziert.",
         "unit_target": "OEO_00050008",
-        "units_accepted": {"kWh/a": 0.001, "MWh/a": 1.0},
+        "units_accepted": {
+            "kWh/a": {"factor": 0.001, "names_period": True},
+            "MWh/a": {"factor": 1.0, "names_period": True}},
         "axes": {
             "carrier": {"vocabulary": {"OEO_00000292": ["Erdgas"],
                                        "OEO_00000211": ["Heizöl", "Heizoel"]}},
@@ -418,7 +420,7 @@ def test_a_subscript_two_resolves_to_the_class_and_is_not_flagged():
         "description": "Die im Wärmeplan bilanzierte Emissionsmenge je "
                        "Energieträger, Sektor und Jahr.",
         "unit_target": "OEO_00000098",
-        "units_accepted": {"t/a": 1.0},
+        "units_accepted": {"t/a": {"factor": 1.0, "names_period": True}},
         "axes": {"quantity": {"vocabulary": {
             "OEO_00340066": ["CO2-Emissionen"],
             "OEO_00140083": ["CO2-Äquivalente"]}}},
@@ -454,7 +456,9 @@ def test_a_bare_entry_says_the_passage_stated_no_period():
         "unit_target": "OEO_00050008",
         # A bare amount and a rate, both accepted, as the kwp spec has them:
         # a plan writes "GWh" for a yearly figure as often as "GWh/a".
-        "units_accepted": {"kWh": 0.001, "kWh/a": 0.001},
+        "units_accepted": {
+            "kWh": {"factor": 0.001, "names_period": False},
+            "kWh/a": {"factor": 0.001, "names_period": True}},
         "axes": {"carrier": {"vocabulary": {"OEO_00000292": ["Erdgas"]}},
                  "sector": {"vocabulary": {"OEO_00000214":
                                            ["Private Haushalte"]}},
@@ -500,7 +504,9 @@ def test_a_power_carries_no_period_flag():
             "description": "Eine im Plan angegebene Leistung, also Energie "
                            "je Zeit, in kW, MW oder GW.",
             "unit_target": "OEO_00390001",
-            "units_accepted": {"kW": 0.001, "MW": 1.0},
+            "units_accepted": {
+                "kW": {"factor": 0.001, "names_period": False},
+                "MW": {"factor": 1.0, "names_period": False}},
             "axes": {"year": {"type": "int"}},
             "example": {"source": "| BHKW | 347 | kW | im Jahr 2020 |",
                         "tuples": [{"value": 347, "unit_raw": "kW"}]},
@@ -519,6 +525,38 @@ def test_a_power_carries_no_period_flag():
     amount = verify_tuple(dict(claim), parameter(), source)
     assert isinstance(amount, Verified), getattr(amount, "reason", amount)
     assert "period:unstated" in amount.flags
+
+
+def test_the_entrys_own_statement_decides_the_period_flag_and_not_its_spelling():
+    """The spec says entry by entry whether it names a period. An entry
+    spelled like a rate that the spec calls a plain amount is flagged, and a
+    plain-looking one that the spec says names a period is not: nothing looks
+    at the spelling any more."""
+    parameter = load({"parameters": [{
+        "uri": "OEO_00050016",
+        "label": "final energy consumption value",
+        "description": "Endenergieverbrauch je Energieträger, Sektor und "
+                       "Jahr, wie im Plan bilanziert.",
+        "unit_target": "OEO_00050008",
+        "units_accepted": {
+            "MWh/a": {"factor": 1.0, "names_period": False},
+            "MWh": {"factor": 1.0, "names_period": True}},
+        "axes": {"year": {"type": "int"}},
+        "example": {"source": "| Erdgas | 42.005 | MWh | im Jahr 2020 |",
+                    "tuples": [{"value": 42005, "unit_raw": "MWh"}]},
+    }]}).by_uri["OEO_00050016"]
+    source = "| Erdgas | 42.005 | MWh/a |"
+    claim = _claim(value=42005, quote=source)
+
+    spelled_as_rate = verify_tuple(dict(claim, unit="MWh/a", unit_raw="MWh/a"),
+                                   parameter, source)
+    assert isinstance(spelled_as_rate, Verified), spelled_as_rate
+    assert "period:unstated" in spelled_as_rate.flags
+
+    spelled_plain = verify_tuple(dict(claim, unit="MWh", unit_raw="MWh"),
+                                 parameter, source)
+    assert isinstance(spelled_plain, Verified), spelled_plain
+    assert not [f for f in spelled_plain.flags if f.startswith("period:")]
 
 
 # ---------------------------------------------------------------------------

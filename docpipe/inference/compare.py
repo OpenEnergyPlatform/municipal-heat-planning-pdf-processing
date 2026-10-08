@@ -85,15 +85,18 @@ def compare_documents(task: str, corpus: Corpus, documents: Sequence,
     document id to that document's earlier turns, so a follow-up and a re-check
     work per plan exactly as they do in a single-plan chat.
 
-    Returns {task, rows, comparison, answered, as_json, dropped}: `rows` is
-    one answer_question result per document with `document_id` and `label`
-    added, `comparison` is prose or None, `dropped` names the documents that
-    did not fit the cap.
+    Returns {task, rows, comparison, answered, as_json, dropped, faults}:
+    `rows` is one answer_question result per document with `document_id` and
+    `label` added (each carries its own statement counts and faults),
+    `comparison` is prose or None, `dropped` names the documents that did not
+    fit the cap, `faults` the requests of the comparison call itself that
+    stayed unreadable. A row's `answer_text` holds only statements that stood
+    their check, and that is all the comparison is given.
     """
     wanted = list(documents)
     kept = wanted[: config.COMPARE_MAX_DOCUMENTS]
     result = {"task": task, "rows": [], "comparison": None, "answered": 0,
-              "as_json": as_json,
+              "as_json": as_json, "faults": [],
               "dropped": [label for _id, label in wanted[len(kept):]]}
 
     for document_id, label in kept:
@@ -109,6 +112,7 @@ def compare_documents(task: str, corpus: Corpus, documents: Sequence,
     # One answer is not a comparison: the table already shows it, and the other
     # plans' emptiness with it. Below two, the call would only paraphrase.
     if result["answered"] >= 2:
-        with progress("⚖️ Comparison"):
+        with progress("⚖️ Comparison"), llm_client.collecting() as faults:
             result["comparison"] = llm_client.compare_answers(task, answers)
+        result["faults"] = list(faults)
     return result

@@ -6,8 +6,11 @@ checks its text layer, writes the Documents row, and links versions.
 A file whose text is unreadable or garbled is refused and left out
 of the corpus. A file with no text layer at all is registered
 anyway and listed for preprocessing to read with the vision model,
-because the pages exist to be read. What the documents are and
-where they come from is defined by the profile's Source.
+because the pages exist to be read. A second URL that ends in the file
+name of a download that came from another URL is refused, and so is a
+download over the size limit; both are listed with the files that
+could not be fetched. What the documents are and where they come from
+is defined by the profile's Source.
 
 Author: Felix Vossel
 """
@@ -26,7 +29,7 @@ from ..profile import Profile
 from ..store import documents as docs
 from ..store import schema
 from . import pdf_quality
-from .fetch import download_pdf, get_num_pages
+from .fetch import check_name, download_pdf, get_num_pages
 from .models import SourceDoc, UnusablePDF
 
 log = logging.getLogger(__name__)
@@ -39,8 +42,15 @@ def register(doc: SourceDoc, connection: sqlite3.Connection, data_dir: Path,
     `scans` collects the documents that carry no text layer, keyed by filename.
     They ARE registered: preprocessing reads their pages with the model. They are
     collected so the run can say which documents depend on that.
+
+    Raises NameTaken (an OSError) when the file of that name came from another
+    URL than `doc.url`, whether or not it is registered yet: the second URL
+    is not the document that is there.
     """
+    if doc.url:
+        check_name(doc.filename, doc.url, data_dir)
     if docs.document_exists(doc.filename, connection):
+        note_content(doc.filename, connection, data_dir)
         return False
 
     if not (data_dir / doc.filename).exists():
@@ -63,18 +73,52 @@ def register(doc: SourceDoc, connection: sqlite3.Connection, data_dir: Path,
     docs.add_document(doc.filename, doc.external_id, doc.group_key, doc.published,
                       get_num_pages(doc.filename, data_dir),
                       datetime.now().strftime("%Y%m%d"), doc.meta, connection)
+    note_content(doc.filename, connection, data_dir)
     return True
 
 
+def note_content(filename: str, connection: sqlite3.Connection,
+                 data_dir: Path) -> None:
+    """Record which bytes a document is, or say that they are others now.
+
+    A new row gets the sha256 and the size of its file. So does a row from
+    before this was recorded, once. A row that has them is held against the
+    size of the file as it lies there: a different size is a different file
+    under the old name, and everything produced from the old one (sections,
+    vectors, harvest) is of the old one. That is said, and nothing is
+    stopped; a file edited to the same length is not seen here.
+    """
+    path = data_dir / filename
+    if not path.is_file():
+        return
+    sha256, size = docs.content_of(filename, connection)
+    if sha256 is None:
+        docs.set_content(filename, *docs.file_sha256(path), connection)
+    elif size is not None and path.stat().st_size != size:
+        log.warning(
+            "%s is not the file that was registered (%d bytes then, %d "
+            "now, sha256 then %s...): what was produced from it is of the "
+            "old file", filename, size, path.stat().st_size, sha256[:12])
+
+
 def ingest(source, db_file: Path, data_dir: Path,
-           profile: Optional[Profile] = None) -> dict:
-    """Run a profile's source into its database. Returns the refused files."""
+           profile: Optional[Profile] = None, *,
+           unreachable: Optional[dict] = None) -> dict:
+    """Run a profile's source into its database. Returns the refused files.
+
+    `unreachable` collects the files that could not be fetched or found,
+    keyed by (filename, URL), for a caller that has to end the run on them.
+    """
     db_file, data_dir = Path(db_file), Path(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
 
     rejected: dict = {}
-    unreachable: dict = {}
+    if unreachable is None:
+        unreachable = {}
     scans: dict = {}
+    prepare = getattr(source, "prepare", None)
+    if prepare is not None:
+        prepare(data_dir)
     with sqlite3.connect(db_file) as connection:
         schema.apply(connection, profile)
         try:
@@ -94,10 +138,14 @@ def ingest(source, db_file: Path, data_dir: Path,
             # link to municipal websites that reorganise. Collect them all and
             # report at the end, so one run yields the whole worklist.
             except (requests.RequestException, OSError) as exc:
-                if doc.filename not in unreachable:
+                # Keyed by the URL too: two URLs that end in one file name are
+                # two entries on the worklist, while one broken file that
+                # serves many entries (a convoy) stays one.
+                key = (doc.filename, doc.url or "")
+                if key not in unreachable:
                     log.warning("UNREACHABLE – not registered: %s (%s)",
                                 doc.filename, _reason(exc))
-                unreachable[doc.filename] = (doc.group_key, doc.url, _reason(exc))
+                unreachable[key] = (doc.group_key, doc.url, _reason(exc))
                 continue
             source.after_document(connection, doc)
         docs.link_document_versions(connection)
@@ -146,12 +194,13 @@ def _report_unreachable(unreachable: dict, db_file: Path) -> None:
               "Source each one by hand, drop it in the data dir and add it to the "
               "profile's PDF_OVERRIDES, then re-run.\n%s",
               banner, len(unreachable), banner)
-    for filename, (group_key, url, reason) in sorted(unreachable.items()):
+    for (filename, _), (group_key, url, reason) in sorted(unreachable.items()):
         log.error("  %-12s %-55s %s", group_key or "-", filename, reason)
     try:
         out.write_text(
             "".join(f"{group_key or ''}\t{fn}\t{reason}\t{url or ''}\n"
-                    for fn, (group_key, url, reason) in sorted(unreachable.items())),
+                    for (fn, _), (group_key, url, reason)
+                    in sorted(unreachable.items())),
             encoding="utf-8",
         )
         log.error("Worklist written to %s", out)

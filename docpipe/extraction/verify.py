@@ -28,13 +28,15 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import os
 import re
 import unicodedata
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
+from ..profile import ENV_VAR, active_profile
 from .fields import DERIVED, READ, UNBACKED
-from .spec import Parameter, fold_label, states_a_year
+from .spec import Parameter, fold_label
 
 TIER_TEXT = "text_located"
 TIER_VISUAL = "visual_source"
@@ -54,12 +56,40 @@ _DATED_YEAR = re.compile(r"(?<![\d.,])(?:\d{1,2}\.){1,2}((?:19|20)\d{2})(?!\d|[.
 _SPACE_GROUPED = re.compile(r"\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?")
 
 
-def canonical_number(raw) -> Optional[str]:
+MARKS = (",", ".")
+_marks: dict = {}
+
+
+def decimal_mark() -> str:
+    """How the documents of the ambient profile write the decimal: "," or
+    ".". The profile says it (`extraction.py: DECIMAL_MARK`); one that does
+    not is read with the comma, as every corpus was before this was asked.
+
+    It decides only what the digits leave open. '1.036.767,8' reads the same
+    under both. '3,251' is 3.251 where the comma is the decimal mark and
+    3251 where the point is, and no rule about digits can tell which.
+    """
+    name = os.environ.get(ENV_VAR)
+    if name not in _marks:
+        profile = active_profile()
+        mark = profile.component("extraction", "DECIMAL_MARK") \
+            if profile is not None else None
+        if mark is not None and mark not in MARKS:
+            raise ValueError(f"extraction.DECIMAL_MARK of profile {name!r} "
+                             f"is {mark!r}; it is one of {MARKS}")
+        _marks[name] = mark or ","
+    return _marks[name]
+
+
+def canonical_number(raw, decimal: Optional[str] = None) -> Optional[str]:
     """One spelling for a number, whatever locale wrote it.
 
     '1.036.767,8', '1,036,767.8' and '1036767.8' all become '1036767.8'.
     Digit-exact comparison then reduces to string equality — no float
     round-tripping, which matters for 9-digit kWh values.
+
+    *decimal* is the mark the documents write the decimal with; without it,
+    the ambient profile's (`decimal_mark`).
     """
     if isinstance(raw, (int, float)):
         raw = f"{raw:.10f}".rstrip("0").rstrip(".") if isinstance(raw, float) else str(raw)
@@ -71,17 +101,20 @@ def canonical_number(raw) -> Optional[str]:
         return None
     # Mixed separator kinds are unambiguous: the rightmost kind is the
     # decimal mark ('1.234,567' is 1234.567). With one kind only, several
-    # separators are all grouping, and a single dot followed by exactly
-    # 3 digits ('1.234') is grouping — how these documents write thousands.
-    # A single comma is the decimal mark whatever follows it: '3,251 GWh' is
-    # 3.251, and read as 3251 it refused 51 correct values on corpus_m5.
+    # separators are all grouping, and a single GROUPING mark followed by
+    # exactly 3 digits is grouping: '1.234' where the comma is the decimal
+    # mark, how those documents write thousands, and '1,234' where the point
+    # is. A single decimal mark is the decimal mark whatever follows it:
+    # with the comma '3,251 GWh' is 3.251, and read as 3251 it refused 51
+    # correct values on corpus_m5.
+    grouping = "." if (decimal or decimal_mark()) == "," else ","
     last_dot, last_comma = s.rfind("."), s.rfind(",")
     decimal_pos = max(last_dot, last_comma)
     if decimal_pos != -1:
         mixed = last_dot != -1 and last_comma != -1
         tail = len(s) - decimal_pos - 1
         if not mixed and (s.count(s[decimal_pos]) > 1
-                          or (tail == 3 and s[decimal_pos] == ".")):
+                          or (tail == 3 and s[decimal_pos] == grouping)):
             decimal_pos = -1
     if decimal_pos != -1:
         integer = re.sub(r"[.,]", "", s[:decimal_pos])
@@ -471,12 +504,13 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                                 f"in the quote")
 
     if (parameter.is_numeric and parameter.integrated
-            and not states_a_year(value_fields.get("unit") or "")):
-        # The entry the unit question chose is a plain amount. The period is
-        # part of that reading -- a passage saying "über das Jahr" makes the
-        # model choose kWh/a -- so an entry without one says the passage
-        # stated none. An integral needs the period it runs over, and a graph
-        # that writes a year beside a storage capacity has invented it.
+            and not parameter.names_period(value_fields.get("unit"))):
+        # The entry the unit question chose says in the spec that it names no
+        # period. The period is part of that reading, because a passage
+        # saying "over the year" makes the model choose kWh/a, so a plain
+        # entry says the passage stated none. An integral needs the period it
+        # runs over, and a graph that writes a year beside a storage capacity
+        # has invented it.
         #
         # Only for a parameter whose unit IS an amount over a span. A power
         # has no period to state, so this would fire on every row of it and
@@ -509,7 +543,8 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                                                                   DERIVED):
             continue
         out[f"{name}_state"] = UNBACKED
-        for suffix in ("_quote", "_source", "_window"):
+        for suffix in ("_quote", "_source", "_window", "_link_quote",
+                       "_link_source"):
             out.pop(f"{name}{suffix}", None)
         flags.append(f"unbacked:{name}")
     out.update(value_fields)

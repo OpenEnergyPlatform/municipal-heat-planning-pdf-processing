@@ -32,6 +32,8 @@ Fields:
 - `embed: Callable[[dict], tuple]`: query item -> (vector, came_from_cache)
 - `resolve_image: Callable[[Optional[str]], Optional[Path]] = lambda p: None`: stored image path -> a readable path, or None
 - `log_conn: Optional[sqlite3.Connection] = None`
+- `lexical: Optional[sqlite3.Connection] = None`: The word index beside the vectors (`lexical.py`), or None: the search is then by meaning alone.
+- `document_label: Callable[[Optional[int]], Optional[str]] = lambda i: None`: document id -> what a reader calls the document. Asked only when the whole corpus is searched, where a source has to say whose it is. Where it says nothing, the document's file name does (`_whose`).
 
 ## Functions
 
@@ -43,21 +45,54 @@ def scopes_are_visual(scopes: list) -> bool
 
 True if the query targets ONLY figure/table scopes → caption-style anchor.
 
+### search_hits
+
+```python
+def search_hits(task: str, phrase: Optional[str], query_vec, corpus: Corpus,
+                document_id: Optional[int], scopes: list, *,
+                image_only: bool = False, exclude=frozenset()) -> list
+```
+
+The passages a turn searches: the hybrid search over the scopes'
+embedding types, TOP_K of them, best first. One definition for the chat
+and for whoever measures its search, so the two cannot drift apart.
+
+The word index is asked with the question and its search anchor: the
+question has the names and numbers, the anchor the wording a document
+would use. An image query has no words to ask it with.
+
 ### answer_question
 
 ```python
-def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *,
+def answer_question(task: str, corpus: Corpus, document_id: Optional[int],
+                    scopes: list, *,
                     image_bytes: Optional[bytes] = None, image_only: bool = False,
                     as_json: bool = False, history: Optional[list] = None,
                     progress: Callable = _silent) -> dict
 ```
 
-Execute one full retrieval + answer turn. Returns a dict with:
+Execute one full retrieval + answer turn. *document_id* None asks the
+whole corpus: every source then names its document. Returns a dict with:
 answer (str|None), answer_text (str|None), citations (list[dict]),
 n_findings (int), cache_hit (bool), n_hits (int), phrase (str|None),
 as_json (bool), n_batches (int), compute (list), examined, recheck,
-n_excluded.
+n_excluded, requested (block ids), statements (list[dict]),
+statements_made / statements_shown / statements_dropped (int, counting
+statements), faults (list of {"request", "cause"}).
 
-answer is None when nothing was retrieved or nothing could be grounded.
+The answer is made of the statements the model wrote whose evidence
+stood in the source they cite (`statements.back`); the rest are counted
+in `statements_dropped`, never shown. Each batch is told the statements
+already checked and writes only new ones, so what was checked is carried
+forward as it was and the model cannot rewrite it. `answer_text` is the
+same statements without list marks and citation numbers, which is what a
+follow-up and a comparison read.
+
+answer is None when nothing was retrieved or no statement was backed.
+`faults` says which requests of the turn stayed unreadable: with no
+statement made and a fault on the answer, the sources were not read, and
+that is not "nothing found in them". `as_json` is True only when the
+answer was reshaped as JSON; where that did not happen the answer is the
+prose and `faults` says why.
 
 [Back to the index](../README.md)

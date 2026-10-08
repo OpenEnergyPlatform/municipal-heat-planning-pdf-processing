@@ -1,13 +1,15 @@
 """Every profile must survive being loaded, not just the one conftest pins.
 
 conftest sets DOCPIPE_PROFILE=kwp before any import, and the config modules
-bind their prompts and constants AT import and then sit in sys.modules. So the
-whole suite has only ever seen kwp's values: ar6's system prompt, temperature,
-max_tokens, window size and word lists were never once loaded by a test. Every
-bug this file is here to catch was found by hand, in a batch job, hours in.
+bind their constants AT import and then sit in sys.modules. So the whole suite
+has only ever seen kwp's values: ar6's system prompt, temperature, max_tokens,
+window size and word lists were never once loaded by a test. Every bug this
+file is here to catch was found by hand, in a batch job, hours in.
 
 A subprocess per profile is the honest way to do this — the import-time binding
 is exactly what must be exercised, and that cannot be undone inside a process.
+The prompts are read on first use, so the probe asks for every one of them:
+importing the stage no longer proves that a profile has them.
 """
 import json
 import os
@@ -19,6 +21,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILES = ROOT / "profiles"
+BUILTIN = ROOT / "docpipe" / "builtin"
 
 # What has to resolve before a stage can process its first document.
 # The subprocess does not get conftest's stubs, so it installs its own for the
@@ -42,6 +45,7 @@ for _name in ("openai", "faiss", "cv2", "fitz", "torch", "ollama",
 
 import json
 from docpipe.refinement import config as refine
+from docpipe.refinement import split
 from docpipe.visuals import config as visuals
 from docpipe.preprocessing import config as pre
 from docpipe.preprocessing import stage3_structure as s3
@@ -49,9 +53,18 @@ from docpipe.preprocessing import stage3_structure as s3
 print("@@" + json.dumps({
     "refine_budget": refine.max_request_tokens(),
     "refine_window": refine.WINDOW_SIZE,
-    "refine_max_tokens": refine.LLM_MAX_TOKENS,
-    "refine_prompt_words": len(refine.SYSTEM_PROMPT.split()),
+    "refine_max_tokens": refine.llm_max_tokens(),
+    "refine_temperature": refine.llm_temperature(),
+    "refine_prompt_words": len(refine.system_prompt().split()),
+    "split": [len(split.split_prompt().text.split()),
+              split.split_temperature(), split.split_max_tokens()],
     "visuals_budget": visuals.max_request_tokens(),
+    "visuals_prompt_words": [len(read().split()) for read in (
+        visuals.table_system_prompt, visuals.table_user_prompt,
+        visuals.figure_system_prompt, visuals.figure_user_prompt,
+        visuals.caption_keep_instruction,
+        visuals.caption_generate_table_instruction,
+        visuals.caption_generate_figure_instruction)],
     "caption_max_words": pre.caption_max_words(),
     "title_prefixes": list(pre.title_exclude_prefixes()),
     "figtab_re": s3._dir_figtab_re().pattern,
@@ -61,8 +74,8 @@ print("@@" + json.dumps({
 
 
 def _profiles():
-    return sorted(p.name for p in PROFILES.iterdir()
-                  if (p / "profile.py").is_file())
+    return sorted(p.name for root in (PROFILES, BUILTIN)
+                  for p in root.iterdir() if (p / "profile.py").is_file())
 
 
 def _load(name: str) -> dict:
@@ -80,6 +93,8 @@ def test_a_profile_loads_every_config_module(name):
     """Import-time binding must work for this profile, not only for kwp."""
     got = _load(name)
     assert got["refine_prompt_words"] > 0, "empty system prompt"
+    assert got["split"][0] > 0 and got["split"][2] > 0
+    assert all(got["visuals_prompt_words"]), "an empty visuals prompt"
     assert got["refine_window"] >= 1
     assert got["title_prefixes"], "no caption prefixes — every figure title "\
                                   "would open a section"

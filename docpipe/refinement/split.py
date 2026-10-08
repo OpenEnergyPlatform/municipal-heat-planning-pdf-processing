@@ -14,9 +14,12 @@ nothing is rephrased, dropped or invented, and each part keeps
 exactly the pages, tables and figures that belong to its own text.
 Asking only for an outline also keeps the call small, since a section
 long enough to need splitting is by definition too long to echo.
-When no cut is asked for, or the reply is unusable, a mechanical
-fallback cuts at even word-count intervals instead, dropping a cut
-that would leave a sliver under about 100 words.
+When no cut is asked for, or the model's cuts could not be read (a
+hole, with its cause), a mechanical fallback cuts at even word-count
+intervals instead, dropping a cut that would leave a sliver under
+about 100 words; the section is named in the refinement report with
+the cause. A request whose reply was cut off is asked again for half
+of the outline, since the outline has one line per segment.
 
 A part still over the configured word limit after this pass is cut
 again against a lower target; a single segment carrying the whole
@@ -29,13 +32,14 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
-import json
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
 from docpipe import prompts
+from docpipe.profile import profile_value
+from docpipe.reading import Hole
 
 from .config import (
     LLM_NUM_PARALLEL,
@@ -51,10 +55,28 @@ log = logging.getLogger(__name__)
 # nothing. Only the first may still place a call.
 _UNASKED = object()
 
-_SPLIT = prompts.load("refinement/split")
-SPLIT_PROMPT = _SPLIT.text
-SPLIT_TEMPERATURE = float(_SPLIT.meta.get("temperature", 0.1))
-SPLIT_MAX_TOKENS = int(_SPLIT.meta.get("max_tokens", 1024))
+
+class NotServed(Exception):
+    """The request for the cuts got no answer from the server.
+
+    Not a reason to cut mechanically: asked again another time, the model
+    places the cuts. An answer that is unusable is, and so is a request the
+    server refused.
+    """
+
+@prompts.per_profile
+def split_prompt():
+    return prompts.load("refinement/split")
+
+
+def split_temperature() -> float:
+    return float(split_prompt().meta.get("temperature", 0.1))
+
+
+def split_max_tokens() -> int:
+    return int(split_prompt().meta.get("max_tokens", 1024))
+
+
 PROMPT_IDS = ("refinement/split",)
 
 
@@ -100,10 +122,16 @@ def needs_split(section: dict, max_words: int = SECTION_MAX_WORDS) -> bool:
     return word_count(content) > max_words
 
 
-def outline(section: dict, sample_words: int = SECTION_OUTLINE_WORDS) -> str:
-    """One numbered line per segment: its size and how it starts."""
+def outline(section: dict, sample_words: int = SECTION_OUTLINE_WORDS, *,
+            start: int = 0, stop: Optional[int] = None) -> str:
+    """One numbered line per segment: its size and how it starts.
+
+    The segments *start* to *stop* (the whole section by default), each with
+    its number in the section: the cuts the model names are those numbers."""
     lines = []
-    for i, seg in enumerate(section.get("segments") or []):
+    segments = section.get("segments") or []
+    for i in range(start, len(segments) if stop is None else stop):
+        seg = segments[i]
         if seg.get("kind") == "text":
             words = (seg.get("text") or "").split()
             head = " ".join(words[:sample_words])
@@ -133,12 +161,16 @@ def _sanitize(cuts, n_segments: int, section: dict) -> list:
     for c in cuts or []:
         try:
             at = int(c.get("at"))
-        except (AttributeError, TypeError, ValueError):
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            # No reply is repaired, and nothing broad catches around this any
+            # more: a position that is no number (an infinity too, which a
+            # strict JSON read lets through) names no boundary and is dropped.
             continue
         if not (0 < at < n_segments) or at in seen:
             continue
         seen.add(at)
-        title = (c.get("title") or "").strip() or None
+        title = c.get("title")
+        title = (title.strip() or None) if isinstance(title, str) else None
         clean.append({"at": at, "title": title})
     clean.sort(key=lambda c: c["at"])
     # Drop a cut that would leave a sliver: below ~100 words a part is not a
@@ -179,7 +211,8 @@ def apply_cuts(section: dict, cuts: list, first_title: Optional[str] = None) -> 
         part["segments"] = chunk
         part["content"] = content_from_segments(chunk)
         part["title"] = (titles[k] or section.get("title") or "").strip() \
-            or f"{section.get('title') or 'Abschnitt'} ({k + 1})"
+            or (f"{section.get('title') or profile_value('preprocessing', 'PART_TITLE')}"
+                f" ({k + 1})")
         # Each part keeps only the media its own text refers to.
         refs = [s.get("ref") for s in chunk if s.get("kind") in ("table", "figure")]
         part["tables"] = [media[r][1] for r in refs if r in media and media[r][0] == "tables"]
@@ -191,27 +224,68 @@ def apply_cuts(section: dict, cuts: list, first_title: Optional[str] = None) -> 
     return parts or [section]
 
 
-def _ask_cuts(section: dict, ask: Callable):
-    """Where the model would cut *section*, as its raw reply; None if it failed.
+def _ask_cuts(section: dict, ask: Callable) -> dict | Hole:
+    """Where the model would cut *section*: the one object it answered with
+    (`cuts`, and maybe `first_title`), or a Hole that says why it did not.
 
     The whole blocking part of a split, and it depends on nothing but this one
-    section — which is what lets split_oversized run them together.
+    section, which is what lets split_oversized run them together. A request
+    the server did not serve raises NotServed.
+
+    A reply that was cut off is not asked again as it stands. The outline has
+    one line per segment, so the section is asked about its first half and
+    its second half, the second keeping the segment numbers it has in the
+    section, and the cuts are joined with the cut between the halves. An
+    outline of one segment has no halves and gets more room, once (the room
+    is what *ask* gives a request marked *again*), or is a hole where the
+    served window leaves it none.
     """
-    try:
-        return ask(prompts.text("refinement/split", target=SECTION_TARGET_WORDS),
-                   f"TITLE: {section.get('title') or ''}\n\nOUTLINE:\n{outline(section)}")
-    except Exception as e:                           # any failure → mechanical
-        log.warning("Split call failed for %r: %s", section.get("title"), e)
-        return None
+    return _ask_range(section, ask, 0, len(section.get("segments") or []))
+
+
+def _ask_range(section: dict, ask: Callable, start: int, stop: int,
+               again: bool = False) -> dict | Hole:
+    got = ask(prompts.text("refinement/split", target=SECTION_TARGET_WORDS),
+              f"TITLE: {section.get('title') or ''}\n\nOUTLINE:\n"
+              f"{outline(section, start=start, stop=stop)}", again)
+    if not (isinstance(got, Hole) and got.cause == "cut_off"):
+        return got
+    if stop - start > 1:
+        mid = start + (stop - start) // 2
+        log.warning("Split reply for %r cut off: asked again for segments "
+                    "%d to %d and %d to %d", section.get("title"), start,
+                    mid - 1, mid, stop - 1)
+        first = _ask_range(section, ask, start, mid)
+        second = _ask_range(section, ask, mid, stop)
+        for half in (first, second):
+            if isinstance(half, Hole):
+                # A half that is a hole leaves a stretch nobody placed cuts in.
+                return half
+        title = second.get("first_title")
+        return {"first_title": first.get("first_title"),
+                "cuts": [*first["cuts"],
+                         {"at": mid, "title": title if isinstance(title, str)
+                          else None},
+                         *second["cuts"]]}
+    if not again:
+        log.warning("Split reply for %r cut off, one segment: no halves to "
+                    "ask for", section.get("title"))
+        return _ask_range(section, ask, start, stop, again=True)
+    return got
 
 
 def split_section(section: dict, ask: Optional[Callable] = None,
-                  reply=_UNASKED) -> list:
+                  reply=_UNASKED, holes: Optional[list] = None) -> list:
     """
     Split one oversized section. *ask* takes the rendered prompt and returns the
-    model's raw reply; without it (or when the reply is unusable) the section is
-    cut mechanically at even intervals. *reply* hands in an answer fetched
-    earlier (see split_oversized); then *ask* is not called at all.
+    model's answer (see `_ask_cuts`); without it, or when the answer is a Hole,
+    the section is cut mechanically at even intervals, and when *holes* is
+    given a Hole adds {"title", "why"} to it: the report names the section
+    and the cause. *reply* hands in an answer fetched earlier (see
+    split_oversized); then *ask* is not called at all.
+
+    An answer of no cuts at all is an answer: the prompt allows it, and it is
+    no hole.
     """
     if not _rebuild_matches(section):
         log.warning(
@@ -225,13 +299,17 @@ def split_section(section: dict, ask: Optional[Callable] = None,
     cuts, first_title = [], None
     if reply is _UNASKED:
         reply = _ask_cuts(section, ask) if ask is not None else None
-    if reply is not None:
-        try:
-            parsed = json.loads(reply) if isinstance(reply, str) else (reply or {})
-            cuts = _sanitize(parsed.get("cuts"), n, section)
-            first_title = (parsed.get("first_title") or "").strip() or None
-        except Exception as e:                       # any failure → mechanical
-            log.warning("Split reply unusable for %r: %s", section.get("title"), e)
+    if isinstance(reply, Hole):
+        log.warning("Split reply for %r could not be read (%s): cutting it "
+                    "mechanically", section.get("title"), reply.cause)
+        if holes is not None:
+            holes.append({"title": str(section.get("title") or ""),
+                          "why": reply.cause})
+    elif reply is not None:
+        cuts = _sanitize(reply.get("cuts"), n, section)
+        title = reply.get("first_title")
+        first_title = ((title.strip() or None) if isinstance(title, str)
+                       else None)
 
     if not cuts:
         cuts = _sanitize(_even_cuts(section), n, section)
@@ -337,8 +415,12 @@ def _ask_all_cuts(sections: list, ask: Optional[Callable],
 
 
 def split_oversized(sections: list, ask: Optional[Callable] = None,
-                    max_words: int = SECTION_MAX_WORDS) -> list:
-    """Split every section longer than *max_words*; returns the new list."""
+                    max_words: int = SECTION_MAX_WORDS,
+                    holes: Optional[list] = None) -> list:
+    """Split every section longer than *max_words*; returns the new list.
+
+    *holes*, when given, gets {"title", "why"} for every section whose cut the
+    model did not place and that was cut mechanically instead."""
     if not SECTION_SPLIT_ENABLE:
         return sections
     replies = _ask_all_cuts(sections, ask, max_words)
@@ -347,7 +429,8 @@ def split_oversized(sections: list, ask: Optional[Callable] = None,
         if needs_split(section, max_words):
             # The cuts are applied in the original order, so the outcome is the
             # one the serial version produced.
-            parts = split_section(section, ask, reply=replies.get(i, _UNASKED))
+            parts = split_section(section, ask, reply=replies.get(i, _UNASKED),
+                                  holes=holes)
             n_split += len(parts) > 1
             bounded = []
             for part in parts:

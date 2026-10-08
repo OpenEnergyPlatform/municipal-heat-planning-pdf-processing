@@ -71,9 +71,12 @@ One question, several documents, one comparison.
 document id to that document's earlier turns, so a follow-up and a re-check
 work per plan exactly as they do in a single-plan chat.
 
-Returns {task, rows, comparison, answered, as_json, dropped}: `rows` is
-one answer_question result per document with `document_id` and `label`
-added, `comparison` is prose or None, `dropped` names the documents that
-did not fit the cap.
+Returns {task, rows, comparison, answered, as_json, dropped, faults}:
+`rows` is one answer_question result per document with `document_id` and
+`label` added (each carries its own statement counts and faults),
+`comparison` is prose or None, `dropped` names the documents that did not
+fit the cap, `faults` the requests of the comparison call itself that
+stayed unreadable. A row's `answer_text` holds only statements that stood
+their check, and that is all the comparison is given.
 
 [Back to the index](../README.md)

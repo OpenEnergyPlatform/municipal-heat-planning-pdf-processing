@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from . import queries as queries_mod
+from .wording import say
 from .spec import Spec, fold_label
 from .fields import (CHOICE, NUMBER, READ, SAID_UNSTATED, TEXT,
                      UNANSWERED, UNBACKED, UNSTATED)
@@ -136,6 +137,18 @@ class Batch:
     # the plan's own words, what the request asks for, so the pair reaches
     # the model as a question and not only as a field.
     anchors: tuple = ()
+    # The years of the document a row may name by a word, with the frame's
+    # quotes: its base years and its target years (`named_years`). On every
+    # batch of the document, framed or not: a passage that says "Basisjahr"
+    # or "Zieljahr" prints no pair, and it is exactly the one that needs them.
+    bases: tuple = ()
+    # The spec as this document sees it. A dynamic axis or value list is a
+    # closed list only once the document is known, so the corpus run puts
+    # the copy with the document's lists filled in on every batch of the
+    # document, like `bases`. None is the run's own spec: no list depends on
+    # the document, or the caller builds its slots from the document's spec
+    # itself, as the top-up does.
+    spec: object = None
 
     @property
     def sources(self) -> list:
@@ -487,7 +500,7 @@ def cell_index(quote: str, value) -> Optional[tuple]:
     return (hits[0], len(cells)) if len(hits) == 1 else None
 
 
-def _invented_wording(claim: dict) -> bool:
+def _invented_wording(claim: dict, spec=None) -> bool:
     """A non-numeric value that its own quote does not contain.
 
     Numbers are left to the verifier: it collapses whitespace, repairs a
@@ -495,9 +508,16 @@ def _invented_wording(claim: dict) -> bool:
     of that here would refuse claims the verifier would have taken. A wording
     needs none of it — either the passage says it or the model wrote it down
     from somewhere else.
+
+    In a spec without a numeric parameter a digit string is a wording too
+    (`fields.is_wording`): the verifier compares a year there as it compares
+    a title. Without *spec* it is taken for a number, as before.
     """
     value = claim.get("value")
-    if not isinstance(value, str) or canonical_number(value) is not None:
+    if not isinstance(value, str):
+        return False
+    if canonical_number(value) is not None and (
+            spec is None or any(p.is_numeric for p in spec.parameters)):
         return False
     # value_raw first, exactly as value_in_quote does it. A choice carries
     # the class in `value` and the document's own wording in `value_raw`, and
@@ -585,18 +605,22 @@ def pair_of_source(source, pairs: tuple, slots: list,
     """
     if not slots:
         return None
+    # A pair of the document that no row carries stands as None under its
+    # index (`plan_batches` of a stored harvest). It prints nothing, and
+    # `names_pair` would say it prints everything.
     found = [(pair, index) for index, pair in enumerate(pairs)
-             if pair is not taken and names_pair(source, pair, slots)]
+             if isinstance(pair, dict) and pair is not taken
+             and names_pair(source, pair, slots)]
     return found[0] if len(found) == 1 else None
 
 
 def rows_from_reply(batch: Batch, reply: Optional[dict],
-                    frame_axes: Optional[list] = None) -> tuple:
+                    frame_axes: Optional[list] = None, spec=None) -> tuple:
     """(rows, orphans) from the value request - the only request that counts.
 
-    Routing is the same as for a whole tuple: the quote decides which source a
-    value belongs to, the label breaks a tie, and a claim that neither quotes
-    nor names any source of the batch is an orphan.
+    Routing: the quote decides which source a value belongs to, the label
+    breaks a tie, and a claim that neither quotes nor names any source of the
+    batch is an orphan.
 
     Under a frame, a passage that does not print the request's pair gives no
     row of THAT pair: `apply_frame` writes the pair onto every row, so the
@@ -633,7 +657,7 @@ def rows_from_reply(batch: Batch, reply: Optional[dict],
             theirs = pair_of_source(source, batch.pairs, frame_axes or [],
                                     batch.frame)
             for claim in claims:
-                if _invented_wording(claim):
+                if _invented_wording(claim, spec):
                     orphans.append(dict(claim, _why="text value not in its quote"))
                     continue
                 elsewhere = pair_of_claim(claim, batch.pairs,
@@ -649,7 +673,7 @@ def rows_from_reply(batch: Batch, reply: Optional[dict],
                                 pair=pair, pair_index=pair_index))
             continue
         for claim in claims:
-            if _invented_wording(claim):
+            if _invented_wording(claim, spec):
                 # A wording that is not in the passage it cites is not a
                 # reading, and the cheapest place to say so is here, before
                 # it becomes a row. It used to become one and was refused at
@@ -687,15 +711,57 @@ def answer_in_quote(slot, given, wording: Optional[str], quote: str) -> bool:
     in so many words. The owner agreed to this reading on 2026-09-13.
     """
     if slot.kind == NUMBER:
-        return canonical_number(given) in numbers_in(quote)
+        wanted = canonical_number(given)
+        if wanted is None:
+            return False
+        if wanted.isdigit():
+            # Its digits in one run. `numbers_in` reads "2.022 MWh" as the
+            # grouped 2022, right for a magnitude and wrong for a year: an
+            # energy figure backed the year it happened to spell. A dated
+            # "31.12.2022" still prints its year in one run (owner decision
+            # 2026-09-23).
+            return re.search(rf"(?<!\d){re.escape(wanted)}(?!\d)",
+                             flat(quote)) is not None
+        return wanted in numbers_in(quote)
     said = flat(quote).casefold()
-    if wording:
-        return flat(wording).casefold() in said
     option = (option_named(slot, given)
               if slot.kind == CHOICE and slot.options else None)
+    if wording:
+        return stands_in(slot, option, flat(wording).casefold(), said)
     spellings = ((option.label, *option.synonyms) if option is not None
                  else (str(given),))
-    return any(flat(s).casefold() in said for s in spellings if s.strip())
+    return any(stands_in(slot, option, flat(s).casefold(), said)
+               for s in spellings if s.strip())
+
+
+def stands_in(slot, option, spelling: str, said: str) -> bool:
+    """Does this spelling stand in the quote where no longer entry of the
+    same list stands?
+
+    "MWh" is in "450 MWh/a", and what the passage states is the other entry:
+    the emission parameter's unit list has 72 such prefix pairs, and a bare
+    "t" was backed by "t CO2eq" -- the number stayed right, the flag for a
+    missing period went wrong. The longest entry at the spot wins (owner
+    decision 2026-09-23). Only ANOTHER option's entry shadows: the chosen
+    option's own longer spelling is the same answer.
+    """
+    if not spelling:
+        return False
+    longer = []
+    if option is not None and slot.options:
+        for other in slot.options:
+            if other is option:
+                continue
+            for s in (other.label, *other.synonyms):
+                s = flat(s).casefold()
+                if len(s) > len(spelling) and s.startswith(spelling):
+                    longer.append(s)
+    at = said.find(spelling)
+    while at != -1:
+        if not any(said.startswith(s, at) for s in longer):
+            return True
+        at = said.find(spelling, at + 1)
+    return False
 
 
 # Where one word ends and the next begins, for a language that writes ae
@@ -774,10 +840,11 @@ def _wrong_type(slot, given) -> Optional[str]:
     model as the reason its answer was refused.
     """
     if slot.kind == NUMBER:
+        whole = say("kind_whole_number")
         if isinstance(given, bool):
-            return "eine ganze Zahl"
+            return whole
         if isinstance(given, float):
-            return None if given.is_integer() else "eine ganze Zahl"
+            return None if given.is_integer() else whole
         if isinstance(given, int):
             return None
         try:
@@ -787,15 +854,117 @@ def _wrong_type(slot, given) -> Optional[str]:
             # back empty on one path and filled on the other.
             number = float(str(given).strip().replace(",", "."))
         except (TypeError, ValueError):
-            return "eine ganze Zahl"
-        return None if number.is_integer() else "eine ganze Zahl"
+            return whole
+        return None if number.is_integer() else whole
     if slot.kind == TEXT and not isinstance(given, str):
-        return "eine Angabe als Text"
+        return say("kind_text")
+    return None
+
+
+# The states of a plan whose year a row may name by a word instead of a
+# number, in the order their years are offered and matched, each with the key
+# a field request offers them under. Which frame pairs are which state is the
+# profile's to say: `BASE_YEAR`, `TARGET_YEAR`.
+YEAR_STATES = {"base": "base_years", "target": "target_years"}
+
+
+def state_years(pairs, frame_axes, where: Optional[dict], state: str) -> list:
+    """The years the document's frame found for one state of the plan, with
+    proof.
+
+    *where* is what the profile says makes a pair that state: which values of
+    the other frame coordinates (`BASE_YEAR` for the plan's own state,
+    `TARGET_YEAR` for its target). Every such pair was read with a quote that
+    prints its year, so each entry here carries that quote and its source:
+    {"state", "axis", "year", "quote", "source", "index"}. One entry per
+    year, the first pair that proved it. Empty when the profile does not name
+    the state or the frame has no number coordinate to date it with.
+    """
+    if not where or not pairs:
+        return []
+    dated = [slot for slot in frame_axes or () if slot.kind == NUMBER]
+    if len(dated) != 1:
+        return []
+    axis = dated[0].name
+    by_name = {slot.name: slot for slot in frame_axes}
+
+    def names(name, given, wanted) -> bool:
+        # By the entry an answer resolves to, so a spelling of it counts.
+        slot = by_name.get(name)
+        if slot is not None and slot.kind == CHOICE and slot.options:
+            got, want = option_named(slot, given), option_named(slot, wanted)
+            return got is not None and got is want
+        return given == wanted
+
+    found: list = []
+    seen: set = set()
+    for index, pair in enumerate(pairs):
+        if not isinstance(pair, dict):
+            continue
+        if not all(names(name, pair.get(name), value)
+                   for name, value in where.items()):
+            continue
+        year = pair.get(axis)
+        quote = pair.get(f"{axis}_quote")
+        source = pair.get(f"{axis}_source")
+        if year is None or not quote or not source:
+            continue
+        key = canonical_number(year)
+        if key in seen:
+            continue
+        seen.add(key)
+        found.append({"state": state, "axis": axis, "year": year,
+                      "quote": quote, "source": list(source), "index": index})
+    return found
+
+
+def named_years(pairs, frame_axes, states: Optional[dict]) -> list:
+    """The years of the document a row may name by the plan's word for them:
+    those of its own state, then those of its target (`YEAR_STATES`).
+
+    *states* is {state: what the profile says makes a pair that state}; a
+    state the profile does not name is absent or None and has no years. A
+    year the frame found for both states stands once under each.
+    """
+    found: list = []
+    for state in YEAR_STATES:
+        found.extend(state_years(pairs, frame_axes,
+                                 (states or {}).get(state), state))
+    return found
+
+
+def named_year(slot, given, wording: Optional[str], quote: str,
+               named) -> Optional[dict]:
+    """The year of the plan a year answer refers to by the plan's word for it.
+
+    A row whose table says "Basisjahr" or "Zieljahr" and prints no year states
+    its year elsewhere in the plan, once: where the frame read that state. The
+    model is shown those years with their quotes (`named_years`) and answers
+    one of them, citing the passage that names the state. That answer is
+    backed by two passages, each for its own half: the row's quote carries the
+    wording, the frame's quote carries the number. Anything else is None, and
+    the answer fails as any answer without its number in the quote does.
+
+    Which state the word means, and which of several years of that state, is
+    the model's reading and not checked (owner decisions 2026-09-22 and
+    2026-10-06): the number has to be one of the years shown. A number that
+    dates both states is cited from the first, the plan's own.
+    """
+    if slot.kind != NUMBER or not named or not wording:
+        return None
+    if flat(wording).casefold() not in flat(quote).casefold():
+        return None
+    number = canonical_number(given)
+    for entry in named:
+        if entry.get("axis") == slot.name \
+                and canonical_number(entry.get("year")) == number:
+            return entry
     return None
 
 
 def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
-                *, window: Optional[tuple] = None) -> dict:
+                *, window: Optional[tuple] = None,
+                bases: Optional[list] = None) -> dict:
     """Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
 
     *window* is (stage, index) and is written next to each coordinate this
@@ -808,8 +977,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
     that were SHOWN, AND it contains the answer. A field that fails either is
     left empty rather than written unbacked — the point of asking per field is
     that each coordinate is evidenced, and an answer that cannot show where it
-    read the year is exactly the answer a whole-tuple request used to hide
-    inside a tuple the value's quote had already justified.
+    read the year is exactly the answer that used to hide inside a tuple the
+    value's quote had already justified.
 
     Shown, not the row's own source: the year of a table is in its caption and
     the scenario is in the section heading, so a coordinate's evidence is
@@ -823,6 +992,14 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
     model's reading, not a rule of this function. Every reason a reading is
     dropped for is listed in `schema.DROP_REASONS`, and a test holds this
     function to that list.
+
+    *bases* are the years of the document a row may name by a word: its base
+    years and its target years (`named_years`). A year answer whose quote
+    carries its wording but not its number is read when the number is one of
+    them (owner decisions 2026-09-22 for the base year, 2026-10-06 for the
+    target year): the coordinate then cites the frame's passage for the year
+    and keeps the row's passage as its link (`<axis>_link_quote`,
+    `<axis>_link_source`).
     """
     reply = reply if isinstance(reply, dict) else {}
     pairs: list = []
@@ -839,6 +1016,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             pairs.append((label, group))
     by_label = {row.label: row for row in rows}
     filled = unquoted = unbacked = unstated = raw_missing = raw_foreign = 0
+    # Of `filled`, the years read by the plan's word for a state, per state.
+    via = {state: 0 for state in YEAR_STATES}
     # Not just how many failed but which, and why. A model that is told "R7:
     # the passage you cited is in none of the sources" can fix R7; a model
     # that is told nothing repeats itself, and the same window is worth
@@ -903,12 +1082,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 row.claim[f"{slot.name}_seen"] = noticed.strip()
             row.claim[f"{slot.name}_state"] = UNBACKED
             failed.append({"row": row.label, "why": "not_an_option",
-                           "given": given, "reason": (
-                f"Dein \"value\" {given!r} ist keiner der Einträge aus "
-                f"\"options\". Wähle genau einen Namen daraus, Zeichen für "
-                f"Zeichen abgeschrieben, auch einen mit \"out:\". Passt keiner, "
-                f"obwohl die Passage die Angabe nennt, dann lass \"value\" weg "
-                f"und gib die Bezeichnung in \"value_raw\".")})
+                           "given": given, "reason": say(
+                               "not_an_option", given=given)})
             unbacked += 1
             continue
         wrong = _wrong_type(slot, given)
@@ -919,9 +1094,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             # the graph was a value nobody had read anywhere.
             row.claim[f"{slot.name}_state"] = UNBACKED
             failed.append({"row": row.label, "why": "wrong_type",
-                           "given": given, "reason": (
-                f"Dein \"value\" {given!r} ist nicht {wrong}. "
-                f"Antworte mit {wrong}, genau wie die Passage es schreibt.")})
+                           "given": given, "reason": say(
+                               "wrong_type", given=given, wrong=wrong)})
             unbacked += 1
             continue
         quote = answer.get("quote")
@@ -935,34 +1109,32 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             row.claim[f"{slot.name}_state"] = UNBACKED
             failed.append({"row": row.label, "why": "quote_not_in_source",
                            "given": given, "raw": answer.get("value_raw"),
-                           "quote": quote, "reason": (
-                "Dein \"quote\" steht in keiner der gezeigten Quellen. "
-                "Kopiere eine Passage Zeichen für Zeichen aus \"sources\" "
-                "oder aus dem \"quote\" der Zeile selbst.")})
+                           "quote": quote, "reason": say(
+                               "quote_not_in_source")})
             unquoted += 1
             continue
         if len(quote.strip()) < MIN_QUOTE_CHARS:
             row.claim[f"{slot.name}_state"] = UNBACKED
             failed.append({"row": row.label, "why": "quote_too_short",
                            "given": given, "raw": answer.get("value_raw"),
-                           "quote": quote, "reason": (
-                f"Dein \"quote\" ist zu kurz, um eine Stelle zu benennen "
-                f"(mindestens {MIN_QUOTE_CHARS} Zeichen). Zitier den ganzen "
-                f"Satz oder die ganze Zeile, in der die Antwort steht.")})
+                           "quote": quote, "reason": say(
+                               "quote_too_short", minimum=MIN_QUOTE_CHARS)})
             unbacked += 1
             continue
         wording = answer.get("value_raw")
         wording = wording.strip() if isinstance(wording, str) and wording.strip() \
             else None
-        if not answer_in_quote(slot, given, wording, quote):
+        backed = answer_in_quote(slot, given, wording, quote)
+        named = None if backed else named_year(slot, given, wording, quote,
+                                               bases)
+        if not backed and named is None:
             row.claim[f"{slot.name}_state"] = UNBACKED
             shown_answer = wording or given
             failed.append({"row": row.label, "why": "answer_not_in_quote",
                            "given": given, "raw": wording, "quote": quote,
-                           "reason": (
-                f"Dein \"quote\" enthält {shown_answer!r} nicht. Zitier die "
-                f"Stelle, an der es wirklich steht, oder antworte mit "
-                f"\"{UNSTATED}\".")})
+                           "reason": say(
+                               "answer_not_in_quote", answer=shown_answer,
+                               unstated=UNSTATED)})
             unbacked += 1
             continue
         row.claim[f"{slot.name}_state"] = READ
@@ -990,14 +1162,30 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
         # The passage this one coordinate was read in, kept next to it. A
         # value and its year are two findings, and a graph that cites one
         # sentence for both is citing the wrong one for at least one of them.
-        row.claim[f"{slot.name}_quote"] = quote
-        row.claim[f"{slot.name}_source"] = [found.owner_kind, found.owner_id]
-        if window is not None:
-            row.claim[f"{slot.name}_window"] = list(window)
+        if named is not None:
+            # The number stands in the frame's passage, the wording in the
+            # row's: each is cited for the half it proves. The window says
+            # under which state the year was offered: `base_year` or
+            # `target_year`.
+            row.claim[f"{slot.name}_quote"] = named["quote"]
+            row.claim[f"{slot.name}_source"] = list(named["source"])
+            row.claim[f"{slot.name}_window"] = [f"{named['state']}_year",
+                                                named["index"]]
+            row.claim[f"{slot.name}_link_quote"] = quote
+            row.claim[f"{slot.name}_link_source"] = [found.owner_kind,
+                                                     found.owner_id]
+            via[named["state"]] += 1
+        else:
+            row.claim[f"{slot.name}_quote"] = quote
+            row.claim[f"{slot.name}_source"] = [found.owner_kind,
+                                                found.owner_id]
+            if window is not None:
+                row.claim[f"{slot.name}_window"] = list(window)
         filled += 1
     return {"filled": filled, "unquoted": unquoted, "unbacked": unbacked,
             "unstated": unstated, "raw_missing": raw_missing,
-            "raw_foreign": raw_foreign, "failed": failed}
+            "raw_foreign": raw_foreign, "via_base": via["base"],
+            "via_target": via["target"], "failed": failed}
 
 
 
@@ -1250,6 +1438,9 @@ def follow_up(batch: Batch, reply: dict, sweep: Sweep, more_sources: Callable,
                                 max_chars=max_chars)
     for one in extra_batches:
         one.followed_up = True
+        # The document's, not the request's: they hold for every passage.
+        one.bases = batch.bases
+        one.spec = batch.spec
     return extra_batches
 
 
@@ -1433,6 +1624,13 @@ def fold_batch(batch: Batch, reply: Optional[dict], report: DocumentReport, *,
         report.owners_harvested += len(batch.items)
 
 
+def repeat_key(row: dict) -> str:
+    """What makes one row another row written twice: everything but its
+    provenance, which is about the writing and not about the reading."""
+    return json.dumps({k: v for k, v in row.items() if k != "provenance"},
+                      sort_keys=True, ensure_ascii=False, default=str)
+
+
 def drop_repeats(report: DocumentReport) -> int:
     """Remove rows that are another row of this document, written twice.
 
@@ -1442,15 +1640,14 @@ def drop_repeats(report: DocumentReport) -> int:
     corpus_m5, which had no such pass: 1,152 of 62,290 tuples, up to 77 in one
     plan, and one office name eleven times.
 
-    `provenance` is left out of the comparison because it is about the writing
-    and not about the reading. The first of a repeated pair is the one kept,
-    so the file stays in the order the harvest produced.
+    `provenance` is left out of the comparison (`repeat_key`). The first of a
+    repeated pair is the one kept, so the file stays in the order the harvest
+    produced.
     """
     seen: set = set()
     kept: list = []
     for row in report.tuples:
-        key = json.dumps({k: v for k, v in row.items() if k != "provenance"},
-                         sort_keys=True, ensure_ascii=False, default=str)
+        key = repeat_key(row)
         if key in seen:
             continue
         seen.add(key)

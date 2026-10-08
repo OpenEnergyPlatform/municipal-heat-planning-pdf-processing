@@ -18,20 +18,31 @@ import json
 import logging
 import re
 import sqlite3
-import unicodedata
-import uuid
+from collections import Counter
 from pathlib import Path
 from typing import Optional
 
+from docpipe.extraction import graphkit
 from docpipe.extraction.fields import DERIVED
+from docpipe.extraction.graphkit import NOT_IN_GRAPH, ttl_comment, ttl_escape
+from docpipe.extraction.identity import tuple_ids
 from docpipe.extraction.spec import kg_name, load as load_spec
-from docpipe.extraction.trust import check_prose, render, trust
+from docpipe.store.schema import readonly_uri
+from docpipe.extraction.trust import (LEVEL_A, LEVEL_B, LEVEL_C, check_prose,
+                                      render, trust)
 
 log = logging.getLogger(__name__)
 
 BASE = "https://openenergyplatform.org/id/mhpkg/"
 OEO = "https://openenergyplatform.org/ontology/oeo/"
-NS_MHPKG = uuid.uuid5(uuid.NAMESPACE_URL, BASE)
+NS_MHPKG = graphkit.base_namespace(BASE)
+
+# Where the provenance of this graph's values is written under, and the
+# vocabulary that says it (docpipe/extraction/provenance.py). The terms are
+# the ones proposed to the ontology; until they are published there they
+# resolve nowhere, which is why the provenance is a file of its own.
+PROVENANCE = {"base": BASE, "prefix": "mhpx",
+              "iri": "https://purl.org/mhpo/prov/"}
 
 # Up here because every identifier below is qualified against it as it is
 # read, and a prefix this header does not bind writes Turtle nobody can load.
@@ -79,14 +90,6 @@ LEGAL = r"(gmbh\s*&\s*co\.?\s*kg|gmbh|mbh|ag|kg|ohg|e\.?\s*v\.?|gbr|se|ug)"
 
 _SPEC = json.loads(
     Path(__file__).with_name("extraction_spec.json").read_text(encoding="utf-8"))
-# The target quantity is per OEO class, not per parameter: which class a
-# value is gets decided by the model on the `quantity` axis, and the unit
-# hangs off the class.
-# The classes the graph takes. The remaining entries of the list start with
-# `out:` and are deliberately choosable non-classes: a cumulative sum, an
-# avoided or captured amount, a potential. They stand in the selection so
-# the model can CHOOSE them, instead of reaching for the nearest real class.
-NOT_IN_GRAPH = "out:"
 
 
 def is_class(value) -> bool:
@@ -102,6 +105,14 @@ def is_class(value) -> bool:
 
 
 _OEO_CLASS = re.compile(r"OEO_\d+")
+# The target quantity is per OEO class, not per parameter: which class a
+# value is gets decided by the model on the `quantity` axis, and the unit
+# hangs off the class.
+# The classes the graph takes. The remaining entries of the list start with
+# `out:` (NOT_IN_GRAPH) and are deliberately choosable non-classes: a
+# cumulative sum, an avoided or captured amount, a potential. They stand in
+# the selection so the model can CHOOSE them, instead of reaching for the
+# nearest real class.
 UNIT_TARGET = {uri: par["unit_target"]
                for par in _SPEC["parameters"]
                if par.get("unit_target")
@@ -313,7 +324,10 @@ def _bare(name: str) -> str:
 # passed it.
 EDGES = tuple(
     [{"where": "kg.py plan", "subject": _bare(CLS_HEATPLAN),
-      "predicate": _bare(P_PUBLICATION_DATE), "datatype": "xsd:date"},
+      "predicate": _bare(P_PUBLICATION_DATE), "datatype": "xsd:date",
+      "accepted": ("the MHPKG schema prescribes this slot on the plan with "
+                   "range date and calls it a near miss itself: OEO declares "
+                   "domain report and range xsd:dateTime")},
      {"where": "kg.py plan", "subject": _bare(CLS_HEATPLAN),
       "predicate": _bare(P_ORGANISATION), "object": _bare(CLS_ORGANISATION)},
      {"where": "kg.py area", "subject": _bare(CLS_PLAN_AREA),
@@ -338,18 +352,9 @@ def year_iri(year) -> str:
     return f"{BASE}year/{int(year)}"
 
 
-def ns(collection: str) -> uuid.UUID:
-    return uuid.uuid5(NS_MHPKG, collection)
-
-
 def normalise(label: str) -> str:
     """The umlaut rule from the policy, applied in order."""
-    s = unicodedata.normalize("NFC", label)
-    s = s.casefold()
-    s = re.sub(r"[^\w\s]", " ", s, flags=re.U)
-    s = re.sub(r"\s+", " ", s).strip()
-    s = re.sub(rf"\s+{LEGAL}$", "", s)
-    return s.strip()
+    return graphkit.normalise(label, LEGAL)
 
 
 def display_name(label: str) -> str:
@@ -363,7 +368,8 @@ def display_name(label: str) -> str:
 
 def mint(collection: str, name: str) -> str:
     """Tier 3: UUIDv5 over the identifying name. Never v4 — v4 is random."""
-    return f"{BASE}{collection}/{uuid.uuid5(ns(collection), name)}"
+    return (f"{BASE}{collection}/"
+            f"{graphkit.mint_uuid(NS_MHPKG, collection, name)}")
 
 
 def _iso_date(raw) -> str:
@@ -385,7 +391,7 @@ def _iso_date(raw) -> str:
 
 def _document_identity(db_path: Path, name: str):
     """(ags, published, municipality name, transcribed page count) or None."""
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    conn = sqlite3.connect(readonly_uri(db_path), uri=True)
     try:
         row = conn.execute(
             "SELECT id, published FROM Documents "
@@ -443,9 +449,16 @@ def heatplan_iri(db_path: Path, name: str) -> Optional[str]:
     return plan_iri(ags, published)
 
 
-def _value_iri(heatplan: str, row: dict) -> str:
+def _value_iri(heatplan: str, row: dict, label: str = "") -> str:
     # mint_slice.py's coordinate list; absent coordinates are empty segments
-    # so the arity never varies.
+    # so the arity never varies. *label* is the plan's own wording, appended
+    # only for a node that `settle` split off by wording.
+    #
+    # A carrier or sector names the node only where it gets an edge, and the
+    # edge writer takes a class and nothing else. An out: answer ("Summe")
+    # and an unstated coordinate serialize alike, and minted apart they were
+    # two nodes for one fact, the second a silent double count (owner
+    # decision 2026-09-23; the formula is mint_slice.py's and moves with it).
     # The area names the node only where it IS the identity. For a sub-area
     # it is: one plan carries four separate gas tables, one per heat-network
     # area, and without the name they collide onto one node and the conflict
@@ -460,13 +473,111 @@ def _value_iri(heatplan: str, row: dict) -> str:
     coordinates = "|".join([
         heatplan,
         f"{OEO}{row['quantity']}",
-        f"{OEO}{row['carrier']}" if row.get("carrier") else "",
-        f"{OEO}{row['sector']}" if row.get("sector") else "",
+        f"{OEO}{row['carrier']}" if is_class(row.get("carrier")) else "",
+        f"{OEO}{row['sector']}" if is_class(row.get("sector")) else "",
         str(row["year"]),
         f"{OEO}{row['aggregation']}",
         area,
-    ])
+    ] + ([label] if label else []))
     return mint("value", coordinates)
+
+
+# How far apart two readings of one number may lie and still be one rounded
+# statement of it: "rund 1,6 Mio. MWh" beside a table's 1.626.000. corpus_m5
+# dropped both sides of 642 such identities.
+ROUNDING_TOLERANCE = 0.02
+_RANK = {LEVEL_A: 0, LEVEL_B: 1, LEVEL_C: 2}
+
+
+def _precision(row: dict) -> int:
+    """Significant digits of the number as the plan printed it."""
+    printed = (row.get("value") if row.get("value") is not None
+               else row.get("value_target"))
+    try:
+        digits = re.sub(r"[^0-9]", "", format(float(printed), "f"))
+    except (TypeError, ValueError):
+        digits = re.sub(r"[^0-9]", "", str(printed))
+    return len(digits.strip("0")) or len(digits)
+
+
+def wording_key(row: dict) -> str:
+    """The plan's words for the two coordinates that fold onto one class.
+
+    "Wirtschaftlich genutzte Gebäude" and "Öffentliche Gebäude" are both
+    OEO_00000405 and are not one number; the wording is what tells them
+    apart, and it is what the node is named by when they collide.
+    """
+    return " / ".join((row.get(key) or "").strip()
+                      for key in ("carrier_raw", "sector_raw")).strip(" /")
+
+
+def settle(iri: str, rows: list, part: str, *,
+           transcribed: bool = False) -> tuple:
+    """({iri: row} kept, Counter skipped, {iri: marks}) for one identity.
+
+    One number several times is one node, marked as read twice. Different
+    numbers are settled in this order (owner decision 2026-09-23): the plan's
+    different wording splits them into a node each, named by that wording; a
+    rounded statement of the other loses to the more precise one; a lower
+    trust grade loses to the higher; and what is left is a question for a
+    human, so nothing stays. Every winner says in its comment what it won
+    over, so a curator can still audit the pick. The counts are per tuple
+    that left the graph: a repeat of the winner is a `duplicate`, a repeat
+    of a loser is one too, and the losers are `conflict:<rule>`.
+    """
+    kept: dict = {}
+    skipped: Counter = Counter()
+    marks: dict = {}
+    targets = {r["value_target"] for r in rows}
+    by_wording: dict = {}
+    for row in rows:
+        by_wording.setdefault(normalise(wording_key(row)), []).append(row)
+    if len(targets) > 1 and len(by_wording) > 1:
+        for key, group in by_wording.items():
+            label = wording_key(group[0])
+            sub_iri = _value_iri(part, group[0], label=key)
+            got, lost, named = settle(sub_iri, group, part,
+                                      transcribed=transcribed)
+            kept.update(got)
+            skipped.update(lost)
+            for node in got:
+                marks[node] = dict(named.get(node, {}), named=label)
+        skipped["split:wording"] += 1
+        return kept, skipped, marks
+    claims: dict = {}
+    for row in rows:
+        claims.setdefault(row["value_target"], []).append(row)
+    skipped["duplicate"] += len(rows) - len(claims)
+
+    def keep(row: dict, **mark) -> None:
+        kept[iri] = row
+        if len(claims[row["value_target"]]) > 1:
+            mark["corroborated"] = True
+        if mark:
+            marks[iri] = mark
+
+    if len(claims) == 1:
+        keep(rows[0])
+        return kept, skipped, marks
+    distinct = [group[0] for group in claims.values()]
+    low, high = min(claims), max(claims)
+    if high and (high - low) / abs(high) <= ROUNDING_TOLERANCE:
+        best = max(_precision(r) for r in distinct)
+        top = [r for r in distinct if _precision(r) == best]
+        if len(top) == 1:
+            keep(top[0], resolved="rounding")
+            skipped["conflict:rounding"] += len(distinct) - 1
+            return kept, skipped, marks
+    graded = [(_RANK[trust(r, transcribed=transcribed)["level"]], i, r)
+              for i, r in enumerate(distinct)]
+    best_rank = min(g[0] for g in graded)
+    winners = [g for g in graded if g[0] == best_rank]
+    if len(winners) == 1:
+        keep(winners[0][2], resolved="trust")
+        skipped["conflict:trust"] += len(distinct) - 1
+        return kept, skipped, marks
+    skipped["conflict"] += len(distinct)
+    return kept, skipped, marks
 
 
 # The words of the trust line; the marks and their order are the core's
@@ -484,18 +595,10 @@ TRUST_PROSE = check_prose({
 TRUST_JOIN = " · "
 
 
-def _ttl_comment(text) -> str:
-    """One Turtle comment line, flattened so a quote cannot break the file."""
-    flat = re.sub(r"\s+", " ", str(text or "")).strip()
-    return "# " + flat[:400]
-
-
-def _ttl_string(text) -> str:
-    """The inside of a Turtle "..." literal. A plan's own name for a sub-area
-    is printed as the plan quotes it, and corpus_m5 wrote 18 labels like
-    "Eignungsgebiet "Bad Dürrheim Nord"" that stop every Turtle parser."""
-    return (str(text).replace("\\", "\\\\").replace('"', '\\"')
-            .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t"))
+# A plan's own name for a sub-area is printed as the plan quotes it, and
+# corpus_m5 wrote 18 labels like "Eignungsgebiet "Bad Dürrheim Nord"" that
+# stop every Turtle parser: a label goes through `ttl_escape`, a comment
+# through `ttl_comment`.
 
 
 # Short English labels for the two coordinates that mint no OEO class of
@@ -541,7 +644,10 @@ def _english_label(uri) -> str:
 
 def evidence_comment(row: dict, document: str, *,
                      transcribed: bool = False,
-                     conflict: bool = False) -> list:
+                     conflict: bool = False,
+                     corroborated: bool = False,
+                     resolved: Optional[str] = None,
+                     named: Optional[str] = None) -> list:
     """Where this value was read, as comment lines above its node.
 
     The prototype's evidence: the wording the document used, the passage it
@@ -553,7 +659,8 @@ def evidence_comment(row: dict, document: str, *,
     # reader of the graph looks. Every accepted tuple is verified, and that
     # is a floor and not a grade: the level adds what else is known, an
     # image origin, a repaired quote, a contested identity.
-    verdict = trust(row, transcribed=transcribed, conflict=conflict)
+    verdict = trust(row, transcribed=transcribed, conflict=conflict,
+                    corroborated=corroborated)
     prov = row.get("provenance") or {}
     where = [f"{document}.pdf"]
     if prov.get("page"):
@@ -573,10 +680,10 @@ def evidence_comment(row: dict, document: str, *,
            scope,
            _english_label(row.get("carrier")),
            _english_label(row.get("sector"))]
-    lines = [_ttl_comment(" · ".join(x for x in what if x))] if any(what) else []
+    lines = [ttl_comment(" · ".join(x for x in what if x))] if any(what) else []
     if row.get("quote"):
-        lines.append(_ttl_comment(f'"{row["quote"]}"'))
-    lines.append(_ttl_comment(", ".join(where)))
+        lines.append(ttl_comment(f'"{row["quote"]}"'))
+    lines.append(ttl_comment(", ".join(where)))
     aggregation = row.get("aggregation")
     if aggregation:
         # How this coordinate was arrived at, in the one place a reader of the
@@ -587,23 +694,47 @@ def evidence_comment(row: dict, document: str, *,
         raw = (row.get("aggregation_raw") or "").strip()
         if row.get("aggregation_state") == DERIVED:
             note = f"Aggregation: {aggregation}"
-            lines.append(_ttl_comment(
+            lines.append(ttl_comment(
                 note + (f" (from the unit {raw})" if raw else "")))
         elif raw:
-            lines.append(_ttl_comment(f'Aggregation: {aggregation} "{raw}"'))
+            lines.append(ttl_comment(f'Aggregation: {aggregation} "{raw}"'))
     if row.get("compute"):
         # A value the sandbox computed carries the code and its inputs, so the
         # arithmetic is checkable without re-running anything.
-        lines.append(_ttl_comment(f"computed: {row['compute']}"))
+        lines.append(ttl_comment(f"computed: {row['compute']}"))
     if row.get("flags"):
-        lines.append(_ttl_comment("Flags: " + ", ".join(row["flags"])))
-    lines.append(_ttl_comment(render(verdict, TRUST_PROSE,
-                                     join=TRUST_JOIN, row=row)))
+        lines.append(ttl_comment("Flags: " + ", ".join(row["flags"])))
+    if named:
+        # Split off another reading of the same coordinates by the plan's
+        # own words for them; the words are what makes this node this node.
+        lines.append(ttl_comment(f'Named by the plan\'s wording: "{named}"'))
+    if resolved:
+        lines.append(ttl_comment(
+            {"rounding": "Kept over a rounded reading of the same number",
+             "trust": "Kept over a reading of the same coordinates with a "
+                      "lower trust level"}[resolved]))
+    lines.append(ttl_comment(render(verdict, TRUST_PROSE,
+                                    join=TRUST_JOIN, row=row)))
     return lines
 
 
+def _class_iri(identifier) -> Optional[str]:
+    """The IRI of a class the graph writes, or None for what is no class."""
+    if not identifier or not is_class(identifier):
+        return None
+    try:
+        return expand(qualified(identifier))
+    except KeyError:
+        return None
+
+
 def make_serializer(db_path: Path):
-    """(document name, accepted tuple rows) -> TTL string or None."""
+    """(document name, accepted tuple rows) -> TTL string or None.
+
+    What was written for a document is left in `serializer.claims[name]`:
+    the plan's node, and for every value its node, its row and the node or
+    class each coordinate became. The provenance file is written from that.
+    """
     header_pending = [True]
     # (ags, published) -> document name. Value IRIs are pure functions of
     # these coordinates, so two documents claiming one identity would merge
@@ -641,7 +772,16 @@ def make_serializer(db_path: Path):
             quantity = row.get("quantity")
             scope = row.get("spatial_scope")
             area = (row.get("spatial_scope_raw") or "").strip()
-            if row.get("scenario") not in PARTS:
+            if quantity not in UNIT_TARGET:
+                # The model chose one of the classes the graph does not take
+                # -- a potential, a cumulative sum, a captured amount.
+                # Counted by what it chose, which is the useful thing to
+                # read. FIRST: a row the gate closed on its quantity never
+                # had its scenario asked, and counted under the scenario it
+                # was "scenario_unread" -- 37,333 of corpus_m5's 42,882, a
+                # gate decision reported as a reading failure.
+                skip(f"not_a_class:{quantity or row.get('quantity_raw') or '?'}")
+            elif row.get("scenario") not in PARTS:
                 # A scenario nobody read is not the same finding as one the
                 # graph has no node for, and counting them together hid the
                 # first: a row with no scenario at all is a coordinate the
@@ -656,11 +796,6 @@ def make_serializer(db_path: Path):
                 skip("sub_area_unnamed")
             elif not isinstance(row.get("year"), int):
                 skip("year")
-            elif quantity not in UNIT_TARGET:
-                # The model chose one of the classes the graph does not take —
-                # a potential, a cumulative sum, a captured amount. Counted by
-                # what it chose, which is the useful thing to read.
-                skip(f"not_a_class:{quantity or row.get('quantity_raw') or '?'}")
             elif not row.get("aggregation"):
                 # No aggregation, no node. It used to become a year's sum by
                 # default, which is a claim about the value that nothing in
@@ -697,37 +832,28 @@ def make_serializer(db_path: Path):
         part_iri = {key: f"{BASE}{segment}/AGS_{ags}_{published}"
                     for key, (_cls, segment, _label) in PARTS.items()}
         municipality_iri = f"{BASE}municipality/AGS_{ags}"
-        place = _ttl_string(municipality or f"AGS {ags}")
+        place = ttl_escape(municipality or f"AGS {ags}")
 
-        values: dict = {}
-        conflicted: set = set()
+        # Every row that minted one identity, settled together (`settle`):
+        # a repeat is one node marked as read twice, and different numbers
+        # are told apart by the plan's wording, by rounding, or by trust
+        # before they are a question for a human. What leaves the graph is
+        # counted per tuple: counting only the second claimant once made
+        # every report short by one per contested identity (Kassel: 217
+        # counted where 317 tuples were lost across 100 identities).
+        claims: dict = {}
         for row in kept:
-            iri = _value_iri(part_iri[row["scenario"]], row)
-            if iri in conflicted:
-                skip("conflict")
-                continue
-            other = values.get(iri)
-            if other is None:
-                values[iri] = row
-            elif other["value_target"] != row["value_target"]:
-                # Same coordinates, different magnitude: a human question,
-                # not a coin toss. Drop both, loudly.
-                #
-                # BOTH, so the number is the number of tuples that left the
-                # graph. Counting only the second claimant made every report
-                # short by one per contested identity: measured over Kassel,
-                # 217 counted where 317 tuples were lost across 100
-                # identities, and every estimate built on that log line was
-                # optimistic by the same 100.
-                skip("conflict", 2)
-                values.pop(iri)
-                conflicted.add(iri)
-            else:
-                # The same number a second time, from another passage. One
-                # node either way, so this is not a loss — but it is not
-                # nothing, and a repeat absorbed in silence is
-                # indistinguishable from a reading that never happened.
-                skip("duplicate")
+            claims.setdefault(_value_iri(part_iri[row["scenario"]], row),
+                              []).append(row)
+        values: dict = {}
+        marks: dict = {}
+        for iri, rows_of in claims.items():
+            got, lost, named = settle(iri, rows_of, part_iri[rows_of[0]["scenario"]],
+                                      transcribed=bool(transcribed))
+            values.update(got)
+            marks.update(named)
+            for reason, n in lost.items():
+                skip(reason, n)
         if not values:
             log.info("kg: %s: nothing serializable (skipped %s)", name, skipped)
             return None
@@ -784,8 +910,8 @@ def make_serializer(db_path: Path):
     {P_HAS_QUANTITY_VALUE} {value_refs} .
 """)
         for iri, row in values.items():
-            lines = evidence_comment(row, name,
-                                     transcribed=bool(transcribed))
+            lines = evidence_comment(row, name, transcribed=bool(transcribed),
+                                     **marks.get(iri, {}))
             lines += [f"<{iri}>",
                       f"    a oeo:{row['quantity']} ;",
                      f"    {P_NUMBER} \"{float(row['value_target'])!r}\"^^xsd:float ;",
@@ -820,7 +946,7 @@ def make_serializer(db_path: Path):
             labelled.add(iri)
             parts.append(f"<{iri}>\n"
                          f"    a {CLS_ORGANISATION} ;\n"
-                         f"    rdfs:label \"{_ttl_string(label)}\" .\n")
+                         f"    rdfs:label \"{ttl_escape(label)}\" .\n")
         # Sub-areas exist as nodes and are part of the municipality area. What
         # is missing is the edge from a VALUE to the area it holds for: the
         # schema has no slot for it, and its TERM REQUEST 1 asks for a
@@ -831,15 +957,37 @@ def make_serializer(db_path: Path):
         for key, label in sorted(areas.items()):
             parts.append(f"<{mint('heatplanarea', f'{ags}|{key}')}>\n"
                          f"    a {CLS_PLAN_AREA} ;\n"
-                         f"    rdfs:label \"{_ttl_string(label)}\" ;\n"
+                         f"    rdfs:label \"{ttl_escape(label)}\" ;\n"
                          f"    {P_PART_OF} <{municipality_iri}> .\n")
         parts.append(f"""\
 <{municipality_iri}>
     a {CLS_MUNICIPALITY} ;
     rdfs:label "Gemeindegebiet {place}" .
 """)
+        names = dict(zip(map(id, rows), tuple_ids(name, rows)))
+
+        def bodies(row: dict) -> dict:
+            area = municipality_iri
+            if row.get("spatial_scope") == "sub_area":
+                key = normalise(row["spatial_scope_raw"])
+                area = mint("heatplanarea", f"{ags}|{key}")
+            found = {"quantity": _class_iri(row.get("quantity")),
+                     "carrier": _class_iri(row.get("carrier")),
+                     "sector": _class_iri(row.get("sector")),
+                     "aggregation": _class_iri(row.get("aggregation")),
+                     "year": year_iri(row["year"]),
+                     "scenario": part_iri[row["scenario"]],
+                     "spatial_scope": area}
+            return {axis: iri for axis, iri in found.items() if iri}
+
+        serializer.claims[name] = {
+            "document": heatplan, "transcribed": bool(transcribed),
+            "values": [{"about": iri, "row": row, "id": names.get(id(row)),
+                        "bodies": bodies(row)}
+                       for iri, row in values.items()]}
         return "\n".join(parts)
 
+    serializer.claims = {}
     return serializer
 
 

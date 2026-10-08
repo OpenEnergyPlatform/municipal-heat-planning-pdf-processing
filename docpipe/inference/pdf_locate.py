@@ -19,12 +19,20 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Optional
 
 log = logging.getLogger(__name__)
 
 MIN_SCORE = 55.0
 MAX_LINES = 10
+
+# PyMuPDF is not thread-safe, and the chat runs every browser session on a
+# thread of its own: a rerun starts while the script it replaced is still
+# drawing. Whoever enters the library holds this around the call itself, not
+# around what is kept from it (a lock on the memo dicts once let eight threads
+# lay out PDFs at once).
+MUPDF_LOCK = threading.Lock()
 
 
 _MISSING: Optional[str] = None
@@ -86,18 +94,19 @@ def page_words(pdf_path, page_number: int) -> Optional[list]:
     if not _have_deps():
         return None
     import fitz
-    try:
-        doc = fitz.open(str(pdf_path))
-    except Exception:
-        return None
-    try:
-        if not (1 <= int(page_number) <= doc.page_count):
+    with MUPDF_LOCK:
+        try:
+            doc = fitz.open(str(pdf_path))
+        except Exception:
             return None
-        return doc.load_page(int(page_number) - 1).get_text("words")
-    except Exception:
-        return None
-    finally:
-        doc.close()
+        try:
+            if not (1 <= int(page_number) <= doc.page_count):
+                return None
+            return doc.load_page(int(page_number) - 1).get_text("words")
+        except Exception:
+            return None
+        finally:
+            doc.close()
 
 
 def rects_from_words(words: list, quote: str,

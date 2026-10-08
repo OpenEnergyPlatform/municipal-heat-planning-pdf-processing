@@ -20,9 +20,12 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from docpipe import usage
-from docpipe.profile import add_profile_argument, resolve_profile
+from docpipe.artifacts import document_dirs
+from docpipe.profile import add_profile_argument, program, resolve_profile
+from docpipe.store import schema as store_schema
 
 from .config import (
+    ALLOW_MIXED_INDEX,
     EMBED_FLUSH_ITEMS,
     EMBED_PREPARE_AHEAD,
     EMBED_PREPARE_WORKERS,
@@ -45,15 +48,42 @@ from .database import (
 )
 from .chunking import build_embedding_inputs
 from .embedding import (
+    IncompleteIndex,
+    Unembedded,
     load_or_create_index,
     index_ids,
     save_index,
     remove_ids_from_index,
     create_embeddings,
+    index_backend,
     load_embedder,
 )
 
 log = logging.getLogger(__name__)
+
+
+def note_embedding(db_path: Path, embedder) -> None:
+    """Record in the database which model builds its index.
+
+    Raises `MixedIndex` before any vector is written when the index holds
+    vectors of another model, unless that is allowed on purpose
+    (`EMBEDDING_ALLOW_MIXED_INDEX`); then, like an index that records no
+    model and so cannot be checked, it is a line in the log.
+    """
+    import sqlite3
+
+    from docpipe import __version__
+    from docpipe.embedding import config as backend
+    model = getattr(embedder, "model", None)
+    if not isinstance(model, str):
+        model = EMBEDDING_MODEL
+    with sqlite3.connect(str(db_path)) as connection:
+        said = store_schema.note_embedding(
+            connection, model, backend.EMBEDDING_DIM, index_backend(),
+            backend.EMBEDDING_MAX_TOKEN_LENGTH, __version__,
+            allow_mixed=ALLOW_MIXED_INDEX)
+    if said:
+        log.warning("%s", said)
 
 
 def peak_rss_gb() -> float:
@@ -107,6 +137,9 @@ def run(
     'enrich-bbox', 'enrich-page-source' or 'enrich-caption'; None runs
     merge → db → embed (the db step backfills the page source and the
     captions itself). `force` ignores caches and clears old embeddings.
+
+    The embed step raises IncompleteIndex when inputs were left without a
+    vector, after it saved the index with the ones that have one.
     """
     data_dir = Path(data_dir)
     db_path = Path(db_path)
@@ -148,8 +181,7 @@ def run(
     # or the embed step can no longer evict the stale vectors from the index.
     evict_ids: dict[str, list[int]] = {}
     if force and "db" in steps and "embed" in steps:
-        for d in sorted(p for p in data_dir.iterdir()
-                        if p.is_dir() and (p / DOCUMENT_JSON).exists()):
+        for d in document_dirs(data_dir, DOCUMENT_JSON):
             ids = get_document_faiss_ids(db_path, d.name)
             if ids:
                 evict_ids[d.name] = ids
@@ -190,11 +222,9 @@ def run(
         next_id = max(next_id, next_faiss_id(db_path),
                       (max(held) + 1) if held else 0)
         embedder = load_embedder(EMBEDDING_MODEL)
+        note_embedding(db_path, embedder)
 
-        candidates = sorted(
-            d for d in data_dir.iterdir()
-            if d.is_dir() and (d / DOCUMENT_JSON).exists()
-        )
+        candidates = document_dirs(data_dir, DOCUMENT_JSON)
 
         log.info("Found %d PDFs with merged output", len(candidates))
 
@@ -244,6 +274,10 @@ def run(
         pending: list = []
         docs_with_inputs = 0
         embedded = 0
+        # Inputs a batch could not embed. The run goes on with the others and
+        # ends on them: they have no row, so a rerun finds them again, but a
+        # run that exits 0 over them tells the next stage the index is whole.
+        missed = Unembedded()
         # The index is one file rewritten whole, so it is saved on vectors
         # added since the last save — not per chunk, which was a ~16 GB write
         # every 4096 items with the GPUs waiting for it.
@@ -256,10 +290,12 @@ def run(
                 docs_with_inputs += 1
                 pending.extend(inputs)
                 if len(pending) >= EMBED_FLUSH_ITEMS:
-                    embedded += len(pending)
+                    before = next_id
                     next_id = create_embeddings(
                         pending, index, next_id, db_path, embedder=embedder,
+                        unembedded=missed,
                     )
+                    embedded += next_id - before
                     pending = []
                     if index.ntotal - saved_ntotal >= EMBED_SAVE_VECTORS:
                         save_index(index, index_path)
@@ -270,14 +306,17 @@ def run(
                              peak_rss_gb())
 
         if pending:
-            embedded += len(pending)
+            before = next_id
             next_id = create_embeddings(
                 pending, index, next_id, db_path, embedder=embedder,
+                unembedded=missed,
             )
+            embedded += next_id - before
 
         log.info(
-            "Embedded %d new items across %d/%d docs",
-            embedded, docs_with_inputs, len(candidates),
+            "Embedded %d new item(s) across %d/%d docs that had open items; "
+            "%d item(s) failed",
+            embedded, docs_with_inputs, len(candidates), len(missed),
         )
         if unregistered:
             log.warning(
@@ -287,14 +326,18 @@ def run(
                 len(unregistered), ", ".join(sorted(unregistered)[:5])
                 + (" …" if len(unregistered) > 5 else ""))
 
+        # What was embedded is kept either way; only then is the run said to
+        # be incomplete.
         save_index(index, index_path)
+        if missed:
+            raise IncompleteIndex(missed.sentence())
         log.info("Embedding complete: %d total vectors in index", index.ntotal)
 
 
 def _build_parser() -> argparse.ArgumentParser:
     """Build the CLI argument parser."""
     p = argparse.ArgumentParser(
-        prog="python -m docpipe.chunking",
+        prog=program("docpipe.chunking"),
         description="Chunking & Embedding – Merge, embed, and index pipeline outputs",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
@@ -363,6 +406,16 @@ def main() -> None:
             force=args.force,
         )
         sys.exit(0)
+    except IncompleteIndex as e:
+        log.error("Embedding incomplete: %s", e)
+        sys.exit(1)
+    except store_schema.MixedIndex as e:
+        log.error("Embedding stopped: %s", e)
+        log.error("Set EMBEDDING_MODEL to %s to continue the index, or run "
+                  "without --step and with --force to embed the whole corpus "
+                  "with %s, or set EMBEDDING_ALLOW_MIXED_INDEX=1 to mix them "
+                  "on purpose.", e.recorded, e.configured)
+        sys.exit(1)
     except Exception as e:
         log.error("Fatal error: %s", e, exc_info=True)
         sys.exit(1)

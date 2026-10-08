@@ -77,7 +77,7 @@ def read(paths: list)
 ### index
 
 ```python
-def index(graph) -> dict
+def index(graph, language: str) -> dict
 ```
 
 identifier -> {kind, label, alt_labels, definition, parents, deprecated}.
@@ -85,6 +85,13 @@ identifier -> {kind, label, alt_labels, definition, parents, deprecated}.
 Properties as well as classes and individuals. Without them a spec's `kg`
 blocks -- which name predicates and nothing else -- read as a list of
 terms the ontology does not have.
+
+`parents` is what a term is under: a class's superclasses, a property's
+superproperties, and for an individual the classes it is asserted into.
+
+`language` is the tag of the alternative labels a term carries: the
+language the corpus writes its words in, which the profile says
+(`extraction.ALT_LABEL_LANGUAGE`). The core names none.
 
 ### closures
 
@@ -116,14 +123,22 @@ checks nothing reads exactly like a spec with nothing wrong.
 ### build
 
 ```python
-def build(closure: Path, sets: dict, spec_raw: dict, *,
-          extra: Optional[list] = None, base: str = "") -> dict
+def build(closure: Path, sets: dict, spec_raw: dict, *, language: str,
+          extra: Optional[list] = None, base: str = "",
+          also: tuple = ()) -> dict
 ```
 
 The vocabulary snapshot, from the ontology files as they stand.
 
-`extra` are further files parsed into the same graph (MHPO, say); `base`
-is the IRI prefix whose ontology header carries the version to pin.
+`language` is the tag of the alternative labels the snapshot keeps, the
+profile's to say (see `index`); there is no default, so a caller cannot
+leave it to the core. `extra` are further files parsed into the same
+graph (MHPO, say); `base` is the IRI prefix whose ontology header carries
+the version to pin. `also` are identifiers the snapshot has to carry
+although the spec does not name them: the classes a writer's own edges
+name. `edge_problems` asks whether a subject is under a predicate's
+domain, and a subject the snapshot does not carry has no parents to
+answer with.
 
 ### shacl_report
 
@@ -265,5 +280,42 @@ defect: an option labelled with a specific word whose class is a generic
 one. "Klaerschlamm" offered as OEO_00000439 waste fuel does not mean the
 model chose badly -- it means every sewage-sludge reading in the corpus
 becomes a generic waste fuel and nobody looking at the graph can tell.
+
+This is also the note on a label that differs from the pin's: an entry is
+named when its first label is neither the pin's label nor one of the pin's
+alternative labels. A German word the pin records as an alternative label
+is not named, and that keeps kwp's corpus words, which the pin knows,
+from being noise. `definition_differences` leaves labels to this.
+
+### definition_differences
+
+```python
+def definition_differences(spec_raw: dict, snapshot: dict) -> list
+```
+
+(where, class, kind, spec text, pin text), one per class and kind.
+
+What the model reads of a class stands in the spec, the pin is the
+yardstick the spec is held to, so a refresh that moves a definition moves
+nothing the model is asked until somebody edits the spec. This says where
+the two have drifted apart and decides nothing:
+
+  REWRITTEN  the spec has a definition and the pin's words are others.
+  PIN_ONLY   the pin defines the class and the spec says nothing of it.
+
+A definition only the spec has is the author's own words and is not a
+difference to anything. Words are compared with their white space
+folded, so a line break is no rewrite. A class that is no term of the pin
+(the profile's own "out:" entries, a region) has nothing to be held to.
+Labels are not compared here: `foreign_labels` already names every entry
+whose first label is neither the pin's nor one of its alternative labels.
+
+### definition_note
+
+```python
+def definition_note(difference: tuple) -> str
+```
+
+The line a refresh prints for one entry of `definition_differences`.
 
 [Back to the index](../README.md)

@@ -21,8 +21,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
-from docpipe import prompts, usage
-from docpipe.profile import add_profile_argument, resolve_profile
+from docpipe import prompts, reading, usage
+from docpipe.artifacts import VISUALS_VERSION, document_dirs
+from docpipe.profile import add_profile_argument, program, require_profile
 
 from docpipe.llm_preflight import assert_serving
 
@@ -38,6 +39,7 @@ from .config import (
     dump_json_atomic,
     max_request_tokens,
 )
+from . import replies
 from .models import ProcessingStats
 from .vision import create_client, check_model_available
 from .process import process_table, process_figure
@@ -53,12 +55,16 @@ DOC_PARALLEL = int(os.environ.get("DOC_PARALLEL", "8"))
 # Input resolution
 # ---------------------------------------------------------------------------
 
+# What this stage reads, best first: the Stage-4 output, else the Stage-3 one.
+INPUT_JSONS = (SECTIONS_REFINED_JSON, SECTIONS_JSON)
+
+
 def _resolve_input(output_dir: Path) -> Optional[Path]:
     """
     Best available input JSON inside a preprocessing output_dir: the Stage-4
     output, else the Stage-3 one. None if neither exists.
     """
-    for candidate in (SECTIONS_REFINED_JSON, SECTIONS_JSON):
+    for candidate in INPUT_JSONS:
         p = output_dir / candidate
         if p.exists():
             return p
@@ -90,6 +96,26 @@ def _load_source_texts(output_dir: Path) -> dict[str, str]:
     return out
 
 
+# What an older run wrote for a table or figure it never got an object for:
+# the model's plain-text answer, under this status. This version asks for the
+# object only and no longer takes such an answer as read; the key is read here
+# for the files that carry it, and written nowhere.
+PLAIN_TEXT_STATUS = "plain_text"
+
+
+def collect_cached(data: dict, into: dict) -> None:
+    """Into *into*, by id: every table of *data* that carries its markdown
+    and every figure that carries its description. What a later run does
+    not ask the model for again, and what `docpipe status` counts as done."""
+    for section in data.get("sections", []):
+        for t in section.get("tables", []):
+            if t.get("markdown"):
+                into[t["id"]] = t
+        for fig in section.get("figures", []):
+            if fig.get("description"):
+                into[fig["id"]] = fig
+
+
 # ---------------------------------------------------------------------------
 # Single-directory processing
 # ---------------------------------------------------------------------------
@@ -103,6 +129,7 @@ def run_single(
     force_stale: bool = False,
     base_url: Optional[str] = None,
     model: Optional[str] = None,
+    holes: Optional[list] = None,
 ) -> Optional[dict]:
     """
     Sends each table/figure image in one PDF's output directory to the vision
@@ -110,7 +137,14 @@ def run_single(
 
     Caching is item-level: tables that already have a "markdown" key and figures
     that already have a "description" key are reused from a previous enriched
-    output unless *force* is set. *input_json* is relative to *output_dir*.
+    output unless *force* is set. An item the model gave no object for has
+    none, says why in "vlm_why", and is asked again by the next run. An item
+    an older run stored as a plain-text answer is treated like one described
+    under older prompts: said once, with its number, and asked again only with
+    *force_stale*. *input_json* is relative to *output_dir*.
+
+    *holes*, when given, gets one entry (`_hole_entry`) for a document with
+    items that ended without content.
 
     Returns:
         Enriched data dict, or None on failure.
@@ -134,13 +168,20 @@ def run_single(
         try:
             with open(out_path, "r", encoding="utf-8") as f:
                 cached_data = json.load(f)
-            for section in cached_data.get("sections", []):
-                for t in section.get("tables", []):
-                    if t.get("markdown"):
-                        cached_items[t["id"]] = t
-                for fig in section.get("figures", []):
-                    if fig.get("description"):
-                        cached_items[fig["id"]] = fig
+            collect_cached(cached_data, cached_items)
+            plain = [i for i, item in cached_items.items()
+                     if item.get("vlm_status") == PLAIN_TEXT_STATUS]
+            if plain and force_stale:
+                log.info("%d cached item(s) were stored as a plain-text "
+                         "answer by an older run, describing them again",
+                         len(plain))
+                for item_id in plain:
+                    del cached_items[item_id]
+            elif plain:
+                log.warning("%d cached item(s) were stored as a plain-text "
+                            "answer by an older run, which is no longer "
+                            "taken as read; re-run with --force-stale to "
+                            "ask for them again", len(plain))
             if cached_items:
                 log.info(
                     "Loaded %d cached items from previous run: %s",
@@ -201,6 +242,7 @@ def run_single(
         log.info(stats.summary())
         enriched = _merge_cache(data, cached_items)
         _strip_source_text(enriched)
+        _set_version(enriched)
         dump_json_atomic(enriched, out_path)
         return enriched
 
@@ -252,8 +294,13 @@ def run_single(
                     model=model, lock=lock,
                 )
         except Exception as e:  # never let one item kill the whole run
-            log.error("  ✗ %s %s crashed: %s", kind, item.get("id", "?"), e)
-            res = item
+            log.error("  ✗ %s %s crashed: %s", kind, item.get("id", "?"), e,
+                      exc_info=True)
+            # An item without content, counted like every other and with the
+            # cause an error of our own is.
+            with lock:
+                stats.hole(kind, "error")
+            res = {**item, "vlm_why": "error"}
         return kind, si, ti, res
 
     if tasks:
@@ -264,12 +311,37 @@ def run_single(
 
     # Write unconditionally, to persist partial progress.
     _strip_source_text(enriched)
+    _set_version(enriched)
     log.info("Writing: %s", out_path)
     dump_json_atomic(enriched, out_path)
     prompts.record(output_dir, PROMPT_IDS)
 
     log.info(stats.summary())
+    if holes is not None and stats.hole_causes:
+        holes.append(_hole_entry(output_dir, stats))
     return enriched
+
+
+def _hole_entry(output_dir: Path, stats: ProcessingStats) -> dict:
+    """What a document left without content, in the units each number counts:
+    tables and figures, and how many items each cause is the cause of."""
+    return {"document": output_dir.name, "tables": stats.failed_tables,
+            "figures": stats.failed_figures, "causes": dict(stats.hole_causes)}
+
+
+def summarise(holes: list) -> str:
+    """One sentence for the items a run left without content, in tables,
+    figures and documents. *holes* are the entries `run_single` adds, one per
+    document."""
+    causes: dict = {}
+    for entry in holes:
+        for cause, n in entry["causes"].items():
+            causes[cause] = causes.get(cause, 0) + n
+    return (f"Stage 5: {sum(h['tables'] for h in holes)} table(s) and "
+            f"{sum(h['figures'] for h in holes)} figure(s) in {len(holes)} "
+            f"document(s) have no content; item(s) by cause: "
+            + ", ".join(f"{c} {n}" for c, n in sorted(causes.items()))
+            + "; the next run asks only for those")
 
 
 def _strip_source_text(enriched: dict) -> None:
@@ -282,6 +354,19 @@ def _strip_source_text(enriched: dict) -> None:
         for t in section.get("tables", []):
             if isinstance(t, dict):
                 t.pop("source_text", None)
+
+
+def _set_version(enriched: dict) -> None:
+    """Put this file's own version first, in place.
+
+    The output is a copy of its input, and an input read from sections.json
+    carries that file's version: the two are counted apart, so whatever the
+    copy brought is replaced rather than kept.
+    """
+    rest = {k: v for k, v in enriched.items() if k != "version"}
+    enriched.clear()
+    enriched["version"] = VISUALS_VERSION
+    enriched.update(rest)
 
 
 def _merge_cache(data: dict, cached_items: dict[str, dict]) -> dict:
@@ -306,8 +391,8 @@ def run_batch(
     **kwargs,
 ) -> dict[str, bool]:
     """
-    Runs enrichment for every subdirectory under *root_dir* that contains one of
-    the expected structured output JSONs.
+    Runs enrichment for every document directory under *root_dir*, at any
+    depth, that contains one of the expected structured output JSONs.
 
     Returns:
         Dict mapping directory name → success boolean.
@@ -315,10 +400,7 @@ def run_batch(
     root_dir = Path(root_dir)
     results: dict[str, bool] = {}
 
-    candidates = sorted(
-        d for d in root_dir.iterdir()
-        if d.is_dir() and _resolve_input(d) is not None
-    )
+    candidates = document_dirs(root_dir, *INPUT_JSONS)
 
     if not candidates:
         log.warning("No PDF output directories found in '%s'.", root_dir)
@@ -391,7 +473,7 @@ def run(
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="python -m docpipe.visuals",
+        prog=program("docpipe.visuals"),
         description="Image Processing – Vision-LLM enrichment of tables and figures",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
@@ -470,7 +552,7 @@ def main() -> None:
         datefmt="%H:%M:%S",
     )
 
-    profile = resolve_profile(args)
+    profile = require_profile(args)
     usage.begin("visuals")
 
     # Lets the job script derive --max-model-len from the code instead of
@@ -479,17 +561,23 @@ def main() -> None:
         print(max_request_tokens())
         sys.exit(0)
 
+    # The sentences a retry says are the profile's, and a profile that lacks
+    # one hears about it now, not in the middle of the first document. A run
+    # that asks nothing of the model (the budget above, a dry run) needs none.
+    if not args.dry_run:
+        reading.phrases()
+
     if args.input is None:
-        if profile is None:
-            raise SystemExit("give an input path or a --profile to take it from")
         args.input = str(profile.processed_dir)
 
+    holes: list = []
     common = dict(
         dry_run=args.dry_run,
         force=args.force,
         force_stale=args.force_stale,
         base_url=args.base_url,
         model=args.model,
+        holes=holes,
     )
 
     if args.input_json:
@@ -501,14 +589,20 @@ def main() -> None:
         if not args.dry_run:
             assert_serving(args.base_url or VLM_BASE_URL, VLM_API_KEY,
                            args.model or VLM_MODEL, max_request_tokens(),
-                           what="image enrichment")
+                           what="image enrichment", role="vlm",
+                           shapes=dict((replies.TABLE, replies.FIGURE)))
         if args.batch:
             results = run_batch(Path(args.input), **common)
             ok = sum(1 for v in results.values() if v)
-            sys.exit(0 if ok == len(results) else 1)
+            code = 0 if ok == len(results) else 1
         else:
             result = run_single(Path(args.input), **common)
-            sys.exit(0 if result is not None else 1)
+            code = 0 if result is not None else 1
+        # An item without content is a result with a cause and does not change
+        # the exit code; it is said once, in the units it is counted in.
+        if holes:
+            log.warning("%s", summarise(holes))
+        sys.exit(code)
     except Exception as e:
         log.error("Fatal error: %s", e, exc_info=True)
         sys.exit(1)

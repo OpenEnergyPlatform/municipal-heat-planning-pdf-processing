@@ -29,36 +29,52 @@ def corpus():
 
 def test_no_hits_returns_an_empty_answer(monkeypatch, corpus):
     monkeypatch.setattr(answer.llm_client, "make_search_phrase", lambda *a, **k: ("p", False))
-    monkeypatch.setattr(answer.faiss_store, "retrieve", lambda *a, **k: [])
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", lambda *a, **k: [])
     out = answer.answer_question("Frage?", corpus, 1, [config.SCOPE_TEXT])
     assert out["answer"] is None and out["n_hits"] == 0 and out["phrase"] == "p"
 
 
+def _said(*statements, complete=True):
+    """What the model wrote for one batch, in the shape the answer call
+    returns it."""
+    return {"statements": list(statements), "complete": complete,
+            "compute": [], "attached_images": [], "requested": [],
+            "fault": None}
+
+
+def _text(statement, index, quote):
+    return {"statement": statement, "basis": "text", "index": index,
+            "quote": quote}
+
+
 def test_grounded_answer_carries_its_citation(monkeypatch, corpus):
+    # The real check: nothing here stands in for `grounded_quote`.
     monkeypatch.setattr(answer.llm_client, "make_search_phrase", lambda *a, **k: ("p", False))
-    monkeypatch.setattr(answer.faiss_store, "retrieve", lambda *a, **k: [_hit(0)])
-    monkeypatch.setattr(answer.llm_client, "answer_from_sources", lambda *a, **k: {
-        "found": True, "complete": True, "answer": "100 GWh.",
-        "supports": [{"index": 0, "quote": "Der Wärmebedarf betrug 100 GWh."}]})
-    monkeypatch.setattr(answer.llm_client, "grounded_quote", lambda q, it: q)
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", lambda *a, **k: [_hit(0)])
+    monkeypatch.setattr(answer.llm_client, "answer_from_sources", lambda *a, **k: _said(
+        _text("100 GWh.", 0, "Der Wärmebedarf betrug 100 GWh.")))
 
     out = answer.answer_question("Wärmebedarf?", corpus, 1, [config.SCOPE_TEXT])
-    assert out["answer"] == "100 GWh."
+    assert out["answer"] == "100 GWh. [1]"          # one statement: a sentence
+    assert out["answer_text"] == "100 GWh."
     assert out["n_findings"] == 1
     assert out["citations"][0]["quote"].startswith("Der Wärmebedarf")
+    assert out["citations"][0]["n"] == 1
+    assert (out["statements_made"], out["statements_shown"],
+            out["statements_dropped"]) == (1, 1, 0)
 
 
 def test_an_ungrounded_answer_is_refused(monkeypatch, corpus):
     """Sources were found, but nothing could be quoted → no answer at all."""
     monkeypatch.setattr(answer.llm_client, "make_search_phrase", lambda *a, **k: ("p", False))
-    monkeypatch.setattr(answer.faiss_store, "retrieve", lambda *a, **k: [_hit(0)])
-    monkeypatch.setattr(answer.llm_client, "answer_from_sources", lambda *a, **k: {
-        "found": True, "complete": True, "answer": "Frei erfunden.",
-        "supports": [{"index": 0, "quote": "steht so nirgends"}]})
-    monkeypatch.setattr(answer.llm_client, "grounded_quote", lambda q, it: None)
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", lambda *a, **k: [_hit(0)])
+    monkeypatch.setattr(answer.llm_client, "answer_from_sources", lambda *a, **k: _said(
+        _text("Frei erfunden.", 0, "steht so nirgends")))
 
     out = answer.answer_question("Frage?", corpus, 1, [config.SCOPE_TEXT])
     assert out["answer"] is None and out["citations"] == []
+    assert (out["statements_made"], out["statements_shown"],
+            out["statements_dropped"]) == (1, 0, 1)
 
 
 def test_recheck_excludes_what_earlier_turns_read(monkeypatch, corpus):
@@ -68,7 +84,7 @@ def test_recheck_excludes_what_earlier_turns_read(monkeypatch, corpus):
     def _retrieve(conn, index, pos, doc, types, vec, k, exclude=None):
         seen["exclude"] = exclude
         return []
-    monkeypatch.setattr(answer.faiss_store, "retrieve", _retrieve)
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", _retrieve)
 
     history = [{"examined": [["section", 1], ["table", 7]], "recheck": False}]
     out = answer.answer_question("Schau noch mal", corpus, 1, [config.SCOPE_TEXT],
@@ -86,7 +102,7 @@ def test_progress_is_optional_and_silent_by_default(monkeypatch, corpus):
     """The core must not require a UI to report into."""
     labels = []
     monkeypatch.setattr(answer.llm_client, "make_search_phrase", lambda *a, **k: ("p", False))
-    monkeypatch.setattr(answer.faiss_store, "retrieve", lambda *a, **k: [])
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", lambda *a, **k: [])
 
     @contextmanager
     def _spy(label):
@@ -120,20 +136,17 @@ def _turns(monkeypatch, said):
     where = {}
     monkeypatch.setattr(answer.llm_client, "make_search_phrase",
                         lambda *a, **k: ("p", False))
-    monkeypatch.setattr(answer.llm_client, "grounded_quote",
-                        lambda q, it: q)
 
     def _retrieve(conn, index, pos, doc, types, vec, k, exclude=None):
         where["doc"] = doc
         return [_hit(0, text=SECRET, document_id=doc)] if said.get(doc) else []
-    monkeypatch.setattr(answer.faiss_store, "retrieve", _retrieve)
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", _retrieve)
 
     def _from_sources(task, items, **kw):
         answer_text = said.get(where["doc"])
         if not answer_text:
-            return {"found": False, "complete": True}
-        return {"found": True, "complete": True, "answer": answer_text,
-                "supports": [{"index": 0, "quote": SECRET}]}
+            return _said()
+        return _said(_text(answer_text, 0, SECRET))
     monkeypatch.setattr(answer.llm_client, "answer_from_sources",
                         _from_sources)
     return where
@@ -151,7 +164,7 @@ def test_every_selected_document_gets_its_own_row_and_its_own_retrieval(
     def _retrieve(conn, index, pos, doc, types, vec, k, exclude=None):
         asked.append(doc)
         return []
-    monkeypatch.setattr(answer.faiss_store, "retrieve", _retrieve)
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", _retrieve)
 
     out = compare.compare_documents("Sanierungsrate?", corpus, DOCS,
                                     [config.SCOPE_TEXT])
@@ -223,7 +236,7 @@ def test_more_documents_than_the_budget_are_named_not_dropped_quietly(
     latency budget. A silent cut would read as "that plan says nothing"."""
     monkeypatch.setattr(answer.llm_client, "make_search_phrase",
                         lambda *a, **k: ("p", False))
-    monkeypatch.setattr(answer.faiss_store, "retrieve",
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve",
                         lambda *a, **k: [])
     monkeypatch.setattr(compare.config, "COMPARE_MAX_DOCUMENTS", 2)
 
@@ -243,7 +256,7 @@ def test_a_follow_up_searches_past_what_that_document_showed(monkeypatch, corpus
     def _retrieve(conn, index, pos, doc, types, vec, k, exclude=None):
         seen[doc] = exclude
         return []
-    monkeypatch.setattr(answer.faiss_store, "retrieve", _retrieve)
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", _retrieve)
 
     histories = {1: [{"examined": [["table", 87457]], "recheck": False}],
                  2: [{"examined": [["section", 9]], "recheck": False}]}
@@ -259,7 +272,7 @@ def test_the_progress_stage_names_the_document_it_runs_for(monkeypatch, corpus):
     identical "Retrieval" spinners and cannot tell how far it has got."""
     monkeypatch.setattr(answer.llm_client, "make_search_phrase",
                         lambda *a, **k: ("p", False))
-    monkeypatch.setattr(answer.faiss_store, "retrieve", lambda *a, **k: [])
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", lambda *a, **k: [])
     labels = []
 
     @contextmanager
@@ -309,3 +322,76 @@ def test_the_overview_cell_is_cut_where_the_reader_can_see_it():
     # The prose answer, not the JSON shaping of it.
     assert compare.summary({"answer": '{"r": 1}', "answer_text": "1 Prozent."}) \
         == "1 Prozent."
+
+
+def test_the_tables_the_compute_prompt_promises_reach_the_sandbox(monkeypatch):
+    """compute_hint tells the model a variable `tables` exists, a list of
+    objects with "caption" and "markdown". The context was keyed by the
+    source's index, the sandbox turns each key into a variable and "0" is no
+    identifier: the preamble was empty and the model's code ended on a
+    NameError whenever a table had been found."""
+    import importlib.util
+    import sys
+    import types
+    from pathlib import Path
+
+    stub = types.ModuleType("llm_sandbox")
+    stub.SandboxSession = object
+    const = types.ModuleType("llm_sandbox.const")
+    const.SandboxBackend = types.SimpleNamespace(PODMAN="podman")
+    monkeypatch.setitem(sys.modules, "llm_sandbox", stub)
+    monkeypatch.setitem(sys.modules, "llm_sandbox.const", const)
+    # Under a private name, so the stubbed import stays out of sys.modules.
+    path = (Path(__file__).resolve().parents[1] / "docpipe" / "app"
+            / "sandbox_service.py")
+    spec = importlib.util.spec_from_file_location("_sandbox_under_test", path)
+    service = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(service)
+
+    hits = [_hit(0, text="Fliesstext."),
+            dict(_hit(1, kind="table", text="| Erdgas | 42 |"),
+                 title="Tabelle 7: Endenergie"),
+            dict(_hit(2, kind="table", text=""), title="leer")]
+    items = [{"index": 0}, {"index": 1}, {"index": 2}]
+
+    scope: dict = {}
+    exec(service._preamble(answer._code_context(items, hits))
+         + "found = [(t['caption'], t['markdown']) for t in tables]", scope)
+    assert scope["found"] == [("Tabelle 7: Endenergie", "| Erdgas | 42 |")]
+
+    # No table among the sources: the variable the prompt names still exists.
+    scope = {}
+    exec(service._preamble(answer._code_context(items[:1], hits))
+         + "count = len(tables)", scope)
+    assert scope["count"] == 0
+
+
+def test_the_turn_hands_the_tables_of_its_sources_to_the_code_runner(
+        monkeypatch, corpus):
+    """The two ends are tested above. This is the line between them: what
+    the answering call is given as the sandbox's context, for the tables of
+    this turn and in their order."""
+    hits = [dict(_hit(0, kind="table", owner=1, text="| Erdgas | 42 |"),
+                 title="Tabelle 7"),
+            _hit(1, owner=2, text="Fliesstext."),
+            dict(_hit(2, kind="table", owner=3, text="| Strom | 7 |"),
+                 title="Tabelle 9")]
+    handed = []
+    monkeypatch.setattr(answer.llm_client, "make_search_phrase",
+                        lambda *a, **k: ("p", False))
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", lambda *a, **k: hits)
+    monkeypatch.setattr(answer.code_exec, "is_enabled", lambda: True)
+
+    def answer_from_sources(task, items, **kw):
+        handed.append((kw.get("code_runner"), kw.get("code_context")))
+        return _said()
+
+    monkeypatch.setattr(answer.llm_client, "answer_from_sources",
+                        answer_from_sources)
+    answer.answer_question("Summe?", corpus, 1, [config.SCOPE_TEXT])
+
+    assert handed, "the model was never asked"
+    tables = [t for _runner, context in handed for t in context["tables"]]
+    assert tables == [{"caption": "Tabelle 7", "markdown": "| Erdgas | 42 |"},
+                      {"caption": "Tabelle 9", "markdown": "| Strom | 7 |"}]
+    assert all(run is answer.code_exec.run_code for run, _context in handed)

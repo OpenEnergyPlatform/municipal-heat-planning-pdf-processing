@@ -24,6 +24,58 @@ def max_request_tokens() -> int
 ```
 
 Worst case for one vision request: the longer of the two system
-prompts + one page image + the reply we ask for.
+prompts + one page image + the reply we ask for, once. A reply cut off at
+its limit is asked once more with more room, but the room is bounded by
+what the served window leaves beyond this number (vision.call_vision), so
+no second reply is counted.
+
+### table_system_prompt
+
+```python
+@prompts.per_profile
+def table_system_prompt() -> str
+```
+
+### table_user_prompt
+
+```python
+@prompts.per_profile
+def table_user_prompt() -> str
+```
+
+### caption_keep_instruction
+
+```python
+@prompts.per_profile
+def caption_keep_instruction() -> str
+```
+
+### caption_generate_table_instruction
+
+```python
+@prompts.per_profile
+def caption_generate_table_instruction() -> str
+```
+
+### caption_generate_figure_instruction
+
+```python
+@prompts.per_profile
+def caption_generate_figure_instruction() -> str
+```
+
+### figure_system_prompt
+
+```python
+@prompts.per_profile
+def figure_system_prompt() -> str
+```
+
+### figure_user_prompt
+
+```python
+@prompts.per_profile
+def figure_user_prompt() -> str
+```
 
 [Back to the index](../README.md)

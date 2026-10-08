@@ -1,1 +1,0 @@
-<ein gültiges JSON-Objekt; folgt der Auftrag einem Schema (z.B. {"creator": "..."}), halte dich exakt daran, sonst waehle sprechende Felder; in den Auszuegen fehlende Angaben = null>

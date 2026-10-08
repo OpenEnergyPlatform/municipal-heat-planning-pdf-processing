@@ -22,7 +22,7 @@ from pathlib import Path
 
 from docpipe.artifacts import (DIR_RESULTS, DOCUMENT_JSON, PAGES_JSON,
                                SECTIONS_JSON, SECTIONS_REFINED_JSON,
-                               VISUALS_JSON)
+                               VISUALS_JSON, document_dirs)
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +38,10 @@ RENAMES = {
 def pending(root: Path) -> list[tuple[Path, Path]]:
     """(old, new) for every artefact still carrying its old name."""
     out = []
-    for results in sorted(root.glob("*/" + DIR_RESULTS)):
+    # Not distinct: a rename cares for the files, and never for the name a
+    # later stage would know the directory by.
+    for doc in document_dirs(root, DIR_RESULTS, distinct=False):
+        results = doc / DIR_RESULTS
         for old_name, new_name in RENAMES.items():
             old = results / old_name
             if old.exists():

@@ -108,6 +108,8 @@ Fields:
 - `frame_index: int = 0`
 - `pairs: tuple = ()`: Every pair of the document, in index order. A claim whose own quote names a different one of them is filed under that pair instead of being refused, which is the only use this list has.
 - `anchors: tuple = ()`: The sentences this request's passages were searched with. They say, in the plan's own words, what the request asks for, so the pair reaches the model as a question and not only as a field.
+- `bases: tuple = ()`: The years of the document a row may name by a word, with the frame's quotes: its base years and its target years (`named_years`). On every batch of the document, framed or not: a passage that says "Basisjahr" or "Zieljahr" prints no pair, and it is exactly the one that needs them.
+- `spec: object = None`: The spec as this document sees it. A dynamic axis or value list is a closed list only once the document is known, so the corpus run puts the copy with the document's lists filled in on every batch of the document, like `bases`. None is the run's own spec: no list depends on the document, or the caller builds its slots from the document's spec itself, as the top-up does.
 
 #### Batch.sources
 
@@ -431,14 +433,14 @@ request per pair exists for.
 
 ```python
 def rows_from_reply(batch: Batch, reply: Optional[dict],
-                    frame_axes: Optional[list] = None) -> tuple
+                    frame_axes: Optional[list] = None, spec=None) -> tuple
 ```
 
 (rows, orphans) from the value request - the only request that counts.
 
-Routing is the same as for a whole tuple: the quote decides which source a
-value belongs to, the label breaks a tie, and a claim that neither quotes
-nor names any source of the batch is an orphan.
+Routing: the quote decides which source a value belongs to, the label
+breaks a tie, and a claim that neither quotes nor names any source of the
+batch is an orphan.
 
 Under a frame, a passage that does not print the request's pair gives no
 row of THAT pair: `apply_frame` writes the pair onto every row, so the
@@ -482,6 +484,22 @@ dropped 284,643 quantity answers for not being in their quote while 95
 percent of the sampled passages said "Wärmebedarf" or "Endenergieverbrauch"
 in so many words. The owner agreed to this reading on 2026-09-13.
 
+### stands_in
+
+```python
+def stands_in(slot, option, spelling: str, said: str) -> bool
+```
+
+Does this spelling stand in the quote where no longer entry of the
+same list stands?
+
+"MWh" is in "450 MWh/a", and what the passage states is the other entry:
+the emission parameter's unit list has 72 such prefix pairs, and a bare
+"t" was backed by "t CO2eq" -- the number stayed right, the flag for a
+missing period went wrong. The longest entry at the spot wins (owner
+decision 2026-09-23). Only ANOTHER option's entry shadows: the chosen
+option's own longer spelling is the same answer.
+
 ### option_named
 
 ```python
@@ -519,11 +537,64 @@ document's word belongs to a class the spec spells differently. What we
 have no measurement of is how often it decides wrongly, and that is
 exactly what this counter is for.
 
+### state_years
+
+```python
+def state_years(pairs, frame_axes, where: Optional[dict], state: str) -> list
+```
+
+The years the document's frame found for one state of the plan, with
+proof.
+
+*where* is what the profile says makes a pair that state: which values of
+the other frame coordinates (`BASE_YEAR` for the plan's own state,
+`TARGET_YEAR` for its target). Every such pair was read with a quote that
+prints its year, so each entry here carries that quote and its source:
+{"state", "axis", "year", "quote", "source", "index"}. One entry per
+year, the first pair that proved it. Empty when the profile does not name
+the state or the frame has no number coordinate to date it with.
+
+### named_years
+
+```python
+def named_years(pairs, frame_axes, states: Optional[dict]) -> list
+```
+
+The years of the document a row may name by the plan's word for them:
+those of its own state, then those of its target (`YEAR_STATES`).
+
+*states* is {state: what the profile says makes a pair that state}; a
+state the profile does not name is absent or None and has no years. A
+year the frame found for both states stands once under each.
+
+### named_year
+
+```python
+def named_year(slot, given, wording: Optional[str], quote: str,
+               named) -> Optional[dict]
+```
+
+The year of the plan a year answer refers to by the plan's word for it.
+
+A row whose table says "Basisjahr" or "Zieljahr" and prints no year states
+its year elsewhere in the plan, once: where the frame read that state. The
+model is shown those years with their quotes (`named_years`) and answers
+one of them, citing the passage that names the state. That answer is
+backed by two passages, each for its own half: the row's quote carries the
+wording, the frame's quote carries the number. Anything else is None, and
+the answer fails as any answer without its number in the quote does.
+
+Which state the word means, and which of several years of that state, is
+the model's reading and not checked (owner decisions 2026-09-22 and
+2026-10-06): the number has to be one of the years shown. A number that
+dates both states is cited from the first, the plan's own.
+
 ### merge_field
 
 ```python
 def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
-                *, window: Optional[tuple] = None) -> dict
+                *, window: Optional[tuple] = None,
+                bases: Optional[list] = None) -> dict
 ```
 
 Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
@@ -538,8 +609,8 @@ what the value's own quote passes: it sits verbatim in one of the sources
 that were SHOWN, AND it contains the answer. A field that fails either is
 left empty rather than written unbacked — the point of asking per field is
 that each coordinate is evidenced, and an answer that cannot show where it
-read the year is exactly the answer a whole-tuple request used to hide
-inside a tuple the value's quote had already justified.
+read the year is exactly the answer that used to hide inside a tuple the
+value's quote had already justified.
 
 Shown, not the row's own source: the year of a table is in its caption and
 the scenario is in the section heading, so a coordinate's evidence is
@@ -553,6 +624,14 @@ from the row it stands, and which column of a table it heads are the
 model's reading, not a rule of this function. Every reason a reading is
 dropped for is listed in `schema.DROP_REASONS`, and a test holds this
 function to that list.
+
+*bases* are the years of the document a row may name by a word: its base
+years and its target years (`named_years`). A year answer whose quote
+carries its wording but not its number is read when the number is one of
+them (owner decisions 2026-09-22 for the base year, 2026-10-06 for the
+target year): the coordinate then cites the frame's passage for the year
+and keeps the row's passage as its link (`<axis>_link_quote`,
+`<axis>_link_source`).
 
 ### line_naming
 
@@ -772,6 +851,15 @@ A claim the harvester already refused keeps the reason it was refused
 for. Verified a second time, 631 of Kassel's claims came out as "claim
 names no parameter of the spec" instead of saying why.
 
+### repeat_key
+
+```python
+def repeat_key(row: dict) -> str
+```
+
+What makes one row another row written twice: everything but its
+provenance, which is about the writing and not about the reading.
+
 ### drop_repeats
 
 ```python
@@ -786,9 +874,9 @@ row, and writing it twice says nothing the first one did not. Measured on
 corpus_m5, which had no such pass: 1,152 of 62,290 tuples, up to 77 in one
 plan, and one office name eleven times.
 
-`provenance` is left out of the comparison because it is about the writing
-and not about the reading. The first of a repeated pair is the one kept,
-so the file stays in the order the harvest produced.
+`provenance` is left out of the comparison (`repeat_key`). The first of a
+repeated pair is the one kept, so the file stays in the order the harvest
+produced.
 
 ### write_report
 

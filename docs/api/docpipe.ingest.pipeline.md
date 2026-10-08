@@ -9,8 +9,11 @@ checks its text layer, writes the Documents row, and links versions.
 A file whose text is unreadable or garbled is refused and left out
 of the corpus. A file with no text layer at all is registered
 anyway and listed for preprocessing to read with the vision model,
-because the pages exist to be read. What the documents are and
-where they come from is defined by the profile's Source.
+because the pages exist to be read. A second URL that ends in the file
+name of a download that came from another URL is refused, and so is a
+download over the size limit; both are listed with the files that
+could not be fetched. What the documents are and where they come from
+is defined by the profile's Source.
 
 Author: Felix Vossel
 
@@ -29,13 +32,37 @@ Fetch and register one document. False if it was already in the DB.
 They ARE registered: preprocessing reads their pages with the model. They are
 collected so the run can say which documents depend on that.
 
+Raises NameTaken (an OSError) when the file of that name came from another
+URL than `doc.url`, whether or not it is registered yet: the second URL
+is not the document that is there.
+
+### note_content
+
+```python
+def note_content(filename: str, connection: sqlite3.Connection,
+                 data_dir: Path) -> None
+```
+
+Record which bytes a document is, or say that they are others now.
+
+A new row gets the sha256 and the size of its file. So does a row from
+before this was recorded, once. A row that has them is held against the
+size of the file as it lies there: a different size is a different file
+under the old name, and everything produced from the old one (sections,
+vectors, harvest) is of the old one. That is said, and nothing is
+stopped; a file edited to the same length is not seen here.
+
 ### ingest
 
 ```python
 def ingest(source, db_file: Path, data_dir: Path,
-           profile: Optional[Profile] = None) -> dict
+           profile: Optional[Profile] = None, *,
+           unreachable: Optional[dict] = None) -> dict
 ```
 
 Run a profile's source into its database. Returns the refused files.
+
+`unreachable` collects the files that could not be fetched or found,
+keyed by (filename, URL), for a caller that has to end the run on them.
 
 [Back to the index](../README.md)

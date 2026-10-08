@@ -17,9 +17,12 @@ nothing is rephrased, dropped or invented, and each part keeps
 exactly the pages, tables and figures that belong to its own text.
 Asking only for an outline also keeps the call small, since a section
 long enough to need splitting is by definition too long to echo.
-When no cut is asked for, or the reply is unusable, a mechanical
-fallback cuts at even word-count intervals instead, dropping a cut
-that would leave a sliver under about 100 words.
+When no cut is asked for, or the model's cuts could not be read (a
+hole, with its cause), a mechanical fallback cuts at even word-count
+intervals instead, dropping a cut that would leave a sliver under
+about 100 words; the section is named in the refinement report with
+the cause. A request whose reply was cut off is asked again for half
+of the outline, since the outline has one line per segment.
 
 A part still over the configured word limit after this pass is cut
 again against a lower target; a single segment carrying the whole
@@ -30,7 +33,40 @@ cut at a guessed position.
 
 Author: Felix Vossel
 
+## Classes
+
+### NotServed
+
+```python
+class NotServed(Exception)
+```
+
+The request for the cuts got no answer from the server.
+
+Not a reason to cut mechanically: asked again another time, the model
+places the cuts. An answer that is unusable is, and so is a request the
+server refused.
+
 ## Functions
+
+### split_prompt
+
+```python
+@prompts.per_profile
+def split_prompt()
+```
+
+### split_temperature
+
+```python
+def split_temperature() -> float
+```
+
+### split_max_tokens
+
+```python
+def split_max_tokens() -> int
+```
 
 ### word_count
 
@@ -57,10 +93,14 @@ def needs_split(section: dict, max_words: int = SECTION_MAX_WORDS) -> bool
 ### outline
 
 ```python
-def outline(section: dict, sample_words: int = SECTION_OUTLINE_WORDS) -> str
+def outline(section: dict, sample_words: int = SECTION_OUTLINE_WORDS, *,
+            start: int = 0, stop: Optional[int] = None) -> str
 ```
 
 One numbered line per segment: its size and how it starts.
+
+The segments *start* to *stop* (the whole section by default), each with
+its number in the section: the cuts the model names are those numbers.
 
 ### apply_cuts
 
@@ -76,21 +116,30 @@ nothing to cut.
 
 ```python
 def split_section(section: dict, ask: Optional[Callable] = None,
-                  reply=_UNASKED) -> list
+                  reply=_UNASKED, holes: Optional[list] = None) -> list
 ```
 
 Split one oversized section. *ask* takes the rendered prompt and returns the
-model's raw reply; without it (or when the reply is unusable) the section is
-cut mechanically at even intervals. *reply* hands in an answer fetched
-earlier (see split_oversized); then *ask* is not called at all.
+model's answer (see `_ask_cuts`); without it, or when the answer is a Hole,
+the section is cut mechanically at even intervals, and when *holes* is
+given a Hole adds {"title", "why"} to it: the report names the section
+and the cause. *reply* hands in an answer fetched earlier (see
+split_oversized); then *ask* is not called at all.
+
+An answer of no cuts at all is an answer: the prompt allows it, and it is
+no hole.
 
 ### split_oversized
 
 ```python
 def split_oversized(sections: list, ask: Optional[Callable] = None,
-                    max_words: int = SECTION_MAX_WORDS) -> list
+                    max_words: int = SECTION_MAX_WORDS,
+                    holes: Optional[list] = None) -> list
 ```
 
 Split every section longer than *max_words*; returns the new list.
+
+*holes*, when given, gets {"title", "why"} for every section whose cut the
+model did not place and that was cut mechanically instead.
 
 [Back to the index](../README.md)

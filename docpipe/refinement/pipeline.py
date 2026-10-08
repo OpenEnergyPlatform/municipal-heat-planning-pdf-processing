@@ -24,14 +24,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
-from docpipe import prompts, usage
+from docpipe import prompts, reading, usage
+from docpipe.artifacts import document_dirs
 from docpipe.llm_preflight import assert_serving
-from docpipe.profile import add_profile_argument, resolve_profile
+from docpipe.profile import add_profile_argument, program, require_profile
 
 from .config import (DIR_RESULTS, LLM_API_KEY, LLM_BASE_URL, LLM_MODEL,
                      SECTIONS_REFINED_JSON, PROMPT_IDS, SECTIONS_JSON,
-                     max_request_tokens)
-from .refine import run_refine
+                     llm_max_tokens, llm_temperature, max_request_tokens)
+from .refine import reply_shapes, run_refine
 
 log = logging.getLogger(__name__)
 
@@ -40,23 +41,21 @@ log = logging.getLogger(__name__)
 DOC_PARALLEL = int(os.environ.get("DOC_PARALLEL", "8"))
 
 
-def _has_input(doc_dir: Path) -> bool:
-    """True if the document directory carries a Stage-3 structured output."""
-    return (doc_dir / SECTIONS_JSON).exists()
-
-
 # ---------------------------------------------------------------------------
 # Single-document refinement
 # ---------------------------------------------------------------------------
 
 def run_single(doc_dir: Path, *, force: bool = False,
-               force_stale: bool = False) -> Optional[dict]:
+               force_stale: bool = False,
+               holes: Optional[list] = None) -> Optional[dict]:
     """
     Refines one document directory. With ``force`` the cached
     ``sections_refined.json`` is ignored and the LLM re-refines; the old file
     stays until the new one atomically replaces it. ``force_stale`` does the
     same, but only when the prompt has changed since the cached output was
-    written.
+    written. *holes*, when given, gets one entry for the document if it has
+    windows that kept their original text or sections that were cut
+    mechanically (see `run_refine`).
     Returns the refined dict, or None on failure.
     """
     doc_dir = Path(doc_dir)
@@ -74,7 +73,7 @@ def run_single(doc_dir: Path, *, force: bool = False,
                         "re-run with --force-stale to redo it",
                         doc_dir.name, ", ".join(changed))
 
-    result = run_refine(doc_dir, force=force)
+    result = run_refine(doc_dir, force=force, holes=holes)
     if result is not None:
         prompts.record(results_dir, PROMPT_IDS)
     return result
@@ -85,15 +84,15 @@ def run_single(doc_dir: Path, *, force: bool = False,
 # ---------------------------------------------------------------------------
 
 def run_batch(root_dir: Path, *, force: bool = False,
-              force_stale: bool = False) -> dict[str, bool]:
+              force_stale: bool = False,
+              holes: Optional[list] = None) -> dict[str, bool]:
     """
-    Refines every document subdirectory under *root_dir* that has a Stage-3
-    structured output. Returns a dict mapping directory name → success boolean.
+    Refines every document directory under *root_dir*, at any depth, that has
+    a Stage-3 structured output. Returns a dict mapping directory name →
+    success boolean.
     """
     root_dir = Path(root_dir)
-    candidates = sorted(
-        d for d in root_dir.iterdir() if d.is_dir() and _has_input(d)
-    )
+    candidates = document_dirs(root_dir, SECTIONS_JSON)
 
     if not candidates:
         log.warning(
@@ -112,7 +111,8 @@ def run_batch(root_dir: Path, *, force: bool = False,
 
     def _process(d: Path) -> tuple[str, bool]:
         try:
-            res = run_single(d, force=force, force_stale=force_stale)
+            res = run_single(d, force=force, force_stale=force_stale,
+                             holes=holes)
             return d.name, res is not None
         except Exception as e:  # never let one document kill the whole run
             log.error("Error refining '%s': %s", d.name, e, exc_info=True)
@@ -147,6 +147,40 @@ def run_batch(root_dir: Path, *, force: bool = False,
 
 
 # ---------------------------------------------------------------------------
+# What a run left unread
+# ---------------------------------------------------------------------------
+
+def summarise(holes: list) -> str:
+    """One sentence for what a run could not read, in the units each number
+    counts: windows, sections and documents. *holes* are the entries
+    `run_refine` adds, one per document."""
+    parts = []
+    kept = [h for h in holes if h["windows"]]
+    if kept:
+        by_cause: dict = {}
+        for entry in kept:
+            for cause, n in entry["holes"].items():
+                by_cause[cause] = by_cause.get(cause, 0) + n
+        parts.append(
+            f"{sum(h['windows'] for h in kept)} window(s) "
+            f"({sum(h['sections'] for h in kept)} section(s)) in {len(kept)} "
+            f"document(s) kept their original text; hole(s) by cause: "
+            + ", ".join(f"{c} {n}" for c, n in sorted(by_cause.items())))
+    cut = [h for h in holes if h["mechanical"]]
+    if cut:
+        by_cause = {}
+        for entry in cut:
+            for cause, n in entry["mechanical"].items():
+                by_cause[cause] = by_cause.get(cause, 0) + n
+        parts.append(
+            f"{sum(by_cause.values())} section(s) in {len(cut)} document(s) "
+            f"were cut mechanically, the model's cuts being unusable; "
+            f"section(s) by cause: "
+            + ", ".join(f"{c} {n}" for c, n in sorted(by_cause.items())))
+    return "Stage 4: " + "; ".join(parts)
+
+
+# ---------------------------------------------------------------------------
 # Unified entry point
 # ---------------------------------------------------------------------------
 
@@ -162,8 +196,9 @@ def run(
     # Before the first document, not after the first failure: a server with too
     # little context rejects requests mid-run, and the affected windows quietly
     # keep their raw text.
+    reading.phrases()
     assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, max_request_tokens(),
-                   what="refinement")
+                   what="refinement", shapes=reply_shapes())
     if batch:
         return run_batch(input_path, force=force, force_stale=force_stale)
     return run_single(input_path, force=force, force_stale=force_stale)
@@ -175,7 +210,7 @@ def run(
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="python -m docpipe.refinement",
+        prog=program("docpipe.refinement"),
         description="Text Refinement – LLM-based section refinement of Stage-3 output",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
@@ -230,8 +265,11 @@ def main() -> None:
         datefmt="%H:%M:%S",
     )
 
-    profile = resolve_profile(args)
+    profile = require_profile(args)
     usage.begin("refinement")
+    # Read once before the first document: a setting that cannot be read
+    # would otherwise fail inside every request of every document.
+    llm_temperature(), llm_max_tokens()
 
     # Lets the job script derive --max-model-len from the code instead of
     # restating it in a comment that nothing checks.
@@ -239,23 +277,33 @@ def main() -> None:
         print(max_request_tokens())
         sys.exit(0)
 
+    # The sentences a retry says are the profile's, and a profile that lacks
+    # one hears about it now, not in the middle of the first document. After
+    # the budget: that asks nothing of the model and needs no sentence.
+    reading.phrases()
+
     if args.input is None:
-        if profile is None:
-            raise SystemExit("give an input path or a --profile to take it from")
         args.input = str(profile.processed_dir)
 
+    holes: list = []
     try:
         assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
-                       max_request_tokens(), what="refinement")
+                       max_request_tokens(), what="refinement",
+                       shapes=reply_shapes())
         if args.batch:
             results = run_batch(Path(args.input), force=args.force,
-                                force_stale=args.force_stale)
+                                force_stale=args.force_stale, holes=holes)
             ok = sum(1 for v in results.values() if v)
-            sys.exit(0 if ok == len(results) else 1)
+            code = 0 if ok == len(results) else 1
         else:
             res = run_single(Path(args.input), force=args.force,
-                             force_stale=args.force_stale)
-            sys.exit(0 if res is not None else 1)
+                             force_stale=args.force_stale, holes=holes)
+            code = 0 if res is not None else 1
+        # A hole is a result with a cause and does not change the exit code;
+        # it is said once, in the units it is counted in, where the run ends.
+        if holes:
+            log.warning("%s", summarise(holes))
+        sys.exit(code)
     except Exception as e:
         log.error("Fatal error: %s", e, exc_info=True)
         sys.exit(1)

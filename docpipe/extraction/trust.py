@@ -46,7 +46,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .fields import EXHAUSTED, READ, SAID_UNSTATED, UNBACKED
+from .fields import EXHAUSTED, READ, SAID_UNSTATED, UNANSWERED, UNBACKED
 from .verify import TIER_TEXT
 
 LEVEL_A = "A"
@@ -89,7 +89,9 @@ def reasons(row: dict, *, conflict: bool = False,
         # because the row left at the gate: none of those is a doubt
         # about the reading. The last three are findings about the
         # document or about this run's scope, recorded as such elsewhere.
-        if state in (EXHAUSTED, UNBACKED):
+        # Unanswered is one about the run, like exhausted: the request came
+        # back without this row, and nothing read the coordinate.
+        if state in (EXHAUSTED, UNBACKED, UNANSWERED):
             found.append(f"{state}:{key[:-len('_state')]}")
     for flag in row.get("flags") or []:
         reason = FLAG_REASONS.get(flag)
@@ -126,6 +128,30 @@ def trust(row: dict, *, conflict: bool = False, transcribed: bool = False,
         level = LEVEL_A
     return {"level": level, "reasons": why, "image_origin": image,
             "corroborated": bool(corroborated)}
+
+
+def transcribed_documents(db) -> set:
+    """The documents of a database whose pages a model transcribed, by the
+    name their harvest file has. None, or a database that predates the
+    mark: no document."""
+    if db is None:
+        return set()
+    import sqlite3
+    from pathlib import Path
+
+    from docpipe.store.schema import columns, readonly_uri
+    connection = sqlite3.connect(readonly_uri(db), uri=True)
+    try:
+        # Asked, not tried: a database that cannot be opened is not one
+        # that predates the mark, and must not read as "no document".
+        if "page_text_transcribed" not in columns(connection, "Documents"):
+            return set()
+        rows = connection.execute(
+            'SELECT "filename" FROM "Documents" '
+            'WHERE "page_text_transcribed" > 0').fetchall()
+    finally:
+        connection.close()
+    return {Path(row[0]).stem for row in rows}
 
 
 # The pieces of a trust line, in the order they are said. Names, not words:
@@ -221,6 +247,12 @@ def document_summary(document_id, tuples, refusals) -> dict:
     arguments for exactly that reason, and the graph side recomputes the
     levels with them. The levels here are the floor: a value that is a C
     already will not become an A later.
+
+    A pass that appends a parameter to a file builds the line again over every
+    tuple and refusal the file now holds. The refusals of the first pass are
+    counted as they were stored and are not revisited: a value refused then
+    for want of the parameter stays in the count, so the number says what the
+    harvest refused and not how many of those a later pass could read.
     """
     levels = {LEVEL_A: 0, LEVEL_B: 0, LEVEL_C: 0}
     why: dict = {}

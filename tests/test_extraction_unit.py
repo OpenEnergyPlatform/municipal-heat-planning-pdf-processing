@@ -13,9 +13,10 @@ No model, no GPU, no database.
 """
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from docpipe.extraction import fields, runner, topup
-from docpipe.extraction.pipeline import Source, WorkItem, group_items
+from docpipe.extraction.pipeline import Row, Source, WorkItem, group_items
 from docpipe.extraction.spec import fingerprints, load as load_spec
 from docpipe.extraction.verify import Refusal, Verified, verify_tuple
 
@@ -137,7 +138,7 @@ def _harvester(monkeypatch, rows_reply, unit_answer):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             out = {}
             for slot in slots:
@@ -249,3 +250,163 @@ def test_a_stored_harvest_is_topped_up_parameter_by_parameter():
     assert keys == ["slot/unit"] and blocked == ["slot/parameter"]
     assert topup.targets_of(SPEC, "axis/energy_consumption/carrier")
     assert topup.targets_of(SPEC, "axis/energy_consumption/nothing") == []
+
+
+# What the verifier read off the spelling of each of the 60 entries of the two
+# amounts, before the spec said it itself: the entries that name a period. The
+# list is written out here and read from nowhere, so the spec's statements are
+# held to what the pattern said and not to themselves.
+NAMES_A_PERIOD = {
+    "energy_consumption": {
+        "kWh/a", "MWh/a", "GWh/a", "Mio. kWh/a", "TWh/a",
+    },
+    "emission": {
+        "Tonnen CO2 im Jahr", "Tonnen CO2 jährlich", "Tonnen CO2 pro Jahr",
+        "Tonnen CO2eq/a", "Tonnen pro Jahr", "t CO2-eq./a", "t CO2-eq/a",
+        "t CO2-Äq./a", "t CO2-Äq/a", "t CO2-Äquivalente/a", "t CO2/a",
+        "t CO2e/a", "t CO2eq/a", "t/a", "t/a CO2eq", "tCO2/a", "Tsd. t/a",
+        "kt CO2 pro Jahr", "kt CO2-Äq./a", "kt CO2/a", "kt CO2eq/a", "kt/a",
+        "kt/a CO2", "Mio. t CO2/a", "Mio. t CO2eq/a", "Mt/a", "kg/a",
+        "kg CO2/a", "kg CO2eq/a",
+    },
+}
+PASSAGE = "Der Wert betrug 450 Einheiten im Berichtsjahr."
+
+
+def _claim_in(unit):
+    return {"value": 450, "unit": unit, "unit_raw": unit,
+            "unit_state": fields.READ, "quote": PASSAGE}
+
+
+def _flags_of(parameter, unit):
+    out = verify_tuple(_claim_in(unit), parameter, PASSAGE)
+    assert isinstance(out, Verified), getattr(out, "reason", out)
+    return [f for f in out.flags if f.startswith("period:")]
+
+
+def test_the_spec_says_for_each_of_the_60_entries_what_the_pattern_said():
+    """34 entries name a period and 26 are plain amounts. Each entry of the
+    kwp spec carries that statement, held here to the list above and not to
+    anything read off the spelling."""
+    entries = 0
+    for uri, named in NAMES_A_PERIOD.items():
+        parameter = SPEC.by_uri[uri]
+        assert named <= set(parameter.units_accepted), \
+            f"{uri}: a listed entry is gone from the spec"
+        for unit in parameter.units_accepted:
+            entries += 1
+            assert parameter.names_period(unit) is (unit in named), \
+                f"{uri}: {unit!r} says something else than it did"
+    assert entries == 60
+    assert sum(len(named) for named in NAMES_A_PERIOD.values()) == 34
+
+
+def test_the_flag_of_every_entry_is_what_it_was():
+    """period:unstated on exactly the 26 plain entries, through the verifier
+    and not through the statement alone. A power is not an amount over a
+    span, and none of its five entries is flagged."""
+    plain = 0
+    for uri, named in NAMES_A_PERIOD.items():
+        parameter = SPEC.by_uri[uri]
+        for unit in parameter.units_accepted:
+            flags = _flags_of(parameter, unit)
+            assert flags == ([] if unit in named else ["period:unstated"]), \
+                (uri, unit, flags)
+            plain += bool(flags)
+    assert plain == 26
+    assert HEAT.integrated is False and len(HEAT.units_accepted) == 5
+    for unit in HEAT.units_accepted:
+        assert _flags_of(HEAT, unit) == [], unit
+
+
+def test_a_statement_moved_by_hand_moves_the_flag():
+    """The same claims against a spec that says "MWh/a" names no period and
+    "MWh" names one: the flag follows the statement and not the spelling, so
+    the two entries swap, and the entries nobody touched keep theirs."""
+    raw = json.loads((PROFILES / "kwp" / "extraction_spec.json").read_text(
+        encoding="utf-8"))
+    units = next(p for p in raw["parameters"]
+                 if p["uri"] == "energy_consumption")["units_accepted"]
+    units["MWh/a"]["names_period"] = False
+    units["MWh"]["names_period"] = True
+    parameter = load_spec(raw).by_uri["energy_consumption"]
+    assert _flags_of(parameter, "MWh/a") == ["period:unstated"]
+    assert _flags_of(parameter, "MWh") == []
+    assert _flags_of(parameter, "GWh/a") == []
+    assert _flags_of(parameter, "GWh") == ["period:unstated"]
+
+
+def _flipped(spec_name="kwp"):
+    """The spec with every statement the other way round, nothing else moved."""
+    raw = json.loads((PROFILES / spec_name / "extraction_spec.json")
+                     .read_text(encoding="utf-8"))
+    for parameter in raw["parameters"]:
+        for entry in (parameter.get("units_accepted") or {}).values():
+            if isinstance(entry, dict) and "names_period" in entry:
+                entry["names_period"] = not entry["names_period"]
+    return load_spec(raw)
+
+
+def test_the_statement_enters_no_stamp_key(tmp_path):
+    """A stamp written under the spec is current under the spec with every
+    statement inverted: not one key of the stamp moves. A unit entry added
+    to a list is a changed question, and the same comparison says so."""
+    flipped = _flipped()
+    assert fingerprints(flipped) == fingerprints(SPEC)
+    stamp = tmp_path / "doc.stamp.json"
+    stamp.write_text(json.dumps(runner._stamp_current("sha-a", "", SPEC)),
+                     encoding="utf-8")
+    assert runner.stale(stamp, runner._stamp_current("sha-b", "", flipped)) \
+        == []
+
+    raw = json.loads((PROFILES / "kwp" / "extraction_spec.json").read_text(
+        encoding="utf-8"))
+    next(p for p in raw["parameters"] if p["uri"] == "energy_consumption")[
+        "units_accepted"]["PWh/a"] = {"factor": 1e9, "names_period": True}
+    assert runner.stale(stamp, runner._stamp_current(
+        "sha-a", "", load_spec(raw))) == ["parameter/energy_consumption",
+                                          "slot/unit"]
+
+
+def test_the_statement_is_in_no_request(monkeypatch):
+    """Every request body the unit, the parameter and each axis send, down to
+    the response format, is the same bytes under the inverted spec. A
+    recording client stands where the model would be."""
+    def bodies(spec):
+        sent: list = []
+
+        def create(**kwargs):
+            sent.append(json.dumps(kwargs, sort_keys=True, default=str,
+                                   ensure_ascii=False))
+            message = SimpleNamespace(content=json.dumps({"answers": {}}))
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=message)],
+                usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1))
+
+        client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+        monkeypatch.setattr(runner, "_client", lambda: client)
+        ask = runner.make_field_asker()
+        text = "| Erdgas | 42.005 | MWh/a |"
+        shown = [Source("table", 1, text, {"document_id": 7, "page": 1})]
+        rows = [Row("R1", 0, {"value": 42005, "unit_raw": "MWh/a",
+                              "quote": text})]
+        slots = [fields.parameter_slot(spec), fields.unit_slot(spec)]
+        for parameter in spec.parameters:
+            slots.extend(fields.axis_slots(parameter))
+            if parameter.is_numeric:
+                slots.append(fields.unit_slot(spec, parameter))
+        for slot in slots:
+            ask(shown, rows, [slot])
+        sent.append(json.dumps(runner._quantities_payload(spec),
+                               sort_keys=True, ensure_ascii=False))
+        sent.extend(json.dumps(runner._parameter_payload(p), sort_keys=True,
+                               ensure_ascii=False) for p in spec.parameters)
+        return sent
+
+    before, after = bodies(SPEC), bodies(_flipped())
+    assert len(before) > 20
+    assert after == before
+    assert any("MWh/a" in body for body in before), \
+        "the unit list does reach the request, so equality is not vacuous"
+    assert not any("names_period" in body for body in before)

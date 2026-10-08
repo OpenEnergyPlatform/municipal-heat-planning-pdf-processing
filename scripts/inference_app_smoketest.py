@@ -30,7 +30,7 @@ if _REPO_ROOT not in sys.path:
 
 import numpy as np
 
-from scripts.inference_app.config import EMBEDDING_BACKEND, EMBEDDING_DIM, EMBEDDING_MODEL
+from docpipe.app.config import EMBEDDING_BACKEND, EMBEDDING_DIM, EMBEDDING_MODEL
 from docpipe.embedding import get_embedder
 
 TEXT_A = "Wärmebedarf der Kommune im Bestand nach Sektoren"

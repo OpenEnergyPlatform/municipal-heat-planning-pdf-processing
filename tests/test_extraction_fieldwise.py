@@ -1,7 +1,7 @@
 """The field-wise harvest, with the model stubbed and nothing else.
 
-The defect this replaces was silent by construction. One request asked for a
-whole tuple, every coordinate was nullable, and a coordinate the model skipped
+The defect this replaces was silent by construction. One request asked for
+every coordinate, every one was nullable, and a coordinate the model skipped
 looked exactly like a coordinate the document does not state. Measured on the
 204-document corpus run: 63.5% of all values carried no year, and on 13% of
 those the year stood in the very quote the model had itself cited.
@@ -11,7 +11,7 @@ request asks for the values, and one request per coordinate fills them, each
 answer carrying the passage it was read in. What these tests hold to is that
 contract: the skeleton is the spec's, an answer without evidence in its own
 source is not written, and an answer that has it survives the same verifier
-the whole-tuple path used.
+the earlier harvest used.
 
 No GPU, no database.
 """
@@ -228,7 +228,7 @@ def test_the_example_survives_the_field_wise_round_trip(profile):
 
     Each field answers with the example's own coordinate and cites the tuple's
     own quote, which is the one passage we know is verbatim in the source. What
-    comes out has to be what the whole-tuple contract produced, coordinates
+    comes out has to be what the earlier contract produced, coordinates
     included — otherwise the change traded a silent gap for a silent loss.
     """
     _name, spec = profile
@@ -267,6 +267,11 @@ def test_the_example_survives_the_field_wise_round_trip(profile):
         assert report.tuples, f"{parameter.uri}: nothing survived"
         assert not report.refusals, \
             f"{parameter.uri}: {report.refusals[0]['reason']}"
+        # Nothing new in a harvest: only a top-up says who re-read a
+        # coordinate, so a coordinate without `<axis>_producer` is the
+        # harvest's.
+        assert not [k for tuple_ in report.tuples for k in tuple_
+                    if k.endswith(fields.PRODUCER)], parameter.uri
         for got, want in zip(report.tuples, expected):
             for name in parameter.axes:
                 if want.get(name) is None:
@@ -621,7 +626,7 @@ def test_an_answer_off_the_list_is_asked_again_with_the_reason(monkeypatch):
 
         def make_asker(image_root=None):
             def ask(shown, rows, slots, corrections=None, document_id=None,
-                    usage_out=None, owner_of=None):
+                    usage_out=None, owner_of=None, bases=None):
                 slots = slots if isinstance(slots, (list, tuple)) else [slots]
                 told.extend(corrections or [])
                 out = {}
@@ -715,7 +720,7 @@ def _fieldwise(monkeypatch, spec, rows_reply, answers, unit_answer=None):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             out = {}
             for slot in slots:
@@ -838,7 +843,8 @@ def test_a_unit_two_parameters_accept_is_still_a_real_question(monkeypatch):
                      .read_text(encoding="utf-8"))
     for parameter in raw["parameters"]:
         if parameter.get("units_accepted"):
-            parameter["units_accepted"]["GWh"] = 1.0
+            parameter["units_accepted"]["GWh"] = {"factor": 1.0,
+                                                  "names_period": False}
     spec = load_spec(raw)
     assert fields.derive_parameter(spec, {"value": 1, "unit": "GWh"}) is None
     assert not fields.parameter_undecidable(spec, {"value": 1, "unit": "GWh"})
@@ -882,7 +888,7 @@ def _gated(monkeypatch, spec, rows_reply, answers, gate, unit_answer=None):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             labels = sorted(r.label for r in rows)
             out = {}
@@ -1072,7 +1078,7 @@ def test_each_coordinate_of_a_row_goes_out_in_its_own_request(monkeypatch):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             calls.append([s.name for s in slots])
             out = {}
@@ -1436,12 +1442,13 @@ def test_the_row_prompt_example_names_no_place_this_corpus_contains(profile):
     named after the city onto the city's own title page. The names in it come
     from a plan that is not the one being read, and the prompt says so."""
     name, _spec = profile
-    text = (PROFILES / name / "prompts" / "extraction" / "rows.md").read_text(
-        encoding="utf-8")
+    from docpipe import prompts
+    from docpipe.profile import load_profile
+    text = prompts.load("extraction/rows", load_profile(name)).text
     assert "Kassel Wärme" not in text
     if name == "kwp":
         assert "MASCHINELL" in text, "the check is promised where it applies"
-        assert "anderen Plan" in text
+        assert "aus einem anderen Dokument" in text
 
 
 def test_the_field_prompt_states_the_two_checks_and_no_other(profile):
@@ -1450,18 +1457,19 @@ def test_the_field_prompt_states_the_two_checks_and_no_other(profile):
     promises a third, which source a quote may come from, has the model
     refuse readings no check refuses."""
     name, _spec = profile
-    text = (PROFILES / name / "prompts" / "extraction" / "field.md").read_text(
-        encoding="utf-8")
+    text = runner.prompts.load(runner.FIELD_PROMPT_ID).text
     assert "EINER der gezeigten Quellen" in text
     for gone in ("AUS WELCHER Quelle", "Nachbarseite", "erlaubten Quellen",
                  '"holds"', '"section"'):
         assert gone not in text, gone
     if name == "kwp":
-        # The row still says which source is its own, and the two captions
-        # the column rule turns on stay, verbatim from Kassel 349525/349566.
+        # The row still says which source is its own, and the rule about
+        # the title of the own table and the title of another one stays. Its
+        # two captions were verbatim from one plan and are descriptions now
+        # (owner, 2026-10-06): the model cited them for other plans.
         assert '"source"' in text and "EIGENEN Tabelle" in text
-        assert "Tabelle 17: Endenergieverbrauch der Gesamtstadt" in text
-        assert "Tabelle 28: Endenergieverbrauch der Gesamtstadt" in text
+        assert "[p85_tbl0:" in text and "[p91_tbl0:" in text
+        assert "Echter Satz, echtes Jahr, andere Tabelle." in text
         rules = text.split("4. Tabellen mit mehreren")[1]
         column = rules.split(chr(10) + chr(10))[0]
         assert "SEKTOR" in column and "JAHR" in column
@@ -1490,7 +1498,7 @@ def test_the_own_window_shows_the_section_a_table_stands_in(monkeypatch):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             shown_per_window.append([(s.owner_kind, s.owner_id) for s in shown])
             return {"fields": {}}
         return ask
@@ -1688,21 +1696,23 @@ def test_the_request_says_what_each_option_means(profile):
     """field.md rule 7 says "decide by the meaning, the spellings are only
     examples" and the request never carried a meaning: the model was handed a
     class identifier and a list of German words. The rule was unfollowable,
-    and which class a number is is the decision the whole tuple hangs on."""
+    and which class a number is is the decision the whole value hangs on. The
+    entry carries them under the keys "means" and "spellings", the words that
+    rule names."""
     name, spec = profile
     if name != "kwp":
         pytest.skip("the meanings are the profile's to write")
     slot = next(s for s in fields.axis_slots(spec.parameters[0])
                 if s.name == "quantity")
     offered = slot.answerable()
-    assert offered["final energy consumption value"]["bedeutet"].startswith(
+    assert offered["final energy consumption value"]["means"].startswith(
         "A final energy consumption value is")
     assert "Endenergiebedarf" in \
-        offered["final energy consumption value"]["Schreibweisen"]
+        offered["final energy consumption value"]["spellings"]
     # "The passages do not state it" is an answer like any other and says so.
-    assert offered[fields.UNSTATED]["bedeutet"]
+    assert offered[fields.UNSTATED]["means"]
     # And every entry the graph does NOT take says what it excludes.
-    assert "Nutzwärme" in offered["Nutzenergie"]["bedeutet"]
+    assert "Nutzwärme" in offered["Nutzenergie"]["means"]
 
 
 def test_an_option_list_without_meanings_keeps_the_short_form():
@@ -1736,7 +1746,7 @@ def _sweeping(monkeypatch, spec, rows_reply, *, more=None, rest=None,
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             shown_at.append([s.owner_id for s in shown])
             if answer is None:
                 return {"fields": {}}
@@ -1806,7 +1816,7 @@ def test_the_passage_another_coordinate_was_read_in_rides_along():
     pool = [_far_source(9001 + n) for n in range(2)]
     served = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         if served:
             return []
         served.extend(pool)
@@ -1815,7 +1825,7 @@ def test_the_passage_another_coordinate_was_read_in_rides_along():
     shown_at = []
 
     def ask(shown, rows, slots, corrections=None, document_id=None,
-            usage_out=None, owner_of=None):
+            usage_out=None, owner_of=None, bases=None):
         shown_at.append([s.owner_id for s in shown])
         return {"fields": {}}
 
@@ -1846,7 +1856,7 @@ def test_a_sweep_that_ran_out_of_budget_still_reads_the_rest_of_the_plan(
     asked_rest = []
     served = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         # Enough passages in one round to make more windows than the budget
         # allows, so retrieval really runs out. That is the state the old
         # condition could not survive: `run` returns False, `combed` is False,
@@ -1916,7 +1926,7 @@ def test_the_search_further_out_gets_the_same_allowance_whatever_own_spent(
                   "status": "complete", "need_more": []}
     served = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         if served:
             return []
         served.extend(_far_source(9000 + n)
@@ -1979,7 +1989,7 @@ def test_a_sweep_reports_every_request_it_made(monkeypatch):
                   "status": "complete", "need_more": []}
     served = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         if served:
             return []
         served.extend(_far_source(9000 + n)
@@ -2014,7 +2024,7 @@ def test_the_window_index_counts_the_whole_sweep(monkeypatch):
                   "status": "complete", "need_more": []}
     served = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         if served:
             return []
         served.extend(_far_source(9000 + n)
@@ -2136,7 +2146,7 @@ def test_a_window_is_asked_again_only_where_asking_again_pays(monkeypatch):
 
     rounds = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         rounds.append(len(rounds))
         return [_far_source(9100 + len(rounds))] if len(rounds) <= 2 else []
 
@@ -2198,7 +2208,7 @@ def test_the_sweep_starts_again_where_it_last_read_instead_of_striking_it_off(
 
     served = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         if served:
             return []
         served.extend(pool)
@@ -2206,7 +2216,7 @@ def test_the_sweep_starts_again_where_it_last_read_instead_of_striking_it_off(
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             shown_at.append([s.owner_id for s in shown])
             return {"fields": {}}       # never answered: the sweep walks the
                                         # whole pool instead of stopping early
@@ -2280,7 +2290,7 @@ def test_the_re_entry_is_capped_and_the_section_outranks_the_rows_own_passage(
 
     served = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         if served:
             return []
         served.extend(pool)
@@ -2288,7 +2298,7 @@ def test_the_re_entry_is_capped_and_the_section_outranks_the_rows_own_passage(
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             shown_at.append([(s.owner_kind, s.owner_id) for s in shown])
             return {"fields": {}}       # never answered: both rows stay open
         return ask
@@ -2320,7 +2330,7 @@ def test_the_axis_sweeps_of_one_batch_run_concurrently(monkeypatch):
     """The promise: the sweeps of a batch's several coordinates are not asked
     one after another.
 
-    One field per request replaced one request for a whole tuple, and the
+    One field per request replaced one request for every field, and the
     concurrency that used to come for free inside that one request has to
     come from somewhere else now: `make_fieldwise_harvester` runs every
     axis's sweep as its own job in the shared field pool. Two stubbed asks
@@ -2342,7 +2352,7 @@ def test_the_axis_sweeps_of_one_batch_run_concurrently(monkeypatch):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             try:
                 barrier.wait(timeout=5)
             except threading.BrokenBarrierError:
@@ -2386,7 +2396,7 @@ def test_the_startup_line_reports_the_three_allowances_and_their_sum(
     # sweep's own dict moves with it.
     monkeypatch.setattr(runner, "REST_MAX_WINDOWS", 5)
     assert runner.window_budget()["rest"] == 5
-    assert "budget = window_budget()" in inspect.getsource(runner.make_sweeper)
+    assert "budget = window_budget(" in inspect.getsource(runner.make_sweeper)
 
 
 def test_the_sweeper_is_the_one_the_harvest_uses(monkeypatch):
@@ -2409,7 +2419,7 @@ def test_the_sweeper_is_the_one_the_harvest_uses(monkeypatch):
                         lambda *a, **kw: (lambda batch, prior=None: {}))
     runner.make_fieldwise_harvester(spec=spec)
     assert seen == [["anchors", "more_sources", "parents",
-                     "rest_of_document"]]
+                     "rest_of_document", "search_share"]]
 
 
 def test_an_answer_of_the_wrong_kind_is_refused_and_the_model_told(profile):
@@ -2429,3 +2439,318 @@ def test_an_answer_of_the_wrong_kind_is_refused_and_the_model_told(profile):
     assert "Zahl" in counts["failed"][0]["reason"]
     assert slot.name not in rows[0].claim
     assert rows[0].claim[f"{slot.name}_state"] == fields.UNBACKED
+
+
+# ---------------------------------------------------------------------------
+# The search asks for what it can show, and a cut sweep says it was cut
+# (audit of corpus_m5, 2026-09-23)
+# ---------------------------------------------------------------------------
+
+def _pool_sweep(monkeypatch, pool, *, share=None, rest_pool=None):
+    """One year sweep over a plan whose search hands back `pool`, as much of
+    it per round as the sweep asks for, and whose remaining sections are
+    `rest_pool`. Answers nothing, so the sweep walks every stage.
+
+    Returns (row, windows shown past the own one, limits the search was
+    asked for)."""
+    from docpipe.extraction.pipeline import Row
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    parameter = _single_axis_parameter(spec.parameters[0], "year")
+    year = fields.axis_slots(parameter)[0]
+    batch = _single_axis_batch(parameter,
+                               [(0, "| Erdgas | 42.005 | MWh/a |", None)])
+    row = Row(label="R1", item_index=0,
+              claim={"value": 42005, "quote": "| Erdgas | 42.005 | MWh/a |"})
+    limits = []
+
+    def more(document_id, queries, exclude, limit=0):
+        limits.append(limit)
+        fresh = [s for s in pool if (s.owner_kind, s.owner_id) not in exclude]
+        return fresh[:limit] if limit else fresh
+
+    def rest(document_id, exclude, start=None):
+        return [s for s in (rest_pool or [])
+                if (s.owner_kind, s.owner_id) not in exclude]
+
+    shown_at = []
+
+    def ask(shown, rows, slots, corrections=None, document_id=None,
+            usage_out=None, owner_of=None, bases=None):
+        shown_at.append([s.owner_id for s in shown if s.owner_id >= 9000])
+        return {"fields": {}}
+
+    sweep = runner.make_sweeper(ask, more_sources=more, rest_of_document=rest,
+                                search_share=share)
+    sweep(batch, [row], [year], "year")
+    return row, shown_at[1:], limits
+
+
+def test_a_search_the_budget_cuts_off_ends_exhausted_not_unstated(monkeypatch):
+    """The search was asked without a limit and handed back the whole ranked
+    document. Every passage of it counted as seen, the rest stage found
+    nothing left to read, and a sweep the budget had cut off after two
+    passages ended "unstated": 0 exhausted in 263,997 sweeps of corpus_m5,
+    while 24 windows was where every long sweep stopped."""
+    monkeypatch.setattr(runner, "FIELD_ATTEMPTS", 1)
+    monkeypatch.setattr(runner, "FIELD_MAX_WINDOWS", 3)    # two search windows
+    monkeypatch.setattr(runner, "REST_MAX_WINDOWS", 1)
+    pool = [_far_source(9000 + n) for n in range(12)]
+    row, windows, limits = _pool_sweep(monkeypatch, pool, rest_pool=pool)
+    assert row.claim["year_state"] == fields.EXHAUSTED
+    # Asked for as much as two windows can show, not for the document.
+    assert limits[0] == runner.FIELD_WINDOW * 2
+    # Two search windows, then one of the rest stage over what the search
+    # never showed -- the stage that was dead under the unlimited search.
+    assert len(windows) == 3, windows
+    assert set(windows[2]) - set(windows[0]) - set(windows[1])
+
+
+def test_the_search_windows_share_no_passage(monkeypatch):
+    """The windows further out overlapped by one, which is right for a
+    document read in its own order (a caption and its table are adjacent)
+    and wrong for a relevance-ranked pool, where the neighbour is arbitrary:
+    every passage was shown twice, half of corpus_m5's 1,235,462 search
+    requests were a request spent twice."""
+    monkeypatch.setattr(runner, "FIELD_ATTEMPTS", 1)
+    monkeypatch.setattr(runner, "FIELD_MAX_WINDOWS", 9)
+    pool = [_far_source(9000 + n) for n in range(6)]
+    row, windows, _limits = _pool_sweep(monkeypatch, pool)
+    assert windows == [[9000, 9001], [9002, 9003], [9004, 9005]]
+    # Nothing was cut: the pool ran dry inside the budget.
+    assert row.claim.get("year_state") != fields.EXHAUSTED
+
+
+def test_a_coordinate_the_profile_looks_less_far_for_gets_its_share(
+        monkeypatch):
+    """Under one budget, corpus_m5's sector search filled 4 percent of its
+    392,541 requests and the aggregation's 3 percent of 65,285. The profile
+    names the share, the budget scales the two search stages by it, and the
+    own window is never touched."""
+    monkeypatch.setattr(runner, "FIELD_ATTEMPTS", 1)
+    monkeypatch.setattr(runner, "FIELD_MAX_WINDOWS", 9)
+    monkeypatch.setattr(runner, "REST_MAX_WINDOWS", 6)
+    assert runner.window_budget() == {"own": 1, "retrieval": 8, "rest": 6}
+    assert runner.window_budget(0.5) == {"own": 1, "retrieval": 4, "rest": 3}
+    # At least one window stays, so no stage is skipped outright.
+    assert runner.window_budget(0.01) == {"own": 1, "retrieval": 1, "rest": 1}
+    pool = [_far_source(9000 + n) for n in range(40)]
+    _row, windows, limits = _pool_sweep(monkeypatch, pool,
+                                        share={"year": 0.5})
+    assert limits[0] == runner.FIELD_WINDOW * 4
+    assert len(windows) == 4
+    _row, windows, limits = _pool_sweep(monkeypatch, pool,
+                                        share={"sector": 0.5})
+    assert limits[0] == runner.FIELD_WINDOW * 8, "another coordinate's share"
+    assert len(windows) == 8
+    from profiles.kwp import extraction as kwp
+    assert kwp.SEARCH_SHARE == {"sector": 0.5, "aggregation": 0.5}
+
+
+def test_the_rest_of_a_plan_includes_its_tables_and_figures(tmp_path):
+    """71 percent of corpus_m5's tuples came out of images, and the floor
+    under the sweep read sections only: "the whole document" that left out
+    every table was not the whole document. A section's blocks follow it,
+    in page order, and the rotation and the exclusion apply to them too."""
+    import sqlite3
+    path = tmp_path / "plans.sqlite"
+    conn = sqlite3.connect(str(path))
+    conn.executescript(
+        "CREATE TABLE Documents (id INTEGER PRIMARY KEY, filename TEXT);"
+        "CREATE TABLE Sections ("
+        " id INTEGER PRIMARY KEY, document INTEGER, section_number INTEGER,"
+        " title TEXT, content TEXT, page_number INTEGER);"
+        "CREATE TABLE Tables ("
+        " id INTEGER PRIMARY KEY, section INTEGER, block_id TEXT,"
+        " caption TEXT, markdown TEXT, page_number INTEGER, path TEXT);"
+        "CREATE TABLE Images ("
+        " id INTEGER PRIMARY KEY, section INTEGER, block_id TEXT,"
+        " caption TEXT, description TEXT, page_number INTEGER, path TEXT);")
+    conn.execute("INSERT INTO Documents (id, filename) VALUES (7, 'plan.pdf')")
+    for n in range(1, 5):
+        conn.execute("INSERT INTO Sections (id, document, section_number, "
+                     "title, content, page_number) VALUES (?, 7, ?, ?, ?, ?)",
+                     (n, n, "Kapitel %d" % n, "Text von Kapitel %d." % n, n))
+    conn.execute("INSERT INTO Tables VALUES (21, 2, 'p2_tbl0', 'Tabelle 1',"
+                 " '| Erdgas | 1 |', 2, 'p2_tbl0.png')")
+    conn.execute("INSERT INTO Tables VALUES (22, 2, 'p2_tbl1', 'Tabelle 2',"
+                 " '| Heizoel | 2 |', 2, 'p2_tbl1.png')")
+    conn.execute("INSERT INTO Images VALUES (31, 3, 'p3_fig0', 'Abbildung 1',"
+                 " 'Ein Balkendiagramm.', 3, 'p3_fig0.png')")
+    conn.commit()
+    conn.close()
+    rest_of_document = runner.make_rest_of_document(path)
+    assert [(s.owner_kind, s.owner_id) for s in rest_of_document(7, set())] == [
+        ("section", 1), ("section", 2), ("table", 21), ("table", 22),
+        ("section", 3), ("figure", 31), ("section", 4)]
+    assert [(s.owner_kind, s.owner_id)
+            for s in rest_of_document(7, {("table", 21), ("section", 1)}, 3)] == [
+        ("section", 3), ("figure", 31), ("section", 4),
+        ("section", 2), ("table", 22)]
+
+
+# ---------------------------------------------------------------------------
+# What backs a coordinate (owner decisions 2026-09-23)
+# ---------------------------------------------------------------------------
+
+def test_a_year_is_backed_only_by_its_four_digits_in_one_run():
+    """`numbers_in` reads "2.022 MWh" as the grouped number 2022, right for a
+    magnitude and wrong for a year: an energy figure backed the year it
+    happened to spell. A dated "31.12.2022" still prints its year in one
+    run, and a longer digit run is a different number."""
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
+    assert not pipeline_answer_in_quote(
+        slot, 2022, None, "Der Verbrauch lag 2030 bei 2.022 MWh.")
+    assert pipeline_answer_in_quote(slot, 2022, None, "Stand: 31.12.2022")
+    assert pipeline_answer_in_quote(slot, 2022, None, "Bilanzjahr 2022 (IST)")
+    assert pipeline_answer_in_quote(slot, "2022", None, "Bilanzjahr 2022")
+    assert not pipeline_answer_in_quote(slot, 2022, None, "12022 Einwohner")
+    assert not pipeline_answer_in_quote(slot, 2022, None, "20221 Haushalte")
+
+
+def test_a_list_entry_does_not_count_where_a_longer_entry_of_the_list_stands():
+    """"MWh" is in "450 MWh/a", and what the passage states is the other
+    entry: the emission parameter's unit list has 72 such prefix pairs, and
+    a bare "t" was backed by "t CO2eq". The longest entry at the spot wins;
+    the chosen entry's own longer spelling is the same answer and does not
+    shadow it."""
+    slot = fields.Slot(name="unit", kind=fields.CHOICE, question="Einheit?",
+                       options=(
+                           fields.Option(label="MWh", uri="u:MWh"),
+                           fields.Option(label="MWh/a", uri="u:MWh_a",
+                                         synonyms=("MWh pro Jahr",)),
+                           fields.Option(label="t", uri="u:t",
+                                         synonyms=("t CO2",)),
+                           fields.Option(label="t CO2eq", uri="u:tCO2eq")))
+    quote = "| Erdgas | 450 MWh/a |"
+    assert not pipeline_answer_in_quote(slot, "MWh", None, quote)
+    assert not pipeline_answer_in_quote(slot, "MWh", "MWh", quote)
+    assert pipeline_answer_in_quote(slot, "MWh/a", None, quote)
+    assert pipeline_answer_in_quote(slot, "MWh/a", "MWh/a", quote)
+    # A bare one elsewhere in the same quote still counts.
+    assert pipeline_answer_in_quote(slot, "MWh", None,
+                                    "450 MWh/a, davon 12 MWh im Winter")
+    # By the synonym of the longer entry too.
+    assert not pipeline_answer_in_quote(slot, "MWh", None, "450 MWh pro Jahr")
+    # The entry's own longer spelling is the same answer.
+    assert pipeline_answer_in_quote(slot, "t", None, "12 t CO2 im Jahr")
+    assert not pipeline_answer_in_quote(slot, "t", None, "12 t CO2eq im Jahr")
+    assert pipeline_answer_in_quote(slot, "t CO2eq", None, "12 t CO2eq im Jahr")
+
+
+# ---------------------------------------------------------------------------
+# The lists a document closes
+# ---------------------------------------------------------------------------
+
+def _scenarios_spec():
+    return load_spec(json.loads(
+        (PROFILES / "scenarios" / "extraction_spec.json").read_text(
+            encoding="utf-8")))
+
+
+DOCUMENT_LISTS = {
+    "scenario": {"EN_NPi2100": ["EN_NPi2100"],
+                 "out:family": ["Szenario-Familie"]},
+    "scenario_label": {"EN_NPi2100": ["EN_NPi2100"],
+                       "out:family": ["Szenario-Familie"]},
+}
+YEARS = "Results for the CurPol scenario are reported for 2030, 2050 and 2070."
+
+
+def _years_batch(spec=None):
+    batch = group_items([WorkItem(7, None, Source(
+        "section", 1, YEARS, {"document_id": 7, "page": 3}))],
+        max_sources=runner.BATCH_SOURCES)[0]
+    batch.spec = spec
+    return batch
+
+
+def test_a_documents_own_list_is_what_the_field_request_offers(monkeypatch):
+    """A dynamic axis is a closed list only once the document is known. The
+    plan built that list and searched with it, and the requests that read the
+    passages were then built from the run's spec, where the list is empty: the
+    scenario of a value was asked as a wording, on the one coordinate whose
+    whole point is the choice. Nothing failed, the answers just came back
+    unmapped."""
+    monkeypatch.setenv("DOCPIPE_PROFILE", "scenarios")
+    spec = _scenarios_spec()
+    year = spec.by_uri["scenario_year"]
+    rows_reply = {"tuples": [{"source": "Q1", "value": "2030",
+                              "value_raw": "2030", "quote": YEARS}],
+                  "status": "complete", "need_more": []}
+    offered: dict = {}
+
+    def answers(slot, rows):
+        offered[slot.name] = [option.label for option in slot.options]
+        value = year.label if slot.name == "parameter" else "Szenario-Familie"
+        return {"answers": {row.label: {"value": value, "value_raw": "CurPol",
+                                        "quote": YEARS} for row in rows}}
+
+    harvest, asked = _fieldwise(monkeypatch, spec, rows_reply, answers)
+    filled = runner.fill_dynamic_axes(spec, DOCUMENT_LISTS)
+    assert filled is not spec
+    reply = harvest(_years_batch(filled))
+    assert "scenario" in asked
+    assert offered["scenario"] == ["EN_NPi2100", "Szenario-Familie"], (
+        "the document's runs, not a blank to write a wording into")
+    assert reply["tuples"][0]["scenario"] == "Szenario-Familie"
+
+    # Without a document list the run's spec stands, as it always did.
+    offered.clear()
+    harvest(_years_batch())
+    assert offered["scenario"] == []
+
+
+def test_a_year_is_a_wording_where_nothing_is_measured(monkeypatch):
+    """That a number without a unit belongs to no parameter is a rule about
+    parameters that have units. A spec without one reads "2030" as a year,
+    and the rule dropped it unasked: every scenario year and every
+    publication year of the scenarios profile, with a state saying it was
+    never in range."""
+    monkeypatch.setenv("DOCPIPE_PROFILE", "scenarios")
+    spec = _scenarios_spec()
+    assert not any(p.is_numeric for p in spec.parameters)
+    year = {"value": "2030", "quote": YEARS}
+    assert not fields.parameter_undecidable(spec, year), (
+        "which of the eighteen it is, is a question, and it is asked")
+    # A value that is no string has to bring its wording: without one no
+    # parameter takes it, and asking would pay for a refusal.
+    assert fields.parameter_undecidable(spec, {"value": 2030})
+    assert not fields.parameter_undecidable(
+        spec, {"value_raw": "Atlantis"}), "no entry fits, the wording stays"
+    # One text parameter and nothing measured: the year is that parameter's.
+    title = spec.by_uri["publication_title"]
+    alone = Spec(parameters=[title])
+    assert fields.derive_parameter(alone, year) is title
+
+    # Where something is measured the rule stands: a number without a unit
+    # is no reading of any quantity, and a name is no number.
+    kwp = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    assert any(p.is_numeric for p in kwp.parameters)
+    assert fields.parameter_undecidable(kwp, {"value": "2030"})
+    assert fields.parameter_undecidable(kwp, {"value": 2030})
+    assert not fields.parameter_undecidable(kwp, {"value": "Stadtwerke"})
+    # And a number stays a number with its printed form beside it: the
+    # wording of a value is what a left-out value needs, not what makes one.
+    read = {"value": 42005, "value_raw": "42.005", "unit": "MWh/a"}
+    assert not fields.is_wording(kwp, read)
+    assert fields.derive_parameter(kwp, read).is_numeric
+
+
+def test_a_follow_up_batch_reads_against_the_same_document():
+    """More passages of the same document, asked for by the model: they are
+    read against the lists of that document, like its base years."""
+    from docpipe.extraction import pipeline
+    marker = object()
+    batch = _years_batch(marker)
+    batch.bases = ({"year": 2020},)
+    reply = {"status": "partial",
+             "need_more": ["the table of results per scenario and year"]}
+    extra = pipeline.follow_up(
+        batch, reply, pipeline.Sweep(set(), 2),
+        lambda document_id, asked, seen: [Source(
+            "table", 9, "| 2050 | 12 |", {"document_id": 7, "page": 4})])
+    assert extra, "the fixture has to earn a follow-up"
+    assert all(one.spec is marker for one in extra)
+    assert all(one.bases == batch.bases for one in extra)

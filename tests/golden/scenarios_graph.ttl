@@ -1,0 +1,131 @@
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix dc:   <http://purl.org/dc/terms/> .
+@prefix obo:  <http://purl.obolibrary.org/obo/> .
+@prefix oeo:  <https://openenergyplatform.org/ontology/oeo/> .
+@prefix oekgprov: <https://openenergyplatform.org/ontology/oekg/provenance/> .
+
+<https://openenergyplatform.org/ontology/oekg/publication/7efb76ae-1bf4-5bbc-9f97-505e33acbda8>
+    a oeo:OEO_00020012 ;
+    oeo:OEO_00390095 "7efb76ae-1bf4-5bbc-9f97-505e33acbda8" ;
+    # “The "Net Zero" Pathways \ Outlook 2050”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # confidence: A
+    rdfs:label "The \"Net Zero\" Pathways \\ Outlook 2050" ;
+    oeo:OEO_00000506 <https://openenergyplatform.org/ontology/oekg/63744527-0cd4-5eea-b37d-24314f67a5b1> ,
+        <https://openenergyplatform.org/ontology/oekg/bd4567bc-3806-5d68-b7eb-13bff84927d9> ;
+    # “the document says 2024”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # confidence: A
+    oeo:OEO_00390096 "2024-01-01T00:00:00"^^xsd:dateTime ;
+    # “the document says 10.1234/outlook.2050”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # confidence: A
+    oeo:OEO_00390098 "10.1234/outlook.2050" .
+
+<https://openenergyplatform.org/ontology/oekg/6394dba2-4049-51c9-af47-ec9e77b17078>
+    a oeo:OEO_00020227 ;
+    oeo:OEO_00390095 "6394dba2-4049-51c9-af47-ec9e77b17078" ;
+    rdfs:label "Pathways Assessment Project" ;
+    dc:acronym "PAP" ;
+    # “the document says This report says "yes" and then goes on. A third line.”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # confidence: A
+    dc:abstract """This report says \"yes\"
+and then goes on.
+A third line.""" ;
+    oeo:OEO_00000510 <https://openenergyplatform.org/ontology/oekg/07a89bdc-d090-53c8-bd71-d735601e555e> ,
+        <https://openenergyplatform.org/ontology/oekg/4780e910-6b3c-5e95-973c-c6785eda79bf> ;
+    oeo:OEO_00000509 <https://openenergyplatform.org/ontology/oekg/57c4502f-d2ec-507c-b7cb-c30410aec10f> ,
+        <https://openenergyplatform.org/ontology/oekg/0560824d-a558-5cd1-90b4-07b35c6e7f65> ;
+    # “the document says Verkehr”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # flags: mapped:sector
+    # confidence: A
+    oeo:OEO_00020439 <https://openenergyplatform.org/ontology/oeo/OEO_00000367> ;
+    obo:BFO_0000051 <https://openenergyplatform.org/ontology/oekg/publication/7efb76ae-1bf4-5bbc-9f97-505e33acbda8> ;
+    obo:BFO_0000051 <https://openenergyplatform.org/ontology/oekg/scenario/0263dccb-6cc1-5af5-abd6-88311b00b9b4> ;
+    obo:BFO_0000051 <https://openenergyplatform.org/ontology/oekg/scenario/04862d3c-907a-5cda-811d-86d934a4c758> .
+
+<https://openenergyplatform.org/ontology/oekg/scenario/0263dccb-6cc1-5af5-abd6-88311b00b9b4>
+    a oeo:OEO_00000365 ;
+    oeo:OEO_00390095 "0263dccb-6cc1-5af5-abd6-88311b00b9b4" ;
+    # “the Current Policies scenario (CurPol)”
+    # outlook_2050.pdf, p. 9, table, text_located
+    # confidence: A
+    rdfs:label "CurPol" ;
+    dc:acronym "Current Policies" ;
+    # “the document says Referenz”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # confidence: A
+    oeo:OEO_00390073 <https://openenergyplatform.org/ontology/oeo/OEO_00020311> ;
+    oeo:OEO_00390073 oeo:OEO_00020517 ;
+    # “CurPol assumes no additional policies at all”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # confidence: A
+    dc:abstract "assumes no additional policies" ;
+    # “the document says Deutschland”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # flags: quote_repaired
+    # confidence: C, repaired, worth checking
+    oeo:OEO_00010378 <https://openenergyplatform.org/ontology/oekg/region/Germany> ;
+    oeo:OEO_00020440 "2050-01-01T00:00:00"^^xsd:dateTime ;
+    oeo:OEO_00020440 "2070-01-01T00:00:00"^^xsd:dateTime .
+
+<https://openenergyplatform.org/ontology/oekg/scenario/04862d3c-907a-5cda-811d-86d934a4c758>
+    a oeo:OEO_00000365 ;
+    oeo:OEO_00390095 "04862d3c-907a-5cda-811d-86d934a4c758" ;
+    # “the NPi scenario”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # confidence: A
+    rdfs:label "NPi" ;
+    dc:acronym "NPi" ;
+    oeo:OEO_00390073 oeo:OEO_00020517 .
+
+<https://openenergyplatform.org/ontology/oekg/63744527-0cd4-5eea-b37d-24314f67a5b1>
+    a oeo:OEO_00000064 ;
+    # “the document says Meyer, A.”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # confidence: A
+    rdfs:label "Meyer, A." .
+
+<https://openenergyplatform.org/ontology/oekg/bd4567bc-3806-5d68-b7eb-13bff84927d9>
+    a oeo:OEO_00000064 ;
+    # “the document says Oeko-Institut”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # confidence: A
+    # “the document says Oeko-Institut e.V.”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # confidence: A
+    rdfs:label "Oeko-Institut" .
+
+<https://openenergyplatform.org/ontology/oekg/07a89bdc-d090-53c8-bd71-d735601e555e>
+    a oeo:OEO_00030022 ;
+    # “the document says Beta Research”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # confidence: A
+    # “the document says Beta Research Ltd.”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # confidence: A
+    rdfs:label "Beta Research" .
+
+<https://openenergyplatform.org/ontology/oekg/4780e910-6b3c-5e95-973c-c6785eda79bf>
+    a oeo:OEO_00030022 ;
+    # “the document says Gamma Inc”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # confidence: A
+    rdfs:label "Gamma Inc" .
+
+<https://openenergyplatform.org/ontology/oekg/57c4502f-d2ec-507c-b7cb-c30410aec10f>
+    a oeo:OEO_00090001 ;
+    # “the document says Horizon 2020”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # confidence: A
+    rdfs:label "Horizon 2020" .
+
+<https://openenergyplatform.org/ontology/oekg/0560824d-a558-5cd1-90b4-07b35c6e7f65>
+    a oeo:OEO_00090001 ;
+    # “the document says ACME GmbH”
+    # outlook_2050.pdf, p. 4, section, text_located
+    # confidence: A
+    rdfs:label "ACME GmbH" .

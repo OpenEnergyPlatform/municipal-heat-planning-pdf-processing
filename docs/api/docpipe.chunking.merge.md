@@ -35,6 +35,6 @@ output.json.
 def merge_batch(root_dir: Path, *, force: bool = False) -> dict[str, bool]
 ```
 
-Run merge for every PDF subdirectory under root_dir.
+Run merge for every document directory under root_dir, at any depth.
 
 [Back to the index](../README.md)

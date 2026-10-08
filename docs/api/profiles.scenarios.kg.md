@@ -51,20 +51,14 @@ def normalise(label: str) -> str
 
 One spelling for a name, so two writings of it mint one IRI.
 
-### ns
-
-```python
-def ns(collection: str) -> uuid.UUID
-```
-
 ### mint
 
 ```python
 def mint(collection: str, name: str) -> str
 ```
 
-UUIDv5 over the identifying name. Never v4 — v4 is random, and two runs
-over one document must mint the same IRI.
+UUIDv5 over the identifying name, folded by `normalise`. Never v4: two
+runs over one document must mint the same IRI.
 
 ### uuid_of
 
@@ -145,14 +139,14 @@ there is one, because that is what links to the AR6 database; the wording
 is what a reader recognises. With no match, and with a wording that fits
 several runs equally, the wording is both.
 
-### literal
+### decision_text
 
 ```python
-def literal(text: str) -> str
+def decision_text(decision: dict) -> str
 ```
 
-A Turtle string literal. Abstracts run over several lines, so the long
-form is used whenever the text is not a single clean line.
+What a person decided about one field of a value, as a comment line:
+the verdict, who made it and when, and the note.
 
 ### make_serializer
 
@@ -161,5 +155,21 @@ def make_serializer(db_path: Path)
 ```
 
 (document name, accepted tuple rows) -> TTL string or None.
+
+What people decided about the rows is left in `serializer.decisions` by
+`serialize.run`, {document: {tuple name: [decision]}}, and goes into the
+Turtle as comment lines above the value each concerns.
+
+### make_study_reader
+
+```python
+def make_study_reader(db_path: Path)
+```
+
+(document name, accepted tuple rows) -> study dict or None.
+
+What the serializer decided for one document, without the Turtle: the
+bundle, its one study report and its scenarios, each value as the graph
+carries it. A document with no title has no study, as it has no graph.
 
 [Back to the index](../README.md)

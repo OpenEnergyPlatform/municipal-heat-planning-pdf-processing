@@ -2,13 +2,15 @@
 
 `docpipe/embedding/api.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-api.py: Embeds items by calling an OpenAI-compatible /v1/embeddings
-endpoint.
+api.py: Embeds items by calling an embeddings API.
 
 ApiEmbedder is for deployments without a GPU, or for a deployment
-where the embedding model is served centrally. It batches items into
-groups of batch_size before calling the endpoint. The OpenAI
-embeddings schema has no place for an image, so embed() is text
+where the embedding model is served centrally. Which API it calls is
+the provider of the `embedding` role (EMBEDDING_PROVIDER, see
+docpipe/providers): an OpenAI-compatible /v1/embeddings endpoint, or
+a hosted one. It batches items into groups of batch_size before
+calling it, and asks a hosted API again that answers "not now". The
+embeddings request has no place for an image, so embed() is text
 only: an item carrying an image is refused with a ValueError rather
 than silently embedded as text.
 

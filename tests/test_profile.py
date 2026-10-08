@@ -9,8 +9,19 @@ from docpipe.profile import ENV_VAR, Facet, Profile, active_profile, load_profil
 def test_kwp_profile_loads_and_names_itself():
     p = load_profile("kwp")
     assert p.name == "kwp"
-    assert p.source_language == "de" and p.answer_language == "de"
     assert any(f.field == "bundesland_lang" for f in p.facets)
+
+
+@pytest.mark.parametrize("gone", ["source_language", "answer_language"])
+def test_a_profile_cannot_set_a_language_nothing_reads(gone):
+    """Both stood in every profile and decided nothing: the language of a
+    request and of an answer is the language of the profile's prompts. A
+    profile that still sets one is told the name, instead of believing it
+    switched something."""
+    with pytest.raises(TypeError) as refused:
+        Profile(name="x", **{gone: "en"})
+    assert gone in str(refused.value)
+    assert not hasattr(load_profile("kwp"), gone)
 
 
 def test_paths_are_profile_scoped(tmp_path):

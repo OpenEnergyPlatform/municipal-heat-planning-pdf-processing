@@ -13,7 +13,9 @@ those sets are ignored, since the Stage 1 PyMuPDF text blocks already
 cover that content. A detection passes a global confidence filter,
 then a per-class threshold, then per-class non-maximum suppression
 and cross-class suppression among table and image boxes, so one
-region never yields two crops.
+region never yields two crops. The text in a footnote box leaves the
+page like a page number does, and the document's log says how many text
+blocks and characters that was.
 
 Two passes run over the whole document afterward. Font-based heading
 promotion turns a plain text block into a section title when the

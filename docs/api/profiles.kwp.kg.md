@@ -63,12 +63,6 @@ One node per calendar year for the whole graph, keyed by the year itself
 rather than minted from a uuid: two plans naming 2030 mean the same 2030,
 and a year is the one coordinate with no document in it.
 
-### ns
-
-```python
-def ns(collection: str) -> uuid.UUID
-```
-
 ### normalise
 
 ```python
@@ -118,12 +112,46 @@ second copy diverges: ingest stores YYYYMMDD, the policy wants
 YYYY-MM-DD, and that mismatch once produced an empty graph with every
 test green.
 
+### wording_key
+
+```python
+def wording_key(row: dict) -> str
+```
+
+The plan's words for the two coordinates that fold onto one class.
+
+"Wirtschaftlich genutzte Gebäude" and "Öffentliche Gebäude" are both
+OEO_00000405 and are not one number; the wording is what tells them
+apart, and it is what the node is named by when they collide.
+
+### settle
+
+```python
+def settle(iri: str, rows: list, part: str, *,
+           transcribed: bool = False) -> tuple
+```
+
+({iri: row} kept, Counter skipped, {iri: marks}) for one identity.
+
+One number several times is one node, marked as read twice. Different
+numbers are settled in this order (owner decision 2026-09-23): the plan's
+different wording splits them into a node each, named by that wording; a
+rounded statement of the other loses to the more precise one; a lower
+trust grade loses to the higher; and what is left is a question for a
+human, so nothing stays. Every winner says in its comment what it won
+over, so a curator can still audit the pick. The counts are per tuple
+that left the graph: a repeat of the winner is a `duplicate`, a repeat
+of a loser is one too, and the losers are `conflict:<rule>`.
+
 ### evidence_comment
 
 ```python
 def evidence_comment(row: dict, document: str, *,
                      transcribed: bool = False,
-                     conflict: bool = False) -> list
+                     conflict: bool = False,
+                     corroborated: bool = False,
+                     resolved: Optional[str] = None,
+                     named: Optional[str] = None) -> list
 ```
 
 Where this value was read, as comment lines above its node.
@@ -140,6 +168,10 @@ def make_serializer(db_path: Path)
 ```
 
 (document name, accepted tuple rows) -> TTL string or None.
+
+What was written for a document is left in `serializer.claims[name]`:
+the plan's node, and for every value its node, its row and the node or
+class each coordinate became. The provenance file is written from that.
 
 ### value_bindings
 

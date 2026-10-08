@@ -8,8 +8,8 @@ shape is identical for every value in the corpus. So the shape is
 computed here, from the spec, and the model is never asked for it. It
 is asked, one field at a time, to fill the shape in.
 
-Asking per field is the point. One request for a whole tuple lets a
-model quietly drop a coordinate it is unsure of, and dropping is
+Asking per field is the point. One request for every coordinate lets a
+model quietly drop one it is unsure of, and dropping is
 free: the field stays nullable, nothing refuses it, nothing counts
 it. Measured on the 204 document corpus run, the year was missing on
 63.5 percent of all values, and on 13 percent of those it stood in
@@ -25,6 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from . import wording
 from .spec import Parameter
 
 # What a slot wants back. VALUE is the only one that decides how many rows
@@ -80,6 +81,34 @@ DERIVED = "derived"
 # this module was written to prevent.
 OUT_OF_SLICE = "out_of_slice"
 
+# The key a coordinate carries when a pass after the harvest read it, a top-up
+# that re-read it or a pass that appended its row: `<axis>_producer`, the
+# position of the entry of the stamp's `producers` list that did. The harvest
+# writes none, so a coordinate without it was read by the harvest, and one
+# that no later pass touched must keep reading that way.
+PRODUCER = "_producer"
+BY_HARVEST, BY_PASS, BY_UNKNOWN = "harvest", "pass", "unknown"
+
+
+def reader_of(row: dict, name: str, producers) -> tuple:
+    """(who, index, entry) for the coordinate `name` of a stored row.
+
+    No key: the harvest read it (BY_HARVEST). A key that points at an entry
+    of `producers`: that pass did (BY_PASS). A key that points at none:
+    BY_UNKNOWN, and never the harvest. `--recheck` deletes the stamps, so a
+    position can outlive the list it was written for; reading that as the
+    harvest would put a top-up's answer under a model that never saw it.
+    """
+    if f"{name}{PRODUCER}" not in row:
+        return BY_HARVEST, None, None
+    index = row[f"{name}{PRODUCER}"]
+    if (not isinstance(index, int) or isinstance(index, bool)
+            or not isinstance(producers, list)
+            or not 0 <= index < len(producers)
+            or not isinstance(producers[index], dict)):
+        return BY_UNKNOWN, None, None
+    return BY_PASS, index, producers[index]
+
 
 @dataclass(frozen=True)
 class Option:
@@ -121,15 +150,20 @@ class Slot:
         # meaning rather than by which word looks nearest. Where no entry
         # has a meaning the short form stays, so a profile that has not
         # written any pays nothing for the promise.
+        # The two keys are protocol, the same English pair in every profile
+        # (a prompt that names them names these); the gloss of UNSTATED is
+        # the profile's prose.
+        words = wording.phrases()
+        means, spellings = words["option_means"], words["option_spellings"]
         if any(opt.definition for opt in self.options):
-            out = {opt.label: {"bedeutet": opt.definition,
-                               "Schreibweisen": list(opt.synonyms)}
-                   if opt.definition else {"Schreibweisen": list(opt.synonyms)}
+            out = {opt.label: {means: opt.definition,
+                               spellings: list(opt.synonyms)}
+                   if opt.definition else {spellings: list(opt.synonyms)}
                    for opt in self.options}
-            out[UNSTATED] = {"bedeutet": "in diesen Passagen steht es nicht"}
+            out[UNSTATED] = {means: words["unstated_means"]}
             return out
         out = {opt.label: list(opt.synonyms) for opt in self.options}
-        out[UNSTATED] = ["steht in diesen Passagen nicht"]
+        out[UNSTATED] = [words["unstated_spelling"]]
         return out
 
 
@@ -178,12 +212,19 @@ def parameter_slot(spec) -> Slot:
 UNIT = "unit"
 
 
+# Counted by a pass over a harvest on disk for a document whose own choice
+# lists could not be closed. Such a file is left as it is: read against an
+# empty list a choice degrades to a wording, and nothing would report it.
+LISTS_UNREADABLE = "choice lists unreadable, left alone"
+
+
 def has_number(claim: dict) -> bool:
     """Is this row's value a number, so that a unit belongs to it?
 
-    The same reading `derive_parameter` makes: a wording is a text
-    parameter's value and carries no unit, whatever the value request wrote
-    beside it.
+    Asked only where a unit can be: of a spec with a numeric parameter. A
+    wording there is a text parameter's value and carries no unit, whatever
+    the value request wrote beside it. A spec without one has no unit
+    question, and what counts as a wording there is `is_wording`'s to say.
     """
     from .verify import canonical_number
     value = claim.get("value")
@@ -263,8 +304,41 @@ def frame_slots(spec, names) -> list:
     return []
 
 
+def is_wording(spec, claim: dict) -> bool:
+    """Is this row's value a wording, which only a parameter that is not
+    numeric can hold?
+
+    A string that is no number is one. In a spec without a numeric parameter
+    every string is: "2030" is a year there, and that a number without a
+    unit belongs to no parameter is a rule about parameters that have units.
+    Read as a number, every bare year and every dotted date of such a spec
+    left the harvest `out_of_slice`, unasked.
+
+    There a row whose value was left out, with the wording in `value_raw`,
+    is one too: that is how the value request says no entry of the list
+    fits, and the row is kept with its wording. A value that is no string
+    and has no wording beside it is not one. No parameter takes it, so
+    asking would pay for a refusal.
+
+    The rule stops at a spec with a numeric parameter: there a digit string
+    is a number, whichever text parameter might have held a year.
+    """
+    from .verify import canonical_number
+    value = claim.get("value")
+    measured = any(p.is_numeric for p in spec.parameters)
+    if isinstance(value, str):
+        return not measured or canonical_number(value) is None
+    if measured:
+        return False
+    wording = claim.get("value_raw")
+    return isinstance(wording, str) and bool(wording.strip())
+
+
 def derive_parameter(spec, claim: dict):
-    """Which parameter this row belongs to, from its unit alone, or None.
+    """Which parameter this row belongs to, or None when that is a question.
+
+    A wording belongs to the text parameter when the spec has exactly one.
+    A number is decided by its unit alone.
 
     The spec says it itself: "the unit separates the two parameters". Measured
     over the kwp spec the nine energy units and the forty-two emission units
@@ -276,9 +350,7 @@ def derive_parameter(spec, claim: dict):
     accepts (the row is refused later, with the unit as the reason), or a unit
     two parameters accept. Then the question is a real question and is asked.
     """
-    from .verify import canonical_number
-    value = claim.get("value")
-    if isinstance(value, str) and canonical_number(value) is None:
+    if is_wording(spec, claim):
         text = [p for p in spec.parameters if not p.is_numeric]
         return text[0] if len(text) == 1 else None
     # The entry the unit question read, never the wording beside it: the
@@ -307,10 +379,8 @@ def parameter_undecidable(spec, claim: dict) -> bool:
     spelling. They cost 178 of 853 field requests, 20.9 percent, and every
     one of the five answers they produced was refused afterwards anyway.
     """
-    from .verify import canonical_number
-    value = claim.get("value")
-    if isinstance(value, str) and canonical_number(value) is None:
-        # A non-numeric value needs a text parameter, and one is a decision.
+    if is_wording(spec, claim):
+        # A wording needs a text parameter, and one is a decision.
         return not [p for p in spec.parameters if not p.is_numeric]
     unit = claim.get("unit")
     if not isinstance(unit, str) or not unit.strip():
@@ -341,7 +411,7 @@ def apply_derived(rows: list, slot: Slot) -> int:
         if wording:
             row.claim[f"{slot.name}_raw"] = wording
         # The passage the unit was read in, where the unit question read one;
-        # the value's own passage where nothing did (the whole-tuple path).
+        # the value's own passage where the unit slot was not answered.
         quote = row.claim.get("unit_quote") or row.claim.get("quote")
         if quote:
             row.claim[f"{slot.name}_quote"] = quote

@@ -20,12 +20,24 @@ Author: Felix Vossel
 
 ## Functions
 
+### unload
+
+```python
+def unload(path: Path) -> None
+```
+
+Take back what one file put into the environment: the names it set
+that still carry its value. The file can be read again afterwards.
+
 ### load_dotenv
 
 ```python
-def load_dotenv() -> Path | None
+def load_dotenv(extra: Optional[Path] = None) -> Path | None
 ```
 
 Read the first readable candidate into os.environ; return which one.
+
+With `extra`, that one file, unless it is not there or was read before:
+a project's own .env, for a command run in one of its subdirectories.
 
 [Back to the index](../README.md)

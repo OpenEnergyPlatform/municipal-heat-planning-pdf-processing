@@ -31,6 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from docpipe import jsonl  # noqa: E402
 from docpipe.extraction.trust import (  # noqa: E402
     LEVEL_A, LEVEL_B, LEVEL_C, trust)
 
@@ -103,7 +104,7 @@ def read_tuples(path: Path) -> list:
     """The accepted tuples of one harvest file. Refusals and the summary are
     not values, so they are not curated."""
     out = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in jsonl.read(path):
         if not line.strip():
             continue
         try:

@@ -12,10 +12,18 @@ from pathlib import Path
 
 import pytest
 
+from docpipe.extraction.graphkit import NOT_IN_GRAPH
 from docpipe.extraction.spec import load
 
 SPEC_PATH = Path("profiles/scenarios/extraction_spec.json")
-ROWS_PROMPT = Path("profiles/scenarios/prompts/extraction/rows.md")
+
+
+def _rows_prompt() -> str:
+    """What the rows request carries: the core's contract with this profile's
+    parts put in, as the loader makes it, not the parts file."""
+    from docpipe import prompts
+    from docpipe.profile import load_profile
+    return prompts.load("extraction/rows", load_profile("scenarios")).text
 
 
 @pytest.fixture(scope="module")
@@ -101,6 +109,8 @@ def test_the_spec_covers_exactly_the_fields_the_shapes_ask_of_us(spec):
         "publication_title", "publication_author", "publication_date",
         "publication_doi", "publication_abstract", "study_organisation",
         "study_funder", "study_project_name", "study_acronym",
+        "study_descriptor", "study_sector_division", "study_sector",
+        "study_technology",
         "scenario_label", "scenario_type", "scenario_abstract",
         "scenario_region", "scenario_year"}
 
@@ -150,7 +160,7 @@ def test_every_example_in_the_rows_prompt_holds_its_own_quote():
     page and named everything on it except the title."""
     from docpipe.extraction.verify import flat
 
-    text = ROWS_PROMPT.read_text(encoding="utf-8")
+    text = _rows_prompt()
     claims = [claim for line in text.splitlines()
               if line.strip().startswith('{"tuples"')
               for claim in json.loads(line.strip())["tuples"]]
@@ -168,7 +178,7 @@ def test_the_rows_prompt_calls_the_front_page_what_it_is():
     the title stayed unnamed: the heading is quotable at all, the front page
     is exempt from "an empty list is the normal case", and it is not one of
     the citations rule 4 forbids."""
-    text = ROWS_PROMPT.read_text(encoding="utf-8")
+    text = _rows_prompt()
     for satz in ("steht am Anfang ihres \"text\" und ist zitierbar",
                  "Eine Quelle ist davon ausgenommen: die Vorderseite",
                  "Die Vorderseite ist keine solche Stelle"):
@@ -183,22 +193,34 @@ def test_the_rows_prompt_calls_the_front_page_what_it_is():
         assert gegenprobe in text, gegenprobe
 
 
-def test_the_rows_prompt_may_answer_as_long_as_the_batch_was_sized_for():
+def test_the_batch_is_sized_for_the_reply_the_rows_prompt_allows(monkeypatch):
     """How many sources a request reads and how much may be written about them
-    are set in two files, and the run mixes them: fit_batch_sources sizes the
-    batch from extraction/harvest's ceiling (runner.py hardwires
-    HARVEST_PROMPT_ID) while the field-wise path answers under
-    extraction/rows. A lower ceiling here means the batch is deliberately
-    sized for a reply the prompt forbids -- 43 replies were cut off at it in
-    the corpus run of 2026-08-31."""
-    import re as regex
+    are set in two files, and the run has to take them from the same one: the
+    rows request reads the batch, so the batch follows the ceiling of the rows
+    prompt. A batch sized from a prompt that allows more than the rows prompt
+    does is sized for a reply the request forbids: 43 replies were cut off at
+    it in the corpus run of 2026-08-31. The field prompt of this profile allows
+    less than the rows prompt (5120 against 6144), and sizing from it would
+    give two sources and not three."""
+    import dataclasses
 
-    def ceiling(path):
-        head = Path(path).read_text(encoding="utf-8").split("---")[1]
-        return int(regex.search(r"max_tokens:\s*(\d+)", head).group(1))
+    from docpipe import prompts
+    from docpipe.extraction import runner
 
-    assert ceiling(ROWS_PROMPT) >= ceiling(
-        "profiles/scenarios/prompts/extraction/harvest.md")
+    monkeypatch.setenv("DOCPIPE_PROFILE", "scenarios")
+    spec = load(SPEC_PATH)
+    rows = prompts.load(runner.ROWS_PROMPT_ID)
+    field = prompts.load(runner.FIELD_PROMPT_ID)
+    assert int(field.meta["max_tokens"]) < int(rows.meta["max_tokens"])
+    assert runner.fit_batch_sources(field, spec) < runner.batch_sources_for(spec)
+    assert runner.batch_sources_for(spec) == runner.fit_batch_sources(rows, spec)
+    # And it follows the rows prompt, by construction: one with half the
+    # ceiling reads fewer sources.
+    smaller = dataclasses.replace(
+        rows, meta={**rows.meta,
+                    "max_tokens": int(rows.meta["max_tokens"]) // 2})
+    assert runner.fit_batch_sources(smaller, spec) < runner.batch_sources_for(
+        spec)
 
 
 def test_the_probes_expand_without_a_vocabulary_axis(monkeypatch):
@@ -270,7 +292,7 @@ def test_nothing_the_closed_shapes_do_not_name_is_emitted(monkeypatch):
     import profiles.scenarios.kg as kg
     monkeypatch.setattr(kg, "EVIDENCE", False)
     allowed = _promised() | STRUCTURAL
-    assert len(allowed) == 14, sorted(allowed)
+    assert len(allowed) == 18, sorted(allowed)
     used = _predicates_in(_ttl(_rows()))
     assert used <= allowed, used - allowed
 
@@ -300,10 +322,81 @@ def test_every_predicate_the_spec_promises_is_one_the_serializer_writes(
          "scenario": "CurPol", "tier": "text_located",
          "quote": "CurPol is a with existing measures scenario",
          "provenance": where},
+    ] + [
+        # A bundle tag is serialized under the same condition as a type.
+        {"parameter": key, "value": "an entry",
+         "value_uri": "https://openenergyplatform.org/ontology/oeo/" + entry,
+         "tier": "text_located", "quote": "the study covers an entry",
+         "provenance": where}
+        for key, entry in (("study_descriptor", "OEO_00140049"),
+                           ("study_sector_division", "OEO_00000368"),
+                           ("study_sector", "OEO_00000367"),
+                           ("study_technology", "OEO_00000407"))
     ]
     written = _predicates_in(_ttl(rows))
     assert _promised() - written == set(), _promised() - written
     assert written - (_promised() | STRUCTURAL) == set()
+
+
+def _tag_rows():
+    where = {"page": 2, "owner_kind": "section", "owner_id": 2}
+    oeo = "https://openenergyplatform.org/ontology/oeo/"
+    return _rows() + [
+        {"parameter": "study_sector", "value": "transport sector",
+         "value_uri": oeo + "OEO_00000422", "value_raw": "transport",
+         "quote": "The model covers transport and industry.",
+         "tier": "text_located", "provenance": where},
+        {"parameter": "study_sector", "value": "transport sector",
+         "value_uri": oeo + "OEO_00000422", "value_raw": "transport sector",
+         "quote": "Results for the transport sector follow.",
+         "tier": "text_located", "provenance": where},
+        {"parameter": "study_sector", "value": "industry sector",
+         "value_uri": oeo + "OEO_00000227", "value_raw": "industry",
+         "quote": "Industry is modelled by subsector.",
+         "tier": "text_located", "provenance": where},
+        {"parameter": "study_technology", "value": "keine dieser Technologien",
+         "value_uri": "out:not_in_list", "value_raw": "direct air capture",
+         "quote": "The model includes direct air capture.",
+         "tier": "text_located", "provenance": where},
+        {"parameter": "study_descriptor", "value": "a wording nobody mapped",
+         "quote": "The study is about a wording nobody mapped.",
+         "tier": "text_located", "provenance": where},
+    ]
+
+
+def test_a_bundle_tag_is_the_entry_the_model_chose_with_its_passages(
+        monkeypatch, caplog):
+    """The four tags the shapes demand of a bundle are entries of lists. One
+    the model picked is one triple on the bundle, whichever passages said
+    it, and each passage stays above it. An out: entry and a wording the
+    list did not hold reach no triple and are counted."""
+    import profiles.scenarios.kg as kg
+    monkeypatch.setattr(kg, "EVIDENCE", False)
+    assert kg.BUNDLE_TAGS == ("study_descriptor", "study_sector_division",
+                              "study_sector", "study_technology")
+    with caplog.at_level(logging.INFO, logger="profiles.scenarios.kg"):
+        ttl = _ttl(_tag_rows())
+    bundle = ttl.split("a oeo:OEO_00020227 ;")[1].split("\n\n")[0]
+    transport, industry = (
+        "oeo:OEO_00020439 <https://openenergyplatform.org/ontology/oeo/"
+        f"{entry}> ;" for entry in ("OEO_00000422", "OEO_00000227"))
+    assert bundle.count(transport) == 1 and bundle.count(industry) == 1, (
+        "a study covers more than one sector, and each is one triple")
+    # Each passage above the triple it is the evidence of: below it, a
+    # reader takes it for the next one's.
+    assert [bundle.index(piece) for piece in (
+        "The model covers transport and industry.",
+        "Results for the transport sector follow.", transport,
+        "Industry is modelled by subsector.", industry)] == sorted(
+        bundle.index(piece) for piece in (
+            "The model covers transport and industry.",
+            "Results for the transport sector follow.", transport,
+            "Industry is modelled by subsector.", industry))
+    assert "oeo:OEO_00020438" not in ttl, "an out: entry is no technology"
+    assert "oeo:OEO_00390071" not in ttl, "an unmapped wording is no tag"
+    assert "out:not_in_list" not in ttl and "direct air capture" not in bundle
+    assert "'out:not_in_list': 1" in caplog.text
+    assert "'unmapped:study_descriptor': 1" in caplog.text
 
 
 def test_the_writers_own_edges_are_declared_for_the_pin_to_judge(
@@ -709,7 +802,7 @@ def test_document_axes_feeds_both_the_coordinate_and_the_value():
     assert axes["scenario"]["EN_NPi2100"] == ["EN_NPi2100"]
     assert axes["scenario_label"] == axes["scenario"]
     assert "Norway" in {v[0] for v in axes["scenario_region"].values()}
-    runs = [k for k in axes["scenario"] if not k.startswith(extraction.NOT_IN_GRAPH)]
+    runs = [k for k in axes["scenario"] if not k.startswith(NOT_IN_GRAPH)]
     assert runs == ["EN_NPi2100"], "the out: entries are the only additions"
 
 
@@ -727,7 +820,7 @@ def test_every_list_offers_a_way_to_say_none_of_these_fit():
     assert "out:family" in axes["scenario"]
     # and the lists exist even where the narrowing found nothing at all
     assert not [k for k in axes["scenario"]
-                if not k.startswith(extraction.NOT_IN_GRAPH)]
+                if not k.startswith(NOT_IN_GRAPH)]
 
 
 def test_the_out_entries_are_short_enough_to_be_retyped_without_a_slip():
@@ -740,35 +833,84 @@ def test_the_out_entries_are_short_enough_to_be_retyped_without_a_slip():
 
     for vocabulary in (extraction.REGION_OUT, extraction.SCENARIO_OUT):
         for key, labels in vocabulary.items():
-            assert key.startswith(extraction.NOT_IN_GRAPH)
+            assert key.startswith(NOT_IN_GRAPH)
             assert labels[0] and len(labels[0]) <= 20, key
             assert len(labels) > 1, f"{key} has no explanation to fall back on"
 
 
-def test_the_prompt_quotes_the_out_entries_exactly_as_the_list_spells_them():
-    """A sentinel printed in the prompt in a spelling the vocabulary does not
-    hold is worse than no sentinel: the model copies the prompt, the exact
-    lookup misses, and the gloss itself is published as a scenario name or a
-    region name. Both halves are checked — every entry is named, and the
-    paragraph that names them quotes nothing else."""
-    from pathlib import Path
+def _field_prompt() -> str:
+    """The field prompt as the request carries it: the core's template of the
+    profile's language with the profile's parts in."""
+    from docpipe import prompts
+    from docpipe.profile import load_profile
 
+    return prompts.load("extraction/field", load_profile("scenarios")).text
+
+
+def _named(prompt: str, vocabulary: dict) -> list:
+    """The keys of *vocabulary* whose first label the prompt does not quote."""
+    return [key for key, labels in vocabulary.items()
+            if f'"{labels[0]}"' not in prompt]
+
+
+def _unknown(quoted_in: str, known: set) -> list:
+    """What a text quotes that no vocabulary holds."""
+    return [quoted for quoted in re.findall(r'"([^"]+)"', quoted_in)
+            if quoted.casefold() not in known]
+
+
+def _known_labels() -> set:
     from profiles.scenarios import extraction
 
-    prompt = Path("profiles/scenarios/prompts/extraction/harvest.md").read_text(
-        encoding="utf-8")
-    known = {label.casefold()
-             for vocabulary in (extraction.REGION_OUT, extraction.SCENARIO_OUT)
-             for labels in vocabulary.values() for label in labels}
-    for vocabulary in (extraction.REGION_OUT, extraction.SCENARIO_OUT):
-        for key, labels in vocabulary.items():
-            assert f'"{labels[0]}"' in prompt, f"{key} is not named in the prompt"
+    return {label.casefold()
+            for vocabulary in (extraction.REGION_OUT, extraction.SCENARIO_OUT)
+            for labels in vocabulary.values() for label in labels}
 
+
+def test_the_rows_prompt_quotes_the_region_entries_exactly_as_the_list_spells_them():
+    """A sentinel printed in the prompt in a spelling the vocabulary does not
+    hold is worse than no sentinel: the model copies the prompt, the exact
+    lookup misses, and the gloss itself is published as a region name. Both
+    halves are checked: every region entry is named, and the paragraph that
+    names them quotes nothing else. The rows request carries the regions; the
+    scenario entries are the field request's."""
+    from profiles.scenarios import extraction
+
+    prompt = _rows_prompt()
+    assert _named(prompt, extraction.REGION_OUT) == []
     paragraph = [line for line in prompt.splitlines()
                  if "KEINE Klasse sind" in line]
     assert paragraph, "the paragraph that introduces the entries moved"
-    for quoted in re.findall(r'"([^"]+)"', paragraph[0]):
-        assert quoted.casefold() in known, f"{quoted!r} is in no vocabulary"
+    assert _unknown(paragraph[0], _known_labels()) == []
+
+
+def test_the_field_prompt_quotes_the_scenario_entries_exactly_as_the_list_spells_them():
+    """The same promise for the scenario entries, which only the field request
+    names: every entry is quoted, and what the sentence that offers an entry
+    quotes after the word is an entry of the list."""
+    from profiles.scenarios import extraction
+
+    prompt = _field_prompt()
+    assert _named(prompt, extraction.SCENARIO_OUT) == []
+    offered = re.findall(r'Eintrag "([^"]+)"', prompt)
+    assert len(offered) >= len(extraction.SCENARIO_OUT), offered
+    assert _unknown(" ".join(f'"{name}"' for name in offered),
+                    _known_labels()) == []
+
+
+def test_the_entry_checks_find_a_spelling_the_list_does_not_hold():
+    """Built to fail: a prompt that spells an entry another way, and a
+    paragraph that quotes a gloss the vocabulary has no label for."""
+    from profiles.scenarios import extraction
+
+    misspelt = ('der Eintrag "Szenario Familie" und der Eintrag '
+                '"nicht in AR 6"')
+    assert _named(misspelt, extraction.SCENARIO_OUT) == [
+        "out:family", "out:not_documented"]
+    assert _unknown('bei der Region "global" und "ganz anders"',
+                    _known_labels()) == ["ganz anders"]
+    assert _named("nothing quoted", extraction.REGION_OUT) == list(
+        extraction.REGION_OUT)
 
 
 def test_filling_turns_the_markers_into_a_real_choice(spec):
@@ -935,7 +1077,7 @@ def test_no_out_entry_ever_reaches_the_turtle():
     # WHICH out: entry was chosen, and the pilot's TTL carries 238 of those.
     triples = [line for line in ttl.splitlines()
                if not line.lstrip().startswith("#")]
-    assert extraction.NOT_IN_GRAPH not in chr(10).join(triples)
+    assert NOT_IN_GRAPH not in chr(10).join(triples)
 
 
 def test_what_the_graph_does_not_take_is_counted_by_what_was_chosen(caplog):
@@ -1340,6 +1482,49 @@ def test_the_meanings_are_the_terms_own_and_not_a_paraphrase(spec):
     assert "Art" in parameter.definitions["out:not_in_list"]
 
 
+# The four lists a bundle is tagged from, as oekg_shapes.ttl holds them: how
+# many classes each, and a digest over their sorted identifiers, since 244
+# lines of them would be the spec a second time.
+BUNDLE_TAG_LISTS = {
+    "study_descriptor": (31, "cd2dc10d031b51b6"),
+    "study_sector_division": (17, "39c93a717e2d8887"),
+    "study_sector": (153, "52608add3ba857e7"),
+    "study_technology": (43, "1c557a0950312b28"),
+}
+
+
+def test_the_bundle_tag_lists_are_the_ones_the_shapes_accept(spec):
+    """Each list is sh:in in the platform's shapes, and a class outside it
+    makes the bundle invalid. A class dropped here is one no study can be
+    tagged with, a dropped out: entry leaves the model nothing to say when
+    the list does not hold what it read, and a meaning pasted onto a second
+    class tells the model the two are one. The meanings are the ontology's
+    own, so each is held against the snapshot of the pinned release; a class
+    the ontology gives none carries none here either."""
+    import hashlib
+    from profiles.scenarios import kg
+    terms = json.loads(SPEC_PATH.with_name("vocabulary.json").read_text(
+        encoding="utf-8"))["terms"]
+    by_uri = {p.uri: p for p in spec.parameters}
+    assert set(BUNDLE_TAG_LISTS) == set(kg.BUNDLE_TAGS)
+    for key, (count, digest) in BUNDLE_TAG_LISTS.items():
+        parameter = by_uri[key]
+        classes = [u for u in parameter.vocabulary if kg.in_graph(u)]
+        names = sorted(u.rsplit("/", 1)[-1] for u in classes)
+        assert len(names) == count, key
+        assert hashlib.sha256("\n".join(names).encode()).hexdigest()[
+            :16] == digest, key
+        assert [u for u in parameter.vocabulary if not kg.in_graph(u)] \
+            == ["out:not_in_list"], key
+        assert parameter.definitions["out:not_in_list"].strip(), key
+        for uri in classes:
+            assert parameter.definitions.get(uri) == terms[
+                uri.rsplit("/", 1)[-1]]["definition"], uri
+        meanings = [parameter.definitions[u] for u in classes
+                    if u in parameter.definitions]
+        assert len(set(meanings)) == len(meanings), key
+
+
 def test_the_offered_wording_did_not_move_when_the_meanings_arrived(spec):
     """The object form carries `label` + `spellings`, and `_vocabulary`
     rebuilds `[label] + spellings`. So the list the model is offered and the
@@ -1432,3 +1617,61 @@ def test_no_question_tells_the_model_where_it_may_quote_from(spec):
             for gone in ("aus der Quelle der Zeile", "Nachbarseite",
                          '"section"'):
                 assert gone not in text, (parameter.uri, name, gone)
+
+
+# ---------------------------------------------------------------------------
+# The properties of the shapes that nobody asks
+# ---------------------------------------------------------------------------
+
+def test_what_the_profile_leaves_out_of_the_shapes_is_recorded_with_a_reason():
+    """The five groups the owner confirmed as left out, and the properties
+    the serializer writes itself or never touches, each with a sentence."""
+    from docpipe.extraction import preflight
+    from profiles.scenarios import extraction
+    recorded, unreadable = preflight.not_extracted(extraction.NOT_EXTRACTED)
+    assert not unreadable
+    assert len(recorded) == len(extraction.NOT_EXTRACTED)
+    left = {prop for _shape, prop in recorded}
+    for group, prop in (("contact person", "OEO_00000508"),
+                        ("energy carrier tag", "OEO_00020432"),
+                        ("interacting region", "OEO_00020222"),
+                        ("scenario output", "OEO_00020436"),
+                        ("scenario input", "OEO_00020437"),
+                        ("reference link", "OEO_00390078")):
+        assert prop in left, f"{group} is not recorded as left out"
+    for key, why in recorded.items():
+        assert len(why.split()) >= 5, f"{key}: that is no reason"
+
+
+def test_the_profile_finds_the_shapes_of_its_last_refresh(tmp_path,
+                                                          monkeypatch):
+    from docpipe import upstream
+    from profiles.scenarios import extraction, oekg_api
+    monkeypatch.setattr(upstream, "CACHE", tmp_path)
+    assert extraction.shapes_files() == [], "no refresh has run"
+    shapes = tmp_path / "oekg_shapes.ttl"
+    shapes.write_text("x", encoding="utf-8")
+    upstream.write_lock(oekg_api.LOCK, {"oekg_shapes": {
+        "kind": "repo_files", "version": "abc",
+        "files": [{"path": str(shapes)}]}}, tmp_path)
+    assert extraction.shapes_files() == [shapes]
+    shapes.unlink()
+    assert extraction.shapes_files() == [], "the file is gone"
+
+
+def test_the_shapes_of_the_platform_leave_unasked_exactly_what_is_recorded():
+    """Against the shapes file of the last refresh, where this machine has
+    one: no property is unasked and unrecorded, and none is recorded that a
+    parameter asks or the shapes no longer carry. Without a file there is
+    nothing to compare, and the preflight line says so as well."""
+    pytest.importorskip("rdflib")
+    from docpipe.extraction import preflight
+    from profiles.scenarios import extraction
+    files = [path for path in extraction.shapes_files() if path.is_file()]
+    if not files:
+        pytest.skip("no shapes file of a refresh on this machine")
+    raw = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
+    unasked, _every = preflight.shape_properties(files, raw)
+    recorded = set(extraction.NOT_EXTRACTED)
+    assert not set(unasked) - recorded, "asked by nobody, recorded by nobody"
+    assert not recorded - set(unasked), "recorded, but asked or not in shapes"

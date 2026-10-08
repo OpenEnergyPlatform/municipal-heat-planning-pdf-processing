@@ -4,6 +4,41 @@
 
 Tools and scripts developed to support the [MHPO development](https://github.com/OpenEnergyPlatform/municipal-heat-planning-ontology) by automating data extraction, enrichment, and semantic indexing of PDF reports: a document pipeline (`docpipe/`) that turns a corpus of PDFs into a searchable database and index and then reads typed values out of it into a knowledge graph. The corpus is a profile's business (`profiles/<name>/`): `kwp` covers German municipal heat plans (Kommunale Wärmepläne) and feeds MHPKG on the Open Energy Platform, `scenarios` covers the literature the IPCC AR6 scenario database cites and feeds OEKG.
 
+## Install and start
+
+```bash
+pip install .                        # the package and the docpipe command
+pip install ".[layout,embed,app]"    # plus stages that run a model in this process
+```
+
+The extras are named in `pyproject.toml`: `layout` (stage 2), `embed` (stage 6
+and the chat's local embedder), `app` (the chat), `kg` (the graph and its
+checks), `kwp` (what the profiles here read their document lists with),
+`sandbox`, `anthropic` and `dev`. A project of one's own starts in an empty
+folder:
+
+```bash
+docpipe init       # docpipe.toml, and a profile that extends the built-in default
+docpipe doctor     # what is missing before a stage can run
+docpipe run        # ingest, preprocess, refine, visuals, chunk and lexical, one after the other
+docpipe status     # which stage has left output for which document
+```
+
+`docpipe init NAME --shapes [FILE]` also writes the draft of an extraction spec
+into the new profile, from the SHACL shapes in FILE or, without one, from a small
+metadata shape the package brings (it needs `docpipe[kg]`). A draft is no spec:
+`docpipe compile` finishes it, and `docpipe extract` stops until it has.
+
+`docpipe run` takes the PDFs put into `data/<name>/pdf` through to a corpus the
+chat can search; `--from`, `--to` and `--skip` choose the stages, and it stops
+at the first one that ends non-zero. A profile whose source needs a document
+list (`kwp`, `scenarios`) is given it first, `docpipe ingest --source FILE`,
+and then run with `docpipe run --skip ingest`. `docpipe estimate` says before a
+run how many requests and tokens, and at what price, each stage still has ahead
+of it, without calling a model. `docpipe --help` lists every command: the stages, the chat and
+the tools around them. `python -m docpipe.<stage>` still works and takes the
+same arguments.
+
 ## Profiles
 
 The pipeline itself is generic: `docpipe/` knows about PDFs, not about heat
@@ -11,24 +46,31 @@ plans. What a project contributes lives in `profiles/<name>/` — where its
 documents come from (`source.py`), the tables it adds (`schema.sql`), the
 prompts it runs on (`prompts/<stage>/`) and the filters its app offers.
 
-Pick one per run. The profile also decides where the data lives
+Pick one per run: the `profile` key of `docpipe.toml`, `--profile <name>` on a
+command, or `DOCPIPE_PROFILE`. The profile also decides where the data lives
 (`data/<name>/`), so two projects never share a database or an index:
 
 ```bash
-export DOCPIPE_PROFILE=kwp
-python -m docpipe.preprocessing            # paths come from the profile
+docpipe --profile kwp status                # paths come from the profile
 ```
 
-The prompts belong to the profile, all of them — the core has no defaults. A
+A profile is found by name on a search path: the project's own `profiles/`,
+installed packages, the `profiles/` of this repository, then the built-in
+`default`; `--profile` also takes the directory of one. The `default` profile is
+the one the package brings itself, any folder of English documents with prompts
+for every stage. A project's profile extends it (`extends="default"`) and
+writes only what it knows better.
+
+The prompts still belong to a profile: the core has no prompt of its own. What
+it holds is the half of the extraction prompts that says what a reply looks
+like, as templates a profile's own parts are put into. A
 prompt names the corpus it was written for and the language it answers in, and
 neither is something `docpipe/` could guess; a fallback could only be some
-other project's prompt. A stage whose profile has no prompt for it says so and
-stops.
-
-Set the profile in the environment rather than only passing `--profile`: a
-stage binds its prompts when it is imported, before the command line is parsed.
-A profile that carries prompts and is named only on the command line is refused
-rather than run with the wrong ones.
+other project's prompt. A profile that stands alone and has no prompt for a
+stage says so and stops. Refinement, visuals and extraction stop with one line
+naming the available profiles when none is given. The chat is the one command
+that does not: with no profile named it runs on the built-in `default` profile
+and says so, since nothing it does writes a corpus.
 
 The documentation site is published at
 [municipal-heat-planning-pdf-processing.readthedocs.io](https://municipal-heat-planning-pdf-processing.readthedocs.io/en/latest/).
@@ -67,6 +109,18 @@ documents or items missing their output are reprocessed — so any stage can be
 re-run in isolation. A tree processed before the rename is brought forward with
 `python -m docpipe.migrate_artifact_names <processed root> --apply`.
 
+Around the stages: `docpipe compile` drafts an extraction spec from the SHACL
+shapes of a graph, `docpipe column` writes the spec of one question of one's own
+for a trial harvest, `docpipe preflight` checks a profile's spec, prompts and
+graph writer before a corpus run, `docpipe evaluate` and `docpipe benchmark` count precision and
+recall against what people decided and make a recorded harvest again without a
+model (`docpipe evaluate NEW --diff OLD` compares two harvests without any
+decisions), and `docpipe export` and `docpipe serve` hand the values on, and
+what the harvest says where it has none, as a table, an HTTP API or an MCP
+server, with a search over the corpus passages beside them. Every model
+request goes through one provider layer: a server of one's own, OpenAI,
+Anthropic or Gemini.
+
 ### 1. File processing (`docpipe.ingest` + profile)
 
 A profile lists its documents through its own `Source` (`profiles/<name>/source.py`); the core does the same four things for every corpus: fetch the file, refuse it when its text layer is unusable, write the `Documents` row, and link versions. What a document is called, what metadata it carries and which extra tables it needs is the profile's part: `kwp` reads the KWW register (an Excel workbook of every published Wärmeplan) and writes `OrganisationUnits`, `Municipalities` and `MunicipalityMeta` rows beside the shared tables, `scenarios` reads a crawl index of the AR6 literature and writes `Scenarios` and `DocumentScenarios` link rows instead.
@@ -75,8 +129,11 @@ Municipal links rot faster than the register is corrected, so a download failure
 does not end the run: unreachable links are collected and written to
 `unreachable_pdfs.txt` next to the database (PDFs that download but fail the
 quality gate go to `rejected_pdfs.txt`), and a clean run deletes both. A
-replacement found by hand is recorded in the profile's `PDF_OVERRIDES` — the
-file is then read from the data directory and never fetched.
+download streams to disk and is refused over `DOCPIPE_MAX_DOWNLOAD_MB`, and
+a second URL that ends in the file name of one already downloaded is refused
+with both URLs named and listed there too. A replacement found by hand is
+recorded in the profile's `PDF_OVERRIDES`; the file is then read from the
+data directory and never fetched.
 
 Documents sharing a `group_key` are versions of the same work; the profile decides what the key is — see [Versioning](#versioning).
 
@@ -96,7 +153,7 @@ Output: `sections.json` per PDF.
 
 An LLM served locally via [vLLM](https://github.com/vllm-project/vllm) cleans the artefacts that are hard to catch deterministically: misattributed captions, residual boilerplate, bibliography pages. It operates in a sliding window over a document's sections (carrying context from the previous window so it can merge across window boundaries) and, per section, decides to keep, merge into the previous section, split, remove, or replace it. Bibliographies are converted to BibTeX.
 
-Output: `sections_refined.json`.
+Output: `sections_refined.json`. A window the model server does not serve (no connection, a timeout, a 429, a 5xx) leaves the document unrefined: no `sections_refined.json` is written, the usable replies are kept in `sections_refined.partial.json`, the stage exits non-zero, and the next run asks only for the windows that are missing. A cut of an oversized section the server does not answer ends the pass the same way, with nothing kept: the next run starts with the cut.
 
 ### 5. Image processing (`docpipe.visuals`)
 
@@ -106,13 +163,13 @@ Output: `visuals.json`.
 
 ### 6. Chunking, embedding & database population (`docpipe.chunking`)
 
-1. **Merge** — Stage-4 sections and Stage-5 enrichments are combined by ID into `document.json`.
+1. **Merge** — Stage-4 sections and Stage-5 enrichments are combined by ID into `document.json`. A document with `sections.json` and no `sections_refined.json` is left out, and the merge warns with its name.
 2. **Database population** — sections, tables, and images are written to SQLite with page-level provenance: each `Sections` row records which pages it spans (`SectionPages`) and an ordered list of page-tagged text/table/figure pieces (`Segments`), so a retrieved chunk can be cited down to the exact source page. A segment also carries the `bbox` it occupied in the source PDF, which lets a citation be highlighted in place rather than searched for by text.
-3. **Embedding** — six embedding types per document (see below) are produced by [Qwen3-VL-Embedding-8B](https://huggingface.co/Qwen/Qwen3-VL-Embedding-8B), loaded in bfloat16 and data-parallel across every visible GPU (one model replica per GPU). Documents are read and prepared in a thread pool while the GPUs work on the items already collected, and each block of them is embedded in batches sorted by text length, so a batch pads to the length of its own members rather than to the longest text in the corpus. Vectors are L2-normalised and added to a single global FAISS index (`IndexIDMap` over `IndexFlatIP`). The database is the source of truth for what has already been embedded, so re-runs only embed missing items.
+3. **Embedding** — six embedding types per document (see below) are produced by [Qwen3-VL-Embedding-8B](https://huggingface.co/Qwen/Qwen3-VL-Embedding-8B), loaded in bfloat16 and data-parallel across every visible GPU (one model replica per GPU). Documents are read and prepared in a thread pool while the GPUs work on the items already collected, and each block of them is embedded in batches sorted by text length, so a batch pads to the length of its own members rather than to the longest text in the corpus. Vectors are L2-normalised and added to a single global FAISS index (`IndexIDMap` over `IndexFlatIP`). The database is the source of truth for what has already been embedded, so re-runs only embed missing items. An index that holds vectors of another embedding model is not continued with this one: the stage stops with one line, unless `EMBEDDING_ALLOW_MIXED_INDEX` allows the mixture. A batch the embedder fails does not end the run: the other batches are finished and saved, and the stage ends non-zero saying how many inputs of which embedding type have no vector, so a re-run embeds exactly those.
 
 ### 7. Reading the values out (`docpipe.extraction` + profile)
 
-The profile's extraction spec (`profiles/<name>/extraction_spec.json`) says which parameters to look for and which coordinates each value carries (for `kwp`: scenario, year, energy carrier, sector, quantity, aggregation, spatial scope). For every document the stage retrieves the passages that fit, asks the LLM one request per field, and accepts a value only when the quoted passage really sits in the source and carries the answer; refusals are kept beside the accepted tuples, and every coordinate ends in a named state rather than empty. The result is one JSONL harvest and one stamp per document, so a re-run with the same spec, prompts and model skips what is already done and a changed question redoes only the coordinate it touches. The contract of that file is published on the documentation site, one page per profile.
+The profile's extraction spec (`profiles/<name>/extraction_spec.json`) says which parameters to look for and which coordinates each value carries (for `kwp`: scenario, year, energy carrier, sector, quantity, aggregation, spatial scope). For every document the stage retrieves the passages that fit, asks the LLM one request per field, and accepts a value only when the quoted passage really sits in the source and carries the answer; refusals are kept beside the accepted tuples, and every coordinate ends in a named state rather than empty. The result is one JSONL harvest and one stamp per document, so a re-run with the same spec, prompts and model skips what is already done and a changed question redoes only the coordinate it touches. A document one of whose requests ended on a 429 or a 5xx is written but not stamped, so the next run harvests it again and this run exits 1. A document whose database row names another PDF checksum than its stamp does is reported stale, skipped, and read again only with `--force-stale`. The contract of that file is published on the documentation site, one page per profile.
 
 ### 8. The knowledge graph (`docpipe.extraction --serialize`)
 
@@ -131,7 +188,8 @@ The accepted tuples of a harvest are serialized into Turtle by the profile's `kg
 ### Python Libraries
 
 [vLLM](https://github.com/vllm-project/vllm) serves the LLM stages (one instance each for 4 and 5),
-reached through the [openai](https://github.com/openai/openai-python) client.
+reached through the [openai](https://github.com/openai/openai-python) client; a hosted API
+takes its place when a role's provider is set (`LLM_PROVIDER`, `VLM_PROVIDER`, `EMBEDDING_PROVIDER`).
 [Transformers](https://huggingface.co/docs/transformers/) runs PP-DocLayoutV3 (Stage 2) and the
 embedding model (Stage 6), with [qwen-vl-utils](https://github.com/QwenLM/Qwen2.5-VL) for vision
 input preprocessing. [PyMuPDF](https://pymupdf.readthedocs.io/) (rawdict mode) extracts text and
@@ -142,11 +200,12 @@ the metadata, and [pandas](https://pandas.pydata.org/) reads a profile's registe
 
 ## Database Schema
 
-SQLite, foreign keys enabled. The core schema (`docpipe/store/schema.sql`) describes any PDF corpus in eight tables; a profile adds its own tables through `profiles/<name>/schema.sql`, applied after the core schema on the same connection, and the core never learns their column names.
+SQLite, foreign keys enabled. The core schema (`docpipe/store/schema.sql`) describes any PDF corpus in nine tables; a profile adds its own tables through `profiles/<name>/schema.sql`, applied after the core schema on the same connection, and the core never learns their column names.
 
 | Table | Content |
 | --- | --- |
 | Documents | One row per PDF: `external_id` (the profile's stable identity: the file name for `kwp`, the DOI for `scenarios`), `filename`, `published`, `num_pages`, whether a model had to transcribe the pages (`page_text_transcribed`), and the versioning columns `group_key`, `is_current`, `supersedes` |
+| Meta | What the database says about itself, one row per fact: the model, dimension and backend its index was built with |
 | Pages | One row per physical page of a document |
 | Sections | Retrieval chunks: title, primary page number, full content |
 | SectionPages | Which pages a section spans (many-to-many) |
@@ -182,14 +241,22 @@ The batch pipeline above produces the corpus; `docpipe.inference` reads it. One
 question becomes a search phrase, an embedded query, a sub-index over the
 selected document and scopes, and finally an answer with a citation resolved
 down to the page — and, where a `bbox` was stored, to the highlighted passage in
-the source PDF. `docpipe.embedding` provides the query-side embedder (a local
+the source PDF. The app draws the cited page from the profile's PDF folder with
+the quote marked and offers the PDF for download. `docpipe.embedding` provides the query-side embedder (a local
 model or an API), separately from the batch embedder so a query does not need a
 whole GPU.
 
-[`scripts/inference_app/`](scripts/inference_app/README.md) is the Streamlit
-front-end around it: one document at a time, or the same question put to
-several documents and answered side by side. It documents its own
-configuration.
+`docpipe chat` starts the Streamlit app around it (`docpipe/app/`, the `app`
+extra). A question goes to one document, to several documents answered side by
+side, or to the whole corpus; the search scopes it offers are the embedding
+types the index holds, and it warns when the index was built with another
+model than the one that embeds the questions. Retrieval is by meaning and, where
+`docpipe lexical` built a word index, by word as well. Pointed at a harvest
+directory, the app shows the verified values the harvest holds for a question
+before it answers from the documents, and has a review page where people decide
+whether harvested values are right; `docpipe evaluate` counts against those
+decisions. [`scripts/inference_app/README.md`](scripts/inference_app/README.md)
+documents its configuration.
 
 ## Collaboration
 

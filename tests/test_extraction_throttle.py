@@ -234,3 +234,56 @@ def test_the_adaptive_limit_can_be_switched_off(monkeypatch):
                         lambda *a, **kw: pytest.fail("asked the server"))
     runner.start_limit()
     assert runner.LIMIT is None
+
+
+def _watch(answers, dead_after=30.0, every=10.0):
+    """Run watch_server over scripted probe answers on a fake clock."""
+    now = [0.0]
+    replies = iter(answers)
+    dead = []
+
+    def sleep(seconds):
+        now[0] += seconds
+
+    def probe():
+        try:
+            return next(replies)
+        except StopIteration:
+            raise SystemExit  # ends the watching thread
+    thread = runner.watch_server(dead.append, probe=probe, every=every,
+                                 dead_after=dead_after, clock=lambda: now[0],
+                                 sleep=sleep)
+    thread.join(2)
+    return dead
+
+
+def test_a_server_silent_long_enough_ends_the_run():
+    assert _watch([True, False, False, False, False]) == [30.0]
+
+
+def test_one_answer_resets_the_silence():
+    assert _watch([False, False, True, False, False, True]) == []
+
+
+def test_a_short_outage_is_not_a_dead_server():
+    assert _watch([False, False, True]) == []
+
+
+def test_the_probe_counts_any_reply_below_500_as_alive(monkeypatch):
+    import urllib.error
+    import urllib.request
+
+    def refuse(code):
+        def urlopen(request, timeout=None):
+            raise urllib.error.HTTPError(request.full_url, code, "x", {}, None)
+        return urlopen
+
+    monkeypatch.setattr(urllib.request, "urlopen", refuse(401))
+    assert runner.probe_server("http://server:8000/v1") is True
+    monkeypatch.setattr(urllib.request, "urlopen", refuse(503))
+    assert runner.probe_server("http://server:8000/v1") is False
+
+    def gone(request, timeout=None):
+        raise OSError("connection refused")
+    monkeypatch.setattr(urllib.request, "urlopen", gone)
+    assert runner.probe_server("http://server:8000/v1") is False

@@ -84,6 +84,9 @@ def test_where_a_coordinates_passage_stands_is_not_a_reason():
 @pytest.mark.parametrize("field,expected", [
     ({"year_state": fields.EXHAUSTED}, "exhausted:year"),
     ({"sector_state": fields.UNBACKED}, "unbacked:sector"),
+    # The request came back without this row: nothing read the coordinate,
+    # and the value that carries it deserves the same doubt as exhausted.
+    ({"sector_state": fields.UNANSWERED}, "unanswered:sector"),
     ({"flags": ["quote_repaired"]}, "repaired"),
     ({"flags": ["computed"]}, "computed"),
     ({"flags": ["not_located"]}, "not_located"),
@@ -103,9 +106,10 @@ def test_a_contested_identity_is_a_c_even_with_everything_else_right():
 def test_a_coordinate_the_plan_does_not_state_is_not_a_doubt():
     """"The plan does not say it" is a finding about the plan, and "never
     asked, the row left at the gate" is one about this run's scope. Neither
-    is a reason to distrust the number that was read."""
-    for state in (fields.SAID_UNSTATED, fields.OUT_OF_SLICE,
-                  fields.DERIVED, fields.UNANSWERED):
+    is a reason to distrust the number that was read. (Unanswered is: the
+    row was asked and the answer never named it, see the parametrized test
+    above.)"""
+    for state in (fields.SAID_UNSTATED, fields.OUT_OF_SLICE, fields.DERIVED):
         # The source key is left pointing at a foreign table on purpose. A
         # coordinate that is not read has no evidence to judge, so whatever
         # a previous window left behind must not be judged as if it had.
@@ -391,3 +395,51 @@ def test_the_plan_keeps_which_passages_each_parameters_own_anchors_rank():
     assert report.sources_of == {
         "planning_organisation": {("section", 1)},
         "energy_consumption": {("table", 2)}}
+
+
+# -- which documents a model transcribed -------------------------------------
+
+def _documents(path, column=True):
+    import sqlite3
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    extra = ', "page_text_transcribed" INTEGER' if column else ""
+    conn.execute(f'CREATE TABLE "Documents" ("id" INTEGER PRIMARY KEY, '
+                 f'"filename" TEXT{extra})')
+    if column:
+        conn.executemany('INSERT INTO "Documents" VALUES (?, ?, ?)', [
+            (1, "scan.pdf", 3), (2, "born_digital.pdf", 0),
+            (3, "unknown.pdf", None)])
+    else:
+        conn.execute('INSERT INTO "Documents" VALUES (1, \'scan.pdf\')')
+    conn.commit()
+    conn.close()
+    return path
+
+
+@pytest.mark.parametrize("folder", ["plain", "run#5", "x%41", "a b"])
+def test_the_transcribed_documents_are_read_from_the_database_that_was_named(
+        tmp_path, folder):
+    """By the name their harvest file has. A `#` in the path is part of the
+    path: read as the start of a fragment, another file was opened and every
+    transcribed document passed as one with its own text."""
+    from docpipe.extraction.trust import transcribed_documents
+    database = _documents(tmp_path / folder / "c.db")
+    assert transcribed_documents(database) == {"scan"}
+    assert transcribed_documents(str(database)) == {"scan"}
+
+
+def test_only_a_database_without_the_mark_says_no_document(tmp_path):
+    import sqlite3
+
+    from docpipe.extraction.trust import transcribed_documents
+    assert transcribed_documents(None) == set()
+    assert transcribed_documents(
+        _documents(tmp_path / "old.db", column=False)) == set()
+    # a database that cannot be opened is not one without the mark
+    with pytest.raises(sqlite3.OperationalError):
+        transcribed_documents(tmp_path / "nowhere" / "c.db")
+    broken = tmp_path / "broken.db"
+    broken.write_bytes(b"this is not a database, " * 64)
+    with pytest.raises(sqlite3.DatabaseError):
+        transcribed_documents(broken)

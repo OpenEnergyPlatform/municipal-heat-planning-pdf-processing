@@ -13,6 +13,19 @@ Author: Felix Vossel
 
 ## Functions
 
+### note_embedding
+
+```python
+def note_embedding(db_path: Path, embedder) -> None
+```
+
+Record in the database which model builds its index.
+
+Raises `MixedIndex` before any vector is written when the index holds
+vectors of another model, unless that is allowed on purpose
+(`EMBEDDING_ALLOW_MIXED_INDEX`); then, like an index that records no
+model and so cannot be checked, it is a line in the log.
+
 ### peak_rss_gb
 
 ```python
@@ -60,6 +73,9 @@ Run the pipeline over the PDF subdirectories of `data_dir`.
 'enrich-bbox', 'enrich-page-source' or 'enrich-caption'; None runs
 merge → db → embed (the db step backfills the page source and the
 captions itself). `force` ignores caches and clears old embeddings.
+
+The embed step raises IncompleteIndex when inputs were left without a
+vector, after it saved the index with the ones that have one.
 
 ### main
 

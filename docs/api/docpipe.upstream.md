@@ -10,11 +10,14 @@ module resolves each one to a version, downloads it into a cache keyed by that
 version, and returns a record of what it got. What a file is for (a closure to
 snapshot, shapes to validate against, regions to offer) is the profile's.
 
-Three kinds:
+Four kinds:
 
   release_asset  An asset of the repository's latest GitHub release. A
                  repository without a release is an error, unless the source
                  says `until_released`: then it is skipped with a note.
+  release_file   A file in the repository at the tag of its latest release,
+                 for a project that attaches nothing to its releases. The
+                 same rule for a repository without a release.
   repo_files     Files at the head of a branch. The version is a digest over
                  their bytes. A source may name the commit its profile was
                  `reviewed` against, and the record then lists every file that

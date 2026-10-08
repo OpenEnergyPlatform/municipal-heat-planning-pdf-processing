@@ -41,8 +41,8 @@ KNOWN_AXIS_STATES = {fields.READ, fields.DERIVED, fields.SAID_UNSTATED,
                      fields.UNANSWERED, fields.EXHAUSTED, fields.UNBACKED,
                      fields.OUT_OF_SLICE}
 
-# The three causes a request never came back for (schema.py's refusal.claim).
-SENTINEL_WHY = ("unreachable", "no_answer", "cut_off")
+# The four causes a request never came back for (schema.py's refusal.claim).
+SENTINEL_WHY = ("unreachable", "unserved", "no_answer", "cut_off")
 
 TUPLE_FLOORS = (25, 10)          # "thin" thresholds a curator asked about
 THIN_PLAN_COUNT = 30             # how many of the thinnest plans to break out

@@ -3,10 +3,13 @@ from docpipe.profile import Facet, Profile
 
 PROFILE = Profile(
     name="scenarios",
+    # Everything the default profile has, this one writes itself, except the
+    # prompts that are the default's byte for byte: those are inherited and
+    # not copied. A test holds that list, so no other prompt ever stands in
+    # for a missing one.
+    extends="default",
     title="IPCC-AR6-Szenarienliteratur – Recherche",
     document_noun="Publikation",
-    source_language="en",
-    answer_language="en",
     # Journal articles and agency reports are typeset in two columns far more
     # often than heat plans are, and a two-column page read line by line is
     # interleaved nonsense. Takes effect on the next Stage 3 (--rebuild-stage3).

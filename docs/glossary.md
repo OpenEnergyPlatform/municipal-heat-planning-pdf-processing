@@ -37,6 +37,14 @@ block
   PyMuPDF text runs with Stage 2's PP-DocLayoutV3 detections; see
   [preprocessing](stages/preprocessing.md).
 
+cassette
+: The answers of one run, each filed under what was asked, so the run can be
+  made again without a model: `DOCPIPE_CASSETTE_RECORD` writes one and
+  `DOCPIPE_CASSETTE_REPLAY` takes its answers from one. Defined in
+  `docpipe/providers/cassette.py` and the basis of `docpipe benchmark`; see
+  [the provider layer](stages/providers.md) and [measuring a
+  harvest](stages/evaluation.md).
+
 chunk
 : One LLM question-answering attempt in the inference app: a token-budgeted
   group of retrieval hits, defined as the `Chunk` dataclass in
@@ -46,9 +54,12 @@ chunk
 
 citation
 : One retrieved source shown under an inference-app answer: a dict of its
-  content, a grounded quote and a `visual` flag, appended to the
+  content, a grounded quote, a `visual` flag, the number `n` the statement
+  that stands on it is shown with, and, for a value the sandbox computed,
+  `computed` and the number of the `run` that printed it, appended to the
   `citations` list `docpipe/inference/answer.py` builds and, through
-  `pdf_link.py`, given a deep link into the source PDF; see
+  `pdf_link.py`, shown in the app with its page drawn from the source PDF
+  (and a link into an external viewer where one is configured); see
   [app](stages/app.md).
 
 claim
@@ -65,6 +76,15 @@ contract
   record, checked into `profiles/<name>/extraction_schema.json`. Published
   per profile at [kwp](contract/kwp.md) and
   [scenarios](contract/scenarios.md).
+
+contract template
+: The core's half of an extraction prompt: a Markdown file
+  `docpipe/extraction/contract/<language>/<name>.md`, in German and in English
+  for each of `rows`, `field`, `frame`, `review` and `example`. It says what that
+  request says of every corpus, and its front matter lists the parts, blocks and
+  rules a profile's parts file may use. Read by `docpipe/extraction/contract.py`
+  and put together with a profile's parts by `docpipe/prompts.py`. Not the
+  harvest contract above; see [extraction](stages/extraction.md).
 
 convoy
 : Several municipalities that share one heat-plan PDF, identified in the
@@ -86,6 +106,12 @@ corpus
   whose paths are `Profile.db_path` and `Profile.index_path` in
   `docpipe/profile.py`. Built by chunking and read by extraction and the
   inference app; see [chunking](stages/chunking.md).
+
+default profile
+: The profile the package brings itself (`docpipe/builtin/default/`): any
+  folder of English documents, with no subject. A project's profile extends it
+  with `extends="default"` and writes only what it knows better. See
+  [profiles](profiles.md).
 
 derived coordinate
 : A coordinate the spec decides on its own, such as the parameter a unit
@@ -117,9 +143,10 @@ embedding_type
   `docpipe/chunking/database.py`; see [chunking](stages/chunking.md).
 
 exhausted
-: The state of a coordinate still open when the field sweep's window
-  budget ran out with the document unread to the end, a finding about the
-  run rather than about the document or the model. Defined in
+: The state of a coordinate still open when the allowance of the document's
+  search for it (in windows or in requests) ran out with the document unread to
+  the end, a finding about the run rather than about the document or the
+  model. Defined in
   `docpipe/extraction/fields.py`; see [states](contract/states.md).
 
 facet
@@ -160,6 +187,17 @@ frame
   `docpipe.extraction.pipeline.apply_frame`; see
   [extraction](stages/extraction.md) and [kwp](profiles/kwp.md).
 
+gold
+: What people decided about harvested values: a field of a row is `correct`
+  or `wrong`, the document states a value the harvest lacks, a document was
+  read whole for a parameter. One JSON line each in `gold.jsonl`, appended and
+  never rewritten, kept beside the harvest and never in it; the only thing
+  precision and recall are counted against. A verdict also notes what its
+  row said beside the value, so two rows that share a quote and a value keep
+  their own decisions. Defined in
+  `docpipe/extraction/gold.py`; see [measuring a
+  harvest](stages/evaluation.md).
+
 group_key
 : The profile-assigned string that marks two or more `Documents` rows as
   versions of one work. `docpipe.store.documents.link_document_versions`
@@ -167,11 +205,25 @@ group_key
   links the rest through `supersedes`; see [store](stages/store.md).
 
 harvest
-: The JSONL a run of `python -m docpipe.extraction` writes for one
+: The JSONL a run of `docpipe extract` (`python -m docpipe.extraction`) writes for one
   document: one line per accepted tuple, one per refusal, one
   `parameter_state` line per spec parameter, and a closing summary.
   Written by `docpipe.extraction.pipeline.write_report`; see
   [extraction](stages/extraction.md).
+
+hole
+: A unit that ended without a result, together with the cause it has none:
+  a window of refinement, the cut of an oversized section, a table or figure
+  of the visuals stage, a page of page transcription. The cause is one of
+  `docpipe.reading.HOLE_CAUSES` (`cut_off`, `reasoning_only`, `empty`,
+  `no_object`, `syntax`, `outside_text`, `not_an_object`, `missing_key`,
+  `wrong_shape`, `refused`, `not_served`, `error`). A hole is written down with
+  its cause in the stage's own output (`failed_windows`, `mechanical_cuts`,
+  `vlm_why`, `failed_pages`); the window, item or page that is a hole is asked
+  again by the next run (a section cut mechanically is not: the cut stands), and
+  a hole changes no exit code. Distinct from `exhausted`, `unstated` and `unanswered`, which are
+  states of a harvest's coordinate. Defined as `Hole` in `docpipe/reading.py`;
+  see [the parts every stage uses](stages/core.md).
 
 index
 : The FAISS vector index a corpus is searched through, an
@@ -223,11 +275,20 @@ parameter
   Defined as the `Parameter` dataclass in `docpipe/extraction/spec.py`;
   see [extraction](stages/extraction.md).
 
+parts file
+: A prompt of the extraction stage whose front matter names a template
+  (`template: rows`) and whose body is sections that each start with a line
+  `<!-- part: name -->`. `docpipe/prompts.py` puts it together with the contract
+  template of the profile's language when the prompt is loaded. A part with the
+  name of one of the template's blocks words that block itself, and
+  `without: [name]` in the front matter leaves out a block the template lists as
+  omittable. See [profiles](profiles.md) and [core](stages/core.md).
+
 passage
 : The stretch of source text a coordinate's or a value's quote is checked
   against, cut at sentence boundaries when a quote has to be rebuilt
   (`docpipe/extraction/verify.py`'s `_sentence_around`). At least
-  `MIN_QUOTE_CHARS` characters, 8 by `docpipe/extraction/verify.py:282`, so
+  `MIN_QUOTE_CHARS` characters, 8 in `docpipe/extraction/verify.py`, so
   it identifies a specific place rather than a recurring token. See
   [extraction](stages/extraction.md).
 
@@ -243,14 +304,19 @@ profile
   pipeline: where its documents live, which Python components and prompts
   it supplies, which facets its inference app offers. Represented by the
   `Profile` dataclass in `docpipe/profile.py` and never imported by the
-  core, only received by it; see [profiles](profiles.md).
+  core, only received by it. It may extend another profile and then takes
+  what it does not provide from that one; see [profiles](profiles.md).
 
 prompt
 : A Markdown file under `profiles/<profile>/prompts/<stage>/<name>.md`,
   with optional YAML front matter carrying model parameters, loaded as a
-  `Prompt` with an id, text and sha256 by `docpipe/prompts.py`. A stage
-  has no default prompt of its own, so a profile without a matching file
-  fails to import. See [core](stages/core.md).
+  `Prompt` with an id, text and sha256 by `docpipe/prompts.py`. For the rows,
+  field, frame, review and example prompts of the extraction stage the file is
+  a parts file, and the text is composed from the core's contract template and
+  the profile's parts. The core has no default prompt of its own beyond those
+  templates, so a profile without a matching file fails to import, unless it
+  extends a profile that has one (`default` has them all). See
+  [core](stages/core.md).
 
 provenance
 : The block on an accepted tuple recording where its evidence came from:
@@ -258,6 +324,20 @@ provenance
   a crop path and highlight rectangles. Attached by
   `docpipe.extraction.pipeline.fold_claims`; see
   [extraction](stages/extraction.md).
+
+provenance file
+: `<graph>.prov.ttl`, written beside a graph by `--serialize`: for every value
+  its page, quote, run and trust level, as PROV-O and Web Annotation
+  statements. Not the same as a tuple's provenance block. Written by
+  `docpipe/extraction/provenance.py`; see [the knowledge
+  graph](stages/graph.md).
+
+provider
+: The API a role (`llm`, `vlm` or `embedding`) sends its requests to:
+  `openai-compatible` (a server of one's own), `openai`, `anthropic` or
+  `gemini`, set per role (`LLM_PROVIDER` and its two siblings). Defined in
+  `docpipe/providers/__init__.py`; see [the provider
+  layer](stages/providers.md).
 
 quote
 : The verbatim passage a claim or a coordinate cites as its evidence,
@@ -290,12 +370,17 @@ resume stamp
 : `<document>.stamp.json`, the record of what produced a document's
   harvest: the spec's sha256, the model, the anchor set, one fingerprint
   key per question asked (`docpipe/extraction/spec.py`'s `fingerprints`),
-  and the recorded sentences a review or a per-document question wrote.
-  `docpipe/extraction/runner.py`'s `stale` compares only the fingerprint
-  keys (`parameter/`, `value/`, `axis/`, `slot/`), and the spec's sha256
-  only where none of those are present; the model, the anchor set and
-  every prompt id are written for a reader and never compared. See
-  [extraction](stages/extraction.md).
+  the sha256 of the PDF it was read from, the passes that wrote into it, and
+  the recorded sentences a review or a per-document question wrote.
+  `docpipe/extraction/runner.py`'s `stale` compares the fingerprint
+  keys (`parameter/`, `value/`, `axis/`, `slot/`) and the PDF's sha256
+  where the stamp and the database both carry one, and the spec's sha256
+  only where no fingerprint key is present; the model, the anchor set and
+  every prompt id are written for a reader and never compared. The stamp
+  is withheld, and the next run harvests the document again, when more than
+  half its sources never reached the server, when no batch answered, or when
+  any request ended on a 429 or a 5xx; an earlier stamp is removed with it,
+  and the run exits 1 for the document. See [extraction](stages/extraction.md).
 
 review
 : The `--review` pass reading each of a harvest's level-C values a second
@@ -317,6 +402,14 @@ row
   `docpipe/extraction/pipeline.py`. Every later field request fills a
   column of rows that already exist and can neither invent one nor drop
   one. See [extraction](stages/extraction.md).
+
+row name
+: One text for a harvested row as it reads now: its document, its tuple id and
+  its parameter, and a short hash of what it says beside its value (its unit
+  and each coordinate). Two rows of one document can share a tuple id, and a
+  decision is about the row it was made on; the review page keys a row by this
+  name. `gold.row_name` in `docpipe/extraction/gold.py`; see [measuring a
+  harvest](stages/evaluation.md).
 
 section
 : One assembled unit of document structure: a title, joined prose content,
@@ -369,12 +462,30 @@ state
   `docpipe/extraction/fields.py`; published at
   [states](contract/states.md).
 
+statement
+: One claim of an answer of the chat with its own quote: the answer is a list
+  of statements, and a statement is shown only if its quote stands whole in the
+  excerpt it cites (an image reading, a computed value: see the page for the
+  other two bases). One statement is shown as a sentence, two or more as a list
+  with the number of each citation, and the reader is told how many of those the
+  model made were removed. `docpipe/inference/statements.py` decides which
+  stand; see [asking the corpus](stages/inference.md).
+
 sweep
 : The repeated, windowed ask-and-fold loop that reads one coordinate of
-  one or more rows until it is answered or the window budget runs out. The
-  shared bookkeeping across a document's batches is
-  `docpipe.extraction.pipeline.Sweep`. See
+  one or more rows until it is answered or the allowance runs out. A batch's
+  turn walks its own stage; what is still open is searched once per document
+  and coordinate over the open rows of all the batches
+  (`docpipe.extraction.runner.DocumentSearch`), and a pass over a stored
+  harvest walks every stage for one batch. The shared bookkeeping across a
+  document's batches is `docpipe.extraction.pipeline.Sweep`. See
   [extraction](stages/extraction.md).
+
+template block
+: A stretch of a contract template between `<!-- block: name -->` and
+  `<!-- /block -->`. A profile's parts file words it itself with a part of the
+  same name or, where the template lists it as omittable, leaves it out with
+  `without`. Not a PDF block (see block above). See [profiles](profiles.md).
 
 tier
 : Which kind of evidence backs an accepted tuple: `text_located`, the
@@ -388,8 +499,22 @@ top-up
 : The `--top-up` pass that re-reads only the coordinates a resume stamp
   says moved, over the harvest's own sweep logic, instead of harvesting a
   document from its first passage again. Implemented in
-  `docpipe/extraction/topup.py`, the only one of the three repair passes
-  that needs the model and the index. See
+  `docpipe/extraction/topup.py`; with `--top-up-parameters`, one of the two
+  passes over a stored harvest that need the model and the index. The keys
+  that only a parameter the spec gained moved are left to the other one. See
+  [extraction](stages/extraction.md).
+
+top-up-parameters
+: The `--top-up-parameters` pass for a parameter added to the spec after
+  documents were harvested, instead of harvesting them again. Per stored
+  document it plans, asks the frame (with the stored pairs as its start) and
+  reads for the new parameter alone, and appends the new tuples, refusals and
+  one `parameter_state` line after the stored lines, which stay the same
+  bytes, with the summary built again last. It carries forward the stamp keys
+  of the addition only and enters itself into the stamp's `producers`. A
+  document whose stamp moved in anything but the addition stays stale as a
+  whole; one that was not read completely is left as it was and the run ends
+  with exit 1. Implemented in `docpipe/extraction/topup_parameter.py`. See
   [extraction](stages/extraction.md).
 
 trace
@@ -421,11 +546,18 @@ tuple
   report by `docpipe/extraction/pipeline.py`. See
   [extraction](stages/extraction.md).
 
+tuple id
+: A name for a harvested row made from its document, its quote and its value
+  as written. It survives a re-chunk and a re-harvest that reads the same
+  thing, so a decision, an export and a provenance record can hold on to it.
+  `identity.tuple_id` in `docpipe/extraction/identity.py`; see
+  [extraction](stages/extraction.md).
+
 unstated
 : The state (`SAID_UNSTATED`, wire value `unstated`) a coordinate is given
   when the model answers that the passages shown do not state it, an
   answer in its own right rather than a gap. Offered in every field
-  request's closed list as `docpipe/extraction/fields.py:47`'s sentinel
+  request's closed list as `docpipe/extraction/fields.py:48`'s sentinel
   `out:unstated`. See [states](contract/states.md).
 
 value request
@@ -463,6 +595,13 @@ window
   (`docpipe/extraction/pipeline.py`). Kept short and overlapping on
   purpose, so a caption is never cut off from the table it belongs to. See
   [extraction](stages/extraction.md).
+
+word index
+: The SQLite FTS5 file `<name>.lexical.db` beside a corpus database, one row
+  per section, table and figure, built by `docpipe lexical`. The chat searches
+  it beside the vectors and merges the two rankings; a stale one is not asked.
+  Defined in `docpipe/inference/lexical.py`; see [asking the
+  corpus](stages/inference.md).
 
 work item
 : One planned document, parameter (or none), and source triple before

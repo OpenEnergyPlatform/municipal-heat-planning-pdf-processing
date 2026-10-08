@@ -33,6 +33,7 @@ ROOT = Path(__file__).resolve().parent.parent
 EXTRACTION = ROOT / "docpipe" / "extraction"
 PIPELINE = EXTRACTION / "pipeline.py"
 RUNNER = EXTRACTION / "runner.py"
+TOPUP_PARAMETER = EXTRACTION / "topup_parameter.py"
 
 # The owner's rule, spelled out: the quote stands in a shown source, it is
 # long enough to name a place, and the answer stands in it. And, decided by
@@ -148,7 +149,7 @@ def test_every_reason_a_claim_is_refused_for_is_a_published_one():
     the schema check could only count them."""
     from docpipe.extraction.schema import build
     written, causes = set(), set()
-    for path in (PIPELINE, RUNNER):
+    for path in (PIPELINE, RUNNER, TOPUP_PARAMETER):
         tree = _tree(path)
         reasons, found = _whys(tree)
         written |= reasons | _refusal_reasons(tree)

@@ -52,8 +52,8 @@ _WORD = r"(?<!\w){}(?!\w)"
 
 
 # The entries that are not a thing in the graph. `kg.py` refuses to mint an IRI
-# or a link from any of them (see NOT_IN_GRAPH there) and counts them by name.
-NOT_IN_GRAPH = "out:"
+# or a link from any of them (NOT_IN_GRAPH, one definition for both profiles in
+# docpipe/extraction/graphkit.py) and counts them by name.
 
 # The first label is the answer token: runner._parameter_payload renders a
 # choice list as {labels[0]: labels[1:]} and the prompt says to copy it
@@ -187,3 +187,221 @@ def document_axes(conn: sqlite3.Connection, document_id: int) -> dict:
         "scenario_label": scenarios,    # and the value of the field itself
         "scenario_region": regions,
     }
+
+# How the documents write the decimal. It decides what the digits leave
+# open: "3,251" is 3251 here, and "1.234" is 1.234.
+DECIMAL_MARK = "."
+
+# The language tag of the ontology's alternative labels that the vocabulary
+# snapshot keeps for this profile, the words its spec is held against. "de"
+# is what the committed snapshot was built with.
+ALT_LABEL_LANGUAGE = "de"
+
+# The language of the core's contract text in this profile's prompts (see the
+# same constant of the kwp profile).
+CONTRACT_LANGUAGE = "de"
+
+
+# What the preflight (`docpipe preflight`) holds this profile's prompts to,
+# beyond the keys the stage reads by name: a wording the run depends on. The
+# prompts are in the profile's language, so the passage is too.
+# (what is checked, prompt, passage, True: has to be there, False: must not)
+PROMPT_CHECKS = (
+    ("field prompt asks one field", "extraction/field",
+     "GENAU EIN Feld", True),
+    ("rows prompt no longer fixes one parameter", "extraction/rows",
+     '"parameter": die gesucht', False),
+)
+
+
+def shapes_files() -> list:
+    """The OEKG shapes of the last refresh of the API sources, or none.
+
+    Where the preflight finds the file `NOT_EXTRACTED` is held against.
+    """
+    from docpipe import upstream
+    from profiles.scenarios import oekg_api   # lazy: it reads the spec
+    path = oekg_api._locked("oekg_shapes", upstream.CACHE)
+    return [path] if path else []
+
+
+# The properties of the OEKG shapes that no parameter reads, each left out on
+# purpose and each with its reason. `docpipe compile diff` lists them and the
+# preflight warns about every one that is neither a parameter nor here. Keyed
+# by (shape, property): the shape as the compiler names it, the property by
+# the end of its IRI. The first group is the owner's decision (2026-10-05):
+# nobody asks for these five, though none of them is required. The rest the
+# serializer writes itself or never touches.
+_NO_DATASET_NODE = "the serializer writes no dataset node"
+_NO_FACTSHEET = ("the serializer writes no factsheet of this kind, so there "
+                 "is nothing to give it")
+_OWN_UUID = ("the serializer writes it on every node it mints (kg.P_UUID), "
+             "behind no parameter")
+NOT_EXTRACTED = {
+    # contact person
+    ("study", "OEO_00000508"):
+        "has contact person: optional in the shapes, and the bundle carries "
+        "authors, organisations and funders and no contact person",
+    # the study's energy carrier tag
+    ("study", "OEO_00020432"):
+        "covers energy carrier: optional in the shapes, a closed list; the "
+        "sector and technology tags of the study are asked and its energy "
+        "carrier tag is not",
+    # interacting region
+    ("scenario", "OEO_00020222"):
+        "has interacting region: optional in the shapes; a scenario's study "
+        "region is asked and its interacting region is not",
+    # input and output datasets of a scenario
+    ("scenario", "OEO_00020436"):
+        "has information output: optional in the shapes, and "
+        + _NO_DATASET_NODE,
+    ("scenario", "OEO_00020437"):
+        "has information input: optional in the shapes, and "
+        + _NO_DATASET_NODE,
+    # the publication's reference link
+    ("publication", "OEO_00390078"):
+        "has reference: optional in the shapes; the report carries no link "
+        "to its reference",
+    ("region", "OEO_00390078"):
+        "has reference: optional in the shapes; a region is only referenced "
+        "by its IRI and never written",
+    # written by the serializer itself
+    ("study", "BFO_0000051"):
+        "has part: the serializer writes it from the kg block of the "
+        "scenario coordinate, the bundle holds its report and its "
+        "factsheets, and no parameter asks for it",
+    ("scenario", "OEO_00020220"):
+        "has study region: the serializer writes its parent, has spatial "
+        "region, for scenario_region, and the bundle body for the platform "
+        "writes this one itself",
+    ("publication", "OEO_00390095"): "has uuid: " + _OWN_UUID,
+    ("scenario", "OEO_00390095"): "has uuid: " + _OWN_UUID,
+    ("common", "label"):
+        "label of the objects of the author, organisation, funder, tag and "
+        "scenario type properties: the serializer writes it for the authors, "
+        "organisations and funders it mints, and a tag or a scenario type is "
+        "the IRI of a node the OEKG already holds with its label",
+    ("region", "label"):
+        "label: a region is only referenced by its IRI, the node exists in "
+        "the OEKG with its label, and writing ours would give it a second one",
+    # shapes of nodes the serializer never writes
+    ("dataset", "label"): "label: " + _NO_DATASET_NODE,
+    ("dataset", "has_id"): "has_id: " + _NO_DATASET_NODE,
+    ("dataset", "OEO_00390094"): "has iri: " + _NO_DATASET_NODE,
+    ("dataset", "OEO_00390095"): "has uuid: " + _NO_DATASET_NODE,
+    ("framework", "label"): "label: " + _NO_FACTSHEET,
+    ("framework", "OEO_00390094"): "has iri: " + _NO_FACTSHEET,
+    ("model", "label"): "label: " + _NO_FACTSHEET,
+    ("model", "OEO_00390094"): "has iri: " + _NO_FACTSHEET,
+}
+
+
+# What the stage says to the model outside its prompts: why an answer was not
+# taken, what was wrong with a reply, what stands beside an image. In the
+# language of the prompts, and read by docpipe/extraction/wording.py, which
+# says what each name is filled with.
+PHRASES = {
+    # the closed list as a request shows it: protocol keys, so English in
+    # every profile
+    "option_means": 'means',
+    "option_spellings": 'spellings',
+    "unstated_means": 'in diesen Passagen steht es nicht',
+    "unstated_spelling": 'steht in diesen Passagen nicht',
+    # why a coordinate's answer was not taken
+    "kind_whole_number": 'eine ganze Zahl',
+    "kind_text": 'eine Angabe als Text',
+    "not_an_option": (
+        'Dein "value" {given!r} ist keiner der Einträge aus "options". '
+        'Wähle genau einen Namen daraus, Zeichen für Zeichen '
+        'abgeschrieben, auch einen mit "out:". Passt keiner, obwohl die '
+        'Passage die Angabe nennt, dann lass "value" weg und gib die '
+        'Bezeichnung in "value_raw".'),
+    "wrong_type": (
+        'Dein "value" {given!r} ist nicht {wrong}. Antworte mit {wrong}, '
+        'genau wie die Passage es schreibt.'),
+    "quote_not_in_source": (
+        'Dein "quote" steht in keiner der gezeigten Quellen. Kopiere '
+        'eine Passage Zeichen für Zeichen aus "sources" oder aus dem '
+        '"quote" der Zeile selbst.'),
+    "quote_too_short": (
+        'Dein "quote" ist zu kurz, um eine Stelle zu benennen '
+        '(mindestens {minimum} Zeichen). Zitier den ganzen Satz oder die '
+        'ganze Zeile, in der die Antwort steht.'),
+    "answer_not_in_quote": (
+        'Dein "quote" enthält {answer!r} nicht. Zitier die Stelle, an '
+        'der es wirklich steht, oder antworte mit "{unstated}".'),
+    # The key of the frame request that holds the entries of a closed frame
+    # coordinate. The frame prompt reads them there.
+    "frame_options": "scenarios",
+    # why a pair of the document's frame was not taken
+    "frame_missing": 'In einem Paar fehlte "{slot}".',
+    "frame_no_quote": 'Zu {slot}={given!r} fehlte "{slot}_quote".',
+    "frame_quote_not_in_source": (
+        'Das Zitat zu {slot}={given!r} steht in keiner der gezeigten '
+        'Passagen: {quote!r}. Kopiere es Zeichen für Zeichen aus '
+        '"sources".'),
+    "frame_answer_not_in_quote": (
+        '{slot}={given!r} steht nicht in seinem Zitat {quote!r}. Schreib '
+        'die Formulierung des Plans in "{slot}_raw".'),
+    "frame_not_an_option": (
+        '{given!r} ist keiner der Schlüssel aus "scenarios". Wähle genau '
+        'einen daraus, Zeichen für Zeichen abgeschrieben, und schreib '
+        'das Wort des Plans in "{slot}_raw".'),
+    "frame_not_a_year": (
+        '{slot}={given!r} ist keine ganze Jahreszahl. Gib das Jahr '
+        'vierstellig an.'),
+    # a reply that could not be read
+    "shape_rule": (
+        ' Gib NUR das JSON-Objekt aus, in EINER Zeile, ohne Text davor '
+        'oder danach, ohne Codefence, ohne <think>-Block und ohne ein '
+        'zweites Objekt. Anführungszeichen INNERHALB eines Zitats müssen '
+        'als \\" escaped sein — ist das mühsam, kürz das Zitat auf eine '
+        'Stelle ohne Anführungszeichen.'),
+    "cut_off": (
+        'Deine Antwort wurde nach {limit} Tokens abgeschnitten und ist '
+        'deshalb kein vollständiges JSON-Objekt. '),
+    "shorter": (
+        'Antworte kürzer: zitiere nur die kurze Stelle, an der die '
+        'Angabe steht.'),
+    "shorter_frame": (
+        'Antworte mit weniger Paaren und zitiere nur die kurze Stelle, '
+        'an der das Szenario oder das Jahr steht.'),
+    "shorter_rows": (
+        'Antworte mit weniger Tupeln und zitiere nur die kurze Stelle, '
+        'an der die Zahl steht.'),
+    "shorter_field": (
+        'Fasse Zeilen mit derselben Antwort in "groups" zusammen und '
+        'zitiere nur die kurze Stelle, an der die Angabe steht.'),
+    "shorter_review": (
+        'Zitiere nur die kurze Stelle, an der die Angabe steht, und lass '
+        'jedes Feld weg, das die zwei Passagen nicht tragen.'),
+    "reasoning_only": (
+        'Du hast nur nachgedacht und nichts geantwortet: dein Beitrag '
+        'war leer. Denk nicht vor, sondern gib direkt das Ergebnis aus.'),
+    "empty": 'Deine Antwort war leer.',
+    "no_object": 'Deine Antwort enthielt gar kein JSON-Objekt.',
+    "syntax": (
+        'Dein JSON bricht bei Zeichen {position} ab ({message}), an '
+        'dieser Stelle: {around!r}.'),
+    "outside_text": 'Neben dem JSON-Objekt stand noch Text: {extra!r}.',
+    "not_an_object": (
+        'Deine Antwort war eine {kind}-Struktur und kein JSON-Objekt.'),
+    "key_missing": 'In deiner Antwort fehlte "{key}".',
+    "key_not_a_list": 'In deiner Antwort war keine Liste "{key}".',
+    "wrong_shape": 'Deine Antwort hatte nicht die Form, die verlangt war.',
+    # what the model gets back after a calculation
+    "code_failed": (
+        'Der Code lief nicht: {error}. Antworte jetzt ohne Berechnung, '
+        'oder korrigiere den Code.'),
+    "code_error_unknown": 'unbekannt',
+    "code_silent": (
+        'Der Code lief, hat aber nichts ausgegeben. Gib jedes Ergebnis '
+        'mit print() aus, oder antworte ohne Berechnung.'),
+    "code_output": (
+        'Ausgabe des Codes:\n{output}\n\nAntworte jetzt mit dem '
+        'Tupel-Objekt. Berechnete Werte tragen "computed": true.'),
+    # labels inside a request
+    "image_for": 'Bild zu {label}:',
+    "anchor_parameter": 'Kennzahl',
+    "anchor_unit": 'Einheit',
+}

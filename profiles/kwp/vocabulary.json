@@ -17,6 +17,10 @@
    "BFO_0000015"
   ],
   [
+   "BFO_0000020",
+   "BFO_0000031"
+  ],
+  [
    "BFO_0000040",
    "BFO_0000141"
   ],
@@ -44,20 +48,24 @@
  "pin": {
   "families": [
    "BFO",
+   "COB",
    "IAO",
    "MENO",
+   "MHPO",
    "OBI",
    "OEO",
+   "OMO",
    "RO",
    "STATO",
    "UO"
   ],
+  "mhpo_sha256": "0ee5d1313c61eda5e6d28222c8c233850c8fae94c0db9835b1fc9b0dd8b2fd66",
   "oeo_file": "oeo-closure.owl",
   "oeo_sha256": "df25aa5aec966be79096cb5dc1f09023fc66a99b984c485a24897adb76a99dd4",
   "oeo_version_iri": "https://openenergyplatform.org/ontology/oeo/releases/2.13.0/oeo.owl",
   "sources": {
-   "mhpkg": "02b73341bddb",
-   "mhpo": null,
+   "mhpkg": "66df36e24c18",
+   "mhpo": "v0.1.0",
    "oeo": "v2.13.0"
   }
  },
@@ -225,6 +233,7 @@
    "UO_1000021"
   ],
   "quantity_value": [
+   "MHPO_00030021",
    "OEO_00010074",
    "OEO_00010075",
    "OEO_00010076",
@@ -365,7 +374,7 @@
   },
   "BFO_0000003": {
    "alt_labels": [],
-   "definition": null,
+   "definition": "An entity that has temporal parts and that happens, unfolds or develops through time.",
    "deprecated": false,
    "kind": "class",
    "label": "occurrent",
@@ -381,6 +390,16 @@
    "label": "independent continuant",
    "parents": [
     "BFO_0000002"
+   ]
+  },
+  "BFO_0000006": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "spatial region",
+   "parents": [
+    "BFO_0000141"
    ]
   },
   "BFO_0000008": {
@@ -497,6 +516,16 @@
     "BFO_0000004"
    ]
   },
+  "IAO_0000005": {
+   "alt_labels": [],
+   "definition": "A directive information entity that describes an intended process endpoint. When part of a plan specification the concretization is realized in a planned process in which the bearer tries to effect the world so that the process endpoint is achieved.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "objective specification",
+   "parents": [
+    "IAO_0000033"
+   ]
+  },
   "IAO_0000030": {
    "alt_labels": [],
    "definition": "A generically dependent continuant that is about some thing.",
@@ -505,6 +534,36 @@
    "label": "information content entity",
    "parents": [
     "BFO_0000031"
+   ]
+  },
+  "IAO_0000033": {
+   "alt_labels": [],
+   "definition": "An information content entity whose concretizations indicate to their bearer how to realize them in a process.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "directive information entity",
+   "parents": [
+    "IAO_0000030"
+   ]
+  },
+  "IAO_0000088": {
+   "alt_labels": [],
+   "definition": "A document assembled by an author for the purpose of providing information for the audience. A report is the output of a documenting process and has the objective to be consumed by a specific audience. Topic of the report is on something that has completed. A report is not a single figure. Examples of reports are journal article, patent application, grant progress report, case report (not patient record).",
+   "deprecated": false,
+   "kind": "class",
+   "label": "report",
+   "parents": [
+    "IAO_0000310"
+   ]
+  },
+  "IAO_0000104": {
+   "alt_labels": [],
+   "definition": "A directive information entity with action specifications and objective specifications as parts, and that may be concretized as a realizable entity that, if realized, is realized in a process in which the bearer tries to achieve the objectives by taking the actions specified.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "plan specification",
+   "parents": [
+    "IAO_0000033"
    ]
   },
   "IAO_0000136": {
@@ -520,6 +579,101 @@
     "topObjectProperty"
    ],
    "range": []
+  },
+  "IAO_0000310": {
+   "alt_labels": [],
+   "definition": "A collection of information content entities intended to be understood together as a whole",
+   "deprecated": false,
+   "kind": "class",
+   "label": "document",
+   "parents": [
+    "IAO_0000030"
+   ]
+  },
+  "MHPO_00020000": {
+   "alt_labels": [],
+   "definition": "An Information Content Entity that consists of a set of propositions that describe some Entity.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "descriptive information content entity",
+   "parents": [
+    "IAO_0000030"
+   ]
+  },
+  "MHPO_00020003": {
+   "alt_labels": [
+    "KWP",
+    "Kommunale Wärmeplanung",
+    "WP_Plan"
+   ],
+   "definition": "A municipal heat plan is a plan specification that contains a heating plan in accordance with §23 of the German Heating Planning Act (WPG). It includes a cartographic representation of the current status and potential analysis, the division into heat supply zones, the indicators of the target scenario, the presentation of heat supply types for the target year, and measures of the implementation strategy. The textual and graphical explanations of the suitability assessment, the current status analysis, the target scenario, and the implementation strategy may be attached to the heat plan as external references.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "municipal heat plan",
+   "parents": [
+    "IAO_0000104"
+   ]
+  },
+  "MHPO_00020005": {
+   "alt_labels": [
+    "Bestandsanalyse",
+    "WP_Bestandsanalyse_aggregiert"
+   ],
+   "definition": "An aggregated inventory analysis is a descriptive information content entity that contains an aggregation of the existing conditions analysis for a certain heat planning area, in accordance with WPG §15.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "aggregated inventory analysis",
+   "parents": [
+    "MHPO_00020000"
+   ]
+  },
+  "MHPO_00020007": {
+   "alt_labels": [
+    "WP_Zielszenarioindikatoren",
+    "Zielszenario"
+   ],
+   "definition": "The target scenario is an objective specification that uses indicators to describe how the goal of a heat supply based on renewable energy or the use of unavoidable waste heat is to be achieved. Unless otherwise specified, the indicators must be provided for the planned area as a whole and for the years 2030, 2035, 2040, and 2045, respectively. In accordance with WPG Annex 2 III.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "target scenario",
+   "parents": [
+    "IAO_0000005"
+   ]
+  },
+  "MHPO_00020017": {
+   "alt_labels": [
+    "Gemeindegebiet"
+   ],
+   "definition": "A municipality area is a region of relevance that encompasses the exact territory of a municipality.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "municipality area",
+   "parents": [
+    "OEO_00360020"
+   ]
+  },
+  "MHPO_00020019": {
+   "alt_labels": [
+    "WP_BeplantesTeilgebiet",
+    "beplantes Teilgebiet"
+   ],
+   "definition": "A heat plan subarea is a region of relevance that consists of several parcels of land or parts thereof, comprising individual or multiple building blocks. It is part of a heat supply area of a municipality and is grouped together by the planning authority for the purpose of assessing potential heat supply options and for the corresponding division into projected heat supply areas.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "heat plan subarea",
+   "parents": [
+    "OEO_00360020"
+   ]
+  },
+  "MHPO_00030021": {
+   "alt_labels": [],
+   "definition": "A building count is a quantity value that measures the number of buildings in a building stock.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "building count",
+   "parents": [
+    "OEO_00000350"
+   ]
   },
   "OEO_00000014": {
    "alt_labels": [
@@ -1980,6 +2134,20 @@
     "OEO_00010224"
    ]
   },
+  "OEO_00010231": {
+   "alt_labels": [],
+   "definition": "A relation between an entity and an information artifact.",
+   "deprecated": false,
+   "domain": [],
+   "kind": "object_property",
+   "label": "is subject of",
+   "parents": [
+    "topObjectProperty"
+   ],
+   "range": [
+    "IAO_0000030"
+   ]
+  },
   "OEO_00010233": {
    "alt_labels": [
     "Vorhersagefehler"
@@ -3217,6 +3385,21 @@
     "OEO_00000350"
    ]
   },
+  "OEO_00140002": {
+   "alt_labels": [],
+   "definition": "A relation between an entity and a quantity value.",
+   "deprecated": false,
+   "domain": [],
+   "kind": "object_property",
+   "label": "has quantity value",
+   "parents": [
+    "OEO_00010231",
+    "topObjectProperty"
+   ],
+   "range": [
+    "OEO_00000350"
+   ]
+  },
   "OEO_00140008": {
    "alt_labels": [],
    "definition": "A relation between an information content entity / model and a continuant, in which the continuant is somehow involved in the creation of the information content entity / model.",
@@ -4123,6 +4306,16 @@
     "OEO_00140127"
    ]
   },
+  "OEO_00360020": {
+   "alt_labels": [],
+   "definition": "A region of relevance is a spatial region that is used in a study or analysis, or is part of spatial planning.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "region of relevance",
+   "parents": [
+    "BFO_0000006"
+   ]
+  },
   "OEO_00390001": {
    "alt_labels": [
     "MW"
@@ -4147,6 +4340,22 @@
     "topObjectProperty"
    ],
    "range": []
+  },
+  "OEO_00390096": {
+   "alt_labels": [],
+   "definition": "has publication date is the relation between a report and the year it was published in.",
+   "deprecated": false,
+   "domain": [
+    "IAO_0000088"
+   ],
+   "kind": "data_property",
+   "label": "has publication date",
+   "parents": [
+    "topDataProperty"
+   ],
+   "range": [
+    "xsd:dateTime"
+   ]
   },
   "OEO_00400054": {
    "alt_labels": [

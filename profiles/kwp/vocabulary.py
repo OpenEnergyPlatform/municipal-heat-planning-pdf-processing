@@ -33,6 +33,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from docpipe import ontology, upstream                        # noqa: E402
+from docpipe.profile import load_profile                      # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 VOCABULARY_PATH = HERE / "vocabulary.json"
@@ -43,17 +44,16 @@ OEO = "https://openenergyplatform.org/ontology/oeo/"
 OBO = "http://purl.obolibrary.org/obo/"
 
 # What this profile is written against, always at upstream's current version.
-# MHPO has no release yet (its VERSION reads 0.0.0 and its only file is OWL
-# functional syntax, which rdflib does not read), so it is declared as the
-# release it will be and skipped until it exists. `reviewed` is the MHPKG
+# MHPO attaches nothing to its releases: its mhpo.owl is in the repository,
+# and is read at the tag of the latest release. `reviewed` is the MHPKG
 # commit kg.py was last read against: a newer schema is reported with the
 # files that changed, because kg.py mirrors it by hand.
 SOURCES = {
     "oeo": {"kind": "release_asset", "repo": "OpenEnergyPlatform/ontology",
             "asset": "oeo-closure.owl"},
-    "mhpo": {"kind": "release_asset",
+    "mhpo": {"kind": "release_file",
              "repo": "OpenEnergyPlatform/municipal-heat-planning-ontology",
-             "asset": "mhpo.owl", "until_released": True},
+             "file": "mhpo.owl"},
     "mhpkg": {"kind": "repo_files", "repo": "OpenEnergyPlatform/oekg",
               "ref": "production",
               "reviewed": "c18860c373eefc0ff38fb7f01a6ff0a230ef1e0d",
@@ -82,8 +82,11 @@ AXIS_SETS = {"sector": "sector", "aggregation": "aggregation_type",
 
 def build(closure: Path, mhpo: Path = None) -> dict:
     spec_raw = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
-    return ontology.build(closure, SETS, spec_raw,
-                          extra=[mhpo] if mhpo else None, base=OEO)
+    return ontology.build(
+        closure, SETS, spec_raw, extra=[mhpo] if mhpo else None, base=OEO,
+        also=edge_terms(spec_raw),
+        language=load_profile(PROFILE).require("extraction",
+                                               "ALT_LABEL_LANGUAGE"))
 
 
 def load(path: Path = VOCABULARY_PATH) -> dict:
@@ -164,6 +167,14 @@ def edges(spec_raw: dict) -> list:
     return list(ontology.spec_edges(spec_raw)) + list(kg.EDGES)
 
 
+def edge_terms(spec_raw: dict) -> tuple:
+    """Every identifier those triple shapes name, for the snapshot to carry."""
+    named = {ontology.identifier(edge.get(part))
+             for edge in edges(spec_raw)
+             for part in ("subject", "predicate", "object") if edge.get(part)}
+    return tuple(sorted(named - {None}))
+
+
 def check(spec_raw: dict, snapshot: dict) -> list:
     """Every complaint the pinned ontology has about this spec."""
     return (ontology.term_problems(spec_raw, snapshot)
@@ -181,7 +192,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--closure", type=Path,
                         help="the OEO closure (owl/ttl), for --write")
-    parser.add_argument("--mhpo", type=Path, help="mhpo-edit.owl, for --write")
+    parser.add_argument("--mhpo", type=Path, help="mhpo.owl, for --write")
     parser.add_argument("--write", action="store_true",
                         help="rebuild vocabulary.json from those files")
     parser.add_argument("--refresh", action="store_true",
@@ -230,8 +241,15 @@ def main(argv=None) -> int:
                 continue
             seen.add(uri)
             print(f"  note {where}: offers {label!r} for {uri} {own!r}")
+        # What the pin defines differently from the spec, or defines where
+        # the spec says nothing. A note and never a problem: the model reads
+        # the spec's words, and they change only when somebody edits them.
+        defined = ontology.definition_differences(spec_raw, load())
+        for difference in defined:
+            print(ontology.definition_note(difference))
         print(f"{len(spec_terms(spec_raw))} identifier(s) checked, "
-              f"{len(problems)} problem(s), {len(seen)} corpus label(s)")
+              f"{len(problems)} problem(s), {len(seen)} corpus label(s), "
+              f"{len(defined)} definition(s) that differ from the pin")
         return 1 if problems else 0
     return 0
 

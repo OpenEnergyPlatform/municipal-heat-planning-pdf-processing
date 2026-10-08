@@ -83,3 +83,21 @@ def test_switched_off_it_writes_nothing_at_all(tmp_path):
     finally:
         trace.ENABLED = True
         trace.close()
+
+
+def test_a_second_trace_writes_under_its_own_directory(tmp_path):
+    """The files are kept open per document. Opened under one directory and
+    left there, a file went on taking the events of its document after the
+    trace had moved, and the new directory never saw them."""
+    first, second = tmp_path / "first", tmp_path / "second"
+    trace.open_trace(first, {7: "plan"}.get)
+    try:
+        trace.event("rows", 7, n=1)
+        trace.open_trace(second, {7: "plan"}.get)
+        trace.event("rows", 7, n=2)
+        trace.flush()
+    finally:
+        trace.close()
+    read = lambda root: [json.loads(line)["n"] for line in (
+        root / "plan.trace.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert read(first) == [1] and read(second) == [2]

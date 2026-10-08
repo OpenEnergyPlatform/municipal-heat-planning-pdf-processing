@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
+from . import wording
+
 
 @dataclass
 class Entry:
@@ -47,8 +49,18 @@ def format_published(published: Any) -> str:
 class Catalog:
     """The generic catalog: the core Documents table and nothing else."""
 
+    # The profile's UI table, read once; see `_words`.
+    _ui: Optional[dict] = None
+
     def __init__(self, profile=None):
         self.profile = profile
+
+    def _words(self) -> dict:
+        """What the picker says, in the profile's words. Without a profile
+        they are those of the profile the package brings itself."""
+        if self._ui is None:
+            self._ui = wording.ui(self.profile)
+        return self._ui
 
     @property
     def facets(self) -> Sequence:
@@ -56,7 +68,11 @@ class Catalog:
 
     @property
     def document_noun(self) -> str:
-        return getattr(self.profile, "document_noun", None) or "Dokument"
+        noun = getattr(self.profile, "document_noun", None)
+        if noun:
+            return noun
+        T = self._words()
+        return T["document_noun_fallback"]
 
     def rows(self, conn: sqlite3.Connection,
              include_superseded: bool = False) -> list:
@@ -80,7 +96,9 @@ class Catalog:
         published = format_published(row["published"])
         if published:
             parts.append(published)
-        parts.append("(aktuell)" if row["is_current"] else "(alt)")
+        T = self._words()
+        parts.append(T["version_current"] if row["is_current"]
+                     else T["version_old"])
         return " · ".join(parts)
 
     def detail(self, row, facets: Optional[dict] = None) -> Sequence:

@@ -19,28 +19,33 @@ a document is read.
 `parameter_state`, `refusal` and `summary` are the three record kinds
 every profile's contract shares. `parameter_state` closes one parameter
 for one document: its `state` and how many `tuple` and `refusal` lines
-it produced (`docpipe/extraction/schema.py:534` to `558`). `refusal`
+it produced (`docpipe/extraction/schema.py:572` to `596`). `refusal`
 records a claim the run did not accept: why it failed, the claim as
-returned, and its source (`docpipe/extraction/schema.py:464` to `492`).
+returned, and its source (`docpipe/extraction/schema.py:493` to `524`).
 `summary`, the file's last line, counts a document's tuples and
 refusals by trust level and by reason
-(`docpipe/extraction/schema.py:493` to `533`). The remaining `##`
+(`docpipe/extraction/schema.py:525` to `571`). The remaining `##`
 sections, one per parameter, are the shapes a `tuple` line can take,
 named `tuple_<uri>` and shown here after the uri.
 
 A tuple section opens with how its row becomes a node of MHPKG
-(`profiles/kwp/kg.py:2`, `:32`), then lists one `###` heading per key,
+(`profiles/kwp/kg.py:2`, `:36`), then lists one `###` heading per key,
 sorted alphabetically rather than grouped by coordinate
-(`scripts/build_docs.py:649`). Eight belong to the `parameter`
-coordinate and to every axis: the value, plus seven keys that make it
+(`scripts/build_docs.py`, where a section's properties are walked in `sorted` order). Eleven belong to the `parameter`
+coordinate and to every axis: the value, plus ten keys that make it
 checkable without the run that produced it: state, raw wording, a flag
 for a wording naming no class, a wording merely noticed and never
-chosen, quote, source and window (`docpipe/extraction/schema.py:212`
-to `215`, `233` to `238`). The rest belong to the row itself: `kind`, `quote`,
+chosen, quote, source and window, for a year read as a base year or a target year
+the row's own passage (`_link_quote`, `_link_source`), and `_producer`, the
+position in the stamp's `producers` list of the pass that wrote the
+coordinate after the harvest: a top-up that read it again, or the pass that
+appended its row (`--top-up-parameters`); the harvest writes none, so a
+missing key means the harvest read it (`docpipe/extraction/schema.py:212` to
+`293`). The rest belong to the row itself: `kind`, `quote`,
 `tier`, `flags`, `provenance`, `computed`, `compute`, `unit` and
 `unit_raw` (empty for a wording); only the value additionally carries
 `value_target` for a numeric parameter, or `value_raw` and `value_uri`
-for a wording (`docpipe/extraction/schema.py:286` to `357`).
+for a wording (`docpipe/extraction/schema.py:313` to `384`).
 
 Two keys on a coordinate say more than its plain description does.
 `x-question` is the sentence, in German, the model was actually asked
@@ -48,22 +53,22 @@ for that coordinate, so a reader can check the wording without opening
 the profile's prompt; it sits on every axis and on the `parameter`
 coordinate, never on the numeric `value` itself, since which number to
 read is settled by the row request, not a question of its own
-(`docpipe/extraction/schema.py:170`, `:372`). `x-options` appears only
+(`docpipe/extraction/schema.py:170`, `:401`). `x-options` appears only
 where a coordinate answers from a closed list: every class it may
 resolve to, with its ontology uri, its definition and the corpus
 spellings recorded for it, collapsed so a long list does not crowd the
 page, matching the spec both were built from
 (`tests/test_extraction_schema.py::test_every_coordinate_a_row_carries_is_described`).
 `x-kg` is the same spec `kg` block on two different objects: an axis
-that mints its own edge (`docpipe/extraction/schema.py:383`), or the
+that mints its own edge (`docpipe/extraction/schema.py:412`), or the
 row itself rather than the `parameter` coordinate
-(`docpipe/extraction/schema.py:24` to `27`, `:390`).
+(`docpipe/extraction/schema.py:24` to `27`, `:419`).
 
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` are always present; `page`,
 `section_number`, `section_title`, `title`, `parent_section`,
 `block_id`, `image`, `rects` and `via` are filled in as the
-source allows (`docpipe/extraction/schema.py:415` to `463`). A
+source allows (`docpipe/extraction/schema.py:444` to `492`). A
 coordinate's `<name>_source` and a refusal's `owner` are the shorter
 `[owner_kind, owner_id]` pair instead
 (`docpipe/extraction/schema.py:147` to `151`).
@@ -71,35 +76,50 @@ coordinate's `<name>_source` and a refusal's `owner` are the shorter
 A tuple section closes with the `allOf` rule: a coordinate is `null`
 unless its own `<name>_state` says `read` or `derived`, one branch of
 the schema's `allOf` array per coordinate (`docpipe/extraction/
-schema.py:269` to `281`). A coordinate never asked and one asked and
+schema.py:296` to `310`, `:420` to `421`). A coordinate never asked and one asked and
 answered `null` differ by type, not merely by convention.
 
 The stamp and the trace close the page, describing the run rather than
 one row. The stamp is `<document>.stamp.json`: whole-run keys (`spec`,
 `model`, `anchors`, `page_text_transcribed`, `extraction/*`,
-`review/*`) beside the `parameter/`, `value/`, `axis/*/*`,
-`slot/parameter` and `question_text/` families, written one per
-question instead (`docpipe/extraction/schema.py:565` to `671`).
+`review/*`, and the three that place the harvest: `docpipe` (the
+version), `document` (the sha256 and size of the PDF it was read from)
+and `producers` (who wrote into it)) beside the `parameter/`, `value/`,
+`axis/*/*`, `slot/parameter` and `question_text/` families, written one
+per question instead (`docpipe/extraction/schema.py:603` to `765`).
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
-parameters alone: `stale` compares only the `parameter/`, `value/`,
+parameters alone: `stale` compares the `parameter/`, `value/`,
 `axis/` and `slot/` families (`QUESTION_KEYS`,
-`docpipe/extraction/runner.py:3718`), and the whole-file sha `spec`
-only for a stamp that carries none of them (`COARSE`, `:3712`;
+`docpipe/extraction/runner.py:4372`), and the whole-file sha `spec`
+only for a stamp that carries none of them (`COARSE`, `:4366`;
 `tests/test_extraction_runner.py::test_a_stamp_from_before_the_detail_is_stale_in_all_of_it`).
 `model`, `anchors`, every `extraction/*` prompt, `page_text_transcribed`,
-`review/*` and `question_text/*` are written into the stamp so a reader
-can place a harvest, and are never compared
+`review/*`, `question_text/*`, `docpipe` and `producers` are written into
+the stamp so a reader can place a harvest, and are never compared
 (`tests/test_extraction_runner.py::test_what_the_stamp_records_about_the_document_never_redoes_it`).
-Only the `parameter/`, `value/`, `axis/` and `slot/` families make a
+A stamp of an older release also carries the key `extraction/harvest`; the
+schema accepts it without requiring it, and a document whose stamp holds it
+stays current.
+`document` is the one key beside the ontology's that is compared: where the
+stamp and the database both name the sha256 of the PDF and the two differ,
+the document is stale like a changed question (see [the extraction
+stage](../stages/extraction.md) for when that can happen). The
+`value/` key counts the classes of a list and their spellings and not
+their definitions, because the rows request shows the model no more.
+A moved `parameter/`, `value/`, `axis/` or `slot/` key, or a moved PDF,
+makes a
 document eligible for `--force-stale`'s full re-harvest (`stale`,
-`docpipe/extraction/runner.py:3750` to `3787`, `already_done`, `:3830`
-to `3855`); redoing only the changed question is
-`top_up_file`'s job (`docpipe/extraction/topup.py:284` to `318`). The
+`docpipe/extraction/runner.py:4404` to `4449`, `already_done`, `:4494`
+to `4533`); redoing only the changed question is
+`top_up_file`'s job (`docpipe/extraction/topup.py:420` to `538`), and
+reading a parameter the spec has gained, without reading the document again,
+`append_document`'s (`docpipe/extraction/topup_parameter.py:336` to `462`),
+which `already_done` names in a second warning for such a document. The
 trace is `<document>.trace.jsonl`: eleven event kinds told apart by
 `t`, `plan` through `invalid` in source order
-(`docpipe/extraction/schema.py:681` to `765`), read by
+(`docpipe/extraction/schema.py:778` to `880`), read by
 `scripts/trace_report.py` and, for a cost report, by `trace_costs` in
-`scripts/harvest_compare.py:134` to `153`, never by a resume.
+`scripts/harvest_compare.py:135` to `155`, never by a resume.
 
 One JSON object per line of a harvest file. Every line is one of the kinds below and nothing else, and each of them is closed (`additionalProperties: false`). A new record kind costs a branch in `docpipe/extraction/schema.py`, a regeneration of both checked-in schemas, and a branch in `read_harvest` in `scripts/harvest_compare.py`.
 
@@ -125,7 +145,7 @@ The spec's uri for the parameter, the same key a tuple carries.
 
 ### `claim`
 
-The claim as the model returned it. A sentinel carries _harvest_failed with _why: the server was gone, the model answered nothing, or the reply did not fit and there was nothing left to split.
+The claim as the model returned it. A sentinel carries _harvest_failed with _why: the server was gone, it answered 429 or 5xx, the model answered nothing, or the reply did not fit and there was nothing left to split.
 
 ### `kind`
 
@@ -143,7 +163,7 @@ Why the claim was refused; one of the reason families of verify.py and pipeline.
 
 ## `summary`
 
-The last line of the file: how this document's own values are distributed. A contested identity is decided by the serializer and a second reading is a later pass, so neither is counted here. The levels are a floor, and the graph side recomputes them.
+The last line of the file: how this document's own values are distributed. A contested identity is decided by the serializer and a second reading is a later pass, so neither is counted here. The levels are a floor, and the graph side recomputes them. A pass that appended a parameter built this line again over every tuple and refusal the file holds; the refusals of the first pass are counted as they were stored and are not revisited, so a value refused then for want of that parameter stays in the count.
 
 ### `document_id`
 
@@ -208,6 +228,18 @@ Object is a named individual of OEO_00140068 aggregation type. Derived from the 
 
 </details>
 
+### `aggregation_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.
+
+### `aggregation_link_source`
+
+Which source 'aggregation_link_quote' was found in.
+
+### `aggregation_producer`
+
+Who re-read 'aggregation': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `aggregation_quote`
 
 The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.
@@ -234,7 +266,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `carrier`
 
@@ -313,6 +345,18 @@ Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is 
 
 </details>
 
+### `carrier_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.
+
+### `carrier_link_source`
+
+Which source 'carrier_link_quote' was found in.
+
+### `carrier_producer`
+
+Who re-read 'carrier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `carrier_quote`
 
 The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.
@@ -339,7 +383,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `compute`
 
@@ -362,6 +406,18 @@ Spec parameter: Emissionen.
 The prompt's own wording:
 
 > Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung.
+
+### `parameter_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.
+
+### `parameter_link_source`
+
+Which source 'parameter_link_quote' was found in.
+
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -389,7 +445,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `provenance`
 
@@ -430,6 +486,18 @@ The class of the value node itself (rdf:type). An out:* answer is a deliberate n
 
 </details>
 
+### `quantity_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.
+
+### `quantity_link_source`
+
+Which source 'quantity_link_quote' was found in.
+
+### `quantity_producer`
+
+Who re-read 'quantity': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `quantity_quote`
 
 The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.
@@ -456,7 +524,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `quote`
 
@@ -493,6 +561,18 @@ Which container node holds the value: the plan has the container by `linked_by`,
 
 </details>
 
+### `scenario_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.
+
+### `scenario_link_source`
+
+Which source 'scenario_link_quote' was found in.
+
+### `scenario_producer`
+
+Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `scenario_quote`
 
 The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.
@@ -519,7 +599,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `sector`
 
@@ -557,6 +637,18 @@ Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is inf
 
 </details>
 
+### `sector_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.
+
+### `sector_link_source`
+
+Which source 'sector_link_quote' was found in.
+
+### `sector_producer`
+
+Who re-read 'sector': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `sector_quote`
 
 The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.
@@ -583,7 +675,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `spatial_scope`
 
@@ -611,6 +703,18 @@ The schema has no relation from a value to its area, so a sub_area value is seri
 
 </details>
 
+### `spatial_scope_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.
+
+### `spatial_scope_link_source`
+
+Which source 'spatial_scope_link_quote' was found in.
+
+### `spatial_scope_producer`
+
+Who re-read 'spatial_scope': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `spatial_scope_quote`
 
 The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.
@@ -637,7 +741,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `tier`
 
@@ -704,6 +808,18 @@ The prompt's own wording:
 
 </details>
 
+### `unit_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.
+
+### `unit_link_source`
+
+Which source 'unit_link_quote' was found in.
+
+### `unit_producer`
+
+Who re-read 'unit': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `unit_quote`
 
 The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.
@@ -730,7 +846,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `value`
 
@@ -760,6 +876,18 @@ The calendar year the aggregation is integrated over, as a node and no longer as
 
 </details>
 
+### `year_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.
+
+### `year_link_source`
+
+Which source 'year_link_quote' was found in.
+
+### `year_producer`
+
+Who re-read 'year': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `year_quote`
 
 The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.
@@ -786,7 +914,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -833,6 +961,18 @@ Object is a named individual of OEO_00140068 aggregation type. Derived from the 
 
 </details>
 
+### `aggregation_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.
+
+### `aggregation_link_source`
+
+Which source 'aggregation_link_quote' was found in.
+
+### `aggregation_producer`
+
+Who re-read 'aggregation': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `aggregation_quote`
 
 The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.
@@ -859,7 +999,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `carrier`
 
@@ -938,6 +1078,18 @@ Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is 
 
 </details>
 
+### `carrier_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.
+
+### `carrier_link_source`
+
+Which source 'carrier_link_quote' was found in.
+
+### `carrier_producer`
+
+Who re-read 'carrier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `carrier_quote`
 
 The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.
@@ -964,7 +1116,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `compute`
 
@@ -987,6 +1139,18 @@ Spec parameter: Energieverbrauch.
 The prompt's own wording:
 
 > Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung.
+
+### `parameter_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.
+
+### `parameter_link_source`
+
+Which source 'parameter_link_quote' was found in.
+
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -1014,7 +1178,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `provenance`
 
@@ -1055,6 +1219,18 @@ The class of the value node itself (rdf:type). An out:* answer is a deliberate n
 
 </details>
 
+### `quantity_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.
+
+### `quantity_link_source`
+
+Which source 'quantity_link_quote' was found in.
+
+### `quantity_producer`
+
+Who re-read 'quantity': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `quantity_quote`
 
 The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.
@@ -1081,7 +1257,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `quote`
 
@@ -1118,6 +1294,18 @@ Which container node holds the value: the plan has the container by `linked_by`,
 
 </details>
 
+### `scenario_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.
+
+### `scenario_link_source`
+
+Which source 'scenario_link_quote' was found in.
+
+### `scenario_producer`
+
+Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `scenario_quote`
 
 The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.
@@ -1144,7 +1332,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `sector`
 
@@ -1182,6 +1370,18 @@ Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is inf
 
 </details>
 
+### `sector_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.
+
+### `sector_link_source`
+
+Which source 'sector_link_quote' was found in.
+
+### `sector_producer`
+
+Who re-read 'sector': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `sector_quote`
 
 The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.
@@ -1208,7 +1408,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `spatial_scope`
 
@@ -1236,6 +1436,18 @@ The schema has no relation from a value to its area, so a sub_area value is seri
 
 </details>
 
+### `spatial_scope_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.
+
+### `spatial_scope_link_source`
+
+Which source 'spatial_scope_link_quote' was found in.
+
+### `spatial_scope_producer`
+
+Who re-read 'spatial_scope': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `spatial_scope_quote`
 
 The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.
@@ -1262,7 +1474,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `tier`
 
@@ -1293,6 +1505,18 @@ The prompt's own wording:
 
 </details>
 
+### `unit_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.
+
+### `unit_link_source`
+
+Which source 'unit_link_quote' was found in.
+
+### `unit_producer`
+
+Who re-read 'unit': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `unit_quote`
 
 The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.
@@ -1319,7 +1543,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `value`
 
@@ -1349,6 +1573,18 @@ The calendar year the aggregation is integrated over, as a node and no longer as
 
 </details>
 
+### `year_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.
+
+### `year_link_source`
+
+Which source 'year_link_quote' was found in.
+
+### `year_producer`
+
+Who re-read 'year': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `year_quote`
 
 The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.
@@ -1375,7 +1611,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -1420,6 +1656,18 @@ Object is a named individual of OEO_00140068 aggregation type. ASKED here and de
 
 </details>
 
+### `aggregation_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.
+
+### `aggregation_link_source`
+
+Which source 'aggregation_link_quote' was found in.
+
+### `aggregation_producer`
+
+Who re-read 'aggregation': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `aggregation_quote`
 
 The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.
@@ -1446,7 +1694,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `carrier`
 
@@ -1525,6 +1773,18 @@ Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is 
 
 </details>
 
+### `carrier_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.
+
+### `carrier_link_source`
+
+Which source 'carrier_link_quote' was found in.
+
+### `carrier_producer`
+
+Who re-read 'carrier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `carrier_quote`
 
 The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.
@@ -1551,7 +1811,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `compute`
 
@@ -1574,6 +1834,18 @@ Spec parameter: Leistung.
 The prompt's own wording:
 
 > Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung.
+
+### `parameter_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.
+
+### `parameter_link_source`
+
+Which source 'parameter_link_quote' was found in.
+
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -1601,7 +1873,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `provenance`
 
@@ -1636,6 +1908,18 @@ The class of the value node itself (rdf:type). OEO_00010157 is defined by its un
 
 </details>
 
+### `quantity_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.
+
+### `quantity_link_source`
+
+Which source 'quantity_link_quote' was found in.
+
+### `quantity_producer`
+
+Who re-read 'quantity': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `quantity_quote`
 
 The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.
@@ -1662,7 +1946,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `quote`
 
@@ -1699,6 +1983,18 @@ Which container node holds the value: the plan has the container by `linked_by`,
 
 </details>
 
+### `scenario_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.
+
+### `scenario_link_source`
+
+Which source 'scenario_link_quote' was found in.
+
+### `scenario_producer`
+
+Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `scenario_quote`
 
 The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.
@@ -1725,7 +2021,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `sector`
 
@@ -1763,6 +2059,18 @@ Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is inf
 
 </details>
 
+### `sector_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.
+
+### `sector_link_source`
+
+Which source 'sector_link_quote' was found in.
+
+### `sector_producer`
+
+Who re-read 'sector': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `sector_quote`
 
 The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.
@@ -1789,7 +2097,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `spatial_scope`
 
@@ -1817,6 +2125,18 @@ The schema has no relation from a value to its area, so a sub_area value is seri
 
 </details>
 
+### `spatial_scope_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.
+
+### `spatial_scope_link_source`
+
+Which source 'spatial_scope_link_quote' was found in.
+
+### `spatial_scope_producer`
+
+Who re-read 'spatial_scope': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `spatial_scope_quote`
 
 The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.
@@ -1843,7 +2163,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `tier`
 
@@ -1866,6 +2186,18 @@ The prompt's own wording:
 - **kWth** → `kWth` — Leistung
 
 </details>
+
+### `unit_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.
+
+### `unit_link_source`
+
+Which source 'unit_link_quote' was found in.
+
+### `unit_producer`
+
+Who re-read 'unit': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `unit_quote`
 
@@ -1893,7 +2225,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `value`
 
@@ -1923,6 +2255,18 @@ The calendar year the power is stated for, as a node and no longer as a literal.
 
 </details>
 
+### `year_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.
+
+### `year_link_source`
+
+Which source 'year_link_quote' was found in.
+
+### `year_producer`
+
+Who re-read 'year': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `year_quote`
 
 The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.
@@ -1949,7 +2293,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -1984,6 +2328,18 @@ The prompt's own wording:
 
 > Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung.
 
+### `parameter_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.
+
+### `parameter_link_source`
+
+Which source 'parameter_link_quote' was found in.
+
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `parameter_quote`
 
 The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
@@ -2010,7 +2366,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `provenance`
 
@@ -2046,21 +2402,24 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 
 One `<document>.stamp.json` beside each harvest file, closed like the records (`additionalProperties: false`).
 
-Every key but `spec` makes the document stale, and it is harvested again, when it differs from the current run. `spec` is recorded so a reader can say which file a harvest came from, and is not compared. Withheld when the harvest did not happen. The parameter/, value/, axis/ and slot/ keys record which question changed, so a moving ontology costs only the coordinates it touched rather than a full re-read of the corpus. A stamp written before those keys existed carries none of them, so for it `spec` decides again, and it is stale in all of them.
+The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make the document stale when they differ from the current run: it is named in a warning, skipped, and harvested again with --force-stale. Every other key is recorded and never compared. `spec` is recorded so a reader can say which file a harvest came from. Withheld when the harvest did not happen. The parameter/, value/, axis/ and slot/ keys record which question changed, so a moving ontology costs only the coordinates it touched rather than a full re-read of the corpus. A stamp written before those keys existed carries none of them, so for it `spec` decides again, and it is stale in all of them.
 
 | key | what it records |
 |---|---|
 | `anchors` | The anchor prompt, the model and the version of the target set, together. NOT the questions: which question was asked is carried by the parameter/, value/, axis/ and slot/ keys, and a question that is GONE by the rule that a key the stamp still carries and the run no longer asks makes the document stale. The anchors decide which passages a document was read from, so a document read under one set is not the same result as one read under another. Empty when anchors were off. |
+| `docpipe` | The version that wrote this stamp. Recorded and never compared. |
+| `document` | Which bytes were read: the sha256 and the size of the file as the database recorded them. Absent for a database that records none. Another sha256 than this one makes the document stale, as a changed ontology key does. The size is recorded and never compared, and a stamp without this key is not compared at all. |
 | `model` | the serving model |
 | `page_text_transcribed` | How many pages of this document a model read rather than the PDF. A harvest from a transcribed document is a reading of a reading. |
+| `producers` | Every pass that wrote into this harvest, in order: the harvest, then each top-up that rewrote the file, each pass that appended a new parameter, each remap that carried a key forward and each review that changed a row. Entries are only ever added, so a position is stable: a coordinate a top-up re-read points at its entry with `<axis>_producer`. `model` above names the first only. Recorded and never compared. |
 | `spec` | sha256 of extraction_spec.json. A record, not a verdict: it moves on a comment, an indent or a graph annotation, none of which any question is asked through. Compared, it would outvote every key below it. |
 | `^axis/[^/]+/[^/]+$` | What this coordinate asks and what it may answer: the question and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else. |
-| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame)$` | sha256 of the prompt file |
+| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame)$` | sha256 of the prompt file; `harvest` is in stamps of an older release |
 | `^parameter/[^/]+$` | What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale. Those have keys of their own. |
 | `^question_text/[^/]+$` | The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here: the generator prompt, the model, and the annotation inside parameter/. |
 | `^review/(prompt\|model)$` | What read this document a second time. Recorded and never compared: the review does not decide whether the harvest is current, and comparing it would report every reviewed document stale the day the review prompt changes. |
 | `^slot/parameter$` | The one coordinate that belongs to no parameter: which quantity a number is. Its question and the parameters it offers, uri and label. Also the only key that moves when a parameter is dropped. |
-| `^value/[^/]+$` | The list a category parameter answers from. Its own key, because a moved option can be re-mapped from the wording the harvest kept while a rewritten question cannot. |
+| `^value/[^/]+$` | The list a category parameter answers from: its classes and their spellings, which is all the rows request shows the model. Not their definitions. Its own key, because a moved option can be re-mapped from the wording the harvest kept while a rewritten question cannot. |
 
 ## The trace
 
@@ -2072,9 +2431,9 @@ One event per line; `t` names it and `doc` the document. Read by scripts/trace_r
 - `anchor`: `doc`, `parameter`, `text`
 - `frame`: `attempt`, `completion_tokens`, `doc`, `missed`, `ms`, `pairs`, `prompt_tokens`, `rejected`, `scenarios`, `sources`, `status`, `years`
 - `rows`: `attempt`, `completion_tokens`, `doc`, `ms`, `origins`, `prompt`, `prompt_tokens`, `ranks`, `rows`, `sources`, `status`
-- `field`: `anchor`, `attempt`, `completion_tokens`, `doc`, `filled`, `filled_by`, `ms`, `open`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `window`
-- `sweep`: `anchor`, `asked`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `slot`, `unbacked`, `unquoted`, `unstated`, `windows`
-- `drop`: `attempt`, `doc`, `field`, `given`, `quote`, `raw`, `row`, `slot`, `why`, `window`
+- `field`: `anchor`, `attempt`, `batches`, `completion_tokens`, `doc`, `filled`, `filled_by`, `ms`, `open`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `via_base`, `via_target`, `window`
+- `sweep`: `anchor`, `asked`, `batches`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `scope`, `slot`, `unbacked`, `unquoted`, `unstated`, `via_base`, `via_target`, `windows`
+- `drop`: `attempt`, `batches`, `doc`, `field`, `given`, `quote`, `raw`, `row`, `slot`, `why`, `window`
 - `error`: `attempt`, `cause`, `detail`, `doc`, `finish`, `kind`, `ms`, `owner`, `slot`, `sources`, `status`, `where`, `why`
 - `coord`: `doc`, `kind`, `owner`, `parameter`, `states`, `tier`, `unit`, `value`
 - `refusal`: `doc`, `owner`, `parameter`, `reason`

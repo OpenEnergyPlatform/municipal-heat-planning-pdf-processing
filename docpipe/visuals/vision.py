@@ -3,24 +3,27 @@ vision.py: Vision model interaction layer over an OpenAI compatible
 API.
 
 Creates the client, checks model availability, and makes the chat
-completions call that sends a base64 encoded image and parses the
-JSON response.
+completions call that sends a base64 encoded image and reads the one
+JSON object that comes back. The reply schema is the grammar of the
+request; the reply is read as exactly one object (see
+docpipe/reading.py): nothing is stripped, cut out, closed or salvaged,
+and no second, unconstrained request fills in for a reply that could
+not be read.
 
 Author: Felix Vossel
 """
 from __future__ import annotations
 
 import base64
-import json
 import logging
-import re
 import time
 from pathlib import Path
 
 import openai
 
-from docpipe import usage
-from docpipe.llm_preflight import request_extras
+from docpipe import providers, reading, usage
+from docpipe.llm_preflight import further_room, request_extras, served_window
+from docpipe.reading import Hole
 
 from .config import (
     VLM_BASE_URL,
@@ -30,22 +33,10 @@ from .config import (
     VLM_TEMPERATURE,
     VLM_MAX_TOKENS,
     MAX_RETRIES,
-    RUNAWAY_CELL_RUN,
     RETRY_PENALTIES,
 )
 
 log = logging.getLogger(__name__)
-
-# A run of empty cells this long is the model losing count in a sparse grid,
-# not a table. N cells means N + 1 pipes. This threshold is the detector's and
-# sits below the stop sequence's: misjudging here only changes how we retry,
-# while the stop sequence would cut content away.
-_RUNAWAY = re.compile(r"(\|[ \t]*){%d,}" % (RUNAWAY_CELL_RUN + 1))
-
-
-def looks_runaway(text: str) -> bool:
-    """True if *text* carries the empty-cell run that precedes a truncated answer."""
-    return bool(_RUNAWAY.search(text))
 
 
 def _http_status(exc: Exception) -> int | None:
@@ -69,9 +60,10 @@ def _is_client_error(status: int | None) -> bool:
 # Client management
 # ---------------------------------------------------------------------------
 
-def create_client(base_url: str | None = None, timeout: float | None = None) -> openai.OpenAI:
-    """Creates an OpenAI client pointed at the vLLM server."""
-    return openai.OpenAI(
+def create_client(base_url: str | None = None, timeout: float | None = None):
+    """The client of the vision model, for the provider it is set to."""
+    return providers.client(
+        "vlm",
         base_url=base_url or VLM_BASE_URL,
         api_key=VLM_API_KEY,
         timeout=timeout or VLM_TIMEOUT,
@@ -116,21 +108,44 @@ def call_vision(
     user_prompt: str,
     image_path: Path,
     *,
+    reply: tuple,
     model: str = VLM_MODEL,
     max_retries: int = MAX_RETRIES,
     temperature: float = VLM_TEMPERATURE,
     max_tokens: int = VLM_MAX_TOKENS,
     repetition_penalty: float | None = None,
-) -> dict | None:
+    budget: int | None = None,
+) -> dict | Hole:
     """
-    Sends an image + prompt to the vision model and parses the JSON response.
+    Sends an image + prompt to the vision model and reads the one JSON object
+    it answers with.
 
     The wall-clock bound per request is the client timeout set by
-    create_client(), not *max_retries*.
+    create_client(), not *max_retries*. *reply* is the (name, schema) of the
+    object asked for (see `replies`): the grammar of every request, and its
+    one required key (the item's `markdown`, `description`) has to be in the
+    reply as text.
+
+    A reply that is not that object is asked again with its cause named, the
+    answer echoed back. A reply that was cut off at its token limit is not
+    asked again as it stands: an image has no halves, so it is asked once more
+    from the original prompt with more room and the next repetition penalty (a
+    runaway grid is what ends at the limit), without a word about the cut. The
+    room is twice *max_tokens* or as much as the served window leaves,
+    whichever is smaller (`llm_preflight.further_room`); where it leaves none
+    the item is a hole at once and nothing more is sent. If the further
+    attempt is cut off too, the item is a hole.
+
+    *budget* is the largest request, in tokens, of the stage this call belongs
+    to: the prompt, the largest input and ONE reply of *max_tokens*, which its
+    preflight checked the window against. Without it the room is twice.
 
     Returns:
-        Parsed JSON dict, or None once the retries are exhausted or the server
-        rejects the request itself (a 4xx, which no retry would change).
+        The parsed JSON dict, or a Hole that names why there is none:
+        "refused" for a request the server rejected itself (a 4xx, which no
+        retry would change), "not_served" when the last attempt got no answer,
+        "error" for a failure of our own after the reply arrived, or the cause
+        the reply was unreadable for (see `reading`).
     """
     # A timeout usually means the model is stuck in a repetition loop, so the
     # penalty is escalated per retry. First attempt: none, to preserve table
@@ -139,7 +154,11 @@ def call_vision(
         """How hard to push back on repetition for the next try."""
         return RETRY_PENALTIES[min(failed_attempt, len(RETRY_PENALTIES) - 1)]
 
+    name, schema = reply
+    (key,) = schema["required"]
+    shape = providers.grammar(name, schema)
     current_penalty = repetition_penalty
+    room = max_tokens
     image_url = _image_data_url(image_path)
     base_messages: list[dict] = [
         {"role": "system", "content": system_prompt},
@@ -152,13 +171,16 @@ def call_vision(
         },
     ]
     messages = list(base_messages)
+    # What the last attempt came to: the last attempt decides.
+    outcome = Hole("not_served")
 
     for attempt in range(1, max_retries + 1):
-        # Waiting is for a server that needs time. A parse failure comes back
-        # 200 OK within the second, so the next attempt starts at once; only a
-        # timeout, a 429 or a 5xx buys the sleep. Page transcription has eight
-        # slots, so an idle one is throughput gone.
+        # Waiting is for a server that needs time. A reply that cannot be read
+        # comes back 200 OK within the second, so the next attempt starts at
+        # once; only a timeout, a 429 or a 5xx buys the sleep. Page
+        # transcription has eight slots, so an idle one is throughput gone.
         server_needs_time = False
+        response = None
         try:
             log.debug("  vLLM chat (attempt %d/%d) → %s",
                       attempt, max_retries, image_path.name)
@@ -174,211 +196,100 @@ def call_vision(
             response = client.chat.completions.create(
                 model=model,
                 messages=messages,
-                response_format={"type": "json_object"},
+                response_format=shape,
                 temperature=temperature,
-                max_tokens=max_tokens,
+                max_tokens=room,
                 extra_body=extra_body or None,
             )
-            usage.reply(response, model)
-
-            raw = response.choices[0].message.content or ""
-            parsed, error_detail = _parse_json_response(raw)
-
-            if parsed is not None:
-                return parsed
-
-            log.warning("  Attempt %d: JSON parsing failed (%s)", attempt, error_detail)
-            # The whole answer, every failed attempt. An excerpt of the last one
-            # was not enough: it could not show whether a run breaks off with no
-            # penalty in effect or only under a harsh one.
-            log.warning("  %s attempt %d/%d (penalty=%s) raw response:\n%s",
-                        image_path.name, attempt, max_retries, current_penalty, raw)
-
-            if attempt < max_retries:
-                if looks_runaway(raw):
-                    # Not a formatting slip: the model lost count in a sparse
-                    # grid and the stop sequence cut it off. Asking it to "fix
-                    # the JSON" re-runs the same loop, so escalate the penalty
-                    # and start over from the original prompt instead.
-                    current_penalty = penalty_after(attempt)
-                    log.warning("  Attempt %d: runaway empty cells – retrying with "
-                                "repetition_penalty=%.1f", attempt, current_penalty)
-                    messages = list(base_messages)
-                else:
-                    # A formatting slip → feed it back so the model can correct it.
-                    messages = base_messages + [
-                        {"role": "assistant", "content": raw},
-                        {
-                            "role": "user",
-                            "content": (
-                                "Your previous response could not be parsed as JSON. "
-                                "Error: %s\n\n"
-                                "Please try again. Respond with ONLY a valid JSON "
-                                "object — no markdown fences, no commentary, no "
-                                "text before or after the JSON."
-                            ) % error_detail,
-                        },
-                    ]
-
-        except openai.APITimeoutError as e:
+        except (openai.APITimeoutError, providers.ProviderTimeout) as e:
             log.warning("  Attempt %d: request timed out (%s)", attempt, e)
+            outcome = Hole("not_served", "timeout")
             messages = list(base_messages)
             current_penalty = penalty_after(attempt)
             if current_penalty is not None:
                 log.info("  Setting repetition_penalty=%.1f for next attempt",
                          current_penalty)
             server_needs_time = True
-        except openai.APIError as e:
+        except (openai.APIError, providers.ProviderError) as e:
             status = _http_status(e)
             if _is_client_error(status):
                 # The request is what the server refused, not the moment. Three
                 # more of it would be refused the same way.
                 log.error("  vLLM rejected %s (HTTP %d): %s — giving up",
                           image_path.name, status, e)
-                return None
+                return Hole("refused", f"HTTP {status}")
             log.error("  vLLM APIError (attempt %d/%d): %s", attempt, max_retries, e)
+            outcome = Hole("not_served", f"HTTP {status}" if status else "")
             messages = list(base_messages)
             server_needs_time = True
         except Exception as e:
             log.error("  Error (attempt %d/%d): %s", attempt, max_retries, e)
+            outcome = Hole("not_served", type(e).__name__)
             messages = list(base_messages)
             server_needs_time = True
+
+        if response is not None:
+            # The reply is in. What goes wrong from here is the reply's or
+            # ours, never the server's.
+            try:
+                usage.reply(response, model)
+                choice = reading.first(response)
+                found, cause, said = reading.read(choice, key=key, of=str)
+                if not cause:
+                    return found
+            except Exception as e:
+                log.exception("  %s: reading the reply failed in the stage "
+                              "itself", image_path.name)
+                return Hole("error", f"{type(e).__name__}: {e}")
+
+            message = getattr(choice, "message", None)
+            raw = getattr(message, "content", None)
+            raw = raw if isinstance(raw, str) else ""
+            log.warning("  Attempt %d: %s reply (finish: %s)", attempt, cause,
+                        getattr(choice, "finish_reason", None))
+            # The whole answer, every failed attempt. An excerpt of the last
+            # one was not enough: it could not show whether a run breaks off
+            # with no penalty in effect or only under a harsh one.
+            log.warning("  %s attempt %d/%d (penalty=%s) raw response:\n%s",
+                        image_path.name, attempt, max_retries, current_penalty,
+                        raw)
+            outcome = Hole(cause)
+
+            if cause == "cut_off":
+                if room != max_tokens:
+                    log.warning("  %s: cut off again at %d tokens, with the "
+                                "room it was given: no content",
+                                image_path.name, room)
+                    return Hole("cut_off", f"{room} tokens")
+                more = further_room(max_tokens, reply=max_tokens,
+                                    budget=budget, role="vlm")
+                if more is None:
+                    log.warning("  %s: cut off at %d tokens, and the served "
+                                "window of %d tokens leaves no more room: no "
+                                "content", image_path.name, max_tokens,
+                                served_window("vlm"))
+                    return Hole("cut_off", f"{max_tokens} tokens")
+                # Not a formatting slip: the answer ran to its limit, a grid
+                # losing count is the usual reason. Telling the model its
+                # answer was too long re-runs the same loop, so start over
+                # from the original prompt with more room and a stronger
+                # push against repetition.
+                room = more
+                current_penalty = penalty_after(attempt)
+                log.warning("  Attempt %d: cut off at %d tokens, asking again "
+                            "with %d tokens (%d tokens before), "
+                            "repetition_penalty=%s", attempt, max_tokens,
+                            room, max_tokens, current_penalty)
+                messages = list(base_messages)
+            elif attempt < max_retries:
+                # A reply that is not the object → feed it back, with what was
+                # wrong with it, so the model can correct it.
+                messages = base_messages + [
+                    {"role": "assistant", "content": raw},
+                    {"role": "user", "content": said},
+                ]
 
         if server_needs_time and attempt < max_retries:
             time.sleep(5 * attempt)
 
-    return None
-
-
-def call_vision_plain(
-    client: openai.OpenAI,
-    system_prompt: str,
-    user_prompt: str,
-    image_path: Path,
-    *,
-    model: str = VLM_MODEL,
-    temperature: float = VLM_TEMPERATURE,
-    max_tokens: int = VLM_MAX_TOKENS,
-    key: str = "markdown",
-) -> str | None:
-    """
-    One unconstrained call: the answer as plain text, no JSON envelope.
-
-    The last resort after call_vision has given up. Of 112 parse failures in the
-    August 2026 run, 111 read "No JSON object found in response" on a 200 OK
-    that came back within the same second — the model answers, it just will not
-    wear the envelope. Discarding that answer loses information the model
-    already produced.
-
-    Returns the response text (``<think>`` stripped), or None if the call fails
-    or comes back empty.
-    """
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": user_prompt},
-                        {"type": "image_url",
-                         "image_url": {"url": _image_data_url(image_path)}},
-                    ],
-                },
-            ],
-            temperature=temperature,
-            max_tokens=max_tokens,
-            extra_body=request_extras(),
-        )
-    except Exception as e:
-        log.warning("  Plain-text rescue failed for %s: %s", image_path.name, e)
-        return None
-    usage.reply(response, model)
-
-    raw = response.choices[0].message.content or ""
-    text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
-    text = re.sub(r"^```(?:markdown|json)?\s*|\s*```$", "", text).strip()
-
-    # Asked for plain text, the model often still answers in JSON — and by then
-    # it is complete rather than truncated, so it parses. Storing the envelope
-    # raw would put `{"markdown": "…"}` into the index as if it were the table.
-    parsed, _ = _parse_json_response(text)
-    if isinstance(parsed, dict):
-        inner = parsed.get(key)
-        return inner.strip() or None if isinstance(inner, str) else None
-
-    # An envelope cut off mid-string — by the stop sequence or the token limit —
-    # has no closing brace, so json.loads has nothing to work with. The content
-    # up to the cut is still good; take it rather than store the envelope raw.
-    if text.lstrip().startswith("{"):
-        return _salvage_truncated(text, key)
-
-    return text or None
-
-
-def _salvage_truncated(text: str, key: str) -> Optional[str]:
-    """The value of *key* out of a JSON object that was never finished."""
-    m = re.search(r'"%s"\s*:\s*"' % re.escape(key), text)
-    if not m:
-        return None
-
-    escapes = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\", "/": "/"}
-    out: list[str] = []
-    raw = text[m.end():]
-    i = 0
-    while i < len(raw):
-        ch = raw[i]
-        if ch == "\\" and i + 1 < len(raw):
-            out.append(escapes.get(raw[i + 1], raw[i + 1]))
-            i += 2
-            continue
-        if ch == '"':          # the string did close after all
-            break
-        out.append(ch)
-        i += 1
-    return "".join(out).strip() or None
-
-
-# ---------------------------------------------------------------------------
-# JSON extraction
-# ---------------------------------------------------------------------------
-
-def _parse_json_response(raw: str) -> tuple[dict | None, str]:
-    """
-    Extracts a JSON object from model output, tolerating <think> blocks and
-    ```json fences.
-
-    Returns:
-        (parsed_dict, error_detail); parsed_dict is None iff extraction failed.
-    """
-    cleaned = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
-
-    if not cleaned:
-        return None, "Empty response after stripping <think> blocks"
-
-    # 1) Direct parse
-    try:
-        return json.loads(cleaned), ""
-    except json.JSONDecodeError as e:
-        last_error = str(e)
-
-    # 2) Fenced code block
-    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group(1)), ""
-        except json.JSONDecodeError as e:
-            last_error = "Found ```json block but: %s" % e
-
-    # 3) First { … }
-    m = re.search(r"\{.*\}", cleaned, re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group(0)), ""
-        except json.JSONDecodeError as e:
-            last_error = "Found JSON-like block but: %s" % e
-    else:
-        last_error = "No JSON object found in response"
-
-    return None, last_error
+    return outcome

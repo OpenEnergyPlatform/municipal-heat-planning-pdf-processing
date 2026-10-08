@@ -3,10 +3,15 @@ from docpipe.profile import Facet, Profile
 
 PROFILE = Profile(
     name="kwp",
+    # Everything the default profile has, this one writes itself, except the
+    # prompts that are the default's byte for byte: those are inherited and
+    # not copied. A test holds that list, so no English prompt ever stands in
+    # for a missing one.
+    extends="default",
+    # Heat plans are published by the municipalities that adopt them.
+    documents_shareable=True,
     title="Kommunale Wärmeplanung – Recherche",
     document_noun="Wärmeplan",
-    source_language="de",
-    answer_language="de",
     # Measured over the 801-document corpus: 184 plans have multi-column pages,
     # 44 of them throughout. Mostly two columns, a handful of three, one of
     # four. Those pages read as interleaved nonsense without this.

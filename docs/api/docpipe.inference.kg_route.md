@@ -131,6 +131,24 @@ through the same fold_label / label_to_uri pair verify.py applies to a
 harvested coordinate, so a synonym the spec knows lands and a wording it
 does not is left unbound, never matched by nearest string.
 
+### parameter_of
+
+```python
+def parameter_of(task: str, spec, ask)
+```
+
+The parameter the question asks for, or None: one closed question
+over the spec's parameters.
+
+### coordinates_of
+
+```python
+def coordinates_of(task: str, parameter, ask, axes=None) -> dict
+```
+
+{axis: uri | int} for the coordinates of *parameter* the question
+fixes. *axes* limits which are asked; None asks every one.
+
 ### by_axis
 
 ```python

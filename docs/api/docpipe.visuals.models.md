@@ -88,8 +88,16 @@ Fields:
 - `skipped_missing: int = 0`
 - `captions_generated: int = 0`
 - `qa_failed_tables: int = 0`: extracted but flagged low-quality by the QA gate
-- `rescued_tables: int = 0`: Answered on the plain-text attempt after the JSON path gave up.
-- `rescued_figures: int = 0`
+- `hole_causes: dict = field(default_factory=dict)`: Why the items that ended without content have none, counted in items: {cause: tables and figures}. The causes are those of `reading.Hole`.
+
+#### ProcessingStats.hole
+
+```python
+def hole(self, kind: str, cause: str) -> None
+```
+
+Count one item that ended without content, by *kind* ("table" or
+"figure") and by cause. The caller holds the lock of the shared stats.
 
 #### ProcessingStats.summary
 

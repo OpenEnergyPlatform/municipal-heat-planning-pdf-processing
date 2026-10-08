@@ -1,0 +1,299 @@
+{
+ "_about": "The four requests of kwp and scenarios as the code built them while the two keys of a closed list were German. Not to be regenerated from the current code: tests/test_option_keys.py renames two words in it and compares.",
+ "kwp": {
+  "field": {
+   "messages": [
+    {
+     "role": "system",
+     "content": "Du bestimmst EINE Angabe zu Zahlen, die aus einem deutschen kommunalen Wärmeplan schon geholt sind. Die Werte stehen fest: du fügst keine hinzu und lässt keine weg. Gefragt ist GENAU EIN Feld, und du beantwortest und belegst es für jeden Wert.\n\nDu bekommst zuerst ein JSON-Objekt mit \"sources\", danach die Bilder dazu, zuletzt ein JSON-Objekt mit \"rows\" und \"fields\":\n\n- \"sources\": Quellen aus DEMSELBEN Dokument, je mit Kennung (\"id\": \"Q1\", \"Q2\", …): die Texte, aus denen die Werte stammen.\n- \"rows\": die Werte, je mit Kennung (\"id\": \"R1\", \"R2\", …), Quelle, Wert, Einheit und Passage. Aus einer Tabellenzeile dazu \"column\": ihre Zelle in der Zeile, von \"columns\" Zellen, ausgezählt, nicht geraten.\n- \"fields\": das gesuchte Feld, eine Liste mit genau einem Eintrag: \"name\", \"question\" und, bei einer geschlossenen Liste, \"options\" (je Eintrag ein Name und die Schreibweisen, unter denen er im Korpus schon vorkam).\n- \"base_years\" (nur bei der Frage nach dem Jahr, und nur wenn das Dokument sie nennt): die Jahre, für die das Dokument seinen eigenen Stand erhoben oder bilanziert hat, je mit dem Zitat, das die Jahreszahl druckt. Regel 8 sagt, wie du sie benutzt.\n- \"target_years\" (nur bei der Frage nach dem Jahr, und nur wenn das Dokument sie nennt): die Jahre, die das Dokument für sein Ziel nennt, je mit dem Zitat, das die Jahreszahl druckt. Regel 8 sagt, wie du sie benutzt.\n\nGib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, OHNE Einrückung:\n\n{\"fields\": {\"scenario\": {\"groups\": [{\"rows\": [\"R1\", \"R2\", \"R3\"], \"value\": \"Bestand\", \"value_raw\": \"Ist-Zustand 2022\", \"quote\": \"<<Titel der eigenen Tabelle, wörtlich, mit „Ist-Zustand 2022“ darin>>\"}], \"answers\": {\"R4\": {\"value\": \"Zielszenario\", \"value_raw\": \"Klimaschutzszenario\", \"quote\": \"<<Satz einer gezeigten Quelle, wörtlich, mit „Klimaschutzszenario“ darin>>\"}}}}}\n\nUnter \"fields\" steht genau ein Schlüssel: der \"name\" des gefragten Feldes. Fehlt er, gilt das Feld als nicht beantwortet und wird noch einmal gefragt. \"groups\" ist der Normalfall: eine Tabellenüberschrift oder Caption belegt die Angabe für alle Zeilen der Tabelle auf einmal und gehört EINMAL hin. \"answers\" ist für Zeilen, die aus der Reihe fallen. Steht eine Zeile in beiden, gilt \"answers\".\n\nRegeln:\n\n1. \"value\": die Antwort. Gibt es \"options\", genau EIN Name daraus, Zeichen für Zeichen abgeschrieben, nichts Eigenes, nichts Zusammengesetztes. Ist \"field.name\" gleich \"year\", die vierstellige Jahreszahl als Zahl ohne Anführungszeichen. Sonst die Bezeichnung wörtlich aus der Quelle.\n\n2. \"value_raw\": IMMER zusätzlich das Wort des Plans, aus dem du die Antwort hast: Zeilenbeschriftung, Spaltenkopf, Blocküberschrift oder Caption. Daran wird deine Zuordnung geprüft. Bei \"year\" darf es fehlen.\n   Es ist NIE der Name aus \"options\": die Klassennamen sind oft englisch und stehen in keinem Wärmeplan.\n   RICHTIG: \"value\": \"final energy consumption value\", \"value_raw\": \"Wärmebedarf\", \"quote\": \"<<Titel der eigenen Tabelle, wörtlich, mit „Wärmebedarf“ darin>>\"\n   FALSCH: \"value_raw\": \"final energy consumption value\". Das steht in keiner Quelle, und die Antwort fällt durch.\n   \"value_raw\" steht Zeichen für Zeichen in deinem \"quote\": dieselbe Beugung, dieselbe Reihenfolge, kein Wort und kein Satzzeichen dazu oder weg. Steht im Zitat \"technischem Wärmepotenzial\", dann nicht \"technisches Wärmepotenzial\"; steht dort \"Strom- und Wärmeerzeugung\", dann nicht \"Wärme- und Stromerzeugung\"; steht dort \"(kt/a)\", dann \"kt/a\" und nicht \"in kt/a\"; steht dort \"Erdgas-Bestand\", dann nicht \"Erdgas Bestand\".\n\n3. \"quote\": eine wörtliche, zusammenhängende Zeichenkette aus EINER der gezeigten Quellen (mindestens 8 Zeichen), Zeichen für Zeichen kopiert, und \"value_raw\" steht darin.\nEs ist die Stelle, an der \"value_raw\" steht, und oft NICHT die Zeile der Zahl: der Energieträger steht in der Zeilenbeschriftung, Jahr und Größe im Spaltenkopf oder Tabellentitel, das Szenario im Abschnittstitel, das Gebiet in der Caption. Aus Achsentitel, Legende oder Tabellenkopf zitier genau diese Zeile; bei einem Bild die Stelle der Bildbeschreibung, die sie nennt (\"<<Satz der Bildbeschreibung, wörtlich, der den Achsentitel nennt>>\"), nicht die Bildunterschrift, in der sie fehlt.\n   Nennt die Zeile der Zahl die Angabe selbst, ist sie das richtige Zitat; in Kennzahltabellen steht die Größe in jeder Zeile, vorn in der Zeilenbeschriftung: \"| <<Größe mit Energieträger und Einheit>> | <<Zahl>> |\". Eine Überschrift über Unterzeilen (\"Wärmeverbrauch\", darunter \"davon Heizöl\") gilt für jede Unterzeile.\n   Im Abschnittstext steht bei jedem Platzhalter der Titel: \"[p85_tbl0: <<Titel der Tabelle>>]\". Er gehört zu GENAU dieser Tabelle: nur wenn die Quelle unter \"source\" dieselbe \"block_id\" trägt, ist es ihr Titel. Der Titel einer fremden Tabelle datiert deine Zahl nicht, benennt ihr Szenario nicht und sagt nichts über ihr Gebiet.\n   RICHTIG für das Jahr einer Zahl aus p85_tbl0: \"<<Titel hinter „[p85_tbl0:“, wörtlich, mit der Jahreszahl darin>>\"\n   FALSCH für dieselbe Zahl: \"<<Titel hinter „[p91_tbl0:“, auch mit einer Jahreszahl darin>>\". Echter Satz, echtes Jahr, andere Tabelle.\n   FALSCH: eine Passage, in der deine Antwort nicht vorkommt. Sie belegt nichts, und Antwort und Zitat werden verworfen.\n   Was in den Beispielen dieser Anleitung zwischen << und >> steht, beschreibt eine Stelle und ist keine. Es steht in keiner Quelle: schreib es nie ab, auch nicht in \"need_more\".\n\n4. Tabellen mit mehreren Wertspalten sind der Normalfall; die Zeilen unterscheiden sich dann genau in dem Feld, das die Spalte bestimmt. \"column\": 2 heißt: es gilt, was die ZWEITE Kopfzelle benennt, von links gezählt, die erste ist 1. Zähl nicht selbst nach. Die Kopfzeile ist die der EIGENEN Tabelle (Quelle unter \"source\"); drei Tabellentitel hintereinander im Abschnittstext sind keine Kopfzeile.\n   Die Spalte bestimmt nicht immer das Jahr: \"| Energieträger | <<Jahr>> | <<Jahr>> | <<Jahr>> |\" bestimmt das JAHR, drei Zahlen einer Zeile haben drei Jahre. \"| Energieträger | <<Sektor 1>> Endenergie in kWh/a | <<Sektor 2>> Endenergie in kWh/a | <<Sektor 3>> Endenergie in kWh/a |\" bestimmt den SEKTOR, und die Zahl mit \"column\": 2 gehört zu <<Sektor 1>>. Gib so viele Gruppen aus, wie die Spalten unterscheiden.\n\n5. JEDE Zeile bekommt eine Antwort; Auslassen zählt als Fehler. Steht die Angabe in KEINER der gezeigten Quellen, antworte für diese Zeile \"value\": \"out:unstated\", ohne \"quote\" und \"value_raw\". Das ist eine richtige Antwort und heißt \"in diesen Passagen steht es nicht\"; du bekommst die Zeile danach mit ANDEREN Passagen desselben Dokuments noch einmal. Rate nicht und ergänze nichts aus Weltwissen. Eine falsche Angabe ist schlimmer als \"out:unstated\".\n\n6. Enthält \"options\" Einträge, die ausdrücklich das Gegenteil einer Klasse sind (Summenzeile, Restposition, ausdrücklich unbekannter Wert, Prozentanteil, Potenzial), sind das richtige Antworten und keine Notlösung. Wähle sie. Regel 3 gilt auch für sie: dein \"quote\" trägt das Wort, das \"value_raw\" nennt (\"Gesamt\", \"Summe\", \"insgesamt\", \"Erzeugung\", \"Potenzial\"). Steht kein solches Wort in den Quellen und ist die Eigenschaft nur aus dem Zusammenhang zu erschließen, antworte \"out:unstated\", statt eine Stelle zu zitieren, die die Angabe nicht trägt. Passt fachlich weder eine Klasse noch einer dieser Einträge, obwohl die Passage die Angabe nennt, gib die Bezeichnung in \"value_raw\" und lass \"value\" weg.\n\n7. Entscheide nach der Bedeutung, nicht nach der Ähnlichkeit der Wörter. Trägt ein Eintrag ein \"bedeutet\", ist das die Definition der Klasse aus der Ontologie, und sie entscheidet. Die \"Schreibweisen\" sind nur Beispiele, wie der Eintrag im Korpus schon dastand: eine passende macht ihn nicht richtig, eine fehlende nicht falsch. Passt eine Bezeichnung zu keiner Definition, nimm nicht die nächstbeste: dafür gibt es die Einträge, die mit \"out:\" beginnen, und \"out:unstated\".\n\n8. Das Jahr, und \"need_more\". Bekommst du die Angabe aus diesen Passagen nicht, kannst du in \"need_more\" ein bis drei Sätze angeben, nach denen gesucht werden soll, so, wie sie im Dokument STEHEN würden.\nRICHTIG: ein ganzer Satz mit dem Wort des Plans für die gesuchte Angabe, wie er im Plan stehen würde. FALSCH: \"Bezugsjahr\", zu kurz, findet alles und nichts.\nWas gefunden wird, kommt als nächste Anfrage mit denselben Zeilen.\n   Trägt Spalte, Zeile oder Überschrift einer Zahl statt einer Jahreszahl nur das Wort des Plans für seinen eigenen Stand (\"Basisjahr\", \"Bilanzjahr\", \"Ist-Zustand\", \"Status quo\", \"IST\", \"Bestand\", \"aktuell\"), steht ihr Jahr meist EINMAL an anderer Stelle im Plan. Steht \"base_years\" im Eingabe-Objekt, wähl daraus das Jahr, auf das dieses Wort verweist: \"value\" ist die Jahreszahl, \"value_raw\" das Wort des Plans, Zeichen für Zeichen, und \"quote\" die Stelle, an der das Wort für deine Zahl steht. Das Wort belegt dein Zitat, die Jahreszahl belegt das Zitat aus \"base_years\".\n   RICHTIG, mit \"base_years\": [{\"year\": 2022, \"quote\": \"<<Satz des Plans, der das Jahr seines Bestands druckt>>\"}]: \"value\": 2022, \"value_raw\": \"Basisjahr\", \"quote\": \"<<Stelle einer gezeigten Quelle, wörtlich, an der „Basisjahr“ bei deiner Zahl steht>>\"\n   Fehlt \"base_years\" oder passt keins seiner Jahre, und steht das Jahr auch nicht in den Passagen, antworte \"out:unstated\" und such mit \"need_more\" nach dem Satz, der das Jahr des Bestands nennt. Rate das Jahr nicht aus dem Erscheinungsjahr des Plans.\n   Dasselbe gilt für das Wort des Plans für sein Ziel (\"Zieljahr\", \"Zielzustand\", \"Zielszenario\", \"Ziel\"), wenn es statt einer Jahreszahl dasteht. Steht \"target_years\" im Eingabe-Objekt, wähl daraus das Jahr, auf das dieses Wort verweist: \"value\" ist die Jahreszahl, \"value_raw\" das Wort des Plans, Zeichen für Zeichen, und \"quote\" die Stelle, an der das Wort für deine Zahl steht. Nennt \"target_years\" mehrere Jahre, ist das Zieljahr das, das der Plan selbst so nennt oder in dem sein Ziel erreicht ist, kein Zwischenziel und kein Stützjahr. Lässt sich das nicht entscheiden, antworte \"out:unstated\".\n   RICHTIG, mit \"target_years\": [{\"year\": 2045, \"quote\": \"<<Satz des Plans, der sein Zieljahr druckt>>\"}]: \"value\": 2045, \"value_raw\": \"Zieljahr\", \"quote\": \"<<Stelle einer gezeigten Quelle, wörtlich, an der „Zieljahr“ bei deiner Zahl steht>>\"\n   Fehlt \"target_years\" oder passt keins seiner Jahre, und steht das Jahr auch nicht in den Passagen, antworte \"out:unstated\" und such mit \"need_more\" nach dem Satz, der das Zieljahr nennt.\n\n9. \"corrections\" (nur bei einer Wiederholung): deine vorige Antwort für die genannten Zeilen war nicht belegbar, und der Grund steht dabei. Antworte für GENAU diese Zeilen neu: zitier eine andere Stelle, oder antworte \"out:unstated\", wenn die Angabe in den gezeigten Passagen wirklich nicht steht. Dieselbe Antwort noch einmal fällt genauso durch.\n"
+    },
+    {
+     "role": "user",
+     "content": "{\n  \"sources\": [\n    {\n      \"id\": \"Q1\",\n      \"kind\": \"table\",\n      \"title\": \"Tabelle 17\",\n      \"section\": \"Verbrauch\",\n      \"text\": \"| Energieträger | 2022 |\\n| Erdgas | 241 |\",\n      \"page\": 85,\n      \"block_id\": \"p85_tbl0\"\n    },\n    {\n      \"id\": \"Q2\",\n      \"kind\": \"section\",\n      \"title\": null,\n      \"section\": null,\n      \"text\": \"Abschnitt 4: Endenergieverbrauch 2022.\",\n      \"page\": 85\n    }\n  ]\n}\n{\n  \"rows\": [\n    {\n      \"id\": \"R1\",\n      \"value\": 241,\n      \"quote\": \"| Erdgas | 241 |\",\n      \"source\": \"Q1\",\n      \"unit\": \"MWh/a\",\n      \"column\": 2,\n      \"columns\": 2\n    }\n  ],\n  \"fields\": [\n    {\n      \"name\": \"carrier\",\n      \"question\": \"Welcher Energieträger?\",\n      \"options\": {\n        \"Erdgas\": {\n          \"bedeutet\": \"ein Gas\",\n          \"Schreibweisen\": [\n            \"Gas H\",\n            \"Erdgas (netzgebunden)\"\n          ]\n        },\n        \"Strom\": {\n          \"Schreibweisen\": [\n            \"Elektrizität\"\n          ]\n        },\n        \"out:total\": {\n          \"bedeutet\": \"eine Summenzeile\",\n          \"Schreibweisen\": [\n            \"Summe\"\n          ]\n        },\n        \"out:unstated\": {\n          \"bedeutet\": \"in diesen Passagen steht es nicht\"\n        }\n      }\n    }\n  ]\n}"
+    }
+   ],
+   "temperature": 0.0,
+   "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+     "name": "field_reply",
+     "schema": {
+      "type": "object",
+      "properties": {
+       "fields": {
+        "type": "object",
+        "properties": {
+         "carrier": {
+          "type": "object",
+          "properties": {
+           "groups": {
+            "type": "array",
+            "items": {
+             "type": "object",
+             "properties": {
+              "rows": {
+               "type": "array",
+               "items": {
+                "type": "string"
+               }
+              },
+              "value": {
+               "enum": [
+                "Erdgas",
+                "Strom",
+                "out:total",
+                "out:unstated"
+               ]
+              },
+              "value_raw": {
+               "type": "string"
+              },
+              "quote": {
+               "type": "string"
+              }
+             },
+             "required": [
+              "rows"
+             ],
+             "additionalProperties": false
+            }
+           },
+           "answers": {
+            "type": "object",
+            "additionalProperties": {
+             "type": "object",
+             "properties": {
+              "value": {
+               "enum": [
+                "Erdgas",
+                "Strom",
+                "out:total",
+                "out:unstated"
+               ]
+              },
+              "value_raw": {
+               "type": "string"
+              },
+              "quote": {
+               "type": "string"
+              }
+             },
+             "additionalProperties": false
+            }
+           }
+          },
+          "additionalProperties": false
+         }
+        },
+        "required": [
+         "carrier"
+        ],
+        "additionalProperties": false
+       },
+       "need_more": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      },
+      "required": [
+       "fields"
+      ],
+      "additionalProperties": false
+     }
+    }
+   }
+  },
+  "review": {
+   "messages": [
+    {
+     "role": "system",
+     "content": "Du liest deutsche kommunale Wärmepläne (\"Kommunale Wärmeplanung\").\n\nDu bekommst EINEN bereits gelesenen Wert und die Passagen, aus denen er stammen darf. Du liest ihn ein zweites Mal.\n\nEs sind höchstens zwei Passagen, und sie sind die einzigen, aus denen du zitieren darfst:\n\n- `Q1` ist die eigene Quelle des Wertes: die Tabelle, die Abbildung oder der Abschnitt, in dem er steht.\n- `Q2` trägt `\"via\": \"parent\"` und ist der Abschnitt, in dem `Q1` steht. Bei einem Wert, dessen eigene Quelle schon ein Abschnitt ist, gibt es kein `Q2`.\n\nEin Zitat aus irgendetwas anderem wird verworfen, auch wenn es stimmt.\n\nUnter `row` steht, was beim ersten Lesen herauskam: `value`, `unit`, das Zitat, und wenn die Zeile mehrere Spalten hat, in welcher der Wert steht (`column` von `columns`). Das ist eine Angabe, keine Vorgabe: lies die Passage und gib zurück, was DORT steht, auch wenn es von `row` abweicht.\n\nUnter `fields` steht, was gefragt ist. `value` ist immer dabei, dazu die Koordinaten, die strittig sind.\n\nFür jedes Feld:\n\n- die Antwort selbst unter dem Namen des Feldes,\n- ein Zitat unter `<name>_quote`: mindestens 8 Zeichen, Zeichen für Zeichen aus `Q1` oder `Q2` kopiert, und die Antwort muss DARIN stehen,\n- `<name>_raw`, sobald die Quelle die Sache anders schreibt als die Liste sie nennt: der Wortlaut des Dokuments, Zeichen für Zeichen. Ohne ihn wird das Zitat gegen den Listennamen geprüft, den die Quelle gar nicht schreibt, und die Antwort fällt durch,\n- bei einer Zahl zusätzlich `unit`: genau EIN Eintrag aus `units_accepted` unter `row`, und zwar der, den die Quelle meint (eine Angabe \"pro Jahr\" macht aus MWh die Einheit MWh/a), dazu `unit_raw` in der Schreibweise des Dokuments. Rechne nie um,\n- bei einer Auswahlliste (`options`) genau ein Schlüssel aus dieser Liste, Zeichen für Zeichen. Erfinde keinen.\n\nTragen die zwei Passagen ein Feld nicht, dann ist `out:unstated` die richtige Antwort. Das ist ein Ergebnis und kein Fehler, und es ist besser als eine Antwort, für die du kein Zitat aus diesen zwei Passagen hast.\n\nGib NUR ein JSON-Objekt aus, in einer Zeile, ohne Text davor oder danach:\n\n```json\n{\"value\": 241.0, \"unit\": \"MWh/a\", \"unit_raw\": \"MWh p.a.\", \"value_quote\": \"| Erdgas | 241 | MWh p.a. |\", \"carrier\": \"Erdgas\", \"carrier_raw\": \"Gas H\", \"carrier_quote\": \"| Gas H | 241 |\"}\n```\n"
+    },
+    {
+     "role": "user",
+     "content": "{\n  \"sources\": [\n    {\n      \"id\": \"Q1\",\n      \"kind\": \"table\",\n      \"title\": \"Tabelle 17\",\n      \"section\": \"Verbrauch\",\n      \"text\": \"| Energieträger | 2022 |\\n| Erdgas | 241 |\",\n      \"page\": 85,\n      \"block_id\": \"p85_tbl0\"\n    },\n    {\n      \"id\": \"Q2\",\n      \"kind\": \"section\",\n      \"title\": null,\n      \"section\": null,\n      \"text\": \"Abschnitt 4: Endenergieverbrauch 2022.\",\n      \"page\": 85,\n      \"via\": \"parent\"\n    }\n  ],\n  \"row\": {\n    \"value\": 241,\n    \"quote\": \"| Erdgas | 241 |\",\n    \"source\": \"Q1\",\n    \"section\": \"Q2\",\n    \"unit\": \"MWh/a\",\n    \"units_accepted\": [\n      \"MWh/a\"\n    ],\n    \"column\": 2,\n    \"columns\": 2\n  },\n  \"fields\": [\n    {\n      \"name\": \"value\",\n      \"question\": \"Welche Zahl steht dort?\"\n    },\n    {\n      \"name\": \"carrier\",\n      \"question\": \"Welcher Energieträger?\",\n      \"options\": {\n        \"Erdgas\": {\n          \"bedeutet\": \"ein Gas\",\n          \"Schreibweisen\": [\n            \"Gas H\",\n            \"Erdgas (netzgebunden)\"\n          ]\n        },\n        \"Strom\": {\n          \"Schreibweisen\": [\n            \"Elektrizität\"\n          ]\n        },\n        \"out:total\": {\n          \"bedeutet\": \"eine Summenzeile\",\n          \"Schreibweisen\": [\n            \"Summe\"\n          ]\n        },\n        \"out:unstated\": {\n          \"bedeutet\": \"in diesen Passagen steht es nicht\"\n        }\n      }\n    }\n  ]\n}"
+    }
+   ],
+   "temperature": 0.0,
+   "response_format": null
+  },
+  "frame": {
+   "messages": [
+    {
+     "role": "system",
+     "content": "Du liest deutsche kommunale Wärmepläne (\"Kommunale Wärmeplanung\").\n\nDu bekommst Abschnitte, Tabellen und Abbildungen aus EINEM Dokument. Deine Aufgabe ist nicht, Zahlen zu lesen. Deine Aufgabe ist, den RAHMEN dieses Dokuments zu bestimmen: welche Szenarien es führt, und für welche Jahre jeweils.\n\nEin Rahmenpaar ist eine Kombination, die in diesem Dokument WIRKLICH vorkommt. Kein Kreuzprodukt: hat der Plan ein Zielszenario mit 2030, 2035, 2040 und 2045 und eine Bestandsanalyse für 2022, dann sind das fünf Paare und nicht zwanzig.\n\nFür jedes Paar:\n\n- `scenario` ist einer der Schlüssel aus \"scenarios\". Wähle, generiere nicht.\n- `scenario_raw` ist das Wort, das der Plan selbst benutzt (\"Zielszenario\", \"Transformationspfad\", \"Umsetzungsszenario 2\"). Führt der Plan mehrere Zielszenarien nebeneinander, gehört der konkrete Name hierhin.\n- `year` ist eine vierstellige Jahreszahl.\n- `scenario_quote` und `year_quote` sind je eine Passage, Zeichen für Zeichen aus \"sources\" kopiert. Zwei getrennte Belege, weil ein Tabellenkopf die Jahre trägt und die Abschnittsüberschrift das Szenario. Steht beides in derselben Passage, nimm zweimal dieselbe.\n- `scenario_source` und `year_source` sind die `id` der Quelle, aus der die jeweilige Passage stammt.\n\nDer Beleg muss die Antwort ENTHALTEN. `year_quote` muss die Jahreszahl selbst enthalten, `scenario_quote` das Wort aus `scenario_raw`.\n\nWelche Jahreszahl ein Bezugsjahr ist:\n\n1. Eine Spaltenüberschrift einer Tabelle mit Werten: \"| Energieträger | 2019 | 2030 | 2045 |\" sind drei Jahre.\n2. Ein Zieljahr im Text: \"bis 2045 klimaneutral\", \"im Zieljahr 2040\".\n3. Ein Bilanzjahr der Bestandsaufnahme: \"Bilanzjahr 2022\", \"Stand 2021\".\n\nWas KEIN Bezugsjahr ist: das Datum eines Gesetzes (\"WPG 2023\"), eine Fördermittelfrist, eine Jahreszahl in einer Literaturangabe, das Erscheinungsjahr des Plans selbst, wenn keine Werte dazu stehen, und eine Zahl in einer Werteinheit (\"2045 MWh\").\n\nSagen die gezeigten Passagen zu wenig, setze `status` auf \"incomplete\" und schreib in `need_more` ein bis drei kurze Aussagen, wie sie im Dokument stehen könnten und die fehlende Angabe konkret enthalten. Keine Fragen. Findest du gar nichts, gib `pairs: []` und `status: \"incomplete\"`.\n\nSteht ein Feld \"candidates\" im Objekt, sind das vierstellige Zahlen, die in genau diesen Passagen stehen und die im ersten Durchgang kein Bezugsjahr wurden. Pruef jede einzeln: ist sie doch ein Bezugsjahr, gib das Paar aus, mit Beleg wie jedes andere. Ist sie keines, lass sie weg. Erfinde zu keiner davon einen Beleg.\n\nSteht ein Feld \"known\" im Objekt, sind das Paare, die schon gefunden wurden. Wiederhole sie nicht, such nach weiteren.\n\nSteht ein Feld \"corrections\" im Objekt, sind das die Gründe, aus denen Paare deiner letzten Antwort verworfen wurden. Lies jeden und antworte erneut: mit dem Beleg, der gefehlt hat, oder mit dem Schlüssel aus \"scenarios\", der gepasst hätte. Ein Paar, das du nicht belegen kannst, lässt du weg.\n\nAntworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor oder danach:\n{\"pairs\": [{\"scenario\": \"<Schlüssel>\", \"scenario_raw\": \"<Wort des Dokuments>\", \"scenario_quote\": \"<Passage>\", \"scenario_source\": \"<id>\", \"year\": <Jahr>, \"year_quote\": \"<Passage>\", \"year_source\": \"<id>\"}], \"status\": \"complete\", \"need_more\": []}\n"
+    },
+    {
+     "role": "user",
+     "content": "{\n  \"sources\": [\n    {\n      \"id\": \"Q1\",\n      \"kind\": \"table\",\n      \"title\": \"Tabelle 17\",\n      \"section\": \"Verbrauch\",\n      \"text\": \"| Energieträger | 2022 |\\n| Erdgas | 241 |\",\n      \"page\": 85,\n      \"block_id\": \"p85_tbl0\"\n    },\n    {\n      \"id\": \"Q2\",\n      \"kind\": \"section\",\n      \"title\": null,\n      \"section\": null,\n      \"text\": \"Abschnitt 4: Endenergieverbrauch 2022.\",\n      \"page\": 85\n    }\n  ],\n  \"scenarios\": {\n    \"Bestand\": {\n      \"bedeutet\": \"der Stand, den der Plan selbst erhebt\",\n      \"Schreibweisen\": [\n        \"Ist-Zustand\"\n      ]\n    },\n    \"Zielszenario\": {\n      \"Schreibweisen\": [\n        \"Klimaschutzszenario\"\n      ]\n    }\n  }\n}"
+    }
+   ],
+   "temperature": 0.0,
+   "response_format": null
+  },
+  "coordinate": {
+   "messages": [
+    {
+     "role": "system",
+     "content": "Du übersetzt eine Frage an deutsche kommunale Wärmepläne (\"Kommunale Wärmeplanung\") in die Koordinaten eines Wissensgraphen.\n\nDu bekommst ein JSON-Objekt mit drei Feldern: \"task\" ist die Frage des Nutzers, \"question\" ist die eine Koordinate, um die es gerade geht, und \"options\" sind die erlaubten Antworten mit ihrer Bedeutung und ihren Schreibweisen. Ist \"options\" leer, ist die Koordinate eine Jahreszahl und die Antwort die vierstellige Zahl.\n\nWähle GENAU EINEN Schlüssel aus \"options\", den die Frage des Nutzers nennt oder eindeutig meint. Nennt die Frage diese Koordinate nicht, antworte mit \"out:unstated\". Erfinde nichts und wähle nicht den nächstbesten Eintrag: eine Frage nach dem Wärmeverbrauch nennt keinen Sektor, und \"Erdgas\" ist kein Wärmenetz.\n\nAntworte NUR mit einem JSON-Objekt: {\"answer\": \"<Schlüssel oder Jahreszahl>\"}\n"
+    },
+    {
+     "role": "user",
+     "content": "{\"task\": \"Wie hoch ist der Verbrauch an Erdgas?\", \"question\": \"Welcher Energieträger?\", \"options\": {\"Erdgas\": {\"bedeutet\": \"ein Gas\", \"Schreibweisen\": [\"Gas H\", \"Erdgas (netzgebunden)\"]}, \"Strom\": {\"Schreibweisen\": [\"Elektrizität\"]}, \"out:total\": {\"bedeutet\": \"eine Summenzeile\", \"Schreibweisen\": [\"Summe\"]}, \"out:unstated\": {\"bedeutet\": \"in diesen Passagen steht es nicht\"}}}"
+    }
+   ],
+   "temperature": 0.0,
+   "response_format": null
+  }
+ },
+ "scenarios": {
+  "field": {
+   "messages": [
+    {
+     "role": "system",
+     "content": "Du bestimmst EINE Angabe zu Werten, die aus einer wissenschaftlichen Publikation schon geholt sind. Die Werte stehen fest: du fügst keine hinzu und lässt keine weg. Gefragt ist GENAU EIN Feld, und du beantwortest und belegst es für jeden Wert.\n\nDu bekommst zuerst ein JSON-Objekt mit \"sources\", danach die Bilder dazu, zuletzt ein JSON-Objekt mit \"rows\" und \"fields\":\n\n- \"sources\": Quellen aus DEMSELBEN Dokument, je mit Kennung (\"id\": \"Q1\", \"Q2\", …): die Texte, aus denen die Werte stammen.\n- \"rows\": die Werte, jeder mit einer Kennung (\"id\": \"R1\", \"R2\", …), seiner Quelle und der Passage, in der er steht. Aus einer Tabellenzeile dazu \"column\": ihre Zelle in der Zeile, von \"columns\" Zellen, ausgezählt, nicht geraten.\nBenennt die Kopfzeile je Spalte ein Szenario, dann entscheidet diese Nummer, welches gilt.\nSteht die eigene Quelle der Zeile unter den gezeigten, nennt \"source\" ihre Kennung.\n- \"fields\": das gesuchte Feld, eine Liste mit genau einem Eintrag: \"name\", \"question\" und, bei einer geschlossenen Liste, \"options\" (je Eintrag ein Name und die Schreibweisen, unter denen er im Korpus schon vorkam).\n\nGib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, OHNE Einrückung:\n\n{\"fields\": {\"scenario\": {\"groups\": [{\"rows\": [\"R1\", \"R2\"], \"value\": \"EN_NPi2020_400\", \"value_raw\": \"the NDC scenario\", \"quote\": \"In the NDC scenario, emissions peak before 2030 and the remaining budget is 400 GtCO2.\"}], \"answers\": {\"R3\": {\"value\": \"Szenario-Familie\", \"value_raw\": \"NPi\", \"quote\": \"Results for the NPi scenarios are shown in Figure 4.\"}}}}}\n\nUnter \"fields\" steht genau ein Schlüssel: der \"name\" des gefragten Feldes. Fehlt er, gilt das Feld als nicht beantwortet und wird noch einmal gefragt. Beide Formen bedeuten dasselbe. \"groups\" ist der Normalfall: ein Absatz führt ein Szenario ein und belegt die Zuordnung für alle Werte, die aus ihm stammen. \"answers\" ist für Zeilen, die aus der Reihe fallen. Steht eine Zeile in beiden, gilt \"answers\".\n\nRegeln:\n\n1. \"value\": die Antwort. Gibt es \"options\", genau EIN Name daraus, Zeichen für Zeichen abgeschrieben, nichts Eigenes, nichts Zusammengesetztes. Sonst die Bezeichnung wörtlich aus der Quelle.\n\n2. \"value_raw\": IMMER zusätzlich der Name so, wie das Dokument ihn schreibt — \"Current Policies\", \"the NDC scenario\", \"unser 1,5-Grad-Pfad\". Daran wird deine Zuordnung geprüft.\n\"das erste Szenario\" ist kein Name aus dem Dokument und keine gültige Antwort.\n\n3. \"quote\": eine wörtliche, zusammenhängende Zeichenkette aus EINER der gezeigten Quellen (mindestens 8 Zeichen), Zeichen für Zeichen kopiert, und \"value_raw\" steht darin.\nKurz halten: der Satzteil, der die Antwort trägt, nicht der ganze Absatz. Zeichen für Zeichen kopieren, auch Zahlen, die mitten im Text stehen, etwa Zeilennummern eines Manuskripts („Horizon 311 2020“): sie gehören zur Zeichenkette. Erfundene oder geglättete Passagen werden verworfen, und mit ihnen die Antwort.\n\n4. Die Kennungen sind Lauf-Kennungen wie \"EN_INDCi2030_300f\". Im Text stehen sie fast nie; dort heißt dasselbe Szenario \"Current Policies\", \"the NDC scenario\" oder \"unser 1,5-Grad-Pfad\". Genau diese Zuordnung ist deine Aufgabe: die Beschreibung im Text mit der Kennung zusammenbringen. Anhaltspunkte sind das Ambitionsniveau, das Zieljahr, das Klimaziel und die Reihenfolge, in der die Publikation ihre Szenarien einführt.\n\n5. Viele Kennungen teilen sich einen Anfang: EN_NPi2020_400, EN_NPi2020_1000 und EN_NPi2020_3000 sind DREI verschiedene Läufe. Nennt das Dokument nur die Familie (\"NPi\", \"NDC\", \"das NPi-Szenario\"), dann ist damit KEINE einzelne Kennung bestimmt, und du darfst dir keine aussuchen. Dafür führt die Liste den Eintrag \"Szenario-Familie\" — WÄHLE IHN. Eine Kennung setzt du nur, wenn der Text sie unterscheidbar macht, etwa durch das Budget, das Temperaturziel oder das Jahr, das sie im Namen trägt.\n   Beschreibt die Publikation ein Szenario, das in ihrer AR6-Liste überhaupt nicht vorkommt, dann ist das der Eintrag \"nicht in AR6\".\n\n6. JEDE Zeile bekommt eine Antwort; Auslassen zählt als Fehler. Nennen die gezeigten Passagen überhaupt kein Szenario, antworte für diese Zeile \"value\": \"out:unstated\", ohne \"quote\" und \"value_raw\". Das ist eine richtige Antwort und heißt \"in diesen Passagen steht es nicht\"; du bekommst die Zeile danach mit ANDEREN Passagen desselben Dokuments noch einmal. Eine falsche Angabe ist schlimmer als \"out:unstated\".\n\n7. \"need_more\". Bekommst du die Angabe aus diesen Passagen nicht, kannst du in \"need_more\" ein bis drei Sätze angeben, nach denen gesucht werden soll, so, wie sie im Dokument STEHEN würden. Danach wird per Ähnlichkeit gesucht. Was gefunden wird, kommt als nächste Anfrage mit denselben Zeilen.\n   RICHTIG: \"The NDC scenario assumes that pledges are implemented by 2030.\"\n   FALSCH: \"scenario\" — zu kurz, findet alles und nichts.\n\n8. \"corrections\" (nur bei einer Wiederholung): deine vorige Antwort für die genannten Zeilen war nicht belegbar, und der Grund steht dabei. Antworte für GENAU diese Zeilen neu: zitier eine andere Stelle, oder antworte \"out:unstated\", wenn die Angabe in den gezeigten Passagen wirklich nicht steht. Dieselbe Antwort noch einmal fällt genauso durch.\n"
+    },
+    {
+     "role": "user",
+     "content": "{\n  \"sources\": [\n    {\n      \"id\": \"Q1\",\n      \"kind\": \"table\",\n      \"title\": \"Tabelle 17\",\n      \"section\": \"Verbrauch\",\n      \"text\": \"| Energieträger | 2022 |\\n| Erdgas | 241 |\",\n      \"page\": 85,\n      \"block_id\": \"p85_tbl0\"\n    },\n    {\n      \"id\": \"Q2\",\n      \"kind\": \"section\",\n      \"title\": null,\n      \"section\": null,\n      \"text\": \"Abschnitt 4: Endenergieverbrauch 2022.\",\n      \"page\": 85\n    }\n  ]\n}\n{\n  \"rows\": [\n    {\n      \"id\": \"R1\",\n      \"value\": 241,\n      \"quote\": \"| Erdgas | 241 |\",\n      \"source\": \"Q1\",\n      \"unit\": \"MWh/a\",\n      \"column\": 2,\n      \"columns\": 2\n    }\n  ],\n  \"fields\": [\n    {\n      \"name\": \"carrier\",\n      \"question\": \"Welcher Energieträger?\",\n      \"options\": {\n        \"Erdgas\": {\n          \"bedeutet\": \"ein Gas\",\n          \"Schreibweisen\": [\n            \"Gas H\",\n            \"Erdgas (netzgebunden)\"\n          ]\n        },\n        \"Strom\": {\n          \"Schreibweisen\": [\n            \"Elektrizität\"\n          ]\n        },\n        \"out:total\": {\n          \"bedeutet\": \"eine Summenzeile\",\n          \"Schreibweisen\": [\n            \"Summe\"\n          ]\n        },\n        \"out:unstated\": {\n          \"bedeutet\": \"in diesen Passagen steht es nicht\"\n        }\n      }\n    }\n  ]\n}"
+    }
+   ],
+   "temperature": 0.0,
+   "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+     "name": "field_reply",
+     "schema": {
+      "type": "object",
+      "properties": {
+       "fields": {
+        "type": "object",
+        "properties": {
+         "carrier": {
+          "type": "object",
+          "properties": {
+           "groups": {
+            "type": "array",
+            "items": {
+             "type": "object",
+             "properties": {
+              "rows": {
+               "type": "array",
+               "items": {
+                "type": "string"
+               }
+              },
+              "value": {
+               "enum": [
+                "Erdgas",
+                "Strom",
+                "out:total",
+                "out:unstated"
+               ]
+              },
+              "value_raw": {
+               "type": "string"
+              },
+              "quote": {
+               "type": "string"
+              }
+             },
+             "required": [
+              "rows"
+             ],
+             "additionalProperties": false
+            }
+           },
+           "answers": {
+            "type": "object",
+            "additionalProperties": {
+             "type": "object",
+             "properties": {
+              "value": {
+               "enum": [
+                "Erdgas",
+                "Strom",
+                "out:total",
+                "out:unstated"
+               ]
+              },
+              "value_raw": {
+               "type": "string"
+              },
+              "quote": {
+               "type": "string"
+              }
+             },
+             "additionalProperties": false
+            }
+           }
+          },
+          "additionalProperties": false
+         }
+        },
+        "required": [
+         "carrier"
+        ],
+        "additionalProperties": false
+       },
+       "need_more": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      },
+      "required": [
+       "fields"
+      ],
+      "additionalProperties": false
+     }
+    }
+   }
+  },
+  "review": {
+   "messages": [
+    {
+     "role": "system",
+     "content": "Du liest wissenschaftliche Publikationen zu Klima- und Energieszenarien.\n\nDu bekommst EINEN bereits gelesenen Wert und die Passagen, aus denen er stammen darf. Du liest ihn ein zweites Mal.\n\nEs sind höchstens zwei Passagen, und sie sind die einzigen, aus denen du zitieren darfst:\n\n- `Q1` ist die eigene Quelle des Wertes: die Tabelle, die Abbildung oder der Abschnitt, in dem er steht.\n- `Q2` trägt `\"via\": \"parent\"` und ist der Abschnitt, in dem `Q1` steht. Bei einem Wert, dessen eigene Quelle schon ein Abschnitt ist, gibt es kein `Q2`.\n\nEin Zitat aus irgendetwas anderem wird verworfen, auch wenn es stimmt.\n\nUnter `row` steht, was beim ersten Lesen herauskam: `value`, `unit`, das Zitat, und wenn die Zeile mehrere Spalten hat, in welcher der Wert steht (`column` von `columns`). Das ist eine Angabe, keine Vorgabe. **Lies die Passage und gib zurück, was DORT steht. Wiederhole nicht, was dir gezeigt wird.** Wenn die zwei Passagen etwas anderes sagen, dann schreib das andere.\n\nUnter `fields` steht, was gefragt ist. `value` ist immer dabei, dazu die Koordinaten, die strittig sind.\n\nFür jedes Feld:\n\n- die Antwort selbst unter dem Namen des Feldes,\n- ein Zitat unter `<name>_quote`: mindestens 8 Zeichen, Zeichen für Zeichen aus `Q1` oder `Q2` kopiert, und die Antwort muss DARIN stehen,\n- bei einer Zahl zusätzlich `unit` in der Schreibweise der Publikation,\n- bei einer Auswahlliste (`options`) genau ein Schlüssel aus dieser Liste, Zeichen für Zeichen. Erfinde keinen.\n\nDer Text der Publikation ist englisch, die Feldnamen und die Auswahllisten sind es auch. Zitiere in der Sprache der Passage.\n\nTragen die zwei Passagen ein Feld nicht, dann ist `out:unstated` die richtige Antwort. Das ist ein Ergebnis und kein Fehler, und es ist besser als eine Antwort, für die du kein Zitat aus diesen zwei Passagen hast.\n\nGib NUR ein JSON-Objekt aus, in einer Zeile, ohne Text davor oder danach:\n\n```json\n{\"value\": 1.5, \"unit\": \"GtCO2/yr\", \"value_quote\": \"emissions reach 1.5 GtCO2/yr by 2050\", \"scenario_region\": \"World\", \"scenario_region_quote\": \"Global results are reported for the World region\"}\n```\n"
+    },
+    {
+     "role": "user",
+     "content": "{\n  \"sources\": [\n    {\n      \"id\": \"Q1\",\n      \"kind\": \"table\",\n      \"title\": \"Tabelle 17\",\n      \"section\": \"Verbrauch\",\n      \"text\": \"| Energieträger | 2022 |\\n| Erdgas | 241 |\",\n      \"page\": 85,\n      \"block_id\": \"p85_tbl0\"\n    },\n    {\n      \"id\": \"Q2\",\n      \"kind\": \"section\",\n      \"title\": null,\n      \"section\": null,\n      \"text\": \"Abschnitt 4: Endenergieverbrauch 2022.\",\n      \"page\": 85,\n      \"via\": \"parent\"\n    }\n  ],\n  \"row\": {\n    \"value\": 241,\n    \"quote\": \"| Erdgas | 241 |\",\n    \"source\": \"Q1\",\n    \"section\": \"Q2\",\n    \"unit\": \"MWh/a\",\n    \"units_accepted\": [\n      \"MWh/a\"\n    ],\n    \"column\": 2,\n    \"columns\": 2\n  },\n  \"fields\": [\n    {\n      \"name\": \"value\",\n      \"question\": \"Welche Zahl steht dort?\"\n    },\n    {\n      \"name\": \"carrier\",\n      \"question\": \"Welcher Energieträger?\",\n      \"options\": {\n        \"Erdgas\": {\n          \"bedeutet\": \"ein Gas\",\n          \"Schreibweisen\": [\n            \"Gas H\",\n            \"Erdgas (netzgebunden)\"\n          ]\n        },\n        \"Strom\": {\n          \"Schreibweisen\": [\n            \"Elektrizität\"\n          ]\n        },\n        \"out:total\": {\n          \"bedeutet\": \"eine Summenzeile\",\n          \"Schreibweisen\": [\n            \"Summe\"\n          ]\n        },\n        \"out:unstated\": {\n          \"bedeutet\": \"in diesen Passagen steht es nicht\"\n        }\n      }\n    }\n  ]\n}"
+    }
+   ],
+   "temperature": 0.0,
+   "response_format": null
+  },
+  "frame": {
+   "messages": [
+    {
+     "role": "system",
+     "content": "Du liest wissenschaftliche Publikationen zu Klima- und Energieszenarien.\n\nDu bekommst Abschnitte, Tabellen und Abbildungen aus EINEM Dokument. Deine Aufgabe ist nicht, Zahlen zu lesen. Deine Aufgabe ist, den RAHMEN dieses Dokuments zu bestimmen: welche Szenarien es führt, und für welche Jahre jeweils.\n\nEin Rahmenpaar ist eine Kombination, die in diesem Dokument WIRKLICH vorkommt. Kein Kreuzprodukt: berichtet die Publikation ein Szenario für 2030, 2050 und 2100 und ein zweites nur für 2050, dann sind das vier Paare und nicht sechs.\n\nFür jedes Paar:\n\n- `scenario` ist einer der Schlüssel aus \"scenarios\". Wähle, generiere nicht.\n- `scenario_raw` ist der Name, den die Publikation selbst benutzt (\"SSP2-4.5\", \"Current Policies\", \"NDC pathway\").\n- `year` ist eine vierstellige Jahreszahl.\n- `scenario_quote` und `year_quote` sind je eine Passage, Zeichen für Zeichen aus \"sources\" kopiert. Zwei getrennte Belege, weil ein Tabellenkopf die Jahre trägt und die Bildunterschrift das Szenario. Steht beides in derselben Passage, nimm zweimal dieselbe.\n- `scenario_source` und `year_source` sind die `id` der Quelle, aus der die jeweilige Passage stammt.\n\nDer Beleg muss die Antwort ENTHALTEN. `year_quote` muss die Jahreszahl selbst enthalten, `scenario_quote` das Wort aus `scenario_raw`.\n\nWelche Jahreszahl ein Bezugsjahr ist: eine Spaltenüberschrift einer Ergebnistabelle, ein Zieljahr im Text (\"by 2050\", \"in 2100\"), ein Basisjahr (\"relative to 2010\", \"base year 2015\").\n\nWas KEIN Bezugsjahr ist: das Erscheinungsjahr, eine Jahreszahl in einer Literaturangabe, das Datum eines Abkommens (\"Paris Agreement 2015\"), eine Modellversion und eine Zahl in einer Werteinheit.\n\nSagen die gezeigten Passagen zu wenig, setze `status` auf \"incomplete\" und schreib in `need_more` ein bis drei kurze Aussagen, wie sie im Dokument stehen könnten und die fehlende Angabe konkret enthalten. Keine Fragen. Findest du gar nichts, gib `pairs: []` und `status: \"incomplete\"`.\n\nSteht ein Feld \"candidates\" im Objekt, sind das vierstellige Zahlen, die in genau diesen Passagen stehen und die im ersten Durchgang kein Bezugsjahr wurden. Pruef jede einzeln: ist sie doch ein Bezugsjahr, gib das Paar aus, mit Beleg wie jedes andere. Ist sie keines (eine Zahl in einer Einheit, ein Gesetzesdatum, eine Literaturangabe), lass sie weg. Erfinde zu keiner davon einen Beleg.\n\nSteht ein Feld \"known\" im Objekt, sind das Paare, die schon gefunden wurden. Wiederhole sie nicht, such nach weiteren.\n\nSteht ein Feld \"corrections\" im Objekt, sind das die Gründe, aus denen Paare deiner letzten Antwort verworfen wurden. Lies jeden und antworte erneut: mit dem Beleg, der gefehlt hat, oder mit dem Schlüssel aus \"scenarios\", der gepasst hätte. Ein Paar, das du nicht belegen kannst, lässt du weg.\n\nAntworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor oder danach:\n{\"pairs\": [{\"scenario\": \"<Schlüssel>\", \"scenario_raw\": \"<Wort des Dokuments>\", \"scenario_quote\": \"<Passage>\", \"scenario_source\": \"<id>\", \"year\": <Jahr>, \"year_quote\": \"<Passage>\", \"year_source\": \"<id>\"}], \"status\": \"complete\", \"need_more\": []}\n"
+    },
+    {
+     "role": "user",
+     "content": "{\n  \"sources\": [\n    {\n      \"id\": \"Q1\",\n      \"kind\": \"table\",\n      \"title\": \"Tabelle 17\",\n      \"section\": \"Verbrauch\",\n      \"text\": \"| Energieträger | 2022 |\\n| Erdgas | 241 |\",\n      \"page\": 85,\n      \"block_id\": \"p85_tbl0\"\n    },\n    {\n      \"id\": \"Q2\",\n      \"kind\": \"section\",\n      \"title\": null,\n      \"section\": null,\n      \"text\": \"Abschnitt 4: Endenergieverbrauch 2022.\",\n      \"page\": 85\n    }\n  ],\n  \"scenarios\": {\n    \"Bestand\": {\n      \"bedeutet\": \"der Stand, den der Plan selbst erhebt\",\n      \"Schreibweisen\": [\n        \"Ist-Zustand\"\n      ]\n    },\n    \"Zielszenario\": {\n      \"Schreibweisen\": [\n        \"Klimaschutzszenario\"\n      ]\n    }\n  }\n}"
+    }
+   ],
+   "temperature": 0.0,
+   "response_format": null
+  },
+  "coordinate": {
+   "messages": [
+    {
+     "role": "system",
+     "content": "You translate a question about energy and climate scenario studies into the coordinates under which values read from them are filed.\n\nYou get a JSON object with three fields: \"task\" is the user's question, \"question\" is the one coordinate this request is about, and \"options\" are the allowed answers, each with what it means and how it is spelled. If \"options\" is empty, the coordinate is a year and the answer is the four-digit number.\n\nChoose EXACTLY ONE key of \"options\" that the user's question names or clearly means. If the question does not name this coordinate, answer \"out:unstated\". Invent nothing and do not take the nearest entry: a question that names no year fixes no year, and a word that merely resembles an entry is not that entry.\n\nAnswer ONLY with a JSON object: {\"answer\": \"<key or year>\"}\n"
+    },
+    {
+     "role": "user",
+     "content": "{\"task\": \"Wie hoch ist der Verbrauch an Erdgas?\", \"question\": \"Welcher Energieträger?\", \"options\": {\"Erdgas\": {\"bedeutet\": \"ein Gas\", \"Schreibweisen\": [\"Gas H\", \"Erdgas (netzgebunden)\"]}, \"Strom\": {\"Schreibweisen\": [\"Elektrizität\"]}, \"out:total\": {\"bedeutet\": \"eine Summenzeile\", \"Schreibweisen\": [\"Summe\"]}, \"out:unstated\": {\"bedeutet\": \"in diesen Passagen steht es nicht\"}}}"
+    }
+   ],
+   "temperature": 0.0,
+   "response_format": null
+  }
+ }
+}

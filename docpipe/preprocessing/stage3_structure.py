@@ -54,6 +54,7 @@ from .config import (
     clean_data,
     dump_json_atomic,
 )
+from docpipe.artifacts import SECTIONS_VERSION
 from docpipe.captions import resolve_title
 from docpipe.profile import active_profile, profile_value
 
@@ -216,7 +217,22 @@ def _dir_lit_title_re():
 
 
 # Titles that are themselves directory headings → drop at a lower score bar.
-_DIR_TITLE_RE = re.compile(r"inhalt|verzeichnis|contents|directory", re.IGNORECASE)
+# Which words make one is the corpus language's business, like the two lists
+# above: the profile says them (DIRECTORY_TITLE_WORDS), as fragments of a
+# pattern found anywhere in the title.
+_dir_title: dict = {}
+
+
+def _dir_title_re():
+    profile = active_profile()
+    name = profile.name if profile else None
+    if name not in _dir_title:
+        words = profile_value("preprocessing", "DIRECTORY_TITLE_WORDS")
+        # No words is a statement, not an empty alternative: joined it would
+        # be the pattern that matches every title.
+        _dir_title[name] = re.compile(
+            "|".join(words) if words else r"(?!)", re.IGNORECASE)
+    return _dir_title[name]
 
 
 def _directory_metrics(content: str) -> tuple[float, int, int]:
@@ -247,8 +263,8 @@ def _is_directory_section(section: Section) -> bool:
     score, entries, residual = _directory_metrics(content)
     if entries < DIRECTORY_MIN_ENTRIES:
         return False
-    # Explicit directory title (Inhaltsverzeichnis, Abbildungsverzeichnis, …).
-    if _DIR_TITLE_RE.search(section.title or "") and score >= DIRECTORY_TITLE_SCORE_THRESHOLD:
+    # Explicit directory title (a table of contents, a list of figures, …).
+    if _dir_title_re().search(section.title or "") and score >= DIRECTORY_TITLE_SCORE_THRESHOLD:
         return True
     # Otherwise drop only a section that is a listing FROM THE START and has
     # almost no prose left over — this protects content sections that merely
@@ -357,9 +373,12 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
         sections.append(new_section)
         current_section = new_section
 
+    # What comes before the first heading. Its title is the profile's word:
+    # it is stored, shown in a citation and read by the model.
+    front = profile_value("preprocessing", "FRONT_SECTION_TITLE")
     # page_number=None, not 1: a leading cover/blank page can push real content
     # to page 2+, so the derivation step below sets it from the first segment.
-    _open_section("Dokument", page_number=None)
+    _open_section(front, page_number=None)
 
     for pg in pages:
         for block in pg.blocks:
@@ -435,11 +454,11 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
     if current_section is not None:
         current_section.content = current_section.content.strip()
 
-    # Drop the synthetic "Dokument" section when the document opened with a
+    # Drop the synthetic front section when the document opened with a
     # real title and it stayed empty.
     if (
         sections
-        and sections[0].title == "Dokument"
+        and sections[0].title == front
         and not sections[0].content
         and not sections[0].tables
         and not sections[0].figures
@@ -473,8 +492,10 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
 # ---------------------------------------------------------------------------
 
 def sections_to_dict(sections: list[Section]) -> dict:
-    """Serialises the section list into the final output JSON structure."""
-    return {"sections": [s.to_dict() for s in sections]}
+    """Serialises the section list into the final output JSON structure, which
+    docpipe/schemas/sections.schema.json describes."""
+    return {"version": SECTIONS_VERSION,
+            "sections": [s.to_dict() for s in sections]}
 
 
 

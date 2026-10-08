@@ -33,14 +33,16 @@ import logging
 import os
 import re
 import sqlite3
-import unicodedata
-import uuid
 from collections import Counter
 from pathlib import Path
 from typing import Optional
 
+from docpipe.extraction import graphkit
+from docpipe.extraction.graphkit import NOT_IN_GRAPH, ttl_comment, ttl_literal
+from docpipe.extraction.identity import tuple_ids
 from docpipe.extraction.spec import kg_name, load as load_spec
 from docpipe.extraction.trust import check_prose, render, trust
+from docpipe.store.schema import readonly_uri
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +53,7 @@ log = logging.getLogger(__name__)
 # UUIDs are random, ours are UUIDv5 over the identifying name so that two runs
 # over one document mint one IRI and a re-run does not duplicate the graph.
 BASE = os.environ.get("OEKG_ID_BASE", "https://openenergyplatform.org/ontology/oekg/")
-NS_OEKG = uuid.uuid5(uuid.NAMESPACE_URL, BASE)
+NS_OEKG = graphkit.base_namespace(BASE)
 
 # Class -> path segment, as the live OEKG has them. A study report sits under
 # publication/, a factsheet under scenario/, and a bundle, author, organisation
@@ -75,6 +77,7 @@ PREFIXES = """@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix oeo:  <https://openenergyplatform.org/ontology/oeo/> .
 @prefix oekgprov: <https://openenergyplatform.org/ontology/oekg/provenance/> .
 """
+OEO_BASE = "https://openenergyplatform.org/ontology/oeo/"
 
 
 _SPEC = json.loads(
@@ -153,7 +156,7 @@ P_ORGANISATION = _edge("study_organisation")   # has organisation
 P_FUNDER = _edge("study_funder")               # has funding source
 P_HAS_PART = _linked_by()                      # has part
 P_SCENARIO_TYPE = _property("scenario_type")   # has scenario type
-P_STUDY_REGION = _property("scenario_region")  # has study region
+P_STUDY_REGION = _property("scenario_region")  # has spatial region
 P_SCENARIO_YEAR = _property("scenario_year")   # has scenario year value
 
 # The two a factsheet writes. They spell the same as the bundle's, and they
@@ -205,6 +208,14 @@ SINGLE = ("publication_title", "publication_date", "publication_doi",
 SCENARIO_FIELDS = tuple(
     parameter["uri"] for parameter in _SPEC["parameters"]
     if "scenario" in (parameter.get("axes") or {}))
+# The tags of a bundle: what the study is about, which sectors and
+# technologies it covers, which sector division it follows. Each is an entry
+# of a list the shapes fix, so the object is an IRI the model chose and never
+# a string it wrote. Read from the spec, for the reason SCENARIO_FIELDS is.
+BUNDLE_TAGS = tuple(
+    parameter["uri"] for parameter in _SPEC["parameters"]
+    if parameter.get("value_type") == "category"
+    and (parameter.get("kg") or {}).get("node") == "scenariobundle")
 # What the shapes demand at least once (sh:minCount 1). A document missing one
 # of these produces a node that will fail validation, so it is reported.
 REQUIRED = ("publication_title", "publication_date", "publication_author")
@@ -216,23 +227,16 @@ NL = "\n"
 
 def normalise(label: str) -> str:
     """One spelling for a name, so two writings of it mint one IRI."""
-    s = unicodedata.normalize("NFC", str(label)).casefold()
-    s = re.sub(r"[^\w\s]", " ", s, flags=re.U)
-    s = re.sub(r"\s+", " ", s).strip()
-    s = re.sub(rf"\s+{_LEGAL}$", "", s)
-    return s.strip()
-
-
-def ns(collection: str) -> uuid.UUID:
-    return uuid.uuid5(NS_OEKG, collection)
+    return graphkit.normalise(str(label), _LEGAL)
 
 
 def mint(collection: str, name: str) -> str:
-    """UUIDv5 over the identifying name. Never v4 — v4 is random, and two runs
-    over one document must mint the same IRI."""
+    """UUIDv5 over the identifying name, folded by `normalise`. Never v4: two
+    runs over one document must mint the same IRI."""
     segment = COLLECTIONS.get(collection, collection)
     prefix = f"{BASE}{segment}/" if segment else BASE
-    return f"{prefix}{uuid.uuid5(ns(collection), normalise(name))}"
+    return (f"{prefix}"
+            f"{graphkit.mint_uuid(NS_OEKG, collection, normalise(name))}")
 
 
 def uuid_of(iri: str) -> str:
@@ -247,11 +251,9 @@ def _squeeze(text) -> str:
 # thing in the graph: a scenario family instead of a run, a global scope
 # instead of a country. They exist so the model can say so instead of picking
 # the nearest entry that is almost right — which means every place where an
-# answer turns into an IRI, a type or a link has to refuse them. One prefix,
-# checked once here, so a new out: entry cannot quietly become a node.
-NOT_IN_GRAPH = "out:"
-
-
+# answer turns into an IRI, a type or a link has to refuse them. One prefix
+# (NOT_IN_GRAPH, graphkit.py), checked once here, so a new out: entry cannot
+# quietly become a node.
 def in_graph(value) -> bool:
     """Is this answer something the graph takes, or one of the out: entries?"""
     return bool(value) and not str(value).startswith(NOT_IN_GRAPH)
@@ -388,16 +390,6 @@ def scenario_key(row: dict, known: Optional[dict] = None,
     return (resolved or wording or None), (wording or resolved or None)
 
 
-def literal(text: str) -> str:
-    """A Turtle string literal. Abstracts run over several lines, so the long
-    form is used whenever the text is not a single clean line."""
-    s = str(text)
-    escaped = s.replace("\\", "\\\\").replace('"', '\\"')
-    if "\n" in s or "\r" in s:
-        return '"""' + escaped.replace("\r", "") + '"""'
-    return f'"{escaped}"'
-
-
 def _pick_one(rows: list) -> tuple:
     """(value, how many other spellings were offered) for a maxCount 1 field.
 
@@ -502,9 +494,21 @@ def _known_scenarios(conn, name: str) -> dict:
 
 
 def _ttl_comment(text) -> str:
-    """One Turtle comment line, flattened so a quote cannot break the file."""
-    flat = re.sub(r"\s+", " ", str(text or "")).strip()
-    return "    # " + flat[:400]
+    """One comment line at the indent this graph's nodes carry."""
+    return ttl_comment(text, indent="    ")
+
+
+def decision_text(decision: dict) -> str:
+    """What a person decided about one field of a value, as a comment line:
+    the verdict, who made it and when, and the note."""
+    said = [f"decision: {decision['field']} {decision['verdict']}"]
+    if decision.get("by"):
+        said.append(f"by {decision['by']}")
+    if decision.get("at"):
+        said.append(str(decision["at"]))
+    if decision.get("note"):
+        said.append(f"note: {decision['note']}")
+    return ", ".join(said)
 
 
 def _evidence_comment(row: dict, document: str) -> list:
@@ -552,30 +556,45 @@ def _evidence(subject: str, predicate: str, row: dict, document: str) -> tuple:
                            f"{provenance.get('owner_id')}|{row.get('quote')}")
     node = [f"<{iri}>", "    a oekgprov:ExtractionEvidence ;",
             f"    oekgprov:aboutProperty {predicate} ;",
-            f"    oekgprov:extractedValue {literal(shown)} ;",
-            f"    oekgprov:quote {literal(row.get('quote') or '')} ;",
-            f"    oekgprov:sourceDocument {literal(document)} ;",
-            f"    oekgprov:evidenceTier {literal(row.get('tier') or '')} ;"]
+            f"    oekgprov:extractedValue {ttl_literal(shown)} ;",
+            f"    oekgprov:quote {ttl_literal(row.get('quote') or '')} ;",
+            f"    oekgprov:sourceDocument {ttl_literal(document)} ;",
+            f"    oekgprov:evidenceTier {ttl_literal(row.get('tier') or '')} ;"]
     if provenance.get("page"):
         node.append(f'    oekgprov:page "{int(provenance["page"])}"^^xsd:integer ;')
     for rect in provenance.get("rects") or ():
         node.append("    oekgprov:region "
-                    f"{literal(' '.join(str(round(v, 2)) for v in rect))} ;")
+                    f"{ttl_literal(' '.join(str(round(v, 2)) for v in rect))} ;")
     node[-1] = node[-1].rstrip(" ;") + " ."
     return (f"    oekgprov:hasEvidence <{iri}> ;",
             NL.join(node) + NL)
 
 
-def make_serializer(db_path: Path):
-    """(document name, accepted tuple rows) -> TTL string or None."""
-    header_pending = [True]
+def _make_builder(db_path: Path):
+    """(document name, accepted tuple rows) -> (TTL body, study) or None.
+
+    One reading of a document's harvest and two things written from it: the
+    Turtle, and `study`, the same decisions as plain data. The second is for
+    a writer that is not Turtle (oekg_api.py builds the platform's request
+    body from it). Both come out of one pass, so which title won, which
+    spellings are one author and which rows are one scenario is decided once.
+    """
     # A preprint and its journal version share a title, so they mint the same
     # study report and the same bundle. The single-valued triples are then
     # written twice into one file, with two dates and two abstracts on one
     # subject, and each document's own log says "1 report, 1 bundle".
     minted: dict = {}
 
-    def serializer(name: str, rows: list):
+    def build(name: str, rows: list, decided: Optional[dict] = None):
+        # What people decided about this document's rows, by the name a row
+        # has in its document (`gold.decisions_in`), kept by the row itself:
+        # each goes above the value its row backs, and none changes it.
+        asked: dict = {}
+        recorded: set = set()
+        if decided:
+            for tuple_name, row in zip(tuple_ids(name, rows), rows):
+                if tuple_name in decided:
+                    asked[id(row)] = decided[tuple_name]
         by_param: dict = {}
         for row in rows:
             by_param.setdefault(row.get("parameter"), []).append(row)
@@ -590,7 +609,8 @@ def make_serializer(db_path: Path):
             for field in ("value_uri", "scenario"):
                 if str(row.get(field) or "").startswith(NOT_IN_GRAPH):
                     out_of_graph[row[field]] += 1
-        for key in ("scenario_label", "scenario_region", "scenario_type"):
+        for key in ("scenario_label", "scenario_region",
+                    "scenario_type") + BUNDLE_TAGS:
             for row in by_param.get(key, ()):
                 if not row.get("value_uri"):
                     # Verified, quoted, located — and it reaches no triple,
@@ -624,7 +644,7 @@ def make_serializer(db_path: Path):
             # `with sqlite3.connect(...)` commits a transaction, it does not
             # close the connection — one leaked handle per document, and on
             # Windows a file nobody can delete afterwards.
-            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            conn = sqlite3.connect(readonly_uri(db_path), uri=True)
             _crosscheck(conn, name, chosen)
             known = _known_scenarios(conn, name)
         except sqlite3.Error as exc:
@@ -682,6 +702,9 @@ def make_serializer(db_path: Path):
                                 conflict=bool(contested.get(row.get("parameter"))))
                 lines.append(_ttl_comment(render(verdict, TRUST_PROSE,
                                                  join=TRUST_JOIN, row=row)))
+                for decision in asked.get(id(row), ()):
+                    lines.append(_ttl_comment(decision_text(decision)))
+                    recorded.add(id(row))
             return lines
 
         # What this document calls each run, learned from the rows that DID
@@ -738,32 +761,34 @@ def make_serializer(db_path: Path):
             for row in by_param.get(key, ()):
                 groups.setdefault(normalise(row["value"]),
                                   (row["value"], []))[1].append(row)
-            links, nodes = [], []
+            links, nodes, labels = [], [], []
             for label, sources in groups.values():
                 iri = mint(collection, label)
                 links.append(f"<{iri}>")
+                labels.append(label)
                 block = [f"<{iri}>", f"    a oeo:{cls} ;"]
                 block += evidence_for(iri, P_LABEL, sources)
-                block.append(f"    {P_LABEL} {literal(label)} .")
+                block.append(f"    {P_LABEL} {ttl_literal(label)} .")
                 nodes.append(NL.join(block) + NL)
-            return links, nodes
+            return links, nodes, labels
 
-        author_links, author_nodes = entities("publication_author", "author",
-                                              CLS_AUTHOR)
-        org_links, org_nodes = entities("study_organisation", "organisation",
-                                        CLS_ORGANISATION)
-        funder_links, funder_nodes = entities("study_funder", "funder",
-                                              CLS_FUNDER)
+        author_links, author_nodes, author_labels = entities(
+            "publication_author", "author", CLS_AUTHOR)
+        org_links, org_nodes, org_labels = entities(
+            "study_organisation", "organisation", CLS_ORGANISATION)
+        funder_links, funder_nodes, funder_labels = entities(
+            "study_funder", "funder", CLS_FUNDER)
 
         # ---- the study report ---------------------------------------------
         pub: list = [f"<{report}>", f"    a oeo:{CLS_REPORT} ;",
-                     f"    {P_UUID} {literal(uuid_of(report))} ;"]
+                     f"    {P_UUID} {ttl_literal(uuid_of(report))} ;"]
         pub += evidence_for(report, P_LABEL,
                             rows_for("publication_title", value=title))
-        pub.append(f"    {P_LABEL} {literal(title)} ;")
+        pub.append(f"    {P_LABEL} {ttl_literal(title)} ;")
         if author_links:
             pub.append(f"    {P_AUTHOR} " +
                        " ,\n        ".join(author_links) + " ;")
+        stamp = ""
         if chosen.get("publication_date"):
             stamp = _publication_date(chosen["publication_date"])
             if stamp:
@@ -776,7 +801,7 @@ def make_serializer(db_path: Path):
             pub += evidence_for(report, P_DOI,
                                 rows_for("publication_doi",
                                          value=chosen["publication_doi"]))
-            pub.append(f"    {P_DOI} {literal(chosen['publication_doi'])} ;")
+            pub.append(f"    {P_DOI} {ttl_literal(chosen['publication_doi'])} ;")
         pub[-1] = pub[-1].rstrip(" ;") + " ."
 
         # ---- the scenarios --------------------------------------------------
@@ -827,6 +852,7 @@ def make_serializer(db_path: Path):
 
         scenario_links: list = []
         scenario_nodes: list = []
+        scenarios: list = []
         unplaced: list = []
         for norm, (ident, label) in wanted.items():
             if known and norm not in known:
@@ -834,13 +860,13 @@ def make_serializer(db_path: Path):
             iri = mint("scenariofactsheet", f"{title}|{ident}")
             scenario_links.append(f"<{iri}>")
             block = [f"<{iri}>", f"    a oeo:{CLS_SCENARIO} ;",
-                     f"    {P_UUID} {literal(uuid_of(iri))} ;"]
+                     f"    {P_UUID} {ttl_literal(uuid_of(iri))} ;"]
             block += evidence_for(iri, P_LABEL,
                                   rows_for("scenario_label", scenario=norm))
             # Mirjam: with no long name beside the acronym, both carry the same
             # string. That is the usual case in this corpus.
-            block.append(f"    {P_LABEL} {literal(known.get(norm, ident))} ;")
-            block.append(f"    {P_SCENARIO_ACRONYM} {literal(label or ident)} ;")
+            block.append(f"    {P_LABEL} {ttl_literal(known.get(norm, ident))} ;")
+            block.append(f"    {P_SCENARIO_ACRONYM} {ttl_literal(label or ident)} ;")
 
             # The types the model chose from the shapes' own list, each with
             # the passage it read them in. On top of that Mirjam asks every IAM
@@ -856,12 +882,13 @@ def make_serializer(db_path: Path):
             block.append(f"    {P_SCENARIO_TYPE} oeo:{IAM_SCENARIO} ;")
 
             described = rows_for("scenario_abstract", scenario=norm)
+            best = None
             if described:
                 best, _ = _pick_one(described)
                 block += evidence_for(iri, P_SCENARIO_ABSTRACT,
                                       rows_for("scenario_abstract", value=best,
                                                scenario=norm))
-                block.append(f"    {P_SCENARIO_ABSTRACT} {literal(best)} ;")
+                block.append(f"    {P_SCENARIO_ABSTRACT} {ttl_literal(best)} ;")
 
             # A region the model picked already exists in the OEKG under
             # its own IRI (oekg/region/Germany), so it is referenced, not
@@ -892,26 +919,45 @@ def make_serializer(db_path: Path):
                              f'"{year}-01-01T00:00:00"^^xsd:dateTime ;')
             block[-1] = block[-1].rstrip(" ;") + " ."
             scenario_nodes.append(NL.join(block) + NL)
+            scenarios.append({
+                "label": known.get(norm, ident), "acronym": label or ident,
+                "abstract": best,
+                "types": list(types) + [OEO_BASE + IAM_SCENARIO],
+                "regions": list(regions),
+                "years": [f"{year}-01-01T00:00:00" for year in years]})
 
         # ---- the bundle -----------------------------------------------------
         std: list = [f"<{bundle}>", f"    a oeo:{CLS_BUNDLE} ;",
-                     f"    {P_UUID} {literal(uuid_of(bundle))} ;",
+                     f"    {P_UUID} {ttl_literal(uuid_of(bundle))} ;",
                      f"    {P_LABEL} "
-                     f"{literal(chosen.get('study_project_name') or title)} ;"]
+                     f"{ttl_literal(chosen.get('study_project_name') or title)} ;"]
         if chosen.get("study_acronym"):
-            std.append(f"    {P_ACRONYM} {literal(chosen['study_acronym'])} ;")
+            std.append(f"    {P_ACRONYM} {ttl_literal(chosen['study_acronym'])} ;")
         if chosen.get("publication_abstract"):
             std += evidence_for(bundle, P_ABSTRACT,
                                 rows_for("publication_abstract",
                                          value=chosen["publication_abstract"]))
             std.append(f"    {P_ABSTRACT} "
-                       f"{literal(chosen['publication_abstract'])} ;")
+                       f"{ttl_literal(chosen['publication_abstract'])} ;")
         if org_links:
             std.append(f"    {P_ORGANISATION} " +
                        " ,\n        ".join(org_links) + " ;")
         if funder_links:
             std.append(f"    {P_FUNDER} " +
                        " ,\n        ".join(funder_links) + " ;")
+        # Only an entry the model picked off the list is written, as with a
+        # scenario type: an out: entry and a wording the list did not hold
+        # are counted above and reach no triple.
+        tags: dict = {}
+        for key in BUNDLE_TAGS:
+            picked: dict = {}
+            for row in by_param.get(key, ()):
+                if in_graph(row.get("value_uri")):
+                    picked.setdefault(row["value_uri"], []).append(row)
+            for tag_iri, sources in picked.items():
+                std += evidence_for(bundle, _property(key), sources)
+                std.append(f"    {_property(key)} <{tag_iri}> ;")
+            tags[key] = list(picked)
         for part in [f"<{report}>"] + scenario_links:
             std.append(f"    {P_HAS_PART} {part} ;")
         std[-1] = std[-1].rstrip(" ;") + " ."
@@ -930,14 +976,69 @@ def make_serializer(db_path: Path):
                  if unplaceable else "",
                  f", {rescued} link(s) the list settled after the model gave up"
                  if rescued else "")
+        left = {key: found for key, found in asked.items()
+                if key not in recorded}
+        if left:
+            # Decided, and the row backs no triple: it lost a single-valued
+            # field to another reading, or its scenario is none.
+            log.info("kg: %s: %d decision(s) on %d row(s) concern no value "
+                     "of the graph", name,
+                     sum(len(found) for found in left.values()), len(left))
 
         parts = [NL.join(pub) + NL, NL.join(std) + NL]
         parts += scenario_nodes + author_nodes + org_nodes + funder_nodes
         parts += evidence_nodes
-        body = NL.join(parts)
+        study = {
+            "document": name,
+            "bundle": {"label": chosen.get("study_project_name") or title,
+                       "acronym": chosen.get("study_acronym"),
+                       "abstract": chosen.get("publication_abstract"),
+                       "organisations": org_labels, "funders": funder_labels,
+                       "tags": tags},
+            "report": {"label": title, "authors": author_labels,
+                       "publication_date": stamp or None,
+                       "doi": chosen.get("publication_doi")},
+            "scenarios": scenarios,
+        }
+        return NL.join(parts), study
+
+    return build
+
+
+def make_serializer(db_path: Path):
+    """(document name, accepted tuple rows) -> TTL string or None.
+
+    What people decided about the rows is left in `serializer.decisions` by
+    `serialize.run`, {document: {tuple name: [decision]}}, and goes into the
+    Turtle as comment lines above the value each concerns.
+    """
+    build = _make_builder(db_path)
+    header_pending = [True]
+
+    def serializer(name: str, rows: list):
+        built = build(name, rows, serializer.decisions.get(name))
+        if built is None:
+            return None
         if header_pending[0]:
             header_pending[0] = False
-            return PREFIXES + "\n" + body
-        return body
+            return PREFIXES + "\n" + built[0]
+        return built[0]
 
+    serializer.decisions = {}
     return serializer
+
+
+def make_study_reader(db_path: Path):
+    """(document name, accepted tuple rows) -> study dict or None.
+
+    What the serializer decided for one document, without the Turtle: the
+    bundle, its one study report and its scenarios, each value as the graph
+    carries it. A document with no title has no study, as it has no graph.
+    """
+    build = _make_builder(db_path)
+
+    def reader(name: str, rows: list):
+        built = build(name, rows)
+        return built[1] if built else None
+
+    return reader

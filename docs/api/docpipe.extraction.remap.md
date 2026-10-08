@@ -70,16 +70,62 @@ space current would hide exactly the value the new option was added for.
 A refusal that cannot be attributed unsettles everything: guessing which
 space it belonged to would be the same mistake in a smaller place.
 
+### producers_of
+
+```python
+def producers_of(stored: dict) -> list
+```
+
+The stamp's list of who wrote into the harvest.
+
+A stamp from before the list starts it with what it does say: the model of
+its harvest.
+
+### next_producer
+
+```python
+def next_producer(stamp_path: Path) -> Optional[int]
+```
+
+The position a pass entered into this stamp now would take, or None when
+there is no stamp to enter it into. A pass that writes `<axis>_producer`
+onto rows asks this first, because the rows are written before the list.
+
+### enter_producer
+
+```python
+def enter_producer(stamp_path: Path, producer: dict) -> Optional[int]
+```
+
+Append this pass to the stamp's list, whatever else it earned. Returns
+its position, or None when there is no readable stamp to write into.
+
+Unlike `stamp_forward`, which enters a pass only when it earned a stamp
+key: a top-up that re-read a coordinate has rows that point at it, and a
+pointer into a list it never joined would read as unknown.
+
 ### stamp_forward
 
 ```python
-def stamp_forward(stamp_path: Path, current: dict, settled: set) -> bool
+def stamp_forward(stamp_path: Path, current: dict, settled: set,
+                  producer: Optional[dict] = None,
+                  record: Optional[dict] = None) -> bool
 ```
 
 Write the stamp keys this pass earned; keep the rest. True if it wrote.
 
 Everything outside `settled` stays exactly as the old stamp had it, so a
 run that comes later still sees which question it has to redo.
+
+*producer* is who this pass was (see `runner.producer`). It joins the
+stamp's list when the pass wrote, so a harvest that two models wrote
+into names both. A stamp from before the list starts it with what it
+does say: the model of its harvest.
+
+*record* is what this pass says about itself and is never compared, the
+sentences it searched with for instance. It goes into the same write as
+the keys, so a stamp never holds the keys without the record of the pass
+that earned them. Callers that record nothing pass none.
 
 ### stamp_path_of
 

@@ -1,0 +1,251 @@
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix obo:   <http://purl.obolibrary.org/obo/> .
+@prefix mhpo:  <https://purl.org/mhpo/ontology/> .
+@prefix oeo:   <https://openenergyplatform.org/ontology/oeo/> .
+
+<https://openenergyplatform.org/id/mhpkg/heatplan/AGS_06611000_2024-03-15>
+    a mhpo:MHPO_00020003 ;
+    rdfs:label "Kommunale Wärmeplanung Kassel 2024" ;
+    oeo:OEO_00390096 "2024-03-15"^^xsd:date ;
+    oeo:OEO_00000510 <https://openenergyplatform.org/id/mhpkg/organisation/2d4f4ae8-ea0f-575c-9a76-8dcf377042af> ,
+        <https://openenergyplatform.org/id/mhpkg/organisation/ab9bbe31-315c-5977-9ec3-c681925f9c47> ;
+    obo:BFO_0000051 <https://openenergyplatform.org/id/mhpkg/inventory/AGS_06611000_2024-03-15> ,
+        <https://openenergyplatform.org/id/mhpkg/referencescenario/AGS_06611000_2024-03-15> ,
+        <https://openenergyplatform.org/id/mhpkg/targetscenario/AGS_06611000_2024-03-15> .
+
+<https://openenergyplatform.org/id/mhpkg/inventory/AGS_06611000_2024-03-15>
+    a mhpo:MHPO_00020005 ;
+    rdfs:label "Bestandsanalyse Kassel 2024" ;
+    oeo:OEO_00140002 <https://openenergyplatform.org/id/mhpkg/value/c6f64f4a-ec7f-533b-aa8e-4cf8961b1889> .
+
+<https://openenergyplatform.org/id/mhpkg/referencescenario/AGS_06611000_2024-03-15>
+    a oeo:OEO_00020311 ;
+    rdfs:label "Trendszenario Kassel 2024" ;
+    oeo:OEO_00140002 <https://openenergyplatform.org/id/mhpkg/value/268ceefd-e8b7-512d-afd7-91fcaf71b42e> .
+
+<https://openenergyplatform.org/id/mhpkg/targetscenario/AGS_06611000_2024-03-15>
+    a mhpo:MHPO_00020007 ;
+    rdfs:label "Zielszenario Kassel 2024" ;
+    oeo:OEO_00140002 <https://openenergyplatform.org/id/mhpkg/value/d8397e7b-af2f-5bc8-9922-5d0c757774df> ,
+        <https://openenergyplatform.org/id/mhpkg/value/0f70cea3-dbd8-55d5-8123-edc641c36b73> ,
+        <https://openenergyplatform.org/id/mhpkg/value/f6ef4860-65c3-53cd-a99d-06c830797687> ,
+        <https://openenergyplatform.org/id/mhpkg/value/51781fd9-a285-5e23-8ad5-7737bc2e89b7> ,
+        <https://openenergyplatform.org/id/mhpkg/value/9229cd47-3e1d-5ff0-83ab-7e6c4b9d085b> ,
+        <https://openenergyplatform.org/id/mhpkg/value/1d314d15-b886-57a7-8480-297c21789140> ,
+        <https://openenergyplatform.org/id/mhpkg/value/433b3434-c978-525d-8358-e949fda2b641> .
+
+# final energy consumption value · target scenario · whole municipality · natural gas
+# "Erdgas "241.000" \ kWh/a zweite Zeile"
+# plan_kassel.pdf, page 12, table "Endenergie"
+# Aggregation: OEO_00140070 (from the unit kWh/a)
+# Flags: quote_repaired
+# Trust: C · repaired · review recommended
+<https://openenergyplatform.org/id/mhpkg/value/d8397e7b-af2f-5bc8-9922-5d0c757774df>
+    a oeo:OEO_00050016 ;
+    oeo:OEO_00140178 "241.0"^^xsd:float ;
+    oeo:OEO_00040010 oeo:OEO_00050008 ;
+    obo:IAO_0000136 oeo:OEO_00000292 ;
+    obo:IAO_0000136 <https://openenergyplatform.org/id/mhpkg/year/2030> ;
+    oeo:OEO_00390023 oeo:OEO_00140070 .
+
+# final energy consumption value · baseline inventory · whole municipality · natural gas · household sector
+# "Der Endenergieverbrauch der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude st
+# plan_kassel.pdf, page 12, table "Endenergie"
+# Aggregation: OEO_00140070 (from the unit kWh/a)
+# Trust: A
+<https://openenergyplatform.org/id/mhpkg/value/c6f64f4a-ec7f-533b-aa8e-4cf8961b1889>
+    a oeo:OEO_00050016 ;
+    oeo:OEO_00140178 "120.0"^^xsd:float ;
+    oeo:OEO_00040010 oeo:OEO_00050008 ;
+    obo:IAO_0000136 oeo:OEO_00000292 ;
+    obo:IAO_0000136 oeo:OEO_00000214 ;
+    obo:IAO_0000136 <https://openenergyplatform.org/id/mhpkg/year/2022> ;
+    oeo:OEO_00390023 oeo:OEO_00140070 .
+
+# final energy consumption value · trend scenario · whole municipality · district heating
+# "| Erdgas | 241.000 |"
+# plan_kassel.pdf, page 12, table "Endenergie"
+# Aggregation: OEO_00140070 (from the unit kWh/a)
+# computed: a + b
+# Flags: computed
+# Trust: C · from an image · computed · review recommended
+<https://openenergyplatform.org/id/mhpkg/value/268ceefd-e8b7-512d-afd7-91fcaf71b42e>
+    a oeo:OEO_00050016 ;
+    oeo:OEO_00140178 "77.0"^^xsd:float ;
+    oeo:OEO_00040010 oeo:OEO_00050008 ;
+    obo:IAO_0000136 oeo:OEO_00000132 ;
+    obo:IAO_0000136 <https://openenergyplatform.org/id/mhpkg/year/2035> ;
+    oeo:OEO_00390023 oeo:OEO_00140070 .
+
+# final energy consumption value · target scenario · Eignungsgebiet "Bad Dürrheim Nord" · natural gas
+# "| Erdgas | 241.000 |"
+# plan_kassel.pdf, page 12, table "Endenergie"
+# Aggregation: OEO_00140070 (from the unit kWh/a)
+# Trust: A
+<https://openenergyplatform.org/id/mhpkg/value/0f70cea3-dbd8-55d5-8123-edc641c36b73>
+    a oeo:OEO_00050016 ;
+    oeo:OEO_00140178 "7.0"^^xsd:float ;
+    oeo:OEO_00040010 oeo:OEO_00050008 ;
+    obo:IAO_0000136 oeo:OEO_00000292 ;
+    obo:IAO_0000136 <https://openenergyplatform.org/id/mhpkg/year/2030> ;
+    oeo:OEO_00390023 oeo:OEO_00140070 .
+
+# final energy consumption value · target scenario · Nordstadt (Süd) · natural gas
+# "| Erdgas | 241.000 |"
+# plan_kassel.pdf, page 12, table "Endenergie"
+# Aggregation: OEO_00140070 (from the unit kWh/a)
+# Trust: A
+<https://openenergyplatform.org/id/mhpkg/value/f6ef4860-65c3-53cd-a99d-06c830797687>
+    a oeo:OEO_00050016 ;
+    oeo:OEO_00140178 "8.0"^^xsd:float ;
+    oeo:OEO_00040010 oeo:OEO_00050008 ;
+    obo:IAO_0000136 oeo:OEO_00000292 ;
+    obo:IAO_0000136 <https://openenergyplatform.org/id/mhpkg/year/2040> ;
+    oeo:OEO_00390023 oeo:OEO_00140070 .
+
+# final energy consumption value · target scenario · whole municipality · electrical energy
+# "| Erdgas | 241.000 |"
+# plan_kassel.pdf, page 12, table "Endenergie"
+# Aggregation: OEO_00140070 (from the unit kWh/a)
+# Kept over a rounded reading of the same number
+# Trust: A
+<https://openenergyplatform.org/id/mhpkg/value/51781fd9-a285-5e23-8ad5-7737bc2e89b7>
+    a oeo:OEO_00050016 ;
+    oeo:OEO_00140178 "1626.0"^^xsd:float ;
+    oeo:OEO_00040010 oeo:OEO_00050008 ;
+    obo:IAO_0000136 oeo:OEO_00000139 ;
+    obo:IAO_0000136 <https://openenergyplatform.org/id/mhpkg/year/2045> ;
+    oeo:OEO_00390023 oeo:OEO_00140070 .
+
+# final energy consumption value · target scenario · whole municipality · natural gas · commercial sector
+# "| Erdgas | 241.000 |"
+# plan_kassel.pdf, page 12, table "Endenergie"
+# Aggregation: OEO_00140070 (from the unit kWh/a)
+# Named by the plan's wording: "Erdgas / Öffentliche Gebäude"
+# Trust: A
+<https://openenergyplatform.org/id/mhpkg/value/9229cd47-3e1d-5ff0-83ab-7e6c4b9d085b>
+    a oeo:OEO_00050016 ;
+    oeo:OEO_00140178 "5.0"^^xsd:float ;
+    oeo:OEO_00040010 oeo:OEO_00050008 ;
+    obo:IAO_0000136 oeo:OEO_00000292 ;
+    obo:IAO_0000136 oeo:OEO_00000405 ;
+    obo:IAO_0000136 <https://openenergyplatform.org/id/mhpkg/year/2050> ;
+    oeo:OEO_00390023 oeo:OEO_00140070 .
+
+# final energy consumption value · target scenario · whole municipality · natural gas · commercial sector
+# "| Erdgas | 241.000 |"
+# plan_kassel.pdf, page 12, table "Endenergie"
+# Aggregation: OEO_00140070 (from the unit kWh/a)
+# Named by the plan's wording: "Erdgas / Wirtschaftlich genutzte Gebäude"
+# Trust: A
+<https://openenergyplatform.org/id/mhpkg/value/1d314d15-b886-57a7-8480-297c21789140>
+    a oeo:OEO_00050016 ;
+    oeo:OEO_00140178 "6.0"^^xsd:float ;
+    oeo:OEO_00040010 oeo:OEO_00050008 ;
+    obo:IAO_0000136 oeo:OEO_00000292 ;
+    obo:IAO_0000136 oeo:OEO_00000405 ;
+    obo:IAO_0000136 <https://openenergyplatform.org/id/mhpkg/year/2050> ;
+    oeo:OEO_00390023 oeo:OEO_00140070 .
+
+# final energy consumption value · target scenario · whole municipality · natural gas
+# "| Erdgas | 241.000 |"
+# plan_kassel.pdf, page 12, table "Endenergie"
+# Aggregation: OEO_00140070 (from the unit kWh/a)
+# Kept over a reading of the same coordinates with a lower trust level
+# Trust: A
+<https://openenergyplatform.org/id/mhpkg/value/433b3434-c978-525d-8358-e949fda2b641>
+    a oeo:OEO_00050016 ;
+    oeo:OEO_00140178 "4.0"^^xsd:float ;
+    oeo:OEO_00040010 oeo:OEO_00050008 ;
+    obo:IAO_0000136 oeo:OEO_00000292 ;
+    obo:IAO_0000136 <https://openenergyplatform.org/id/mhpkg/year/2055> ;
+    oeo:OEO_00390023 oeo:OEO_00140070 .
+
+<https://openenergyplatform.org/id/mhpkg/year/2022>
+    a oeo:OEO_00030033 ;
+    rdfs:label "2022" .
+
+<https://openenergyplatform.org/id/mhpkg/year/2030>
+    a oeo:OEO_00030033 ;
+    rdfs:label "2030" .
+
+<https://openenergyplatform.org/id/mhpkg/year/2035>
+    a oeo:OEO_00030033 ;
+    rdfs:label "2035" .
+
+<https://openenergyplatform.org/id/mhpkg/year/2040>
+    a oeo:OEO_00030033 ;
+    rdfs:label "2040" .
+
+<https://openenergyplatform.org/id/mhpkg/year/2045>
+    a oeo:OEO_00030033 ;
+    rdfs:label "2045" .
+
+<https://openenergyplatform.org/id/mhpkg/year/2050>
+    a oeo:OEO_00030033 ;
+    rdfs:label "2050" .
+
+<https://openenergyplatform.org/id/mhpkg/year/2055>
+    a oeo:OEO_00030033 ;
+    rdfs:label "2055" .
+
+<https://openenergyplatform.org/id/mhpkg/organisation/2d4f4ae8-ea0f-575c-9a76-8dcf377042af>
+    a oeo:OEO_00030022 ;
+    rdfs:label "Kassel Wärme Ingenieurbüro" .
+
+<https://openenergyplatform.org/id/mhpkg/organisation/ab9bbe31-315c-5977-9ec3-c681925f9c47>
+    a oeo:OEO_00030022 ;
+    rdfs:label "EGS-Plan" .
+
+<https://openenergyplatform.org/id/mhpkg/heatplanarea/ccab88b5-f7b5-58ec-84e6-8632cfb5819c>
+    a mhpo:MHPO_00020019 ;
+    rdfs:label "Eignungsgebiet \"Bad Dürrheim Nord\"" ;
+    obo:BFO_0000050 <https://openenergyplatform.org/id/mhpkg/municipality/AGS_06611000> .
+
+<https://openenergyplatform.org/id/mhpkg/heatplanarea/be1ab2bf-019e-55e4-87a7-d76f005f7876>
+    a mhpo:MHPO_00020019 ;
+    rdfs:label "Nordstadt (Süd)" ;
+    obo:BFO_0000050 <https://openenergyplatform.org/id/mhpkg/municipality/AGS_06611000> .
+
+<https://openenergyplatform.org/id/mhpkg/municipality/AGS_06611000>
+    a mhpo:MHPO_00020017 ;
+    rdfs:label "Gemeindegebiet Kassel" .
+
+<https://openenergyplatform.org/id/mhpkg/heatplan/AGS_13074053_2025-09-01>
+    a mhpo:MHPO_00020003 ;
+    rdfs:label "Kommunale Wärmeplanung Grevesmühlen \"Nord\" 2025" ;
+    oeo:OEO_00390096 "2025-09-01"^^xsd:date ;
+    oeo:OEO_00000510 <https://openenergyplatform.org/id/mhpkg/organisation/2d4f4ae8-ea0f-575c-9a76-8dcf377042af> ,
+        <https://openenergyplatform.org/id/mhpkg/organisation/cdb7a863-068d-5873-afb1-25b22114b58f> ;
+    obo:BFO_0000051 <https://openenergyplatform.org/id/mhpkg/targetscenario/AGS_13074053_2025-09-01> .
+
+<https://openenergyplatform.org/id/mhpkg/targetscenario/AGS_13074053_2025-09-01>
+    a mhpo:MHPO_00020007 ;
+    rdfs:label "Zielszenario Grevesmühlen \"Nord\" 2025" ;
+    oeo:OEO_00140002 <https://openenergyplatform.org/id/mhpkg/value/914d2192-f64a-57fd-8251-78255a3df04e> .
+
+# final energy consumption value · target scenario · whole municipality · natural gas
+# "Strom 55 GWh"
+# plan_ohne_textebene.pdf, page 3, section
+# Aggregation: OEO_00140070 (from the unit kWh/a)
+# Trust: B · page_transcribed
+<https://openenergyplatform.org/id/mhpkg/value/914d2192-f64a-57fd-8251-78255a3df04e>
+    a oeo:OEO_00050016 ;
+    oeo:OEO_00140178 "55.0"^^xsd:float ;
+    oeo:OEO_00040010 oeo:OEO_00050008 ;
+    obo:IAO_0000136 oeo:OEO_00000292 ;
+    obo:IAO_0000136 <https://openenergyplatform.org/id/mhpkg/year/2030> ;
+    oeo:OEO_00390023 oeo:OEO_00140070 .
+
+<https://openenergyplatform.org/id/mhpkg/year/2030>
+    a oeo:OEO_00030033 ;
+    rdfs:label "2030" .
+
+<https://openenergyplatform.org/id/mhpkg/organisation/cdb7a863-068d-5873-afb1-25b22114b58f>
+    a oeo:OEO_00030022 ;
+    rdfs:label "Stadtwerke Grevesmühlen" .
+
+<https://openenergyplatform.org/id/mhpkg/municipality/AGS_13074053>
+    a mhpo:MHPO_00020017 ;
+    rdfs:label "Gemeindegebiet Grevesmühlen \"Nord\"" .

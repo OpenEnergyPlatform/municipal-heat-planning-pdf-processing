@@ -237,6 +237,31 @@ def test_harvest_failure_sentinels_are_counted_by_why_not_by_reason(tmp_path):
     assert stats["refusals"]["total"] == 4
 
 
+def test_the_report_knows_every_cause_the_harvest_can_write():
+    """The list is spelled out here and in the schema. A cause the harvest
+    writes and this report does not know is printed as UNKNOWN, on every run,
+    for a state that is working as intended."""
+    from docpipe.extraction import schema
+    from docpipe.extraction.spec import load as load_spec
+    spec = load_spec(json.loads(
+        (Path(__file__).resolve().parents[1] / "profiles" / "kwp"
+         / "extraction_spec.json").read_text(encoding="utf-8")))
+
+    def enums(node, key):
+        if isinstance(node, dict):
+            if isinstance(node.get(key), dict) and "enum" in node[key]:
+                yield tuple(node[key]["enum"])
+            for value in node.values():
+                yield from enums(value, key)
+        elif isinstance(node, list):
+            for value in node:
+                yield from enums(value, key)
+
+    built = schema.build(spec)["harvest"]
+    written = {why for found in enums(built, "_why") for why in found}
+    assert written and written == set(hr.SENTINEL_WHY)
+
+
 # ---------------------------------------------------------------------------
 # 5. Parameter states
 # ---------------------------------------------------------------------------

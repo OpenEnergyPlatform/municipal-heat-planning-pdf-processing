@@ -21,6 +21,32 @@ The `mode=ro` URI keeps the app from ever writing to the authoritative
 database or taking a write lock that would contend with the batch pipeline
 running against the same file.
 
+### available_scopes
+
+```python
+def available_scopes(conn: sqlite3.Connection) -> list[str]
+```
+
+The search scopes whose embedding types the database holds vectors of,
+in the order of ALL_SCOPES.
+
+An index built through a text-only backend has no *\_vl vectors, and a
+scope offered over none of them can only come back empty.
+
+### index_model_notice
+
+```python
+def index_model_notice(conn: sqlite3.Connection, model: str,
+                       sentence: str) -> Optional[str]
+```
+
+`sentence` filled in when the database records another embedding model
+than `model`, the one that embeds the queries; else None.
+
+`sentence` is the profile's wording and takes {built} and {queried}. A
+database that records no model says nothing. This is for a notice: the
+search is not refused, its vectors only may not compare.
+
 ### get_candidate_faiss_ids
 
 ```python

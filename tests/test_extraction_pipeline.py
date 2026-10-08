@@ -12,7 +12,7 @@ SPEC = load({"parameters": [{
     "description": "Endenergieverbrauch je Energieträger, Sektor und Jahr, "
                    "wie im Plan bilanziert.",
     "unit_target": "OEO_00050008",
-    "units_accepted": {"MWh/a": 1.0},
+    "units_accepted": {"MWh/a": {"factor": 1.0, "names_period": True}},
     "axes": {
         "carrier": {"vocabulary": {"OEO_00000292": ["Erdgas"],
                                    "OEO_00000211": ["Heizöl"]}},

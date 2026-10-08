@@ -1,5 +1,5 @@
 """Length-sorted batches, and preparation that overlaps with the GPUs."""
-import conftest
+from tests import conftest
 
 conftest.needs_real("torch")
 

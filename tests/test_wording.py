@@ -13,12 +13,15 @@ import pytest
 from docpipe.inference import wording
 from docpipe.profile import Profile, load_profile
 
-PROFILES = pathlib.Path(__file__).resolve().parent.parent / "profiles"
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+PROFILES = ROOT / "profiles"
+BUILTIN = ROOT / "docpipe" / "builtin"
 
 
 def _profiles_that_answer():
     """Profiles whose stages talk to a model, so they need the wording."""
-    return sorted(p.name for p in PROFILES.iterdir()
+    return sorted(p.name for root in (PROFILES, BUILTIN)
+                  for p in root.iterdir()
                   if (p / "prompts" / "inference").is_dir())
 
 
@@ -56,8 +59,107 @@ def test_an_incomplete_set_says_which_pieces_are_missing(monkeypatch):
     monkeypatch.setattr(wording, "_component",
                         lambda attr, profile=None: {"task_heading": "Task"})
 
+    # A profile that stands alone: one that extends another has asked for
+    # that profile's pieces where it has none.
     with pytest.raises(LookupError) as exc:
-        wording.phrases(load_profile("kwp"))
+        wording.phrases(Profile(name="kwp"))
 
     assert "history_heading" in str(exc.value)
     assert "task_heading" not in str(exc.value)
+
+
+# -- the words of the app's pages ---------------------------------------------
+
+APP = ROOT / "docpipe" / "app" / "app.py"
+# The picker's labels are words of the pages too, read from the same table.
+CATALOG = ROOT / "docpipe" / "inference" / "catalog.py"
+
+
+def _fields(text):
+    import string
+    return sorted(name for _lit, name, _spec, _conv
+                  in string.Formatter().parse(text) if name)
+
+
+@pytest.mark.parametrize("name", ["kwp", "scenarios", "default"])
+def test_a_profile_words_every_piece_of_the_pages_and_no_other(name):
+    profile = load_profile(name)
+    own = profile._own("inference", "UI")
+    assert set(own) == set(wording.UI_REQUIRED), name
+    assert wording.ui(profile) == own
+    assert all(isinstance(text, str) and text.strip()
+               for text in own.values())
+
+
+def test_the_three_tables_take_the_same_values():
+    """A page fills a sentence by name. A table that names another value,
+    or none, fails on that page only, in that language only."""
+    tables = {name: load_profile(name)._own("inference", "UI")
+              for name in ("kwp", "scenarios", "default")}
+    for key in sorted(wording.UI_REQUIRED):
+        taken = {name: _fields(table[key]) for name, table in tables.items()}
+        assert len({tuple(fields) for fields in taken.values()}) == 1, (
+            key, taken)
+
+
+def test_the_pages_use_every_word_and_only_words_there_are():
+    import ast
+    used = set()
+    for source in (APP, CATALOG):
+        for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
+            if (isinstance(node, ast.Subscript)
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id == "T"):
+                key = node.slice
+                key = getattr(key, "value", key)    # Python 3.8: ast.Index
+                key = getattr(key, "value", key)
+                assert isinstance(key, str), "a page word is named literally"
+                used.add(key)
+    assert used == set(wording.UI_REQUIRED), (
+        sorted(used - wording.UI_REQUIRED),
+        sorted(wording.UI_REQUIRED - used))
+
+
+def test_the_pages_say_nothing_that_is_not_in_a_table():
+    """Every sentence a person reads is the profile's. A literal with a
+    space and a letter in a call that puts text on the page would be one
+    the profile cannot word."""
+    import ast
+    shows = {"markdown", "caption", "header", "subheader", "warning",
+             "error", "info", "checkbox", "multiselect", "radio",
+             "selectbox", "text_input", "text_area", "button",
+             "link_button", "download_button", "expander", "toast",
+             "chat_input",
+             "file_uploader", "title"}
+    found = []
+    for node in ast.walk(ast.parse(APP.read_text(encoding="utf-8"))):
+        if not (isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id in ("st", "save", "skip")
+                and node.func.attr in shows and node.args):
+            continue
+        first = node.args[0]
+        if isinstance(first, ast.Constant) and isinstance(first.value, str)                 and " " in first.value.strip()                 and not first.value.lstrip().startswith("<"):
+            found.append((node.lineno, first.value))
+    assert not found, found
+
+
+def test_without_a_profile_the_pages_speak_the_built_in_profile_s_words(
+        monkeypatch):
+    monkeypatch.delenv("DOCPIPE_PROFILE", raising=False)
+    monkeypatch.setattr(wording, "_ui_checked", {})
+    assert wording.ui() == load_profile("default")._own("inference", "UI")
+
+
+def test_a_table_with_a_piece_too_few_or_too_many_is_named(monkeypatch):
+    monkeypatch.setattr(wording, "_ui_checked", {})
+    profile = load_profile("default")
+    short = dict(profile._own("inference", "UI"))
+    del short["open_pdf"]
+    short["greeting"] = "Hello"
+    monkeypatch.setattr(type(profile), "layers",
+                        lambda self, module, attr: [short])
+    with pytest.raises(LookupError) as caught:
+        wording.ui(profile)
+    assert "open_pdf" in str(caught.value) and "greeting" in str(caught.value)

@@ -37,7 +37,21 @@ CREATE TABLE IF NOT EXISTS "Documents" (
     "page_text_transcribed" INTEGER,
     "added"       TEXT,
     "is_current"  INTEGER NOT NULL DEFAULT 1,
-    "supersedes"  INTEGER REFERENCES "Documents"("id") ON DELETE SET NULL
+    "supersedes"  INTEGER REFERENCES "Documents"("id") ON DELETE SET NULL,
+    -- Which bytes this document is: the sha256 and the size of the file as
+    -- it was registered. NULL for a row written before this was recorded.
+    "sha256"      TEXT,
+    "bytes"       INTEGER
+);
+
+-- What this database is, in its own words: one row per fact. Written by the
+-- stage that knows it (the embedding model by the stage that builds the
+-- index) and read by whoever needs to place the database. A record, never a
+-- gate. The shape of the tables themselves is not a row here: a database
+-- carries that as PRAGMA user_version.
+CREATE TABLE IF NOT EXISTS "Meta" (
+    "key"   TEXT PRIMARY KEY,
+    "value" TEXT
 );
 
 -- One row per physical page of a document; referenced by the provenance tables.
@@ -90,6 +104,10 @@ CREATE TABLE IF NOT EXISTS "Segments" (
 -- 'section_text' = it was replaced by the sentence standing before this
 -- item's placeholder in the section text, because the stored one did not
 -- open like a caption. NULL = the backfill has not seen the row.
+-- `qa` is what stage 5 measured of the transcription when it kept it: a JSON
+-- object {passed, coverage, coverage_assessed, duplication, has_rows}, as in
+-- visuals.json. NULL = not checked: a table of a run before this was kept, one
+-- the model answered only in plain text, one it never read. Not a pass.
 CREATE TABLE IF NOT EXISTS "Tables" (
     "id"             INTEGER PRIMARY KEY AUTOINCREMENT,
     "section"        INTEGER NOT NULL REFERENCES "Sections"("id") ON DELETE CASCADE,
@@ -99,7 +117,8 @@ CREATE TABLE IF NOT EXISTS "Tables" (
     "caption"        TEXT,
     "markdown"       TEXT,
     "bbox"           TEXT,  -- JSON [[x0,y0,x1,y1]] region in PDF points
-    "caption_source" TEXT   -- stage | section_text
+    "caption_source" TEXT,  -- stage | section_text
+    "qa"             TEXT   -- JSON, see above
 );
 
 CREATE TABLE IF NOT EXISTS "Images" (

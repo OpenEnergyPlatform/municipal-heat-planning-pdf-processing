@@ -1,5 +1,5 @@
 """Tests for semantic pre-masking of figures embedded in table crops (Stage 2)."""
-import conftest
+from tests import conftest
 
 conftest.needs_real("torch")
 

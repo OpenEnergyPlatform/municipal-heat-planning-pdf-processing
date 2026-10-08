@@ -28,8 +28,11 @@ import json
 import logging
 from collections import Counter
 from pathlib import Path
+from typing import Callable, Optional
 
-from .fields import DERIVED, NUMBER, READ, UNANSWERED, asked_slots
+from .. import jsonl
+from .fields import (DERIVED, LISTS_UNREADABLE, NUMBER, READ, UNANSWERED,
+                     asked_slots)
 from .pipeline import answer_in_quote
 from .spec import Spec
 from .trust import document_summary
@@ -56,7 +59,7 @@ def recheck_row(row: dict, slots: list) -> Counter:
             dropped["derived"] += 1
             continue
         if not quote:
-            # Written by the whole-tuple contract, which never asked for one.
+            # A harvest from before each coordinate carried a quote has none.
             # It is not evidence and was never checked, so it does not stay.
             dropped["no evidence at all"] += 1
         elif not answer_in_quote(slot, given,
@@ -72,17 +75,43 @@ def recheck_row(row: dict, slots: list) -> Counter:
     return dropped
 
 
-def recheck_file(path: Path, spec: Spec) -> Counter:
+def _document_of(text: str):
+    """The document id a harvest file's summary line names, or None."""
+    for line in jsonl.lines(text):
+        if '"summary"' not in line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict) and row.get("kind") == "summary":
+            return row.get("document_id")
+    return None
+
+
+def recheck_file(path: Path, spec: Spec,
+                 spec_for: Optional[Callable] = None) -> Counter:
     """Rewrite one harvest file in place. Returns what it dropped and why.
 
     The summary line is recomputed rather than carried over: it counts the
     trust levels of the tuples above it, and this pass is in the business of
     demoting them. A kept summary would report the run that no longer exists.
+
+    *spec_for* gives the spec as the file's document sees it (document id ->
+    Spec, or None when its lists cannot be closed). A coordinate the harvest
+    backed as an entry of the document's list is held to the same list here:
+    against the run's spec the entry is a bare identifier no quote prints.
     """
     stats: Counter = Counter()
     lines = []
     tuples, refusals, document_id = [], [], None
-    for line in Path(path).read_text(encoding="utf-8").splitlines():
+    text = Path(path).read_text(encoding="utf-8")
+    if spec_for is not None:
+        spec = spec_for(_document_of(text))
+        if spec is None:
+            stats[LISTS_UNREADABLE] += 1
+            return stats
+    for line in jsonl.lines(text):
         if not line.strip():
             continue
         try:
@@ -126,21 +155,30 @@ def recheck_file(path: Path, spec: Spec) -> Counter:
     return stats
 
 
-def run(harvest_dir: Path, spec: Spec, *, drop_stamps: bool = True) -> Counter:
+def run(harvest_dir: Path, spec: Spec, *, drop_stamps: bool = True,
+        spec_for: Optional[Callable] = None) -> Counter:
     """Recheck a whole harvest directory.
 
     The stamps go with it. A file rewritten by a rule the harvest did not
     apply is not the output of the run its stamp names, and leaving the stamp
     would make the next run skip the document — which is exactly how 205 plans
-    kept a whole-tuple harvest through a field-wise corpus run.
+    kept an old harvest through a corpus run meant to redo them. A file left
+    alone keeps its stamp: it still is that run's output.
     """
     stats: Counter = Counter()
     harvest_dir = Path(harvest_dir)
+    untouched = set()
     for path in sorted(harvest_dir.glob("*.jsonl")):
-        stats.update(recheck_file(path, spec))
+        got = recheck_file(path, spec, spec_for)
+        stats.update(got)
+        if got[LISTS_UNREADABLE]:
+            untouched.add(path.stem)
+            continue
         stats["documents"] += 1
     if drop_stamps:
         for stamp in harvest_dir.glob("*.stamp.json"):
+            if stamp.name[:-len(".stamp.json")] in untouched:
+                continue
             stamp.unlink()
             stats["stamps cleared"] += 1
     for key, value in sorted(stats.items()):

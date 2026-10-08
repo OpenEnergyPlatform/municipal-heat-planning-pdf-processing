@@ -1,5 +1,5 @@
 """Tests for font-based heading promotion and caption intervener detection."""
-import conftest
+from tests import conftest
 
 conftest.needs_real("torch")
 

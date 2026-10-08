@@ -1,0 +1,228 @@
+# plan_kassel
+<https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel> a prov:Activity
+    ; prov:used <https://openenergyplatform.org/id/mhpkg/heatplan/AGS_06611000_2024-03-15>
+    ; prov:generated <https://openenergyplatform.org/id/mhpkg/value/0f70cea3-dbd8-55d5-8123-edc641c36b73> ,
+        <https://openenergyplatform.org/id/mhpkg/value/1d314d15-b886-57a7-8480-297c21789140> ,
+        <https://openenergyplatform.org/id/mhpkg/value/268ceefd-e8b7-512d-afd7-91fcaf71b42e> ,
+        <https://openenergyplatform.org/id/mhpkg/value/433b3434-c978-525d-8358-e949fda2b641> ,
+        <https://openenergyplatform.org/id/mhpkg/value/51781fd9-a285-5e23-8ad5-7737bc2e89b7> ,
+        <https://openenergyplatform.org/id/mhpkg/value/9229cd47-3e1d-5ff0-83ab-7e6c4b9d085b> ,
+        <https://openenergyplatform.org/id/mhpkg/value/c6f64f4a-ec7f-533b-aa8e-4cf8961b1889> ,
+        <https://openenergyplatform.org/id/mhpkg/value/d8397e7b-af2f-5bc8-9922-5d0c757774df> ,
+        <https://openenergyplatform.org/id/mhpkg/value/f6ef4860-65c3-53cd-a99d-06c830797687> .
+<https://openenergyplatform.org/id/mhpkg/prov/part/plan_kassel/table-5> a doco:Table
+    ; dcterms:identifier "table/5"
+    ; dcterms:isPartOf <https://openenergyplatform.org/id/mhpkg/heatplan/AGS_06611000_2024-03-15>
+    ; dcterms:title "Endenergie" .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/406334602b39c5902eef2774/value> a oa:Annotation
+    ; oa:hasBody <https://openenergyplatform.org/id/mhpkg/value/d8397e7b-af2f-5bc8-9922-5d0c757774df>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/d8397e7b-af2f-5bc8-9922-5d0c757774df>
+    ; <https://purl.org/mhpo/prov/coordinate> "value"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; oa:hasTarget [ a oa:SpecificResource
+        ; oa:hasSource <https://openenergyplatform.org/id/mhpkg/prov/part/plan_kassel/table-5>
+        ; oa:hasSelector [ a oa:FragmentSelector ; dcterms:conformsTo <http://tools.ietf.org/rfc/rfc3778> ; rdf:value "page=12" ; oa:refinedBy [ a oa:TextQuoteSelector ; oa:exact "Erdgas \"241.000\" \\ kWh/a\nzweite Zeile" ] ] ]
+    ; <https://purl.org/mhpo/prov/readingNote> <https://purl.org/mhpo/prov/quote_repaired> .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/406334602b39c5902eef2774/aggregation> a oa:Annotation
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/d8397e7b-af2f-5bc8-9922-5d0c757774df>
+    ; <https://purl.org/mhpo/prov/coordinate> "aggregation"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; <https://purl.org/mhpo/prov/readingState> <https://purl.org/mhpo/prov/derived>
+    ; oa:hasBody <https://openenergyplatform.org/ontology/oeo/OEO_00140070>
+    ; <https://purl.org/mhpo/prov/wording> "kWh/a" .
+<https://openenergyplatform.org/id/mhpkg/prov/trust/plan_kassel/406334602b39c5902eef2774> a <https://purl.org/mhpo/prov/TrustAssessment>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/d8397e7b-af2f-5bc8-9922-5d0c757774df>
+    ; <https://purl.org/mhpo/prov/trustLevel> <https://purl.org/mhpo/prov/C>
+    ; <https://purl.org/mhpo/prov/fromImage> false
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; <https://purl.org/mhpo/prov/trustReason> <https://purl.org/mhpo/prov/repaired> .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/6e440998c7530e460e83ca13/value> a oa:Annotation
+    ; oa:hasBody <https://openenergyplatform.org/id/mhpkg/value/c6f64f4a-ec7f-533b-aa8e-4cf8961b1889>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/c6f64f4a-ec7f-533b-aa8e-4cf8961b1889>
+    ; <https://purl.org/mhpo/prov/coordinate> "value"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; oa:hasTarget [ a oa:SpecificResource
+        ; oa:hasSource <https://openenergyplatform.org/id/mhpkg/prov/part/plan_kassel/table-5>
+        ; oa:hasSelector [ a oa:FragmentSelector ; dcterms:conformsTo <http://tools.ietf.org/rfc/rfc3778> ; rdf:value "page=12" ; oa:refinedBy [ a oa:TextQuoteSelector ; oa:exact "Der Endenergieverbrauch der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt der Gebäude steigt und fällt danach wieder." ] ] ] .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/6e440998c7530e460e83ca13/aggregation> a oa:Annotation
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/c6f64f4a-ec7f-533b-aa8e-4cf8961b1889>
+    ; <https://purl.org/mhpo/prov/coordinate> "aggregation"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; <https://purl.org/mhpo/prov/readingState> <https://purl.org/mhpo/prov/derived>
+    ; oa:hasBody <https://openenergyplatform.org/ontology/oeo/OEO_00140070>
+    ; <https://purl.org/mhpo/prov/wording> "kWh/a" .
+<https://openenergyplatform.org/id/mhpkg/prov/trust/plan_kassel/6e440998c7530e460e83ca13> a <https://purl.org/mhpo/prov/TrustAssessment>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/c6f64f4a-ec7f-533b-aa8e-4cf8961b1889>
+    ; <https://purl.org/mhpo/prov/trustLevel> <https://purl.org/mhpo/prov/A>
+    ; <https://purl.org/mhpo/prov/fromImage> false
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel> .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/7aea553e07924694a68bf750/value> a oa:Annotation
+    ; oa:hasBody <https://openenergyplatform.org/id/mhpkg/value/268ceefd-e8b7-512d-afd7-91fcaf71b42e>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/268ceefd-e8b7-512d-afd7-91fcaf71b42e>
+    ; <https://purl.org/mhpo/prov/coordinate> "value"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; oa:hasTarget [ a oa:SpecificResource
+        ; oa:hasSource <https://openenergyplatform.org/id/mhpkg/prov/part/plan_kassel/table-5>
+        ; oa:hasSelector [ a oa:FragmentSelector ; dcterms:conformsTo <http://tools.ietf.org/rfc/rfc3778> ; rdf:value "page=12" ; oa:refinedBy [ a oa:TextQuoteSelector ; oa:exact "| Erdgas | 241.000 |" ] ] ] .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/7aea553e07924694a68bf750/aggregation> a oa:Annotation
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/268ceefd-e8b7-512d-afd7-91fcaf71b42e>
+    ; <https://purl.org/mhpo/prov/coordinate> "aggregation"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; <https://purl.org/mhpo/prov/readingState> <https://purl.org/mhpo/prov/derived>
+    ; oa:hasBody <https://openenergyplatform.org/ontology/oeo/OEO_00140070>
+    ; <https://purl.org/mhpo/prov/wording> "kWh/a" .
+<https://openenergyplatform.org/id/mhpkg/prov/trust/plan_kassel/7aea553e07924694a68bf750> a <https://purl.org/mhpo/prov/TrustAssessment>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/268ceefd-e8b7-512d-afd7-91fcaf71b42e>
+    ; <https://purl.org/mhpo/prov/trustLevel> <https://purl.org/mhpo/prov/C>
+    ; <https://purl.org/mhpo/prov/fromImage> true
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; <https://purl.org/mhpo/prov/trustReason> <https://purl.org/mhpo/prov/computed> .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/7aea553e07924694a68bf750.2/value> a oa:Annotation
+    ; oa:hasBody <https://openenergyplatform.org/id/mhpkg/value/0f70cea3-dbd8-55d5-8123-edc641c36b73>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/0f70cea3-dbd8-55d5-8123-edc641c36b73>
+    ; <https://purl.org/mhpo/prov/coordinate> "value"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; oa:hasTarget [ a oa:SpecificResource
+        ; oa:hasSource <https://openenergyplatform.org/id/mhpkg/prov/part/plan_kassel/table-5>
+        ; oa:hasSelector [ a oa:FragmentSelector ; dcterms:conformsTo <http://tools.ietf.org/rfc/rfc3778> ; rdf:value "page=12" ; oa:refinedBy [ a oa:TextQuoteSelector ; oa:exact "| Erdgas | 241.000 |" ] ] ] .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/7aea553e07924694a68bf750.2/aggregation> a oa:Annotation
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/0f70cea3-dbd8-55d5-8123-edc641c36b73>
+    ; <https://purl.org/mhpo/prov/coordinate> "aggregation"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; <https://purl.org/mhpo/prov/readingState> <https://purl.org/mhpo/prov/derived>
+    ; oa:hasBody <https://openenergyplatform.org/ontology/oeo/OEO_00140070>
+    ; <https://purl.org/mhpo/prov/wording> "kWh/a" .
+<https://openenergyplatform.org/id/mhpkg/prov/trust/plan_kassel/7aea553e07924694a68bf750.2> a <https://purl.org/mhpo/prov/TrustAssessment>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/0f70cea3-dbd8-55d5-8123-edc641c36b73>
+    ; <https://purl.org/mhpo/prov/trustLevel> <https://purl.org/mhpo/prov/A>
+    ; <https://purl.org/mhpo/prov/fromImage> false
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel> .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/7aea553e07924694a68bf750.3/value> a oa:Annotation
+    ; oa:hasBody <https://openenergyplatform.org/id/mhpkg/value/f6ef4860-65c3-53cd-a99d-06c830797687>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/f6ef4860-65c3-53cd-a99d-06c830797687>
+    ; <https://purl.org/mhpo/prov/coordinate> "value"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; oa:hasTarget [ a oa:SpecificResource
+        ; oa:hasSource <https://openenergyplatform.org/id/mhpkg/prov/part/plan_kassel/table-5>
+        ; oa:hasSelector [ a oa:FragmentSelector ; dcterms:conformsTo <http://tools.ietf.org/rfc/rfc3778> ; rdf:value "page=12" ; oa:refinedBy [ a oa:TextQuoteSelector ; oa:exact "| Erdgas | 241.000 |" ] ] ] .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/7aea553e07924694a68bf750.3/aggregation> a oa:Annotation
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/f6ef4860-65c3-53cd-a99d-06c830797687>
+    ; <https://purl.org/mhpo/prov/coordinate> "aggregation"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; <https://purl.org/mhpo/prov/readingState> <https://purl.org/mhpo/prov/derived>
+    ; oa:hasBody <https://openenergyplatform.org/ontology/oeo/OEO_00140070>
+    ; <https://purl.org/mhpo/prov/wording> "kWh/a" .
+<https://openenergyplatform.org/id/mhpkg/prov/trust/plan_kassel/7aea553e07924694a68bf750.3> a <https://purl.org/mhpo/prov/TrustAssessment>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/f6ef4860-65c3-53cd-a99d-06c830797687>
+    ; <https://purl.org/mhpo/prov/trustLevel> <https://purl.org/mhpo/prov/A>
+    ; <https://purl.org/mhpo/prov/fromImage> false
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel> .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/ad694aafe0fcadddb5ed498e/value> a oa:Annotation
+    ; oa:hasBody <https://openenergyplatform.org/id/mhpkg/value/51781fd9-a285-5e23-8ad5-7737bc2e89b7>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/51781fd9-a285-5e23-8ad5-7737bc2e89b7>
+    ; <https://purl.org/mhpo/prov/coordinate> "value"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; oa:hasTarget [ a oa:SpecificResource
+        ; oa:hasSource <https://openenergyplatform.org/id/mhpkg/prov/part/plan_kassel/table-5>
+        ; oa:hasSelector [ a oa:FragmentSelector ; dcterms:conformsTo <http://tools.ietf.org/rfc/rfc3778> ; rdf:value "page=12" ; oa:refinedBy [ a oa:TextQuoteSelector ; oa:exact "| Erdgas | 241.000 |" ] ] ] .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/ad694aafe0fcadddb5ed498e/aggregation> a oa:Annotation
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/51781fd9-a285-5e23-8ad5-7737bc2e89b7>
+    ; <https://purl.org/mhpo/prov/coordinate> "aggregation"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; <https://purl.org/mhpo/prov/readingState> <https://purl.org/mhpo/prov/derived>
+    ; oa:hasBody <https://openenergyplatform.org/ontology/oeo/OEO_00140070>
+    ; <https://purl.org/mhpo/prov/wording> "kWh/a" .
+<https://openenergyplatform.org/id/mhpkg/prov/trust/plan_kassel/ad694aafe0fcadddb5ed498e> a <https://purl.org/mhpo/prov/TrustAssessment>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/51781fd9-a285-5e23-8ad5-7737bc2e89b7>
+    ; <https://purl.org/mhpo/prov/trustLevel> <https://purl.org/mhpo/prov/A>
+    ; <https://purl.org/mhpo/prov/fromImage> false
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel> .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/7aea553e07924694a68bf750.6/value> a oa:Annotation
+    ; oa:hasBody <https://openenergyplatform.org/id/mhpkg/value/9229cd47-3e1d-5ff0-83ab-7e6c4b9d085b>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/9229cd47-3e1d-5ff0-83ab-7e6c4b9d085b>
+    ; <https://purl.org/mhpo/prov/coordinate> "value"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; oa:hasTarget [ a oa:SpecificResource
+        ; oa:hasSource <https://openenergyplatform.org/id/mhpkg/prov/part/plan_kassel/table-5>
+        ; oa:hasSelector [ a oa:FragmentSelector ; dcterms:conformsTo <http://tools.ietf.org/rfc/rfc3778> ; rdf:value "page=12" ; oa:refinedBy [ a oa:TextQuoteSelector ; oa:exact "| Erdgas | 241.000 |" ] ] ] .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/7aea553e07924694a68bf750.6/aggregation> a oa:Annotation
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/9229cd47-3e1d-5ff0-83ab-7e6c4b9d085b>
+    ; <https://purl.org/mhpo/prov/coordinate> "aggregation"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; <https://purl.org/mhpo/prov/readingState> <https://purl.org/mhpo/prov/derived>
+    ; oa:hasBody <https://openenergyplatform.org/ontology/oeo/OEO_00140070>
+    ; <https://purl.org/mhpo/prov/wording> "kWh/a" .
+<https://openenergyplatform.org/id/mhpkg/prov/trust/plan_kassel/7aea553e07924694a68bf750.6> a <https://purl.org/mhpo/prov/TrustAssessment>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/9229cd47-3e1d-5ff0-83ab-7e6c4b9d085b>
+    ; <https://purl.org/mhpo/prov/trustLevel> <https://purl.org/mhpo/prov/A>
+    ; <https://purl.org/mhpo/prov/fromImage> false
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel> .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/7aea553e07924694a68bf750.7/value> a oa:Annotation
+    ; oa:hasBody <https://openenergyplatform.org/id/mhpkg/value/1d314d15-b886-57a7-8480-297c21789140>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/1d314d15-b886-57a7-8480-297c21789140>
+    ; <https://purl.org/mhpo/prov/coordinate> "value"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; oa:hasTarget [ a oa:SpecificResource
+        ; oa:hasSource <https://openenergyplatform.org/id/mhpkg/prov/part/plan_kassel/table-5>
+        ; oa:hasSelector [ a oa:FragmentSelector ; dcterms:conformsTo <http://tools.ietf.org/rfc/rfc3778> ; rdf:value "page=12" ; oa:refinedBy [ a oa:TextQuoteSelector ; oa:exact "| Erdgas | 241.000 |" ] ] ] .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/7aea553e07924694a68bf750.7/aggregation> a oa:Annotation
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/1d314d15-b886-57a7-8480-297c21789140>
+    ; <https://purl.org/mhpo/prov/coordinate> "aggregation"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; <https://purl.org/mhpo/prov/readingState> <https://purl.org/mhpo/prov/derived>
+    ; oa:hasBody <https://openenergyplatform.org/ontology/oeo/OEO_00140070>
+    ; <https://purl.org/mhpo/prov/wording> "kWh/a" .
+<https://openenergyplatform.org/id/mhpkg/prov/trust/plan_kassel/7aea553e07924694a68bf750.7> a <https://purl.org/mhpo/prov/TrustAssessment>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/1d314d15-b886-57a7-8480-297c21789140>
+    ; <https://purl.org/mhpo/prov/trustLevel> <https://purl.org/mhpo/prov/A>
+    ; <https://purl.org/mhpo/prov/fromImage> false
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel> .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/7aea553e07924694a68bf750.9/value> a oa:Annotation
+    ; oa:hasBody <https://openenergyplatform.org/id/mhpkg/value/433b3434-c978-525d-8358-e949fda2b641>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/433b3434-c978-525d-8358-e949fda2b641>
+    ; <https://purl.org/mhpo/prov/coordinate> "value"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; oa:hasTarget [ a oa:SpecificResource
+        ; oa:hasSource <https://openenergyplatform.org/id/mhpkg/prov/part/plan_kassel/table-5>
+        ; oa:hasSelector [ a oa:FragmentSelector ; dcterms:conformsTo <http://tools.ietf.org/rfc/rfc3778> ; rdf:value "page=12" ; oa:refinedBy [ a oa:TextQuoteSelector ; oa:exact "| Erdgas | 241.000 |" ] ] ] .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_kassel/7aea553e07924694a68bf750.9/aggregation> a oa:Annotation
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/433b3434-c978-525d-8358-e949fda2b641>
+    ; <https://purl.org/mhpo/prov/coordinate> "aggregation"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel>
+    ; <https://purl.org/mhpo/prov/readingState> <https://purl.org/mhpo/prov/derived>
+    ; oa:hasBody <https://openenergyplatform.org/ontology/oeo/OEO_00140070>
+    ; <https://purl.org/mhpo/prov/wording> "kWh/a" .
+<https://openenergyplatform.org/id/mhpkg/prov/trust/plan_kassel/7aea553e07924694a68bf750.9> a <https://purl.org/mhpo/prov/TrustAssessment>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/433b3434-c978-525d-8358-e949fda2b641>
+    ; <https://purl.org/mhpo/prov/trustLevel> <https://purl.org/mhpo/prov/A>
+    ; <https://purl.org/mhpo/prov/fromImage> false
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_kassel> .
+
+# plan_ohne_textebene
+<https://openenergyplatform.org/id/mhpkg/prov/run/plan_ohne_textebene> a prov:Activity
+    ; prov:used <https://openenergyplatform.org/id/mhpkg/heatplan/AGS_13074053_2025-09-01>
+    ; prov:generated <https://openenergyplatform.org/id/mhpkg/value/914d2192-f64a-57fd-8251-78255a3df04e> .
+<https://openenergyplatform.org/id/mhpkg/prov/part/plan_ohne_textebene/section-8> a doco:Section
+    ; dcterms:identifier "section/8"
+    ; dcterms:isPartOf <https://openenergyplatform.org/id/mhpkg/heatplan/AGS_13074053_2025-09-01> .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_ohne_textebene/cc0904bb23b7fc40630168e0/value> a oa:Annotation
+    ; oa:hasBody <https://openenergyplatform.org/id/mhpkg/value/914d2192-f64a-57fd-8251-78255a3df04e>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/914d2192-f64a-57fd-8251-78255a3df04e>
+    ; <https://purl.org/mhpo/prov/coordinate> "value"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_ohne_textebene>
+    ; oa:hasTarget [ a oa:SpecificResource
+        ; oa:hasSource <https://openenergyplatform.org/id/mhpkg/prov/part/plan_ohne_textebene/section-8>
+        ; oa:hasSelector [ a oa:FragmentSelector ; dcterms:conformsTo <http://tools.ietf.org/rfc/rfc3778> ; rdf:value "page=3" ; oa:refinedBy [ a oa:TextQuoteSelector ; oa:exact "Strom 55 GWh" ] ] ] .
+<https://openenergyplatform.org/id/mhpkg/prov/annotation/plan_ohne_textebene/cc0904bb23b7fc40630168e0/aggregation> a oa:Annotation
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/914d2192-f64a-57fd-8251-78255a3df04e>
+    ; <https://purl.org/mhpo/prov/coordinate> "aggregation"
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_ohne_textebene>
+    ; <https://purl.org/mhpo/prov/readingState> <https://purl.org/mhpo/prov/derived>
+    ; oa:hasBody <https://openenergyplatform.org/ontology/oeo/OEO_00140070>
+    ; <https://purl.org/mhpo/prov/wording> "kWh/a" .
+<https://openenergyplatform.org/id/mhpkg/prov/trust/plan_ohne_textebene/cc0904bb23b7fc40630168e0> a <https://purl.org/mhpo/prov/TrustAssessment>
+    ; <https://purl.org/mhpo/prov/about> <https://openenergyplatform.org/id/mhpkg/value/914d2192-f64a-57fd-8251-78255a3df04e>
+    ; <https://purl.org/mhpo/prov/trustLevel> <https://purl.org/mhpo/prov/B>
+    ; <https://purl.org/mhpo/prov/fromImage> false
+    ; prov:wasGeneratedBy <https://openenergyplatform.org/id/mhpkg/prov/run/plan_ohne_textebene>
+    ; <https://purl.org/mhpo/prov/trustReason> <https://purl.org/mhpo/prov/page_transcribed> .

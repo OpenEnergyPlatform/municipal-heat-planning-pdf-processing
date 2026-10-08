@@ -64,7 +64,7 @@ TRUST_LEVEL_DOC = {
 TRUST_REASONS = tuple(
     [f"^{r}$" for r in sorted(FLAG_REASONS.values())]
     + ["^conflict$", "^page_transcribed$",
-       r"^(exhausted|unbacked):[a-z_]+$"])
+       r"^(exhausted|unbacked|unanswered):[a-z_]+$"])
 
 # What a coordinate's state can be, and what each one is a finding ABOUT. The
 # distinction is the whole point of carrying seven of them instead of a null:
@@ -212,10 +212,11 @@ def _value_uri(parameter) -> dict:
 def _slot_properties(name: str, slot, doc: str) -> dict:
     """Every key one coordinate writes.
 
-    Seven, not one. The value is what the graph takes; the rest is what makes
-    the value re-checkable without the run that produced it: which state it
-    ended in, the document's own wording, the passage, the source that passage
-    came from and the window it was found in.
+    Not one. The value is what the graph takes; the rest is what makes the
+    value re-checkable without the run that produced it: which state it ended
+    in, the document's own wording, the passage, the source that passage came
+    from and the window it was found in, and for a year read as a base year
+    or a target year the row's own passage that names the state.
     """
     return {
         name: _slot_value(slot, doc),
@@ -247,7 +248,8 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"axis' own rule (own | local | any)."},
         f"{name}_window": {
             "type": "array",
-            "prefixItems": [{"enum": ["own", "retrieval", "rest", "frame"]},
+            "prefixItems": [{"enum": ["own", "retrieval", "rest", "frame",
+                                      "base_year", "target_year"]},
                             {"type": "integer"}],
             "minItems": 2, "maxItems": 2,
             "description": f"[stage, index] of the window '{name}' was read "
@@ -256,13 +258,38 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"the one that is not a window: the coordinate was "
                            f"read ONCE for the document and applied to this "
                            f"row, and the index is which of the document's "
-                           f"pairs it came from."},
+                           f"pairs it came from. `base_year`: the row's "
+                           f"passage names the document's base state by "
+                           f"word, and the index is the pair whose quote "
+                           f"prints the number. `target_year`: the same for "
+                           f"the document's target."},
+        f"{name}_link_quote": {
+            "type": "string", "minLength": MIN_QUOTE_CHARS,
+            "description": f"Only with window `base_year` or `target_year`: "
+                           f"the passage where the row names that state "
+                           f"('{name}_raw'). '{name}_quote' is then the "
+                           f"frame's passage that prints the number."},
+        f"{name}_link_source": {
+            **_owner(),
+            "description": f"Which source '{name}_link_quote' was found in."},
         f"{name}_seen": {
             "type": "string",
             "description": f"A wording the model noticed for '{name}' while "
                            f"answering 'not stated', or offered as an answer "
                            f"the closed list does not hold. Vocabulary review "
                            f"material, never evidence."},
+        f"{name}{fields.PRODUCER}": {
+            "type": "integer", "minimum": 0,
+            "description": f"Who re-read '{name}': the position of its entry "
+                           f"in the `producers` list of the stamp beside the "
+                           f"harvest. Written by a top-up for each coordinate "
+                           f"it re-read, and by a pass that appended a "
+                           f"parameter for each coordinate of the rows it "
+                           f"wrote, never by the harvest, so a missing "
+                           f"key means the harvest read it. A position the "
+                           f"stamp has no entry for (the stamps were "
+                           f"deleted) means nobody can say. Recorded and "
+                           f"never compared."},
     }
 
 
@@ -481,14 +508,15 @@ def harvest_schema(spec) -> dict:
                         "type": "object",
                         "description": "The claim as the model returned it. "
                                        "A sentinel carries _harvest_failed "
-                                       "with _why: the server was gone, the "
-                                       "model answered nothing, or the reply "
-                                       "did not fit and there was nothing "
-                                       "left to split.",
+                                       "with _why: the server was gone, it "
+                                       "answered 429 or 5xx, the model "
+                                       "answered nothing, or the reply did "
+                                       "not fit and there was nothing left "
+                                       "to split.",
                         "properties": {
                             "_harvest_failed": {"const": True},
-                            "_why": {"enum": ["unreachable", "no_answer",
-                                              "cut_off"]}}},
+                            "_why": {"enum": ["unreachable", "unserved",
+                                              "no_answer", "cut_off"]}}},
                     "owner": _owner(),
                 },
                 "required": ["kind", "parameter", "reason", "claim", "owner"],
@@ -502,7 +530,13 @@ def harvest_schema(spec) -> dict:
                                "serializer and a second reading is a later "
                                "pass, so neither is counted here. The "
                                "levels are a floor, and the graph side "
-                               "recomputes them.",
+                               "recomputes them. A pass that appended a "
+                               "parameter built this line again over every "
+                               "tuple and refusal the file holds; the "
+                               "refusals of the first pass are counted as "
+                               "they were stored and are not revisited, so "
+                               "a value refused then for want of that "
+                               "parameter stays in the count.",
                 "properties": {
                     "kind": {"const": "summary"},
                     "document_id": {"type": "integer"},
@@ -573,11 +607,14 @@ def stamp_schema() -> dict:
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"{BASE_ID}/stamp",
         "title": "docpipe extraction resume stamp",
-        "description": "Every key but `spec` makes the document stale, and "
-                       "it is harvested again, when it differs from the "
-                       "current run. `spec` is recorded so a reader can "
-                       "say which file a harvest came from, and is not "
-                       "compared. Withheld when the harvest did not happen. "
+        "description": "The parameter/, value/, axis/ and slot/ keys, and "
+                       "the sha256 in `document`, make the document stale "
+                       "when they differ from the current run: it is "
+                       "named in a warning, skipped, and harvested again "
+                       "with --force-stale. Every other key is recorded and "
+                       "never compared. `spec` is recorded so a reader can "
+                       "say which file a harvest came from. Withheld when "
+                       "the harvest did not happen. "
                        "The parameter/, value/, axis/ and slot/ keys record "
                        "which question changed, so a moving ontology costs "
                        "only the coordinates it touched rather than a full "
@@ -611,6 +648,55 @@ def stamp_schema() -> dict:
                                        "the same result as one read under "
                                        "another. Empty when anchors were "
                                        "off."},
+            "docpipe": {"type": "string",
+                        "description": "The version that wrote this stamp. "
+                                       "Recorded and never compared."},
+            "document": {
+                "type": "object",
+                "description": "Which bytes were read: the sha256 and the "
+                               "size of the file as the database recorded "
+                               "them. Absent for a database that records "
+                               "none. Another sha256 than this one makes "
+                               "the document stale, as a changed ontology "
+                               "key does. The size is recorded and never "
+                               "compared, and a stamp without this key is "
+                               "not compared at all.",
+                "properties": {"sha256": sha,
+                               "bytes": {"type": ["integer", "null"]}},
+                "required": ["sha256"], "additionalProperties": False},
+            "producers": {
+                "type": "array",
+                "description": "Every pass that wrote into this harvest, in "
+                               "order: the harvest, then each top-up that "
+                               "rewrote the file, each pass that appended a "
+                               "new parameter, each remap that carried a "
+                               "key forward and each review that changed a "
+                               "row. Entries are only ever added, so a "
+                               "position is stable: a coordinate a top-up "
+                               "re-read points at its entry with "
+                               "`<axis>_producer`. `model` above names the "
+                               "first only. Recorded and never compared.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "pass": {"type": "string"},
+                        "model": {"type": ["string", "null"]},
+                        "provider": {"type": "string"},
+                        "prompts": {"type": "object"},
+                        "docpipe": {"type": "string"},
+                        "utc": {"type": "string"},
+                        "parameters": {
+                            "type": "array", "items": {"type": "string"},
+                            "description": "A pass that appended parameters "
+                                           "to a stored harvest: their "
+                                           "URIs."},
+                        "frame": {
+                            "type": "string",
+                            "description": "A pass that appended parameters "
+                                           "to a stored harvest: where the "
+                                           "frame's pairs of the document "
+                                           "came from."}},
+                    "required": ["pass"], "additionalProperties": False}},
             "page_text_transcribed": {
                 "type": ["integer", "null"],
                 "description": "How many pages of this document a model read "
@@ -620,7 +706,8 @@ def stamp_schema() -> dict:
         },
         "patternProperties": {
             "^extraction/(harvest|queries|anchors|rows|field|phrase|frame)$":
-                {**sha, "description": "sha256 of the prompt file"},
+                {**sha, "description": "sha256 of the prompt file; `harvest` "
+                                       "is in stamps of an older release"},
             "^question_text/[^/]+$": {
                 "type": "array", "items": {"type": "string"},
                 "description": "The sentence THIS document was searched "
@@ -642,10 +729,13 @@ def stamp_schema() -> dict:
                                "keys of their own."},
             "^value/[^/]+$": {
                 **sha,
-                "description": "The list a category parameter answers from. "
-                               "Its own key, because a moved option can be "
-                               "re-mapped from the wording the harvest kept "
-                               "while a rewritten question cannot."},
+                "description": "The list a category parameter answers from: "
+                               "its classes and their spellings, which is "
+                               "all the rows request shows the model. Not "
+                               "their definitions. Its own key, because a "
+                               "moved option can be re-mapped from the "
+                               "wording the harvest kept while a rewritten "
+                               "question cannot."},
             "^slot/parameter$": {
                 **sha,
                 "description": "The one coordinate that belongs to no "
@@ -668,9 +758,9 @@ def stamp_schema() -> dict:
                                "with its spellings and its definitions. "
                                "Everything the model sees for this axis, and "
                                "nothing else."}},
-        "required": ["spec", "model", "anchors", "extraction/harvest",
-                     "extraction/queries", "extraction/anchors",
-                     "extraction/rows", "extraction/field"],
+        "required": ["spec", "model", "anchors", "extraction/queries",
+                     "extraction/anchors", "extraction/rows",
+                     "extraction/field"],
         "additionalProperties": False,
     }
 
@@ -678,9 +768,12 @@ def stamp_schema() -> dict:
 def trace_schema() -> dict:
     """One line of <name>.trace.jsonl: one event, never an aggregate."""
     owner = _owner()
+    # `via_base`: of `filled`, the years read as one of the plan's base years
+    # by the word the row's passage uses for its state. `via_target`: the
+    # same for the plan's target years.
     counts = {k: {"type": "integer"} for k in
               ("filled", "unquoted", "unbacked", "unstated", "raw_missing",
-               "raw_foreign")}
+               "raw_foreign", "via_base", "via_target")}
     by_field = {"type": "object", "additionalProperties": {"type": "integer"}}
     kinds = {
         "plan": {"rank": {"type": ["integer", "null"]},
@@ -724,6 +817,9 @@ def trace_schema() -> dict:
                                      "frame"]},
                   "attempt": {"type": "integer"},
                   "parameter": {"type": ["string", "null"]},
+                  # How many batches the rows of the request came from: one
+                  # for a batch's own stage, the document's for its search.
+                  "batches": {"type": "integer"},
                   "open": {"type": "integer"}, "reply": {"type": "boolean"},
                   "shown": {"type": "array", "items": owner},
                   "filled_by": by_field, "unbacked_by": by_field,
@@ -734,11 +830,20 @@ def trace_schema() -> dict:
                   "windows": {"type": "integer"}, "rows": {"type": "integer"},
                   "combed": {"type": "boolean"},
                   "retried": {"type": "integer"}, "asked": {"type": "integer"},
-                  "exhausted": {"type": "integer"}, **counts},
+                  "exhausted": {"type": "integer"},
+                  # What the sweep covered: a batch's own stage alone (`own`),
+                  # the search of a document's open rows after the own
+                  # stages (`document`), or every stage for one batch
+                  # (`batch`), which is what a pass over a stored harvest
+                  # walks. `batches` is how many batches its rows came from.
+                  "scope": {"enum": ["own", "document", "batch"]},
+                  "batches": {"type": "integer"}, **counts},
         "drop": {"slot": {"type": "string"},
                  "field": {"type": ["string", "null"]},
                  "window": {"type": "integer"},
                  "attempt": {"type": "integer"},
+                 # A label of a search over several batches names no batch.
+                 "batches": {"type": "integer"},
                  "row": {"type": "string", "pattern": "^R[0-9]+$"},
                  "why": {"enum": DROP_REASONS},
                  # What was answered: the model's value and wording as they
@@ -761,7 +866,8 @@ def trace_schema() -> dict:
                   "finish": {"type": ["string", "null"]},
                   "status": {"type": ["integer", "string", "null"]},
                   "detail": {"type": "string"},
-                  "why": {"enum": ["unreachable", "no_answer", "cut_off"]},
+                  "why": {"enum": ["unreachable", "unserved", "no_answer",
+                                   "cut_off"]},
                   "owner": owner,
                   "sources": {"type": "array", "items": owner},
                   "ms": {"type": "integer"}},
@@ -790,7 +896,9 @@ def trace_schema() -> dict:
     loose = {"detail", "status", "finish", "why", "sources", "ms", "slot",
              "prompt_tokens", "completion_tokens", "filled_by", "unbacked_by",
              "field", "raw_missing", "raw_foreign", "cause", "owner",
-             "rejected", "given", "raw", "quote"}
+             "rejected", "given", "raw", "quote", "via_base", "via_target",
+             "scope",
+             "batches"}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"{BASE_ID}/trace-record",
@@ -820,20 +928,44 @@ def serialize(schema: dict) -> str:
                       sort_keys=True) + "\n"
 
 
+def _profile_dir(profile_name: str) -> Path:
+    """Where a profile lives: wherever profiles are found (a project's own
+    directory, the search path), else the checkout's `profiles/`."""
+    from docpipe.profile import load_profile
+    try:
+        return Path(load_profile(profile_name).package_dir)
+    except (LookupError, ImportError, ValueError):  # not a profile yet
+        return (Path(__file__).resolve().parent.parent.parent / "profiles"
+                / profile_name)
+
+
 def schema_path(profile_name: str) -> Path:
-    return (Path(__file__).resolve().parent.parent.parent / "profiles"
-            / profile_name / SCHEMA_NAME)
+    return _profile_dir(profile_name) / SCHEMA_NAME
+
+
+def _spec_file(profile_name: str) -> Path:
+    """The spec the run reads: the one the profile names
+    (`extraction.SPEC_PATH`), wherever it lies. For a name that is no
+    profile yet, the file where a profile keeps it."""
+    from docpipe.profile import load_profile
+    try:
+        named = load_profile(profile_name).component("extraction",
+                                                     "SPEC_PATH")
+    except (LookupError, ImportError, ValueError):
+        named = None
+    return (Path(named) if named
+            else _profile_dir(profile_name) / "extraction_spec.json")
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("profile", help="profile name, e.g. kwp")
     parser.add_argument("--write", action="store_true",
-                        help=f"write profiles/<profile>/{SCHEMA_NAME}")
+                        help=f"write {SCHEMA_NAME} into the profile's "
+                             f"directory")
     args = parser.parse_args(argv)
 
-    spec_file = (Path(__file__).resolve().parent.parent.parent / "profiles"
-                 / args.profile / "extraction_spec.json")
+    spec_file = _spec_file(args.profile)
     if not spec_file.is_file():
         print(f"no spec: {spec_file}")
         return 1

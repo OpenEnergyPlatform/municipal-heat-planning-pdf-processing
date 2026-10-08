@@ -25,6 +25,13 @@ TITLE_EXCLUDE_PREFIXES = (
     "tab.",
 )
 
+# What opens a caption (docpipe/captions.py): a word, a number, a colon.
+# NOT a word list; the number is what carries it: "Hinweis:" is a note,
+# "Tabelle 17:" is a caption. Each pattern carries its own anchor.
+CAPTION_START = (
+    r"(?:^|(?<=[\s\]]))([A-ZÄÖÜ][A-Za-zÄÖÜäöüß.]{2,14}\s+\d+(?:[-.–]\d+)*\s*:)",
+)
+
 # A caption is a label, not a paragraph. Measured on this corpus: 8 words
 # median, 24 at the 99th percentile, 205 captions past 40 words, longest 156.
 # Above this the nearest-text-block fallback adopts whole prose paragraphs —
@@ -35,6 +42,23 @@ CAPTION_MAX_WORDS = 45
 # deterministic directory removal in Stage 3.
 DIRECTORY_FIGTAB_WORDS = ("Abbildung", "Tabelle", r"Abb\.", r"Tab\.")
 
+# What a table of contents or a list of figures calls itself (Inhaltsverzeichnis,
+# Abbildungsverzeichnis): such a title lowers the bar for the directory drop.
+# The four words stage 3 has always used, so no decision moves.
+DIRECTORY_TITLE_WORDS = ("inhalt", "verzeichnis", "contents", "directory")
+
 # Bibliography titles → routed to the Stage-4 [LITERATURE] BibTeX path rather
 # than dropped as a directory listing.
 BIBLIOGRAPHY_TITLE_WORDS = ("literatur", "quellen", "referenz", "bibliograf")
+
+
+# The one line of the user's turn when a page without a text layer is read
+# by the vision model; the system prompt is prompts/preprocessing/
+# page_transcribe.md.
+PAGE_REQUEST = "Seite {page}. Gib den Text dieser Seite zurück."
+
+# What the text before a document's first heading is called, and a part of a
+# split section that has no title of its own. Stored with the sections, shown
+# in a citation and read by the model.
+FRONT_SECTION_TITLE = "Dokument"
+PART_TITLE = "Abschnitt"

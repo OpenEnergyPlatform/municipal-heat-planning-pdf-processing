@@ -15,6 +15,8 @@ No model, no GPU, no index: the sweeper and the source fetcher are stubs.
 import json
 from pathlib import Path
 
+import pytest
+
 from docpipe.extraction import fields, runner, topup
 from docpipe.extraction.pipeline import Source
 from docpipe.extraction.spec import load as load_spec
@@ -137,9 +139,9 @@ def _harvest(tmp_path, rows, stamp=None, name="plan"):
 def _stamp(**overrides):
     from docpipe.extraction.spec import fingerprints
     stamp = {"spec": "spec-sha", "model": "m", "anchors": "a",
-             "extraction/harvest": "h", "extraction/queries": "q",
-             "extraction/anchors": "an", "extraction/rows": "r",
-             "extraction/field": "f", **fingerprints(SPEC)}
+             "extraction/queries": "q", "extraction/anchors": "an",
+             "extraction/rows": "r", "extraction/field": "f",
+             **fingerprints(SPEC)}
     stamp.update(overrides)
     return stamp
 
@@ -212,6 +214,54 @@ def test_a_changed_model_or_prompt_leaves_the_document_current(tmp_path):
 def test_nothing_is_asked_and_nothing_is_written_when_the_stamp_is_current(
         tmp_path):
     path = _harvest(tmp_path, [_row(), _summary()], stamp=_stamp())
+    before = path.read_bytes()
+    calls = []
+    stats = topup.run(tmp_path, SPEC, _stamp(), _deps(sweep=_sweeper(calls=calls)))
+    assert calls == [] and stats["already current"] == 1
+    assert path.read_bytes() == before
+
+
+def _pdf(sha):
+    return {"sha256": sha * 64, "bytes": 10}
+
+
+def test_the_run_key_set_a_top_up_carries_has_no_pdf_in_it():
+    """The PDF is compared per document by `already_done`. Were it part of
+    the set a top-up and a remap carry forward, they would earn it from the
+    database without having read a page."""
+    assert runner.DOCUMENT_KEY not in runner._stamp_current("sha", "a", SPEC)
+
+
+def test_a_top_up_neither_earns_nor_loses_the_pdf_key(tmp_path, monkeypatch):
+    """The database may hold another file under this name by now. The top-up
+    re-reads one coordinate and does not read a page of it: the stamp keeps
+    saying which PDF the rest of the document was read from."""
+    monkeypatch.setattr(runner, "DOCUMENT_CONTENT", {"plan": _pdf("b")})
+    kept = _harvest(tmp_path, [_row(), _summary()], name="kept",
+                    stamp=_stamp(document=_pdf("a"),
+                                 **{f"axis/{PARAMETER}/sector": "moved"}))
+    never = _harvest(tmp_path, [_row(), _summary()], name="never",
+                     stamp=_stamp(**{f"axis/{PARAMETER}/sector": "moved"}))
+    deps = _deps(sweep=_sweeper(
+        {"sector": {"value": "Haushalte", "raw": "Haushalte"}}))
+    stats = topup.run(tmp_path, SPEC, _stamp(), deps)
+    assert stats["stamps carried forward"] == 2
+    assert _rows(kept)[0]["sector_raw"] == "Haushalte"
+    stored = json.loads((tmp_path / "kept.stamp.json").read_text())
+    assert stored["document"] == _pdf("a")
+    assert runner.stale(tmp_path / "kept.stamp.json", _stamp()) == []
+    assert "document" not in json.loads(
+        (tmp_path / "never.stamp.json").read_text())
+
+
+def test_a_document_whose_only_difference_is_its_pdf_is_not_a_top_up(tmp_path,
+                                                                    monkeypatch):
+    """Another file is not a question that moved. Nothing a top-up re-reads
+    would answer it, so the file is left as it is and --force-stale is the
+    way to read the new one."""
+    monkeypatch.setattr(runner, "DOCUMENT_CONTENT", {"plan": _pdf("b")})
+    path = _harvest(tmp_path, [_row(), _summary()],
+                    stamp=_stamp(document=_pdf("a")))
     before = path.read_bytes()
     calls = []
     stats = topup.run(tmp_path, SPEC, _stamp(), _deps(sweep=_sweeper(calls=calls)))
@@ -641,6 +691,48 @@ def test_one_file_is_read_rewritten_and_stamped_in_one_place(tmp_path):
     again = topup.top_up_file(path, SPEC, _stamp(), _deps())
     assert again["already current"] == 1 and again["rows"] == 0
 
+
+def test_a_top_up_that_lost_a_request_keeps_the_old_stamp(tmp_path):
+    """A coordinate whose request ended on a 429 or a 5xx was not re-read.
+    The sweep cannot tell, so the stamp carried forward would say the file
+    is current, and no later top-up would ask again."""
+    from docpipe.extraction import runner
+    moved = _stamp(**{f"axis/{PARAMETER}/sector": "moved"})
+    path = _harvest(tmp_path, [_row(), _summary()], stamp=moved)
+    stamp_path = tmp_path / "plan.stamp.json"
+
+    read = _sweeper({"sector": {"value": "Haushalte", "raw": "Haushalte"}})
+
+    def lossy(batch, rows, slots, anchor_id=""):
+        # One window read the coordinate, the request for another ended on a
+        # 503: everything the sweep reports says the coordinate is settled.
+        runner.UNSERVED.note(7)
+        return read(batch, rows, slots, anchor_id)
+
+    runner.UNSERVED.clear()
+    try:
+        stats = topup.top_up_file(path, SPEC, _stamp(), _deps(sweep=lossy))
+        assert stats["rows"] == 1, "the sweep did read the coordinate"
+        assert stats["stamps carried forward"] == 0
+        assert stats["stamps left, a request ended on 429 or 5xx"] == 1
+        stored = json.loads(stamp_path.read_text(encoding="utf-8"))
+        # Every key that decides is as it was. The list of who wrote is not a
+        # key that decides, and it has the pass: the rows were written, and
+        # the coordinate that was read points at it.
+        assert {k: v for k, v in stored.items() if k != "producers"} == moved
+        assert [p["pass"] for p in stored["producers"]] == ["harvest", "top-up"]
+        assert _rows(path)[0]["sector_producer"] == 1
+
+        again = topup.top_up_file(path, SPEC, _stamp(), _deps(
+            sweep=_sweeper({"sector": {"value": "Haushalte",
+                                       "raw": "Haushalte"}})))
+        assert again["stamps carried forward"] == 1, (
+            "the next top-up asks again, and an earlier loss is not held "
+            "against it")
+    finally:
+        runner.UNSERVED.clear()
+
+
 def test_the_passages_a_harvest_named_are_fetched_back_the_way_it_read_them(
         tmp_path):
     """`make_owner_sources` rebuilds a Source from the address a harvest
@@ -739,9 +831,9 @@ def test_a_dynamic_axis_is_swept_against_this_documents_own_list(tmp_path):
                "refusals": 0, "levels": {"A": 1, "B": 0, "C": 0},
                "reasons": {}, "image_origin": 0}
     base = {"spec": "s", "model": "m", "anchors": "a",
-            "extraction/harvest": "h", "extraction/queries": "q",
-            "extraction/anchors": "an", "extraction/rows": "r",
-            "extraction/field": "f", **fingerprints(other)}
+            "extraction/queries": "q", "extraction/anchors": "an",
+            "extraction/rows": "r", "extraction/field": "f",
+            **fingerprints(other)}
     moved = {**base, "axis/scenario_region/scenario": "moved"}
     lists = {"scenario": {"EN_NPi2020_300f": ["Current Policies", "CurPol"]},
              "scenario_region": {region: ["Germany"]}}
@@ -815,3 +907,307 @@ def test_a_topped_up_document_is_current_and_an_untouched_one_is_not(
     assert after["sector_raw"] == "Haushalte"
     assert after["sector"] != _row()["sector"]
     assert runner.stale(tmp_path / "offen.stamp.json", current) == [f"value/{PARAMETER}"],         "the document the pass had to skip is still stale"
+
+
+# ---------------------------------------------------------------------------
+# A re-sweep of the year knows the plan's base years (audit 2026-09-23)
+# ---------------------------------------------------------------------------
+
+def test_the_base_years_are_rebuilt_from_the_frames_own_readings():
+    """The harvest read a "Basisjahr" column against the frame's base years;
+    the top-up rebuilt its batches without them and could not. The pairs are
+    recoverable from the file: every row the frame dated carries the pair's
+    index in its window, with the quote and source the year was read by."""
+    frame = fields.frame_slots(SPEC, ("scenario", "year"))
+    tuples = [
+        _row(scenario="status_quo", scenario_window=["frame", 0],
+             year=2022, year_quote="Bilanzjahr 2022",
+             year_source=["section", 5], year_window=["frame", 0]),
+        # The same pair on a second row: one entry.
+        _row(scenario="status_quo", scenario_window=["frame", 0],
+             year=2022, year_quote="Bilanzjahr 2022",
+             year_source=["section", 5], year_window=["frame", 0]),
+        # A scenario of the plan, not its own state.
+        _row(scenario="target", scenario_window=["frame", 1],
+             year=2040, year_quote="Zielszenario 2040",
+             year_source=["section", 6], year_window=["frame", 1]),
+        # Read in the sweep, not by the frame: not a base year.
+        _row(scenario="status_quo", scenario_window=["own", 1],
+             year=2019, year_quote="Stand 2019",
+             year_source=["table", 1], year_window=["own", 1]),
+    ]
+    base = {"base": {"scenario": "status_quo"}}
+    got = topup.named_years_of(tuples, frame, base)
+    assert [(b["state"], b["year"], b["quote"], b["source"], b["index"])
+            for b in got] == [
+        ("base", 2022, "Bilanzjahr 2022", ["section", 5], 0)]
+    assert topup.named_years_of(tuples, frame, None) == ()
+    assert topup.named_years_of(tuples, frame, {"base": None}) == ()
+    assert topup.named_years_of(tuples, None, base) == ()
+    # A profile that names a target gets the target's years as well, from
+    # the pair the frame read for it.
+    both = dict(base, target={"scenario": "target"})
+    assert [(b["state"], b["year"], b["quote"], b["index"])
+            for b in topup.named_years_of(tuples, frame, both)] == [
+        ("base", 2022, "Bilanzjahr 2022", 0),
+        ("target", 2040, "Zielszenario 2040", 1)]
+
+
+def test_a_re_sweep_hands_the_base_years_to_every_batch(tmp_path):
+    calls = []
+    path = _harvest(tmp_path, [
+        _row(scenario="status_quo", scenario_window=["frame", 0],
+             year=2022, year_quote="Bilanzjahr 2022",
+             year_source=["section", 5], year_window=["frame", 0]),
+        _summary()], stamp=_stamp(**{f"axis/{PARAMETER}/sector": "moved"}))
+    frame = fields.frame_slots(SPEC, ("scenario", "year"))
+    topup.run(tmp_path, SPEC, _stamp(), _deps(
+        sweep=_sweeper({"sector": {"value": "Haushalte", "raw": "Haushalte"}},
+                       calls),
+        frame_axes=frame, year_states={"base": {"scenario": "status_quo"}}))
+    assert calls, "the coordinate was swept"
+    assert [b["year"] for b in calls[0]["batch"].bases] == [2022]
+    assert _rows(path)[0]["sector_raw"] == "Haushalte"
+
+
+# ---------------------------------------------------------------------------
+# Who re-read a coordinate
+#
+# Promised: a coordinate a top-up re-reads points at its entry of the stamp's
+# producers list with `<axis>_producer`, AND the top-up always enters the list,
+# also when it earned no stamp key, AND a coordinate it did not re-read keeps
+# what it had.
+# ---------------------------------------------------------------------------
+HARVEST_ENTRY = {"pass": "harvest", "model": "first-model"}
+
+
+def _producers(tmp_path, name="plan"):
+    return json.loads((tmp_path / f"{name}.stamp.json")
+                      .read_text(encoding="utf-8")).get("producers")
+
+
+def _moved(*axes, **more):
+    return _stamp(**{f"axis/{PARAMETER}/{a}": "moved" for a in axes},
+                  **more)
+
+
+def test_a_coordinate_a_top_up_re_reads_points_at_the_entry_it_made(tmp_path):
+    path = _harvest(tmp_path, [_row(), _summary()],
+                    stamp=_moved("sector", producers=[HARVEST_ENTRY]))
+    topup.run(tmp_path, SPEC, _stamp(), _deps(sweep=_sweeper(
+        {"sector": {"value": "Haushalte", "raw": "Haushalte"}})))
+    row = _rows(path)[0]
+    producers = _producers(tmp_path)
+    assert [p["pass"] for p in producers] == ["harvest", "top-up"]
+    assert producers[1]["model"] == runner.LLM_MODEL
+    assert row["sector_producer"] == 1
+    who, index, entry = fields.reader_of(row, "sector", producers)
+    assert (who, index, entry["pass"]) == (fields.BY_PASS, 1, "top-up")
+    # every other coordinate was read by the harvest, and says nothing
+    others = [k for k in row
+              if k.endswith("_producer") and k != "sector_producer"]
+    assert others == []
+    assert fields.reader_of(row, "carrier", producers)[0] == fields.BY_HARVEST
+
+
+def test_a_stamp_from_before_the_list_gets_its_harvest_first(tmp_path):
+    """The position is the one the list will really have, or the pointer
+    would name the harvest's entry for the top-up's answer."""
+    path = _harvest(tmp_path, [_row(), _summary()], stamp=_moved("sector"))
+    assert "producers" not in json.loads(
+        (tmp_path / "plan.stamp.json").read_text())
+    topup.run(tmp_path, SPEC, _stamp(), _deps(sweep=_sweeper(
+        {"sector": {"value": "Haushalte", "raw": "Haushalte"}})))
+    producers = _producers(tmp_path)
+    assert producers[0] == {"pass": "harvest", "model": "m"}
+    assert producers[1]["pass"] == "top-up"
+    assert _rows(path)[0]["sector_producer"] == 1
+
+
+def test_the_top_up_enters_the_list_when_it_earns_no_stamp_key(tmp_path):
+    """One of two rows stays unread, so the key is not written forward. The
+    row that was read still points at the pass, which has to be in the list."""
+    def one_row_only(batch, rows, slots, anchor_id=""):
+        first = rows[0]
+        for slot in slots:
+            first.claim[slot.name] = "Haushalte"
+            first.claim[f"{slot.name}_state"] = fields.READ
+            first.claim[f"{slot.name}_raw"] = "Haushalte"
+            first.claim[f"{slot.name}_quote"] = QUOTE
+            first.claim[f"{slot.name}_source"] = ["table", 1]
+        return {}
+
+    path = _harvest(tmp_path, [_row(), _row(quote=QUOTE + " "), _summary()],
+                    stamp=_moved("sector", producers=[HARVEST_ENTRY]))
+    stats = topup.run(tmp_path, SPEC, _stamp(), _deps(sweep=one_row_only))
+    assert stats["stamps carried forward"] == 0, "the key was not earned"
+    assert runner.stale(tmp_path / "plan.stamp.json", _stamp()) \
+        == [f"axis/{PARAMETER}/sector"]
+    first, second = _rows(path)[:2]
+    producers = _producers(tmp_path)
+    assert [p["pass"] for p in producers] == ["harvest", "top-up"]
+    assert first["sector_producer"] == 1 and first["sector_raw"] == "Haushalte"
+    # the row the pass could not read keeps its old reading and no pointer
+    assert "sector_producer" not in second
+    assert second["sector_raw"] == "Gewerbe"
+
+
+def test_a_coordinate_whose_old_reading_is_put_back_keeps_its_old_pointer(
+        tmp_path):
+    older = {"pass": "top-up", "model": "older-model"}
+    path = _harvest(tmp_path, [_row(sector_producer=1), _summary()],
+                    stamp=_moved("sector", producers=[HARVEST_ENTRY, older]))
+    topup.run(tmp_path, SPEC, _stamp(), _deps(sweep=_sweeper()))
+    row = _rows(path)[0]
+    assert row["sector_raw"] == "Gewerbe", "nothing better was read"
+    assert row["sector_producer"] == 1, "so it is still the older pass's"
+    assert len(_producers(tmp_path)) == 3, "the pass is in the list all the same"
+
+
+def test_a_coordinate_a_spec_gained_points_at_the_pass_that_wrote_it(tmp_path):
+    """The stored rows carry nothing for the axis, so there is no old block to
+    put back and no old pointer: what stands is this pass's, answered or not,
+    and a coordinate without the key would read as the harvest's."""
+    def without_sector():
+        row = _row()
+        for key in [k for k in row if k.startswith("sector")]:
+            row.pop(key)
+        return row
+
+    for answers, state in (
+            ({"sector": {"value": "Haushalte", "raw": "Haushalte"}},
+             fields.READ),
+            (None, fields.UNANSWERED)):
+        path = _harvest(tmp_path, [without_sector(), _summary()],
+                        stamp=_moved("sector", producers=[HARVEST_ENTRY]),
+                        name=state)
+        topup.run(tmp_path, SPEC, _stamp(), _deps(sweep=_sweeper(answers)))
+        row = _rows(path)[0]
+        assert row["sector_state"] == state
+        assert row["sector_producer"] == 1, state
+        assert [p["pass"] for p in _producers(tmp_path, state)] \
+            == ["harvest", "top-up"]
+
+
+def test_a_second_top_up_points_at_its_own_entry_and_leaves_the_first(tmp_path):
+    path = _harvest(tmp_path, [_row(), _summary()],
+                    stamp=_moved("sector", producers=[HARVEST_ENTRY]))
+    topup.run(tmp_path, SPEC, _stamp(), _deps(sweep=_sweeper(
+        {"sector": {"value": "Haushalte", "raw": "Haushalte"}})))
+    stamp = json.loads((tmp_path / "plan.stamp.json").read_text())
+    stamp[f"axis/{PARAMETER}/carrier"] = "moved"
+    (tmp_path / "plan.stamp.json").write_text(json.dumps(stamp))
+    topup.run(tmp_path, SPEC, _stamp(), _deps(sweep=_sweeper(
+        {"carrier": {"value": "Erdgas", "raw": "Erdgas"}})))
+    row = _rows(path)[0]
+    assert (row["sector_producer"], row["carrier_producer"]) == (1, 2)
+    assert [p["pass"] for p in _producers(tmp_path)] \
+        == ["harvest", "top-up", "top-up"]
+
+
+def test_a_derived_coordinate_a_top_up_writes_points_at_it_too(tmp_path):
+    """Nobody asked a model, but the pass wrote it: left without the key it
+    would read as the harvest's."""
+    parameter = SPEC.by_uri[PARAMETER]
+    derived = next(s for s in fields.axis_slots(parameter) if s.derive)
+    path = _harvest(tmp_path, [_row(**{derived.name: "OEO_00000000",
+                                       f"{derived.name}_state": fields.DERIVED}),
+                               _summary()],
+                    stamp=_stamp(**{f"axis/{PARAMETER}/{derived.name}": "x",
+                                    "producers": [HARVEST_ENTRY]}))
+    topup.run(tmp_path, SPEC, _stamp(), _deps(sweep=_sweeper()))
+    row = _rows(path)[0]
+    assert row[f"{derived.name}_producer"] == 1
+    assert [p["pass"] for p in _producers(tmp_path)] == ["harvest", "top-up"]
+
+
+def test_a_top_up_that_re_reads_nothing_enters_nothing(tmp_path):
+    """Blocked, or nothing moved: the file is not written and no entry says
+    otherwise."""
+    for name, stamp in (
+            ("blocked", _stamp(**{f"parameter/{PARAMETER}": "moved",
+                                  "producers": [HARVEST_ENTRY]})),
+            ("current", _stamp(producers=[HARVEST_ENTRY]))):
+        path = _harvest(tmp_path, [_row(), _summary()], stamp=stamp, name=name)
+        before = path.read_bytes()
+        topup.top_up_file(path, SPEC, _stamp(), _deps(sweep=_sweeper(
+            {"sector": {"value": "Haushalte", "raw": "Haushalte"}})))
+        assert path.read_bytes() == before, name
+        assert _producers(tmp_path, name) == [HARVEST_ENTRY], name
+
+
+def test_a_request_that_ended_on_a_5xx_still_leaves_the_pointers_an_entry(
+        tmp_path):
+    """The rows were written and the coordinate that was read points at the
+    pass, so the pass is in the list although the stamp keys stay."""
+    moved = _moved("sector", producers=[HARVEST_ENTRY])
+    path = _harvest(tmp_path, [_row(), _summary()], stamp=moved)
+    read = _sweeper({"sector": {"value": "Haushalte", "raw": "Haushalte"}})
+
+    def lossy(batch, rows, slots, anchor_id=""):
+        runner.UNSERVED.note(7)
+        return read(batch, rows, slots, anchor_id)
+
+    runner.UNSERVED.clear()
+    try:
+        stats = topup.top_up_file(path, SPEC, _stamp(), _deps(sweep=lossy))
+    finally:
+        runner.UNSERVED.clear()
+    assert stats["stamps left, a request ended on 429 or 5xx"] == 1
+    assert _rows(path)[0]["sector_producer"] == 1
+    assert [p["pass"] for p in _producers(tmp_path)] == ["harvest", "top-up"]
+
+
+PRODUCERS = [HARVEST_ENTRY, {"pass": "top-up", "model": "second-model"}]
+
+
+@pytest.mark.parametrize("key, who", [
+    (None, fields.BY_HARVEST),              # no key: the harvest wrote it
+    (0, fields.BY_PASS),
+    (1, fields.BY_PASS),
+    (2, fields.BY_UNKNOWN),                 # past the list
+    (-1, fields.BY_UNKNOWN),
+    (True, fields.BY_UNKNOWN),              # a flag is no position
+    ("1", fields.BY_UNKNOWN),
+    (1.0, fields.BY_UNKNOWN),
+    ([1], fields.BY_UNKNOWN),
+])
+def test_a_missing_key_reads_as_the_harvest_and_a_dangling_one_as_unknown(
+        key, who):
+    row = {} if key is None else {"sector_producer": key}
+    assert fields.reader_of(row, "sector", PRODUCERS)[0] == who
+
+
+@pytest.mark.parametrize("producers", [None, [], "top-up", {"1": {}},
+                                       [HARVEST_ENTRY, "not an entry"]])
+def test_a_pointer_into_a_list_that_is_not_there_reads_as_unknown(producers):
+    """`--recheck` deletes the stamps. The rows keep their pointers, and a
+    pointer without its list is not the harvest."""
+    assert fields.reader_of({"sector_producer": 1}, "sector", producers)[0] \
+        == fields.BY_UNKNOWN
+
+
+def test_a_pointer_survives_a_recheck_and_reads_as_unknown_afterwards(
+        tmp_path):
+    from docpipe.extraction import provenance, recheck
+    path = _harvest(tmp_path, [_row(sector_producer=1), _summary()],
+                    stamp=_stamp(producers=PRODUCERS))
+    stamp = provenance.read_stamp(tmp_path, "plan")
+    assert fields.reader_of(_rows(path)[0], "sector",
+                            stamp.get("producers"))[0] == fields.BY_PASS
+    recheck.run(tmp_path, SPEC, drop_stamps=True)
+    assert not (tmp_path / "plan.stamp.json").exists(), "the stamp is gone"
+    row = _rows(path)[0]
+    assert row["sector_producer"] == 1, "and the row still points"
+    stamp = provenance.read_stamp(tmp_path, "plan")
+    assert fields.reader_of(row, "sector", stamp.get("producers"))[0] \
+        == fields.BY_UNKNOWN
+
+
+def test_every_key_a_coordinate_owns_is_taken_off_with_it():
+    """A pointer left behind by `reopen` would be a pointer for an answer
+    nobody gave."""
+    assert "_producer" in topup.SLOT_KEYS
+    row = _row(sector_producer=1)
+    topup.reopen(row, _slot("sector"))
+    assert "sector_producer" not in row

@@ -211,3 +211,16 @@ def test_a_logged_dict_is_read_as_it_was_when_it_was_logged():
             "kg: x: 1 value(s) serialized, skipped {'year': 1}")
     finally:
         log.removeHandler(handler)
+
+
+def test_it_says_it_measures_one_harvest_and_where_two_are_compared():
+    """It took one directory and one database and its docstring said that
+    running it twice was a comparison. Two harvests are held against each
+    other by `docpipe evaluate --diff`, and the pointer has to be to a flag
+    that is there."""
+    from docpipe.extraction import evaluate
+    said = " ".join(hc.__doc__.split())
+    assert "the diff is the answer" not in said
+    assert "does not compare two harvests" in said
+    assert "docpipe evaluate NEW_DIR --diff OLD_DIR" in said
+    assert "--diff" in evaluate._parser().format_help()

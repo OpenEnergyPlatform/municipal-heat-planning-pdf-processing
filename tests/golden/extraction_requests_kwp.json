@@ -1,0 +1,79 @@
+{
+ "rows_request": "{\n  \"quantities\": [\n    {\n      \"uri\": \"energy_consumption\",\n      \"label\": \"Energieverbrauch\",\n      \"description\": \"Eine im Wärmeplan bilanzierte Energiemenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \\\"quantity\\\" aus der Liste. Die Ontologie definiert die beiden Klassen so: final energy consumption value ist \\\"the energy delivered to and consumed by end users\\\". Darunter fällt BEIDES, was ein deutscher Wärmeplan Verbrauch nennt und was er Bedarf nennt: für ein Zielszenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Ein Wärmebedarf, ein Endenergiebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. primary energy consumption value ist \\\"the total consumption of energy in a spatial region excluding the non-energetic use of fuels\\\", also die Bilanz vor der Umwandlung. Die übrigen Einträge der Liste beginnen mit \\\"out:\\\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.\",\n      \"value_type\": \"float\",\n      \"units_accepted\": [\n        \"GWh\",\n        \"GWh/a\",\n        \"MWh\",\n        \"MWh/a\",\n        \"Millionen kWh\",\n        \"Mio. kWh\",\n        \"Mio. kWh/a\",\n        \"Mrd. kWh\",\n        \"TWh\",\n        \"TWh/a\",\n        \"kWh\",\n        \"kWh/a\"\n      ]\n    },\n    {\n      \"uri\": \"emission\",\n      \"label\": \"Emissionen\",\n      \"description\": \"Eine im Wärmeplan bilanzierte Emissionsmenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \\\"quantity\\\" aus der Liste. Die Ontologie definiert die beiden Klassen so: CO2 emission value ist \\\"a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit\\\", also reines Kohlendioxid. carbon dioxide equivalent quantity value ist \\\"the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2\\\", also alle Treibhausgase in CO2-Äquivalenten. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Die übrigen Einträge der Liste beginnen mit \\\"out:\\\": das sind Größen, die der Graph NICHT aufnimmt, etwa eine kumulierte Summe über mehrere Jahre, eine vermiedene Emission oder eine abgeschiedene Menge aus einer CCS-Anlage. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.\",\n      \"value_type\": \"float\",\n      \"units_accepted\": [\n        \"Mio. t CO2/a\",\n        \"Mio. t CO2eq\",\n        \"Mio. t CO2eq/a\",\n        \"Mt\",\n        \"Mt/a\",\n        \"Tonnen\",\n        \"Tonnen CO2\",\n        \"Tonnen CO2 im Jahr\",\n        \"Tonnen CO2 jährlich\",\n        \"Tonnen CO2 pro Jahr\",\n        \"Tonnen CO2eq/a\",\n        \"Tonnen CO2äquivalent\",\n        \"Tonnen pro Jahr\",\n        \"Tsd. t\",\n        \"Tsd. t/a\",\n        \"kg\",\n        \"kg CO2\",\n        \"kg CO2/a\",\n        \"kg CO2eq\",\n        \"kg CO2eq/a\",\n        \"kg/a\",\n        \"kt\",\n        \"kt CO2 pro Jahr\",\n        \"kt CO2-Äq./a\",\n        \"kt CO2/a\",\n        \"kt CO2eq\",\n        \"kt CO2eq/a\",\n        \"kt/a\",\n        \"kt/a CO2\",\n        \"t\",\n        \"t CO2\",\n        \"t CO2-eq./a\",\n        \"t CO2-eq/a\",\n        \"t CO2-Äq./a\",\n        \"t CO2-Äq/a\",\n        \"t CO2-Äquivalent\",\n        \"t CO2-Äquivalente/a\",\n        \"t CO2/a\",\n        \"t CO2e\",\n        \"t CO2e/a\",\n        \"t CO2eq\",\n        \"t CO2eq/a\",\n        \"t CO2äq\",\n        \"t CO2äq.\",\n        \"t/a\",\n        \"t/a CO2eq\",\n        \"tCO2\",\n        \"tCO2/a\"\n      ]\n    },\n    {\n      \"uri\": \"planning_organisation\",\n      \"label\": \"Beauftragtes Planungsbüro\",\n      \"description\": \"Das Ingenieur-, Planungs- oder Beratungsbüro, das die Wärmeplanung im Auftrag der Kommune erstellt hat. Ein Tupel je Büro, in der Schreibweise des Dokuments, ohne Rechtsform. Zu finden im Impressum, auf der Titelseite, unter Auftragnehmer, Bearbeitung, Erstellt durch oder Verfasser. NICHT die Kommune selbst, die ist die Auftraggeberin. NICHT Fördermittelgeber, Datenlieferanten, Netzbetreiber oder im Text erwähnte Firmen.\",\n      \"value_type\": \"text\"\n    },\n    {\n      \"uri\": \"heat_load\",\n      \"label\": \"Leistung\",\n      \"description\": \"Eine im Wärmeplan angegebene Leistung, also Energie je Zeit: eine Heizlast, eine Anschlussleistung, eine Netz- oder Erzeugerleistung, die Nennwärmeleistung eines Kessels oder BHKW. Welche Größe es ist, wählst du in \\\"quantity\\\" aus der Liste. Die Ontologie definiert die Klasse über ihre Einheit: power value ist \\\"a quantity value that has a power unit as unit\\\", also jede Angabe in kW, MW oder GW. Die Einheit trennt diesen Parameter von den anderen: kW gegen kWh. Eine Angabe in kWh, MWh oder GWh ist KEINE Leistung, sondern eine Energiemenge, auch wenn die Zeile das Wort Leistung enthält. Eine ANZAHL (Gebäude, Anlagen, Anschlüsse) ist keine Leistung, hat keine Einheit dieser Liste und bekommt kein Tupel, auch wenn sie in derselben Zeile steht. Die übrigen Einträge der Liste beginnen mit \\\"out:\\\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.\",\n      \"value_type\": \"float\",\n      \"units_accepted\": [\n        \"GW\",\n        \"MW\",\n        \"MWth\",\n        \"kW\",\n        \"kWth\"\n      ]\n    }\n  ],\n  \"anchors\": [\n    \"Der Endenergiebedarf 2045 im Zielszenario.\"\n  ],\n  \"frame\": {\n    \"scenario\": \"target\",\n    \"year\": 2045\n  },\n  \"sources\": [\n    {\n      \"id\": \"Q1\",\n      \"kind\": \"table\",\n      \"title\": \"Tabelle 4\",\n      \"section\": \"Szenarien\",\n      \"text\": \"Tabelle 4: Zielszenario 2045\\n| Erdgas | 17.000 | MWh/a |\"\n    },\n    {\n      \"id\": \"Q2\",\n      \"kind\": \"section\",\n      \"title\": \"Einleitung\",\n      \"section\": null,\n      \"text\": \"Das Basisjahr ist 2020.\"\n    }\n  ],\n  \"prior\": [\n    {\n      \"parameter\": \"energy_consumption\",\n      \"value\": 12.5,\n      \"unit\": \"MWh/a\",\n      \"quote\": \"| Fernwaerme | 12,5 | MWh/a |\"\n    }\n  ]\n}",
+ "rows_request_unframed": "{\n  \"quantities\": [\n    {\n      \"uri\": \"energy_consumption\",\n      \"label\": \"Energieverbrauch\",\n      \"description\": \"Eine im Wärmeplan bilanzierte Energiemenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \\\"quantity\\\" aus der Liste. Die Ontologie definiert die beiden Klassen so: final energy consumption value ist \\\"the energy delivered to and consumed by end users\\\". Darunter fällt BEIDES, was ein deutscher Wärmeplan Verbrauch nennt und was er Bedarf nennt: für ein Zielszenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Ein Wärmebedarf, ein Endenergiebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. primary energy consumption value ist \\\"the total consumption of energy in a spatial region excluding the non-energetic use of fuels\\\", also die Bilanz vor der Umwandlung. Die übrigen Einträge der Liste beginnen mit \\\"out:\\\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.\",\n      \"value_type\": \"float\",\n      \"units_accepted\": [\n        \"GWh\",\n        \"GWh/a\",\n        \"MWh\",\n        \"MWh/a\",\n        \"Millionen kWh\",\n        \"Mio. kWh\",\n        \"Mio. kWh/a\",\n        \"Mrd. kWh\",\n        \"TWh\",\n        \"TWh/a\",\n        \"kWh\",\n        \"kWh/a\"\n      ]\n    },\n    {\n      \"uri\": \"emission\",\n      \"label\": \"Emissionen\",\n      \"description\": \"Eine im Wärmeplan bilanzierte Emissionsmenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \\\"quantity\\\" aus der Liste. Die Ontologie definiert die beiden Klassen so: CO2 emission value ist \\\"a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit\\\", also reines Kohlendioxid. carbon dioxide equivalent quantity value ist \\\"the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2\\\", also alle Treibhausgase in CO2-Äquivalenten. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Die übrigen Einträge der Liste beginnen mit \\\"out:\\\": das sind Größen, die der Graph NICHT aufnimmt, etwa eine kumulierte Summe über mehrere Jahre, eine vermiedene Emission oder eine abgeschiedene Menge aus einer CCS-Anlage. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.\",\n      \"value_type\": \"float\",\n      \"units_accepted\": [\n        \"Mio. t CO2/a\",\n        \"Mio. t CO2eq\",\n        \"Mio. t CO2eq/a\",\n        \"Mt\",\n        \"Mt/a\",\n        \"Tonnen\",\n        \"Tonnen CO2\",\n        \"Tonnen CO2 im Jahr\",\n        \"Tonnen CO2 jährlich\",\n        \"Tonnen CO2 pro Jahr\",\n        \"Tonnen CO2eq/a\",\n        \"Tonnen CO2äquivalent\",\n        \"Tonnen pro Jahr\",\n        \"Tsd. t\",\n        \"Tsd. t/a\",\n        \"kg\",\n        \"kg CO2\",\n        \"kg CO2/a\",\n        \"kg CO2eq\",\n        \"kg CO2eq/a\",\n        \"kg/a\",\n        \"kt\",\n        \"kt CO2 pro Jahr\",\n        \"kt CO2-Äq./a\",\n        \"kt CO2/a\",\n        \"kt CO2eq\",\n        \"kt CO2eq/a\",\n        \"kt/a\",\n        \"kt/a CO2\",\n        \"t\",\n        \"t CO2\",\n        \"t CO2-eq./a\",\n        \"t CO2-eq/a\",\n        \"t CO2-Äq./a\",\n        \"t CO2-Äq/a\",\n        \"t CO2-Äquivalent\",\n        \"t CO2-Äquivalente/a\",\n        \"t CO2/a\",\n        \"t CO2e\",\n        \"t CO2e/a\",\n        \"t CO2eq\",\n        \"t CO2eq/a\",\n        \"t CO2äq\",\n        \"t CO2äq.\",\n        \"t/a\",\n        \"t/a CO2eq\",\n        \"tCO2\",\n        \"tCO2/a\"\n      ]\n    },\n    {\n      \"uri\": \"planning_organisation\",\n      \"label\": \"Beauftragtes Planungsbüro\",\n      \"description\": \"Das Ingenieur-, Planungs- oder Beratungsbüro, das die Wärmeplanung im Auftrag der Kommune erstellt hat. Ein Tupel je Büro, in der Schreibweise des Dokuments, ohne Rechtsform. Zu finden im Impressum, auf der Titelseite, unter Auftragnehmer, Bearbeitung, Erstellt durch oder Verfasser. NICHT die Kommune selbst, die ist die Auftraggeberin. NICHT Fördermittelgeber, Datenlieferanten, Netzbetreiber oder im Text erwähnte Firmen.\",\n      \"value_type\": \"text\"\n    },\n    {\n      \"uri\": \"heat_load\",\n      \"label\": \"Leistung\",\n      \"description\": \"Eine im Wärmeplan angegebene Leistung, also Energie je Zeit: eine Heizlast, eine Anschlussleistung, eine Netz- oder Erzeugerleistung, die Nennwärmeleistung eines Kessels oder BHKW. Welche Größe es ist, wählst du in \\\"quantity\\\" aus der Liste. Die Ontologie definiert die Klasse über ihre Einheit: power value ist \\\"a quantity value that has a power unit as unit\\\", also jede Angabe in kW, MW oder GW. Die Einheit trennt diesen Parameter von den anderen: kW gegen kWh. Eine Angabe in kWh, MWh oder GWh ist KEINE Leistung, sondern eine Energiemenge, auch wenn die Zeile das Wort Leistung enthält. Eine ANZAHL (Gebäude, Anlagen, Anschlüsse) ist keine Leistung, hat keine Einheit dieser Liste und bekommt kein Tupel, auch wenn sie in derselben Zeile steht. Die übrigen Einträge der Liste beginnen mit \\\"out:\\\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.\",\n      \"value_type\": \"float\",\n      \"units_accepted\": [\n        \"GW\",\n        \"MW\",\n        \"MWth\",\n        \"kW\",\n        \"kWth\"\n      ]\n    }\n  ],\n  \"sources\": [\n    {\n      \"id\": \"Q1\",\n      \"kind\": \"table\",\n      \"title\": \"Tabelle 4\",\n      \"section\": \"Szenarien\",\n      \"text\": \"Tabelle 4: Zielszenario 2045\\n| Erdgas | 17.000 | MWh/a |\"\n    },\n    {\n      \"id\": \"Q2\",\n      \"kind\": \"section\",\n      \"title\": \"Einleitung\",\n      \"section\": null,\n      \"text\": \"Das Basisjahr ist 2020.\"\n    }\n  ]\n}",
+ "rows_reply_grammar": {
+  "type": "object",
+  "properties": {
+   "tuples": {
+    "type": "array",
+    "items": {
+     "type": "object",
+     "properties": {
+      "source": {
+       "type": "string"
+      },
+      "unit_raw": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "value": {
+       "type": [
+        "number",
+        "string"
+       ]
+      },
+      "value_raw": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "quote": {
+       "type": "string"
+      },
+      "computed": {
+       "type": "boolean"
+      }
+     },
+     "additionalProperties": false
+    }
+   },
+   "defaults": {
+    "type": "object",
+    "properties": {
+     "source": {
+      "type": "string"
+     },
+     "unit_raw": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "additionalProperties": false
+   },
+   "status": {
+    "type": "string"
+   },
+   "need_more": {
+    "type": "array",
+    "items": {
+     "type": "string"
+    }
+   },
+   "action": {
+    "enum": [
+     "python"
+    ]
+   },
+   "code": {
+    "type": "string"
+   }
+  },
+  "additionalProperties": false
+ },
+ "rows_prompt_sha256": "e10fbeba88d8c40db20bf949c0cf83af174e6ce6b96bdd5f72aa12c4636d99d6"
+}

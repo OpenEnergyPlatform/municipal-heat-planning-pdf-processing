@@ -1,0 +1,53 @@
+# What a document says about itself, after schema.org: the shape `docpipe init
+# --shapes` drafts a spec from when it is given no file of its own. Eight text
+# fields, each as the document prints it. Nothing about a subject matter is in
+# here; a project with a graph of its own brings its own shapes.
+
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix schema: <https://schema.org/> .
+@prefix meta: <urn:docpipe:metadata#> .
+
+meta:MetadataShape a sh:NodeShape ;
+    sh:targetClass schema:CreativeWork ;
+
+    sh:property [
+        sh:path schema:name ; sh:datatype xsd:string ; sh:maxCount 1 ;
+        sh:name "title" ;
+        sh:description "The title of the document as printed on its cover or its first page."
+    ] ;
+    sh:property [
+        sh:path schema:author ; sh:datatype xsd:string ;
+        sh:name "author" ;
+        sh:description "The person or the organisation the document names as its author."
+    ] ;
+    sh:property [
+        sh:path schema:publisher ; sh:datatype xsd:string ; sh:maxCount 1 ;
+        sh:name "publisher" ;
+        sh:description "The organisation the document names as the one that published it."
+    ] ;
+    sh:property [
+        sh:path schema:datePublished ; sh:datatype xsd:string ; sh:maxCount 1 ;
+        sh:name "date" ;
+        sh:description "The date or the year of publication as the document states it."
+    ] ;
+    sh:property [
+        sh:path schema:version ; sh:datatype xsd:string ; sh:maxCount 1 ;
+        sh:name "version" ;
+        sh:description "The edition, version or revision the document says it is, as it writes it."
+    ] ;
+    sh:property [
+        sh:path schema:inLanguage ; sh:datatype xsd:string ; sh:maxCount 1 ;
+        sh:name "language" ;
+        sh:description "The language the document is written in, as the document or its text shows."
+    ] ;
+    sh:property [
+        sh:path schema:abstract ; sh:datatype xsd:string ; sh:maxCount 1 ;
+        sh:name "abstract" ;
+        sh:description "The summary or abstract of the document, where the document has one of its own."
+    ] ;
+    sh:property [
+        sh:path schema:keywords ; sh:datatype xsd:string ;
+        sh:name "keywords" ;
+        sh:description "A keyword or a subject term the document itself lists for what it is about."
+    ] .

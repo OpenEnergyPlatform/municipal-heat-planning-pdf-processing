@@ -23,6 +23,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import Optional
 
+from docpipe.artifacts import document_dirs
 from docpipe.captions import resolve_title
 from .config import (
     DOCUMENT_JSON,
@@ -154,6 +155,15 @@ def _ensure_caption_source_column(connection: sqlite3.Connection) -> None:
                 f'ALTER TABLE "{table}" ADD COLUMN "caption_source" TEXT')
 
 
+def _ensure_table_qa_column(connection: sqlite3.Connection) -> None:
+    """Add `qa` to Tables on a DB that predates it. A row written before has
+    NULL there, which reads as not checked; it is filled when its document is
+    inserted again."""
+    cols = {row[1] for row in connection.execute('PRAGMA table_info("Tables")')}
+    if "qa" not in cols:
+        connection.execute('ALTER TABLE "Tables" ADD COLUMN "qa" TEXT')
+
+
 def enrich_page_source(db_path: Path, root_dir: Path,
                        *, force: bool = False) -> dict:
     """Record, per document, how many of its pages the MODEL read.
@@ -172,9 +182,7 @@ def enrich_page_source(db_path: Path, root_dir: Path,
     """
     root_dir = Path(root_dir)
     stats = {"documents": 0, "transcribed": 0, "pages": 0}
-    candidates = sorted(
-        d for d in root_dir.iterdir()
-        if d.is_dir() and (d / PAGE_TRANSCRIPTION_REPORT_JSON).exists())
+    candidates = document_dirs(root_dir, PAGE_TRANSCRIPTION_REPORT_JSON)
     if not candidates:
         log.warning("enrich-page-source: no transcription report under '%s'.",
                     root_dir)
@@ -276,6 +284,13 @@ def _bbox_json(item: dict) -> Optional[str]:
     """Serialise an item's `bbox` (a list of rects) to JSON text, or None."""
     b = item.get("bbox")
     return json.dumps(b, ensure_ascii=False) if b else None
+
+
+def _qa_json(item: dict) -> Optional[str]:
+    """Serialise a table's `qa` (what stage 5 measured) to JSON text, or None
+    where it measured nothing."""
+    q = item.get("qa")
+    return json.dumps(q, ensure_ascii=False) if q else None
 
 
 # ---------------------------------------------------------------------------
@@ -437,10 +452,10 @@ def _insert_sections(
         )
 
         connection.executemany(
-            "INSERT INTO Tables (section, block_id, path, page_number, caption, markdown, bbox) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO Tables (section, block_id, path, page_number, caption, markdown, bbox, qa) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             [(section_id, t.get("id"), t.get("path", ""), t.get("page_number"),
-              t.get("caption"), t.get("markdown"), _bbox_json(t))
+              t.get("caption"), t.get("markdown"), _bbox_json(t), _qa_json(t))
              for t in section.get("tables", [])],
         )
 
@@ -467,10 +482,7 @@ def update_database(
     """
     root_dir = Path(root_dir)
 
-    candidates = sorted(
-        d for d in root_dir.iterdir()
-        if d.is_dir() and (d / DOCUMENT_JSON).exists()
-    )
+    candidates = document_dirs(root_dir, DOCUMENT_JSON)
 
     if not candidates:
         log.warning("No PDF directories with merged output found in '%s'.", root_dir)
@@ -480,6 +492,7 @@ def update_database(
 
     with closing(connect(db_path)) as conn:
         _ensure_bbox_columns(conn)
+        _ensure_table_qa_column(conn)
         for i, pdf_dir in enumerate(candidates):
             pdf_name = pdf_dir.name
             doc_id = _resolve_document_id(pdf_name, conn)
@@ -566,10 +579,7 @@ def enrich_bbox(db_path: Path, root_dir: Path, *, force: bool = False) -> dict:
     root_dir = Path(root_dir)
     stats = {"documents": 0, "segments": 0, "tables": 0, "images": 0}
 
-    candidates = sorted(
-        d for d in root_dir.iterdir()
-        if d.is_dir() and (d / SECTIONS_JSON).exists()
-    )
+    candidates = document_dirs(root_dir, SECTIONS_JSON)
     if not candidates:
         log.warning("enrich-bbox: no Stage-3 outputs found under '%s'.", root_dir)
         return stats

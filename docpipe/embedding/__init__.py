@@ -64,6 +64,9 @@ def _from_path(spec: str, **kwargs) -> Embedder:
 
 def get_embedder(backend: Optional[str] = None, **kwargs) -> Embedder:
     """The embedder this deployment is configured for."""
+    from docpipe.providers import cassette
+    if cassette.replaying():
+        return cassette.ReplayEmbedder()
     spec = (backend or config.BACKEND).strip()
     if ":" in spec:
         return _from_path(spec, **kwargs)

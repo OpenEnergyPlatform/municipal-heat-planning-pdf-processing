@@ -120,7 +120,7 @@ def test_a_family_no_file_covers_is_named_and_not_called_an_error():
     false error that teaches everyone to ignore the real ones; reporting
     nothing would let the gap grow."""
     spec, snapshot = _spec("kwp"), _snapshot("kwp")
-    # Until MHPO has a release, which is when `--refresh` starts pulling it.
+    # A snapshot built without the MHPO file, as before its first release.
     snapshot = json.loads(json.dumps(snapshot))
     snapshot["pin"]["families"] = [f for f in snapshot["pin"]["families"]
                                    if f != "MHPO"]
@@ -258,6 +258,67 @@ def test_an_object_outside_the_range_is_reported():
               "predicate": "OEO_0000100", "object": "OEO_0000006"}]
     problems = ontology.edge_problems(edges, TOY)
     assert len(problems) == 1 and "OEO_0000006" in problems[0]
+
+
+# An ontology as upstream writes one: the aggregation types are individuals
+# of a class, and the predicate that points at them names that class as its
+# range. One of them sits in a subclass, one in another class, one in none.
+ASSERTED = """
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix oeo:  <https://openenergyplatform.org/ontology/oeo/> .
+
+oeo:OEO_00140068 a owl:Class ; rdfs:label "aggregation type" .
+oeo:OEO_00140099 a owl:Class ; rdfs:label "temporal aggregation type" ;
+    rdfs:subClassOf oeo:OEO_00140068 .
+oeo:OEO_00000367 a owl:Class ; rdfs:label "sector" .
+oeo:OEO_00140070 a owl:NamedIndividual , oeo:OEO_00140068 ;
+    rdfs:label "integral" .
+oeo:OEO_00140071 a owl:NamedIndividual , oeo:OEO_00140099 ;
+    rdfs:label "arithmetic mean" .
+oeo:OEO_00000214 a owl:NamedIndividual , oeo:OEO_00000367 ;
+    rdfs:label "household sector" .
+oeo:OEO_00009999 a owl:NamedIndividual ; rdfs:label "asserted into nothing" .
+oeo:OEO_00390023 a owl:ObjectProperty ; rdfs:label "has aggregation type" ;
+    rdfs:range oeo:OEO_00140068 .
+"""
+
+
+def _indexed(turtle):
+    rdflib = pytest.importorskip("rdflib")   # optional; the rest is not
+    graph = rdflib.Graph().parse(data=turtle, format="turtle")
+    return {"pin": {"families": ["OEO"]}, "disjoint": [],
+            "terms": ontology.index(graph, "de")}
+
+
+def test_an_individual_is_under_the_classes_it_is_asserted_into():
+    """And under nothing else: that it is an individual at all is not a class
+    a range could name, and one asserted into no class is under none."""
+    terms = _indexed(ASSERTED)["terms"]
+    assert terms["OEO_00140070"]["kind"] == "individual"
+    assert terms["OEO_00140070"]["parents"] == ["OEO_00140068"]
+    assert terms["OEO_00140071"]["parents"] == ["OEO_00140099"]
+    assert terms["OEO_00009999"]["parents"] == []
+    # A class goes on reading its superclasses.
+    assert terms["OEO_00140099"]["parents"] == ["OEO_00140068"]
+
+
+@pytest.mark.parametrize("obj, complaints", [
+    ("OEO_00140070", 0),    # asserted into the range itself
+    ("OEO_00140071", 0),    # asserted into a class under the range
+    ("OEO_00000214", 1),    # asserted into another class
+    ("OEO_00009999", 1),    # asserted into none
+])
+def test_an_individual_object_is_held_to_the_range_by_its_class(obj,
+                                                                 complaints):
+    """Upstream gave `has aggregation type` a range, the class the aggregation
+    types are individuals of. Read as terms without parents, every one of
+    them was reported as outside it and the run did not start."""
+    edge = [{"where": "p.aggregation.kg", "predicate": "OEO_00390023",
+             "object": obj}]
+    problems = ontology.edge_problems(edge, _indexed(ASSERTED))
+    assert len(problems) == complaints, problems
+    assert all(obj in problem for problem in problems)
 
 
 def test_a_literal_written_with_another_datatype_is_reported():
@@ -411,13 +472,13 @@ mhpo:MHPO_00020003 a owl:Class ; rdfs:label "municipal heat plan" .
 """
 
 
-def _build_tiny(tmp_path, spec):
+def _build_tiny(tmp_path, spec, more=""):
     pytest.importorskip("rdflib")   # optional; the rest is not
     closure = tmp_path / "tiny.ttl"
-    closure.write_text(TINY, encoding="utf-8")
+    closure.write_text(TINY + more, encoding="utf-8")
     sets = {"energy_carrier": ("class", "https://openenergyplatform.org/"
                                         "ontology/oeo/OEO_00020039")}
-    return ontology.build(closure, sets, spec,
+    return ontology.build(closure, sets, spec, language="de",
                           base="https://openenergyplatform.org/ontology/oeo/")
 
 
@@ -477,6 +538,75 @@ def test_a_built_snapshot_carries_what_the_edge_check_needs(tmp_path):
     assert "xsd:dateTime" in problems[1]
 
 
+def test_a_built_snapshot_carries_the_class_of_an_individual(tmp_path):
+    """The spec names the individual and never its class, and the class is
+    what the range check asks about: without it in the file, and the chain
+    above it, the individual is under nothing the file knows."""
+    more = """
+oeo:OEO_00140068 a owl:Class ; rdfs:label "aggregation type" ;
+    rdfs:subClassOf obo:BFO_0000002 .
+oeo:OEO_00140070 a owl:NamedIndividual , oeo:OEO_00140068 ;
+    rdfs:label "integral" .
+"""
+    spec = {"parameters": [{"uri": "p", "axes": {"aggregation": {
+        "vocabulary": {"OEO_00140070": {"labels": ["Summe"]}}}}}]}
+    built = _build_tiny(tmp_path, spec, more)
+    assert "OEO_00140068" in built["terms"]
+    assert ontology.ancestors("OEO_00140070", built) == {"OEO_00140068",
+                                                         "BFO_0000002"}
+    # The same closure without the individual's assertion leaves it bare.
+    bare = _build_tiny(tmp_path, spec, more.replace(
+        "owl:NamedIndividual , oeo:OEO_00140068", "owl:NamedIndividual"))
+    assert ontology.ancestors("OEO_00140070", bare) == set()
+
+
+def test_a_built_snapshot_carries_the_classes_a_writer_names(tmp_path):
+    """A serializer writes triples that sit behind no parameter, so the spec
+    names neither their subject nor their predicate. A snapshot without them
+    has no parents for the subject: once its family is covered, the edge
+    check reads every such subject as outside every domain."""
+    spec = {"parameters": [{"uri": "p", "kg": {"class": "OEO_00000292"}}]}
+    edge = [{"where": "writer", "subject": "OEO_00000292",
+             "predicate": "OEO_00000510"}]
+    bare = _build_tiny(tmp_path, spec)
+    assert "OEO_00000510" not in bare["terms"]
+    assert ontology.edge_problems(edge, bare) == []     # nothing to ask with
+    built = ontology.build(tmp_path / "tiny.ttl", {"energy_carrier": (
+        "class", "https://openenergyplatform.org/ontology/oeo/OEO_00020039")},
+        spec, language="de", base="https://openenergyplatform.org/ontology/oeo/",
+        also=("OEO_00000510", "MHPO_00020003"))
+    assert {"OEO_00000510", "MHPO_00020003"} <= set(built["terms"])
+    # The predicate brings its domain with it, as a spec's predicate does.
+    assert "OEO_00020011" in built["terms"]
+    assert len(ontology.edge_problems(edge, built)) == 1
+
+
+def test_kwp_carries_every_term_its_writer_names():
+    """What `edges` hands the check and what the snapshot can answer for are
+    the same set, so no edge of kg.py is passed for want of its terms."""
+    from profiles.kwp import vocabulary
+    spec, snapshot = _spec("kwp"), _snapshot("kwp")
+    named = vocabulary.edge_terms(spec)
+    assert {"MHPO_00020003", "OEO_00390096"} <= set(named)
+    assert not [name for name in named if name not in snapshot["terms"]]
+    assert ontology.ancestors("MHPO_00020003", snapshot) >= {"IAO_0000030"}
+
+
+def test_kwp_writes_the_publication_date_as_its_schema_prescribes():
+    """OEO declares `has publication date` for a report and as a dateTime.
+    The MHPKG schema puts it on the plan as a date and says so; the edge
+    carries that reason, and without it the check names both differences."""
+    from profiles.kwp import kg, vocabulary
+    spec, snapshot = _spec("kwp"), _snapshot("kwp")
+    dated = [edge for edge in kg.EDGES if edge["predicate"] == "OEO_00390096"]
+    assert len(dated) == 1 and "MHPKG schema" in dated[0]["accepted"]
+    assert vocabulary.check(spec, snapshot) == []
+    undeclared = [dict(dated[0], accepted=None)]
+    problems = ontology.edge_problems(undeclared, snapshot)
+    assert len(problems) == 2, problems
+    assert "IAO_0000088" in problems[0] and "xsd:dateTime" in problems[1]
+
+
 def test_a_built_snapshot_names_the_families_it_can_speak_for(tmp_path):
     """Written by the builder, not carried forward: a snapshot that forgets
     this reverts silently to answering for families it never read, and the
@@ -491,3 +621,137 @@ def test_a_built_snapshot_names_the_families_it_can_speak_for(tmp_path):
     outside = {"parameters": [{"uri": "p", "kg": {"class": "UO_0000111"}}]}
     assert ontology.term_problems(outside, built) == []
     assert set(ontology.uncovered(outside, built)) == {"UO"}
+
+
+# ---------------------------------------------------------------------------
+# What the pin defines and the spec says differently
+# ---------------------------------------------------------------------------
+
+def _pin(**by_class):
+    """A snapshot whose classes have these definitions."""
+    return {"terms": {key: {"label": key.casefold(), "alt_labels": [],
+                            "definition": text, "deprecated": False,
+                            "kind": "class", "parents": []}
+                      for key, text in by_class.items()}}
+
+
+def _listed(entries, value=None):
+    """A spec with one list on an axis, and one on the value if given."""
+    parameter = {"uri": "p", "axes": {"carrier": {"vocabulary": entries}}}
+    if value is not None:
+        parameter["vocabulary"] = value
+    return {"parameters": [parameter]}
+
+
+def test_a_rewritten_definition_is_named_with_both_texts():
+    spec = _listed({"OEO_00000001": {"label": "gas",
+                                     "definition": "Gas is a fuel."}})
+    pin = _pin(OEO_00000001="Gas is a fuel burned for heat.")
+    assert ontology.definition_differences(spec, pin) == [
+        ("p.carrier", "OEO_00000001", ontology.REWRITTEN, "Gas is a fuel.",
+         "Gas is a fuel burned for heat.")]
+
+
+def test_a_definition_only_the_pin_has_is_named_whatever_form_the_entry_has():
+    spec = _listed({"OEO_00000001": ["gas", "natural gas"],
+                    "OEO_00000002": {"label": "oil"}})
+    pin = _pin(OEO_00000001="Gas is a fuel.", OEO_00000002="Oil is a fuel.")
+    assert [(uri, kind, ours) for _where, uri, kind, ours, _theirs
+            in ontology.definition_differences(spec, pin)] == [
+        ("OEO_00000001", ontology.PIN_ONLY, ""),
+        ("OEO_00000002", ontology.PIN_ONLY, "")]
+
+
+def test_an_equal_definition_and_one_the_spec_alone_has_are_no_difference():
+    spec = _listed({"OEO_00000001": {"label": "gas",
+                                     "definition": "Gas is a fuel."},
+                    "OEO_00000002": {"label": "oil",
+                                     "definition": "Oil is ours."},
+                    "OEO_00000003": ["coal"]})
+    pin = _pin(OEO_00000001="Gas is a fuel.", OEO_00000002="",
+               OEO_00000003="")
+    assert ontology.definition_differences(spec, pin) == []
+
+
+def test_a_class_the_pin_does_not_know_has_nothing_to_be_held_to():
+    """The profile's own "none of these" and a term the pin lacks are not
+    differences: the second is `term_problems`' to report."""
+    spec = _listed({"out:other": ["other"], "OEO_09999999": ["unknown"],
+                    "status_quo": ["status quo"]})
+    assert ontology.definition_differences(spec, _pin(OEO_00000001="x")) == []
+
+
+def test_a_class_listed_in_several_places_is_named_once_per_kind():
+    entry = {"label": "gas", "definition": "Gas is a fuel."}
+    spec = _listed({"OEO_00000001": entry}, value={"OEO_00000001": entry})
+    spec["parameters"].append({"uri": "q", "axes": {"carrier": {
+        "vocabulary": {"OEO_00000001": ["gas"]}}}})
+    found = ontology.definition_differences(
+        spec, _pin(OEO_00000001="Gas is a fuel burned for heat."))
+    # rewritten where the spec says it (named at the first place), and only
+    # the pin's where another parameter lists it without
+    assert [(where, kind) for where, _uri, kind, _o, _t in found] == [
+        ("p.carrier", ontology.REWRITTEN), ("q.carrier", ontology.PIN_ONLY)]
+
+
+def test_a_label_that_differs_is_not_a_difference_of_definitions():
+    """The label is `foreign_labels`' to name, and it does."""
+    spec = _listed({"OEO_00000001": {"label": "household",
+                                     "definition": "Gas is a fuel."}})
+    pin = _pin(OEO_00000001="Gas is a fuel.")
+    assert ontology.definition_differences(spec, pin) == []
+    assert [uri for _w, uri, _l, _o in ontology.foreign_labels(spec, pin)] \
+        == ["OEO_00000001"]
+
+
+def test_the_note_for_a_difference_says_which_text_is_whose():
+    rewritten = ontology.definition_note(
+        ("p.carrier", "OEO_00000001", ontology.REWRITTEN, "Ours.", "Theirs."))
+    assert "p.carrier" in rewritten and "'Ours.'" in rewritten
+    assert "'Theirs.'" in rewritten and "pin" in rewritten
+    only = ontology.definition_note(
+        ("p.value", "OEO_00000002", ontology.PIN_ONLY, "", "Theirs."))
+    assert "the pin defines OEO_00000002" in only
+    assert "the spec does not" in only
+    # a long definition is cut and says so, so a refresh stays readable
+    long = ontology.definition_note(
+        ("p.value", "OEO_00000002", ontology.PIN_ONLY, "", "x" * 400))
+    assert "..." in long and len(long) < 250
+
+
+@pytest.mark.parametrize("profile", ["kwp", "scenarios"])
+def test_a_check_prints_one_note_for_each_definition_that_differs(
+        profile, tmp_path, monkeypatch, capsys):
+    """What `--check` and `--refresh` print, for both profiles: a note for a
+    definition the spec rewrote and one for a definition only the pin has,
+    none for an equal one, and a count that says what it counts."""
+    import importlib
+    vocabulary = importlib.import_module(f"profiles.{profile}.vocabulary")
+
+    def term(label, definition):
+        return {"label": label, "alt_labels": [], "definition": definition,
+                "deprecated": False, "kind": "class", "parents": []}
+
+    spec = {"parameters": [{"uri": "p", "axes": {"carrier": {"vocabulary": {
+        "OEO_00000001": {"label": "gas", "definition": "Ours."},
+        "OEO_00000002": ["oil"],
+        "OEO_00000003": {"label": "coal", "definition": "Same."}}}}}]}
+    pin = {"pin": {}, "terms": {
+        "OEO_00000001": term("gas", "Theirs."),
+        "OEO_00000002": term("oil", "Oil is a fuel."),
+        "OEO_00000003": term("coal", "Same.")}}
+    spec_file, pin_file = tmp_path / "spec.json", tmp_path / "pin.json"
+    spec_file.write_text(json.dumps(spec), encoding="utf-8")
+    pin_file.write_text(json.dumps(pin), encoding="utf-8")
+    monkeypatch.setattr(vocabulary, "SPEC_PATH", spec_file)
+    monkeypatch.setattr(vocabulary, "VOCABULARY_PATH", pin_file)
+    monkeypatch.setattr(vocabulary, "load", lambda path=None: pin)
+    monkeypatch.setattr(vocabulary, "check", lambda raw, snapshot: [])
+    assert vocabulary.main(["--check"]) == 0, "a note is no problem"
+    printed = capsys.readouterr().out
+    assert ("p.carrier: the spec defines OEO_00000001 as 'Ours.', the pin "
+            "as 'Theirs.'") in printed
+    assert "p.carrier: the pin defines OEO_00000002 as 'Oil is a fuel.'" \
+        in printed
+    assert "OEO_00000003" not in printed
+    assert "2 definition(s) that differ from the pin" in printed

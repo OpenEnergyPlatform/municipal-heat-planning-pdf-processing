@@ -5,53 +5,80 @@ term, carries a `<name>_state` key beside its value, its raw wording, its
 quote, its source, the window it was read in, and, when `unstated` or a
 closed-list answer names none of its entries, a
 `<name>_seen` key for a wording the model noticed
-(`docpipe/extraction/schema.py:212-266`). The state is one of seven fixed
+(`docpipe/extraction/schema.py:212-293`). The state is one of seven fixed
 strings, defined in `docpipe/extraction/fields.py`. A coordinate with no
 value, and one never asked for, read the same on the row. The state
 distinguishes a coordinate the document never mentions from one a run
 ended before asking about. A coordinate's own value is `null` unless its
-state is `read` or `derived` (`schema.py:269-283`). It is a finding about
+state is `read` or `derived` (`schema.py:296-310`). It is a finding about
 the model, the document, the run, or the run's scope, never about more
 than one of those at once.
+
+A harvest also holds one state line per document and parameter, which says
+whether values were read, the document does not carry the parameter, or the run
+ended first. That is a state of the parameter in a document and not of a
+coordinate (a tuple's own `parameter_state` key is the state of its `parameter`
+coordinate). The pass that appends a parameter the spec gained after the
+harvest (`--top-up-parameters`) writes one such line for each parameter it
+appends, and takes the line as the proof that the parameter was read in that
+document. `docpipe export --what states` and the server's `get_states` and
+`get_coverage` serve those lines; see [handing the values on](../stages/serve.md).
 
 ## How the field sweep assigns it
 
 Two states are written before any question reaches a model. `apply_derived`
-(`fields.py:265-286`) fills a coordinate the spec's own `derive` rule
+(`fields.py:395-419`) fills a coordinate the spec's own `derive` rule
 decides, such as kwp's `aggregation` coordinate on `energy_consumption` and
 `emission` parameters, derived to `integral`, the only `derive` rules in
 either profile (`profiles/kwp/extraction_spec.json:173,920`). Which
 parameter a row belongs to is a separate decision, `derive_parameter`
-(`fields.py:212-235`), written directly in `runner.py:3277-3290`, not
-through `apply_derived`. `out_of_slice` is written the same way: a gate
-coordinate the profile's `SLICE` names has put the row outside what this
-run serializes, or no parameter of the spec could hold it, so none of its
-coordinates are asked about. The field sweep decides everything else: for
+(`fields.py:337-364`), written directly by `Turn.settle_parameter` in
+`docpipe/extraction/runner.py`, not through `apply_derived`. `out_of_slice` is
+written the same way: a gate coordinate the profile's `SLICE` names has put
+the row outside what this
+run serializes, or no parameter of the spec could hold it (a number with
+no unit, or with one no parameter accepts), so none of its coordinates
+are asked about. Where a spec has no numeric parameter nothing is
+measured: a bare year or a dotted date is a wording there
+(`fields.is_wording`), and it is asked which parameter it belongs to
+instead of leaving the harvest `out_of_slice` unasked. The field sweep
+decides everything else: for
 each window's reply, `merge_field` writes `read` when the row's cited
 quote sits in a shown source and carries the answer; `unstated` when the
 model names the
 closed list's own `out:unstated` entry, since no passage can prove a
 document does not say something
 (`test_not_stated_is_an_answer_and_needs_no_passage`,
-`tests/test_extraction_fieldwise.py:283`); and `unbacked` when a quote is
+`tests/test_extraction_fieldwise.py:290`); and `unbacked` when a quote is
 offered but fails one of those checks, or a closed-list answer names none
 of its entries (`not_an_option`). Only `read` is final: a later
 window's reply for a coordinate already `read` is discarded, and the row
-keeps its first reading (`tests/test_extraction_fieldwise.py:1036`).
+keeps its first reading (`tests/test_extraction_fieldwise.py:1171`).
 `open_rows` still counts `unstated`, `unbacked`, and a coordinate no
 reply has mentioned, as open, so the sweep keeps asking through
 retrieval and then the rest of the document
 (`test_one_window_saying_nothing_here_does_not_end_the_sweep`,
-`tests/test_extraction_fieldwise.py:330`). `unstated` becomes permanent
-only once the sweep has nothing left to read; if the window budget ends
+`tests/test_extraction_fieldwise.py:337`).
+
+The sweep of a coordinate is no longer one per batch. A batch's turn asks only
+the own stage, and what is still open after it is searched once per document
+and coordinate, with the open rows of all the batches together; the verdict
+below is that search's. `unstated` becomes permanent only once the search has
+nothing left to read, the document read to its end; if its allowance ends
 first, every coordinate `open_rows` still counts, `unstated` included, is
 instead written `exhausted`, and what no reply mentioned across every
-round the sweep did run becomes `unanswered`, written once at the end by
+round that did run becomes `unanswered`, written once at the end by
 `mark_unanswered`
 (`test_every_coordinate_ends_with_a_state_even_when_nothing_answered`,
-`tests/test_extraction_fieldwise.py:310`). See
-[extraction](../stages/extraction.md) for the windows and rounds this
-walks.
+`tests/test_extraction_fieldwise.py:317`;
+`test_a_document_read_to_its_end_is_unstated_and_a_cut_one_exhausted`,
+`tests/test_extraction_document_search.py`). The allowance of the rest stage is
+counted in windows and in requests, for every batch that still has an open row
+when the stage begins. A pass over a stored
+harvest (`--top-up`, `--top-up-parameters`) still walks the three stages for
+one batch, and the verdict is that sweep's. See
+[extraction](../stages/extraction.md) for the windows, rounds and allowance
+this walks.
 
 ## Why seven, not fewer
 
@@ -60,23 +87,23 @@ the run depends on. `unanswered` and `unstated` were the same empty cell
 before the state existed: on the 1079-document run they made up 16 to 34
 percent of every axis, one half a finding about the model and the other
 about the document, with no way after the fact to tell which was which
-(`docpipe/extraction/pipeline.py:1118`). `exhausted` and `unstated` are the
+(`docpipe/extraction/pipeline.py:1306`). `exhausted` and `unstated` are the
 same conflation about a whole run, and the reason the sweep reads past
 retrieval first: before that stage existed, a harvest meant to mark plans
 read to the end wrote 789 `exhausted` against 0 `unstated` on the M3 run,
 because nothing after retrieval read a document the rest of the way
-(`docpipe/extraction/runner.py:3141`). The two the sweep skips are kept
-apart from `unstated` for the same reason it exists: asking the parameter
+(`Sweeping.search` in `docpipe/extraction/runner.py`). The two the sweep skips
+are kept apart from `unstated` for the same reason it exists: asking the parameter
 question anyway on the Kassel run would have cost 322 of 1,043 field
-windows, 30.9 percent (`docpipe/extraction/fields.py:266`); asking the
+windows, 30.9 percent (`docpipe/extraction/fields.py:346`); asking the
 coordinates of a row no parameter could hold, on the M3 acceptance run,
 cost 178 of 853 field requests, 20.9 percent
-(`docpipe/extraction/fields.py:295`); and before the slice gate ran first,
+(`docpipe/extraction/fields.py:379`); and before the slice gate ran first,
 4,064 of 6,763 tuples harvested across 20 plans had all seven axes
 filled in before being dropped for the two gate coordinates
-(`docpipe/extraction/runner.py:3327`). The same split holds past the
-coordinate: `docpipe/extraction/trust.py`'s `reasons` counts only
-`exhausted` and `unbacked` as doubt about a reading, and treats every
-other state, `derived`, `unstated` and `out_of_slice`, as a fact about the
-document or the run's scope, not about the value itself.
+(`Turn.walk` in `docpipe/extraction/runner.py`). The same split holds past
+the coordinate: `docpipe/extraction/trust.py`'s `reasons` counts
+`exhausted`, `unbacked` and `unanswered` as doubt about a reading, and
+treats every other state, `derived`, `unstated` and `out_of_slice`, as a
+fact about the document or the run's scope, not about the value itself.
 [Trust](trust.md) grades a tuple from exactly that split.

@@ -9,12 +9,15 @@ that survived verification and trust scoring to a fact a query engine
 can walk. The walk from JSONL to Turtle splits in two:
 `docpipe/extraction/serialize.py` is a profile free core guaranteeing
 the file walk and that a refusal line never reaches a serializer,
-while `profiles/<name>/kg.py` alone decides IRI minting, node shape
-and predicate choice. `kwp`'s Turtle file is read back by
-`docpipe/inference/kg_route.py` when
-`scripts/inference_app` has a graph configured; `scenarios`' `kg.py`
+while `profiles/<name>/kg.py` decides IRI minting, node shape
+and predicate choice for a profile that has a writer of its own. A
+profile whose spec carries a `graph` block and which has no `kg.py` is
+written by the generic writer, `docpipe/extraction/graph.py`. `kwp`'s Turtle
+file is read back by `docpipe/inference/kg_route.py` when the chat
+(`docpipe/app`) has a graph configured; `scenarios`' `kg.py`
 declares no `COORDINATE_AXES` or `VALUE_QUERY`, so its file has no
-reader here.
+reader here. Beside the graph a run also writes where each value comes from,
+as a second file (see The provenance file under Method).
 
 A second, unrelated tool lives here: `docpipe/ontology.py`, with
 `profiles/<name>/vocabulary.py` and `docpipe/upstream.py`, writes a
@@ -40,7 +43,7 @@ rather than a call the ontology check makes itself.
 | | |
 |---|---|
 | **In** | A document's accepted JSONL tuple lines (`kind == "tuple"`), the profile's SQLite corpus database, and its `extraction_spec.json` `kg` blocks, parsed once at import. |
-| **Out** | One Turtle file per `--serialize` call: a shared prefix header plus one block per document that produced anything (`kwp`'s read back by `kg_route.py`; `scenarios`' by nothing here). |
+| **Out** | One Turtle file per `--serialize` call: a shared prefix header plus one block per document that produced anything (`kwp`'s read back by `kg_route.py`; `scenarios`' by nothing here), and beside it the provenance file `<graph>.prov.ttl`. |
 | **Resumes on** | Nothing. Every call re walks the harvest and re renders the whole output; a run's dedupe state (which identities are claimed) is never persisted. |
 | **Needs** | No served model and no GPU: a read only SQLite connection and local text; the ontology check also needs `rdflib`. `vocabulary.py --refresh` needs network access to pull `SOURCES`, and, for `scenarios`, `OEP_API_TOKEN`; `--write` needs an external OEO closure file by hand instead. The SHACL report a `kwp` `--serialize` run writes needs `pyshacl`. |
 
@@ -59,9 +62,10 @@ skips a line that does not parse, and keeps only rows whose `kind` is
 document (`None` skips it), concatenates what came back, and refuses to
 write at all, raising `ValueError` with the output path untouched, when
 nothing came back. The CLI, `--serialize` on `python -m
-docpipe.extraction`, resolves the profile, requires
-`profiles/<name>/kg.py` to export `make_serializer`, and logs and exits
-1 on that `ValueError`:
+docpipe.extraction` (`docpipe extract`), resolves the profile, takes its
+`kg.make_serializer` where it has one and otherwise the generic writer built
+from the spec's `graph` block (see below), and logs and exits 1 on that
+`ValueError`:
 
 ```bash
 python -m docpipe.extraction <db> <index> <out> \
@@ -71,14 +75,106 @@ python -m docpipe.extraction <db> <index> <out> \
 The `index` positional is still required by the parser, though this
 branch returns before it is touched.
 
+### The generic writer
+
+A spec drafted by [`docpipe compile`](./compile.md) carries a `graph` block,
+the base IRI, the prefixes, the nodes and how they are linked, and every
+parameter's `kg` names the node and the property its value is written to. That
+is everything a writer needs, so a project whose spec was compiled needs no
+`kg.py` (`docpipe/extraction/graph.py`). A profile that has a serializer keeps
+it: its graph knows things no shape says.
+
+Per document the writer writes a node of each kind the block declares
+`per: document`, once it carries something; a property for the value of a
+parameter, a literal of the property's datatype or the term chosen from the
+parameter's list; a node of its own for a value that names one, at
+`<base><node>/<its wording>`, with the wording written under the parameter's
+`kg.property` and the edge to it; and a link between two nodes that are both
+there. Three things are left out and counted in the log, none silently: a
+parameter with coordinates (where a year or a scenario goes is not something
+the block says, and two values of two years would become one property with two
+numbers); a property that allows fewer values than the harvest has (`max`: the
+values of the best trust level are taken, and if those are still too many none
+is written, because picking one would be a guess, and a value that is left out
+leaves no node of its own behind either); and an answer that is not a term
+where a term has to be written.
+
+### The provenance file
+
+A graph carries a number. That it was read on page 97, from which words, by
+which run and how far the run stands behind it, the harvest knows and the graph
+does not say. `--serialize` writes that in a file of its own beside the graph,
+`<graph>.prov.ttl` (`docpipe/extraction/provenance.py`), as PROV-O and W3C Web
+Annotation statements: per value an annotation whose body is the value and
+whose target is the page, refined by the quote and, where it was located, by
+its rectangles; per coordinate an annotation of its own with what was read, the
+wording and how the reading ended; the trust level with its reasons; and once
+per document the run, with its model and the fingerprints of the spec and the
+prompts. A coordinate that a pass after the harvest wrote, a top-up that read it again
+or the pass that appended its row (it carries `<axis>_producer`,
+see [Reading the values out](extraction.md)), is generated by an activity of its
+own, `<base>prov/run/<document>/producer-<n>` (n is the position in the stamp's `producers` list),
+with the pass as its label, the document it used, the model as its agent, the
+time it ended and a hash of its prompts; a pointer to an entry the stamp does
+not have leaves the coordinate with no generating activity and no mapping
+agent, not the run's. Every statement points at a value and none starts from
+one, so the graph itself is the same with and without the file, and a reader
+who does not want it leaves it away.
+
+The file is written where the writer names a base IRI for its terms (a
+profile's `kg.PROVENANCE`, or the `graph` block of the spec), from what a
+serializer leaves in its `claims`. `--no-provenance`, or `EXTRACT_PROVENANCE=0`,
+leaves it out. A file that this run did not write is not removed, and the run
+warns that it describes an earlier graph. Not written is the decision between
+two readings that claim one value: the writers settle that before a value
+reaches this module. A decision of a person is not that: it is recorded and
+judges nothing.
+
+What people decided about a value is kept beside it. After the harvest is
+read, `serialize.run` reads `gold.jsonl` from where `evaluate` finds it by
+default, next to the harvest directory (`gold.path_beside`), and looks each
+decision up by the row's name (`gold.decisions_in`; not in `collect`, which
+`evaluate` and the review page read their rows through). The decisions the
+review page wrote to another path, `INFERENCE_GOLD_PATH`, are not read by
+`--serialize`: the file has to lie beside the harvest. What is kept is the
+settled verdict of each decided field (`Gold.settled`): correct or wrong, who
+decided, when, and the note. The value is the same with it and without it,
+and none is left out because of one. In the provenance file of a profile that
+writes one (kwp, and the generic writer) a decision is a node of its own,
+`Decision`, with `about` the value, the coordinate, the verdict as `rdf:value`,
+`dcterms:creator`, `dcterms:created` and `rdfs:comment` for the note. The
+scenarios graph writes against closed shapes, so there a decision is one
+comment line after the value's trust line: `decision: FIELD VERDICT, by NAME,
+TIME, note: NOTE`, the parts that are missing left out, a line break in the
+note flattened. The kwp graph itself carries no decision, so the comment block
+`kg_route.py` reads above a node, whose last line is the trust line, is as it
+was.
+
+The run says what it did. `serialize: N decision(s) on M row(s) of K
+document(s) read` is the count of what was read. A decision about a row the
+harvest does not hold is applied to nothing and named in a warning (ten names,
+then "and N more"). The last line, `N of M decision(s) recorded beside their
+value in the provenance file; K decision(s) are about rows the writer left out
+of the graph`, counts the ones that found no value: a losing reading of two
+for one value, a repeat row the node was not made from, a kwp organisation, a
+document the writer wrote nothing for. A run that writes no provenance file
+(`--no-provenance`, `EXTRACT_PROVENANCE=0`) and whose serializer takes none
+says `N decision(s) read and recorded nowhere`. A decisions file that does not
+read is a warning and the run goes on; no exit code depends on any of it. A
+decision on a field the row no longer has is neither found nor counted.
+
 ### kwp: gating, identity and rendering the plan
 
 `profiles/kwp/kg.py`'s `serializer` pulls `planning_organisation` rows
-into a normalised `offices` dict; every other row passes a gate:
+into a normalised `offices` dict; every other row passes a gate,
+`quantity` checked first: `quantity` a class in `UNIT_TARGET`,
 `scenario` a key of `PARTS` (`status_quo`, `trend`, `target`),
 `spatial_scope` `municipality` or a named `sub_area`, `year` an `int`,
-`quantity` a class in `UNIT_TARGET`, `aggregation` present and known. A
-row failing any gate is dropped and counted by reason.
+`aggregation` present and known. A row failing any gate is dropped and
+counted by reason; quantity first, so a row closed on it is counted
+`not_a_class:<quantity>` and never reaches the scenario check.
+Before the reorder it counted `scenario_unread` as well, about 37,300 of
+corpus_m5's 42,882, a gate decision reported as a reading failure.
 `_document_identity` resolves a document's AGS and publication date
 from `Documents` and `DocumentMeta`/`Municipalities`; a document whose
 AGS or date does not parse yields `None` and its tuples are skipped
@@ -91,10 +187,19 @@ rather than merged onto it.
 scenario part, quantity, carrier, sector, year and aggregation, plus,
 only for a named `sub_area`, the area wording, left out for a whole
 plan value so several wordings of one fact do not split into separate
-nodes. Two rows minting one IRI with the same target are a repeat,
-counted `duplicate`; with different targets they disagree, both
-dropped, and every later claimant too, counted twice per pair as
-`conflict`. The plan node gets `has part` edges only to parts with a
+nodes. A carrier or sector enters the IRI only where `is_class` calls it
+a real OEO class; a deliberate `out:` answer or an unmapped wording is
+left out exactly like an absent one, so the identity matches what gets
+an edge. `settle` resolves every row minting one identity together: the
+same number twice is one node, marked read twice, counted `duplicate`;
+different numbers under different plan wording (`carrier_raw`/
+`sector_raw`) split into a node per wording, named by it, counted
+`split:wording`; failing that, a reading within `ROUNDING_TOLERANCE`
+(2%) of another loses to the more precise one, counted
+`conflict:rounding`; failing that, the lower trust level loses to the
+higher, counted `conflict:trust`; what none of those settles still
+drops every claimant, counted `conflict`. Each winner's comment states
+what it won over. The plan node gets `has part` edges only to parts with a
 surviving value; all three parts are
 written (docstring stale, naming only target). A value node's type is
 its quantity's OEO class; its carrier, sector and year edges share one
@@ -127,8 +232,8 @@ else the pinned vocabulary's label, else the identifier itself.
 
 `profiles/scenarios/kg.py`'s `serializer` groups rows by parameter and
 counts every `out:` answer, and every unresolved
-`scenario_label`/`scenario_region`/`scenario_type` row, into
-`out_of_graph`, logged but never written. For fields the OEKG shapes
+`scenario_label`/`scenario_region`/`scenario_type` or bundle tag row,
+into `out_of_graph`, logged but never written. For fields the OEKG shapes
 allow at most once, `_pick_one` ranks readings, dropping a substring
 candidate first, then by vote count, location and length; the rest
 are `contested`. A document with no `publication_title` is skipped
@@ -147,6 +252,9 @@ identity entirely.
 The study report IRI is minted from the title, the bundle IRI from
 `study_project_name` or the title; a second document reusing either
 IRI is logged, not refused, its triples landing on the shared subject.
+The bundle also takes one triple for each tag entry the model picked off
+the shapes' lists (`BUNDLE_TAGS`), and none for an `out:` entry or an
+unmapped wording, which are counted.
 One factsheet is minted per resolved identity: `rdfs:label` is the AR6
 database's own spelling when known, `dc:acronym` the document's own; a
 matched study region is referenced by its existing OEKG IRI, never
@@ -158,21 +266,35 @@ number; it is counted `unplaceable`, keyed by state, since without it
 the gap read as zero. Evidence for a triple is a flattened comment, or,
 with `OEKG_EVIDENCE`
 on, a linked `oekgprov:ExtractionEvidence` node; either way the
-rendered trust line follows it.
+rendered trust line follows it. That reading lives in `_make_builder`, which
+`make_serializer` and `make_study_reader` share; the second hands the same
+document as plain data to `profiles/scenarios/oekg_api.py`, a dry run of the
+OEKG scenario-bundle API that sends nothing, described on
+[the scenarios profile](../profiles/scenarios.md).
 
 ### Checking a spec against the ontology
 
 `ontology.read` parses OWL or Turtle into an `rdflib` graph; `index`
 walks every labelled class, individual and property into a per
 identifier record (kind, label, `alt_labels`, definition, parents,
-deprecated, and, for a property, its domain and range); `alt_labels`
-holds the term's German alternative spellings, checked by
-`foreign_labels` below. `closures` computes, per declared root, every
+deprecated, and, for a property, its domain and range). The parents of a
+class are its superclasses, those of a property its superproperties, and
+those of an individual the classes the ontology asserts it into: a
+predicate's range names a class, and an individual object is held to it
+through its own class and nothing else. `alt_labels`
+holds the term's alternative spellings in one language, the one the profile
+names (`extraction.ALT_LABEL_LANGUAGE`: `de` for kwp and scenarios, `en` for
+the built-in profile; `index` and `build` take it as `language`, without a
+default), checked by `foreign_labels` below. `closures` computes, per declared root, every
 class under it or individual it types. `build` grows a profile's
 closures plus its spec's identifiers to a fixpoint over parents,
 domains and ranges, and writes a pin recording the ontology's version
 IRI, each file's sha256, and which identifier families the files
-cover. `vocabulary.py --write` calls this with an external `--closure`
+cover. It also carries what a writer's own edges name (`also`, which
+`kwp` fills from `vocabulary.edge_terms`): `edge_problems` asks
+whether a subject is under a predicate's domain, and a class the
+snapshot lacks has no parents to answer with. `vocabulary.py --write`
+calls this with an external `--closure`
 file (plus, for `kwp`, `--mhpo`) and overwrites `vocabulary.json`;
 `--refresh` does the same pull automatically, through `upstream.py`
 (below), and then runs `--check` on what it wrote. `--check` runs
@@ -183,8 +305,15 @@ file (plus, for `kwp`, `--mhpo`) and overwrites `vocabulary.json`;
 `carrier_problems` or `scenarios`' `region_problems`; each a string,
 never an exception, and the CLI exits 1 if any exist. Both CLIs then
 print `foreign_labels`' notes, one line per corpus label whose first
-spelling is not the term's own, and both end on a summary line naming
-identifiers checked, problems found, and such labels noted. Only
+spelling is not the term's own, and then one note per class whose
+definition in the spec is not the pin's (`ontology.definition_differences`:
+`REWRITTEN`, the spec has a definition and the pin's words are others, or
+`PIN_ONLY`, the pin defines the class and the spec says nothing; white space
+is folded, a definition only the spec has is the author's own, `out:` entries
+and classes the pin does not know are skipped). Both end on a summary line
+naming identifiers checked, problems found, such labels noted and definitions
+that differ from the pin. The notes are printed and never counted as a
+problem, so the exit code is what it was. Only
 `scenarios`' `--check` also prints `uncovered` notes, for a family no
 parsed file covers.
 
@@ -194,12 +323,16 @@ parsed file covers.
 version and caches it under `data/upstream/<source>/<version>/`: a
 `release_asset` is an asset of the repository's latest GitHub release,
 found from the redirect `github.com/<repo>/releases/latest` gives,
-never the GitHub API; a `repo_files` source is files at a branch
+never the GitHub API; a `release_file` is a file in the repository at
+that release's tag, for a project that attaches nothing to its
+releases; a `repo_files` source is files at a branch
 head, versioned by a digest over their bytes and, where the source
 names a `reviewed` commit, compared against it so a schema `kg.py`
 mirrors by hand is named the moment it moves; a `sparql` source
 queries the OEKG endpoint with a token read from the environment
-variable it names and written nowhere. `write_lock` records every
+variable it names and written nowhere. `kwp` reads MHPO's `mhpo.owl`
+as a `release_file`, because MHPO's releases carry no attachment.
+`write_lock` records every
 source's result in `data/upstream/<profile>.lock.json`.
 
 `vocabulary.py --refresh` pulls `SOURCES`, rebuilds `vocabulary.json`
@@ -233,13 +366,17 @@ terms, disjoint}`, plus `regions` for `scenarios`; `pin` carries
 come from `--refresh`. A declared edge, the
 unit `edge_problems` checks, is `{where, subject, predicate,
 object|datatype, accepted}`: `accepted` lets a serializer name why a
-triple contradicts the pinned domain, for example `scenarios`' `has
-uuid` on a bundle, though domained on report or factsheet alone.
+triple contradicts the pinned domain or range, for example `scenarios`' `has
+uuid` on a bundle, though domained on report or factsheet alone, or
+`kwp`'s publication date on the plan, a slot the MHPKG schema
+prescribes with range `date` where OEO says `xsd:dateTime`.
 
 Every value's trust verdict, `{level, reasons, image_origin,
 corroborated}`, is rendered into one line by a profile's own
 `TRUST_PROSE` table, written as the last comment above the value's
-node, in English for both `kwp` and `scenarios`. The level is a floor,
+node, in English for both `kwp` and `scenarios` (where a person decided
+something about the value, the scenarios graph adds a decision line after it,
+see The provenance file). The level is a floor,
 computed once and never raised by later human review, and where a
 coordinate's passage stands is no reason. The levels, reasons and
 marks a trust line is built from are at
@@ -252,6 +389,7 @@ marks a trust line is built from are at
 | `db` (positional) | required argument | none | SQLite path passed to `make_serializer(db_path)` | `runner.py` |
 | `out` (positional) | required argument | none | Harvest directory `serialize.collect` walks | `runner.py` |
 | `--serialize TTL` | CLI flag | none | Switches to serialize only mode, writing the graph here | `runner.py` |
+| `--no-provenance`, `EXTRACT_PROVENANCE` | CLI flag, env var | provenance written (`1`) | With `--serialize`: leave out the provenance file beside the graph | `runner.py` |
 | `--profile NAME` | CLI flag | `$DOCPIPE_PROFILE` | Selects which `kg.py` and spec the run uses | `docpipe/profile.py` |
 | `DOCPIPE_PROFILE` | environment variable | unset | Default for `--profile` | `docpipe/profile.py` |
 | `OEKG_ID_BASE` | env var, `scenarios` only | `https://openenergyplatform.org/ontology/oekg/` | Overrides the IRI prefix every node and namespace uses | `profiles/scenarios/kg.py` |
@@ -318,10 +456,11 @@ marks a trust line is built from are at
   node's class, making the graph unsatisfiable while every check then
   in place still passed (`docpipe/ontology.py`, `edge_problems`
   docstring).
-- The checked-in `kwp` snapshot holds 335 terms, 6 sets and 10 disjoint
-  pairs, pinned to OEO 2.13.0, against a spec naming 58 identifiers;
-  `scenarios`' holds 53 terms and 249 OEKG regions, same release,
-  against a spec of 32 (inspected directly; `ontology.spec_terms`).
+- The checked-in `kwp` snapshot holds 352 terms, 6 sets and 11 disjoint
+  pairs, pinned to OEO 2.13.0 and MHPO v0.1.0, against a spec naming 58
+  identifiers;
+  `scenarios`' holds 322 terms and 249 OEKG regions, same release,
+  against a spec of 280 (inspected directly; `ontology.spec_terms`).
   `--refresh` pulls that same release straight from GitHub rather than
   by hand; neither number is pinned in a test any more, since both
   move the day upstream does.
@@ -338,16 +477,26 @@ marks a trust line is built from are at
 ## Verification
 
 - `test_value_minting_matches_the_schema_repo_reference`,
-  `test_both_date_spellings_mint_the_same_iris` and
-  `test_a_carrier_oeo_does_not_call_a_carrier_keeps_its_edge_and_is_counted`:
+  `test_both_date_spellings_mint_the_same_iris`,
+  `test_a_carrier_oeo_does_not_call_a_carrier_keeps_its_edge_and_is_counted`
+  and `test_a_non_class_names_no_node_just_as_an_unstated_coordinate_does`:
   minting is a pure function of a value's coordinates; a
-  `CARRIER_OUTSIDE_ROOT` carrier keeps its edge, counted.
+  `CARRIER_OUTSIDE_ROOT` carrier keeps its edge, counted, and an `out:`
+  or unmapped carrier or sector never enters the identity.
+  `test_the_gate_names_the_quantity_before_the_scenario` holds the
+  quantity gate ahead of the scenario one.
 - `test_every_plan_part_the_ontology_names_is_serialized` and
   `test_a_part_with_no_value_is_neither_a_node_nor_a_has_part_edge`: a
   part gets a node only when it has a value.
-- `test_a_value_conflict_on_one_coordinate_drops_every_claimant` and
-  `test_a_repeat_alone_still_serializes_one_node`: a disagreement drops
-  both claimants; an exact repeat, one node, no conflict.
+- `test_a_value_conflict_on_one_coordinate_drops_every_claimant`,
+  `test_a_repeat_alone_still_serializes_one_node`,
+  `test_a_rounded_reading_loses_to_the_precise_one`,
+  `test_different_wordings_are_different_nodes_named_by_the_wording`,
+  `test_a_lower_trust_grade_loses_the_identity` and
+  `test_what_no_rule_settles_is_still_a_question_for_a_human`: an exact
+  repeat is one node; different plan wording splits into a node each; a
+  rounded reading loses to a precise one and a lower trust level to a
+  higher one; what none of those settles still drops every claimant.
 - `test_a_second_document_claiming_the_same_identity_is_refused` and
   `test_one_heat_plan_comes_out_as_the_published_example`: a stale
   duplicate is refused after the first claimant succeeds, and a full
@@ -375,7 +524,19 @@ marks a trust line is built from are at
 
 `docpipe/extraction/serialize.py` is the profile free core walking the
 harvest and choosing a serializer (see Method above); called only from
-`runner.py`'s `--serialize` branch. Its `validate` holds a written
+`runner.py`'s `--serialize` branch. `docpipe/extraction/graph.py` is the
+generic writer for a spec with a `graph` block, and
+`docpipe/extraction/provenance.py` writes the provenance file; both are
+chosen and called there too. `docpipe/extraction/graphkit.py` is what the
+two profile writers and these two share: the UUIDv5 an IRI is minted from
+(`base_namespace`, `mint_uuid`), the folding of a name to one spelling
+(`normalise`, to which each writer passes its own list of legal forms, since a
+shared list would mint every organisation of one corpus anew), the Turtle
+helpers (`ttl_string`, `ttl_escape`, `ttl_literal`, `ttl_comment`, a comment
+cut at 400 characters) and `NOT_IN_GRAPH`, the `out:` prefix of the choice
+list entries that are answers and not things of the graph. Every IRI and every
+byte of Turtle is what it was before the move, which two golden Turtle files
+per profile hold. Its `validate` holds a written
 graph against a profile's refreshed SHACL shapes and is the one place
 this stage calls into the ontology tooling. `docpipe/ontology.py` is
 the profile free snapshot builder and checker (see Method above),
@@ -385,7 +546,7 @@ call; it never imports a profile. `docpipe/upstream.py` is the
 profile free source puller (see Method above): it resolves a
 profile's `SOURCES` to a version, caches what it fetched, and writes
 the lock both `vocabulary.py --refresh` and
-`scripts/preflight_profiles.py` read back; it never imports a profile
+`docpipe preflight` read back; it never imports a profile
 either.
 
 `profiles/kwp/kg.py` is the `kwp` MHPKG serializer (see Method above),

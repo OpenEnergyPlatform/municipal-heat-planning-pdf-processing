@@ -1,6 +1,6 @@
 # The image sandbox_service.py runs LLM-written Python in.
 #
-# It is part of the contract, not a deployment detail: the harvest prompt tells
+# It is part of the contract, not a deployment detail: the rows prompt tells
 # the model that numpy and pandas are available, so what this file installs is
 # what that promise means. Nothing else goes in — the container is started with
 # --network=none and a memory cap, and every package is one more thing that

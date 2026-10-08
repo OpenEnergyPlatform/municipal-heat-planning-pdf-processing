@@ -11,8 +11,8 @@ shape is identical for every value in the corpus. So the shape is
 computed here, from the spec, and the model is never asked for it. It
 is asked, one field at a time, to fill the shape in.
 
-Asking per field is the point. One request for a whole tuple lets a
-model quietly drop a coordinate it is unsure of, and dropping is
+Asking per field is the point. One request for every coordinate lets a
+model quietly drop one it is unsure of, and dropping is
 free: the field stays nullable, nothing refuses it, nothing counts
 it. Measured on the 204 document corpus run, the year was missing on
 63.5 percent of all values, and on 13 percent of those it stood in
@@ -82,6 +82,20 @@ of reading a row.
 
 ## Functions
 
+### reader_of
+
+```python
+def reader_of(row: dict, name: str, producers) -> tuple
+```
+
+(who, index, entry) for the coordinate `name` of a stored row.
+
+No key: the harvest read it (BY_HARVEST). A key that points at an entry
+of `producers`: that pass did (BY_PASS). A key that points at none:
+BY_UNKNOWN, and never the harvest. `--recheck` deletes the stamps, so a
+position can outlive the list it was written for; reading that as the
+harvest would put a top-up's answer under a model that never saw it.
+
 ### parameter_slot
 
 ```python
@@ -108,9 +122,10 @@ def has_number(claim: dict) -> bool
 
 Is this row's value a number, so that a unit belongs to it?
 
-The same reading `derive_parameter` makes: a wording is a text
-parameter's value and carries no unit, whatever the value request wrote
-beside it.
+Asked only where a unit can be: of a spec with a numeric parameter. A
+wording there is a text parameter's value and carries no unit, whatever
+the value request wrote beside it. A spec without one has no unit
+question, and what counts as a wording there is `is_wording`'s to say.
 
 ### unit_slot
 
@@ -169,13 +184,40 @@ frames and no way to say which one a value hangs in. A name no parameter
 has yields nothing at all rather than a shorter frame: half a frame is
 a pair set that is silently missing a coordinate.
 
+### is_wording
+
+```python
+def is_wording(spec, claim: dict) -> bool
+```
+
+Is this row's value a wording, which only a parameter that is not
+numeric can hold?
+
+A string that is no number is one. In a spec without a numeric parameter
+every string is: "2030" is a year there, and that a number without a
+unit belongs to no parameter is a rule about parameters that have units.
+Read as a number, every bare year and every dotted date of such a spec
+left the harvest `out_of_slice`, unasked.
+
+There a row whose value was left out, with the wording in `value_raw`,
+is one too: that is how the value request says no entry of the list
+fits, and the row is kept with its wording. A value that is no string
+and has no wording beside it is not one. No parameter takes it, so
+asking would pay for a refusal.
+
+The rule stops at a spec with a numeric parameter: there a digit string
+is a number, whichever text parameter might have held a year.
+
 ### derive_parameter
 
 ```python
 def derive_parameter(spec, claim: dict)
 ```
 
-Which parameter this row belongs to, from its unit alone, or None.
+Which parameter this row belongs to, or None when that is a question.
+
+A wording belongs to the text parameter when the spec has exactly one.
+A number is decided by its unit alone.
 
 The spec says it itself: "the unit separates the two parameters". Measured
 over the kwp spec the nine energy units and the forty-two emission units

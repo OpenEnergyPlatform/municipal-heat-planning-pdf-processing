@@ -16,9 +16,12 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
-from docpipe.profile import add_profile_argument, resolve_profile
+from docpipe import reading
+from docpipe.artifacts import document_dirs, refuse_same_names
+from docpipe.llm_preflight import PreflightError
+from docpipe.profile import add_profile_argument, program, resolve_profile
 
 from .config import (
     PAGE_TRANSCRIPTION_REPORT_JSON,
@@ -73,6 +76,8 @@ def run_single(
     column_layout: str = "auto",
     transcribe_missing_text: bool = False,
     profile=None,
+    holes: Optional[list] = None,
+    page_server: Optional[Callable[[], None]] = None,
 ) -> Optional[dict]:
     """
     Processes a single PDF through Stages 1-3; returns the Stage-3 dict, or
@@ -82,7 +87,13 @@ def run_single(
     *transcribe_missing_text* sends pages whose text layer is missing to the
     vision model and uses the reply as their text blocks. Off by default: it is
     the only part of preprocessing that needs a model server, and a run that
-    does not ask for it must not depend on one.
+    does not ask for it must not depend on one. A page the model gave no
+    readable reply for keeps no text and is named, with the cause, in the
+    page transcription report; the next run with the flag asks again for the
+    pages that still have none. *holes*, when given, gets one entry for a
+    document that has any. *page_server*, when given, is called before the
+    first page of this document goes to the model (`main` asks the server
+    there, once per run).
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -130,8 +141,11 @@ def run_single(
     # After Stages 1+2, because the media blocks are then known and only the
     # TEXT layer is missing; before Stage 3, because from there on nothing may
     # need to know where a page's text came from.
+    transcribed = 0
     if transcribe_missing_text:
-        _fill_missing_page_text(pdf_path, output_dir, pages, profile=profile)
+        transcribed = _fill_missing_page_text(
+            pdf_path, output_dir, pages, profile=profile,
+            holes=holes, page_server=page_server)["pages_transcribed"]
 
     total_text   = sum(
         sum(1 for b in pg.blocks if b.type == "text")  for pg in pages
@@ -156,6 +170,14 @@ def run_single(
     if n_failed and stage3_path.exists():
         log.warning("%s: dropping the Stage-3 cache, it was built from an "
                     "incomplete extraction", pdf_path.name)
+        stage3_path.unlink(missing_ok=True)
+    # The same for a page this run transcribed. A page that failed in an
+    # earlier run and is read now is in pages.json, and a Stage 3 built
+    # before that has none of its text: it would be reused for good.
+    if transcribed and stage3_path.exists():
+        log.warning("%s: dropping the Stage-3 cache, %d page(s) were "
+                    "transcribed after it was built", pdf_path.name,
+                    transcribed)
         stage3_path.unlink(missing_ok=True)
     if stage3_path.exists() and not force_reextract:
         try:
@@ -192,17 +214,25 @@ def run_folder(
     column_layout: str = "auto",
     transcribe_missing_text: bool = False,
     profile=None,
+    holes: Optional[list] = None,
+    page_server: Optional[Callable[[], None]] = None,
 ) -> dict[str, Optional[dict]]:
     """
     Processes all PDFs in *input_dir* sequentially, keyed by path relative to
     *input_dir*. The layout model is loaded once and reused; it is not
     thread-safe, so processing must stay sequential. _index.json is rewritten
-    after each PDF so partial results survive an interruption.
+    after each PDF so partial results survive an interruption. Raises
+    DuplicateDocumentName for two PDFs that would be one document name.
     """
     pdf_files = sorted(input_dir.glob(glob))
     if not pdf_files:
         log.warning(f"No PDFs found in '{input_dir}' (pattern: {glob})")
         return {}
+    # Every stage after this one refuses two documents of one name, so they
+    # are refused here, before the layout model has run over either.
+    refuse_same_names(
+        [output_dir / p.relative_to(input_dir).with_suffix("")
+         for p in pdf_files], output_dir)
 
     log.info(f"{'=' * 60}")
     log.info(f"Folder mode: {len(pdf_files)} PDFs in '{input_dir}'")
@@ -243,8 +273,14 @@ def run_folder(
                 column_layout=column_layout,
                 transcribe_missing_text=transcribe_missing_text,
                 profile=profile,
+                holes=holes,
+                page_server=page_server,
             )
             status = "ok" if result is not None else "error"
+        except PreflightError:
+            # The server a page needs is not there. That is the run's error
+            # and not this document's: every later document would meet it too.
+            raise
         except Exception as e:
             log.error(f"Error processing '{pdf_key}': {e}", exc_info=True)
             result, status = None, "error"
@@ -288,15 +324,12 @@ def _write_index(
 
 def rebuild_stage3_from_cache(output_dir: Path, column_layout: str = "auto") -> int:
     """
-    Re-run ONLY Stage 3 for every doc under *output_dir* that has a readable
-    pages cache, overwriting its sections.json. No PDF input and no
-    layout model. Returns the number of docs rebuilt.
+    Re-run ONLY Stage 3 for every doc under *output_dir*, at any depth, that
+    has a readable pages cache, overwriting its sections.json. No PDF input
+    and no layout model. Returns the number of docs rebuilt.
     """
     output_dir = Path(output_dir)
-    doc_dirs = sorted(
-        d for d in output_dir.iterdir()
-        if d.is_dir() and (d / PAGES_JSON).exists()
-    )
+    doc_dirs = document_dirs(output_dir, PAGES_JSON)
     log.info("Rebuild Stage 3: %d docs with a pages cache under '%s'",
              len(doc_dirs), output_dir)
     done = 0
@@ -323,10 +356,7 @@ def report_columns(output_dir: Path, top: int = 20) -> dict[str, tuple[int, int]
     from .columns import count_multi_column_pages
 
     output_dir = Path(output_dir)
-    doc_dirs = sorted(
-        d for d in output_dir.iterdir()
-        if d.is_dir() and (d / PAGES_JSON).exists()
-    )
+    doc_dirs = document_dirs(output_dir, PAGES_JSON)
     found: dict[str, tuple[int, int, int]] = {}
     total_pages = total_multi = 0
     for d in doc_dirs:
@@ -350,12 +380,19 @@ def report_columns(output_dir: Path, top: int = 20) -> dict[str, tuple[int, int]
 # Unified entry point
 # ---------------------------------------------------------------------------
 
-def _fill_missing_page_text(pdf_path, output_dir, pages, *, profile=None) -> dict:
+def _fill_missing_page_text(pdf_path, output_dir, pages, *, profile=None,
+                            holes: Optional[list] = None,
+                            page_server: Optional[Callable[[], None]] = None
+                            ) -> dict:
     """Transcribe the pages with no text layer, and record what that cost.
 
     Kept out of run_single's body because it is the one part of preprocessing
     that talks to a model: everything else here is deterministic, and a run
     that does not ask for this must not need a server to be up.
+
+    *holes*, when given, gets {"document", "pages", "causes"} if pages ended
+    without text because the model gave no readable reply for them: how many
+    pages, and how many of them each cause is the cause of.
     """
     import json as _json
 
@@ -371,6 +408,7 @@ def _fill_missing_page_text(pdf_path, output_dir, pages, *, profile=None) -> dic
         render=make_page_renderer(pdf_path),
         transcribe=make_transcriber(profile),
         workers=PAGE_WORKERS,
+        before_first=page_server,
     )
     # Written even when nothing needed doing: an empty report is
     # checked-and-clean, a missing one means nobody looked.
@@ -385,7 +423,61 @@ def _fill_missing_page_text(pdf_path, output_dir, pages, *, profile=None) -> dic
         # later --rebuild-stage3 must see the transcribed text, not the empty
         # layer it replaced.
         _save_pages_cache(pages, Path(output_dir))
+    if holes is not None and report["pages_failed"]:
+        causes: dict = {}
+        for entry in report["failed_pages"]:
+            causes[entry["why"]] = causes.get(entry["why"], 0) + 1
+        holes.append({"document": Path(output_dir).name,
+                      "pages": report["pages_failed"], "causes": causes})
     return report
+
+
+def summarise(holes: list) -> str:
+    """One sentence for the pages a run could not read, in pages and
+    documents. *holes* are the entries `_fill_missing_page_text` adds."""
+    causes: dict = {}
+    for entry in holes:
+        for cause, n in entry["causes"].items():
+            causes[cause] = causes.get(cause, 0) + n
+    return (f"Page transcription: {sum(h['pages'] for h in holes)} page(s) in "
+            f"{len(holes)} document(s) could not be read; page(s) by cause: "
+            + ", ".join(f"{c} {n}" for c, n in sorted(causes.items()))
+            + "; the next run with --transcribe-missing-text asks for "
+              "them again")
+
+
+def _once(check: Callable[[], None]) -> Callable[[], None]:
+    """*check*, run by the first call only. One that raised is not run again
+    either: its error ends the run."""
+    done: list = []
+
+    def first_call_only() -> None:
+        if not done:
+            done.append(True)
+            check()
+    return first_call_only
+
+
+def _assert_page_server(profile) -> None:
+    """The vision server serves the model, holds a page request, and takes
+    the reply schema of the transcription. Asked before the first page that
+    needs the model and not before: a run in which every page has its text
+    asks no server and must not end because none is there (owner decision
+    2026-10-06). The window the server reports stays with the run
+    (`llm_preflight.served_window`): a page whose reply was cut off is given
+    the room that window leaves beyond `page_request_tokens`."""
+    from docpipe.llm_preflight import assert_serving
+    from docpipe.visuals import replies
+    from docpipe.visuals.config import VLM_API_KEY, VLM_BASE_URL, VLM_MODEL
+
+    from .page_text_fallback import page_request_tokens
+
+    if profile is None:
+        from docpipe.profile import resolve_profile as _resolve
+        profile = _resolve(None)
+    assert_serving(VLM_BASE_URL, VLM_API_KEY, VLM_MODEL,
+                   page_request_tokens(profile), what="page transcription",
+                   role="vlm", shapes=dict((replies.PAGE,)))
 
 
 def run(
@@ -398,6 +490,8 @@ def run(
     column_layout: str = "auto",
     transcribe_missing_text: bool = False,
     profile=None,
+    holes: Optional[list] = None,
+    page_server: Optional[Callable[[], None]] = None,
 ) -> Optional[dict] | dict[str, Optional[dict]]:
     """
     Entry point: dispatches to run_single() or run_folder() depending on
@@ -423,6 +517,8 @@ def run(
             column_layout=column_layout,
             transcribe_missing_text=transcribe_missing_text,
             profile=profile,
+            holes=holes,
+            page_server=page_server,
         )
     elif input_path.is_file() and input_path.suffix.lower() == ".pdf":
         return run_single(
@@ -433,6 +529,8 @@ def run(
             column_layout=column_layout,
             transcribe_missing_text=transcribe_missing_text,
             profile=profile,
+            holes=holes,
+            page_server=page_server,
         )
     else:
         raise ValueError(f"Input is neither a PDF nor a folder: {input_path}")
@@ -444,7 +542,7 @@ def run(
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="python -m docpipe.preprocessing.pipeline",
+        prog=program("docpipe.preprocessing"),
         description="Municipal Heat Planning – PDF Preprocessing Pipeline (Stages 1-3)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
@@ -514,6 +612,7 @@ def main() -> None:
         args.output = str(profile.processed_dir)
 
     page_range = tuple(args.pages) if args.pages else None
+    holes: list = []
 
     if args.report_columns:
         # The report reads a processed root, which is the second positional in
@@ -526,7 +625,13 @@ def main() -> None:
         log.error("input is required unless --rebuild-stage3 is given")
         sys.exit(1)
 
+    # Only a run that asks for the model needs the profile's retry sentences,
+    # and only one that has a page to send needs the server: the sentences are
+    # checked here, the server before the first page that lacks its text.
+    asks_model = args.transcribe_missing_text and not args.rebuild_stage3
     try:
+        if asks_model:
+            reading.phrases()
         run(
             input_path=args.input,
             output_dir=args.output,
@@ -537,9 +642,16 @@ def main() -> None:
             column_layout=(profile.column_layout if profile else "auto"),
             transcribe_missing_text=args.transcribe_missing_text,
             profile=profile,
+            holes=holes,
+            page_server=(_once(lambda: _assert_page_server(profile))
+                         if asks_model else None),
         )
+        # A page without text is a result with a cause and does not change the
+        # exit code; it is said once, in pages and documents.
+        if holes:
+            log.warning("%s", summarise(holes))
         sys.exit(0)
-    except ValueError as e:
+    except (ValueError, PreflightError) as e:
         log.error(str(e))
         sys.exit(1)
 

@@ -149,8 +149,8 @@ def test_a_pair_whose_quote_is_in_no_shown_passage_is_not_a_pair():
 
 def test_a_pair_whose_quote_does_not_carry_the_answer_is_not_a_pair():
     """The quote is in a shown passage and says nothing about 2050. That is
-    the answer a whole-tuple request used to hide inside a tuple some other
-    quote had already justified."""
+    the answer that used to hide inside a tuple some other quote had
+    already justified."""
     assert runner.frame_pairs(_reply(year=2050), _slots(), _shown()) == []
 
 
@@ -626,8 +626,9 @@ def test_the_prompt_bounds_completeness_by_the_frame():
     every passage, and told it in the input description to return only the
     ones of this pair. It followed the loud rule, and 174 of 234 checked
     tuples carried a foreign year."""
-    text = (PROFILES / "kwp" / "prompts" / "extraction"
-            / "rows.md").read_text(encoding="utf-8")
+    from docpipe import prompts
+    from docpipe.profile import load_profile
+    text = prompts.load("extraction/rows", load_profile("kwp")).text
     rule = [line for line in text.splitlines()
             if "vollst" in line.lower() and "Eintrag" in line]
     assert len(rule) == 1, rule
@@ -768,7 +769,7 @@ def test_a_row_gets_only_the_frame_coordinates_its_parameter_has(monkeypatch):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             # The unit is read for the numeric row, which is what lets it
             # settle a parameter and reach the frame projection below;
             # every other field stays unanswered, which this test does not

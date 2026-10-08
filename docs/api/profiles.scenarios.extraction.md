@@ -70,4 +70,14 @@ publication with no runs in DocumentScenarios, or one that names no country
 at all, used to leave the field with no list, and a field with no list is
 free text again.
 
+### shapes_files
+
+```python
+def shapes_files() -> list
+```
+
+The OEKG shapes of the last refresh of the API sources, or none.
+
+Where the preflight finds the file `NOT_EXTRACTED` is held against.
+
 [Back to the index](../README.md)

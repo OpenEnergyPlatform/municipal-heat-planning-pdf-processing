@@ -85,7 +85,8 @@ headers/footers are stripped, both in place).
 def sections_to_dict(sections: list[Section]) -> dict
 ```
 
-Serialises the section list into the final output JSON structure.
+Serialises the section list into the final output JSON structure, which
+docpipe/schemas/sections.schema.json describes.
 
 ### save_output
 

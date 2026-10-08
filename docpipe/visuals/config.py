@@ -69,24 +69,24 @@ IMAGE_TOKENS = 4096
 
 def max_request_tokens() -> int:
     """Worst case for one vision request: the longer of the two system
-    prompts + one page image + the reply we ask for."""
-    words = max(len(TABLE_SYSTEM_PROMPT.split()),
-                len(FIGURE_SYSTEM_PROMPT.split()))
+    prompts + one page image + the reply we ask for, once. A reply cut off at
+    its limit is asked once more with more room, but the room is bounded by
+    what the served window leaves beyond this number (vision.call_vision), so
+    no second reply is counted."""
+    words = max(len(table_system_prompt().split()),
+                len(figure_system_prompt().split()))
     return int(words * TOKENS_PER_WORD + IMAGE_TOKENS + VLM_MAX_TOKENS)
 
 # ---------------------------------------------------------------------------
-# Runaway detection
+# Retry ladder
 # ---------------------------------------------------------------------------
 # Sparse Gantt grids ("Zeitlicher Rahmen", "Maßnahmenzeitplan 2024–2030") make
-# the model lose count and emit empty cells until it hits VLM_MAX_TOKENS; the
-# JSON is then truncated and unparseable. Measured on the August 2026 run: runs
-# of 29 to 75 consecutive empty cells, where no real table exceeded a handful.
-# A stop sequence on the empty-cell run was tried and removed. It cut the answer
-# mid-JSON, which then had to be repaired, and it bought nothing the detector
-# below does not already do — the detector only chooses how to retry, so a
-# misjudgement there costs a differently-worded attempt rather than content.
-RUNAWAY_CELL_RUN = int(os.environ.get("VLM_RUNAWAY_CELL_RUN", "25"))
-
+# the model lose count and emit empty cells until it hits VLM_MAX_TOKENS: the
+# reply ends at its limit, cut off. Measured on the August 2026 run: runs of 29
+# to 75 consecutive empty cells, where no real table exceeded a handful. The
+# reply says so itself (finish_reason "length"), and call_vision starts over
+# from the original prompt with the next penalty below.
+#
 # repetition_penalty for the attempt AFTER the indexed one failed, so index 0 is
 # unused: the first attempt runs clean. A table legitimately repeats pipes,
 # dashes, units and years, and a penalty blunts exactly that — hence the gentle
@@ -120,18 +120,41 @@ PROMPT_IDS = ("visuals/table_system", "visuals/table_user",
               "visuals/caption_keep", "visuals/caption_generate_table",
               "visuals/caption_generate_figure")
 
-TABLE_SYSTEM_PROMPT = prompts.text("visuals/table_system")
+# Read on first use, not on import: a prompt belongs to a profile, and the
+# stage is imported before its command line names one.
 
-TABLE_USER_PROMPT = prompts.text("visuals/table_user")
+@prompts.per_profile
+def table_system_prompt() -> str:
+    return prompts.text("visuals/table_system")
 
-# ── Caption instruction fragments (inserted into TABLE/FIGURE_USER_PROMPT) ──
 
-CAPTION_KEEP_INSTRUCTION = prompts.text("visuals/caption_keep")
+@prompts.per_profile
+def table_user_prompt() -> str:
+    return prompts.text("visuals/table_user")
 
-CAPTION_GENERATE_TABLE_INSTRUCTION = prompts.text("visuals/caption_generate_table")
 
-CAPTION_GENERATE_FIGURE_INSTRUCTION = prompts.text("visuals/caption_generate_figure")
+# ── Caption instruction fragments (inserted into the two user prompts) ──
 
-FIGURE_SYSTEM_PROMPT = prompts.text("visuals/figure_system")
+@prompts.per_profile
+def caption_keep_instruction() -> str:
+    return prompts.text("visuals/caption_keep")
 
-FIGURE_USER_PROMPT = prompts.text("visuals/figure_user")
+
+@prompts.per_profile
+def caption_generate_table_instruction() -> str:
+    return prompts.text("visuals/caption_generate_table")
+
+
+@prompts.per_profile
+def caption_generate_figure_instruction() -> str:
+    return prompts.text("visuals/caption_generate_figure")
+
+
+@prompts.per_profile
+def figure_system_prompt() -> str:
+    return prompts.text("visuals/figure_system")
+
+
+@prompts.per_profile
+def figure_user_prompt() -> str:
+    return prompts.text("visuals/figure_user")

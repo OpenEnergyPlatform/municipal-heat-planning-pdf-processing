@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""harvest_compare.py – What a harvest is worth, without a GPU.
+"""harvest_compare.py: What one harvest is worth, without a GPU.
 
-Two harvests of the same plans differ in ways a log line cannot show. This
+Despite its name this does not compare two harvests: it measures one. It
 reads the JSONL a run wrote, puts it through the profile's own serializer and
 prints the numbers a decision is made on: how many tuples survived into the
 graph, how many were lost to a contested identity, which coordinate is still
-open how often, and what the run cost in requests. Run it on the old
-directory and on the new one and the diff is the answer.
+open how often, and what the run cost in requests. Two harvests are held
+against each other by `docpipe evaluate NEW_DIR --diff OLD_DIR`, not by this.
 
 It never loads a model and never touches the index. The one thing it needs
 besides the harvest is the document database, because value IRIs are minted
@@ -44,6 +44,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from docpipe import jsonl                                   # noqa: E402
 from docpipe.extraction import fields                       # noqa: E402
 from docpipe.profile import load_profile                    # noqa: E402
 
@@ -73,7 +74,7 @@ def read_harvest(path: Path) -> tuple:
     """
     tuples, refusals, summary = [], [], None
     parameter_lines: list = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in jsonl.read(path):
         if not line.strip():
             continue
         try:
@@ -140,7 +141,8 @@ def trace_costs(directory: Path, name: str) -> dict:
                  if p.is_file()), None)
     if path is None:
         return out
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line in jsonl.lines(path.read_text(encoding="utf-8",
+                                           errors="replace")):
         try:
             event = json.loads(line)
         except json.JSONDecodeError:

@@ -7,9 +7,10 @@ process.py: Core processing logic for table and figure enrichment.
 Sends one table or figure image to the vision model, together with
 its section context, and returns a copy of the item carrying the
 model's markdown or description. A table's transcription passes a
-quality gate and gets one retry with a stronger prompt on failure; a
-call that never returns valid JSON falls back to a plain text
-request before the item is marked failed.
+quality gate and gets one retry with a stronger prompt on failure. An
+image the model could not be read an object for (see vision.call_vision)
+has no content: the item carries no markdown or description, says why in
+`vlm_why`, and is counted by cause. No plain-text request fills in for it.
 
 Author: Felix Vossel
 
@@ -35,7 +36,11 @@ Returns a copy of *table* enriched with a ``markdown`` key.
 
 A QA gate checks coverage against *source_text* and row duplication; on
 failure the table is still returned (best effort) but carries a
-``qa_warning`` field.
+``qa_warning`` field. The result of the check is kept for every table the
+model transcribed, as ``qa`` (the metrics of the kept attempt and whether
+it passed). A table the model gave no object for has none: it was not
+checked, which is not the same as passed. It has no ``markdown`` either,
+and says why in ``vlm_why``.
 
 *lock* guards the shared ProcessingStats: without it this is not safe to
 call from several threads at once.
