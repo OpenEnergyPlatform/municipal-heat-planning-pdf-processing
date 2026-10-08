@@ -118,6 +118,9 @@ def index(graph, language: str) -> dict:
     blocks -- which name predicates and nothing else -- read as a list of
     terms the ontology does not have.
 
+    `parents` is what a term is under: a class's superclasses, a property's
+    superproperties, and for an individual the classes it is asserted into.
+
     `language` is the tag of the alternative labels a term carries: the
     language the corpus writes its words in, which the profile says
     (`extraction.ALT_LABEL_LANGUAGE`). The core names none.
@@ -151,15 +154,24 @@ def index(graph, language: str) -> dict:
                     str(a) for a in graph.objects(subject, alternative)
                     if getattr(a, "language", None) is None)
             meaning = graph.value(subject, definition)
-            parent = (RDFS.subPropertyOf if kind.endswith("property")
-                      else RDFS.subClassOf)
+            if kind == "individual":
+                # An individual has no superclass. A predicate's range names
+                # a class, and the only thing that holds an individual object
+                # to it is the class the ontology asserts it into: read as
+                # having no parents, every aggregation type was outside the
+                # range `has aggregation type` declares since OEO 2.14.0.
+                above = [p for p in graph.objects(subject, RDF.type)
+                         if p != OWL.NamedIndividual]
+            else:
+                above = graph.objects(
+                    subject, RDFS.subPropertyOf if kind.endswith("property")
+                    else RDFS.subClassOf)
             out[key] = {
                 "kind": kind,
                 "label": str(label),
                 "alt_labels": foreign,
                 "definition": str(meaning) if meaning else None,
-                "parents": sorted(short(p) for p in
-                                  graph.objects(subject, parent)
+                "parents": sorted(short(p) for p in above
                                   if isinstance(p, URIRef)),
                 "deprecated": bool(graph.value(subject, OWL.deprecated)),
             }

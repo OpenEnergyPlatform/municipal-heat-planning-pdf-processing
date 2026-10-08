@@ -260,6 +260,67 @@ def test_an_object_outside_the_range_is_reported():
     assert len(problems) == 1 and "OEO_0000006" in problems[0]
 
 
+# An ontology as upstream writes one: the aggregation types are individuals
+# of a class, and the predicate that points at them names that class as its
+# range. One of them sits in a subclass, one in another class, one in none.
+ASSERTED = """
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix oeo:  <https://openenergyplatform.org/ontology/oeo/> .
+
+oeo:OEO_00140068 a owl:Class ; rdfs:label "aggregation type" .
+oeo:OEO_00140099 a owl:Class ; rdfs:label "temporal aggregation type" ;
+    rdfs:subClassOf oeo:OEO_00140068 .
+oeo:OEO_00000367 a owl:Class ; rdfs:label "sector" .
+oeo:OEO_00140070 a owl:NamedIndividual , oeo:OEO_00140068 ;
+    rdfs:label "integral" .
+oeo:OEO_00140071 a owl:NamedIndividual , oeo:OEO_00140099 ;
+    rdfs:label "arithmetic mean" .
+oeo:OEO_00000214 a owl:NamedIndividual , oeo:OEO_00000367 ;
+    rdfs:label "household sector" .
+oeo:OEO_00009999 a owl:NamedIndividual ; rdfs:label "asserted into nothing" .
+oeo:OEO_00390023 a owl:ObjectProperty ; rdfs:label "has aggregation type" ;
+    rdfs:range oeo:OEO_00140068 .
+"""
+
+
+def _indexed(turtle):
+    rdflib = pytest.importorskip("rdflib")   # optional; the rest is not
+    graph = rdflib.Graph().parse(data=turtle, format="turtle")
+    return {"pin": {"families": ["OEO"]}, "disjoint": [],
+            "terms": ontology.index(graph, "de")}
+
+
+def test_an_individual_is_under_the_classes_it_is_asserted_into():
+    """And under nothing else: that it is an individual at all is not a class
+    a range could name, and one asserted into no class is under none."""
+    terms = _indexed(ASSERTED)["terms"]
+    assert terms["OEO_00140070"]["kind"] == "individual"
+    assert terms["OEO_00140070"]["parents"] == ["OEO_00140068"]
+    assert terms["OEO_00140071"]["parents"] == ["OEO_00140099"]
+    assert terms["OEO_00009999"]["parents"] == []
+    # A class goes on reading its superclasses.
+    assert terms["OEO_00140099"]["parents"] == ["OEO_00140068"]
+
+
+@pytest.mark.parametrize("obj, complaints", [
+    ("OEO_00140070", 0),    # asserted into the range itself
+    ("OEO_00140071", 0),    # asserted into a class under the range
+    ("OEO_00000214", 1),    # asserted into another class
+    ("OEO_00009999", 1),    # asserted into none
+])
+def test_an_individual_object_is_held_to_the_range_by_its_class(obj,
+                                                                 complaints):
+    """Upstream gave `has aggregation type` a range, the class the aggregation
+    types are individuals of. Read as terms without parents, every one of
+    them was reported as outside it and the run did not start."""
+    edge = [{"where": "p.aggregation.kg", "predicate": "OEO_00390023",
+             "object": obj}]
+    problems = ontology.edge_problems(edge, _indexed(ASSERTED))
+    assert len(problems) == complaints, problems
+    assert all(obj in problem for problem in problems)
+
+
 def test_a_literal_written_with_another_datatype_is_reported():
     """Measured on the real spec: the year is written `xsd:integer` under a
     property whose declared range is `xsd:dateTime`, which is not a wrong
@@ -411,10 +472,10 @@ mhpo:MHPO_00020003 a owl:Class ; rdfs:label "municipal heat plan" .
 """
 
 
-def _build_tiny(tmp_path, spec):
+def _build_tiny(tmp_path, spec, more=""):
     pytest.importorskip("rdflib")   # optional; the rest is not
     closure = tmp_path / "tiny.ttl"
-    closure.write_text(TINY, encoding="utf-8")
+    closure.write_text(TINY + more, encoding="utf-8")
     sets = {"energy_carrier": ("class", "https://openenergyplatform.org/"
                                         "ontology/oeo/OEO_00020039")}
     return ontology.build(closure, sets, spec, language="de",
@@ -475,6 +536,28 @@ def test_a_built_snapshot_carries_what_the_edge_check_needs(tmp_path):
     assert len(problems) == 2, problems
     assert "disjoint" in problems[0]
     assert "xsd:dateTime" in problems[1]
+
+
+def test_a_built_snapshot_carries_the_class_of_an_individual(tmp_path):
+    """The spec names the individual and never its class, and the class is
+    what the range check asks about: without it in the file, and the chain
+    above it, the individual is under nothing the file knows."""
+    more = """
+oeo:OEO_00140068 a owl:Class ; rdfs:label "aggregation type" ;
+    rdfs:subClassOf obo:BFO_0000002 .
+oeo:OEO_00140070 a owl:NamedIndividual , oeo:OEO_00140068 ;
+    rdfs:label "integral" .
+"""
+    spec = {"parameters": [{"uri": "p", "axes": {"aggregation": {
+        "vocabulary": {"OEO_00140070": {"labels": ["Summe"]}}}}}]}
+    built = _build_tiny(tmp_path, spec, more)
+    assert "OEO_00140068" in built["terms"]
+    assert ontology.ancestors("OEO_00140070", built) == {"OEO_00140068",
+                                                         "BFO_0000002"}
+    # The same closure without the individual's assertion leaves it bare.
+    bare = _build_tiny(tmp_path, spec, more.replace(
+        "owl:NamedIndividual , oeo:OEO_00140068", "owl:NamedIndividual"))
+    assert ontology.ancestors("OEO_00140070", bare) == set()
 
 
 def test_a_built_snapshot_carries_the_classes_a_writer_names(tmp_path):

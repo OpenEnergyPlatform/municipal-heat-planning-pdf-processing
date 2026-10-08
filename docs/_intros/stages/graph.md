@@ -277,7 +277,11 @@ OEKG scenario-bundle API that sends nothing, described on
 `ontology.read` parses OWL or Turtle into an `rdflib` graph; `index`
 walks every labelled class, individual and property into a per
 identifier record (kind, label, `alt_labels`, definition, parents,
-deprecated, and, for a property, its domain and range); `alt_labels`
+deprecated, and, for a property, its domain and range). The parents of a
+class are its superclasses, those of a property its superproperties, and
+those of an individual the classes the ontology asserts it into: a
+predicate's range names a class, and an individual object is held to it
+through its own class and nothing else. `alt_labels`
 holds the term's alternative spellings in one language, the one the profile
 names (`extraction.ALT_LABEL_LANGUAGE`: `de` for kwp and scenarios, `en` for
 the built-in profile; `index` and `build` take it as `language`, without a

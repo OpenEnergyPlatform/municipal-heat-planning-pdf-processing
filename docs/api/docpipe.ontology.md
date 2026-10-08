@@ -86,6 +86,9 @@ Properties as well as classes and individuals. Without them a spec's `kg`
 blocks -- which name predicates and nothing else -- read as a list of
 terms the ontology does not have.
 
+`parents` is what a term is under: a class's superclasses, a property's
+superproperties, and for an individual the classes it is asserted into.
+
 `language` is the tag of the alternative labels a term carries: the
 language the corpus writes its words in, which the profile says
 (`extraction.ALT_LABEL_LANGUAGE`). The core names none.
