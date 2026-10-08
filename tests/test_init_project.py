@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from docpipe import cli, settings
+from tests import conftest
 from tests.test_entry_points import PROBE
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -141,10 +142,23 @@ def _packaged(relative: str, patterns) -> bool:
 
 
 def _package_data() -> list:
-    text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    text = conftest.pyproject_text()
     block = re.search(r"\[tool\.setuptools\.package-data\]\n(?:#.*\n)*"
                       r"docpipe = \[(.*?)\]", text, re.S)
     return re.findall(r'"([^"]+)"', block.group(1))
+
+
+def test_a_tree_without_a_project_file_skips_what_reads_it():
+    with pytest.raises(pytest.skip.Exception):
+        conftest.pyproject_text(Path("no") / "such" / "tree")
+
+
+def test_a_checkout_has_the_project_file_those_tests_read():
+    """Skipping is for a tree that ships without the file. In a checkout the
+    file is there, or every test that reads it would be skipped unnoticed."""
+    if not (ROOT / ".git").exists():
+        pytest.skip("this tree is no checkout")
+    assert (ROOT / "pyproject.toml").is_file()
 
 
 def test_the_metadata_shape_is_a_package_file_that_pyproject_names():

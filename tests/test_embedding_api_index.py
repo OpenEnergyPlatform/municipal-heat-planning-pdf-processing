@@ -21,6 +21,7 @@ from docpipe.chunking import embedding as emb
 from docpipe.chunking.chunking import EmbeddingInput
 from docpipe.embedding import config as backend
 from docpipe.embedding.api import ApiEmbedder
+from tests import conftest
 
 
 class _Index:
@@ -283,9 +284,13 @@ def test_nothing_refers_to_the_vllm_embedder_it_was_removed_with(tmp_path):
     # the search finds a reference where there is one ...
     (tmp_path / "module.py").write_text("from x import " + klass + chr(10))
     assert _referenced(tmp_path, klass) == ["module.py"]
-    # ... and finds none in the code, the tests and the project file
+    # ... and finds none in the code and the tests
     for place in ("docpipe", "tests", "scripts", "profiles", "docker"):
         assert _referenced(root / place, klass) == [], place
         assert _referenced(root / place, module) == [], place
-    project = (root / "pyproject.toml").read_text(encoding="utf-8")
+
+
+def test_the_project_file_does_not_refer_to_it_either():
+    klass, module = "Vllm" + "Embedder", "vllm" + "_embedding"
+    project = conftest.pyproject_text()
     assert klass not in project and module not in project
