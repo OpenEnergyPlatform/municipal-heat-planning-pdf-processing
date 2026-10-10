@@ -20,7 +20,8 @@ def link_filename(link) -> str:
 # sourced by hand. Keyed by Gemeindeschlüssel → the local filename to use
 # instead of the KWW link. The file must be placed in the data dir by hand; it
 # is never downloaded. (Previously the "Ersetzte Datei" column in our own copy
-# of the Excel; the KWW export does not carry it.)
+# of the Excel; the KWW export does not carry it.) A file KWW renamed is held
+# to the name it is registered under the same way.
 PDF_OVERRIDES = {
     1051011: "waermeplan_brunsbuettel_20241210.pdf",             # Brunsbüttel
     1051072: "waermeplan_marne_20241104.pdf",                    # Marne
@@ -432,6 +433,38 @@ PDF_OVERRIDES = {
     9674139: "warmeplan_vg_theres_20260225.pdf",  # Gädheim
     9674180: "warmeplan_vg_theres_20260225.pdf",  # Theres
     9674219: "warmeplan_vg_theres_20260225.pdf",  # Wonfurt
+    # --- September 2026 export: KWW renamed four files it had already
+    # published. The server gives the same number of bytes under the new name
+    # as the registered file has, so these are the documents the corpus holds
+    # and not new editions. They stay under the name they are registered
+    # with: under the new one each would be a second document of its group.
+    3154028: "waermeplan_helmstedt_05.12.2025.pdf",  # Helmstedt
+    9179111: "waermeplan_adelshofen_konvoi_20260130.pdf",  # Adelshofen (Oberbayern)
+    # Konvoi "BW Konvoi Berghülen" (4 Gemeinden)
+    8425017: "waermeplan_merklingen-et-al-konvoi_20260420.pdf",  # Berghülen
+    8425079: "waermeplan_merklingen-et-al-konvoi_20260420.pdf",  # Merklingen
+    8425084: "waermeplan_merklingen-et-al-konvoi_20260420.pdf",  # Nellingen
+    8425134: "waermeplan_merklingen-et-al-konvoi_20260420.pdf",  # Westerheim (Württemberg)
+    # Konvoi "Amt Hagenow-Land" (19 Gemeinden)
+    13076002: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Alt Zachun
+    13076004: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Bandenitz
+    13076008: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Belsch
+    13076013: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Bobzin
+    13076019: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Bresegard bei Picher
+    13076041: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Gammelin
+    13076057: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Groß Krams
+    13076064: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Hoort
+    13076065: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Hülseburg
+    13076070: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Kirch Jesar
+    13076079: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Kuhstorf
+    13076099: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Moraas
+    13076110: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Pätow-Steegen
+    13076111: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Picher
+    13076116: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Pritzier
+    13076119: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Redefin
+    13076131: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Strohkirchen
+    13076145: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Warlitz
+    13076169: "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",  # Toddin
     # KWW gave these three the link of a DIFFERENT town (see SHARED_FILE_OWNERS).
     # Their own plans, verified by the town named in the document:
     8216007: "waermeplan_buehl_20251016.pdf",                    # Bühl (nicht Greding)
