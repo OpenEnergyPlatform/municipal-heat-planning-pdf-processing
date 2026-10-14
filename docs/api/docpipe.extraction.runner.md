@@ -788,6 +788,25 @@ next parameter: four parameters times four rounds is the same row read up
 to sixteen times over NFS. One planning thread owns one of these, so it
 needs no lock.
 
+### make_shared_content
+
+```python
+def make_shared_content(limit: Optional[int] = None) -> Callable
+```
+
+fetch_owner_content for every thread of a run, each owner read once.
+
+The harvest's helpers used to give each thread a `make_content_fetcher`
+of its own, unbounded, in pools that live as long as the run. The KWP run
+of 2026-10-14 had 2,308 threads and grew from 46 to 53 GB of heap between
+its third and its sixth hour: the same sections held once per thread that
+had read them. One store for all threads holds each owner once.
+
+A hit is a dict lookup and waits for nobody. A miss reads under the lock
+and looks again first, so two threads missing the same owner read it once.
+Each caller passes its own connection: the store is shared, the SQLite
+handle is not.
+
 ### make_retrieve
 
 ```python
@@ -831,7 +850,7 @@ because the plan is no longer built once per parameter.
 ### make_parents
 
 ```python
-def make_parents(db_path: Path) -> Callable
+def make_parents(db_path: Path, content: Optional[Callable] = None) -> Callable
 ```
 
 (sources) -> the section each table or figure stands in, once each.
@@ -850,11 +869,14 @@ twice is the same passage paying twice.
 
 Its own connection per thread, like more_sources: this runs inside the
 harvest pool, and SQLite handles are not shared across a hundred threads.
+The content read through it is: *content* is the run's shared store
+(`make_shared_content`), or one of its own.
 
 ### make_owner_sources
 
 ```python
-def make_owner_sources(db_path: Path) -> Callable
+def make_owner_sources(db_path: Path,
+                       content: Optional[Callable] = None) -> Callable
 ```
 
 (owners) -> {(kind, id): Source} for passages a harvest already named.
@@ -865,14 +887,15 @@ two functions the harvest used -- the cached fetcher and `_source_of` --
 so the heading is prefixed the same way and a quote that was checkable
 during the harvest stays checkable.
 
-Its own connection per thread, read-only, and memoised across calls: one
-section is the parent of several rows and would otherwise be read once
-per row.
+Its own connection per thread, read-only, and memoised across calls in
+*content*, the run's shared store or one of its own: one section is the
+parent of several rows and would otherwise be read once per row.
 
 ### make_review_sources
 
 ```python
-def make_review_sources(db_path: Path) -> Callable
+def make_review_sources(db_path: Path,
+                        content: Optional[Callable] = None) -> Callable
 ```
 
 (row) -> the passages one stored tuple may legally quote from.
@@ -888,7 +911,8 @@ The parent goes through `make_parents` rather than being fetched from
 cut around this row's own placeholder instead of from its first character.
 
 Its own connection per thread, like `make_parents`: read-only, and SQLite
-handles are not shared.
+handles are not shared. The content is, with the parents too: *content*,
+the run's shared store or one of its own.
 
 ### own_section_number
 
@@ -906,7 +930,8 @@ at once and only a start before all of them is close to every one.
 ### make_rest_of_document
 
 ```python
-def make_rest_of_document(db_path: Path) -> Callable
+def make_rest_of_document(db_path: Path,
+                          content: Optional[Callable] = None) -> Callable
 ```
 
 (document_id, exclude, start) -> every remaining section, in document order.
@@ -933,11 +958,15 @@ A section's tables and figures follow it, in page order. The floor read
 sections only, and 71 percent of corpus_m5's tuples came out of images:
 "the whole document" that left out every table was not the whole document.
 
+Each call reads a whole document, so what it read goes into *content*, the
+run's shared store, and not into a store per thread.
+
 ### make_more_sources
 
 ```python
 def make_more_sources(db_path: Path, index, id_to_pos: dict,
-                      cache_path: Path) -> Callable
+                      cache_path: Path,
+                      content: Optional[Callable] = None) -> Callable
 ```
 
 (document_id, queries, exclude) -> the passages the model asked for.
@@ -958,6 +987,9 @@ seen after the first round: the stage that reads the rest in order then
 found nothing left, and a sweep whose budget had cut the ranked list
 ended "unstated" instead of "exhausted". corpus_m5 wrote 0 exhausted
 coordinates in 263,997 sweeps that way. 0 means no bound.
+
+The passages' content comes from *content*, the run's shared store or one
+of its own, and not from a store per thread.
 
 ### fill_dynamic_axes
 

@@ -566,6 +566,7 @@ their values and where each value comes from.
 | Extraction | `EXTRACT_LIMIT_TPOT_MAX` | unset | seconds per output token above which a sample also counts as pressure; unset, token time never steps the limit down | `docpipe/extraction/throttle.py:61` |
 | Extraction | `EXTRACT_SERVER_DEAD_AFTER` | `180` | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes | `docpipe/extraction/runner.py:1955` |
 | Extraction | `EXTRACT_LOCATE_CACHE_PAGES` | `512` | pages of words cached by `make_locate` across documents; a cache hit is a dict lookup and takes no lock | `docpipe/extraction/runner.py:282` |
+| Extraction | `EXTRACT_CONTENT_CACHE_OWNERS` | `300000` | passages (sections, tables, figures) whose text one run keeps in the store every thread shares, so each is read once; past it the oldest goes, `0` keeps all | `docpipe/extraction/runner.make_shared_content` |
 | App, serve | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` (the chat; `serve` has none) | SQLite corpus database, opened read-only; `docpipe serve` opens it for its passage search | `docpipe/app/config.py` |
 | App | `INFERENCE_PDF_ROOT` | profile `pdf_dir`, else `data/pdf` | folder of the source PDFs, which the cited page is drawn from | `docpipe/app/config.py` |
 | App | `PDF_URL_PREFIX`, `PDF_VIEWER_PREFIX` | empty | URL path an external viewer serves the PDFs and its pdf.js viewer under, for an optional link into it; empty: no link | `docpipe/app/config.py` |

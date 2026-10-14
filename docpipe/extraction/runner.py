@@ -492,6 +492,51 @@ def make_content_fetcher() -> Callable:
     return fetch
 
 
+# Owners (sections, tables, figures) whose content a run keeps. The whole of
+# the largest corpus fits (KWP: 252,909), so a run reads each owner once; past
+# the bound the oldest goes, so a larger corpus cannot grow into it.
+CONTENT_CACHE_OWNERS = int(os.environ.get("EXTRACT_CONTENT_CACHE_OWNERS",
+                                          "300000"))
+
+
+def make_shared_content(limit: Optional[int] = None) -> Callable:
+    """fetch_owner_content for every thread of a run, each owner read once.
+
+    The harvest's helpers used to give each thread a `make_content_fetcher`
+    of its own, unbounded, in pools that live as long as the run. The KWP run
+    of 2026-10-14 had 2,308 threads and grew from 46 to 53 GB of heap between
+    its third and its sixth hour: the same sections held once per thread that
+    had read them. One store for all threads holds each owner once.
+
+    A hit is a dict lookup and waits for nobody. A miss reads under the lock
+    and looks again first, so two threads missing the same owner read it once.
+    Each caller passes its own connection: the store is shared, the SQLite
+    handle is not.
+    """
+    from docpipe.inference import db as inference_db
+
+    bound = CONTENT_CACHE_OWNERS if limit is None else limit
+    lock = threading.Lock()
+    seen: dict = {}
+
+    def fetch(conn, owner_kind: str, owner_id: int):
+        key = (owner_kind, owner_id)
+        try:
+            return seen[key]
+        except KeyError:
+            pass
+        with lock:
+            if key not in seen:
+                content = inference_db.fetch_owner_content(conn, owner_kind,
+                                                           owner_id)
+                if bound > 0 and len(seen) >= bound:
+                    seen.pop(next(iter(seen)))
+                seen[key] = content
+            return seen[key]
+
+    return fetch
+
+
 def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
                   cache_conn, content_fetcher: Optional[Callable] = None,
                   limit: int = 0, per_probe_top: int = 0) -> Callable:
@@ -615,7 +660,7 @@ def _around(text: str, needle: str, budget: int) -> str:
     return text[start:start + budget]
 
 
-def make_parents(db_path: Path) -> Callable:
+def make_parents(db_path: Path, content: Optional[Callable] = None) -> Callable:
     """(sources) -> the section each table or figure stands in, once each.
 
     The own window used to be the batch's tables and nothing else, and the
@@ -632,15 +677,17 @@ def make_parents(db_path: Path) -> Callable:
 
     Its own connection per thread, like more_sources: this runs inside the
     harvest pool, and SQLite handles are not shared across a hundred threads.
+    The content read through it is: *content* is the run's shared store
+    (`make_shared_content`), or one of its own.
     """
     local = threading.local()
+    shared = content or make_shared_content()
 
     def fetcher():
         if getattr(local, "conn", None) is None:
             local.conn = sqlite3.connect(readonly_uri(db_path), uri=True)
             local.conn.row_factory = sqlite3.Row
-            local.fetch = make_content_fetcher()
-        return local.conn, local.fetch
+        return local.conn, shared
 
     def parents(sources: list) -> list:
         conn, fetch = fetcher()
@@ -675,7 +722,8 @@ def make_parents(db_path: Path) -> Callable:
     return parents
 
 
-def make_owner_sources(db_path: Path) -> Callable:
+def make_owner_sources(db_path: Path,
+                       content: Optional[Callable] = None) -> Callable:
     """(owners) -> {(kind, id): Source} for passages a harvest already named.
 
     The harvest stores the address of a passage and not its text, so a pass
@@ -684,18 +732,18 @@ def make_owner_sources(db_path: Path) -> Callable:
     so the heading is prefixed the same way and a quote that was checkable
     during the harvest stays checkable.
 
-    Its own connection per thread, read-only, and memoised across calls: one
-    section is the parent of several rows and would otherwise be read once
-    per row.
+    Its own connection per thread, read-only, and memoised across calls in
+    *content*, the run's shared store or one of its own: one section is the
+    parent of several rows and would otherwise be read once per row.
     """
     local = threading.local()
+    shared = content or make_shared_content()
 
     def _connections():
         if getattr(local, "conn", None) is None:
             local.conn = sqlite3.connect(readonly_uri(db_path), uri=True)
             local.conn.row_factory = sqlite3.Row
-            local.fetch = make_content_fetcher()
-        return local.conn, local.fetch
+        return local.conn, shared
 
     def owner_sources(owners) -> dict:
         conn, fetch = _connections()
@@ -718,7 +766,8 @@ def make_owner_sources(db_path: Path) -> Callable:
     return owner_sources
 
 
-def make_review_sources(db_path: Path) -> Callable:
+def make_review_sources(db_path: Path,
+                        content: Optional[Callable] = None) -> Callable:
     """(row) -> the passages one stored tuple may legally quote from.
 
     Exactly two, in this order: the row's own source, and the section that
@@ -732,17 +781,18 @@ def make_review_sources(db_path: Path) -> Callable:
     cut around this row's own placeholder instead of from its first character.
 
     Its own connection per thread, like `make_parents`: read-only, and SQLite
-    handles are not shared.
+    handles are not shared. The content is, with the parents too: *content*,
+    the run's shared store or one of its own.
     """
     local = threading.local()
-    parents = make_parents(db_path)
+    shared = content or make_shared_content()
+    parents = make_parents(db_path, content=shared)
 
     def _connections():
         if getattr(local, "conn", None) is None:
             local.conn = sqlite3.connect(readonly_uri(db_path), uri=True)
             local.conn.row_factory = sqlite3.Row
-            local.fetch = make_content_fetcher()
-        return local.conn, local.fetch
+        return local.conn, shared
 
     def sources_for(row: dict) -> list:
         conn, fetch = _connections()
@@ -780,7 +830,8 @@ def own_section_number(sources) -> Optional[int]:
     return min(numbers) if numbers else None
 
 
-def make_rest_of_document(db_path: Path) -> Callable:
+def make_rest_of_document(db_path: Path,
+                          content: Optional[Callable] = None) -> Callable:
     """(document_id, exclude, start) -> every remaining section, in document order.
 
     The floor under the field sweep, and the reason "not stated" can mean it.
@@ -804,15 +855,18 @@ def make_rest_of_document(db_path: Path) -> Callable:
     A section's tables and figures follow it, in page order. The floor read
     sections only, and 71 percent of corpus_m5's tuples came out of images:
     "the whole document" that left out every table was not the whole document.
+
+    Each call reads a whole document, so what it read goes into *content*, the
+    run's shared store, and not into a store per thread.
     """
     local = threading.local()
+    shared = content or make_shared_content()
 
     def connections():
         if getattr(local, "conn", None) is None:
             local.conn = sqlite3.connect(readonly_uri(db_path), uri=True)
             local.conn.row_factory = sqlite3.Row
-            local.fetch = make_content_fetcher()
-        return local.conn, local.fetch
+        return local.conn, shared
 
     def rest_of_document(document_id: int, exclude: set,
                          start: Optional[int] = None) -> list:
@@ -855,7 +909,8 @@ def make_rest_of_document(db_path: Path) -> Callable:
 
 
 def make_more_sources(db_path: Path, index, id_to_pos: dict,
-                      cache_path: Path) -> Callable:
+                      cache_path: Path,
+                      content: Optional[Callable] = None) -> Callable:
     """(document_id, queries, exclude) -> the passages the model asked for.
 
     Retrieval a second time, but from a query the MODEL wrote rather than one
@@ -874,22 +929,25 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
     found nothing left, and a sweep whose budget had cut the ranked list
     ended "unstated" instead of "exhausted". corpus_m5 wrote 0 exhausted
     coordinates in 263,997 sweeps that way. 0 means no bound.
+
+    The passages' content comes from *content*, the run's shared store or one
+    of its own, and not from a store per thread.
     """
     from docpipe.inference import query_cache
 
     local = threading.local()
+    shared = content or make_shared_content()
 
     def connections():
         if getattr(local, "conn", None) is None:
             local.conn = sqlite3.connect(readonly_uri(db_path), uri=True)
             local.conn.row_factory = sqlite3.Row
             local.cache = query_cache.connect(cache_path, create=False)
-            local.fetch = make_content_fetcher()
             # One per thread, so the document's sub-index and the score
             # matrix survive from one round to the next; built per call they
             # were rebuilt for every round of every coordinate.
             local.retrieve = make_retrieve(local.conn, index, id_to_pos,
-                                           local.cache, local.fetch)
+                                           local.cache, shared)
         return local.retrieve
 
     def more_sources(document_id: int, queries: list, exclude: set,
@@ -6302,8 +6360,10 @@ def main(argv: Optional[list] = None) -> int:
     primer = query_cache.connect(cache_path)
     prime_probe_cache(primer, spec, templates, anchors)
     primer.close()
+    # One store of passage content for every helper and thread of this run.
+    content = make_shared_content()
     more_sources = make_more_sources(args.db, faiss_index, id_to_pos,
-                                     cache_path)
+                                     cache_path, content=content)
 
     if args.top_up:
         from . import topup
@@ -6326,10 +6386,12 @@ def main(argv: Optional[list] = None) -> int:
                 {"sweep": make_sweeper(
                     make_field_asker(args.image_root),
                     more_sources=more_sources,
-                    rest_of_document=make_rest_of_document(args.db),
-                    parents=make_parents(args.db), anchors=anchors,
+                    rest_of_document=make_rest_of_document(args.db,
+                                                           content=content),
+                    parents=make_parents(args.db, content=content),
+                    anchors=anchors,
                     search_share=search_share),
-                 "owner_sources": make_owner_sources(args.db),
+                 "owner_sources": make_owner_sources(args.db, content=content),
                  "document_spec": document_spec,
                  "frame_names": frame_names,
                  "frame_axes": frame_axes,
@@ -6506,10 +6568,11 @@ def main(argv: Optional[list] = None) -> int:
     # document. After the streak and the give-up, because the field pool
     # shares them with the rows pool. OpenAI client is thread-safe.
     harvest = make_fieldwise_harvester(args.image_root, more_sources,
-                                       make_rest_of_document(args.db),
+                                       make_rest_of_document(args.db,
+                                                             content=content),
                                        spec=spec, anchors=anchors,
                                        slice_gate=slice_gate,
-                                       parents=make_parents(args.db),
+                                       parents=make_parents(args.db, content=content),
                                        frame_axes=frame_axes,
                                        search_share=search_share,
                                        dead=dead, on_give_up=give_up)
