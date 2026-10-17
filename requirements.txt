@@ -104,6 +104,7 @@ pathlib==1.0.1
 pdf2image==1.17.0
 pdfminer.six==20251230
 pdfplumber==0.11.9
+pexpect==4.9.0; sys_platform != "win32"
 pickleshare==0.7.5
 pillow==12.1.1
 platformdirs==4.9.4
@@ -115,6 +116,7 @@ prompt_toolkit==3.0.52
 protobuf==7.34.1
 prov==2.1.1
 psutil==7.2.2
+ptyprocess==0.7.0; sys_platform != "win32"
 pure_eval==0.2.3
 puremagic==1.30
 py-cpuinfo==9.0.0
@@ -197,4 +199,5 @@ yarg==0.1.9
 # python -m pytest tests/ -n auto --dist loadfile
 pytest>=8
 pytest-xdist>=3
+execnet==2.1.2
 zipp==4.1.0

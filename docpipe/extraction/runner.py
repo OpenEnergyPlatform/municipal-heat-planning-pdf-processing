@@ -193,14 +193,19 @@ def retry_wait(attempt: int, transport: bool = False) -> float:
 
 
 def unserved(exc: BaseException) -> bool:
-    """A 429 or a 5xx: the server was there and did not do the work.
+    """A 429, a 5xx or a timeout: the server was asked and did not do the work.
 
-    Neither says anything about the request. A rate limit lifts and a server
-    recovers, and the same request is answered then. Every other 4xx refuses
-    the request itself, and refuses it every time.
+    None says anything about the request. A rate limit lifts and a server
+    recovers, and the same request is answered then. A request that timed out
+    was never answered either: a server whose engine stopped taking requests
+    kept its connections open until every one of them timed out, and their
+    documents were stamped with the coordinates never read. Every other 4xx
+    refuses the request itself, and refuses it every time.
     """
     status = getattr(exc, "status_code", None)
-    return isinstance(status, int) and (status == 429 or status >= 500)
+    if isinstance(status, int):
+        return status == 429 or status >= 500
+    return providers.timed_out(exc)
 
 
 def server_side(exc: BaseException) -> bool:
@@ -214,7 +219,7 @@ def server_side(exc: BaseException) -> bool:
 
 
 class Unserved:
-    """Documents one of whose requests ended on a 429 or a 5xx.
+    """Documents one of whose requests ended on a 429, a 5xx or a timeout.
 
     Such a request was never answered, so its document is not finished,
     whichever request it was: a passage's rows, one coordinate, the frame, a
@@ -1411,15 +1416,89 @@ def start_limit() -> None:
                  LIMIT.maximum)
 
 
-def prompt_tokens(system: str, conversation: list) -> int:
-    """What a request's system prompt, messages and crops take, estimated high.
+class PromptCounter:
+    """The prompt of a request counted with the served model's own tokenizer.
 
-    Estimated before sending, so a request is sized to the window instead of
+    The text of every message goes through the model's chat template with the
+    settings every request carries (`request_extras`) and is counted exactly;
+    a crop is counted at IMAGE_TOKENS, the most one can take. The estimate
+    this replaces ran short on tables of figures, where the tokenizer gives
+    every digit a token of its own: requests went out one token over the
+    window and were refused, and a refused request that carried a crop broke
+    the server's multimodal cache (vLLM before 0.28, CVE-2026-105753).
+    """
+
+    def __init__(self, tokenizer):
+        self._tokenizer = tokenizer
+        # One tokenizer for every thread, and a fast tokenizer is not safe to
+        # share between threads that encode at once.
+        self._lock = threading.Lock()
+
+    def __call__(self, system: str, conversation: list) -> int:
+        messages, images = [{"role": "system", "content": system or ""}], 0
+        for message in conversation:
+            content = message.get("content")
+            if not isinstance(content, str):
+                texts = []
+                for part in content or ():
+                    if part.get("type") == "image_url":
+                        images += 1
+                    else:
+                        texts.append(part.get("text") or "")
+                # One newline more per part than the template joins with:
+                # counted high, never short.
+                content = "\n".join(texts)
+            messages.append({"role": message.get("role", "user"),
+                             "content": content})
+        kwargs = request_extras().get("chat_template_kwargs") or {}
+        with self._lock:
+            text = self._tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True,
+                **kwargs)
+            ids = self._tokenizer.encode(text, add_special_tokens=False)
+        return len(ids) + images * IMAGE_TOKENS
+
+
+# Set by `start_counting` for the run; None counts by estimate.
+PROMPT_COUNTER: Optional[PromptCounter] = None
+
+
+def start_counting(model: Optional[str] = None) -> None:
+    """Count every prompt of the run with the served model's tokenizer.
+
+    For a server of one's own, whose tokenizer lies in the local model cache.
+    A hosted API's tokenizer is its own and a recorded run sends nothing;
+    both keep the estimate. A tokenizer that cannot be loaded ends the run
+    here, before the first request, and not as refusals hours into it.
+    """
+    global PROMPT_COUNTER
+    if PROMPT_COUNTER is not None or providers.replaying() or providers.hosted("llm"):
+        return
+    from transformers import AutoTokenizer
+    name = model or LLM_MODEL
+    try:
+        PROMPT_COUNTER = PromptCounter(AutoTokenizer.from_pretrained(name))
+    except Exception as exc:
+        raise RuntimeError(
+            f"the tokenizer of {name} could not be loaded, and every request "
+            f"is sized with it: {exc}\n  it is read from the model cache "
+            f"(HF_HOME) the server loads the model from") from exc
+    log.info("prompt tokens: counted with the tokenizer of %s", name)
+
+
+def prompt_tokens(system: str, conversation: list) -> int:
+    """What a request's system prompt, messages and crops take.
+
+    Counted before sending, so a request is sized to the window instead of
     shrunk after the server refused it. vLLM's refusal names only a lower
     bound ("at least N input tokens" is the window minus the requested answer,
     plus one), and reading that as the prompt shrank the answer by 33 tokens
-    per attempt until the coordinates were written off.
+    per attempt until the coordinates were written off. With the model's
+    tokenizer (`start_counting`) the text is counted exactly; without one it
+    is estimated high.
     """
+    if PROMPT_COUNTER is not None:
+        return PROMPT_COUNTER(system, conversation)
     chars, images = len(system or ""), 0
     for message in conversation:
         content = message.get("content")
@@ -2729,9 +2808,9 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
                             status=status, detail=str(exc)[:300],
                             owner=[first.owner_kind, first.owner_id])
                 # No HTTP status at all is a transport failure: the server is
-                # not there. A 429 or a 5xx is a server that was there and did
-                # not do the work. Neither is a harvested document, and a
-                # resume must never mistake one for it.
+                # not there. A 429, a 5xx or a timeout is a server that was
+                # asked and did not do the work. Neither is a harvested
+                # document, and a resume must never mistake one for it.
                 why[0] = ("unserved" if unserved(exc)
                           else "no_answer" if isinstance(status, int)
                           else "unreachable")
@@ -5248,7 +5327,7 @@ def not_happened(report, *, answered: Optional[int] = None,
     reached the server, of the sources the plan held; "no_reply" is the
     sources planned, when not one batch came back (`answered` is how many did;
     None means the caller does not track it and the count is not checked);
-    "unserved" is the requests that ended on a 429 or a 5xx, `lost` of them
+    "unserved" is the requests that ended on a 429, a 5xx or a timeout, `lost` of them
     noted beside the report and the rest in its sentinels. None when the
     reading happened. `finish_document` withholds the stamp on any of them
     and the pass for a new parameter writes nothing.
@@ -5291,7 +5370,7 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
     documents into 0-byte results a resume would have skipped.
 
     `lost` is how many of the document's other requests (a coordinate,
-    the frame, a search sentence) ended on a 429 or a 5xx; the passages that
+    the frame, a search sentence) ended on a 429 or a 5xx, or timed out; the passages that
     ended there carry it in their sentinel. One is enough to withhold the
     stamp: the request was never answered and nothing says it cannot be.
 
@@ -6168,6 +6247,7 @@ def main(argv: Optional[list] = None) -> int:
                                      what="extraction review",
                                      flag="--max-model-len", role="llm"))
         start_limit()
+        start_counting()
         from .review import run as review_run
         wanted = None
         if args.document:
@@ -6253,6 +6333,7 @@ def main(argv: Optional[list] = None) -> int:
                                  required, what="extraction",
                                  flag="--max-model-len", role="llm"))
     start_limit()
+    start_counting()
 
     from concurrent.futures import ThreadPoolExecutor
 
@@ -6351,8 +6432,8 @@ def main(argv: Optional[list] = None) -> int:
         # Every document would be searched without them and stamped as if it
         # had been searched with them. The ones written are kept in the
         # store, so the next start asks only for the rest.
-        log.error("extraction: %d anchor request(s) ended on a 429 or a 5xx "
-                  "— nothing is harvested without them, start the run again",
+        log.error("extraction: %d anchor request(s) ended on a 429 or a 5xx, "
+                  "or timed out — nothing is harvested without them, start the run again",
                   UNSERVED.of(None))
         return 1
 

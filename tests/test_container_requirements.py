@@ -70,5 +70,70 @@ def test_an_install_that_only_adds_passes(ir, monkeypatch, tmp_path):
     seen = iter([{"torch": "2.11.0+cu129"},
                  {"torch": "2.11.0+cu129", "rdflib": "7.6.0"}])
     monkeypatch.setattr(ir, "installed", lambda: next(seen))
+    monkeypatch.setattr(ir, "unmet", lambda added, present: [])
     monkeypatch.setattr(ir.subprocess, "run", lambda cmd, check: None)
     assert ir.main([str(requirements)]) == 0
+
+
+def test_the_freeze_is_installed_without_resolving_the_base_again(
+        ir, monkeypatch, tmp_path):
+    """The base's own pins need not agree with each other, so resolving the
+    added packages' dependencies again can find no install at all."""
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("rdflib==7.6.0\n")
+    seen = iter([{"torch": "2.13.0+cu130"},
+                 {"torch": "2.13.0+cu130", "rdflib": "7.6.0"}])
+    monkeypatch.setattr(ir, "installed", lambda: next(seen))
+    monkeypatch.setattr(ir, "unmet", lambda added, present: [])
+    calls = []
+    monkeypatch.setattr(ir.subprocess, "run",
+                        lambda cmd, check: calls.append(cmd))
+    assert ir.main([str(requirements)]) == 0
+    assert "--no-deps" in calls[0]
+
+
+def _requires(table):
+    def requires(name):
+        if name not in table:
+            raise ir_metadata().PackageNotFoundError(name)
+        return table[name]
+    return requires
+
+
+def ir_metadata():
+    from importlib import metadata
+    return metadata
+
+
+def test_a_dependency_the_freeze_lacks_fails_the_build(ir, monkeypatch,
+                                                       tmp_path):
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("rdflib==7.6.0\n")
+    seen = iter([{"torch": "2.13.0+cu130"},
+                 {"torch": "2.13.0+cu130", "rdflib": "7.6.0"}])
+    monkeypatch.setattr(ir, "installed", lambda: next(seen))
+    monkeypatch.setattr(ir.metadata, "requires",
+                        _requires({"rdflib": ["pyparsing>=3"]}))
+    monkeypatch.setattr(ir.subprocess, "run", lambda cmd, check: None)
+    assert ir.main([str(requirements)]) == 1
+
+
+def test_only_a_dependency_that_applies_counts(ir, monkeypatch):
+    monkeypatch.setattr(ir.metadata, "requires", _requires({"rdflib": [
+        "pyparsing>=3",
+        "html5lib; extra == 'html'",
+        "pywin32; sys_platform == 'never'",
+        "Isodate>=0.7"]}))
+    assert ir.unmet({"rdflib"}, {"rdflib": "7.6.0", "isodate": "0.7.2"}) == [
+        "rdflib needs pyparsing"]
+    assert ir.unmet({"rdflib"}, {"rdflib": "7.6.0", "isodate": "0.7.2",
+                                 "pyparsing": "3.2.0"}) == []
+
+
+def test_the_headless_opencv_is_the_dependency_on_opencv(ir, monkeypatch):
+    monkeypatch.setattr(ir.metadata, "requires", _requires({
+        "layoutparser": ["opencv-python"]}))
+    assert ir.unmet({"layoutparser"}, {"layoutparser": "0.3.4"}) == [
+        "layoutparser needs opencv-python"]
+    assert ir.unmet({"layoutparser"}, {"layoutparser": "0.3.4",
+                                       "opencv-python-headless": "4.12"}) == []

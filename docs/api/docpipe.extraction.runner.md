@@ -57,7 +57,7 @@ Author: Felix Vossel
 class Unserved
 ```
 
-Documents one of whose requests ended on a 429 or a 5xx.
+Documents one of whose requests ended on a 429, a 5xx or a timeout.
 
 Such a request was never answered, so its document is not finished,
 whichever request it was: a passage's rows, one coordinate, the frame, a
@@ -86,6 +86,28 @@ def of(self, document_id) -> int
 
 ```python
 def clear(self) -> None
+```
+
+### PromptCounter
+
+```python
+class PromptCounter
+```
+
+The prompt of a request counted with the served model's own tokenizer.
+
+The text of every message goes through the model's chat template with the
+settings every request carries (`request_extras`) and is counted exactly;
+a crop is counted at IMAGE_TOKENS, the most one can take. The estimate
+this replaces ran short on tables of figures, where the tokenizer gives
+every digit a token of its own: requests went out one token over the
+window and were refused, and a refused request that carried a crop broke
+the server's multimodal cache (vLLM before 0.28, CVE-2026-105753).
+
+#### PromptCounter.\_\_init\_\_
+
+```python
+def __init__(self, tokenizer)
 ```
 
 ### SweepStopped
@@ -723,11 +745,14 @@ waiting longer for those buys nothing.
 def unserved(exc: BaseException) -> bool
 ```
 
-A 429 or a 5xx: the server was there and did not do the work.
+A 429, a 5xx or a timeout: the server was asked and did not do the work.
 
-Neither says anything about the request. A rate limit lifts and a server
-recovers, and the same request is answered then. Every other 4xx refuses
-the request itself, and refuses it every time.
+None says anything about the request. A rate limit lifts and a server
+recovers, and the same request is answered then. A request that timed out
+was never answered either: a server whose engine stopped taking requests
+kept its connections open until every one of them timed out, and their
+documents were stamped with the coordinates never read. Every other 4xx
+refuses the request itself, and refuses it every time.
 
 ### server_side
 
@@ -1205,19 +1230,34 @@ def start_limit() -> None
 
 Steer the requests by the server's queue unless EXTRACT_LIMIT_ADAPTIVE=0.
 
+### start_counting
+
+```python
+def start_counting(model: Optional[str] = None) -> None
+```
+
+Count every prompt of the run with the served model's tokenizer.
+
+For a server of one's own, whose tokenizer lies in the local model cache.
+A hosted API's tokenizer is its own and a recorded run sends nothing;
+both keep the estimate. A tokenizer that cannot be loaded ends the run
+here, before the first request, and not as refusals hours into it.
+
 ### prompt_tokens
 
 ```python
 def prompt_tokens(system: str, conversation: list) -> int
 ```
 
-What a request's system prompt, messages and crops take, estimated high.
+What a request's system prompt, messages and crops take.
 
-Estimated before sending, so a request is sized to the window instead of
+Counted before sending, so a request is sized to the window instead of
 shrunk after the server refused it. vLLM's refusal names only a lower
 bound ("at least N input tokens" is the window minus the requested answer,
 plus one), and reading that as the prompt shrank the answer by 33 tokens
-per attempt until the coordinates were written off.
+per attempt until the coordinates were written off. With the model's
+tokenizer (`start_counting`) the text is counted exactly; without one it
+is estimated high.
 
 ### answer_room
 
@@ -1832,7 +1872,7 @@ in the unit the message needs: "unreachable" is the sources that never
 reached the server, of the sources the plan held; "no_reply" is the
 sources planned, when not one batch came back (`answered` is how many did;
 None means the caller does not track it and the count is not checked);
-"unserved" is the requests that ended on a 429 or a 5xx, `lost` of them
+"unserved" is the requests that ended on a 429, a 5xx or a timeout, `lost` of them
 noted beside the report and the rest in its sentinels. None when the
 reading happened. `finish_document` withholds the stamp on any of them
 and the pass for a new parameter writes nothing.
@@ -1864,7 +1904,7 @@ stamps an empty file. That is how a dead server turned 872 planned
 documents into 0-byte results a resume would have skipped.
 
 `lost` is how many of the document's other requests (a coordinate,
-the frame, a search sentence) ended on a 429 or a 5xx; the passages that
+the frame, a search sentence) ended on a 429 or a 5xx, or timed out; the passages that
 ended there carry it in their sentinel. One is enough to withhold the
 stamp: the request was never answered and nothing says it cannot be.
 

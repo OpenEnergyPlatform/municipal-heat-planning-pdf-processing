@@ -28,7 +28,7 @@ a harvest already written can use without starting a document over.
 |---|---|
 | **In** | The corpus [chunking](chunking.md) built: the SQLite database's `Sections`, `Tables`, `Images`, `Embeddings`, `Documents` and `DocumentMeta` rows, and the FAISS index. No file under `results/` is read directly. Also a profile's validated `extraction_spec.json` (`spec.load`). |
 | **Out** | One `<document>.jsonl` harvest and one `<document>.stamp.json` resume stamp per document, a per-document trace file under `trace/`, and, written once per run, `anchors.json` and `query_cache.db`. A `--serialize` call reads the harvest back and writes one Turtle file, feeding [the knowledge graph](graph.md) stage. |
-| **Resumes on** | `<document>.stamp.json`, compared against what today's spec would produce, one key per parameter, value list, axis and slot; the whole-file spec sha stands in only for a stamp that carries none of those. The sha256 of the PDF the harvest was read from is compared too, where the stamp and the database both carry one. The model, the anchor set and every prompt are written into the stamp for a reader and are never compared. A document with no stamp is read as fully stale, never as finished, and a document one of whose requests ended on a 429 or a 5xx is not stamped, which the run counts as a failure and answers with exit code 1. |
+| **Resumes on** | `<document>.stamp.json`, compared against what today's spec would produce, one key per parameter, value list, axis and slot; the whole-file spec sha stands in only for a stamp that carries none of those. The sha256 of the PDF the harvest was read from is compared too, where the stamp and the database both carry one. The model, the anchor set and every prompt are written into the stamp for a reader and are never compared. A document with no stamp is read as fully stale, never as finished, and a document one of whose requests ended on a 429 or a 5xx, or timed out, is not stamped, which the run counts as a failure and answers with exit code 1. |
 | **Needs** | A served LLM reached over the network, the query embedder, the FAISS index, the corpus database, and, unless `EXTRACT_LOCATE=0`, the source PDF (`--pdf-root`) to place a quote's highlight rectangles. Unless `EXTRACT_ATTACH_IMAGES=0`, also the `images/` directory (`--image-root`) with the table and figure crops that ride along with every request. |
 
 Extraction is the seventh of the pipeline's eight stages. [Chunking,
@@ -302,7 +302,8 @@ once: five coordinates for every row of a batch in one request wanted up to
 Its rows are chunked to at most `FIELD_ROWS` (32, env `EXTRACT_FIELD_ROWS`),
 about 2,600 answer tokens at the measured p90, sized against the server's own
 window before the request is sent rather than shrunk after a refusal,
-`answer_room`; a chunk still too large for its room is halved before it is
+`answer_room`, from a prompt counted with the served model's tokenizer
+(see Counting the prompt); a chunk still too large for its room is halved before it is
 sent.
 
 A `Sweeper` (what `make_sweeper` returns) holds what a sweep needs and starts
@@ -490,9 +491,10 @@ Every request loop of this stage reads the exception's HTTP status to tell
 three ends apart. A request that never arrived has no status and is the
 server's: `server_side` is true, and the loop waits on the long curve,
 `retry_wait(attempt, transport=True)`, rather than the short one the model's
-own mistakes get (`runner.py:174-188`, `180-187`). A 429 or a 5xx is
-`unserved` (`runner.py:191-199`): the server was there and did not do the
-work, which says nothing about the request, so it is `server_side` too,
+own mistakes get (`runner.py:174-188`, `180-187`). A 429, a 5xx or a
+timeout is `unserved` (`runner.py:191-199`): the server was asked and did
+not do the work, which says nothing about the request, so it is
+`server_side` too,
 waits on the long curve, and ends the request as unserved if the last
 attempt still got it. Any other 4xx refuses the request itself, and every
 retry would be refused alike: the row, coordinate, frame and review loops
@@ -511,6 +513,13 @@ counts it in the registry `UNSERVED` (`runner.py:212-239`, noted at
 too (`runner.py:3023`). The run's anchor requests belong to no document and
 are counted under `None` (`runner.py:1887-1890`).
 
+A timeout counts because a server whose engine stopped taking requests keeps
+its connections open until every request times out; those documents used to be
+stamped with coordinates that were never read. It is recognised by the client's
+timeout error (`openai.APITimeoutError`, `providers.ProviderTimeout`). A
+connection that never arrived has no status and no timeout and stays
+`unreachable`, under the more-than-half rule.
+
 ### The adaptive request limit
 
 A fixed thread pool bounds how many requests can be sent at once; how many the
@@ -526,6 +535,28 @@ a preemption (`throttle.Controller.decide`, `throttle.py:237`).
 rise past, and a server with no `/metrics` gets no adaptive limit at all, the
 pools alone deciding as before. `EXTRACT_LIMIT_ADAPTIVE=0` turns it off
 (`runner.start_limit`, `runner.py:1333`).
+
+### Counting the prompt
+
+A request is sized to the window before it is sent, so the prompt has to be
+counted. For a self-hosted server `runner.start_counting`, called at the start
+of a run next to `start_limit`, loads the served model's own tokenizer
+(`transformers.AutoTokenizer.from_pretrained(LLM_MODEL)`, from the local model
+cache, `HF_HOME`) and sets `runner.PROMPT_COUNTER`, a `PromptCounter`. It runs the
+messages through the model's chat template with the `chat_template_kwargs`
+every request carries and counts the tokens exactly; a crop still counts
+`IMAGE_TOKENS`, the most one can take. A tokenizer that cannot be loaded ends
+the run at that point, before the first request. A hosted API (its tokenizer is
+its own) and a recorded run (nothing is sent) keep the old estimate, characters
+divided by `PROMPT_CHARS_PER_TOKEN`, estimated high.
+
+The estimate ran short on tables of figures, where every digit is a token of
+its own: requests went out one token over the window and were refused. On
+vLLM before 0.28 a refused request that carried a crop also broke the server's
+multimodal cache (CVE-2026-105753), after which the engine took no more
+requests, which is how requests came to time out in bulk (see the unserved
+rule above). vLLM 0.28 and later recover: a request that hits a stale cache
+entry fails once.
 
 ### Merging a coordinate
 
@@ -721,7 +752,7 @@ flowchart TD
 |---|---|---|---|
 | `--recheck` | No model, no GPU, no index; the corpus database, read-only, where the profile closes lists per document | Every tuple's coordinates | Clears every stamp in the directory (unless `--keep-stamps`), except a document left alone |
 | `--remap` | Nothing: no model, no GPU, no index | A category coordinate's mapped class | Writes forward only the answer spaces it fully settled |
-| `--top-up` | The model, the FAISS index, the embedder, the database | One named coordinate of every row that has it | Writes forward only the exact stamp keys it could settle, and none when one of its requests ended on a 429 or a 5xx |
+| `--top-up` | The model, the FAISS index, the embedder, the database | One named coordinate of every row that has it | Writes forward only the exact stamp keys it could settle, and none when one of its requests ended on a 429 or a 5xx, or timed out |
 | `--top-up-parameters` | The model, the FAISS index, the embedder, the database | Nothing that is stored: it appends the rows, refusals and state line of each parameter the spec gained, and builds the summary line again | Writes forward the keys of the parameters it appended and of the questions the addition alone moved, and none for a document it did not read completely |
 | `--review` | The model, and the crops for image-attached prompts | Only a row's `flags` | Adds `review/prompt` and `review/model`, compared by nothing |
 
@@ -889,7 +920,7 @@ then asked over the new passages`. Every coordinate of an appended row carries
 are written before the keys, as the coordinate pass does.
 
 A document is written only when the new parameters were read completely.
-A request of any kind that ended on a 429 or a 5xx, more than half the
+A request of any kind that ended on a 429 or a 5xx, or timed out, more than half the
 sources never reaching the server, not one batch answering
 (`runner.not_happened`, which `finish_document` asks too), or a frame or
 the plan of a pair that raised leave the file and the stamp as they were
@@ -1216,7 +1247,7 @@ A harvest line is one of four kinds, named by its `kind` field.
 
 A refusal whose claim carries `_harvest_failed` is a sentinel: a passage the
 run never got an answer for. Its `_why` is one of `unreachable` (the request
-never arrived), `unserved` (the server answered 429 or a 5xx), `no_answer`
+never arrived), `unserved` (the server answered 429 or a 5xx, or the request timed out), `no_answer`
 (the model answered nothing, or the server refused the request with another
 4xx) and `cut_off` (the reply did not fit and there was nothing left to
 split); a trace `error` event with `kind: gave_up` carries the same value as
@@ -1276,7 +1307,7 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up` or
 |---|---|---|---|---|
 | `EXTRACT_FIELD_WINDOW` / `EXTRACT_FIELD_OVERLAP` | env var | `2` / `1` | `WINDOW`: sources per retrieval- or rest-stage window. `OVERLAP`: how many of a rest-stage window repeat in the next one; a retrieval-stage window never repeats one | `runner.main`, `runner.Sweeping` |
 | `EXTRACT_MAX_RETRIES` / `EXTRACT_RETRY_TIMEOUT` | env var | `3` / `600` | `MAX_RETRIES`: attempts every retry loop of this stage gets per request. `RETRY_TIMEOUT`: client timeout (seconds) a row- or field-request retry gets after a request timed out; one refused at once keeps the client's own timeout instead | `runner.py`, `runner.make_harvester`, `runner.make_field_asker` |
-| `EXTRACT_RETRY_WAIT` / `_MAX` / `EXTRACT_TRANSPORT_WAIT` / `_MAX` | env var | `2` / `6` / `15` / `120` | Seconds before the next attempt. The short curve, `RETRY_WAIT` times the attempt up to `RETRY_WAIT_MAX`, follows the model's own mistake. The long curve, `TRANSPORT_WAIT` doubling per attempt up to `TRANSPORT_WAIT_MAX`, follows a request that never arrived or ended on a 429 or a 5xx | `runner.retry_wait` |
+| `EXTRACT_RETRY_WAIT` / `_MAX` / `EXTRACT_TRANSPORT_WAIT` / `_MAX` | env var | `2` / `6` / `15` / `120` | Seconds before the next attempt. The short curve, `RETRY_WAIT` times the attempt up to `RETRY_WAIT_MAX`, follows the model's own mistake. The long curve, `TRANSPORT_WAIT` doubling per attempt up to `TRANSPORT_WAIT_MAX`, follows a request that never arrived or ended on a 429, a 5xx or a timeout | `runner.retry_wait` |
 | `EXTRACT_FIELD_ROWS` | env var | `32` | Rows one field request answers at once; a coordinate's open rows are chunked to this many per request, halved again if the chunk still leaves too little room for its answer. It is also the unit the rest stage of a document's search counts its requests in | `runner.make_field_asker`, `runner.Sweeping.requests_of` |
 | `EXTRACT_FIELD_ROUNDS` / `EXTRACT_FIELD_ATTEMPTS` | env var | `4` / `3` | Retrieval rounds before falling to the rest stage; retries of the own-stage window when unbackable | `runner.Sweeping` |
 | `EXTRACT_FIELD_MAX_WINDOWS` / `EXTRACT_REST_MAX_WINDOWS` | env var | `24` / `12` | `MAX_WINDOWS`: the own and retrieval windows of a coordinate; a document's search has them once per document and coordinate. `REST_MAX_WINDOWS`: the rest stage's separate allowance, per coordinate for one batch's sweep and, for a document's search, for every batch that still has an open row of the coordinate when the stage begins, with the requests of those windows bounded as well. A coordinate whose allowance ends before the document does is `exhausted` | `runner.window_budget`, `runner.Sweeping` |
@@ -1367,7 +1398,7 @@ and withholds the stamp entirely, forcing a full redo on the next run, in
 three cases, which `not_happened` tells apart and the pass that appends a
 parameter asks as well: more than half a document's planned sources came back
 from a server it could not reach (`UNREACHABLE_LIMIT`, `0.5`), not one batch
-answered at all, or any one of its requests ended on a 429 or a 5xx. The last
+answered at all, or any one of its requests ended on a 429 or a 5xx, or timed out. The last
 count adds the `unserved` sentinels to the document's entry in `UNSERVED`,
 which the callers pass as `lost`; one is enough, because such a request was
 never answered and nothing says it cannot be.
@@ -1383,7 +1414,7 @@ on, `harvest_document` returns `(stamped, failures)` with one failure added
 when the document is not stamped, `harvest_documents` adds the failures up,
 and `main` returns 1 when there are any. The exit code is 1 for a document
 written and left unstamped as it is for a server that stopped answering. The
-run's own anchor requests are the other case: if any ended on a 429 or a 5xx,
+run's own anchor requests are the other case: if any ended on a 429 or a 5xx, or timed out,
 `main` returns 1 before anything is harvested, and the anchors already written
 stay in `anchors.json`, so the next start asks only for the rest.
 
@@ -1412,7 +1443,7 @@ flight at once, their batches sharing one `batch_pool` and one `DeadStreak`
 across every document in flight and across the field sweep's own requests too,
 rather than a separate dead-server count per document or per pool: the run
 gives up once `max(64, EXTRACT_LLM_PARALLEL)` requests in a row were not
-served by the server (not reached, or a 429 or a 5xx). The rows pool and the
+served by the server (not reached, a 429, a 5xx or a timeout). The rows pool and the
 field pool log it as "requests in a row the server did not serve". Once `STOP`
 or a dead server sets `Halted`, no new document starts, a document already in
 flight leaves its own `harvest_batches` call at once instead of waiting out its

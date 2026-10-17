@@ -1195,7 +1195,7 @@ def test_a_pass_that_did_not_read_says_what_it_counted_in_its_own_unit(
     assert tp.not_read("no_reply", 4, 4) == (
         "4 source(s) planned and not one reply")
     assert tp.not_read("unserved", 2, 2) == (
-        "2 request(s) ended on a 429 or a 5xx")
+        "2 request(s) ended on a 429 or a 5xx, or timed out")
     world = World(tmp_path, model=Model(unserved=True))
     with caplog.at_level(logging.ERROR, logger=tp.log.name):
         world.run()
