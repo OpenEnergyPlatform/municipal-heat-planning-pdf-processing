@@ -111,22 +111,26 @@ def test_a_request_that_never_arrived_is_the_servers_but_not_unserved():
     assert not runner.unserved(ConnectionError("gone"))
 
 
-def _timeouts():
-    """The two ways a timeout reaches the loops: the OpenAI client's own, and
-    a hosted provider's."""
-    import httpx
-    import openai
+def _timeout():
+    """A hosted provider's timeout, which needs no client package."""
     from docpipe.providers.base import ProviderTimeout
-    return [openai.APITimeoutError(request=httpx.Request("POST", "http://x")),
-            ProviderTimeout("no answer in time")]
+    return ProviderTimeout("no answer in time")
 
 
 def test_a_request_that_timed_out_was_not_served():
     """A server whose engine stopped taking requests kept every connection
     open until it timed out; those were never answered either."""
-    for exc in _timeouts():
-        assert runner.unserved(exc), type(exc).__name__
-        assert runner.server_side(exc), type(exc).__name__
+    assert runner.unserved(_timeout())
+    assert runner.server_side(_timeout())
+
+
+def test_the_openai_clients_timeout_was_not_served():
+    """The one a self-hosted server's requests end on."""
+    httpx = pytest.importorskip("httpx")
+    openai = pytest.importorskip("openai")
+    exc = openai.APITimeoutError(request=httpx.Request("POST", "http://x"))
+    assert runner.unserved(exc)
+    assert runner.server_side(exc)
 
 
 # ---------------------------------------------------------------------------
@@ -222,11 +226,10 @@ def raising(monkeypatch):
     return install
 
 
-@pytest.mark.parametrize("which", [0, 1])
-def test_a_coordinate_that_timed_out_is_counted_on_its_document(which, raising,
+def test_a_coordinate_that_timed_out_is_counted_on_its_document(raising,
                                                                waits):
     """Its document is left unstamped, so the next run asks it again."""
-    calls = raising(_timeouts()[which])
+    calls = raising(_timeout())
     assert runner.make_field_asker()([], [], _year(), None, 7) is None
     assert runner.UNSERVED.of(7) == 1
     assert len(calls) == runner.MAX_RETRIES
@@ -241,13 +244,13 @@ def test_a_coordinate_whose_connection_failed_is_not_counted(raising, waits):
 
 
 def test_a_passage_that_timed_out_is_named_unserved(raising, waits):
-    raising(_timeouts()[0])
+    raising(_timeout())
     reply = runner.make_harvester(None)(_batch(), [])
     assert [t["_why"] for t in reply["tuples"]] == ["unserved"]
 
 
 def test_a_frame_that_timed_out_is_counted_on_its_document(raising, waits):
-    raising(_timeouts()[0])
+    raising(_timeout())
     shown = [Source("table", 1, TEXT, {"document_id": 7, "page": 3})]
     slots = fields.frame_slots(_kwp(), ("scenario", "year"))
     assert runner.make_frame_asker()(shown, slots, 7) is None
@@ -260,7 +263,7 @@ def test_a_document_with_a_timed_out_coordinate_is_not_stamped(
     the same document without one is stamped."""
     monkeypatch.setattr(runner.prompts, "versions",
                         lambda ids: {i: "v1" for i in ids})
-    raising(_timeouts()[0])
+    raising(_timeout())
     runner.make_field_asker()([], [], _year(), None, 7)
     assert not runner.finish_document(_report([None]), "ein", tmp_path,
                                       "sha", lost=runner.UNSERVED.of(7))

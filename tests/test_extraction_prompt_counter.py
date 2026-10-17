@@ -18,6 +18,8 @@ TEMPLATE = ("{% for m in messages %}<{{ m.role }}>{{ m.content }}{% endfor %}"
 
 
 def _tokenizer():
+    pytest.importorskip("tokenizers")
+    pytest.importorskip("transformers")
     from tokenizers import Regex, Tokenizer, models, pre_tokenizers
     from transformers import PreTrainedTokenizerFast
     chars = [chr(c) for c in range(32, 127)] + ["\n", "[UNK]"]
@@ -100,7 +102,7 @@ def test_without_a_tokenizer_the_estimate_stays(monkeypatch):
 
 
 def test_a_tokenizer_that_cannot_be_loaded_ends_the_run(monkeypatch):
-    import transformers
+    transformers = pytest.importorskip("transformers")
     monkeypatch.setattr(runner, "PROMPT_COUNTER", None)
     monkeypatch.setattr(runner.providers, "replaying", lambda: False)
     monkeypatch.setattr(runner.providers, "hosted", lambda role: False)
@@ -116,7 +118,7 @@ def test_a_tokenizer_that_cannot_be_loaded_ends_the_run(monkeypatch):
 
 
 def test_the_run_counts_with_the_served_models_tokenizer(monkeypatch):
-    import transformers
+    transformers = pytest.importorskip("transformers")
     monkeypatch.setattr(runner, "PROMPT_COUNTER", None)
     monkeypatch.setattr(runner.providers, "replaying", lambda: False)
     monkeypatch.setattr(runner.providers, "hosted", lambda role: False)
@@ -135,7 +137,7 @@ def test_the_run_counts_with_the_served_models_tokenizer(monkeypatch):
 @pytest.mark.parametrize("hosted,replaying", [(True, False), (False, True)])
 def test_a_hosted_api_and_a_recorded_run_keep_the_estimate(hosted, replaying,
                                                           monkeypatch):
-    import transformers
+    transformers = pytest.importorskip("transformers")
     monkeypatch.setattr(runner, "PROMPT_COUNTER", None)
     monkeypatch.setattr(runner.providers, "replaying", lambda: replaying)
     monkeypatch.setattr(runner.providers, "hosted", lambda role: hosted)
