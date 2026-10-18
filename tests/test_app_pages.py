@@ -29,6 +29,15 @@ What is promised, sentence by sentence:
     folder with its quote marked, AND a download of that PDF; where the quote
     cannot be located the page is shown unmarked AND says so in the profile's
     words; where the page cannot be shown the expander says what is missing;
+  * a harvested value shows the page it was read on, in the chat AND on
+    the review page, with a section's quote marked as a citation's is,
+    AND a table's page unmarked without looking for its reading;
+  * the sidebar offers a choice of answer route only where the harvest
+    or the graph can answer, AND the graph only for one document;
+  * the harvest alone answers from the harvest AND never asks the
+    documents, AND says in the profile's words why where it holds
+    nothing; the documents alone never ask the harvest; the graph
+    alone asks neither;
   * a link into an external viewer is shown only where a prefix is
     configured, and a fresh install configures none;
   * a chat with no profile says so in one line, naming that it runs on the
@@ -1376,3 +1385,192 @@ def test_follow_up_history_never_carries_a_dropped_statement(
     # the note that one was removed is on the page, not in the memory
     assert app.T["statements_dropped"].format(dropped=1, made=2) \
         in page.texts("caption")
+
+
+# ------------------------------------------------- the page a harvested value is on
+
+def harvested(**more):
+    """A served value read from a section: its page is 3 in the harvest and
+    12 where its quote stands in the raw segments."""
+    return {"id": "x", "document": "kassel", "parameter": P,
+            "label": "Final energy consumption", "value": 241.0,
+            "unit": "GWh/a", "coordinates": {}, "quote": QUOTE, "page": 3,
+            "level": "B", "reasons": [],
+            "source": {"owner_kind": "section", "owner_id": 4}, **more}
+
+
+@pytest.fixture
+def known(app, cited, monkeypatch):
+    monkeypatch.setattr(app, "get_documents",
+                        lambda: {"kassel": (1, "kassel.pdf")})
+    return cited
+
+
+def test_a_harvested_value_shows_its_page_with_the_quote_marked(
+        app, page, known):
+    app._render_values({"values": [harvested()], "total": 1})
+    (drawn,) = known.drawn
+    assert drawn["path"] == known.pdf and drawn["page"] == 12
+    assert drawn["rects"] == MARK
+    assert ("image", b"PNG") in page.inside[shown_page(app)]
+    assert ("download", app.T["download_pdf"]) in page.inside[shown_page(app)]
+
+
+def test_a_value_read_from_a_table_is_shown_unmarked_on_its_page(
+        app, page, known, monkeypatch):
+    def never(path, number, quote):
+        raise AssertionError("the reading of a table is not looked for")
+
+    monkeypatch.setattr(app.pdf_link, "best_quote_rects", never)
+    app._render_values({"values": [harvested(
+        quote="| Erdgas | 241 |",
+        source={"owner_kind": "table", "owner_id": 9})], "total": 1})
+    (drawn,) = known.drawn
+    assert drawn["page"] == 3 and not drawn["rects"]
+    assert app.T["page_not_located"] not in page.texts()
+
+
+def test_a_value_of_a_document_the_database_does_not_know_shows_no_page(
+        app, page, known):
+    app._render_values({"values": [harvested(document="elsewhere")],
+                        "total": 1})
+    assert known.drawn == [] and page.downloads == []
+
+
+def test_the_review_page_shows_the_page_of_the_value_it_asks_about(
+        app, page, known):
+    shown = dict(row(quote=QUOTE),
+                 provenance={"document_id": 1, "page": 3,
+                             "owner_kind": "section", "owner_id": 4})
+    app._review_one("kassel", shown, gold.Gold.load(app.config.GOLD_PATH),
+                    {}, "fv", set())
+    (drawn,) = known.drawn
+    assert drawn["page"] == 12 and drawn["rects"] == MARK
+    assert ("image", b"PNG") in page.inside[shown_page(app)]
+
+
+# ------------------------------------------------------------- the answer route
+
+def _routes_offered(app, page):
+    """The labels of each answer-route switch the app showed."""
+    offered = []
+    original = page.radio
+
+    def radio(label, options, key=None, **kwargs):
+        if label == app.T["route"]:
+            offered.append(list(options))
+        return original(label, options, key=key, **kwargs)
+
+    sys.modules["streamlit"].radio = radio
+    return offered
+
+
+@pytest.fixture
+def routed(app, page, chat, monkeypatch):
+    asked = {"outcome": [], "graph": []}
+
+    def outcome(task, document_id):
+        asked["outcome"].append(document_id)
+        return asked.get("held") or {
+            "route": "rag", "reason": "no_values", "values": [], "total": 0}
+
+    def graph(task, document_id):
+        asked["graph"].append(document_id)
+        return {"route": "rag", "reason": "no_rows"}
+
+    monkeypatch.setattr(app, "values_outcome", outcome)
+    monkeypatch.setattr(app, "run_kg_turn", graph)
+    monkeypatch.setattr(app, "graph_offered", lambda: True)
+    monkeypatch.setattr(app, "get_kg_hooks", lambda: types.SimpleNamespace(
+        notes={"no_rows": "The graph has no value for this."}))
+    asked["offered"] = _routes_offered(app, page)
+    return asked
+
+
+def test_no_route_is_offered_where_only_the_documents_can_answer(
+        app, page, chat, monkeypatch):
+    offered = _routes_offered(app, page)
+    monkeypatch.setattr(app.config, "HARVEST_DIR", None)
+    monkeypatch.setattr(app, "graph_offered", lambda: False)
+    page.question = "How much gas?"
+    app.chat_page()
+    assert offered == []
+    assert len(chat["turns"]) == 1
+
+
+def test_the_graph_is_offered_for_one_document_and_not_for_the_corpus(
+        app, page, routed):
+    app.chat_page()
+    keys = ["route_auto", "route_harvest", "route_graph", "route_documents"]
+    assert routed["offered"][-1] == [app.T[key] for key in keys]
+    page.answers[app.T["whole_corpus"]] = True
+    app.chat_page()
+    assert app.T["route_graph"] not in routed["offered"][-1]
+
+
+def test_the_harvest_alone_answers_from_it_and_never_asks_the_documents(
+        app, page, chat, routed):
+    routed["held"] = {"route": "values", "reason": None, "total": 1,
+                      "values": [harvested()]}
+    page.answers[app.T["route"]] = app.T["route_harvest"]
+    page.question = "How much gas?"
+    app.chat_page()
+    assert routed["outcome"] == [1]
+    assert chat["turns"] == [] and chat["values"] == []
+    assert f"**{app.T['values_heading']}**" in page.texts("markdown")
+    # drawn again with the history, still without an answer of its own
+    page.said.clear()
+    page.question = None
+    app.chat_page()
+    assert f"**{app.T['values_heading']}**" in page.texts("markdown")
+    assert "" not in page.texts("markdown")
+
+
+@pytest.mark.parametrize("reason", ["no_parameter", "no_values"])
+def test_a_harvest_that_holds_nothing_says_why_and_asks_no_documents(
+        app, page, chat, routed, reason):
+    routed["held"] = {"route": "rag", "reason": reason, "values": [],
+                      "total": 0}
+    page.answers[app.T["route"]] = app.T["route_harvest"]
+    page.question = "How much gas?"
+    app.chat_page()
+    assert app.T[f"values_{reason}"] in page.texts("markdown")
+    assert chat["turns"] == []
+
+
+def test_the_documents_alone_never_ask_the_harvest(app, page, chat, routed):
+    page.answers[app.T["route"]] = app.T["route_documents"]
+    page.question = "How much gas?"
+    app.chat_page()
+    assert chat["values"] == [] and routed["outcome"] == []
+    assert len(chat["turns"]) == 1
+
+
+def test_the_graph_alone_asks_neither_harvest_nor_documents(
+        app, page, chat, routed):
+    page.answers[app.T["route"]] = app.T["route_graph"]
+    page.question = "How much gas?"
+    app.chat_page()
+    assert routed["graph"] == [1]
+    assert chat["turns"] == [] and chat["values"] == []
+    assert routed["outcome"] == []
+    assert "The graph has no value for this." in page.texts("markdown")
+
+
+def test_the_routes_follow_what_can_answer(app, monkeypatch):
+    monkeypatch.setattr(app, "graph_offered", lambda: True)
+    assert app.harvest_offered()
+    assert app.routes_offered(False) == [
+        "route_auto", "route_harvest", "route_graph", "route_documents"]
+    assert "route_graph" not in app.routes_offered(True)
+    monkeypatch.setattr(app.config, "HARVEST_DIR", None)
+    monkeypatch.setattr(app, "graph_offered", lambda: False)
+    assert not app.harvest_offered()
+    assert app.routes_offered(False) == ["route_auto", "route_documents"]
+
+
+def test_every_reason_the_harvest_gives_has_its_words(app):
+    """The harvest alone says why it holds nothing by its reason token; a
+    token no profile words would end the turn on a missing key."""
+    assert set(app.values_reason_words()) == set(app.values_route.REASONS)
+    assert set(app.route_words()) >= set(app.routes_offered(False))

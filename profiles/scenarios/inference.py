@@ -156,6 +156,22 @@ UI = {
                     "the answer below."),
     "values_more": "{shown} of {total} values shown.",
     "values_level": "Level {level}",
+    "values_no_store": "No harvest is loaded, so it cannot answer.",
+    "values_no_parameter": ("The question names none of the quantities the "
+                            "harvest has read, so it cannot answer."),
+    "values_no_values": ("The harvest holds no value for what the question "
+                         "names."),
+    "route": "Answer from",
+    "route_help": ("Automatic shows the harvest's values first and then the "
+                   "answer from the documents. Harvest and knowledge graph "
+                   "answer only from that source, or say that it holds "
+                   "nothing. Documents searches the documents alone. A "
+                   "comparison of several documents always searches the "
+                   "documents."),
+    "route_auto": "Automatic",
+    "route_harvest": "Harvest",
+    "route_graph": "Knowledge graph",
+    "route_documents": "Documents",
     "index_model_differs": ("The index was built with {built}, questions are "
                             "embedded with {queried}: their vectors do not "
                             "compare, so what is found may be wrong."),

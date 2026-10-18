@@ -57,7 +57,11 @@ without a profile.
    and its own citations, and one final call compares the finished answers. There is no values
    step and no image in a comparison.
 
-The graph route (`docpipe.inference.kg_route`) is not offered while no corpus graph exists.
+Where the harvest or the graph can answer, the sidebar offers the answer route: Automatic
+(the harvest's values, then the answer from the documents), Harvest alone, Knowledge graph
+alone (`docpipe.inference.kg_route`, for one document, where `INFERENCE_KG_TTL_PATH` exists)
+or Documents alone. A route that answers alone says why where its source holds nothing and
+does not fall back to the documents.
 
 ## Whole-corpus questions
 
@@ -74,8 +78,9 @@ With `INFERENCE_HARVEST_DIR` set to a harvest directory (`docpipe extract`), a q
 number is answered from the harvest before the documents are searched
 (`docpipe/inference/values_route.py`). The question is turned into the parameter and the
 coordinates it names, one closed question each over the spec's own lists; the values the harvest
-holds for them are shown as they are, each with document, page, trust level and quote, and, where
-an external viewer is configured (see below), a link into the source PDF. An answer outside a list
+holds for them are shown as they are, each with document, trust level and quote and the page it
+was read on, drawn from the PDF with a section's quote marked as a citation's page is (and, where
+an external viewer is configured, a link into it). An answer outside a list
 leaves that coordinate open, and a question that
 names no parameter shows nothing here. `INFERENCE_VALUES_LEVEL` (A, B or C) leaves out values
 below a trust level, and `INFERENCE_VALUES_LIMIT` caps how many are shown before the count of the
@@ -85,7 +90,7 @@ rest.
 
 Where a harvest is configured the sidebar offers a second page. A person gives a name and works
 through the rows nobody has decided yet: for each field (the value, the unit, every coordinate)
-the value, its quote and, where an external viewer is configured, a link to its page are shown,
+the value, its quote and the page it was read on, drawn from the PDF, are shown,
 and the field is marked correct or wrong,
 with what is right where it is wrong. Two more forms record that the document states a value the
 harvest lacks, and that somebody has read a whole document for one parameter. Everything is
@@ -180,7 +185,7 @@ comes from, and `docpipe.toml` takes them under `[chat]`.
 | `INFERENCE_VALUES_LEVEL` | unset | Worst trust level (A, B or C) of a harvested value the chat still shows. Unset: every value. |
 | `INFERENCE_VALUES_LIMIT` | `20` | Harvested values one answer shows before it says how many more there are. |
 | `INFERENCE_LEXICAL` | `1` | Search by word beside the search by meaning where a word index exists. `0`: by meaning only. |
-| `INFERENCE_KG_TTL_PATH` | `<profile>.root/graph.ttl` | The Turtle `--serialize` wrote. Read by nothing while the graph route is not offered. |
+| `INFERENCE_KG_TTL_PATH` | `<profile>.root/graph.ttl` | The Turtle `--serialize` wrote, read by the knowledge-graph route. Without it the route is not offered. |
 | `EMBEDDING_MODEL` | `Qwen/Qwen3-VL-Embedding-8B` | HF id of the embedding model. |
 | `EMBEDDING_BACKEND` | `local` | Where a query vector comes from: `local`, `api`, or `package.module:Attribute`. |
 | `LLM_PROVIDER` | `openai-compatible` | The API behind the text model: a server of one's own, `openai`, `anthropic` or `gemini`. |

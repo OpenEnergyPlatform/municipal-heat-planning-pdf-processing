@@ -180,6 +180,22 @@ UI = {
                     "Antwort unten."),
     "values_more": "{shown} von {total} Werten gezeigt.",
     "values_level": "Stufe {level}",
+    "values_no_store": "Es ist keine Auswertung geladen, sie kann nicht antworten.",
+    "values_no_parameter": ("Die Frage nennt keine der Größen, die die "
+                            "Auswertung gelesen hat; sie kann nicht antworten."),
+    "values_no_values": ("Die Auswertung hat zu dem, was die Frage nennt, "
+                         "keinen Wert."),
+    "route": "Antwortweg",
+    "route_help": ("Automatik zeigt zuerst die Werte der Auswertung und dann "
+                   "die Antwort aus den Dokumenten. Auswertung und "
+                   "Wissensgraph antworten nur aus dieser Quelle oder sagen, "
+                   "dass sie nichts hält. Dokumente durchsucht nur die "
+                   "Dokumente. Ein Vergleich mehrerer Dokumente durchsucht "
+                   "immer die Dokumente."),
+    "route_auto": "Automatik",
+    "route_harvest": "Auswertung",
+    "route_graph": "Wissensgraph",
+    "route_documents": "Dokumente",
     "index_model_differs": ("Der Index wurde mit {built} aufgebaut, Fragen "
                             "werden mit {queried} eingebettet: die Vektoren "
                             "sind nicht vergleichbar, Treffer können falsch "

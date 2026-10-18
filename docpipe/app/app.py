@@ -10,8 +10,11 @@ Where a harvest is configured, the numbers it holds for a question are
 shown first, as they were read and checked, and the answer from the
 documents follows.
 
-The graph route is not offered while no corpus graph exists, and
-`docpipe.inference.kg_route` stays in the core for the day it does.
+The sidebar chooses where an answer comes from: the harvest first and
+then the documents, the harvest alone, the graph `--serialize` wrote
+alone (for one document, where the graph is there), or the documents
+alone. A harvested value shows the page it was read on, as a citation
+does.
 
 Run:
     docpipe --profile kwp chat --server.address 0.0.0.0 --server.port 8501
@@ -276,6 +279,14 @@ def run_values_turn(task: str, document_id: int | None) -> dict | None:
     """What the harvest holds for the question, or None: no harvest, or
     the question names nothing it has. `document_id` None asks every
     document's harvest."""
+    got = values_outcome(task, document_id)
+    return got if got is not None and got["route"] == "values" else None
+
+
+def values_outcome(task: str, document_id: int | None) -> dict | None:
+    """The harvest's answer with its reason where it has none
+    (`values_route.REASONS`), or None: no harvest, or a document the
+    database does not know."""
     store, _rows = get_values()
     if store is None:
         return None
@@ -285,10 +296,46 @@ def run_values_turn(task: str, document_id: int | None) -> dict | None:
         if not filename:
             return None
         name = Path(filename).stem
-    got = values_route.answer_from_values(
+    return values_route.answer_from_values(
         task, store, ask=_ask_value_coordinate, document=name,
         level=config.VALUES_LEVEL, limit=config.VALUES_LIMIT)
-    return got if got["route"] == "values" else None
+
+
+def graph_offered() -> bool:
+    """Whether the graph route can answer: the profile contributes to it
+    and the graph `--serialize` wrote is where the app is told."""
+    return get_kg_hooks() is not None and config.KG_TTL_PATH.is_file()
+
+
+def harvest_offered() -> bool:
+    return config.HARVEST_DIR is not None and config.HARVEST_DIR.is_dir()
+
+
+def route_words() -> dict:
+    """{route key: its label in the profile's words}."""
+    return {"route_auto": T["route_auto"], "route_harvest": T["route_harvest"],
+            "route_graph": T["route_graph"],
+            "route_documents": T["route_documents"]}
+
+
+def values_reason_words() -> dict:
+    """{reason of values_route.REASONS: why the harvest holds nothing, in
+    the profile's words}."""
+    return {"no_store": T["values_no_store"],
+            "no_parameter": T["values_no_parameter"],
+            "no_values": T["values_no_values"]}
+
+
+def routes_offered(whole: bool) -> list:
+    """The answer routes the sidebar offers, by their UI key. The graph
+    answers for one plan, so not for the whole corpus."""
+    routes = ["route_auto"]
+    if harvest_offered():
+        routes.append("route_harvest")
+    if not whole and graph_offered():
+        routes.append("route_graph")
+    routes.append("route_documents")
+    return routes
 
 
 def _ask_value_coordinate(task: str, slot):
@@ -392,6 +439,15 @@ def chat_page() -> None:
         out_fmt = st.radio(T["format"], [T["format_prose"], "JSON"],
                            horizontal=True)
         as_json = out_fmt == "JSON"
+        # Where nothing but the documents can answer, there is nothing to
+        # choose and no switch is shown.
+        routes = routes_offered(whole)
+        route = "route_auto"
+        if len(routes) > 2:
+            words = route_words()
+            by_label = {words[key]: key for key in routes}
+            route = by_label[st.radio(T["route"], list(by_label),
+                                      horizontal=True, help=T["route_help"])]
         if config.LLM_STUB_MODE:
             st.info(T["stub_mode"])
 
@@ -411,25 +467,7 @@ def chat_page() -> None:
 
     # ---- Render history ----
     for msg in history:
-        with st.chat_message(msg["role"]):
-            if msg.get("kg_values") is not None:
-                _render_kg(msg["kg_values"])
-                continue
-            if msg.get("rows") is not None:
-                _render_comparison(msg)
-                continue
-            if msg.get("values") is not None:
-                _render_values(msg["values"])
-            if msg["role"] == "assistant":
-                _render_answer(msg["content"], msg.get("as_json", False))
-                _render_dropped(msg.get("made"), msg.get("dropped"))
-                _render_faults(msg.get("faults"))
-            else:
-                st.markdown(msg["content"])
-            _render_notes(msg)
-            _render_compute(msg.get("compute"))
-            for cit in msg.get("citations", []):
-                _render_citation(cit)
+        _say(msg)
 
     # ---- Optional image upload + mode ----
     # The image and this toggle only change how the *query embedding* is formed;
@@ -473,15 +511,43 @@ def chat_page() -> None:
             _remember(by_doc, row["document_id"], task, row)
         return
 
-    # The graph route is not offered: there is no corpus graph yet, and a
-    # selector for a source that does not exist is a promise the app cannot
-    # keep. `kg_route` stays in the core for the day the graph is there.
     route_note = None
+
+    # The graph or the harvest alone: either answers, or says why not and
+    # the documents are not asked. A silent fallback would hide that the
+    # chosen source holds nothing.
+    if route == "route_graph":
+        with _spinner(T["route_graph"]):
+            outcome = run_kg_turn(task, doc_id)
+        if outcome["route"] == "kg":
+            message = {"role": "assistant", "content": "",
+                       "kg_values": outcome["values"], "route": "kg"}
+        else:
+            message = {"role": "assistant", "route": "kg_empty",
+                       "content": get_kg_hooks().notes[outcome["reason"]]}
+        _say(message)
+        history.append(message)
+        return
+    if route == "route_harvest":
+        got = None if image_only else values_outcome(task, doc_id)
+        if got is not None and got["route"] == "values":
+            message = {"role": "assistant", "content": "", "values": got,
+                       "route": "harvest"}
+        else:
+            # A question that is only an image names no parameter.
+            reason = ("no_parameter" if image_only
+                      else "no_store" if got is None else got["reason"])
+            message = {"role": "assistant", "route": "harvest_empty",
+                       "content": values_reason_words()[reason]}
+        _say(message)
+        history.append(message)
+        return
 
     # What the harvest holds for the question comes first and stands for
     # itself: read and checked beforehand, not written by the answer below.
     # Not for a question that is only an image: it names nothing.
-    values = None if image_only else run_values_turn(task, doc_id)
+    values = (None if image_only or route == "route_documents"
+              else run_values_turn(task, doc_id))
 
     result = run_turn(task, image_bytes, image_only, doc_id, scopes, as_json=as_json,
                       history=by_doc.get(doc_id, []))
@@ -533,6 +599,31 @@ def chat_page() -> None:
     history.append(message)
 
     _remember(by_doc, doc_id, task, result)
+
+
+def _say(msg: dict) -> None:
+    """One message of the conversation, as it is drawn live and again."""
+    with st.chat_message(msg["role"]):
+        if msg.get("kg_values") is not None:
+            _render_kg(msg["kg_values"])
+            return
+        if msg.get("rows") is not None:
+            _render_comparison(msg)
+            return
+        if msg.get("values") is not None:
+            _render_values(msg["values"])
+            if msg.get("route") == "harvest":
+                return
+        if msg["role"] == "assistant":
+            _render_answer(msg["content"], msg.get("as_json", False))
+            _render_dropped(msg.get("made"), msg.get("dropped"))
+            _render_faults(msg.get("faults"))
+        else:
+            st.markdown(msg["content"])
+        _render_notes(msg)
+        _render_compute(msg.get("compute"))
+        for cit in msg.get("citations", []):
+            _render_citation(cit)
 
 
 def _unread_replies(turn: dict) -> list:
@@ -610,21 +701,29 @@ def _render_values(got: dict) -> None:
         st.markdown(f"**{line['text']}** · {line['where']} · {level}")
         if value.get("quote"):
             st.markdown("> " + str(value["quote"]).replace("\n", " "))
-        _value_link(value["document"], value.get("page"), value.get("quote"))
+        _value_page(value["document"], value.get("page"), value.get("quote"),
+                    value.get("source"))
     if got["total"] > len(got["values"]):
         st.caption(T["values_more"].format(shown=len(got["values"]),
                                            total=got["total"]))
     st.divider()
 
 
-def _value_link(document: str, page, quote) -> None:
-    """A button into the source PDF at a harvested value's page."""
+def _value_page(document: str, page, quote, source=None) -> None:
+    """The page a harvested value was read on, shown as a citation's is: a
+    section's quote is looked for there and marked, a table's or a figure's
+    is a reading and the page is shown unmarked. *source* is the value's
+    provenance, which names the passage's kind and id."""
     known = get_documents().get(document)
     if known is None or not page:
         return
-    url = _pdf_url(known[1], page, quote)
-    if url:
-        st.link_button(T["open_pdf"].format(page=page), url)
+    source = source or {}
+    where = _cited_page({"document_id": known[0], "page_number": page,
+                         "quote": quote,
+                         "owner_kind": source.get("owner_kind"),
+                         "owner_id": source.get("owner_id")})
+    if where:
+        _source_page(*where)
 
 
 def _render_comparison(outcome: dict) -> None:
@@ -843,6 +942,15 @@ def _show_page(filename: str, page, quote) -> None:
                            key=f"download_pdf:{next(_downloads)}")
 
 
+def _source_page(filename: str, page, phrase, marked) -> None:
+    """A link into an external viewer where one is configured, and the page
+    drawn here with *marked* boxed. Must not be called inside an expander."""
+    url = _pdf_url(filename, page, marked, phrase)
+    if url:
+        st.link_button(T["open_pdf"].format(page=page), url)
+    _show_page(filename, page, marked)
+
+
 def _render_citation(cit: dict) -> None:
     """Render one citation: source label, quote, its page, expandable
     context, image.
@@ -862,12 +970,7 @@ def _render_citation(cit: dict) -> None:
         st.caption(T["computed_from"].format(n=cit["run"]))
     where = _cited_page(cit)
     if where:
-        filename, page, phrase, marked = where
-        # None where no prefix is configured: nothing to link to
-        url = _pdf_url(filename, page, marked, phrase)
-        if url:
-            st.link_button(T["open_pdf"].format(page=page), url)
-        _show_page(filename, page, marked)
+        _source_page(*where)
     context = (cit.get("text") or "").strip()
     if context:
         with st.expander(T["show_context"]):
@@ -956,8 +1059,9 @@ def _review_one(document: str, row: dict, held, labels: dict, by: str,
     st.markdown(f"**{T['review_value']}: {number} {row.get('unit') or ''}**")
     if row.get("quote"):
         st.markdown("> " + str(row["quote"]).replace("\n", " "))
-    page = (row.get("provenance") or {}).get("page")
-    _value_link(document, page, row.get("quote"))
+    provenance = row.get("provenance") or {}
+    _value_page(document, provenance.get("page"), row.get("quote"),
+                provenance)
 
     choices = [T["review_open"], T["review_correct"], T["review_wrong"]]
     decided: dict = {}
