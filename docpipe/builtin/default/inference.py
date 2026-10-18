@@ -19,6 +19,10 @@ PHRASES = {
     "history_task": "Question",
     "history_phrase": "Search anchor",
     "history_answer": "Answer",
+    "chat_parameter_question": ("What does the user ask for? Choose the entry "
+                                "of the list the question asks about, by what "
+                                "it means and not by its words. A question "
+                                "about none of them is out:unstated."),
 
     "code_heading": "Code executed",
     "exec_stdout": "Execution result (stdout)",
@@ -151,9 +155,21 @@ UI = {
                    "`docpipe --profile <name> chat`, or set `profile = "
                    "\"<name>\"` in docpipe.toml or DOCPIPE_PROFILE."),
     "values_heading": "Backed values from the reading of the documents",
-    "values_note": ("These numbers were read from the documents beforehand "
-                    "and checked against their quote; they do not come from "
-                    "the answer below."),
+    "values_note": ("Answered from the values read out of the documents "
+                    "beforehand; every statement stands in the passage it "
+                    "cites."),
+    "values_where": "{document}, p. {page}",
+    "values_used": "Values the answer stands on",
+    "values_details": "Details of the values",
+    "reason_exhausted": "{axis}: not searched to the end of the document",
+    "reason_unbacked": "{axis}: the quote does not carry it",
+    "reason_unanswered": "{axis}: the model gave no answer",
+    "reason_conflict": "another reading of the same value differs",
+    "reason_repaired": "the quote was adjusted afterwards",
+    "reason_computed": "computed, not read",
+    "reason_not_located": "the quote was not found on its page",
+    "reason_review_disagree": "a review disagrees",
+    "reason_page_transcribed": "from a page a model transcribed",
     "values_more": "{shown} of {total} values shown.",
     "values_level": "Level {level}",
     "values_no_store": "No harvest is loaded, so it cannot answer.",

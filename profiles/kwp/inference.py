@@ -26,6 +26,18 @@ ROUTE_NOTES = {
                  "wird aus dem Graphen nichts angezeigt."),
 }
 
+# What the chat calls each axis of the spec where it shows a value's
+# coordinates and the reasons of its level.
+AXIS_NAMES = {
+    "quantity": "Größe",
+    "aggregation": "Art des Werts",
+    "carrier": "Energieträger",
+    "sector": "Sektor",
+    "year": "Jahr",
+    "scenario": "Szenario",
+    "spatial_scope": "Gebiet",
+}
+
 READOFF_MARKER = "abgelesen"
 READOFF_NOTE = ("(Hinweis: Werte teilweise aus Abbildungen abgelesen "
                 "– Schätzwerte, Ablesefehler möglich.)")
@@ -39,6 +51,13 @@ PHRASES = {
     "history_task": "Frage",
     "history_phrase": "Suchanker",
     "history_answer": "Antwort",
+    "chat_parameter_question": ("Wonach fragt der Nutzer? Wähle den Eintrag "
+                                "der Liste, nach dem die Frage fragt, nach dem, "
+                                "was sie meint, nicht nach ihren Wörtern: wer "
+                                "einen Plan erstellt hat, ist das beauftragte "
+                                "Planungsbüro; wie viel Wärme gebraucht wird, "
+                                "ist ein Energieverbrauch. Fragt sie nach "
+                                "keinem davon, ist die Antwort out:unstated."),
 
     "code_heading": "Ausgeführter Code",
     "exec_stdout": "Ausführungsergebnis (stdout)",
@@ -175,9 +194,21 @@ UI = {
                    "oder setzen Sie `profile = \"<name>\"` in der "
                    "docpipe.toml oder DOCPIPE_PROFILE."),
     "values_heading": "Belegte Werte aus der Auswertung der Dokumente",
-    "values_note": ("Diese Zahlen wurden vorab aus den Dokumenten gelesen "
-                    "und mit Zitat geprüft; sie stammen nicht aus der "
-                    "Antwort unten."),
+    "values_note": ("Beantwortet aus den Werten, die vorab aus den "
+                    "Dokumenten gelesen wurden; jede Aussage steht in der "
+                    "Passage, die sie zitiert."),
+    "values_where": "{document}, S. {page}",
+    "values_used": "Werte, auf denen die Antwort steht",
+    "values_details": "Details der Werte",
+    "reason_exhausted": "{axis}: nicht bis zum Ende des Dokuments gesucht",
+    "reason_unbacked": "{axis}: das Zitat trägt die Angabe nicht",
+    "reason_unanswered": "{axis}: das Modell hat nicht geantwortet",
+    "reason_conflict": "eine andere Lesung desselben Werts weicht ab",
+    "reason_repaired": "das Zitat wurde nachträglich angeglichen",
+    "reason_computed": "berechnet, nicht gelesen",
+    "reason_not_located": "das Zitat wurde auf seiner Seite nicht gefunden",
+    "reason_review_disagree": "eine Prüfung widerspricht",
+    "reason_page_transcribed": "aus einer vom Modell abgeschriebenen Seite",
     "values_more": "{shown} von {total} Werten gezeigt.",
     "values_level": "Stufe {level}",
     "values_no_store": "Es ist keine Auswertung geladen, sie kann nicht antworten.",

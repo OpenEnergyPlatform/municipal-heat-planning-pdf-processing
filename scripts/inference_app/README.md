@@ -58,7 +58,7 @@ without a profile.
    step and no image in a comparison.
 
 Where the harvest or the graph can answer, the sidebar offers the answer route: Automatic
-(the harvest's values, then the answer from the documents), Harvest alone, Knowledge graph
+(the harvest's answer, then the answer from the documents), Harvest alone, Knowledge graph
 alone (`docpipe.inference.kg_route`, for one document, where `INFERENCE_KG_TTL_PATH` exists)
 or Documents alone. A route that answers alone says why where its source holds nothing and
 does not fall back to the documents.
@@ -74,17 +74,17 @@ included, and the help text of the checkbox says so.
 
 ## Values from the harvest
 
-With `INFERENCE_HARVEST_DIR` set to a harvest directory (`docpipe extract`), a question for a
-number is answered from the harvest before the documents are searched
-(`docpipe/inference/values_route.py`). The question is turned into the parameter and the
-coordinates it names, one closed question each over the spec's own lists; the values the harvest
-holds for them are shown as they are, each with document, trust level and quote and the page it
-was read on, drawn from the PDF with a section's quote marked as a citation's page is (and, where
-an external viewer is configured, a link into it). An answer outside a list
-leaves that coordinate open, and a question that
-names no parameter shows nothing here. `INFERENCE_VALUES_LEVEL` (A, B or C) leaves out values
-below a trust level, and `INFERENCE_VALUES_LIMIT` caps how many are shown before the count of the
-rest.
+With `INFERENCE_HARVEST_DIR` set to a harvest directory (`docpipe extract`), a question is
+answered from the harvest before the documents are searched. The question is turned into the
+parameter it asks for (with the profile's question for a person's question) and the coordinates
+it names, one closed question each over the spec's own lists (`docpipe/inference/values_route.py`);
+the model then answers it from the passages the found values were read from, and every statement
+stands in the passage it cites, as in an answer from the documents. Its citations show their pages.
+Under the answer stand only the values it uses, one line each in words (number, coordinates,
+document and page, level), and their details (every coordinate by name, the reasons of the level)
+unfold below. An answer outside a list leaves that coordinate open, and a question that names no
+parameter gets nothing here. `INFERENCE_VALUES_LEVEL` (A, B or C) leaves out values below a trust
+level, and `INFERENCE_VALUES_LIMIT` caps how many values the answer is given.
 
 ## The review page
 

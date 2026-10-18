@@ -137,11 +137,12 @@ does not is left unbound, never matched by nearest string.
 ### parameter_of
 
 ```python
-def parameter_of(task: str, spec, ask)
+def parameter_of(task: str, spec, ask, question: Optional[str] = None)
 ```
 
 The parameter the question asks for, or None: one closed question
-over the spec's parameters.
+over the spec's parameters. *question* replaces the spec's own, which
+asks what a number in a source is and not what a person asks for.
 
 ### coordinates_of
 

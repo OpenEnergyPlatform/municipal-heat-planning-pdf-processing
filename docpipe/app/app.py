@@ -298,7 +298,33 @@ def values_outcome(task: str, document_id: int | None) -> dict | None:
         name = Path(filename).stem
     return values_route.answer_from_values(
         task, store, ask=_ask_value_coordinate, document=name,
-        level=config.VALUES_LEVEL, limit=config.VALUES_LIMIT)
+        level=config.VALUES_LEVEL, limit=config.VALUES_LIMIT,
+        parameter_question=wording.phrases(
+            WORDS_PROFILE)["chat_parameter_question"])
+
+
+def run_values_answer(task: str, got: dict, document_id: int | None,
+                      history: list | None = None) -> dict:
+    """The question answered from the passages the found values were read
+    from (`answer.answer_from_values`), and the values the answer stands on.
+
+    {"answer", "answer_text", "citations", "made", "dropped", "faults",
+     "unread", "values", "shown", "total", "result"}: `values` are the used
+    ones, `shown` how many the answer was given, `total` how many matched.
+    """
+    result = answer.answer_from_values(
+        task, _corpus(), got["values"], document_id, history=history,
+        progress=_spinner)
+    return {"answer": result["answer"], "answer_text": result["answer_text"],
+            "citations": result["citations"],
+            "made": result.get("statements_made", 0),
+            "dropped": result.get("statements_dropped", 0),
+            "faults": list(result.get("faults") or []),
+            "unread": _unread_replies(result),
+            "values": values_route.used_values(got["values"],
+                                               result["statements"]),
+            "shown": len(got["values"]), "total": got["total"],
+            "result": result}
 
 
 def graph_offered() -> bool:
@@ -531,8 +557,11 @@ def chat_page() -> None:
     if route == "route_harvest":
         got = None if image_only else values_outcome(task, doc_id)
         if got is not None and got["route"] == "values":
-            message = {"role": "assistant", "content": "", "values": got,
-                       "route": "harvest"}
+            harvest = run_values_answer(task, got, doc_id,
+                                        by_doc.get(doc_id, []))
+            message = {"role": "assistant", "content": "",
+                       "harvest": _kept(harvest), "route": "harvest"}
+            _remember(by_doc, doc_id, task, harvest["result"])
         else:
             # A question that is only an image names no parameter.
             reason = ("no_parameter" if image_only
@@ -543,11 +572,15 @@ def chat_page() -> None:
         history.append(message)
         return
 
-    # What the harvest holds for the question comes first and stands for
-    # itself: read and checked beforehand, not written by the answer below.
-    # Not for a question that is only an image: it names nothing.
+    # The answer from the harvest comes first and stands for itself: read
+    # out of the passages the harvest read its values from, not out of the
+    # search below. Not for a question that is only an image: it names
+    # nothing.
     values = (None if image_only or route == "route_documents"
               else run_values_turn(task, doc_id))
+    harvest = (None if values is None
+               else _kept(run_values_answer(task, values, doc_id,
+                                            by_doc.get(doc_id, []))))
 
     result = run_turn(task, image_bytes, image_only, doc_id, scopes, as_json=as_json,
                       history=by_doc.get(doc_id, []))
@@ -579,14 +612,14 @@ def chat_page() -> None:
         "phrase": result.get("phrase"),
         "as_json": result["as_json"] if answered else False,
         "recheck_note": recheck_note, "route_note": route_note,
-        "compute": result.get("compute", []), "values": values,
+        "compute": result.get("compute", []), "harvest": harvest,
         "made": result.get("statements_made", 0),
         "dropped": result.get("statements_dropped", 0),
         "faults": [f for f in faults if f not in told],
     }
     with st.chat_message("assistant"):
-        if values is not None:
-            _render_values(values)
+        if harvest is not None:
+            _render_harvest(harvest)
         _render_answer(reply, message["as_json"])
         _render_dropped(message["made"], message["dropped"])
         _render_faults(message["faults"])
@@ -610,8 +643,8 @@ def _say(msg: dict) -> None:
         if msg.get("rows") is not None:
             _render_comparison(msg)
             return
-        if msg.get("values") is not None:
-            _render_values(msg["values"])
+        if msg.get("harvest") is not None:
+            _render_harvest(msg["harvest"])
             if msg.get("route") == "harvest":
                 return
         if msg["role"] == "assistant":
@@ -687,25 +720,114 @@ def _remember(by_doc: dict, document_id, task: str, result: dict) -> None:
     by_doc[document_id] = turns[-5:]
 
 
-def _render_values(got: dict) -> None:
-    """The values the harvest holds for the question, each with its
-    document, page, level and quote. Nothing here was written by a model
-    in this turn."""
+def _kept(harvest: dict) -> dict:
+    """What a harvest answer keeps in the history: everything but the
+    turn's full result, which only the follow-up context reads."""
+    return {key: value for key, value in harvest.items() if key != "result"}
+
+
+# Coordinates a value line leaves to the details: the parameter is the
+# question's, the unit stands with the number.
+NOT_A_COORDINATE = ("parameter", "unit")
+# And the two that say what kind of number it is rather than of what.
+DETAIL_ONLY = ("quantity", "aggregation")
+
+
+def axis_names() -> dict:
+    """{axis: its name in the profile's words}, `inference.AXIS_NAMES`; an
+    axis the profile does not name is shown by its key."""
+    return WORDS_PROFILE.component("inference", "AXIS_NAMES") or {}
+
+
+def reason_words() -> dict:
+    """{reason family: why a value is not an A, in the profile's words}.
+    The families of `exhausted:<axis>` and its kin take the axis's name."""
+    return {"exhausted": T["reason_exhausted"],
+            "unbacked": T["reason_unbacked"],
+            "unanswered": T["reason_unanswered"],
+            "conflict": T["reason_conflict"],
+            "repaired": T["reason_repaired"],
+            "computed": T["reason_computed"],
+            "not_located": T["reason_not_located"],
+            "review:disagree": T["reason_review_disagree"],
+            "page_transcribed": T["reason_page_transcribed"]}
+
+
+def _reason(reason: str) -> str:
+    words, names = reason_words(), axis_names()
+    family, _, axis = reason.partition(":")
+    if reason in words:
+        return words[reason]
+    if axis and family in words:
+        return words[family].format(axis=names.get(axis, axis))
+    return reason
+
+
+def _coordinate_text(entry: dict) -> str:
+    label = entry.get("label")
+    return str(label if label not in (None, "") else entry.get("value"))
+
+
+def _value_line(value: dict) -> str:
+    """One line in words: the number as the plan writes it, what it is of,
+    where it stands and its level."""
+    number = value.get("value_raw") or value.get("value")
+    what = " ".join(str(part) for part in (number, value.get("unit")) if part)
+    about = [_coordinate_text(entry)
+             for axis, entry in (value.get("coordinates") or {}).items()
+             if axis not in NOT_A_COORDINATE + DETAIL_ONLY
+             and entry.get("value") not in (None, "")]
+    where = value["document"]
+    if value.get("page") is not None:
+        where = T["values_where"].format(document=value["document"],
+                                         page=value["page"])
+    cited = f"[{value['n']}] " if value.get("n") else ""
+    return " · ".join([f"{cited}**{what}**"] + about + [
+        where, T["values_level"].format(level=value["level"])])
+
+
+def _value_details(value: dict) -> list:
+    """The coordinates by name and the reasons of the level, in words."""
+    names = axis_names()
+    lines = [f"{names.get(axis, axis)}: {_coordinate_text(entry)}"
+             for axis, entry in (value.get("coordinates") or {}).items()
+             if axis not in NOT_A_COORDINATE
+             and entry.get("value") not in (None, "")]
+    lines += [_reason(reason) for reason in value.get("reasons") or []]
+    return lines
+
+
+def _render_harvest(harvest: dict) -> None:
+    """The answer from the harvest: the statements that stood their check
+    against the passages the values were read from, their citations, and
+    the values the answer stands on, one line each with the details to
+    unfold."""
     st.markdown(f"**{T['values_heading']}**")
     st.caption(T["values_note"])
-    for value, line in zip(got["values"],
-                           values_route.as_passages(got["values"])):
-        level = T["values_level"].format(level=value["level"])
-        if value["reasons"]:
-            level += " (" + ", ".join(value["reasons"]) + ")"
-        st.markdown(f"**{line['text']}** · {line['where']} · {level}")
-        if value.get("quote"):
-            st.markdown("> " + str(value["quote"]).replace("\n", " "))
-        _value_page(value["document"], value.get("page"), value.get("quote"),
-                    value.get("source"))
-    if got["total"] > len(got["values"]):
-        st.caption(T["values_more"].format(shown=len(got["values"]),
-                                           total=got["total"]))
+    if harvest["answer"] is not None:
+        _render_answer(harvest["answer"], False)
+    elif harvest.get("unread"):
+        st.markdown(T["answer_unreadable"].format(
+            causes=llm_client.describe_faults(harvest["unread"])))
+    else:
+        st.markdown(T["nothing_backed"])
+    _render_dropped(harvest.get("made"), harvest.get("dropped"))
+    _render_faults([f for f in harvest.get("faults") or []
+                    if f not in (harvest.get("unread") or [])])
+    for cit in harvest.get("citations") or []:
+        _render_citation(cit)
+    if harvest.get("values"):
+        st.caption(T["values_used"])
+        for value in harvest["values"]:
+            st.markdown(_value_line(value))
+        with st.expander(T["values_details"]):
+            for value in harvest["values"]:
+                st.markdown(_value_line(value))
+                details = _value_details(value)
+                if details:
+                    st.markdown("\n".join(f"- {line}" for line in details))
+            st.caption(T["values_more"].format(shown=harvest["shown"],
+                                               total=harvest["total"]))
     st.divider()
 
 

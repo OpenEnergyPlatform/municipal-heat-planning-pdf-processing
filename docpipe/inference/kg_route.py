@@ -30,7 +30,7 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -189,10 +189,27 @@ def to_coordinates(task: str, spec, axes, ask) -> dict:
     return coordinates_of(task, parameter, ask, axes)
 
 
-def parameter_of(task: str, spec, ask):
+def _first_sentence(text) -> str:
+    """Up to and with the first full stop that ends a sentence."""
+    text = " ".join(str(text or "").split())
+    end = re.search(r"[.!?](\s|$)", text)
+    return text[:end.start() + 1] if end else text
+
+
+def parameter_of(task: str, spec, ask, question: Optional[str] = None):
     """The parameter the question asks for, or None: one closed question
-    over the spec's parameters."""
+    over the spec's parameters. *question* replaces the spec's own, which
+    asks what a number in a source is and not what a person asks for."""
     slot = fields.parameter_slot(spec)
+    if question:
+        # A person names what they want ("Wärmebedarf"), not the spec's
+        # label ("Energieverbrauch"), so each entry carries what it means:
+        # the first sentence of the spec's description of it.
+        described = {p.uri: _first_sentence(p.description)
+                     for p in spec.parameters}
+        slot = replace(slot, question=question, options=tuple(
+            replace(option, definition=described.get(option.uri) or "")
+            for option in slot.options))
     by_label = {fold_label(p.label): p.uri for p in spec.parameters}
     uri = by_label.get(fold_label(ask(task, slot) or ""))
     return spec.by_uri[uri] if uri is not None else None

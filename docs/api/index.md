@@ -44,7 +44,7 @@ is for and what it hands to what; this is the reference.
 ## docpipe.app
 
 - [docpipe.app](docpipe.app.md): app: The chat over a processed corpus, and the page on which a person decides about harvested values.
-- [docpipe.app.app](docpipe.app.app.md): The chat over a docpipe corpus and the page on which harvested values are reviewed. (29 functions)
+- [docpipe.app.app](docpipe.app.app.md): The chat over a docpipe corpus and the page on which harvested values are reviewed. (32 functions)
 - [docpipe.app.config](docpipe.app.config.md): Central configuration for the chat app.
 - [docpipe.app.pdf_link](docpipe.app.pdf_link.md): Where a citation stands in the source PDF: the deep link into an external viewer, and the page drawn here with the quote marked. (1 class, 8 functions)
 - [docpipe.app.sandbox_service](docpipe.app.sandbox_service.md): Localhost HTTP wrapper around llm-sandbox. (1 class, 2 functions)
@@ -125,7 +125,7 @@ is for and what it hands to what; this is the reference.
 ## docpipe.inference
 
 - [docpipe.inference](docpipe.inference.md): Retrieval and grounded answering, usable from a UI or from a batch job.
-- [docpipe.inference.answer](docpipe.inference.answer.md): Runs one retrieval and answer turn, with no user interface attached. (1 class, 3 functions)
+- [docpipe.inference.answer](docpipe.inference.answer.md): Runs one retrieval and answer turn, with no user interface attached. (1 class, 4 functions)
 - [docpipe.inference.catalog](docpipe.inference.catalog.md): Presents a corpus for selection. (2 classes, 4 functions)
 - [docpipe.inference.chunker](docpipe.inference.chunker.md): Pack ranked retrieval hits into token-budgeted chunks, each fed to the LLM as one QA attempt. (1 class, 5 functions)
 - [docpipe.inference.code_exec](docpipe.inference.code_exec.md): Client for the sandboxed code execution service. (2 functions)

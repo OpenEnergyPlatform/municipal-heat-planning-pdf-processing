@@ -95,4 +95,22 @@ that is not "nothing found in them". `as_json` is True only when the
 answer was reshaped as JSON; where that did not happen the answer is the
 prose and `faults` says why.
 
+### answer_from_values
+
+```python
+def answer_from_values(task: str, corpus: Corpus, values: list,
+                       document_id: Optional[int], *, as_json: bool = False,
+                       history: Optional[list] = None,
+                       progress: Callable = _silent) -> dict
+```
+
+The question answered from the passages the harvest read *values*
+from, as `answer_question` answers it from the passages a search found.
+
+The harvest decides which passages are read and the model decides which
+of their numbers answer the question: the total or a carrier, which
+variant, which year. Every statement stands its check against its
+passage exactly as in a document turn, and the citations are the same
+kind. Returns what `answer_question` returns; `n_hits` counts passages.
+
 [Back to the index](../README.md)

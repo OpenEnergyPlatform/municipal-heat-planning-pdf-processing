@@ -216,6 +216,20 @@ The harvest's answer with its reason where it has none
 (`values_route.REASONS`), or None: no harvest, or a document the
 database does not know.
 
+### run_values_answer
+
+```python
+def run_values_answer(task: str, got: dict, document_id: int | None,
+                      history: list | None = None) -> dict
+```
+
+The question answered from the passages the found values were read
+from (`answer.answer_from_values`), and the values the answer stands on.
+
+{"answer", "answer_text", "citations", "made", "dropped", "faults",
+ "unread", "values", "shown", "total", "result"}: `values` are the used
+ones, `shown` how many the answer was given, `total` how many matched.
+
 ### graph_offered
 
 ```python
@@ -268,6 +282,24 @@ def main() -> None
 ```python
 def chat_page() -> None
 ```
+
+### axis_names
+
+```python
+def axis_names() -> dict
+```
+
+{axis: its name in the profile's words}, `inference.AXIS_NAMES`; an
+axis the profile does not name is shown by its key.
+
+### reason_words
+
+```python
+def reason_words() -> dict
+```
+
+{reason family: why a value is not an A, in the profile's words}.
+The families of `exhausted:<axis>` and its kin take the axis's name.
 
 ### review_page
 

@@ -48,7 +48,8 @@ def _fallback(reason: str, parameter=None,
 def answer_from_values(task: str, store, *, ask,
                        document: Optional[str] = None,
                        level: Optional[str] = None,
-                       limit: int = DEFAULT_LIMIT) -> dict:
+                       limit: int = DEFAULT_LIMIT,
+                       parameter_question: Optional[str] = None) -> dict:
     """The harvest's answer, or why there is none.
 
     {"route": "values", "reason": None, "values": [...], "total": n,
@@ -57,10 +58,13 @@ def answer_from_values(task: str, store, *, ask,
     *document* limits it to one document (its harvest name); None asks the
     whole corpus. *ask(task, slot)* answers one closed question with one
     label or None. *level* is the worst trust level still shown.
+    *parameter_question* is the question the parameter is chosen with; the
+    profile words one for a person's question (`chat_parameter_question`).
     """
     if store is None or store.spec is None or not len(store):
         return _fallback("no_store")
-    parameter = kg_route.parameter_of(task, store.spec, ask)
+    parameter = kg_route.parameter_of(task, store.spec, ask,
+                                      question=parameter_question)
     if parameter is None:
         return _fallback("no_parameter")
     coordinates = kg_route.coordinates_of(task, parameter, ask)
@@ -73,27 +77,30 @@ def answer_from_values(task: str, store, *, ask,
             "coordinates": coordinates}
 
 
-def as_passages(values: list) -> list:
-    """The values as lines a model can be shown and a reader can check:
-    what was read, for which coordinates, on which page, from which words.
+def used_values(values: list, statements: list) -> list:
+    """The values an answer stands on, each with the number of the citation
+    that carries it (`n`), in the order of *values*.
+
+    A value is used where a statement's quote and the value's quote hold
+    one another: the statement quotes the value's whole quote, or a part of
+    it that names the value as the plan writes it (`value_raw`). Sharing a
+    passage is not enough: a table of twelve carriers is one passage, and
+    an answer about their total uses one of its rows.
     """
-    lines = []
+    def norm(text) -> str:
+        return " ".join(str(text or "").split())
+
+    used = []
     for value in values:
-        number = value.get("value")
-        unit = value.get("unit") or ""
-        label = value.get("label") or value.get("parameter")
-        about = ", ".join(
-            f"{name}: {coordinate.get('label') or coordinate.get('value')}"
-            for name, coordinate in sorted(
-                (value.get("coordinates") or {}).items())
-            if coordinate.get("value") not in (None, ""))
-        where = value["document"]
-        if value.get("page") is not None:
-            where += f", p. {value['page']}"
-        lines.append({
-            "id": value["id"],
-            "text": f"{label}: {number} {unit}".strip()
-                    + (f" ({about})" if about else ""),
-            "where": where, "quote": value.get("quote"),
-            "level": value["level"], "reasons": value["reasons"]})
-    return lines
+        quote = norm(value.get("quote"))
+        raw = norm(value.get("value_raw"))
+        if not quote:
+            continue
+        for statement in statements:
+            said = norm(statement.get("quote"))
+            if not said:
+                continue
+            if quote in said or (said in quote and raw and raw in said):
+                used.append(dict(value, n=statement.get("citation")))
+                break
+    return used

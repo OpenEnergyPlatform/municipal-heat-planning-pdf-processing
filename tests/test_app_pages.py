@@ -604,10 +604,26 @@ def chat(app, page, monkeypatch, tmp_path):
             "unit": "GWh/a", "coordinates": {}, "quote": "| Erdgas | 241 |",
             "page": 12, "level": "B", "reasons": []}]}
 
+    asked["answered"] = []
+
+    def from_values(task, got, document_id, history=None):
+        """The harvest's answer: one statement, standing on the first value."""
+        asked["answered"].append((document_id, [v["id"] for v in got["values"]]))
+        result = {"answer": "Harvest: 241 GWh. [1]",
+                  "answer_text": "Harvest: 241 GWh.", "citations": [],
+                  "statements": [], "phrase": None, "examined": []}
+        return {"answer": result["answer"],
+                "answer_text": result["answer_text"], "citations": [],
+                "made": 1, "dropped": 0, "faults": [], "unread": [],
+                "values": [dict(got["values"][0], n=1)],
+                "shown": len(got["values"]), "total": got["total"],
+                "result": result}
+
     monkeypatch.setattr(app, "get_catalog", lambda: Catalog())
     monkeypatch.setattr(app, "get_db", lambda: held)
     monkeypatch.setattr(app, "run_turn", turn)
     monkeypatch.setattr(app, "run_values_turn", values)
+    monkeypatch.setattr(app, "run_values_answer", from_values)
     return asked
 
 
@@ -619,10 +635,12 @@ def test_a_question_to_the_whole_corpus(app, page, chat):
     assert chat["values"] == [None]
     said = page.texts("markdown")
     heading = said.index(f"**{app.T['values_heading']}**")
+    harvest = said.index("Harvest: 241 GWh. [1]")
     answer = said.index("The demand is 241 GWh.")
-    assert heading < answer                 # the harvest's values come first
-    line = said[heading + 1]
-    assert "241.0 GWh/a" in line and "kassel, p. 12" in line
+    assert heading < harvest < answer       # the harvest's answer comes first
+    assert chat["answered"] == [(None, ["x"])]
+    (line,) = [text for text in said if "**241.0 GWh/a**" in text][:1]
+    assert line.startswith("[1] ") and "kassel, p. 12" in line
     assert app.T["values_level"].format(level="B") in line
     assert app.T["values_more"].format(shown=1, total=3) \
         in page.texts("caption")
@@ -1406,34 +1424,80 @@ def known(app, cited, monkeypatch):
     return cited
 
 
-def test_a_harvested_value_shows_its_page_with_the_quote_marked(
+def harvest_answer(**more):
+    """A harvest answer of one statement on one value."""
+    return {"answer": "Der Bedarf sinkt auf 241 GWh. [1]", "citations": [],
+            "made": 1, "dropped": 0, "faults": [], "unread": [],
+            "values": [dict(harvested(), n=1)], "shown": 3, "total": 7,
+            **more}
+
+
+def test_the_harvests_answer_shows_the_page_of_its_citation(
         app, page, known):
-    app._render_values({"values": [harvested()], "total": 1})
+    app._render_harvest(harvest_answer(citations=[dict(citation(), n=1)]))
     (drawn,) = known.drawn
     assert drawn["path"] == known.pdf and drawn["page"] == 12
     assert drawn["rects"] == MARK
     assert ("image", b"PNG") in page.inside[shown_page(app)]
-    assert ("download", app.T["download_pdf"]) in page.inside[shown_page(app)]
+    said = page.texts("markdown")
+    line = ("[1] **241.0 GWh/a** · kassel, p. 3 · "
+            + app.T["values_level"].format(level="B"))
+    assert said.index("Der Bedarf sinkt auf 241 GWh. [1]") < said.index(line)
 
 
-def test_a_value_read_from_a_table_is_shown_unmarked_on_its_page(
-        app, page, known, monkeypatch):
-    def never(path, number, quote):
-        raise AssertionError("the reading of a table is not looked for")
+def test_a_value_is_one_line_in_words_and_its_keys_stay_in_the_details(
+        app, page, monkeypatch):
+    monkeypatch.setattr(app, "WORDS_PROFILE", load_profile("kwp"))
+    app.T.clear()
+    app.T.update(app.wording.ui(load_profile("kwp")))
+    value = dict(harvested(), n=1, value_raw="125.000", unit="MWh/a",
+                 reasons=["exhausted:sector", "conflict"], coordinates={
+                     "parameter": {"value": P},
+                     "unit": {"value": "MWh/a"},
+                     "aggregation": {"value": "integral",
+                                     "label": "integral"},
+                     "scenario": {"value": "target", "label": "Zielszenario"},
+                     "year": {"value": 2045},
+                     "carrier": {"value": "oeo:x", "label": "Summe"}})
+    app._render_harvest(harvest_answer(values=[value]))
+    line = app._value_line(value)
+    assert line.startswith("[1] **125.000 MWh/a** · Zielszenario · 2045 · "
+                           "Summe · ")
+    for key in ("parameter", "aggregation", "integral", "exhausted",
+                "scenario:", P):
+        assert key not in line
+    details = page.inside[app.T["values_details"]]
+    texts = " ".join(text for _how, text in details)
+    names = app.axis_names()
+    assert f"{names['aggregation']}: integral" in texts
+    assert app.T["reason_exhausted"].format(axis=names["sector"]) in texts
+    assert app.T["reason_conflict"] in texts
+    assert "exhausted:sector" not in texts and "parameter" not in texts
 
-    monkeypatch.setattr(app.pdf_link, "best_quote_rects", never)
-    app._render_values({"values": [harvested(
-        quote="| Erdgas | 241 |",
-        source={"owner_kind": "table", "owner_id": 9})], "total": 1})
-    (drawn,) = known.drawn
-    assert drawn["page"] == 3 and not drawn["rects"]
-    assert app.T["page_not_located"] not in page.texts()
+
+def test_a_harvest_answer_nothing_backs_says_so_and_shows_no_value(
+        app, page):
+    app._render_harvest(harvest_answer(answer=None, values=[], made=1, dropped=1))
+    said = page.texts("markdown")
+    assert app.T["nothing_backed"] in said
+    assert not [text for text in said if "**241" in text]
+    assert app.T["values_details"] not in page.texts("expander")
+
+
+def test_a_reason_nobody_words_is_shown_as_it_is(app):
+    assert app._reason("something:new") == "something:new"
+    unnamed = app.T["reason_exhausted"].format(axis="unknown_axis")
+    assert app._reason("exhausted:unknown_axis") == unnamed
+
+
+def test_the_harvest_answer_kept_in_the_history_leaves_the_full_result(app):
+    assert "result" not in app._kept({"answer": "a", "result": {"x": 1}})
 
 
 def test_a_value_of_a_document_the_database_does_not_know_shows_no_page(
         app, page, known):
-    app._render_values({"values": [harvested(document="elsewhere")],
-                        "total": 1})
+    app._value_page("elsewhere", 3, QUOTE, {"owner_kind": "section",
+                                             "owner_id": 4})
     assert known.drawn == [] and page.downloads == []
 
 
@@ -1574,3 +1638,13 @@ def test_every_reason_the_harvest_gives_has_its_words(app):
     token no profile words would end the turn on a missing key."""
     assert set(app.values_reason_words()) == set(app.values_route.REASONS)
     assert set(app.route_words()) >= set(app.routes_offered(False))
+
+
+def test_every_reason_a_level_can_give_has_its_words(app):
+    """A reason the trust module adds and no profile words would be shown
+    as its token."""
+    from docpipe.extraction import trust
+    families = set(trust.FLAG_REASONS.values()) | {
+        "conflict", "page_transcribed", "exhausted", "unbacked",
+        "unanswered"}
+    assert set(app.reason_words()) == families

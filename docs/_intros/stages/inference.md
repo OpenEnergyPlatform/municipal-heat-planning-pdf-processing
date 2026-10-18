@@ -25,8 +25,9 @@ plan's numbers as a graph (see [The knowledge graph](./graph.md)):
 `kg_route.answer_from_graph` reads that graph directly, with no
 retrieval or free-text generation. A third path reads the harvest itself:
 `values_route.answer_from_values` turns a question into a parameter and the
-coordinates it names and shows the values the harvest holds for them, each
-with its quote, page and trust level (see Method).
+coordinates it names and finds the values the harvest holds for them, and
+`answer.answer_from_values` answers the question from the passages those
+values were read from (see Method).
 
 ## Position in the pipeline
 
@@ -400,13 +401,26 @@ searched, needs no graph and no query of the profile: the harvest and the spec
 are enough, so it works for every profile that has both, over one document or
 all of them. The question is turned into a parameter and the coordinates it
 names, one closed question each over the spec's own lists, asked with the same
-`llm_client.choose` and the `kg/coordinate` prompt as the graph route. An
+`llm_client.choose` and the `kg/coordinate` prompt as the graph route; the
+parameter is asked with `parameter_question` where the caller gives one (the
+chat gives the profile's `chat_parameter_question`), because the spec's own
+asks what a number in a source is. An
 answer outside a list leaves that coordinate open, and an open coordinate
 narrows nothing; a question that names no parameter is not one for this
 route, and the caller searches the documents. What is shown is what
 `docpipe/serve/values.py` holds for the values, as it holds them (see
 [handing the values on](./serve.md)), limited only by the caller's worst
 trust level and count.
+
+`answer.answer_from_values` answers the question from those values: it
+fetches the passage each was read from (`db.fetch_owner_content`, each
+passage once, an unknown one skipped) and runs the answer half of a turn
+over them (`_answer_hits`, which a document turn runs over its search
+hits), so the statements, their check and the citations are the same.
+Values without a passage ask no model. `values_route.used_values` names the
+values the answer stands on: a statement quotes the value's quote, or a part
+of it that names the value as the plan writes it (`value_raw`); sharing a
+passage is not enough, because a table of twelve carriers is one passage.
 
 ### Comparing several documents
 

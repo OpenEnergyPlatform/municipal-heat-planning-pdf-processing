@@ -70,13 +70,23 @@ real model differs from that name is not noticed. Changing the selection
 resets the history. A turn then runs in this order:
 
 1. If a harvest is configured (`INFERENCE_HARVEST_DIR`) and the question is
-   not only an image, the numbers the harvest holds for it are shown first,
-   each with its document, page, trust level and quote, as they were read and
-   checked and not as a model writes them now. This is
-   `docpipe/inference/values_route.py` over `docpipe/serve/values.py`; a
-   question that names no parameter shows nothing here. `INFERENCE_VALUES_LEVEL`
-   leaves out values below a trust level and `INFERENCE_VALUES_LIMIT` caps how
-   many are shown before the count of the rest.
+   not only an image, the harvest answers first. `values_route` finds the
+   values the question asks for (`docpipe/serve/values.py`; the parameter is
+   chosen with the profile's own question for a person's question,
+   `chat_parameter_question`, and not with the extraction's question about a
+   number), and `answer.answer_from_values` answers the question from the
+   passages those values were read from, each passage once. The model decides
+   which of their numbers answer it (the total or a carrier, which variant),
+   and every statement stands its check against its passage as in a document
+   turn; its citations show their pages the same way. Under the answer stand
+   only the values it uses (`values_route.used_values`: a statement quotes the
+   value's quote, or a part of it that names the value as the plan writes
+   it), one line each in the profile's words (number, coordinates, document
+   and page, level), with their coordinates by name and the reasons of their
+   level, in words (`AXIS_NAMES`, `reason_*`), in an expander. A question that
+   names no parameter gets nothing here. `INFERENCE_VALUES_LEVEL` leaves out
+   values below a trust level and `INFERENCE_VALUES_LIMIT` caps how many
+   values, and so passages, the answer is given.
 2. The answer from the documents follows: a search anchor, the query
    embedding, retrieval, and the answer across token-budgeted batches.
    Retrieval is by meaning and, where a word index exists beside the database
@@ -135,7 +145,7 @@ harvested document, older versions included, and the help text of the
 checkbox (`whole_corpus_help` of the profile) says so.
 
 The answer route (`route` of the profile's UI words) chooses where an answer
-comes from. Automatic is the order above: the harvest's values, then the
+comes from. Automatic is the order above: the harvest's answer, then the
 answer from the documents. Harvest answers from the harvest alone, and where
 it holds nothing it says why in the profile's words (`values_no_parameter`,
 `values_no_values`, one per reason of `values_route.REASONS`); the
@@ -211,11 +221,12 @@ redraws the evicted ones (about 0.2 to 0.5 seconds each). The note "not
 located" is also what shows when `rapidfuzz` is missing, the cause being
 logged once. Tables and figures get no rectangles.
 
-A harvested value shows its page the same way, in the values block of the
-chat and on the review page (`_value_page`): its provenance names the
-passage's kind and id, so a value read from a section has its quote located
-and marked, and one read from a table or a figure is shown on its page
-unmarked. A value whose document the database does not know shows no page.
+The harvest's answer shows its citations' pages the same way, and so does
+the review page for the value it asks about (`_value_page`): the value's
+provenance names the passage's kind and id, so a value read from a section
+has its quote located and marked, and one read from a table or a figure is
+shown on its page unmarked. A value whose document the database does not
+know shows no page.
 
 That link is optional and off by default. `PDF_URL_PREFIX` and
 `PDF_VIEWER_PREFIX` are both empty, and nothing ships that serves a PDF or a
