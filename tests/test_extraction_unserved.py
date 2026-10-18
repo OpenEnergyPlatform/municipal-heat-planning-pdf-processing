@@ -111,6 +111,28 @@ def test_a_request_that_never_arrived_is_the_servers_but_not_unserved():
     assert not runner.unserved(ConnectionError("gone"))
 
 
+def _timeout():
+    """A hosted provider's timeout, which needs no client package."""
+    from docpipe.providers.base import ProviderTimeout
+    return ProviderTimeout("no answer in time")
+
+
+def test_a_request_that_timed_out_was_not_served():
+    """A server whose engine stopped taking requests kept every connection
+    open until it timed out; those were never answered either."""
+    assert runner.unserved(_timeout())
+    assert runner.server_side(_timeout())
+
+
+def test_the_openai_clients_timeout_was_not_served():
+    """The one a self-hosted server's requests end on."""
+    httpx = pytest.importorskip("httpx")
+    openai = pytest.importorskip("openai")
+    exc = openai.APITimeoutError(request=httpx.Request("POST", "http://x"))
+    assert runner.unserved(exc)
+    assert runner.server_side(exc)
+
+
 # ---------------------------------------------------------------------------
 # The request loops
 # ---------------------------------------------------------------------------
@@ -183,6 +205,73 @@ def test_a_coordinate_the_server_did_not_serve_is_counted_on_its_document(
     assert runner.UNSERVED.of(7) == lost
     assert len(calls) == (runner.MAX_RETRIES if lost else 1)
     assert runner.UNSERVED.of(8) == 0, "counted on its own document only"
+
+
+@pytest.fixture
+def raising(monkeypatch):
+    """raising(exc) -> the requests made; every request raises *exc*."""
+    def install(exc):
+        calls: list = []
+
+        class Client:
+            class chat:
+                class completions:
+                    @staticmethod
+                    def create(**kw):
+                        calls.append(kw)
+                        raise exc
+
+        monkeypatch.setattr(runner, "_client", lambda: Client())
+        return calls
+    return install
+
+
+def test_a_coordinate_that_timed_out_is_counted_on_its_document(raising,
+                                                               waits):
+    """Its document is left unstamped, so the next run asks it again."""
+    calls = raising(_timeout())
+    assert runner.make_field_asker()([], [], _year(), None, 7) is None
+    assert runner.UNSERVED.of(7) == 1
+    assert len(calls) == runner.MAX_RETRIES
+    assert runner.UNSERVED.of(8) == 0, "counted on its own document only"
+
+
+def test_a_coordinate_whose_connection_failed_is_not_counted(raising, waits):
+    """Never arrived is not timed out: it keeps the passages' own rule."""
+    raising(ConnectionError("gone"))
+    assert runner.make_field_asker()([], [], _year(), None, 7) is None
+    assert runner.UNSERVED.of(7) == 0
+
+
+def test_a_passage_that_timed_out_is_named_unserved(raising, waits):
+    raising(_timeout())
+    reply = runner.make_harvester(None)(_batch(), [])
+    assert [t["_why"] for t in reply["tuples"]] == ["unserved"]
+
+
+def test_a_frame_that_timed_out_is_counted_on_its_document(raising, waits):
+    raising(_timeout())
+    shown = [Source("table", 1, TEXT, {"document_id": 7, "page": 3})]
+    slots = fields.frame_slots(_kwp(), ("scenario", "year"))
+    assert runner.make_frame_asker()(shown, slots, 7) is None
+    assert runner.UNSERVED.of(7) == 1
+
+
+def test_a_document_with_a_timed_out_coordinate_is_not_stamped(
+        tmp_path, raising, waits, monkeypatch):
+    """The whole promise, end to end: a timeout leaves no stamp behind, and
+    the same document without one is stamped."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    raising(_timeout())
+    runner.make_field_asker()([], [], _year(), None, 7)
+    assert not runner.finish_document(_report([None]), "ein", tmp_path,
+                                      "sha", lost=runner.UNSERVED.of(7))
+    assert not (tmp_path / "ein.stamp.json").exists()
+    assert not runner.already_done("ein", tmp_path, "sha")
+    assert runner.finish_document(_report([None]), "zwei", tmp_path, "sha",
+                                  lost=runner.UNSERVED.of(8))
+    assert (tmp_path / "zwei.stamp.json").is_file()
 
 
 def test_a_coordinate_answered_after_a_503_is_not_counted(served, waits):
@@ -467,6 +556,7 @@ def corpus_run(monkeypatch, tmp_path):
     monkeypatch.setattr(runner, "assert_serving", lambda *a, **k: 40960)
     monkeypatch.setattr(runner, "set_model_len", lambda n: None)
     monkeypatch.setattr(runner, "start_limit", lambda: None)
+    monkeypatch.setattr(runner, "start_counting", lambda *a, **k: None)
     monkeypatch.setattr(runner, "watch_server", lambda *a, **k: None)
     monkeypatch.setattr(runner, "install_stop_handler", lambda: None)
     monkeypatch.setattr(runner, "prime_probe_cache", lambda *a, **k: 0)

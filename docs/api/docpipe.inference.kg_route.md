@@ -23,8 +23,8 @@ and the caller falls back to the documents.
 
 Which graph, which query and which axes are the profile's own.
 `Hooks` carries them the way `answer.Corpus` carries the corpus, and
-this module imports neither `profiles` nor `streamlit`. rdflib is
-imported inside the functions that need it, the convention
+this module imports neither `profiles` nor `streamlit`. The graph is a
+pyoxigraph store, imported inside the functions that need it, the convention
 `docpipe/ontology.py` states: the batch path never touches this
 module, and the check that does can run without it.
 
@@ -93,13 +93,16 @@ def load_graph(ttl_path) -> tuple
 def load_graph_from_text(text: str) -> tuple
 ```
 
-The same, from a string. rdflib is imported here and nowhere above.
+The same, from a string, as a pyoxigraph store. pyoxigraph is
+imported here and in `run_query` and nowhere above. Measured on the
+corpus graph (499,688 triples): it loads in 2 s and answers the value
+query in 0.6 s, where rdflib took 39 s and 83 s.
 
 The serializer writes the prefix header once per run, so a file made of
 several runs carries several headers, which is legal Turtle -- and a
 fragment cut from a run's second document onward carries none and
-would not parse. That case is named here rather than left to rdflib's
-parser error on a prefixed name.
+would not parse. That case is named here rather than left to the
+parser's error on a prefixed name.
 
 ### trust_comments
 
@@ -134,11 +137,12 @@ does not is left unbound, never matched by nearest string.
 ### parameter_of
 
 ```python
-def parameter_of(task: str, spec, ask)
+def parameter_of(task: str, spec, ask, question: Optional[str] = None)
 ```
 
 The parameter the question asks for, or None: one closed question
-over the spec's parameters.
+over the spec's parameters. *question* replaces the spec's own, which
+asks what a number in a source is and not what a person asks for.
 
 ### coordinates_of
 
@@ -172,9 +176,10 @@ def run_query(graph, text: str, bindings: dict) -> list
 [{variable: string}] for one SPARQL over the loaded graph.
 
 `bindings` are (kind, value) pairs, "iri" or "literal", so the profile
-that builds them stays rdflib-free. A literal binds UNTYPED: the
-serializer writes the year node's label as a plain string, and
-Literal(2030) with an integer datatype matches nothing.
+that builds them stays free of any RDF library. A string literal binds
+UNTYPED: the serializer writes the year node's label as a plain string,
+and a number binds as xsd:integer or xsd:double, which matches nothing
+there.
 
 ### answer_from_graph
 

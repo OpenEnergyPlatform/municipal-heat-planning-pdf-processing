@@ -13,8 +13,11 @@ Where a harvest is configured, the numbers it holds for a question are
 shown first, as they were read and checked, and the answer from the
 documents follows.
 
-The graph route is not offered while no corpus graph exists, and
-`docpipe.inference.kg_route` stays in the core for the day it does.
+The sidebar chooses where an answer comes from: the harvest first and
+then the documents, the harvest alone, the graph `--serialize` wrote
+alone (for one document, where the graph is there), or the documents
+alone. A harvested value shows the page it was read on, as a citation
+does.
 
 Run:
     docpipe --profile kwp chat --server.address 0.0.0.0 --server.port 8501
@@ -203,6 +206,71 @@ What the harvest holds for the question, or None: no harvest, or
 the question names nothing it has. `document_id` None asks every
 document's harvest.
 
+### values_outcome
+
+```python
+def values_outcome(task: str, document_id: int | None) -> dict | None
+```
+
+The harvest's answer with its reason where it has none
+(`values_route.REASONS`), or None: no harvest, or a document the
+database does not know.
+
+### run_values_answer
+
+```python
+def run_values_answer(task: str, got: dict, document_id: int | None,
+                      history: list | None = None) -> dict
+```
+
+The question answered from the passages the found values were read
+from (`answer.answer_from_values`), and the values the answer stands on.
+
+{"answer", "answer_text", "citations", "made", "dropped", "faults",
+ "unread", "values", "shown", "total", "result"}: `values` are the used
+ones, `shown` how many the answer was given, `total` how many matched.
+
+### graph_offered
+
+```python
+def graph_offered() -> bool
+```
+
+Whether the graph route can answer: the profile contributes to it
+and the graph `--serialize` wrote is where the app is told.
+
+### harvest_offered
+
+```python
+def harvest_offered() -> bool
+```
+
+### route_words
+
+```python
+def route_words() -> dict
+```
+
+{route key: its label in the profile's words}.
+
+### values_reason_words
+
+```python
+def values_reason_words() -> dict
+```
+
+{reason of values_route.REASONS: why the harvest holds nothing, in
+the profile's words}.
+
+### routes_offered
+
+```python
+def routes_offered(whole: bool) -> list
+```
+
+The answer routes the sidebar offers, by their UI key. The graph
+answers for one plan, so not for the whole corpus.
+
 ### main
 
 ```python
@@ -214,6 +282,24 @@ def main() -> None
 ```python
 def chat_page() -> None
 ```
+
+### axis_names
+
+```python
+def axis_names() -> dict
+```
+
+{axis: its name in the profile's words}, `inference.AXIS_NAMES`; an
+axis the profile does not name is shown by its key.
+
+### reason_words
+
+```python
+def reason_words() -> dict
+```
+
+{reason family: why a value is not an A, in the profile's words}.
+The families of `exhausted:<axis>` and its kin take the axis's name.
 
 ### review_page
 

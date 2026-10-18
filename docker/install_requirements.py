@@ -79,6 +79,30 @@ def pip_command() -> list:
         return ["uv", "pip", "install", "--python", sys.executable]
 
 
+def unmet(added: set, present: dict) -> list:
+    """'<package> needs <dependency>' for every dependency of a package in
+    *added* that is not installed at all. Extras the package was not asked
+    with and markers of another platform do not count, and another build of
+    the same module (the headless OpenCV) is the dependency."""
+    from packaging.requirements import Requirement
+    lines = []
+    for name in sorted(added):
+        try:
+            requires = metadata.requires(name) or []
+        except metadata.PackageNotFoundError:
+            continue
+        for spec in requires:
+            requirement = Requirement(spec)
+            if requirement.marker and not requirement.marker.evaluate(
+                    {"extra": ""}):
+                continue
+            wanted = normalize(requirement.name)
+            family = next((s for s in SAME_MODULE if wanted in s), {wanted})
+            if not any(n in present for n in family):
+                lines.append(f"{name} needs {requirement.name}")
+    return lines
+
+
 def main(argv: list) -> int:
     requirements = Path(argv[0])
     base = installed()
@@ -95,7 +119,13 @@ def main(argv: list) -> int:
         # Local version labels (+cu129) are what the base installed; a
         # constraint on them holds as long as nothing asks for a change.
         constraints.write_text("".join(f"{n}=={v}\n" for n, v in sorted(base.items())))
-        subprocess.run(pip_command() + ["-r", str(wanted), "-c", str(constraints)],
+        # Without dependency resolution. requirements.txt is a freeze, every
+        # dependency is in it with its version; resolving them again reaches
+        # into the base, whose own pins need not agree with each other (vLLM
+        # 0.31 ships a newer NCCL than its torch names, and no install could
+        # be resolved at all). What the freeze lacks is found below.
+        subprocess.run(pip_command() + ["--no-deps", "-r", str(wanted),
+                                        "-c", str(constraints)],
                        check=True)
 
     after = installed()
@@ -104,6 +134,13 @@ def main(argv: list) -> int:
     if changed:
         print("FAIL: the install changed base image package(s):")
         for line in changed:
+            print("  " + line)
+        return 1
+    missing = unmet(set(after) - set(base), after)
+    if missing:
+        print("FAIL: a package installed here lacks a dependency, which "
+              "requirements.txt has to name:")
+        for line in missing:
             print("  " + line)
         return 1
     print(f"PASS: {len(after) - len(base)} distribution(s) added, base unchanged")

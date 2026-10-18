@@ -11,8 +11,12 @@ What is promised, sentence by sentence:
   * the route says why it did not answer: no harvest, no parameter named,
     nothing held for what was named;
   * the worst level still wanted is the caller's to say;
-  * a value is shown to a model as one line with its document, its page
-    and its quote.
+  * the parameter is chosen with the question the caller words for a
+    person's question, where it gives one, AND with the spec's own
+    where it does not;
+  * an answer uses a value where a statement quotes the value's quote,
+    or a part of it that names the value as the plan writes it, AND
+    not where they only share a passage.
 """
 import pytest
 
@@ -179,13 +183,82 @@ def test_the_graph_route_still_asks_the_same_way(spec):
     assert kg_route.to_coordinates("?", spec, ("year",), Asked()) == {}
 
 
-def test_a_value_as_a_line_a_model_is_shown(store):
-    ask = Asked(parameter="Final energy consumption", carrier="coal")
-    got = values_route.answer_from_values("Coal?", store, ask=ask)
-    (line,) = values_route.as_passages(got["values"])
-    assert line["text"] == ("Final energy consumption: 5.0 GWh/a "
-                            "(carrier: coal, year: 2040)")
-    assert line["where"] == "kassel, p. 12"
-    assert line["quote"] == "| oeo:coal | 5.0 | 2040 |"
-    assert (line["level"], line["reasons"]) == ("B", [])
-    assert line["id"] == got["values"][0]["id"]
+class Heard(Asked):
+    """Also notes the question each slot was asked with."""
+
+    def __init__(self, **answers):
+        super().__init__(**answers)
+        self.questions = {}
+
+    def __call__(self, task, slot):
+        self.questions[slot.name] = slot.question
+        return super().__call__(task, slot)
+
+
+def test_the_parameter_is_chosen_with_the_callers_question(store, spec):
+    heard = Heard(parameter="Final energy consumption")
+    values_route.answer_from_values("Who made it?", store, ask=heard,
+                                    parameter_question="What is asked for?")
+    assert heard.questions["parameter"] == "What is asked for?"
+    heard = Heard(parameter="Final energy consumption")
+    values_route.answer_from_values("Who made it?", store, ask=heard)
+    assert heard.questions["parameter"] == spec.parameter_question
+
+
+def found(quote, raw):
+    return {"id": raw, "quote": quote, "value_raw": raw}
+
+
+TABLE = [found("| Summe | 125.000 |", "125.000"),
+         found("| Holz | 7.872 |", "7.872"),
+         found("| Solar | 4.135 |", "4.135")]
+
+
+def test_an_answer_uses_the_values_its_statements_quote():
+    said = [{"quote": "| Summe | 125.000 |", "citation": 1}]
+    used = values_route.used_values(TABLE, said)
+    assert [(value["id"], value["n"]) for value in used] == [("125.000", 1)]
+
+
+def test_a_part_of_the_quote_counts_only_where_it_names_the_value():
+    assert [v["id"] for v in values_route.used_values(
+        TABLE, [{"quote": "Summe | 125.000", "citation": 2}])] == ["125.000"]
+    # a part that names no value of the row is not a use of it
+    assert values_route.used_values(
+        TABLE, [{"quote": "Summe", "citation": 2}]) == []
+
+
+def test_sharing_a_passage_is_not_using_its_values():
+    """The twelve carriers of one table are one passage; an answer that
+    quotes another passage of it uses none of them."""
+    said = [{"quote": "Bis 2045 sinkt der Gesamtwert", "citation": 1}]
+    assert values_route.used_values(TABLE, said) == []
+    assert values_route.used_values(TABLE, []) == []
+
+
+def test_parameter_of_asks_with_the_question_it_is_given(spec):
+    heard = Heard(parameter="Greenhouse gas emissions")
+    chosen = kg_route.parameter_of("?", spec, heard, question="Asked for?")
+    assert chosen.uri == Q and heard.questions["parameter"] == "Asked for?"
+    kg_route.parameter_of("?", spec, heard)
+    assert heard.questions["parameter"] == spec.parameter_question
+
+
+def test_a_persons_question_sees_what_each_parameter_means(spec):
+    """The spec's labels are its own words; with the caller's question every
+    entry carries the first sentence of its description, and without it the
+    list stays as the extraction asks it."""
+    seen = {}
+
+    def ask(task, slot):
+        seen[bool(slot.question == "Asked for?")] = {
+            option.uri: option.definition for option in slot.options}
+        return None
+
+    kg_route.parameter_of("?", spec, ask, question="Asked for?")
+    kg_route.parameter_of("?", spec, ask)
+    assert seen[True][P] == ("What the document states for it, per year "
+                             "and energy carrier.")
+    assert set(seen[False].values()) == {""}
+    assert kg_route._first_sentence("One. Two.") == "One."
+    assert kg_route._first_sentence("No stop") == "No stop"

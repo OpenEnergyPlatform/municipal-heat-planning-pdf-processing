@@ -981,3 +981,62 @@ def test_no_profile_keeps_a_prompt_of_the_old_envelope(name):
     assert not {"inference/answer_spec_text", "inference/revise",
                 "inference/envelope_correction",
                 "inference/readoff_correction"} & set(llm_client.PROMPT_IDS)
+
+
+# ---------------------------------------------------------------------------
+# The answer from the harvest: the passages its values were read from
+# ---------------------------------------------------------------------------
+
+def _value(owner, kind="section"):
+    return {"source": {"owner_kind": kind, "owner_id": owner}}
+
+
+@pytest.fixture
+def from_values(monkeypatch, corpus):
+    """`answer_from_values` over passages held by owner, its answer calls
+    replying as told. Returns what each call was shown."""
+    asked = []
+
+    def run(values, replies, held):
+        monkeypatch.setattr(answer.db, "fetch_owner_content",
+                            lambda conn, kind, owner: held.get((kind, owner)))
+        monkeypatch.setattr(answer.chunker, "get_tokenizer", lambda *a: None)
+        queue = list(replies)
+
+        def from_sources(task, items, **kw):
+            asked.append([item["text"] for item in items])
+            return queue.pop(0)
+
+        monkeypatch.setattr(answer.llm_client, "answer_from_sources",
+                            from_sources)
+        return answer.answer_from_values("Wärmebedarf 2045?", corpus, values,
+                                         1)
+
+    run.asked = asked
+    return run
+
+
+def test_the_harvest_answers_from_its_values_passages_each_once(from_values):
+    other = "Der Plan wurde von der Musterplan GmbH erstellt."
+    held = {("section", 1): _hit(1), ("table", 2): _hit(2, other, "table")}
+    out = from_values([_value(1), _value(1), _value(2, "table"), _value(9)],
+                      [_said(_text("Der Bedarf war 100 GWh.", Q1))], held)
+    (shown,) = from_values.asked
+    assert len(shown) == 2                  # passage 1 once, 9 unknown
+    assert PASSAGE in shown[0] and other in shown[1]
+    assert out["n_hits"] == 2
+    assert out["answer"] == "Der Bedarf war 100 GWh. [1]"
+
+
+def test_the_harvests_answer_stands_its_check_like_any_other(from_values):
+    held = {("section", 1): _hit(1)}
+    out = from_values([_value(1)], [_said(
+        _text("Wärmepumpen decken 55 Prozent.", Q2_FABRICATED))], held)
+    assert out["answer"] is None
+    assert (out["statements_made"], out["statements_dropped"]) == (1, 1)
+
+
+def test_values_without_a_passage_ask_no_model(from_values):
+    out = from_values([_value(9), {"source": {}}], [], {})
+    assert from_values.asked == []
+    assert out["answer"] is None and out["n_hits"] == 0

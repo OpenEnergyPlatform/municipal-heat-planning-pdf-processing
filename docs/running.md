@@ -110,10 +110,14 @@ beside the project file.
 ## Container image
 
 `docker/Containerfile` builds one OCI image for stages 1 to 8, on top of
-`vllm/vllm-openai:v0.23.0-cu129-ubuntu2404`, pinned by digest so a moved tag
-cannot change what gets built (`docker/Containerfile` line 8). The base image
+`vllm/vllm-openai:v0.31.0-ubuntu2404` (CUDA 13.0, which needs an NVIDIA driver
+of 580 or newer), pinned by digest so a moved tag cannot change what gets
+built (`docker/Containerfile` line 10). The base image's CUDA 12.9 build does
+not start (vllm-project/vllm#60406). The base image
 starts `vllm serve`; this one clears the entrypoint, so every invocation says
-whether it runs the server or a stage (lines 13 to 14). `docpipe/`,
+whether it runs the server or a stage (lines 13 to 14). A server started
+from it uses `vllm serve <model>`; the module
+`vllm.entrypoints.openai.api_server` is deprecated since vLLM 0.29. `docpipe/`,
 `profiles/`, `scripts/`, `tests/`, `docker/` and `requirements.txt` are copied
 in under `/opt/docpipe` (lines 22 to 27). Weights (the HF cache), `data/`, the database, the FAISS
 index, outputs and tokens are not baked in: they are mounted or passed at run
@@ -126,7 +130,13 @@ already has (torch, its CUDA wheels, transformers, ...) is skipped so the base
 version wins, every base package is passed to pip as a constraint so nothing
 pulled in drags one along, a plain `opencv-python` is installed headless since
 the image carries no libGL, and the build fails if installing anyway changed a
-base package (`docker/install_requirements.py` lines 56 to 72, 82 to 110).
+base package. The rest is installed without resolving dependencies: `requirements.txt` is a
+freeze that names every dependency with its version, and resolving them again
+reaches into the base, whose own pins need not agree (vLLM 0.31 ships a newer
+NCCL than its torch names). What the freeze lacks fails the build instead: a
+dependency of an added package that is not installed at all, counted for this
+platform and with the headless OpenCV standing in for `opencv-python`
+(`unmet`).
 `tests/test_container_requirements.py` covers that logic directly, no image
 needed.
 
@@ -456,7 +466,7 @@ The stage writes one `<doc>.jsonl` harvest and one `<doc>.stamp.json`
 per document, and resumes per question, not per document, detailed in
 [the extraction stage](stages/extraction.md) and below.
 
-A request that ends on a 429 or a 5xx was not answered: it waits on the
+A request that ends on a 429, a 5xx or a timeout was not answered: it waits on the
 long retry curve between attempts, and a row or field request that ends
 there counts towards the dead-server streak. A document with such a
 request is written but not stamped, so the next run harvests it again, and
@@ -566,6 +576,7 @@ their values and where each value comes from.
 | Extraction | `EXTRACT_LIMIT_TPOT_MAX` | unset | seconds per output token above which a sample also counts as pressure; unset, token time never steps the limit down | `docpipe/extraction/throttle.py:61` |
 | Extraction | `EXTRACT_SERVER_DEAD_AFTER` | `180` | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes | `docpipe/extraction/runner.py:1955` |
 | Extraction | `EXTRACT_LOCATE_CACHE_PAGES` | `512` | pages of words cached by `make_locate` across documents; a cache hit is a dict lookup and takes no lock | `docpipe/extraction/runner.py:282` |
+| Extraction | `EXTRACT_CONTENT_CACHE_OWNERS` | `300000` | passages (sections, tables, figures) whose text one run keeps in the store every thread shares, so each is read once; past it the oldest goes, `0` keeps all | `docpipe/extraction/runner.make_shared_content` |
 | App, serve | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` (the chat; `serve` has none) | SQLite corpus database, opened read-only; `docpipe serve` opens it for its passage search | `docpipe/app/config.py` |
 | App | `INFERENCE_PDF_ROOT` | profile `pdf_dir`, else `data/pdf` | folder of the source PDFs, which the cited page is drawn from | `docpipe/app/config.py` |
 | App | `PDF_URL_PREFIX`, `PDF_VIEWER_PREFIX` | empty | URL path an external viewer serves the PDFs and its pdf.js viewer under, for an optional link into it; empty: no link | `docpipe/app/config.py` |
@@ -621,7 +632,7 @@ already-written harvest directory, instead of or before harvesting.
   addition forward. A document whose stamp moved in anything but the addition
   (a reworded, renamed or removed parameter, another PDF, a moved list or
   question, no stamp) is left stale as a whole. A document the pass did not
-  read completely, one with a request that ended on a 429 or a 5xx for
+  read completely, one with a request that ended on a 429, a 5xx or a timeout for
   instance, is left as it was, nothing is written, and the run returns 1. A
   second run asks nothing about a document that has the key. Traces go to
   `trace-topup/`; see [extraction](stages/extraction.md).

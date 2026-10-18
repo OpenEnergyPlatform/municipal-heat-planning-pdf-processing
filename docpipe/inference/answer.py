@@ -189,15 +189,62 @@ def answer_question(task: str, corpus: Corpus, document_id: Optional[int],
     return result
 
 
+def _empty(as_json: bool, faults: list) -> dict:
+    """What a turn returns before anything was found."""
+    return {"answer": None, "answer_text": None, "citations": [], "n_findings": 0,
+            "cache_hit": False, "n_hits": 0, "phrase": None, "as_json": as_json,
+            "n_batches": 0, "compute": [], "examined": [], "recheck": False,
+            "n_excluded": 0, "requested": [], "statements": [],
+            "statements_made": 0, "statements_shown": 0,
+            "statements_dropped": 0, "faults": faults}
+
+
+def answer_from_values(task: str, corpus: Corpus, values: list,
+                       document_id: Optional[int], *, as_json: bool = False,
+                       history: Optional[list] = None,
+                       progress: Callable = _silent) -> dict:
+    """The question answered from the passages the harvest read *values*
+    from, as `answer_question` answers it from the passages a search found.
+
+    The harvest decides which passages are read and the model decides which
+    of their numbers answer the question: the total or a carrier, which
+    variant, which year. Every statement stands its check against its
+    passage exactly as in a document turn, and the citations are the same
+    kind. Returns what `answer_question` returns; `n_hits` counts passages.
+    """
+    with llm_client.collecting() as faults:
+        result = _empty(as_json, faults)
+        start_time = time.time()
+        hits, seen = [], set()
+        for value in values:
+            source = value.get("source") or {}
+            key = (source.get("owner_kind"), source.get("owner_id"))
+            if None in key or key in seen:
+                continue
+            seen.add(key)
+            hit = db.fetch_owner_content(corpus.conn, *key)
+            if hit is None:
+                continue
+            if document_id is None:
+                hit["document_label"] = _whose(corpus, hit.get("document_id"))
+            hits.append(hit)
+        result["n_hits"] = len(hits)
+        if not hits:
+            _log(corpus, document_id, task, "harvest", [], start_time,
+                 n_hits=0, error_message="No passage of the values")
+        else:
+            result = _answer_hits(task, corpus, document_id, [], hits, result,
+                                  faults, mode="harvest", phrase=None,
+                                  start_time=start_time, history=history,
+                                  as_json=as_json, progress=progress)
+    result["faults"] = list(faults)
+    return result
+
+
 def _turn(task: str, corpus: Corpus, document_id: Optional[int], scopes: list,
           faults: list, *, image_bytes, image_only, as_json, history,
           progress) -> dict:
-    result = {"answer": None, "answer_text": None, "citations": [], "n_findings": 0,
-              "cache_hit": False, "n_hits": 0, "phrase": None, "as_json": as_json,
-              "n_batches": 0, "compute": [], "examined": [], "recheck": False,
-              "n_excluded": 0, "requested": [], "statements": [],
-              "statements_made": 0, "statements_shown": 0,
-              "statements_dropped": 0, "faults": faults}
+    result = _empty(as_json, faults)
 
     start_time = time.time()
 
@@ -258,7 +305,18 @@ def _turn(task: str, corpus: Corpus, document_id: Optional[int], scopes: list,
         _log(corpus, document_id, task or phrase or "", mode, scopes, start_time,
              n_hits=0, error_message="No hits")
         return result
+    return _answer_hits(task, corpus, document_id, scopes, hits, result,
+                        faults, mode=mode, phrase=phrase,
+                        start_time=start_time, history=history,
+                        as_json=as_json, progress=progress)
 
+
+def _answer_hits(task: str, corpus: Corpus, document_id: Optional[int],
+                 scopes: list, hits: list, result: dict, faults: list, *,
+                 mode: str, phrase: Optional[str], start_time: float,
+                 history, as_json: bool, progress) -> dict:
+    """Steps 4 and 5 of a turn over *hits*, best first: the answer across
+    token-budgeted batches, each statement checked against its source."""
     # --- 4) answer across the top sources in context-safe batches; a further
     #        batch runs only while the answer is still incomplete ---
     top_hits = hits[: config.MAX_CHUNK_ATTEMPTS]

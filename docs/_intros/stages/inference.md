@@ -25,8 +25,9 @@ plan's numbers as a graph (see [The knowledge graph](./graph.md)):
 `kg_route.answer_from_graph` reads that graph directly, with no
 retrieval or free-text generation. A third path reads the harvest itself:
 `values_route.answer_from_values` turns a question into a parameter and the
-coordinates it names and shows the values the harvest holds for them, each
-with its quote, page and trust level (see Method).
+coordinates it names and finds the values the harvest holds for them, and
+`answer.answer_from_values` answers the question from the passages those
+values were read from (see Method).
 
 ## Position in the pipeline
 
@@ -377,11 +378,15 @@ absent, so `scenarios` gets no route at all (`kg_route.py:95-122`).
 question per axis over the spec's own vocabulary, through
 `llm_client.choose` in the app (`llm_client.py:406-430`,
 `docpipe/app/app.py:269-272`); an answer outside the vocabulary leaves the axis
-unbound (`kg_route.py:174-216`), and the route proceeds only once a
+unbound (`kg_route.py:177-219`), and the route proceeds only once a
 coordinate lands on one of the `DECIDING_AXES`, quantity, scenario or
-year (`kg_route.py:61`). It runs the profile's SPARQL and reads a
+year (`kg_route.py:61`). It runs the profile's SPARQL over a pyoxigraph
+store (`load_graph`, `run_query`; the bound coordinates open the pattern as
+one `VALUES` row of terms pyoxigraph writes, so a value is never spliced into
+the query as text). On the corpus graph of 499,688 triples it loads in about
+2 s and answers in under a second, where rdflib took 39 s and 83 s. It reads a
 value's evidence and trust from the serializer's comment lines,
-recovered from the raw Turtle text (`kg_route.py:148-171`); a value with
+recovered from the raw Turtle text (`kg_route.py:151-174`); a value with
 no trust comment withholds the whole answer (see Failure modes, and
 [How much of a value the run can stand
 behind](../contract/trust.md)). Every decline is one of five closed
@@ -396,13 +401,26 @@ searched, needs no graph and no query of the profile: the harvest and the spec
 are enough, so it works for every profile that has both, over one document or
 all of them. The question is turned into a parameter and the coordinates it
 names, one closed question each over the spec's own lists, asked with the same
-`llm_client.choose` and the `kg/coordinate` prompt as the graph route. An
+`llm_client.choose` and the `kg/coordinate` prompt as the graph route; the
+parameter is asked with `parameter_question` where the caller gives one (the
+chat gives the profile's `chat_parameter_question`), because the spec's own
+asks what a number in a source is. An
 answer outside a list leaves that coordinate open, and an open coordinate
 narrows nothing; a question that names no parameter is not one for this
 route, and the caller searches the documents. What is shown is what
 `docpipe/serve/values.py` holds for the values, as it holds them (see
 [handing the values on](./serve.md)), limited only by the caller's worst
 trust level and count.
+
+`answer.answer_from_values` answers the question from those values: it
+fetches the passage each was read from (`db.fetch_owner_content`, each
+passage once, an unknown one skipped) and runs the answer half of a turn
+over them (`_answer_hits`, which a document turn runs over its search
+hits), so the statements, their check and the citations are the same.
+Values without a passage ask no model. `values_route.used_values` names the
+values the answer stands on: a statement quotes the value's quote, or a part
+of it that names the value as the plan writes it (`value_raw`); sharing a
+passage is not enough, because a table of twelve carriers is one passage.
 
 ### Comparing several documents
 
@@ -497,7 +515,7 @@ plus what `answer.py` adds:
 | `n` | the number the `[n]` marks of the answer refer to, from 1; a JSON answer has no marks and its citations have no `n` |
 
 `kg_route.answer_from_graph` returns `{route, reason, values,
-coordinates}` (`kg_route.py:272-305`): `route` is `"kg"` or `"rag"`,
+coordinates}` (`kg_route.py:299-332`): `route` is `"kg"` or `"rag"`,
 `reason` one of `REASONS` or `None`, `values` one dict per matching row
 with its `evidence` and `trust`.
 
@@ -617,10 +635,10 @@ degrades without raising: any transport or JSON failure comes back
 (`code_exec.py:27-62`).
 
 `kg_route` fails closed on missing trust, withholding the whole answer
-with reason `no_trust` (`kg_route.py:298-303`). A profile that leaves a
+with reason `no_trust` (`kg_route.py:325-330`). A profile that leaves a
 `REASONS` token unworded, or words an extra one, raises `LookupError`
 when the route is built (`kg_route.py:80-92`); a Turtle fragment with no
-`@prefix` line is refused outright (`kg_route.py:139-141`).
+`@prefix` line is refused outright (`kg_route.py:142-144`).
 
 The wording contract fails the same way: a profile whose `PHRASES` dict
 is missing a required key raises `LookupError` at the first check

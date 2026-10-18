@@ -33,7 +33,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: >
-          python -m pip install pytest PyYAML numpy Pillow jsonschema rdflib
+          python -m pip install pytest PyYAML numpy Pillow jsonschema rdflib pyoxigraph
           requests tqdm pandas openpyxl "tomli; python_version < '3.11'"
       - run: python -m pytest tests -q -p no:cacheprovider
 

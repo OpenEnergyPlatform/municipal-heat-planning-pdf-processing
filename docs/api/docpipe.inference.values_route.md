@@ -33,7 +33,8 @@ Author: Felix Vossel
 def answer_from_values(task: str, store, *, ask,
                        document: Optional[str] = None,
                        level: Optional[str] = None,
-                       limit: int = DEFAULT_LIMIT) -> dict
+                       limit: int = DEFAULT_LIMIT,
+                       parameter_question: Optional[str] = None) -> dict
 ```
 
 The harvest's answer, or why there is none.
@@ -44,14 +45,22 @@ for what the question names; otherwise route "rag" with one of REASONS.
 *document* limits it to one document (its harvest name); None asks the
 whole corpus. *ask(task, slot)* answers one closed question with one
 label or None. *level* is the worst trust level still shown.
+*parameter_question* is the question the parameter is chosen with; the
+profile words one for a person's question (`chat_parameter_question`).
 
-### as_passages
+### used_values
 
 ```python
-def as_passages(values: list) -> list
+def used_values(values: list, statements: list) -> list
 ```
 
-The values as lines a model can be shown and a reader can check:
-what was read, for which coordinates, on which page, from which words.
+The values an answer stands on, each with the number of the citation
+that carries it (`n`), in the order of *values*.
+
+A value is used where a statement's quote and the value's quote hold
+one another: the statement quotes the value's whole quote, or a part of
+it that names the value as the plan writes it (`value_raw`). Sharing a
+passage is not enough: a table of twelve carriers is one passage, and
+an answer about their total uses one of its rows.
 
 [Back to the index](../README.md)

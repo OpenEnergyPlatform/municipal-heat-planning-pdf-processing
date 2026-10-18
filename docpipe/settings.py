@@ -250,6 +250,11 @@ SETTINGS = (
     S("EXTRACT_CODE_ROUNDS", "extract.code_rounds", "int", "2",
       "Sandbox calculation rounds one value request may use.",
       stages=("extract",)),
+    S("EXTRACT_CONTENT_CACHE_OWNERS", "extract.content_cache_owners", "int",
+      "300000",
+      "Passages (sections, tables, figures) whose text one run keeps, shared "
+      "by every thread; 0 keeps all.",
+      stages=("extract",)),
     S("EXTRACT_FIELD_ATTEMPTS", "extract.field_attempts", "int", "3",
       "Times one window is asked again when its answers could not be backed "
       "by a quote.",

@@ -277,7 +277,7 @@ Each worklist holds one tab-separated line per document, sorted by key:
 | `DOCPIPE_MAX_DOWNLOAD_MB` | setting (`ingest.max_download_mb`) | 500 | largest PDF a download keeps, in megabytes of 1024 x 1024 bytes; a larger one is refused with its size. A value that is not a whole number of 1 or more is a `ValueError` at the first download, inside the run's transaction, so what that run had registered before it is rolled back and a re-run recovers it | `docpipe/ingest/fetch.py`, `docpipe/settings.py` |
 | download timeout | hardcoded | 30 seconds | the timeout of each request | `docpipe/ingest/fetch.py` |
 | `EXCEL_SHEET` | module constant, `kwp` | `"Datensatz Status quo KWP"` | Which sheet of the KWW workbook is read | `profiles/kwp/config.py` |
-| `PDF_OVERRIDES`, `SHARED_FILE_OWNERS` | module constant, `kwp` | 329, 4 entries | Per-municipality filename override; owner of a shared non-convoy file | `profiles/kwp/config.py` |
+| `PDF_OVERRIDES`, `SHARED_FILE_OWNERS` | module constant, `kwp` | 354, 4 entries | Per-municipality filename override, for a dead link or for a file the register renamed; owner of a shared non-convoy file | `profiles/kwp/config.py` |
 | `SCENARIO_FILE`, `PUBLICATION_META_FILE` | module constant, `scenarios` | two JSON filenames | Optional siblings of `pdf_index.json` for scenario names and OpenAlex fields | `profiles/scenarios/config.py` |
 | `AVAILABLE_STATUS`, `PUBLISHED_DAY` | module constant, `scenarios` | `"pdf"`, `"0101"` | Index status meaning a PDF exists; day suffix for a publication's year | `profiles/scenarios/config.py` |
 | `PDF_SUFFIX` | module constant, `scenarios` | `".pdf"` | Appended to a publication's slug to build its filename | `profiles/scenarios/config.py` |

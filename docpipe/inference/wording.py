@@ -41,6 +41,7 @@ REQUIRED = frozenset({
     "citation_quotes", "citation_page", "citation_page_unknown",
     "citation_section", "citation_table", "citation_figure",
     "readoff_value", "exec_none", "image_requested",
+    "chat_parameter_question",
 })
 
 
@@ -69,6 +70,13 @@ UI_REQUIRED = frozenset({
     "download_pdf", "no_profile",
     "values_heading", "values_note", "values_more",
     "values_level", "index_model_differs",
+    "values_no_store", "values_no_parameter", "values_no_values",
+    "values_where", "values_used", "values_details",
+    "reason_exhausted", "reason_unbacked", "reason_unanswered",
+    "reason_conflict", "reason_repaired", "reason_computed",
+    "reason_not_located", "reason_review_disagree", "reason_page_transcribed",
+    "route", "route_help", "route_auto", "route_harvest", "route_graph",
+    "route_documents",
     "review_heading", "review_intro", "review_no_harvest",
     "review_by", "review_by_missing", "review_progress",
     "review_none_open", "review_parameter_filter", "review_all_parameters",

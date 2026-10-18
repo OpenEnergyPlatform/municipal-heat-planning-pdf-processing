@@ -290,6 +290,7 @@ def _corpus(monkeypatch, tmp_path, harvester_stubbed):
     monkeypatch.setattr(runner, "assert_serving", lambda *a, **k: 40960)
     monkeypatch.setattr(runner, "set_model_len", lambda n: None)
     monkeypatch.setattr(runner, "start_limit", lambda: None)
+    monkeypatch.setattr(runner, "start_counting", lambda *a, **k: None)
     monkeypatch.setattr(runner, "watch_server", lambda *a, **k: None)
     monkeypatch.setattr(runner, "install_stop_handler", lambda: None)
     monkeypatch.setattr(runner, "prime_probe_cache", lambda *a, **k: 0)

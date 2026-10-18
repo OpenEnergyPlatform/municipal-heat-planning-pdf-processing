@@ -29,6 +29,15 @@ What is promised, sentence by sentence:
     folder with its quote marked, AND a download of that PDF; where the quote
     cannot be located the page is shown unmarked AND says so in the profile's
     words; where the page cannot be shown the expander says what is missing;
+  * a harvested value shows the page it was read on, in the chat AND on
+    the review page, with a section's quote marked as a citation's is,
+    AND a table's page unmarked without looking for its reading;
+  * the sidebar offers a choice of answer route only where the harvest
+    or the graph can answer, AND the graph only for one document;
+  * the harvest alone answers from the harvest AND never asks the
+    documents, AND says in the profile's words why where it holds
+    nothing; the documents alone never ask the harvest; the graph
+    alone asks neither;
   * a link into an external viewer is shown only where a prefix is
     configured, and a fresh install configures none;
   * a chat with no profile says so in one line, naming that it runs on the
@@ -169,6 +178,7 @@ class Page:
     code = _say("code")
     json = _say("json")
     image = _say("image")
+    iframe = _say("iframe")
     dataframe = _say("dataframe")
 
     def set_page_config(self, **kwargs):
@@ -595,10 +605,26 @@ def chat(app, page, monkeypatch, tmp_path):
             "unit": "GWh/a", "coordinates": {}, "quote": "| Erdgas | 241 |",
             "page": 12, "level": "B", "reasons": []}]}
 
+    asked["answered"] = []
+
+    def from_values(task, got, document_id, history=None):
+        """The harvest's answer: one statement, standing on the first value."""
+        asked["answered"].append((document_id, [v["id"] for v in got["values"]]))
+        result = {"answer": "Harvest: 241 GWh. [1]",
+                  "answer_text": "Harvest: 241 GWh.", "citations": [],
+                  "statements": [], "phrase": None, "examined": []}
+        return {"answer": result["answer"],
+                "answer_text": result["answer_text"], "citations": [],
+                "made": 1, "dropped": 0, "faults": [], "unread": [],
+                "values": [dict(got["values"][0], n=1)],
+                "shown": len(got["values"]), "total": got["total"],
+                "result": result}
+
     monkeypatch.setattr(app, "get_catalog", lambda: Catalog())
     monkeypatch.setattr(app, "get_db", lambda: held)
     monkeypatch.setattr(app, "run_turn", turn)
     monkeypatch.setattr(app, "run_values_turn", values)
+    monkeypatch.setattr(app, "run_values_answer", from_values)
     return asked
 
 
@@ -610,10 +636,12 @@ def test_a_question_to_the_whole_corpus(app, page, chat):
     assert chat["values"] == [None]
     said = page.texts("markdown")
     heading = said.index(f"**{app.T['values_heading']}**")
+    harvest = said.index("Harvest: 241 GWh. [1]")
     answer = said.index("The demand is 241 GWh.")
-    assert heading < answer                 # the harvest's values come first
-    line = said[heading + 1]
-    assert "241.0 GWh/a" in line and "kassel, p. 12" in line
+    assert heading < harvest < answer       # the harvest's answer comes first
+    assert chat["answered"] == [(None, ["x"])]
+    (line,) = [text for text in said if "**241.0 GWh/a**" in text][:1]
+    assert line.startswith("[1] ") and "kassel, p. 12" in line
     assert app.T["values_level"].format(level="B") in line
     assert app.T["values_more"].format(shown=1, total=3) \
         in page.texts("caption")
@@ -905,6 +933,36 @@ def test_what_is_not_located_is_said_in_the_profiles_words(app, page, cited):
     assert app.T["show_page"].format(page=12) == "Seite 12 anzeigen"
 
 
+GLUED = [(3, "Wappen Huglfing"),
+         (4, "101BAuftraggeber Stadt Wolfratshausen Auftragnehmer EWO")]
+
+
+def test_a_quote_the_raw_words_miss_is_found_on_a_page_of_its_section(
+        app, page, cited, monkeypatch):
+    """The text layer glued a mark to the first word, so no segment shares
+    three words with the quote; the PDF itself holds it on page 4."""
+    monkeypatch.setattr(app.db, "section_segments", lambda conn, owner: GLUED)
+    monkeypatch.setattr(app.pdf_link, "best_quote_rects",
+                        lambda path, number, quote: MARK if number == 4
+                        else None)
+    app._render_citation(citation(page_number=3,
+                                  quote="Auftraggeber: Stadt Wolfratshausen"))
+    (drawn,) = cited.drawn
+    assert drawn["page"] == 4 and drawn["rects"] == MARK
+
+
+def test_a_quote_no_page_of_its_section_holds_stays_on_its_page_unmarked(
+        app, page, cited, monkeypatch):
+    monkeypatch.setattr(app.db, "section_segments", lambda conn, owner: GLUED)
+    cited.found["rects"] = None
+    app._render_citation(citation(page_number=3,
+                                  quote="Auftraggeber: Stadt Wolfratshausen"))
+    (drawn,) = cited.drawn
+    assert drawn["page"] == 3 and not drawn["rects"]
+    assert ("caption", app.T["page_not_located"]) \
+        in page.inside[shown_page(app, 3)]
+
+
 def test_a_table_is_shown_unmarked_without_looking_for_its_title(
         app, page, cited, monkeypatch):
     """The quote of a table or a figure is its title or a reading, not a
@@ -1009,6 +1067,52 @@ def test_a_link_into_an_external_viewer_is_shown_only_where_one_is_set(
     assert url.startswith("/pdf/kassel.pdf#page=12")
     # the page is drawn here as well: the link is an addition, not a swap
     assert len(page.downloads) == 2
+
+
+@pytest.fixture
+def viewer(app, cited, monkeypatch):
+    monkeypatch.setattr(app.config, "PDF_URL_PREFIX", "/app/static/pdf")
+    monkeypatch.setattr(app.config, "PDF_VIEWER_PREFIX",
+                        "/app/static/pdfjs/web")
+    return cited
+
+
+def _frames(page):
+    return [text for how, text in page.said if how == "iframe"]
+
+
+def test_with_a_viewer_the_page_is_drawn_here_and_the_pdf_opens_boxed_in_a_tab(
+        app, page, viewer):
+    app._render_citation(citation())
+    (drawn,) = viewer.drawn                 # the picture, with the mark
+    assert drawn["page"] == 12 and drawn["rects"] == MARK
+    assert ("image", b"PNG") in page.inside[shown_page(app)]
+    ((label, url),) = page.links
+    assert label == app.T["open_pdf"].format(page=12)
+    assert url.startswith("/app/static/pdfjs/web/viewer.html?file=")
+    assert "kassel.pdf" in url and "#page=12" in url
+    assert "&mhl=" in url                   # the same lines, boxed there
+    assert _frames(page) == []              # nothing embedded
+
+
+def test_reviewing_a_value_and_researching_show_one_page_the_same_way(
+        app, page, viewer, monkeypatch):
+    """One function shows every page: the review page's value and a
+    citation of the same passage draw the same page and open the same
+    viewer at the same place."""
+    monkeypatch.setattr(app, "get_documents",
+                        lambda: {"kassel": (1, "kassel.pdf")})
+    app._render_citation(citation())
+    shown = dict(row(quote=QUOTE),
+                 provenance={"document_id": 1, "page": 3,
+                             "owner_kind": "section", "owner_id": 4})
+    app._review_one("kassel", shown, gold.Gold.load(app.config.GOLD_PATH),
+                    {}, "fv", set())
+    (cited_url, reviewed_url) = [url for _label, url in page.links]
+    assert cited_url == reviewed_url
+    # drawn once: the second is the cached picture of the same page
+    assert [d["page"] for d in viewer.drawn] == [12]
+    assert page.texts("image") == [b"PNG", b"PNG"]
 
 
 def fresh_config():
@@ -1376,3 +1480,248 @@ def test_follow_up_history_never_carries_a_dropped_statement(
     # the note that one was removed is on the page, not in the memory
     assert app.T["statements_dropped"].format(dropped=1, made=2) \
         in page.texts("caption")
+
+
+# ------------------------------------------------- the page a harvested value is on
+
+def harvested(**more):
+    """A served value read from a section: its page is 3 in the harvest and
+    12 where its quote stands in the raw segments."""
+    return {"id": "x", "document": "kassel", "parameter": P,
+            "label": "Final energy consumption", "value": 241.0,
+            "unit": "GWh/a", "coordinates": {}, "quote": QUOTE, "page": 3,
+            "level": "B", "reasons": [],
+            "source": {"owner_kind": "section", "owner_id": 4}, **more}
+
+
+@pytest.fixture
+def known(app, cited, monkeypatch):
+    monkeypatch.setattr(app, "get_documents",
+                        lambda: {"kassel": (1, "kassel.pdf")})
+    return cited
+
+
+def harvest_answer(**more):
+    """A harvest answer of one statement on one value."""
+    return {"answer": "Der Bedarf sinkt auf 241 GWh. [1]", "citations": [],
+            "made": 1, "dropped": 0, "faults": [], "unread": [],
+            "values": [dict(harvested(), n=1)], "shown": 3, "total": 7,
+            **more}
+
+
+def test_the_harvests_answer_shows_the_page_of_its_citation(
+        app, page, known):
+    app._render_harvest(harvest_answer(citations=[dict(citation(), n=1)]))
+    (drawn,) = known.drawn
+    assert drawn["path"] == known.pdf and drawn["page"] == 12
+    assert drawn["rects"] == MARK
+    assert ("image", b"PNG") in page.inside[shown_page(app)]
+    said = page.texts("markdown")
+    line = ("[1] **241.0 GWh/a** · kassel, p. 3 · "
+            + app.T["values_level"].format(level="B"))
+    assert said.index("Der Bedarf sinkt auf 241 GWh. [1]") < said.index(line)
+
+
+def test_a_value_is_one_line_in_words_and_its_keys_stay_in_the_details(
+        app, page, monkeypatch):
+    monkeypatch.setattr(app, "WORDS_PROFILE", load_profile("kwp"))
+    app.T.clear()
+    app.T.update(app.wording.ui(load_profile("kwp")))
+    value = dict(harvested(), n=1, value_raw="125.000", unit="MWh/a",
+                 reasons=["exhausted:sector", "conflict"], coordinates={
+                     "parameter": {"value": P},
+                     "unit": {"value": "MWh/a"},
+                     "aggregation": {"value": "integral",
+                                     "label": "integral"},
+                     "scenario": {"value": "target", "label": "Zielszenario"},
+                     "year": {"value": 2045},
+                     "carrier": {"value": "oeo:x", "label": "Summe"}})
+    app._render_harvest(harvest_answer(values=[value]))
+    line = app._value_line(value)
+    assert line.startswith("[1] **125.000 MWh/a** · Zielszenario · 2045 · "
+                           "Summe · ")
+    for key in ("parameter", "aggregation", "integral", "exhausted",
+                "scenario:", P):
+        assert key not in line
+    details = page.inside[app.T["values_details"]]
+    texts = " ".join(text for _how, text in details)
+    names = app.axis_names()
+    assert f"{names['aggregation']}: integral" in texts
+    assert app.T["reason_exhausted"].format(axis=names["sector"]) in texts
+    assert app.T["reason_conflict"] in texts
+    assert "exhausted:sector" not in texts and "parameter" not in texts
+
+
+def test_a_harvest_answer_nothing_backs_says_so_and_shows_no_value(
+        app, page):
+    app._render_harvest(harvest_answer(answer=None, values=[], made=1, dropped=1))
+    said = page.texts("markdown")
+    assert app.T["nothing_backed"] in said
+    assert not [text for text in said if "**241" in text]
+    assert app.T["values_details"] not in page.texts("expander")
+
+
+def test_a_reason_nobody_words_is_shown_as_it_is(app):
+    assert app._reason("something:new") == "something:new"
+    unnamed = app.T["reason_exhausted"].format(axis="unknown_axis")
+    assert app._reason("exhausted:unknown_axis") == unnamed
+
+
+def test_the_harvest_answer_kept_in_the_history_leaves_the_full_result(app):
+    assert "result" not in app._kept({"answer": "a", "result": {"x": 1}})
+
+
+def test_a_value_of_a_document_the_database_does_not_know_shows_no_page(
+        app, page, known):
+    app._value_page("elsewhere", 3, QUOTE, {"owner_kind": "section",
+                                             "owner_id": 4})
+    assert known.drawn == [] and page.downloads == []
+
+
+def test_the_review_page_shows_the_page_of_the_value_it_asks_about(
+        app, page, known):
+    shown = dict(row(quote=QUOTE),
+                 provenance={"document_id": 1, "page": 3,
+                             "owner_kind": "section", "owner_id": 4})
+    app._review_one("kassel", shown, gold.Gold.load(app.config.GOLD_PATH),
+                    {}, "fv", set())
+    (drawn,) = known.drawn
+    assert drawn["page"] == 12 and drawn["rects"] == MARK
+    assert ("image", b"PNG") in page.inside[shown_page(app)]
+
+
+# ------------------------------------------------------------- the answer route
+
+def _routes_offered(app, page):
+    """The labels of each answer-route switch the app showed."""
+    offered = []
+    original = page.radio
+
+    def radio(label, options, key=None, **kwargs):
+        if label == app.T["route"]:
+            offered.append(list(options))
+        return original(label, options, key=key, **kwargs)
+
+    sys.modules["streamlit"].radio = radio
+    return offered
+
+
+@pytest.fixture
+def routed(app, page, chat, monkeypatch):
+    asked = {"outcome": [], "graph": []}
+
+    def outcome(task, document_id):
+        asked["outcome"].append(document_id)
+        return asked.get("held") or {
+            "route": "rag", "reason": "no_values", "values": [], "total": 0}
+
+    def graph(task, document_id):
+        asked["graph"].append(document_id)
+        return {"route": "rag", "reason": "no_rows"}
+
+    monkeypatch.setattr(app, "values_outcome", outcome)
+    monkeypatch.setattr(app, "run_kg_turn", graph)
+    monkeypatch.setattr(app, "graph_offered", lambda: True)
+    monkeypatch.setattr(app, "get_kg_hooks", lambda: types.SimpleNamespace(
+        notes={"no_rows": "The graph has no value for this."}))
+    asked["offered"] = _routes_offered(app, page)
+    return asked
+
+
+def test_no_route_is_offered_where_only_the_documents_can_answer(
+        app, page, chat, monkeypatch):
+    offered = _routes_offered(app, page)
+    monkeypatch.setattr(app.config, "HARVEST_DIR", None)
+    monkeypatch.setattr(app, "graph_offered", lambda: False)
+    page.question = "How much gas?"
+    app.chat_page()
+    assert offered == []
+    assert len(chat["turns"]) == 1
+
+
+def test_the_graph_is_offered_for_one_document_and_not_for_the_corpus(
+        app, page, routed):
+    app.chat_page()
+    keys = ["route_auto", "route_harvest", "route_graph", "route_documents"]
+    assert routed["offered"][-1] == [app.T[key] for key in keys]
+    page.answers[app.T["whole_corpus"]] = True
+    app.chat_page()
+    assert app.T["route_graph"] not in routed["offered"][-1]
+
+
+def test_the_harvest_alone_answers_from_it_and_never_asks_the_documents(
+        app, page, chat, routed):
+    routed["held"] = {"route": "values", "reason": None, "total": 1,
+                      "values": [harvested()]}
+    page.answers[app.T["route"]] = app.T["route_harvest"]
+    page.question = "How much gas?"
+    app.chat_page()
+    assert routed["outcome"] == [1]
+    assert chat["turns"] == [] and chat["values"] == []
+    assert f"**{app.T['values_heading']}**" in page.texts("markdown")
+    # drawn again with the history, still without an answer of its own
+    page.said.clear()
+    page.question = None
+    app.chat_page()
+    assert f"**{app.T['values_heading']}**" in page.texts("markdown")
+    assert "" not in page.texts("markdown")
+
+
+@pytest.mark.parametrize("reason", ["no_parameter", "no_values"])
+def test_a_harvest_that_holds_nothing_says_why_and_asks_no_documents(
+        app, page, chat, routed, reason):
+    routed["held"] = {"route": "rag", "reason": reason, "values": [],
+                      "total": 0}
+    page.answers[app.T["route"]] = app.T["route_harvest"]
+    page.question = "How much gas?"
+    app.chat_page()
+    assert app.T[f"values_{reason}"] in page.texts("markdown")
+    assert chat["turns"] == []
+
+
+def test_the_documents_alone_never_ask_the_harvest(app, page, chat, routed):
+    page.answers[app.T["route"]] = app.T["route_documents"]
+    page.question = "How much gas?"
+    app.chat_page()
+    assert chat["values"] == [] and routed["outcome"] == []
+    assert len(chat["turns"]) == 1
+
+
+def test_the_graph_alone_asks_neither_harvest_nor_documents(
+        app, page, chat, routed):
+    page.answers[app.T["route"]] = app.T["route_graph"]
+    page.question = "How much gas?"
+    app.chat_page()
+    assert routed["graph"] == [1]
+    assert chat["turns"] == [] and chat["values"] == []
+    assert routed["outcome"] == []
+    assert "The graph has no value for this." in page.texts("markdown")
+
+
+def test_the_routes_follow_what_can_answer(app, monkeypatch):
+    monkeypatch.setattr(app, "graph_offered", lambda: True)
+    assert app.harvest_offered()
+    assert app.routes_offered(False) == [
+        "route_auto", "route_harvest", "route_graph", "route_documents"]
+    assert "route_graph" not in app.routes_offered(True)
+    monkeypatch.setattr(app.config, "HARVEST_DIR", None)
+    monkeypatch.setattr(app, "graph_offered", lambda: False)
+    assert not app.harvest_offered()
+    assert app.routes_offered(False) == ["route_auto", "route_documents"]
+
+
+def test_every_reason_the_harvest_gives_has_its_words(app):
+    """The harvest alone says why it holds nothing by its reason token; a
+    token no profile words would end the turn on a missing key."""
+    assert set(app.values_reason_words()) == set(app.values_route.REASONS)
+    assert set(app.route_words()) >= set(app.routes_offered(False))
+
+
+def test_every_reason_a_level_can_give_has_its_words(app):
+    """A reason the trust module adds and no profile words would be shown
+    as its token."""
+    from docpipe.extraction import trust
+    families = set(trust.FLAG_REASONS.values()) | {
+        "conflict", "page_transcribed", "exhausted", "unbacked",
+        "unanswered"}
+    assert set(app.reason_words()) == families

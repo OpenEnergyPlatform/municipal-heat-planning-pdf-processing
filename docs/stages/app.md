@@ -58,7 +58,8 @@ package.
 
 The sidebar offers the picker the profile's catalog builds (its filters, the
 document label, the detail shown for one document), a checkbox for the whole
-corpus, the search scopes and the answer format. The scopes are those whose
+corpus, the search scopes, the answer format and, where the harvest or the
+graph can answer, the answer route. The scopes are those whose
 embedding types the index holds vectors of, in a fixed order, found by one
 query over the `Embeddings` table (`db.available_scopes`): an index built
 through a text-only backend shows no image scopes. An index with no vectors at
@@ -71,13 +72,23 @@ real model differs from that name is not noticed. Changing the selection
 resets the history. A turn then runs in this order:
 
 1. If a harvest is configured (`INFERENCE_HARVEST_DIR`) and the question is
-   not only an image, the numbers the harvest holds for it are shown first,
-   each with its document, page, trust level and quote, as they were read and
-   checked and not as a model writes them now. This is
-   `docpipe/inference/values_route.py` over `docpipe/serve/values.py`; a
-   question that names no parameter shows nothing here. `INFERENCE_VALUES_LEVEL`
-   leaves out values below a trust level and `INFERENCE_VALUES_LIMIT` caps how
-   many are shown before the count of the rest.
+   not only an image, the harvest answers first. `values_route` finds the
+   values the question asks for (`docpipe/serve/values.py`; the parameter is
+   chosen with the profile's own question for a person's question,
+   `chat_parameter_question`, and not with the extraction's question about a
+   number), and `answer.answer_from_values` answers the question from the
+   passages those values were read from, each passage once. The model decides
+   which of their numbers answer it (the total or a carrier, which variant),
+   and every statement stands its check against its passage as in a document
+   turn; its citations show their pages the same way. Under the answer stand
+   only the values it uses (`values_route.used_values`: a statement quotes the
+   value's quote, or a part of it that names the value as the plan writes
+   it), one line each in the profile's words (number, coordinates, document
+   and page, level), with their coordinates by name and the reasons of their
+   level, in words (`AXIS_NAMES`, `reason_*`), in an expander. A question that
+   names no parameter gets nothing here. `INFERENCE_VALUES_LEVEL` leaves out
+   values below a trust level and `INFERENCE_VALUES_LIMIT` caps how many
+   values, and so passages, the answer is given.
 2. The answer from the documents follows: a search anchor, the query
    embedding, retrieval, and the answer across token-budgeted batches.
    Retrieval is by meaning and, where a word index exists beside the database
@@ -135,9 +146,20 @@ The values of step 1 are not narrowed that way: they come from every
 harvested document, older versions included, and the help text of the
 checkbox (`whole_corpus_help` of the profile) says so.
 
-The graph route is not offered while no corpus graph exists. `kg_route` stays
-in the core, and `run_kg_turn` and `_render_kg` stay in the app, for the day
-one does.
+The answer route (`route` of the profile's UI words) chooses where an answer
+comes from. Automatic is the order above: the harvest's answer, then the
+answer from the documents. Harvest answers from the harvest alone, and where
+it holds nothing it says why in the profile's words (`values_no_parameter`,
+`values_no_values`, one per reason of `values_route.REASONS`); the
+documents are not asked, because a silent fallback would hide that the
+chosen source holds nothing. Knowledge graph answers from the graph
+`--serialize` wrote (`INFERENCE_KG_TTL_PATH`) through `kg_route`, or says
+why not in the profile's `ROUTE_NOTES`; it is offered only where the profile
+contributes to the graph route and the file is there, and only for one
+document, because the graph is asked per plan. Documents searches the
+documents alone. `routes_offered` decides what is offered, and where only the
+documents can answer no switch is shown. A comparison of several documents
+always searches the documents.
 
 ## The review page
 
@@ -145,10 +167,9 @@ The review page is how the decisions behind
 [a harvest's precision and recall](evaluation.md) are made. The person gives
 a name and works through the queue of rows nobody has decided yet: for each
 field of the row (the value, the unit, every coordinate) the value, its quote
-and a button into the source PDF at its page are shown, and the field is
-marked correct or wrong, with what is right where it is wrong (the button into
-the PDF is the optional external link below, so it is there only where one is
-configured). Two more
+and the page it was read on are shown, drawn as a citation's page is (below),
+and the field is marked correct or wrong, with what is right where it is
+wrong. Two more
 forms record that the document states a value the harvest lacks, and that
 somebody has read a whole document for one parameter. All three append to
 `gold.jsonl` (`INFERENCE_GOLD_PATH`, by default beside the harvest directory,
@@ -200,19 +221,37 @@ file for each citation, which is heavy for a plan of 50 to 150 MB. Once the
 history holds more distinct cited pages than the cache, each new question
 redraws the evicted ones (about 0.2 to 0.5 seconds each). The note "not
 located" is also what shows when `rapidfuzz` is missing, the cause being
-logged once. Tables and figures get no rectangles. The values block and the
-review page still get only the optional external link.
+logged once. Tables and figures get no rectangles.
 
-That link is optional and off by default. `PDF_URL_PREFIX` and
-`PDF_VIEWER_PREFIX` are both empty, and nothing ships that serves a PDF or a
-viewer. Where a deployment sets them, a link button goes into an external
-viewer at the cited page: `PDF_URL_PREFIX` is the URL path the PDFs are served
-under, and `PDF_VIEWER_PREFIX` the path of a pdf.js viewer, through which the
-rectangles reach the browser as the `&mhl=` parameter and
-`pdfjs_overlay.js`, which a deployment copies into that viewer, draws the
-boxes (assuming an unrotated page). With the viewer prefix empty the link is a
-bare page link for the browser's own viewer, and with a missing library or a
-match scoring under 55 it loses its phrase or rectangles.
+The harvest's answer shows its citations' pages the same way, and so does
+the review page for the value it asks about (`_value_page`): the value's
+provenance names the passage's kind and id, so a value read from a section
+has its quote located and marked, and one read from a table or a figure is
+shown on its page unmarked. A value whose document the database does not
+know shows no page.
+
+Every page the app shows goes through one function, `_source_page`: a
+citation of the answer from the documents, a citation of the harvest's
+answer and the value the review page asks about. The page is drawn here as
+above, and where a PDF area is configured a button opens the whole PDF at
+that page in a tab of its own. Where the raw words of a section's quote do
+not match its segments, which happens where the text layer glued a stray
+mark to a word ("101BAuftraggeber"), `_cited_page` looks for the quote in
+the PDF itself on the pages the section's segments stand on, with the same
+search that draws its mark, and the first page that holds it is the page;
+where none does, the page stays the citation's own and is shown unmarked.
+
+The viewer is off by default. `PDF_URL_PREFIX` and `PDF_VIEWER_PREFIX` are
+both empty, and nothing ships that serves a PDF or a viewer. A deployment
+sets `PDF_URL_PREFIX` to the URL path the PDFs are served under and
+`PDF_VIEWER_PREFIX` to the path of a pdf.js viewer; both must be of the
+app's own origin, which pdf.js requires. The button then opens the pdf.js
+viewer, and the rectangles reach it as the `&mhl=` parameter:
+`pdfjs_overlay.js`, which a deployment copies into the viewer and references
+from its `viewer.html`, draws the boxes (assuming an unrotated page). With
+only `PDF_URL_PREFIX` set, the button goes into the browser's own viewer,
+and with a missing library or a match scoring under 55 the link loses its
+phrase or rectangles.
 
 ## Configuration
 
@@ -225,9 +264,9 @@ the profile's own.
 | `INFERENCE_DB_PATH`, `INFERENCE_INDEX_PATH`, `INFERENCE_IMAGE_ROOT`, `INFERENCE_PDF_ROOT` | the corpus database (read-only; `docpipe serve` reads it too, for its passage search, and has no default), the FAISS index, the root of table and figure images, the folder of source PDFs the cited page is drawn from |
 | `INFERENCE_HARVEST_DIR`, `INFERENCE_GOLD_PATH`, `INFERENCE_VALUES_LEVEL`, `INFERENCE_VALUES_LIMIT` | the harvest the values and the review page read, the decisions file the review page appends to (`--serialize` reads the one beside the harvest and ignores this setting), how many and how trustworthy a value must be to be shown |
 | `INFERENCE_LEXICAL` | search by word beside the search by meaning where a word index exists |
-| `INFERENCE_KG_TTL_PATH` | the Turtle file a graph route would read; read by nothing while the route is not offered |
+| `INFERENCE_KG_TTL_PATH` | the Turtle file the knowledge-graph route reads; the route is offered only where it exists |
 | `QUERY_CACHE_PATH`, `REQUEST_LOG_PATH` | the two files of the app's own |
-| `PDF_URL_PREFIX`, `PDF_VIEWER_PREFIX` | where an external viewer serves the PDFs and its pdf.js viewer, for the optional link; both are empty by default, and empty means no link and the browser's own viewer |
+| `PDF_URL_PREFIX`, `PDF_VIEWER_PREFIX` | where the PDFs and a pdf.js viewer are served from the app's own origin; with both set the button beside every drawn page opens the PDF in pdf.js with the quote boxed, with only the first in the browser's own viewer; both are empty by default |
 | `COMPARE_MAX_DOCUMENTS`, `TOP_K`, `MAX_CHUNK_ATTEMPTS`, `ANSWER_CONTEXT_TOKENS` | how many documents one comparison asks, and the retrieval and answer budgets |
 | `CODE_EXEC_URL`, `CODE_EXEC_TOKEN`, `CODE_EXEC_MAX_ROUNDS`, `CODE_EXEC_TIMEOUT` | the calculation sandbox; an empty URL turns the feature off |
 
@@ -345,8 +384,11 @@ Where a harvest is configured, the numbers it holds for a question are
 shown first, as they were read and checked, and the answer from the
 documents follows.
 
-The graph route is not offered while no corpus graph exists, and
-`docpipe.inference.kg_route` stays in the core for the day it does.
+The sidebar chooses where an answer comes from: the harvest first and
+then the documents, the harvest alone, the graph `--serialize` wrote
+alone (for one document, where the graph is there), or the documents
+alone. A harvested value shows the page it was read on, as a citation
+does.
 
 Run:
     docpipe --profile kwp chat --server.address 0.0.0.0 --server.port 8501
