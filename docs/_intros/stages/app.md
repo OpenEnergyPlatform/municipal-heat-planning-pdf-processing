@@ -230,24 +230,26 @@ know shows no page.
 
 Every page the app shows goes through one function, `_source_page`: a
 citation of the answer from the documents, a citation of the harvest's
-answer and the value the review page asks about. Where a deployment serves a
-pdf.js viewer, that page is the whole PDF in the viewer, embedded in the
-page expander (`st.iframe`, `VIEWER_HEIGHT` pixels high) and opened at the
-cited page with the quote's lines boxed, with a button that opens the same
-in a tab of its own; the reader can leaf through and search the whole
-document from there. A PDF the server does not hold is said, as above, and
-nothing is embedded. Without a viewer the page is drawn as above.
+answer and the value the review page asks about. The page is drawn here as
+above, and where a PDF area is configured a button opens the whole PDF at
+that page in a tab of its own. Where the raw words of a section's quote do
+not match its segments, which happens where the text layer glued a stray
+mark to a word ("101BAuftraggeber"), `_cited_page` looks for the quote in
+the PDF itself on the pages the section's segments stand on, with the same
+search that draws its mark, and the first page that holds it is the page;
+where none does, the page stays the citation's own and is shown unmarked.
 
 The viewer is off by default. `PDF_URL_PREFIX` and `PDF_VIEWER_PREFIX` are
 both empty, and nothing ships that serves a PDF or a viewer. A deployment
 sets `PDF_URL_PREFIX` to the URL path the PDFs are served under and
 `PDF_VIEWER_PREFIX` to the path of a pdf.js viewer; both must be of the
-app's own origin, which pdf.js requires. The rectangles reach the viewer as
-the `&mhl=` parameter and `pdfjs_overlay.js`, which a deployment copies into
-the viewer and references from its `viewer.html`, draws the boxes (assuming
-an unrotated page). With only `PDF_URL_PREFIX` set, the page is drawn here
-and a link goes into the browser's own viewer, and with a missing library or
-a match scoring under 55 the link loses its phrase or rectangles.
+app's own origin, which pdf.js requires. The button then opens the pdf.js
+viewer, and the rectangles reach it as the `&mhl=` parameter:
+`pdfjs_overlay.js`, which a deployment copies into the viewer and references
+from its `viewer.html`, draws the boxes (assuming an unrotated page). With
+only `PDF_URL_PREFIX` set, the button goes into the browser's own viewer,
+and with a missing library or a match scoring under 55 the link loses its
+phrase or rectangles.
 
 ## Configuration
 
@@ -262,7 +264,7 @@ the profile's own.
 | `INFERENCE_LEXICAL` | search by word beside the search by meaning where a word index exists |
 | `INFERENCE_KG_TTL_PATH` | the Turtle file the knowledge-graph route reads; the route is offered only where it exists |
 | `QUERY_CACHE_PATH`, `REQUEST_LOG_PATH` | the two files of the app's own |
-| `PDF_URL_PREFIX`, `PDF_VIEWER_PREFIX` | where the PDFs and a pdf.js viewer are served from the app's own origin; with both set every page is the PDF in the embedded viewer, with only the first a page drawn here and a link into the browser's viewer; both are empty by default |
+| `PDF_URL_PREFIX`, `PDF_VIEWER_PREFIX` | where the PDFs and a pdf.js viewer are served from the app's own origin; with both set the button beside every drawn page opens the PDF in pdf.js with the quote boxed, with only the first in the browser's own viewer; both are empty by default |
 | `COMPARE_MAX_DOCUMENTS`, `TOP_K`, `MAX_CHUNK_ATTEMPTS`, `ANSWER_CONTEXT_TOKENS` | how many documents one comparison asks, and the retrieval and answer budgets |
 | `CODE_EXEC_URL`, `CODE_EXEC_TOKEN`, `CODE_EXEC_MAX_ROUNDS`, `CODE_EXEC_TIMEOUT` | the calculation sandbox; an empty URL turns the feature off |
 

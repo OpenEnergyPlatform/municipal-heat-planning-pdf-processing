@@ -933,6 +933,36 @@ def test_what_is_not_located_is_said_in_the_profiles_words(app, page, cited):
     assert app.T["show_page"].format(page=12) == "Seite 12 anzeigen"
 
 
+GLUED = [(3, "Wappen Huglfing"),
+         (4, "101BAuftraggeber Stadt Wolfratshausen Auftragnehmer EWO")]
+
+
+def test_a_quote_the_raw_words_miss_is_found_on_a_page_of_its_section(
+        app, page, cited, monkeypatch):
+    """The text layer glued a mark to the first word, so no segment shares
+    three words with the quote; the PDF itself holds it on page 4."""
+    monkeypatch.setattr(app.db, "section_segments", lambda conn, owner: GLUED)
+    monkeypatch.setattr(app.pdf_link, "best_quote_rects",
+                        lambda path, number, quote: MARK if number == 4
+                        else None)
+    app._render_citation(citation(page_number=3,
+                                  quote="Auftraggeber: Stadt Wolfratshausen"))
+    (drawn,) = cited.drawn
+    assert drawn["page"] == 4 and drawn["rects"] == MARK
+
+
+def test_a_quote_no_page_of_its_section_holds_stays_on_its_page_unmarked(
+        app, page, cited, monkeypatch):
+    monkeypatch.setattr(app.db, "section_segments", lambda conn, owner: GLUED)
+    cited.found["rects"] = None
+    app._render_citation(citation(page_number=3,
+                                  quote="Auftraggeber: Stadt Wolfratshausen"))
+    (drawn,) = cited.drawn
+    assert drawn["page"] == 3 and not drawn["rects"]
+    assert ("caption", app.T["page_not_located"]) \
+        in page.inside[shown_page(app, 3)]
+
+
 def test_a_table_is_shown_unmarked_without_looking_for_its_title(
         app, page, cited, monkeypatch):
     """The quote of a table or a figure is its title or a reading, not a
@@ -1051,22 +1081,25 @@ def _frames(page):
     return [text for how, text in page.said if how == "iframe"]
 
 
-def test_with_a_viewer_the_whole_pdf_is_embedded_at_the_page_with_the_quote_boxed(
+def test_with_a_viewer_the_page_is_drawn_here_and_the_pdf_opens_boxed_in_a_tab(
         app, page, viewer):
     app._render_citation(citation())
-    (url,) = _frames(page)
+    (drawn,) = viewer.drawn                 # the picture, with the mark
+    assert drawn["page"] == 12 and drawn["rects"] == MARK
+    assert ("image", b"PNG") in page.inside[shown_page(app)]
+    ((label, url),) = page.links
+    assert label == app.T["open_pdf"].format(page=12)
     assert url.startswith("/app/static/pdfjs/web/viewer.html?file=")
     assert "kassel.pdf" in url and "#page=12" in url
-    assert "&mhl=" in url                   # the located lines, boxed
-    assert ("iframe", url) in page.inside[shown_page(app)]
-    assert page.links == [(app.T["open_pdf"].format(page=12), url)]
-    assert viewer.drawn == []               # no picture beside the viewer
+    assert "&mhl=" in url                   # the same lines, boxed there
+    assert _frames(page) == []              # nothing embedded
 
 
 def test_reviewing_a_value_and_researching_show_one_page_the_same_way(
         app, page, viewer, monkeypatch):
     """One function shows every page: the review page's value and a
-    citation of the same passage open the same viewer at the same place."""
+    citation of the same passage draw the same page and open the same
+    viewer at the same place."""
     monkeypatch.setattr(app, "get_documents",
                         lambda: {"kassel": (1, "kassel.pdf")})
     app._render_citation(citation())
@@ -1075,17 +1108,11 @@ def test_reviewing_a_value_and_researching_show_one_page_the_same_way(
                              "owner_kind": "section", "owner_id": 4})
     app._review_one("kassel", shown, gold.Gold.load(app.config.GOLD_PATH),
                     {}, "fv", set())
-    cited_url, reviewed_url = _frames(page)
+    (cited_url, reviewed_url) = [url for _label, url in page.links]
     assert cited_url == reviewed_url
-
-
-def test_a_pdf_the_server_does_not_hold_is_said_and_not_embedded(
-        app, page, viewer):
-    viewer.pdf.unlink()
-    app._render_citation(citation())
-    assert _frames(page) == []
-    assert ("caption", app.T["page_no_file"].format(file="kassel.pdf")) \
-        in page.inside[shown_page(app)]
+    # drawn once: the second is the cached picture of the same page
+    assert [d["page"] for d in viewer.drawn] == [12]
+    assert page.texts("image") == [b"PNG", b"PNG"]
 
 
 def fresh_config():

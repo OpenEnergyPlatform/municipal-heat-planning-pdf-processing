@@ -998,10 +998,21 @@ def _cited_page(cit: dict):
     located = cit.get("owner_kind") == "section" and quote \
         and cit.get("owner_id")
     if located:
-        loc = pdf_link.locate_quote(
-            quote, db.section_segments(get_db(), cit["owner_id"]))
+        segments = db.section_segments(get_db(), cit["owner_id"])
+        loc = pdf_link.locate_quote(quote, segments)
         if loc:
             page, phrase = loc            # exact page (+ a fallback phrase)
+        else:
+            # The raw words did not match: a text layer can glue a stray mark
+            # to a word ("101BAuftraggeber"), and the quote then shares too
+            # few words with any segment. The quote is looked for in the PDF
+            # itself, on the pages the section's segments stand on, the way
+            # its mark is drawn; the first page that holds it is the page.
+            for candidate in sorted({number for number, _text in segments}):
+                if pdf_link.best_quote_rects(config.PDF_ROOT / filename,
+                                             candidate, quote):
+                    page = candidate
+                    break
     if not page:
         return None
     return filename, page, phrase, (quote if located else None)
@@ -1064,30 +1075,14 @@ def _show_page(filename: str, page, quote) -> None:
                            key=f"download_pdf:{next(_downloads)}")
 
 
-# How tall the embedded pdf.js viewer is, in pixels.
-VIEWER_HEIGHT = 800
-
-
 def _source_page(filename: str, page, phrase, marked) -> None:
     """The page a citation or a reviewed value stands on: the one way every
-    page of the app shows its source.
-
-    Where a pdf.js viewer is configured, the whole PDF in it, embedded here
-    and opened at *page* with *marked* boxed, and the same in a tab of its
-    own; the reader can leaf through the document from there. Otherwise the
-    page drawn here, with a link into the browser's own viewer where a PDF
-    area is configured. Must not be called inside an expander."""
+    page of the app shows its source. The page drawn here with *marked*
+    boxed, and where a PDF area is configured a button that opens the whole
+    PDF at that page in a tab of its own: in the pdf.js viewer with the same
+    lines boxed where one is configured, in the browser's own viewer
+    otherwise. Must not be called inside an expander."""
     url = _pdf_url(filename, page, marked, phrase)
-    if url and config.PDF_VIEWER_PREFIX:
-        with st.expander(T["show_page"].format(page=page)):
-            if not (config.PDF_ROOT / filename).is_file():
-                log.warning("%s is not in the PDF folder %s", filename,
-                            config.PDF_ROOT)
-                st.caption(T["page_no_file"].format(file=filename))
-                return
-            st.iframe(url, height=VIEWER_HEIGHT)
-            st.link_button(T["open_pdf"].format(page=page), url)
-        return
     if url:
         st.link_button(T["open_pdf"].format(page=page), url)
     _show_page(filename, page, marked)
