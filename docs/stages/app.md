@@ -230,16 +230,26 @@ has its quote located and marked, and one read from a table or a figure is
 shown on its page unmarked. A value whose document the database does not
 know shows no page.
 
-That link is optional and off by default. `PDF_URL_PREFIX` and
-`PDF_VIEWER_PREFIX` are both empty, and nothing ships that serves a PDF or a
-viewer. Where a deployment sets them, a link button goes into an external
-viewer at the cited page: `PDF_URL_PREFIX` is the URL path the PDFs are served
-under, and `PDF_VIEWER_PREFIX` the path of a pdf.js viewer, through which the
-rectangles reach the browser as the `&mhl=` parameter and
-`pdfjs_overlay.js`, which a deployment copies into that viewer, draws the
-boxes (assuming an unrotated page). With the viewer prefix empty the link is a
-bare page link for the browser's own viewer, and with a missing library or a
-match scoring under 55 it loses its phrase or rectangles.
+Every page the app shows goes through one function, `_source_page`: a
+citation of the answer from the documents, a citation of the harvest's
+answer and the value the review page asks about. Where a deployment serves a
+pdf.js viewer, that page is the whole PDF in the viewer, embedded in the
+page expander (`st.iframe`, `VIEWER_HEIGHT` pixels high) and opened at the
+cited page with the quote's lines boxed, with a button that opens the same
+in a tab of its own; the reader can leaf through and search the whole
+document from there. A PDF the server does not hold is said, as above, and
+nothing is embedded. Without a viewer the page is drawn as above.
+
+The viewer is off by default. `PDF_URL_PREFIX` and `PDF_VIEWER_PREFIX` are
+both empty, and nothing ships that serves a PDF or a viewer. A deployment
+sets `PDF_URL_PREFIX` to the URL path the PDFs are served under and
+`PDF_VIEWER_PREFIX` to the path of a pdf.js viewer; both must be of the
+app's own origin, which pdf.js requires. The rectangles reach the viewer as
+the `&mhl=` parameter and `pdfjs_overlay.js`, which a deployment copies into
+the viewer and references from its `viewer.html`, draws the boxes (assuming
+an unrotated page). With only `PDF_URL_PREFIX` set, the page is drawn here
+and a link goes into the browser's own viewer, and with a missing library or
+a match scoring under 55 the link loses its phrase or rectangles.
 
 ## Configuration
 
@@ -254,7 +264,7 @@ the profile's own.
 | `INFERENCE_LEXICAL` | search by word beside the search by meaning where a word index exists |
 | `INFERENCE_KG_TTL_PATH` | the Turtle file the knowledge-graph route reads; the route is offered only where it exists |
 | `QUERY_CACHE_PATH`, `REQUEST_LOG_PATH` | the two files of the app's own |
-| `PDF_URL_PREFIX`, `PDF_VIEWER_PREFIX` | where an external viewer serves the PDFs and its pdf.js viewer, for the optional link; both are empty by default, and empty means no link and the browser's own viewer |
+| `PDF_URL_PREFIX`, `PDF_VIEWER_PREFIX` | where the PDFs and a pdf.js viewer are served from the app's own origin; with both set every page is the PDF in the embedded viewer, with only the first a page drawn here and a link into the browser's viewer; both are empty by default |
 | `COMPARE_MAX_DOCUMENTS`, `TOP_K`, `MAX_CHUNK_ATTEMPTS`, `ANSWER_CONTEXT_TOKENS` | how many documents one comparison asks, and the retrieval and answer budgets |
 | `CODE_EXEC_URL`, `CODE_EXEC_TOKEN`, `CODE_EXEC_MAX_ROUNDS`, `CODE_EXEC_TIMEOUT` | the calculation sandbox; an empty URL turns the feature off |
 

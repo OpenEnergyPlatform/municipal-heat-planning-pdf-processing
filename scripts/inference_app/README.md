@@ -115,7 +115,7 @@ is not asked. `INFERENCE_LEXICAL=0` turns the word search off.
 | `docpipe/app/app.py` | Streamlit UI and orchestration: the chat page and the review page (the only module importing `streamlit`). |
 | `docpipe/app/config.py` | Env-var configuration; re-exports the core's values, derives the corpus paths from the profile. |
 | `docpipe/app/pdf_link.py` | Where a citation stands in the source PDF: quote to page, bbox rects, the page drawn with the quote marked, and the optional viewer URL. |
-| `docpipe/app/pdfjs_overlay.js` | pdf.js companion that draws the highlight boxes, for an external viewer that has it. |
+| `docpipe/app/pdfjs_overlay.js` | pdf.js companion that draws the highlight boxes, for a deployed viewer that has it. |
 | `docpipe/app/sandbox_service.py` | The code-execution service (`docpipe sandbox`). |
 | `scripts/inference_app/app.py` | Hands `streamlit run scripts/inference_app/app.py` over to the package. |
 | `scripts/inference_app/Containerfile` | The image the sandbox runs code in. |
@@ -197,8 +197,8 @@ comes from, and `docpipe.toml` takes them under `[chat]`.
 | `TOP_K` / `MAX_CHUNK_ATTEMPTS` / `ANSWER_CONTEXT_TOKENS` | 50 / 10 / 10000 | Retrieval depth / max sources examined / per-call source token budget. |
 | `QUERY_CACHE_PATH` | `data/inference_app_query_cache.db` | Separate embedding-vector cache DB (never the corpus DB). |
 | `REQUEST_LOG_PATH` | `data/inference_app_request_log.db` | Separate request log DB (never the corpus DB). |
-| `PDF_URL_PREFIX` | (empty) | URL path an external viewer serves the source PDFs under, for the optional link. Empty: no link. |
-| `PDF_VIEWER_PREFIX` | (empty) | Path of a pdf.js viewer under that prefix. Empty: the browser's own PDF viewer. Nothing is bundled. |
+| `PDF_URL_PREFIX` | (empty) | URL path the source PDFs are served under, of the app's own origin. Empty: no viewer and no link. |
+| `PDF_VIEWER_PREFIX` | (empty) | Path of a pdf.js viewer of the same origin. Set with `PDF_URL_PREFIX`: every page is the PDF in that viewer, embedded. Empty: the page as a picture. Nothing is bundled. |
 | `CODE_EXEC_URL` | (empty) | Sandbox `/run` endpoint. **Empty: the calculation feature is OFF.** |
 | `CODE_EXEC_TOKEN` | from `.env` | Bearer token for the sandbox (matches its `KWP_SANDBOX_TOKEN`). |
 | `CODE_EXEC_MAX_ROUNDS` | `2` | Max code runs the model may request per answer batch. |
@@ -233,9 +233,13 @@ pre-refinement, page-tagged provenance) and takes the longest shared word-run, w
 in the PDF text layer. **`Segments.page` is a FK to `Pages.id`, not the page number**: the real
 page is joined through `Pages`.
 
-**The link into an external viewer (optional).** Nothing here serves a PDF or a viewer, so both
-prefixes are empty and the link button is not shown. A deployment that serves the PDFs sets
-`PDF_URL_PREFIX` to their URL path, and the citation then also carries a link at the right page.
+**The embedded viewer (optional).** Nothing here serves a PDF or a viewer, so both prefixes are
+empty and every page is drawn as a picture. A deployment that serves the PDFs and a pdf.js viewer
+from the app's own origin (for instance through Streamlit's static serving) sets
+`PDF_URL_PREFIX` and `PDF_VIEWER_PREFIX`, and every page the app shows, a citation, a citation of
+the harvest's answer or the value on the review page, is then the whole PDF in the viewer,
+embedded and opened at the page with the quote boxed, with a button that opens it in a tab of its
+own. With only `PDF_URL_PREFIX` set, the citation carries a link at the right page.
 With `PDF_VIEWER_PREFIX` set to a pdf.js viewer the URL is
 `#page=N&search=<phrase>&phrase=true`, which highlights in every browser; without it the browser's
 own viewer jumps to the page but only highlights in Firefox/Adobe. When the matched segment

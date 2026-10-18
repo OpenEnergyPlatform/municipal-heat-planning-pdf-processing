@@ -1064,10 +1064,30 @@ def _show_page(filename: str, page, quote) -> None:
                            key=f"download_pdf:{next(_downloads)}")
 
 
+# How tall the embedded pdf.js viewer is, in pixels.
+VIEWER_HEIGHT = 800
+
+
 def _source_page(filename: str, page, phrase, marked) -> None:
-    """A link into an external viewer where one is configured, and the page
-    drawn here with *marked* boxed. Must not be called inside an expander."""
+    """The page a citation or a reviewed value stands on: the one way every
+    page of the app shows its source.
+
+    Where a pdf.js viewer is configured, the whole PDF in it, embedded here
+    and opened at *page* with *marked* boxed, and the same in a tab of its
+    own; the reader can leaf through the document from there. Otherwise the
+    page drawn here, with a link into the browser's own viewer where a PDF
+    area is configured. Must not be called inside an expander."""
     url = _pdf_url(filename, page, marked, phrase)
+    if url and config.PDF_VIEWER_PREFIX:
+        with st.expander(T["show_page"].format(page=page)):
+            if not (config.PDF_ROOT / filename).is_file():
+                log.warning("%s is not in the PDF folder %s", filename,
+                            config.PDF_ROOT)
+                st.caption(T["page_no_file"].format(file=filename))
+                return
+            st.iframe(url, height=VIEWER_HEIGHT)
+            st.link_button(T["open_pdf"].format(page=page), url)
+        return
     if url:
         st.link_button(T["open_pdf"].format(page=page), url)
     _show_page(filename, page, marked)

@@ -178,6 +178,7 @@ class Page:
     code = _say("code")
     json = _say("json")
     image = _say("image")
+    iframe = _say("iframe")
     dataframe = _say("dataframe")
 
     def set_page_config(self, **kwargs):
@@ -1036,6 +1037,55 @@ def test_a_link_into_an_external_viewer_is_shown_only_where_one_is_set(
     assert url.startswith("/pdf/kassel.pdf#page=12")
     # the page is drawn here as well: the link is an addition, not a swap
     assert len(page.downloads) == 2
+
+
+@pytest.fixture
+def viewer(app, cited, monkeypatch):
+    monkeypatch.setattr(app.config, "PDF_URL_PREFIX", "/app/static/pdf")
+    monkeypatch.setattr(app.config, "PDF_VIEWER_PREFIX",
+                        "/app/static/pdfjs/web")
+    return cited
+
+
+def _frames(page):
+    return [text for how, text in page.said if how == "iframe"]
+
+
+def test_with_a_viewer_the_whole_pdf_is_embedded_at_the_page_with_the_quote_boxed(
+        app, page, viewer):
+    app._render_citation(citation())
+    (url,) = _frames(page)
+    assert url.startswith("/app/static/pdfjs/web/viewer.html?file=")
+    assert "kassel.pdf" in url and "#page=12" in url
+    assert "&mhl=" in url                   # the located lines, boxed
+    assert ("iframe", url) in page.inside[shown_page(app)]
+    assert page.links == [(app.T["open_pdf"].format(page=12), url)]
+    assert viewer.drawn == []               # no picture beside the viewer
+
+
+def test_reviewing_a_value_and_researching_show_one_page_the_same_way(
+        app, page, viewer, monkeypatch):
+    """One function shows every page: the review page's value and a
+    citation of the same passage open the same viewer at the same place."""
+    monkeypatch.setattr(app, "get_documents",
+                        lambda: {"kassel": (1, "kassel.pdf")})
+    app._render_citation(citation())
+    shown = dict(row(quote=QUOTE),
+                 provenance={"document_id": 1, "page": 3,
+                             "owner_kind": "section", "owner_id": 4})
+    app._review_one("kassel", shown, gold.Gold.load(app.config.GOLD_PATH),
+                    {}, "fv", set())
+    cited_url, reviewed_url = _frames(page)
+    assert cited_url == reviewed_url
+
+
+def test_a_pdf_the_server_does_not_hold_is_said_and_not_embedded(
+        app, page, viewer):
+    viewer.pdf.unlink()
+    app._render_citation(citation())
+    assert _frames(page) == []
+    assert ("caption", app.T["page_no_file"].format(file="kassel.pdf")) \
+        in page.inside[shown_page(app)]
 
 
 def fresh_config():
