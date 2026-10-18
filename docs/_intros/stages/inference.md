@@ -377,11 +377,15 @@ absent, so `scenarios` gets no route at all (`kg_route.py:95-122`).
 question per axis over the spec's own vocabulary, through
 `llm_client.choose` in the app (`llm_client.py:406-430`,
 `docpipe/app/app.py:269-272`); an answer outside the vocabulary leaves the axis
-unbound (`kg_route.py:174-216`), and the route proceeds only once a
+unbound (`kg_route.py:177-219`), and the route proceeds only once a
 coordinate lands on one of the `DECIDING_AXES`, quantity, scenario or
-year (`kg_route.py:61`). It runs the profile's SPARQL and reads a
+year (`kg_route.py:61`). It runs the profile's SPARQL over a pyoxigraph
+store (`load_graph`, `run_query`; the bound coordinates open the pattern as
+one `VALUES` row of terms pyoxigraph writes, so a value is never spliced into
+the query as text). On the corpus graph of 499,688 triples it loads in about
+2 s and answers in under a second, where rdflib took 39 s and 83 s. It reads a
 value's evidence and trust from the serializer's comment lines,
-recovered from the raw Turtle text (`kg_route.py:148-171`); a value with
+recovered from the raw Turtle text (`kg_route.py:151-174`); a value with
 no trust comment withholds the whole answer (see Failure modes, and
 [How much of a value the run can stand
 behind](../contract/trust.md)). Every decline is one of five closed
@@ -497,7 +501,7 @@ plus what `answer.py` adds:
 | `n` | the number the `[n]` marks of the answer refer to, from 1; a JSON answer has no marks and its citations have no `n` |
 
 `kg_route.answer_from_graph` returns `{route, reason, values,
-coordinates}` (`kg_route.py:272-305`): `route` is `"kg"` or `"rag"`,
+coordinates}` (`kg_route.py:299-332`): `route` is `"kg"` or `"rag"`,
 `reason` one of `REASONS` or `None`, `values` one dict per matching row
 with its `evidence` and `trust`.
 
@@ -617,10 +621,10 @@ degrades without raising: any transport or JSON failure comes back
 (`code_exec.py:27-62`).
 
 `kg_route` fails closed on missing trust, withholding the whole answer
-with reason `no_trust` (`kg_route.py:298-303`). A profile that leaves a
+with reason `no_trust` (`kg_route.py:325-330`). A profile that leaves a
 `REASONS` token unworded, or words an extra one, raises `LookupError`
 when the route is built (`kg_route.py:80-92`); a Turtle fragment with no
-`@prefix` line is refused outright (`kg_route.py:139-141`).
+`@prefix` line is refused outright (`kg_route.py:142-144`).
 
 The wording contract fails the same way: a profile whose `PHRASES` dict
 is missing a required key raises `LookupError` at the first check

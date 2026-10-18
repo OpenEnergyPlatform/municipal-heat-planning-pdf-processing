@@ -8,7 +8,9 @@ import json
 import re
 
 import pytest
-from rdflib import RDF, URIRef
+
+pyoxigraph = pytest.importorskip("pyoxigraph")
+from pyoxigraph import NamedNode  # noqa: E402
 
 from docpipe.extraction import fields
 from docpipe.inference import kg_route, llm_client
@@ -16,6 +18,8 @@ from docpipe.profile import load_profile
 from profiles.kwp import inference, kg, vocabulary
 from tests.test_kwp_extraction import (SPEC, _database, _database_corpus_format,
                                        _row)
+
+RDF_TYPE = NamedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
 
 UNSTATED = fields.UNSTATED
 DOCUMENT = "waermeplan_kassel_20240315"
@@ -139,7 +143,8 @@ def test_every_part_class_expands_to_an_iri_the_serializer_wrote(graph_fixture):
     prefixes = set()
     for cls, _segment, _label in kg.PARTS.values():
         prefixes.add(cls.split(":")[0])
-        assert (None, RDF.type, URIRef(kg.expand(cls))) in graph, cls
+        assert any(graph.quads_for_pattern(
+            None, RDF_TYPE, NamedNode(kg.expand(cls)))), cls
     assert prefixes == {"mhpo", "oeo"}
     assert kg.expand("mhpo:MHPO_00020007") == \
         "https://purl.org/mhpo/ontology/MHPO_00020007"
@@ -154,10 +159,10 @@ def test_every_part_class_expands_to_an_iri_the_serializer_wrote(graph_fixture):
 def test_the_trust_line_is_not_in_the_graph_and_is_recovered_from_the_text(
         graph_fixture):
     _db, ttl, graph, comments = graph_fixture
-    assert not any(kg.TRUST_PROSE["level"].split(":")[0] in str(o)
-                   for o in graph.objects())
-    values = {str(s) for s in graph.subjects(URIRef(kg.expand(kg.P_NUMBER)),
-                                             None)}
+    assert not any(kg.TRUST_PROSE["level"].split(":")[0] in quad.object.value
+                   for quad in graph)
+    values = {quad.subject.value for quad in graph.quads_for_pattern(
+        None, NamedNode(kg.expand(kg.P_NUMBER)), None)}
     assert len(values) == 7
     assert set(comments) == values
     # A blank line resets the buffer: a comment above a gap belongs to no
@@ -467,3 +472,19 @@ def test_choose_asks_nothing_in_stub_mode(monkeypatch, hooks):
     monkeypatch.setattr(llm_client, "_chat_json",
                         lambda *a, **k: pytest.fail("the endpoint was called"))
     assert llm_client.choose(hooks.prompt, "q", "f?", {"x": []}) is None
+
+
+def test_a_bound_value_is_a_term_and_never_part_of_the_query(graph_fixture):
+    """The bindings enter the query as terms pyoxigraph writes. A year whose
+    text closes the literal and opens a pattern of its own would, spliced in
+    as text, match every value or break the query; as a term it matches
+    nothing."""
+    db, _ttl, graph, _comments = graph_fixture
+    plan = kg.heatplan_iri(db, DOCUMENT)
+    text, bindings = kg.value_bindings({"year": 2030})
+    query = kg.VALUE_QUERY.replace(kg_route.CONSTRAINTS_MARKER, text)
+    sneaky = dict(bindings, PLAN=("iri", plan),
+                  YEAR=("literal", '2030") } UNION { ?x ?y "'))
+    assert kg_route.run_query(graph, query, sneaky) == []
+    assert len(kg_route.run_query(graph, query,
+                                  dict(bindings, PLAN=("iri", plan)))) == 4

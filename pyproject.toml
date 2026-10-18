@@ -33,7 +33,8 @@ dependencies = [
 layout = ["torch", "transformers", "opencv-python-headless"]
 # stage 6 and the chat's queries with the embedding model in this process
 embed = ["torch", "transformers", "qwen-vl-utils"]
-app = ["streamlit"]
+# the chat; its graph route asks the graph through pyoxigraph
+app = ["streamlit", "pyoxigraph"]
 # the graph: snapshot of the ontology, SHACL report
 kg = ["rdflib", "pyshacl"]
 # what the profiles in this repository read their document lists with
@@ -42,7 +43,7 @@ sandbox = ["llm-sandbox"]
 # a hosted text or vision model of this provider (openai is a core package,
 # gemini needs none)
 anthropic = ["anthropic>=0.108"]
-dev = ["pytest", "rdflib", "pandas", "openpyxl"]
+dev = ["pytest", "rdflib", "pyoxigraph", "pandas", "openpyxl"]
 
 [project.scripts]
 docpipe = "docpipe.cli:main"

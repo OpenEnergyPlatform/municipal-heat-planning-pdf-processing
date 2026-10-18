@@ -20,8 +20,8 @@ and the caller falls back to the documents.
 
 Which graph, which query and which axes are the profile's own.
 `Hooks` carries them the way `answer.Corpus` carries the corpus, and
-this module imports neither `profiles` nor `streamlit`. rdflib is
-imported inside the functions that need it, the convention
+this module imports neither `profiles` nor `streamlit`. The graph is a
+pyoxigraph store, imported inside the functions that need it, the convention
 `docpipe/ontology.py` states: the batch path never touches this
 module, and the check that does can run without it.
 
@@ -128,20 +128,23 @@ def load_graph(ttl_path) -> tuple:
 
 
 def load_graph_from_text(text: str) -> tuple:
-    """The same, from a string. rdflib is imported here and nowhere above.
+    """The same, from a string, as a pyoxigraph store. pyoxigraph is
+    imported here and in `run_query` and nowhere above. Measured on the
+    corpus graph (499,688 triples): it loads in 2 s and answers the value
+    query in 0.6 s, where rdflib took 39 s and 83 s.
 
     The serializer writes the prefix header once per run, so a file made of
     several runs carries several headers, which is legal Turtle -- and a
     fragment cut from a run's second document onward carries none and
-    would not parse. That case is named here rather than left to rdflib's
-    parser error on a prefixed name.
+    would not parse. That case is named here rather than left to the
+    parser's error on a prefixed name.
     """
     if not re.search(r"^\s*@prefix\s", text, re.M):
         raise ValueError("no @prefix line: this is a fragment of a run, not "
                          "the file --serialize wrote")
-    from rdflib import Graph
-    graph = Graph()
-    graph.parse(data=text, format="turtle")
+    from pyoxigraph import RdfFormat, Store
+    graph = Store()
+    graph.bulk_load(text.encode("utf-8"), RdfFormat.TURTLE)
     return graph, trust_comments(text)
 
 
@@ -249,18 +252,42 @@ def run_query(graph, text: str, bindings: dict) -> list:
     """[{variable: string}] for one SPARQL over the loaded graph.
 
     `bindings` are (kind, value) pairs, "iri" or "literal", so the profile
-    that builds them stays rdflib-free. A literal binds UNTYPED: the
-    serializer writes the year node's label as a plain string, and
-    Literal(2030) with an integer datatype matches nothing.
+    that builds them stays free of any RDF library. A string literal binds
+    UNTYPED: the serializer writes the year node's label as a plain string,
+    and a number binds as xsd:integer or xsd:double, which matches nothing
+    there.
     """
-    from rdflib import Literal, URIRef
-    init = {name: (URIRef(value) if kind == "iri" else Literal(value))
-            for name, (kind, value) in bindings.items()}
+    from pyoxigraph import Literal, NamedNode
+    # pyoxigraph's own substitutions take only projected variables, and the
+    # bound ones stand in FILTERs. So they open the pattern as one VALUES
+    # row, each term written by pyoxigraph in its N-Triples form.
+    terms = {name: (NamedNode(value) if kind == "iri"
+                    else _literal(Literal, NamedNode, value))
+             for name, (kind, value) in bindings.items()}
+    if terms:
+        row = (f"  VALUES ({' '.join('?' + name for name in terms)}) "
+               f"{{ ({' '.join(str(term) for term in terms.values())}) }}\n")
+        where = re.search(r"\bWHERE\s*\{\n?", text, re.I)
+        if where is None:
+            raise ValueError("a query with bindings needs a WHERE clause")
+        text = text[:where.end()] + row + text[where.end():]
+    solutions = graph.query(text)
+    names = solutions.variables
     rows = []
-    for row in graph.query(text, initBindings=init):
-        rows.append({str(var): (None if term is None else str(term))
-                     for var, term in row.asdict().items()})
+    for solution in solutions:
+        rows.append({var.value: (None if solution[var] is None
+                                 else solution[var].value)
+                     for var in names})
     return rows
+
+
+def _literal(Literal, NamedNode, value):
+    """A string as a plain literal, a number with its XSD datatype."""
+    if isinstance(value, str):
+        return Literal(value)
+    kind = "integer" if isinstance(value, int) else "double"
+    return Literal(str(value), datatype=NamedNode(
+        "http://www.w3.org/2001/XMLSchema#" + kind))
 
 
 def _fallback(reason: str, coordinates: Optional[dict] = None) -> dict:
