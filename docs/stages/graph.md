@@ -464,8 +464,7 @@ marks a trust line is built from are at
   `scenarios`' holds 322 terms and 249 OEKG regions, same release,
   against a spec of 280 (inspected directly; `ontology.spec_terms`).
   `--refresh` pulls that same release straight from GitHub rather than
-  by hand; neither number is pinned in a test any more, since both
-  move the day upstream does.
+  by hand; both numbers move the day upstream does.
 - Over a corpus run the model answered `out:` 1,171 times for a
   wording its document scoped AR6 list could resolve unambiguously,
   347 a character for character match (`profiles/scenarios/kg.py`,
@@ -475,52 +474,6 @@ marks a trust line is built from are at
   budget finding), 9 `unstated` (a finding about the paper), counted
   separately so the first does not hide the second
   (`profiles/scenarios/kg.py`, comment above `unplaceable`).
-
-## Verification
-
-- `test_value_minting_matches_the_schema_repo_reference`,
-  `test_both_date_spellings_mint_the_same_iris`,
-  `test_a_carrier_oeo_does_not_call_a_carrier_keeps_its_edge_and_is_counted`
-  and `test_a_non_class_names_no_node_just_as_an_unstated_coordinate_does`:
-  minting is a pure function of a value's coordinates; a
-  `CARRIER_OUTSIDE_ROOT` carrier keeps its edge, counted, and an `out:`
-  or unmapped carrier or sector never enters the identity.
-  `test_the_gate_names_the_quantity_before_the_scenario` holds the
-  quantity gate ahead of the scenario one.
-- `test_every_plan_part_the_ontology_names_is_serialized` and
-  `test_a_part_with_no_value_is_neither_a_node_nor_a_has_part_edge`: a
-  part gets a node only when it has a value.
-- `test_a_value_conflict_on_one_coordinate_drops_every_claimant`,
-  `test_a_repeat_alone_still_serializes_one_node`,
-  `test_a_rounded_reading_loses_to_the_precise_one`,
-  `test_different_wordings_are_different_nodes_named_by_the_wording`,
-  `test_a_lower_trust_grade_loses_the_identity` and
-  `test_what_no_rule_settles_is_still_a_question_for_a_human`: an exact
-  repeat is one node; different plan wording splits into a node each; a
-  rounded reading loses to a precise one and a lower trust level to a
-  higher one; what none of those settles still drops every claimant.
-- `test_a_second_document_claiming_the_same_identity_is_refused` and
-  `test_one_heat_plan_comes_out_as_the_published_example`: a stale
-  duplicate is refused after the first claimant succeeds, and a full
-  render matches the schema repository's reference exactly.
-- `test_every_edge_the_writer_emits_is_one_the_ontology_was_asked_about`
-  (`kwp`) and
-  `test_the_writers_own_edges_are_declared_for_the_pin_to_judge`
-  (`scenarios`): every triple shape a serializer writes is one
-  `edge_problems` checks.
-- `test_the_reading_the_most_sources_agree_on_wins`,
-  `test_a_running_header_does_not_outvote_the_located_title_page` and
-  `test_the_crawl_is_the_cross_check_not_the_source`: `_pick_one`'s
-  ranking, including the substring guard, and a `DocumentMeta`
-  disagreement logged, never substituted.
-- `test_a_scenario_becomes_its_own_factsheet_hung_off_the_bundle` and
-  `test_a_scenario_wording_that_fits_several_runs_links_to_none`: a
-  resolved run mints its own factsheet; an ambiguous wording is
-  refused as an identity and its rows merge by wording alone.
-- `test_every_value_can_name_the_passage_it_came_from` and
-  `test_the_evidence_can_be_switched_off_for_a_closed_shape_run`: with
-  `OEKG_EVIDENCE` on, every value points at its evidence node; off, no
-  `oekgprov:` triple appears.
 
 ## Modules
 

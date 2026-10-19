@@ -169,7 +169,7 @@ round budget, `CODE_EXEC_MAX_ROUNDS` plus `REQUEST_IMAGE_MAX`
 schema requires `statements` and offers no action. The scan of batches ends when
 a batch reports complete and at least one statement has stood in the turn so
 far (`answer.py:343-344`); a batch that says complete before anything stood does
-not stop it (`test_complete_with_nothing_shown_yet_does_not_stop_the_scan`).
+not stop it.
 
 ### What backs a statement, and what is shown
 
@@ -185,8 +185,7 @@ checked beyond these rules:
 
 A quote is matched without regard to case and white space, after one layer of
 wrapping quotation marks is taken off, and against the excerpt it names only: a
-quote that stands in another excerpt of the batch does not back this statement
-(`test_a_quote_that_stands_in_another_shown_passage_does_not_back_this_statement`).
+quote that stands in another excerpt of the batch does not back this statement.
 Whether a statement says what its quote says is reading, not a check. A crop
 named by its block id is found with or without the brackets it was shown in.
 
@@ -196,8 +195,7 @@ an object), `no_source` (the `index` is no integer, a digit written as text is
 none, or it names an excerpt that is not in this batch), `quote`, `image` and
 `run`. Every statement the model wrote is exactly one of shown and dropped, so
 `statements_made` is `statements_shown` plus `statements_dropped`, and all three
-count statements, not batches and not citations
-(`test_every_drop_reason_is_reached_and_every_statement_is_one_or_the_other`).
+count statements, not batches and not citations.
 
 What the reader is told is the count and nothing finer. The app puts one
 sentence directly under the answer, "n of m statement(s) removed" in the
@@ -223,8 +221,7 @@ Every visual citation is then re-read in a focused, single-image call,
 first pass often misreads a chart (`llm_client.py:641-683`,
 `answer.py:357-369`). The sentence of the focused call is the statement: it
 replaces the text and the quote of every statement that stands on the citation,
-and the model's first wording of it is not shown
-(`test_the_focused_reread_is_the_statement_and_the_citation`). A read-off that
+and the model's first wording of it is not shown. A read-off that
 cannot be made, because the crop cannot be read, its reply stayed unreadable or
 its reading came back blank, leaves the reading the batch gave, and an
 unreadable or blank reply is left in the faults.
@@ -234,8 +231,7 @@ followed by its `[n]`; two or more are a list, one `- statement [n]` line each,
 in the order they were made. A statement read off a picture has to say so: where
 a visual statement does not carry the profile's `READOFF_MARKER` (compared
 without regard to case), the profile's `READOFF_NOTE` is added once, under the
-answer and under `answer_text`
-(`test_the_readoff_note_is_added_once_when_a_visual_statement_lacks_the_marker`).
+answer and under `answer_text`.
 `answer_text` is the same statements without list marks and numbers: what the
 history of a follow-up and a comparison are given.
 
@@ -250,8 +246,7 @@ provider, or `LLM_SCHEMA=all`), `format_as_json` returns `None` and notes the
 fault `json_format: not_asked`; where its reply stays unreadable it raises
 `ReplyError`, which the turn catches, with the request `json_reply` in the
 faults. In both cases the answer stays the checked prose, `as_json` is `False`
-and the citations keep their numbers
-(`test_where_the_json_cannot_be_made_the_prose_stays_and_says_why`). Every turn
+and the citations keep their numbers. Every turn
 is logged through `request_log.log_request` (`answer.py:447-452`).
 
 ### Reading a model's reply
@@ -265,32 +260,27 @@ that. The one request with no schema, the JSON answer above, asks for a JSON
 object and nothing more. Every request also carries `request_extras()`, the
 reasoning fields every stage sends: `chat_template_kwargs` with `enable_thinking`
 (`LLM_ENABLE_THINKING`, off by default) and `reasoning_effort`
-(`LLM_REASONING_EFFORT`, `low` by default)
-(`test_the_request_goes_out_with_its_grammar_and_the_extras_of_every_stage`).
+(`LLM_REASONING_EFFORT`, `low` by default).
 
 The reply is read by `docpipe.reading` (`reading.read`), and read strictly: it
 is exactly one JSON object and nothing else. No code fence and no `<think>`
 block is stripped, no object is cut out of surrounding text, no bracket is
-closed, and nothing is rescued from a reply that was cut off
-(`test_nothing_is_repaired`). The key the request needs has to be in the object
+closed, and nothing is rescued from a reply that was cut off. The key the request needs has to be in the object
 and of the kind its schema gives it (`replies.needs` says which: `statements`, a
 list, for the answer, or `action` where the model may ask for a calculation or a
 crop instead; `answer` of a closed question; `phrase`; `reading`; `comparison`).
 It has to be there also where its kind is any, as for the `answer` of a closed
 question, so a reply without it is not read as "no answer" but asked again, and
-ends as `ReplyError` with the cause `missing_key` where it stays missing
-(`test_a_closed_question_answered_with_no_answer_is_asked_again_not_read_as_none`).
+ends as `ReplyError` with the cause `missing_key` where it stays missing.
 A reply that cannot be read is classified by its cause: `cut_off`,
 `reasoning_only`, `empty`, `no_object`, `syntax`, `outside_text`,
 `not_an_object` or `missing_key` (`reading.CAUSES`, the harvest's own causes in
-its order, held against each other by
-`test_the_chat_and_the_harvest_agree_on_the_cause`).
+its order, held against each other by).
 
 A reply that is not the object is asked again at once with its cause named
 (`llm_client._chat_json`, `llm_client.py:355-403`): the same single user turn
 with the profile's sentence for the cause appended, as one more text part where
-the turn carries images, and no assistant turn echoed
-(`test_the_correction_rides_along_with_the_images_of_the_request`). There is no
+the turn carries images, and no assistant turn echoed. There is no
 pause for this. A failure of the call itself, a server that does not answer or
 refuses the request, starts over from the original turn after a pause of two
 seconds times the attempt number, at most ten, and none after the last attempt.
@@ -311,8 +301,7 @@ is joined, the second half's run numbers shifted past the first's, up to
 every request that is no batch are asked again once with twice the tokens
 (`LLM_MAX_TOKENS` doubled). If that is cut off too, the request ends as a hole
 with the cause `cut_off`. A cut that was answered, by the halves or by the room,
-leaves nothing in the faults; one that was not leaves one fault for its request
-(`test_a_cut_that_is_answered_leaves_no_fault_and_one_that_is_not_leaves_one`).
+leaves nothing in the faults; one that was not leaves one fault for its request.
 
 A request that stayed unreadable is a hole and never "nothing found":
 `answer_from_sources` then returns no statements, `complete` false and the cause
@@ -539,9 +528,7 @@ both counted in statements. A row that did not count them, a turn that found no
 hits and every row written before the columns existed, holds `NULL`, which says
 "not counted" and not "none". A log made before the columns existed gets them
 when it is opened (`request_log.py:85-92`, `ALTER TABLE ... ADD COLUMN`) and
-keeps its rows; the oldest table gets both migrations in one open
-(`test_the_oldest_table_gets_both_migrations_in_one_open`,
-`test_a_log_made_before_the_statement_columns_gains_them_and_keeps_its_rows`).
+keeps its rows; the oldest table gets both migrations in one open.
 What `error_message` holds is under Failure modes.
 
 The logged `cache_hit` column is not the turn's own value: `_log` always
@@ -600,9 +587,7 @@ a turn there, told apart in the request log's `error_message` and to the reader
 The requests that stayed unreadable besides, and all of them where an answer
 exists, follow as `; n request(s) unreadable: request: cause, ...`, a kind
 counted with `xN` where it happened `N` times. An unreadable batch beside
-dropped statements stays in that line
-(`test_an_unread_batch_beside_dropped_statements_stays_in_the_log`,
-`test_unreadable_answer_is_not_nothing_found`). An unknown or missing crop id
+dropped statements stays in that line. An unknown or missing crop id
 comes back `None` and is logged (`answer.py:98-126`); a repeated id stops the
 loop and forces an answer (`llm_client.py:839-843`).
 
@@ -676,111 +661,6 @@ in for evidence; the code names "GmbH" as the concrete case the
 page: the corpus text is never byte-identical to what PyMuPDF reads off
 the page, and the floor is tuned to survive that drift, not to demand
 an exact match.
-
-## Verification
-
-The turn's core contract:
-`test_no_hits_returns_an_empty_answer`,
-`test_grounded_answer_carries_its_citation`,
-`test_an_ungrounded_answer_is_refused`,
-`test_visual_scopes_ask_for_a_caption_style_anchor`,
-`test_progress_is_optional_and_silent_by_default`
-(`tests/test_answer_core.py`).
-
-The recheck exclusion chain: `test_recheck_excludes_what_earlier_turns_read`
-(`tests/test_answer_core.py`);
-`test_batched_retrieval_matches_probe_by_probe`,
-`test_batched_retrieval_honours_a_prior_exclusion`,
-`test_no_probes_and_no_candidates_are_both_empty`
-(`tests/test_faiss_retrieve_many.py`).
-
-The sandbox context: `test_the_tables_the_compute_prompt_promises_reach_the_sandbox`
-(`tests/test_answer_core.py`).
-
-Crop requests:
-`test_the_model_can_ask_for_a_crop_and_gets_it`,
-`test_an_unavailable_crop_still_lets_the_model_answer`,
-`test_asking_twice_for_the_same_crop_stops_the_loop`,
-`test_the_action_is_not_offered_when_it_is_switched_off`
-(`tests/test_image_request.py`).
-
-Comparing documents:
-`test_every_selected_document_gets_its_own_row_and_its_own_retrieval`,
-`test_a_document_that_answered_nothing_keeps_its_row`,
-`test_the_comparison_call_never_sees_a_source_passage`,
-`test_one_answer_is_not_a_comparison`,
-`test_more_documents_than_the_budget_are_named_not_dropped_quietly`,
-`test_a_follow_up_searches_past_what_that_document_showed`
-(`tests/test_answer_core.py`).
-
-The picker's filters and its fallback:
-`test_current_documents_only_unless_asked`,
-`test_a_document_covering_several_values_matches_any_of_them`,
-`test_without_a_profile_the_generic_catalog_is_used`
-(`tests/test_catalog.py`).
-
-The word index and the merged search: `test_two_rankings_are_merged_by_reciprocal_rank`,
-`test_an_index_of_another_state_of_the_database_is_not_asked`,
-`test_over_the_whole_corpus_only_current_documents_answer`,
-`test_without_a_word_index_the_result_is_the_search_by_meaning`
-(`tests/test_hybrid_search.py`). The values route:
-`test_a_coordinate_the_question_does_not_name_narrows_nothing`,
-`test_an_answer_outside_the_list_is_no_answer`,
-`test_no_harvest_no_route_and_no_question_asked`
-(`tests/test_values_route.py`).
-
-The wording contract: `test_a_profile_that_answers_provides_all_of_it`
-(`tests/test_wording.py`); the reading table of every profile:
-`test_every_profile_says_every_sentence_with_the_same_names`
-(`tests/test_reading_wording.py`). The search anchor is the sentence the model
-wrote: `test_the_search_phrase_is_the_sentence_the_model_wrote`
-(`tests/test_inference_app.py`).
-
-The statements and what backs them (`tests/test_chat_statements.py`):
-`test_one_fabricated_quote_removes_exactly_its_statement`,
-`test_a_short_real_substring_is_no_quote`,
-`test_a_read_off_is_backed_only_by_a_crop_that_was_attached`,
-`test_a_crop_that_was_asked_for_and_never_arrived_backs_no_statement`,
-`test_a_computed_statement_needs_a_run_that_ran_and_a_quote_of_its_inputs`.
-Each is a case that breaks the promise by construction: a fabricated quote, a
-substring too short to be a place, a crop that was never attached, a crop that
-never arrived, a run that ended in an error. Beside them:
-`test_a_computed_statement_is_shown_under_the_run_of_the_turn`,
-`test_a_later_batch_gets_only_the_checked_statements_as_prior`,
-`test_a_batch_whose_reply_could_not_be_read_was_not_examined`,
-`test_citations_are_numbered_in_order_and_one_per_source_quote_and_run`,
-`test_json_answer_is_shaped_from_checked_text_only`,
-`test_a_provider_that_takes_schemas_only_is_not_asked_for_the_users_json`,
-`test_compare_sees_only_checked_answers`,
-`test_a_cut_off_batch_is_halved_and_what_the_halves_say_is_joined` and
-`test_a_single_excerpt_gets_more_room_once_and_then_is_a_hole`.
-
-The reading of a reply and the faults (`tests/test_chat_reply.py`):
-`test_a_reply_that_is_not_the_object_is_asked_again_naming_the_cause`,
-`test_nothing_is_repaired`,
-`test_a_request_that_stays_unreadable_raises_with_its_cause_and_counts_attempts`,
-`test_a_server_that_does_not_answer_is_retried_after_a_pause`,
-`test_a_cut_off_reply_is_not_asked_again_as_it_stands`,
-`test_a_unit_that_cannot_be_split_gets_twice_the_room_once`,
-`test_unreadable_answer_is_not_nothing_found` and
-`test_an_honest_miss_is_not_a_fault`.
-
-The request log: `test_a_turn_logs_how_many_statements_it_made_and_how_many_were_dropped`,
-`test_a_new_log_has_the_columns_from_the_start`
-(`tests/test_request_log.py`).
-
-The graph route:
-`test_the_query_names_only_predicates_the_serializer_writes`,
-`test_the_trust_line_is_not_in_the_graph_and_is_recovered_from_the_text`,
-`test_a_value_without_a_trust_line_falls_back_instead_of_rendering`,
-`test_the_answer_space_is_the_specs_own_list`,
-`test_a_synonym_resolves_through_the_axis_not_by_string_match`,
-`test_unstated_leaves_the_axis_unbound`,
-`test_an_out_class_is_never_bound_as_a_coordinate`,
-`test_every_reason_the_route_gives_is_reached`,
-`test_every_fallback_reason_has_a_sentence`,
-`test_a_fragment_without_its_prefix_header_is_refused_on_load`
-(`tests/test_kg_route.py`).
 
 ## Modules
 

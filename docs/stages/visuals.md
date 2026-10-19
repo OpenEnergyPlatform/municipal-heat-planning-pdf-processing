@@ -369,98 +369,10 @@ ladder goes by `finish_reason` and not by what the text looks like; the detector
 of empty-cell runs, `VLM_RUNAWAY_CELL_RUN`, was removed. A harder penalty
 ladder, 1.4 then 1.8, was tried and reverted: at 1.8 the pipe token is
 penalised so hard that a table is barely writable (`config.py`, comment above
-`RETRY_PENALTIES`); `test_no_stop_sequence_is_sent` holds that no stop sequence
+`RETRY_PENALTIES`) holds that no stop sequence
 is sent. Every profile
 that ships a `profile.py` states a positive context budget when its config
-module is imported in a subprocess and asked for it
-(`test_a_profile_states_a_usable_context_budget`,
-`tests/test_every_profile_loads.py`).
-
-## Verification
-
-`tests/test_qa.py` pins the QA gate: salient tokens, coverage on a full and
-partial match, coverage reported as unknown when it cannot be assessed,
-duplication, consecutive-row dedup leaving non-adjacent duplicates alone,
-and `assess`'s pass and fail boundaries. `tests/test_vision.py` pins base64
-image encoding, the model-availability check, `call_vision`'s happy path, and
-that the schema goes out as the grammar under its own name
-(`test_call_vision_sends_base64_image_and_the_schema_as_grammar`,
-`test_every_reply_is_sent_under_its_own_name`,
-`test_a_request_without_its_reply_schema_is_not_made`). It pins the strict
-reading too: a reply wrapped in prose is asked again with its cause, a fence, a
-think block or a second object is not unwrapped, a missing or non-text key is
-`missing_key` and not empty content, an empty string is an answer, four
-plain-text answers end as a hole with no second request, a cut envelope is
-never content, and an error of the stage's own after the reply is a hole named
-`error` and not an outage (`test_a_reply_wrapped_in_prose_is_asked_again_with_its_cause`,
-`test_a_fence_a_think_block_or_a_second_object_is_not_unwrapped`,
-`test_a_reply_object_without_its_key_is_a_missing_key_not_empty_content`,
-`test_an_empty_string_is_an_answer`,
-`test_four_plain_text_answers_end_as_a_hole_and_no_second_request_is_made`,
-`test_a_cut_envelope_is_never_content`,
-`test_an_error_of_our_own_after_the_reply_is_a_hole_and_not_an_outage`;
-`test_the_old_readers_and_the_plain_text_request_are_gone` holds that the
-removed names are gone). `tests/test_vision_retry.py` pins the retry wait and
-what the last attempt makes of the item: a refused 4xx does not sleep and is not
-retried, a busy or broken server is waited out on 429, 500 and 503 and ends as
-a hole that says it did not serve, the last attempt decides the cause, and a
-reply that cannot be read retries at once. `tests/test_vision_cut_off.py`
-covers the cut-off reply: it restarts from the original prompt with the next
-penalty and, where the window is not known, a limit of twice what the request
-asked for, a second cut-off and a cut-off on the last attempt are a hole, a cut reply is never content whatever it
-holds, a closed object with empty cells that ended normally is read and not
-retried, and the context budget counts one reply
-(`test_the_retry_after_a_cut_gets_twice_the_room_where_the_window_is_not_known`,
-`test_the_context_budget_counts_one_reply`). `tests/test_room.py` pins the room
-itself: the smaller of twice and the reply plus what the window leaves, a hole at
-once where the window leaves no more room, twice where the window is not known,
-a hosted model that reports its window held to it, the budget of stage 5 as the
-prompt, the image and one reply, a server that serves exactly the budget taken
-and one token under it refused, the log of the further attempt naming both sizes
-in tokens, the `vlm_why` description in the schema allowing for a hole after a
-smaller request or none, and every request of the stage carrying its budget
-(`test_the_room_is_the_smaller_of_twice_and_the_reply_plus_what_is_left`,
-`test_a_window_that_leaves_no_more_room_makes_the_unit_a_hole_at_once`,
-`test_a_server_that_reports_no_window_gives_twice_the_room`,
-`test_a_hosted_model_that_reports_its_window_is_held_to_it`,
-`test_the_budget_of_stage_five_is_the_prompt_the_image_and_one_reply`,
-`test_stage_five_takes_a_server_that_serves_exactly_its_budget`,
-`test_stage_five_refuses_a_server_one_token_under_its_budget`,
-`test_the_log_of_the_further_attempt_says_both_sizes_in_tokens`,
-`test_the_schema_does_not_say_a_cut_off_item_had_twice_the_room`,
-`test_every_request_of_the_visuals_stage_carries_the_budget_of_that_stage`).
-`tests/test_visuals_holes.py` covers the hole end to end: a table or a figure
-that could not be read is an item with its cause and no second request fills
-it in, a QA retry that is a hole keeps the first attempt, the summary line says
-what has no content, a document with holes is written and the next run asks
-only those, a crash of our own is counted as a hole named `error`, a run with
-holes exits as it did, and an item an older run stored as plain text is said
-once and asked again only with `--force-stale`. `tests/test_process.py` pins
-the workers: a missing image
-counted as skipped rather than failed, a QA retry that recovers, a
-persistent QA failure
-flagged, a coverage failure the retry fixes, adjacent duplicates left
-untouched on a pass, `source_text` stripped, and which caption
-instruction is chosen. `tests/test_imageprocessing_pipeline.py` pins the
-concurrent run end to end: every item enriched, the cache reused with the
-client never created, `source_text` never leaking on a worker crash, and a
-dry run writing nothing. `tests/test_imageprocessing_config.py` pins that
-the system prompts are injection-hardened and that a table's temperature is
-lower than a figure's. `tests/test_imageprocessing_models.py` pins the
-`EnrichedTable`, `EnrichedFigure` and `ProcessingStats` shapes.
-`tests/test_stage_preflight.py` pins that the visuals command hands the
-preflight its own two schemas, that a server that refuses the figure schema
-ends the run before the first document, and that a dry run asks the server
-nothing. `tests/test_prompts.py` checks that `visuals/table_system`, one of this
-stage's prompt ids, resolves for the kwp profile, and that a prompt id a
-profile lacks fails by name rather than falling back to another project's
-text. All seven of the stage's `PROMPT_IDS` are exercised through their readers
-instead: `config.py` reads each through a `prompts.per_profile` function on
-first use, and `tests/test_every_profile_loads.py` asks a subprocess for
-every one of them per profile, in `test_a_profile_loads_every_config_module`
-and `test_a_profile_states_a_usable_context_budget`. `tests/test_segment_bbox.py`'s
-`test_imageprocessing_passthrough_preserves_bbox` checks that a `bbox`
-survives this stage unchanged.
+module is imported in a subprocess and asked for it.
 
 ## Modules
 

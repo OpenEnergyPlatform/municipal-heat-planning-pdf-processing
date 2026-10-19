@@ -38,8 +38,7 @@ of English documents, with no subject. It reads a folder of PDFs
 wording tables (the chat's in `inference.py`, the sentences a model hears when
 its reply was not the one JSON object in `reading.py`) and a catalog that
 filters by subfolder, and has no extraction spec. `kwp` and `scenarios` both
-extend it, and a test holds that each writes every part itself, so no English
-prompt ever stands in for a missing German one.
+extend it and write every part of their prompts themselves.
 
 `kwp` covers German municipal heat plans, a corpus of
 801 documents at the point its `column_layout` comment was written
@@ -79,12 +78,7 @@ module it imports; an unknown name raises `LookupError` listing the
 profile directories that exist (`docpipe/profile.py:356-372`). Nothing
 under `docpipe/` imports a profile itself: its own docstring states the
 rule in one line, "the core never imports a profile; it receives one"
-(`docpipe/profile.py:6`), and `tests/test_architecture.py` holds it
-mechanically. `test_core_imports_neither_profiles_nor_streamlit` walks the
-AST of every `.py` file under `docpipe/` (`ast.walk`, so a nested import
-counts as well as a module-level one) and fails at the exact line of any
-`import profiles...` or `import streamlit...`
-(`tests/test_architecture.py:25-32,28-35`).
+(`docpipe/profile.py:6`).
 
 Five entry points, preprocessing, refinement, visuals, extraction, and
 chunking, reach `load_profile` through `resolve_profile(args)` rather than
@@ -152,29 +146,23 @@ prompts, below).
 Which of the two a caller uses is a choice, not a fixed rule.
 `docpipe/inference/kg_route.py`'s `hooks()` reads `kg.VALUE_QUERY` through
 `component`, not `require`, so a profile with no answerable graph
-(`scenarios`) is not forced to provide one; its own comment names why: "a
-require with two constant arguments is read by test_architecture as a
-demand on EVERY profile" (`docpipe/inference/kg_route.py:98-99, 104`).
+(`scenarios`) is not forced to provide one; an absent one is no failure there.
 `preprocessing.py`'s constants, by contrast, are all read through
 `require` or `profile_value`, so their absence is a hard failure for any
 profile the pipeline runs text through.
-
-That comment points at the fourth and last of `tests/test_architecture.py`'s
-checks. The other two share the same gate: they run only for a profile
-whose `prompts/` directory already holds one `.md` file (`_profile_homes()`,
-`tests/test_architecture.py:98-101`). The first finds every prompt id the
+ The other two share the same gate: they run only for a profile
+whose `prompts/` directory already holds one `.md` file (`_profile_homes()`). The first finds every prompt id the
 core's own source asks for, by walking `docpipe/`'s AST for literal
 arguments to `prompts.load()` / `.text()` or a module constant named
 `..._PROMPT_ID`, and checks each exists on disk under that profile's
 `prompts/`, excusing an id under `extraction/` when `extraction.SPEC_PATH`
 is absent and one under `kg/` when `kg.VALUE_QUERY` is absent
-(`OPTIONAL_STAGES`, `tests/test_architecture.py:84-95`). The second checks
+(`OPTIONAL_STAGES`). The second checks
 the reverse: every `.md` file on disk names an id the core actually
 requested. The fourth check is what `kg_route.py` is written around: every
 `(module, attr)` pair reached through **two literal strings** passed to
 `require()` or `profile_value()` anywhere under `docpipe/` must resolve to
-something other than `None`, for every profile `_profile_homes()` finds
-(`tests/test_architecture.py:133-171`). It is a syntactic scan, and that
+something other than `None`, for every profile `_profile_homes()` finds. It is a syntactic scan, and that
 literalness is its whole limit: `docpipe/inference/wording.py:120` calls
 `profile.require("inference", attr)` with `attr` a variable, so a profile
 missing `PHRASES` is invisible to it and surfaces only as a
@@ -209,10 +197,7 @@ byte, which they inherit: `visuals/caption_keep` for kwp, and for scenarios that
 one and `inference/json_format`. Inherited means the built-in
 file, so the text read, its hash and the stamp are what the copies had, and
 `docpipe doctor` says `31 prompt file(s), 30 of its own` for kwp and `31 prompt
-file(s), 29 of its own` for scenarios. The list is held by
-`tests/test_default_profile.py` (`INHERITED`): a built-in prompt that is neither
-on it nor a file of the profile fails, and so does a listed one that returns as a
-file of the profile. A later change to one of the two built-in prompts on the
+file(s), 29 of its own` for scenarios.  A later change to one of the two built-in prompts on the
 list therefore reaches the profiles that inherit it, and its sha256 is entered
 in `BEFORE` there; for `visuals/caption_keep` a changed hash also makes stage 3
 say "described with older prompts" for stored documents. A prompt of the
@@ -271,8 +256,7 @@ list for every closed frame coordinate, and the built-in profile says
 `"{slot}_options"`, one list per coordinate. The German frame template names the
 key through the fact `frame_options`, so the frame prompts of `kwp` and
 `scenarios` say `"scenarios"` as the profile's phrase does, and their
-`frame_not_an_option` phrase names `"scenarios"` in its own words; a test holds
-the three together. The built-in frame prompt names
+`frame_not_an_option` phrase names `"scenarios"` in its own words. The built-in frame prompt names
 no key ("the list the request gives for `scenario`"), and its
 `frame_not_an_option` phrase is handed the key that was sent, as `{options}`. A
 profile that extends the built-in one and words only `frame_options`
@@ -425,28 +409,17 @@ word" (see [Running the pipeline](running.md)).
    (empty) and `profiles/<name>/profile.py` exporting
    `PROFILE = Profile(name="<name>")`. Verify with
    `python -c "from docpipe.profile import load_profile;
-   print(load_profile('<name>').display_title)"`. No test in
-   `tests/test_architecture.py` notices this profile yet: `_profile_homes()`
-   only picks up a profile whose `prompts/` directory holds a `.md` file,
-   and this one has none.
+   print(load_profile('<name>').display_title)"`.
 
 2. **Register documents.** Add `source.py` with a `SOURCE` class
    implementing `docpipe.ingest.models.Source`
    (`documents(connection)`, `after_document(connection, doc)`), and, if
    `SourceDoc.meta` carries fields, a `schema.sql` with a `DocumentMeta`
-   table plus a `store.py` for the SQL that fills it. Nothing in
-   `tests/test_architecture.py` checks this; a missing `SOURCE` surfaces
-   only when `docpipe ingest` runs (`docpipe/ingest/cli.py`; the older
-   `scripts/fileprocessing/pipeline.py` re-exports it) and
-   `profile.component("source", "SOURCE")` comes back `None`.
+   table plus a `store.py` for the SQL that fills it.
 
 3. **Teach text extraction the corpus's language, together with the first
    prompt file.** Add `preprocessing.py`'s constants (the table
-   above), and one file under `prompts/`, because
-   `test_a_profile_provides_every_component_the_core_requires` only runs
-   once `_profile_homes()` sees this profile. From here,
-   `pytest tests/test_architecture.py -k <name>` reports every missing
-   preprocessing constant and prompt id together.
+   above), and one file under `prompts/`.
 
 4. **Add the prompts each stage asks for.** The id set is fixed by the
    core's own code, not invented per profile; copying an existing
@@ -460,9 +433,7 @@ word" (see [Running the pipeline](running.md)).
    that extends `default` has the built-in ones and writes only the ones it
    words differently). `preprocessing/page_transcribe.md` is
    exercised only when a PDF carries no text layer, but `preprocessing`
-   is not one of `OPTIONAL_STAGES`' two keys, `extraction` and `kg`
-   (`tests/test_architecture.py:84-85`), so
-   `test_a_profile_provides_every_prompt_the_core_loads` demands it on
+   is not one of `OPTIONAL_STAGES`' two keys, `extraction` and `kg`, so the stage needs it on
    disk for every profile once its `prompts/` directory holds any `.md`
    file, regardless of whether its corpus has a textless PDF.
 
@@ -470,9 +441,8 @@ word" (see [Running the pipeline](running.md)).
    (`PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`) and the ten
    `prompts/inference/*.md` the answer loop loads (`llm_client.PROMPT_IDS`), then
    `catalog.py` if the generic picker (filename, published date, current or superseded) is not enough. A
-   missing one of these three `inference.py` attributes is the case named
-   above where `test_architecture.py` cannot catch it: it passes `pytest`
-   and fails only at the answer app's first real question.
+   missing one of these three `inference.py` attributes fails only at the
+   answer app's first real question.
 
 6. **Add extraction, if this corpus should feed a knowledge graph.** Write
    `extraction_spec.json` by hand, add `extraction.py` with `SPEC_PATH` at
@@ -499,49 +469,10 @@ word" (see [Running the pipeline](running.md)).
    profile in effect, and a profile may be named by its directory, as for
    `--profile`. See [the extraction stage](stages/extraction.md).
 
-Throughout, `pytest tests/test_architecture.py -k <name>` is the one
-command that reports what is missing by name rather than by where it
-crashes later. Running the suite in full, at the end, is still necessary:
-neither it nor `docpipe preflight` replaces the profile's own tests,
-and `docpipe.extraction.schema`'s generator and `docpipe.extraction`'s
-`--serialize` path each read a profile's checked-in files directly.
-
-## Verification
-
-A misconfigured profile fails more than one way. `Profile.__post_init__`
-raises `ValueError` on an unusable `name` or unknown `column_layout`
-(`docpipe/profile.py:188-192`), pinned by `tests/test_profile.py`'s
-`test_rejects_unusable_names` and `test_rejects_unknown_column_layout`.
-`load_profile` raises `LookupError` for a name given nowhere
-(`docpipe/profile.py:359-361`) or unknown on disk
-(`docpipe/profile.py:370-372`), pinned by
-`test_no_profile_is_an_explicit_error` and
-`test_unknown_profile_lists_the_available_ones`; it also raises
-`ValueError`, unpinned by any test, when `PROFILE.name` does not match its
-directory (`docpipe/profile.py:377-378`). `Profile.require` and
-`profile_value` raise `LookupError` for a missing attribute or an unset
-`$DOCPIPE_PROFILE` (`docpipe/profile.py:261-271,401-402`), the case
-`kg_route.hooks()` turns into its own `LookupError` for a partial
-`kg.VALUE_QUERY` route (above). `resolve_profile` raises `SystemExit` for a
-profile named after a stage was imported under another one, when the named
-profile ships prompts (`docpipe/profile.py:466-473`), pinned by
-`test_late_profile_is_refused_when_it_overrides_prompts`; `require_profile`
-raises it for no profile at all (`docpipe/profile.py:481-484`), pinned by
-`test_a_stage_that_cannot_run_without_a_profile_says_which_there_are`
-(`tests/test_entry_points.py`). Two entry points
-add their own `SystemExit`, via `parser.error()` for extraction:
-`docpipe/ingest/cli.py:69,78-79` for a missing `SOURCE` or
-`backfill_meta`, and
-`docpipe/extraction/runner.py:5379-5383,5433-5436` for a missing
-`SPEC_PATH` (under `--serialize`, only when `make_serializer` is missing too).
-
-A parts file that cannot be composed fails when its prompt is loaded and not
-when a request is sent: `PromptPartsError`, pinned case by case in
-`tests/test_prompt_parts.py`, among them
-`test_a_missing_required_part_names_the_prompt_the_part_the_profile_and_both_files`
-and `test_a_part_the_template_does_not_know_is_refused_and_the_near_one_named`.
-That a profile declares its own language and inherits none is held by
-`test_a_profile_declares_for_itself_and_inherits_nothing_of_it`.
+Throughout, `docpipe preflight <name>` reports what is missing by name
+rather than by where it crashes later; `docpipe.extraction.schema`'s
+generator and `docpipe.extraction`'s `--serialize` path each read a
+profile's checked-in files directly.
 
 ## What `docpipe/profile.py` says
 

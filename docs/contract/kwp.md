@@ -57,8 +57,7 @@ read is settled by the row request, not a question of its own
 where a coordinate answers from a closed list: every class it may
 resolve to, with its ontology uri, its definition and the corpus
 spellings recorded for it, collapsed so a long list does not crowd the
-page, matching the spec both were built from
-(`tests/test_extraction_schema.py::test_every_coordinate_a_row_carries_is_described`).
+page, matching the spec both were built from.
 `x-kg` is the same spec `kg` block on two different objects: an axis
 that mints its own edge (`docpipe/extraction/schema.py:412`), or the
 row itself rather than the `parameter` coordinate
@@ -91,12 +90,10 @@ The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone: `stale` compares the `parameter/`, `value/`,
 `axis/` and `slot/` families (`QUESTION_KEYS`,
 `docpipe/extraction/runner.py:4372`), and the whole-file sha `spec`
-only for a stamp that carries none of them (`COARSE`, `:4366`;
-`tests/test_extraction_runner.py::test_a_stamp_from_before_the_detail_is_stale_in_all_of_it`).
+only for a stamp that carries none of them (`COARSE`, `:4366`).
 `model`, `anchors`, every `extraction/*` prompt, `page_text_transcribed`,
 `review/*`, `question_text/*`, `docpipe` and `producers` are written into
-the stamp so a reader can place a harvest, and are never compared
-(`tests/test_extraction_runner.py::test_what_the_stamp_records_about_the_document_never_redoes_it`).
+the stamp so a reader can place a harvest, and are never compared.
 A stamp of an older release also carries the key `extraction/harvest`; the
 schema accepts it without requiring it, and a document whose stamp holds it
 stays current.

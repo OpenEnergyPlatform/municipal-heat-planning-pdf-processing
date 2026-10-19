@@ -194,9 +194,7 @@ as the profile's phrase does, and their `frame_not_an_option` phrase names
 before any field job is queued; a row that already answered better keeps
 its own reading. A passage that prints several pairs, a table with a
 column per year, is read under each of them, and each request takes its
-own pair's column
-(`test_a_passage_of_several_pairs_is_read_under_each_of_them`,
-`tests/test_extraction_frame.py:651`). A passage that prints none of a
+own pair's column. A passage that prints none of a
 request's pair used to give no row at all: its claims were refused as
 `passage is not of this pair` (`rows_from_reply`, `pipeline.py:617`). Two
 helpers get a look at the claim first now: `pair_of_claim`
@@ -439,7 +437,7 @@ the sweeper (what `make_sweeper` returns; `Sweeper` also has the two halves,
 `own` and `search`) for each rebuilt batch, and the pass for a new parameter
 calls `harvest_all`, whose harvester is the whole `harvest`, so every batch
 walks all three stages of a coordinate in its own turn. `run_document`
-and `pipeline.harvest_document`, the serial path the tests use, do the same.
+and `pipeline.harvest_document`, the serial path, do the same.
 Only the harvest of `runner.main` uses the two halves, and it uses them for
 the batches of one document at a time.
 
@@ -583,9 +581,7 @@ entry fails once.
 holding every answer to the two clauses the value's own quote is held to:
 its cited passage sits verbatim in a shown source, and it contains the
 answer, with a floor of `MIN_QUOTE_CHARS` so that a quote names a place.
-Those are the check for a quote (`pipeline.py:1101-1139`;
-`test_a_coordinate_is_dropped_for_the_agreed_reasons_and_no_other`,
-`tests/test_extraction_reasons.py:115`). Without its own `value_raw`
+Those are the check for a quote (`pipeline.py:1101-1139`). Without its own `value_raw`
 wording, a closed-list answer's quote is checked against every spelling the
 spec lists for the chosen option, not only its label: the real classes
 carry the ontology's English names, which stand in no German plan, and
@@ -1174,7 +1170,7 @@ names "rule 2" or "rule 3" of the field prompt means the number in the composed
 text of those two profiles. The German and the English template of a name list
 the same parts, blocks and rules, apart from the blocks only the English
 template has (`images` and `quantities_number` of the rows template,
-`options_explained` of the field template); `tests/test_contract_templates.py`
+`options_explained` of the field template)
 lists those in `EN_ONLY` and holds the list in both directions.
 
 Two places of the field template say that what is found comes as the next
@@ -1376,9 +1372,6 @@ set by the field prompt; for scenarios 37,426 tokens per request, set by the
 rows prompt. Both numbers are those of the composed prompts. A
 profile with several long lists, as scenarios has, can therefore need a
 window above the 32768 that `EXTRACT_MAX_MODEL_LEN` falls back to.
-`tests/test_extraction_runner.py` states the ceiling a profile may ask
-for, 40960, and keeps kwp within 32768
-(`test_every_profile_fits_the_window_it_will_be_served`).
 
 How many passages one rows request reads comes from the rows prompt alone
 (`runner.batch_sources_for`): its `max_tokens` bounds the reply, and the
@@ -1509,266 +1502,6 @@ never sends leaves no trace, so the row is offered again later.
   does not hold and, while the scenario axis still gated a row, 2,510
   more for not being the target scenario (`profiles/kwp/extraction.py:11`).
 
-## Verification
-
-`tests/test_extraction_spec.py` pins spec validation and the fingerprint
-functions the stamp is built from. `tests/test_extraction_pipeline.py`
-pins the retrieval plan and routing, among them
-`test_the_plan_asks_retrieval_once_and_not_until_the_document_is_gone`,
-`test_every_table_is_planned_whether_or_not_a_probe_ranked_it` and
-`test_only_verified_values_become_the_next_batch_s_prior`.
-`tests/test_extraction_fieldwise.py` pins the field sweep and its two
-checks: `test_an_answer_whose_evidence_is_not_in_the_source_is_not_written`,
-`test_a_quote_that_does_not_contain_the_answer_is_not_evidence`,
-`test_the_field_prompt_states_the_two_checks_and_no_other`,
-`test_a_read_coordinate_is_not_overwritten_by_a_later_window`,
-`test_a_row_outside_the_slice_is_not_asked_for_its_other_axes`,
-`test_a_sweep_that_ran_out_of_budget_still_reads_the_rest_of_the_plan`,
-`test_the_last_stage_keeps_its_allowance_when_it_is_larger_than_the_first`,
-`test_the_sweep_starts_again_where_it_last_read_instead_of_striking_it_off`,
-`test_the_sweeper_is_the_one_the_harvest_uses` and, for the lists a document
-closes and the year of a spec that measures nothing,
-`test_a_documents_own_list_is_what_the_field_request_offers`,
-`test_a_year_is_a_wording_where_nothing_is_measured` and
-`test_a_follow_up_batch_reads_against_the_same_document`.
-`tests/test_extraction_document_search.py`, 33 tests, pins the document's search
-over a stubbed asker. A batch's own stage asks what it asked before
-(`test_a_batchs_own_stage_asks_what_it_asked_before`), and what the batches left
-open is searched once with their rows together
-(`test_what_the_batches_left_open_is_searched_once_with_their_rows_together`). A
-row waits at the unit, the parameter or a gate coordinate that is still open
-(`test_a_row_whose_unit_is_open_waits_for_the_unit_search`,
-`test_a_row_whose_parameter_is_open_waits_for_the_parameter_search`,
-`test_a_row_waits_at_a_gate_coordinate_that_is_still_open`). The rest stage has
-its allowance in windows and in requests
-(`test_the_rest_stage_gets_its_allowance_once_for_every_batch_with_an_open_row`,
-`test_the_rest_stage_never_sends_more_requests_than_the_batches_own_windows`),
-and a document read to its end gives `unstated` where a cut one gives
-`exhausted`
-(`test_a_document_read_to_its_end_is_unstated_and_a_cut_one_exhausted`). The
-passes over a stored harvest keep the three stages per batch
-(`test_the_sweeper_of_a_stored_harvest_walks_every_stage_for_its_batch`,
-`test_the_pass_for_a_new_parameter_asks_each_rebuilt_batch_in_whole`). A stop,
-one that comes with the last request of the step, and a raise where rows wait
-are each pinned
-(`test_a_stop_during_the_document_step_ends_it_and_says_so`,
-`test_a_stop_that_comes_with_the_last_request_of_the_step_is_a_stop`,
-`test_a_search_that_rows_wait_on_fails_the_document_when_it_raises`), and so is
-that a document whose step did not finish is not written
-(`test_a_document_whose_step_did_not_finish_is_not_written`). The file pins
-what the step decides and never the wording of a log line.
-`tests/test_extraction_frame.py` pins the frame's two quotes per pair and
-its projection onto rows: `test_every_half_of_a_pair_quotes_for_itself`,
-`test_a_frame_reading_may_quote_a_heading_anywhere_in_the_plan`,
-`test_a_passage_of_several_pairs_is_read_under_each_of_them`,
-`test_every_row_gets_the_year_of_its_own_pair`,
-`test_a_coordinate_the_row_itself_answered_is_not_overwritten`,
-`test_a_search_that_never_completes_says_exhausted_rather_than_complete`,
-and, for the claim a request's own pair does not cover,
-`test_a_quote_that_names_a_pair_itself_beats_the_title`,
-`test_a_claim_that_names_two_pairs_stays_refused` and
-`test_a_claim_that_names_no_pair_stays_refused`.
-`tests/test_extraction_verify.py` pins `canonical_number`, quote repair,
-the evidence tiers, and, for the fold `quote_in` and `value_in_quote`
-share, `test_a_ligature_and_a_decomposed_umlaut_are_the_letters_they_are`,
-`test_the_quotation_marks_of_a_plan_are_quotation_marks` and
-`test_the_year_of_a_dotted_date_is_a_number_of_the_quote`.
-`tests/test_extraction_trust.py` pins the level
-cutoffs. `tests/test_extraction_reasons.py` pins that a coordinate is
-dropped for the agreed reasons and no other, that every reason a claim is
-refused for, in `pipeline.py`, `runner.py` and `topup_parameter.py`, is a
-published one, and that no closure in the package reads a name bound after
-it. `tests/test_extraction_schema.py` validates
-that a harvest, a stamp and a trace event all conform to the published
-contract. `tests/test_extraction_unserved.py` pins the 429 and 5xx rule:
-`test_a_429_and_a_5xx_are_the_servers`,
-`test_any_other_4xx_refuses_the_request_itself`,
-`test_a_passage_the_server_did_not_serve_is_named_as_that`,
-`test_the_last_word_decides_what_a_passage_ended_on`,
-`test_a_refused_passage_stays_the_models_and_is_asked_once`,
-`test_a_coordinate_the_server_did_not_serve_is_counted_on_its_document`,
-`test_the_runs_own_anchors_are_counted_under_no_document`,
-`test_one_unserved_passage_withholds_the_stamp`,
-`test_an_unserved_request_of_any_kind_withholds_the_stamp`,
-`test_a_withheld_stamp_takes_the_earlier_one_with_it`,
-`test_the_one_document_path_withholds_the_stamp_as_well`,
-`test_a_document_with_an_unserved_request_is_harvested_again`,
-`test_a_forced_run_that_loses_a_request_is_not_hidden_by_the_old_stamp`,
-`test_a_lost_search_sentence_leaves_its_document_unstamped` and
-`test_nothing_is_harvested_without_the_anchors_the_server_did_not_serve`.
-`tests/test_extraction_runner.py`, 129 tests, pins `runner.py`
-itself: among them `test_a_document_the_server_never_answered_for_is_not_stamped`,
-`test_a_document_no_reply_ever_came_back_for_is_not_stamped`,
-`test_the_image_root_follows_the_pdf_root`,
-`test_the_context_budget_holds_a_full_window_and_a_crop`,
-`test_the_context_budget_counts_every_list_a_reading_request_carries`,
-`test_the_context_budget_counts_the_widest_single_parameter`,
-`test_figures_and_tables_keep_their_share_of_the_plan`,
-`test_the_share_is_room_held_and_not_room_promised`,
-`test_what_is_taken_stays_in_the_order_it_was_ranked`,
-`test_the_same_reading_written_twice_is_one_reading`,
-`test_a_stop_returns_at_once_and_names_the_documents_left_open`,
-`test_sigterm_sets_the_stop_instead_of_killing_the_run`,
-`test_each_unreadable_reply_raises_the_temperature_of_the_retry` and, for
-the lists a document closes,
-`test_the_value_request_offers_the_documents_own_lists` and
-`test_the_halves_of_a_cut_off_request_keep_the_documents_lists`.
-`tests/test_extraction_ranking.py` pins the fused ranking behind the
-retrieval plan: `test_the_structural_floor_is_every_table_and_every_figure`,
-`test_a_table_whose_content_is_gone_is_skipped_and_not_planned_empty`
-and `test_the_plan_is_built_from_the_anchors_and_not_from_the_templates`.
-`tests/test_extraction_dry_run.py` pins the spec-to-schema round trip, the
-context budget against the batch size and, in the gate that runs before a
-harvest, the lists a document closes:
-`test_every_example_survives_its_own_round_trip`,
-`test_the_answer_budget_and_the_batch_size_agree` and
-`test_the_lists_a_document_closes_reach_its_requests_and_their_check`.
-`tests/test_extraction_trace.py` pins the trace file itself:
-`test_switched_off_it_writes_nothing_at_all`,
-`test_a_document_harvested_twice_does_not_leave_two_traces_in_one_file` and
-`test_a_second_trace_writes_under_its_own_directory`.
-`tests/test_extraction_document_lists.py`, 14 tests, pins the lists a
-document closes from the copy of the spec to the passes over a harvest on
-disk: `test_only_the_lists_differ_in_a_documents_spec`,
-`test_a_choice_outside_the_documents_list_is_not_taken_for_one`,
-`test_a_year_its_quote_does_not_print_is_dropped_before_it_is_asked`,
-`test_every_batch_of_a_document_reads_against_its_lists` and
-`test_a_recheck_leaves_a_document_whose_lists_cannot_be_closed`.
-`tests/test_preflight.py` builds a profile to break each promise of the
-preflight: `test_a_profile_without_a_spec_fails_on_that_and_is_told_what_drafts_one`,
-`test_the_spec_read_is_the_named_one_and_not_the_one_beside_the_profile`,
-`test_a_profile_with_neither_writer_nor_graph_block_fails`,
-`test_a_graph_block_the_generic_writer_refuses_fails_before_the_harvest`,
-`test_a_prompt_in_another_language_is_held_to_the_inherited_passage`,
-`test_a_check_that_cannot_be_read_is_named_and_not_run` and
-`test_a_profile_the_audit_cannot_finish_fails_and_the_others_are_printed`.
-`tests/test_extraction_wording.py` pins where the frame request puts a closed
-list: `test_a_profile_that_names_the_coordinate_keeps_two_lists_apart`,
-`test_the_german_frame_prompts_read_the_list_where_the_request_puts_it`,
-`test_the_built_in_frame_prompt_names_no_key_that_could_go_stale` and
-`test_a_project_words_the_key_of_the_list_itself`.
-The five prompts that are written in parts have a test file each, which states
-the promise of its prompt as one sentence in its docstring and tests every AND
-of it with a case built to break it: `tests/test_rows_prompt.py`,
-`tests/test_field_prompt.py`, `tests/test_frame_prompt.py`,
-`tests/test_review_prompt.py` and `tests/test_example_prompt.py`. Among them
-stand, for the sentences a profile words itself,
-`test_a_profile_without_numbers_keeps_what_it_said_of_figure_descriptions` and
-`test_scenarios_names_the_kinds_of_its_sources_in_its_own_words` (rows) and
-`test_scenarios_says_its_own_sentence_and_kwp_the_templates` (field).
-`tests/test_prompts_composed.py` holds the five prompts of each shipped profile
-together: composed in the profile's language, no mark of a template left in a
-text, no German in an English prompt, the passages the preflight asks for in the
-composed text, and a stamp written before the prompts were composed that makes
-no document stale (`test_no_document_of_a_stamp_from_before_is_stale`, over
-`tests/fixtures/prompt_shas_before_composition.json`) next to one whose
-question moved that still does
-(`test_a_stamp_from_before_whose_question_moved_is_still_stale`).
-`tests/test_contract_templates.py` holds the templates of the core in both
-languages, and `tests/test_prompt_parts.py` the loader (see [the core's
-modules](core.md)).
-
-For the five maintenance passes, `tests/test_extraction_recheck.py` pins
-`test_a_coordinate_its_quote_carries_survives`,
-`test_a_year_whose_caption_names_no_year_does_not_stay`,
-`test_a_coordinate_with_no_quote_at_all_does_not_stay`, and
-`test_the_stamps_go_with_the_rewrite` against
-`test_keeping_the_stamps_is_something_you_have_to_ask_for`.
-`tests/test_extraction_remap.py` pins
-`test_a_wording_the_new_list_knows_reaches_its_class`,
-`test_a_wording_in_no_list_keeps_the_reading_it_has`,
-`test_a_fully_remapped_answer_space_is_written_forward` against
-`test_a_space_the_pass_could_not_settle_stays_stale`, and
-`test_a_refusal_the_grown_list_might_place_keeps_its_space_stale`.
-`tests/test_extraction_topup.py` pins
-`test_only_a_coordinate_key_is_topped_up_and_the_rest_blocks`,
-`test_a_frame_coordinate_is_never_a_top_up`,
-`test_the_old_reading_comes_back_unless_the_new_state_is_better`,
-`test_a_row_whose_source_no_longer_carries_its_quote_is_left_alone`, and
-`test_the_top_up_writes_its_trace_beside_the_harvests_and_not_over_it` and
-`test_a_top_up_that_lost_a_request_keeps_the_old_stamp`.
-`tests/test_extraction_topup_parameter.py` pins the pass for a new parameter
-by a document that cannot be taken as well as by one that can:
-`test_new_is_told_from_reworded_by_the_stamp`, the stamps and the spec changes
-that must come out as no pass at all in
-`test_what_is_not_an_addition_is_left_stale_as_a_whole` (a reworded
-parameter, no stamp, an unreadable one, none with parameter keys, a renamed
-parameter, a reworded question or label, a list the spec no longer has) and
-`test_the_derivation_gate_blocks_what_changes_how_stored_rows_were_decided`;
-for what is written, `test_stored_lines_stay_byte_for_byte`,
-`test_the_refusals_of_the_first_pass_are_not_revisited_and_the_summary_says_so`
-and `test_the_stamp_carries_exactly_what_the_pass_answered_for`; for the
-request, `test_the_rows_request_and_the_search_are_for_the_new_parameter_alone`,
-`test_a_unit_of_a_stored_parameter_cannot_make_a_row_of_that_parameter` and
-`test_the_coordinates_are_asked_only_of_new_rows`; for the checks,
-`test_the_checks_are_the_harvests_and_no_others` and
-`test_the_new_pass_writes_no_reason_of_its_own`; for the frame,
-`test_the_pairs_of_the_stored_rows_are_handed_to_the_plan`,
-`test_an_appended_row_carries_the_index_its_pair_was_stored_under` and
-`test_a_profile_without_a_frame_hands_the_plan_no_pair`; and, for the
-document that was not read completely and the window between file and stamp,
-`test_a_pass_that_did_not_complete_leaves_file_and_stamp_untouched`,
-`test_a_stamp_that_could_not_be_written_after_the_file_is_completed_by_the_next_run`,
-`test_a_file_that_holds_the_state_line_but_no_stamp_key_makes_no_request`,
-`test_a_file_with_the_line_of_only_some_new_parameters_is_a_failure` and
-`test_a_second_run_changes_nothing`. Its two tests of the coordinate pass,
-`test_the_coordinate_pass_is_no_longer_blocked_by_the_new_keys` and
-`test_the_coordinate_pass_is_still_blocked_by_everything_else`, hold that
-`--top-up` leaves exactly the keys an addition explains and nothing else.
-`tests/test_extraction_topup_parameter_command.py` runs the pass through
-`runner.main`: `test_a_new_parameter_is_appended_by_one_command_and_a_second_changes_nothing`,
-`test_a_pass_whose_server_did_not_serve_ends_the_run_non_zero_and_writes_nothing`,
-`test_the_pass_is_not_combined_with_the_coordinate_pass`,
-`test_a_document_nobody_harvested_is_left_to_the_harvest` and
-`test_the_run_wires_the_pass_after_the_harvest_loop_and_keeps_the_top_up_branch`.
-`tests/test_extraction_plan_batches.py` pins `runner.plan_batches`, which the
-harvest and the pass share: the harvest's own call plans every parameter and
-numbers the pairs from zero
-(`test_the_harvests_call_plans_every_parameter_and_numbers_pairs_from_zero`),
-reads a passage no search kept under the pair it prints
-(`test_a_passage_no_search_kept_is_read_under_the_pair_it_prints`), never a
-kept one twice (`test_a_passage_a_search_kept_is_not_read_a_second_time`)
-and counts and traces the rest
-(`test_the_rest_is_counted_as_harvested_and_traced_as_rest`),
-the pass's call searches for the named parameter alone
-(`test_the_search_is_for_the_new_parameter_alone`) and keeps a stored pair
-under its index (`test_a_stored_pair_keeps_its_index_and_a_new_pair_takes_the_next_free_one`),
-and `runner.not_happened` names the three ways a reading does not happen
-(`test_not_happened_names_the_three_ways_a_reading_does_not_happen`).
-`tests/test_extraction_request_bytes.py` holds the rows request of a normal
-harvest and its reply grammar to the bytes captured before that code was
-shared, and its prompt to the sha256 of the composed rows prompt that was last
-decided on, for kwp and scenarios (`tests/golden/`;
-`test_a_normal_harvest_request_is_byte_for_byte_what_it_was`), and shows that
-the comparison can fail (`test_the_golden_file_can_fail`).
-`tests/test_extraction_requests.py` builds each of the six kinds of request a
-harvest sends (the rows, one field, the frame, the search sentence, the
-anchors and the second reading of a value) against a recording client and
-holds that each carries exactly the text of its own prompt and the
-temperature of that prompt's front matter, and that the rows request asks in
-the reply grammar it always did, to a digest
-(`test_a_request_carries_exactly_the_text_of_its_prompt`,
-`test_the_rows_grammar_is_the_one_it_was`); a builder that appends text to its
-prompt is found (`test_a_builder_that_appends_text_to_its_prompt_is_found`).
-`tests/test_legacy_stamp.py` holds that a stamp which still carries
-`extraction/harvest` is current and its document skipped, that no pass that
-writes into a stamp drops the key, that the stamp schema takes it without
-requiring it, and that the stamp a run writes today lacks it
-(`test_a_stamp_with_the_removed_prompt_is_current_and_its_document_skipped`).
-`tests/test_removed_harvest_path.py` holds that a row of the reply grammar has
-no form in which it carries its coordinates and that a run builds the one
-harvester there is
-(`test_a_row_of_the_reply_grammar_has_no_coordinates_of_its_own`,
-`test_a_run_builds_the_one_harvester_and_the_module_has_no_switch`).
-`tests/test_extraction_review.py` pins
-`test_only_the_values_nobody_can_stand_behind_are_reviewed`,
-`test_a_row_is_reviewed_once`,
-`test_a_corroborated_row_is_still_a_c`,
-`test_a_disagreement_is_a_reason_a_curator_can_count`,
-`test_the_limit_bounds_the_whole_run_and_not_each_document`,
-`test_a_row_is_read_again_against_its_documents_own_lists` and
-`test_a_document_whose_lists_cannot_be_closed_is_left_alone`.
-
 ## Modules
 
 `spec.py` loads and validates a profile's contract into `Spec`,
@@ -1794,7 +1527,7 @@ calls it to recompute a rewritten file's summary.
 `--top-up-parameters` produce, never aggregating anything itself; `schema.py` generates the
 published JSON Schema for a harvest line, a stamp and a trace event from
 the spec and from `trust.py`'s own constants, so the two cannot drift
-apart. Called by the tests, its own CLI entry point, `runner.py`'s
+apart. Called by its own CLI entry point, `runner.py`'s
 schema self-check, and `preflight.py`. `serialize.py`
 walks a harvest
 directory, keeps only the rows a run accepted (`collect`), and hands

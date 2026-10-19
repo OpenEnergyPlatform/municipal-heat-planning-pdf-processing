@@ -183,9 +183,7 @@ error raised anywhere (`docpipe/chunking/config.py:13` to `16`).
 - `ApiEmbedder.client()` builds `self._client` the same lazily-checked
   way, but with no lock: two threads calling `embed()` before any client
   exists could each construct their own `OpenAI` client
-  (`docpipe/embedding/api.py:43` to `47`), and no test exercises
-  concurrent calls on it the way
-  `test_the_local_backend_guards_its_lazy_load` does for `LocalEmbedder`.
+  (`docpipe/embedding/api.py:43` to `47`).
 - A single replica's forward pass raising inside `MultiGPUEmbedder.process()`
   is captured per thread; once every thread joins, the first captured
   exception is re-raised on the main thread and the whole call fails
@@ -209,36 +207,11 @@ error raised anywhere (`docpipe/chunking/config.py:13` to `16`).
   card, a sixth raised a CUDA out-of-memory error, and none of the
   sixteen documents in that pilot completed
   (`docpipe/extraction/runner.py:422` to `433`, the `embedder()`
-  docstring; pinned by
-  `test_the_embedder_is_built_once_however_many_threads_ask` below).
+  docstring).
 - The `api` backend batches eight texts per request by default
   (`docpipe/embedding/config.py:24`), a different number from the 32 items
   `docpipe/chunking/config.py:32` batches into one call to the model when
   the corpus is built, a constant this package neither reads nor uses.
-
-## Verification
-
-- `tests/test_embedding_backends.py`: `test_backend_is_configuration_not_code`,
-  `test_a_deployment_can_bind_its_own_implementation`,
-  `test_the_import_path_may_name_a_function_too` and (three malformed
-  specs) `test_a_broken_backend_says_which_part_broke` pin the three
-  backend forms and how a broken one fails; `test_api_backend_needs_an_endpoint`,
-  `test_api_embeds_text_in_batches`, `test_api_refuses_images_instead_of_dropping_them`
-  and `test_embed_one_goes_through_the_batch_path` pin `ApiEmbedder`,
-  including that three items at `batch_size=2` cost two requests, not three.
-- `tests/test_extraction_runner.py`: `test_the_embedder_is_built_once_however_many_threads_ask`
-  pins that eight threads asking `runner.embedder()` at once produce one
-  construction, shared by every thread; `test_the_local_backend_guards_its_lazy_load`
-  asserts `LocalEmbedder._lock` is a real `threading.Lock`, replacing an
-  earlier timing-based check that passed with or without the lock.
-- `tests/test_multigpu_embedder.py` pins, across three tests, that 30 items
-  across 4 replicas return in input order, that 4 long items among 40
-  short ones land one per shard rather than four in one, and that a single
-  replica skips the sharding machinery entirely.
-- `tests/test_dotenv.py::test_the_value_reaches_the_config_that_reads_it`
-  pins that a fresh interpreter, given only `DOCPIPE_ENV_FILE`, sees an
-  `.env` file's `EMBEDDING_BACKEND` at import time; checked here because
-  this module pulls in no third-party package.
 
 ## Modules
 
@@ -264,8 +237,7 @@ calling an OpenAI-compatible `/v1/embeddings` endpoint in batches (or, with
 `EMBEDDING_PROVIDER` set to `openai` or `gemini`, that hosted API; see [the
 provider layer](providers.md)), constructed by `get_embedder()` when
 `EMBEDDING_BACKEND=api`, by `docpipe/chunking/embedding.py`'s
-`ApiIndexEmbedder` when `EMBEDDING_INDEX_BACKEND=api`, and directly by
-`tests/test_embedding_backends.py`.
+`ApiIndexEmbedder` when `EMBEDDING_INDEX_BACKEND=api`.
 
 `docpipe/chunking/qwen3_vl_embedding.py` is not part of this package, but
 `LocalEmbedder` depends on it entirely: `Qwen3VLForEmbedding` (a Qwen3-VL

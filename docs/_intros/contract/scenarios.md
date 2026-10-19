@@ -28,9 +28,7 @@ the pass that appended its row (`--top-up-parameters`); a missing key means
 the harvest read it (`docpipe/extraction/schema.py:212` to `293`). Four parameters carry
 the same `scenario` axis, `scenario_type`, `scenario_abstract`,
 `scenario_region` and `scenario_year`, each stating which of the
-publication's AR6 scenarios the row belongs to
-(`tests/test_scenarios_extraction.py::
-test_a_document_field_carries_no_axes_and_a_scenario_field_carries_one`).
+publication's AR6 scenarios the row belongs to.
 
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` always present, the rest, page and
@@ -52,17 +50,13 @@ coordinate is `null` unless its own `<name>_state` says `read` or
 
 Seven parameters answer from a list rather than write a wording:
 `scenario_label`, `scenario_type` and `scenario_region`
-(`profiles/scenarios/extraction_spec.json`,
-`tests/test_scenarios_extraction.py::
-test_a_field_with_a_finite_answer_set_is_a_choice_not_a_wording`), and
+(`profiles/scenarios/extraction_spec.json`), and
 the four tags of a bundle, `study_descriptor`, `study_sector_division`,
 `study_sector` and `study_technology`. Five publish their list as
 `x-options` below: `scenario_type` carries seventeen OEO classes plus
 one `out:` entry for a type none of them cover, and each tag the
 shapes' own list (31, 17, 153 and 43 entries) plus such an entry, for
-every document, so the spec states each list once
-(`tests/test_scenarios_extraction.py::
-test_the_bundle_tag_lists_are_the_ones_the_shapes_accept`).
+every document, so the spec states each list once.
 
 The other two are marked `vocabulary_dynamic` in the spec: their value
 resolves through `_value_uri`, which for a dynamic list types it as a

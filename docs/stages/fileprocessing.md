@@ -348,90 +348,24 @@ Each worklist holds one tab-separated line per document, sorted by key:
   first non-German corpus's readable 318-page report
   (`docpipe/ingest/pdf_quality.py`, comment on the alpha-ratio check).
 - The August 2026 KWW export carried 24 of the sheet's usual 35 metadata
-  columns (`profiles/kwp/source.py`, the `extract_meta` docstring;
-  `tests/test_kwp_source.py`, comment).
+  columns (`profiles/kwp/source.py`, the `extract_meta` docstring, comment).
 - The smallest-ags rule for a shared, non-convoy file picked the wrong
   municipality in all three cases it is known to have applied to, which is
   why `SHARED_FILE_OWNERS` exists at all (`profiles/kwp/source.py`, comment
   on `group_keys_by_filename`).
 - One publication can document up to 146 AR6 scenarios, and one scenario
   can be documented by up to three publications
-  (`profiles/scenarios/schema.sql`, comment; exercised in
-  `tests/test_scenarios_source.py` with 146 scenario ids).
-
-## Verification
-
-- `test_registers_documents_and_calls_the_profile_hook` and
-  `test_a_document_is_registered_once`: two documents each get a row and
-  each trigger the profile hook; two entries sharing one filename produce
-  one `Documents` row but still fire `after_document` twice.
-- `test_works_without_a_profile`: `ingest()` with `profile=None` still
-  writes the `Documents` row and creates no `DocumentMeta` table.
-- `test_gate_accepts_normal_german_text`,
-  `test_english_prose_passes_without_an_umlaut_in_sight`, and
-  `test_a_statistical_annex_is_not_a_broken_glyph_map`: ordinary German
-  and English prose pass, and so does a document mostly made of numeric
-  tables with one prose page in twelve.
-- `test_gate_rejects_scan_without_text`, `test_gate_rejects_garbled_text`,
-  and `test_gate_rejects_unreadable_file`: an all-blank sample, 40 pages of
-  garbled encoding, and a truncated non-real PDF yield `NO_TEXT`,
-  `BROKEN_ENCODING`, and `UNREADABLE`.
-- `test_gate_samples_across_the_document`: a 60-page PDF with text only on
-  its first two pages is rejected `NO_TEXT`, so a cover page does not
-  prevent detecting a scanned body elsewhere.
-- `test_only_a_missing_text_layer_gets_the_benefit_of_the_doubt`:
-  `is_missing_text_layer()` is true only for a `NO_TEXT`-prefixed reason.
-- `test_a_scan_is_registered_rather_than_refused` and
-  `test_a_registered_scan_is_named_on_its_own_worklist`: a `NO_TEXT`
-  verdict is registered, not refused, and named on `scanned_pdfs.txt`,
-  never `rejected_pdfs.txt`.
-- `test_unusable_pdf_leaves_nothing_behind`: a `BROKEN_ENCODING` verdict
-  leaves an empty `Documents` table and a `rejected_pdfs.txt`.
-- `test_a_scan_reaches_the_register_and_its_municipality_with_it`: a
-  scanned `kwp` document reaches both `Documents` and `Municipalities`.
-- `test_missing_local_file_without_url_is_an_error`: `register()` raises
-  `FileNotFoundError` for a missing file with no `url`.
-- `test_a_dead_link_does_not_stop_the_run`,
-  `test_the_dead_links_are_written_out_as_a_worklist`, and
-  `test_one_dead_convoy_link_is_reported_once`: one 404 among several
-  documents does not abort the run, `unreachable_pdfs.txt`'s line is
-  `group_key`, `filename`, `reason`, `url`, and several entries pointing
-  at one dead filename log one warning and one worklist line.
-- `test_a_missing_override_file_lands_on_the_worklist_too`: an override
-  naming a file absent from the data directory is reported, not a crash.
-- `test_a_clean_run_clears_the_previous_worklists` and
-  `test_the_scan_worklist_is_cleared_by_a_clean_run`: a worklist from an
-  earlier run is removed once the current run has nothing to put on it.
-- `test_versions_are_linked_after_ingest`: of two documents sharing a
-  `group_key`, the one with the newer `published` date ends
-  `is_current=1`.
-- `test_override_replaces_broken_link` and
-  `test_non_override_uses_kww_link`: `PDF_OVERRIDES` decides the filename
-  when present, the KWW link otherwise.
-- `test_the_three_pasted_links_are_resolved_by_their_own_plans`: all three
-  known `SHARED_FILE_OWNERS` cases resolve the wrongly linked municipality
-  to its own plan.
-- `test_a_doi_identifies_a_publication` and
-  `test_an_entry_without_a_doi_falls_back_to_its_slug`: `external_id` is
-  the DOI when present, the crawl's slug otherwise.
-- `test_a_publication_with_many_scenarios_is_counted_and_linked`: 146
-  scenario ids yield `scenario_count=146` and 146 `DocumentScenarios` rows.
-- `test_a_second_import_refreshes_instead_of_duplicating` and
-  `test_metadata_that_arrives_later_reaches_an_imported_corpus`: a re-run
-  refreshes metadata and links rather than duplicating them, and fills in
-  fields a first import left null.
+  (`profiles/scenarios/schema.sql`, comment).
 
 ## Modules
 
 `docpipe/ingest/__init__.py` re-exports the area's public surface:
 `Source`, `SourceDoc`, `UnusablePDF`, `ingest`, `register`. It is what
-`docpipe/ingest/cli.py` and `tests/test_ingest.py` import from.
+`docpipe/ingest/cli.py` imports from.
 
 `docpipe/ingest/pipeline.py` holds the stage's orchestration: `register()`
 for one document, `ingest()` for a whole run, and the worklist reporting
-helpers. It is called by `docpipe/ingest/cli.py:main()` and
-directly by `tests/test_ingest.py`, `tests/test_kwp_source.py`, and
-`tests/test_scenarios_source.py`.
+helpers. It is called by `docpipe/ingest/cli.py:main()`.
 
 `docpipe/ingest/fetch.py` downloads a PDF to disk, streamed and atomically,
 keeps the URL it came from beside it, refuses a second URL for a taken name

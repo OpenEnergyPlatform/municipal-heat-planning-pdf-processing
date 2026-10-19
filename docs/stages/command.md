@@ -66,9 +66,7 @@ comes from (the default, the project file, a `.env`, the environment);
 `--stage S` narrows it to the settings one command reads and `--set` to the
 ones that are not at their default. `--stage` offers the commands that have
 settings of their own; one that has none (`compile`, `evaluate`, `export`)
-reads those of the stage it works for. A test holds the list against every
-environment name the code reads, so a setting cannot exist without a line
-there.
+reads those of the stage it works for.
 
 ## Running the stages and seeing where they stand
 

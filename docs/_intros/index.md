@@ -113,28 +113,14 @@ functions and classes, their signatures and their docstrings. A contract page
 is read off a profile's published `extraction_schema.json`, never off its
 `extraction_spec.json`, whose examples are real tables from real plans and
 are never quoted here.
-
-`tests/test_docs_build.py` holds a page and the code it describes
-together. It fails the moment a checked-in page and a fresh render
-disagree (`test_the_checked_in_docs_are_the_generated_ones`), the moment a
-page quotes a corpus passage
-(`test_no_generated_page_quotes_a_corpus_passage`), or the moment a page
-uses a dash as punctuation (`test_no_page_uses_a_dash_as_punctuation`; the
-module pages of the API reference carry the code's docstrings verbatim and
-are left out there). The module renders the documentation once, and every
-test that reads a page reads that render (under `pytest-xdist` once per
-worker); `test_a_stale_generated_page_fails_the_check` shows the comparison
-still fails on an edited, a deleted or a left-behind page.
-`.github/workflows/docs.yml` runs that check on every pull request that
+`python scripts/build_docs.py --check` fails the moment a checked-in page and
+a fresh render disagree. `.github/workflows/docs.yml` runs that check on every pull request that
 touches a documented source and on every `v*` tag, and, on a push to
 `develop`, regenerates the pages instead and commits them when changed.
 Either way, Sphinx then builds the site the way Read the Docs does, from
-`docs/conf.py` and `.readthedocs.yaml`
-(`test_the_docs_workflow_regenerates_on_develop_and_checks_everywhere_else`).
+`docs/conf.py` and `.readthedocs.yaml`.
 Read the Docs rebuilds the hosted site from its own webhook once new
 pages are committed to a tracked branch or tag.
 
-The pipeline's own correctness is checked separately: [running the
-pipeline](running.md) describes a suite of about 1,800 tests
-(`requirements.txt`, the comment above `pytest`), run with `pytest tests/
--n 8 --dist loadfile`.
+The pipeline's own tests are a small suite that runs in memory: where a
+reply is read and where a reading is checked, run with `pytest tests/`.

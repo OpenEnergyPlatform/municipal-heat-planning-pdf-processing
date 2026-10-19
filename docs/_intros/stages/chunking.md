@@ -338,8 +338,7 @@ A million 4096-dimensional vectors is roughly a 16 GB file; saving it once per
 `EMBED_FLUSH_ITEMS` chunk cost roughly 244 full rewrites over one build, every
 one GPU-idle (`chunking/config.py:52`). The threshold is checked only after a
 document's inputs are appended, so it can be exceeded: forty documents of a
-thousand items each flush in chunks of 5000, not 4096
-(`tests/test_embedding_batching.py:265`).
+thousand items each flush in chunks of 5000, not 4096.
 
 Two directories with no `Documents` row once put 1096 orphaned vectors into
 the index, before the check that skips an unresolved directory existed
@@ -358,7 +357,7 @@ distinguishing the two kinds of plan (`database.py:171`; `schema.sql:31`).
 
 `Sections` holds on the order of 134,000 rows, far more `Segments` beneath
 them, why children go out one `executemany` per statement, not one `execute`
-per row (`tests/test_database.py:81`). The corpus holds on the order of
+per row. The corpus holds on the order of
 85,000 crops, why `build_embedding_inputs` lists each directory once rather
 than checking every path (`chunking.py:127`).
 
@@ -370,79 +369,6 @@ document: 338 versus 1.1 milliseconds per document at corpus scale
 Pulling a placeholder's referenced content directly into a section's embedding
 text once made up 46% of the section-text corpus, before this changed to
 substitute only the item's caption (`chunking.py:100`).
-
-## Verification
-
-Merge caching and failure handling:
-`test_merge_batch_skips_cached_dirs_without_parsing`,
-`test_merge_batch_force_remerges_cached_dir`,
-`test_merge_batch_remerges_when_final_json_is_newer`,
-`test_merge_batch_remerges_when_images_json_is_newer`,
-`test_merge_batch_remerges_a_zero_byte_output`,
-`test_merge_keeps_the_previous_output_when_the_write_fails`,
-`test_merge_batch_reports_failure_for_invalid_final_json`,
-`test_merge_batch_contains_an_unreadable_cache_entry`, and
-`test_merge_preserves_segments_and_pages_and_enriches_media`.
-
-Database insertion and resume bookkeeping:
-`test_insert_sections_writes_pages_segments_sectionpages`,
-`test_section_children_go_out_per_statement_not_per_row`,
-`test_embeddings_roundtrip_and_clear`, `test_force_delete_cascades`,
-`test_next_faiss_id_advances_past_max`,
-`test_faiss_id_snapshot_survives_forced_content_delete`,
-`test_per_document_lookups_drive_from_sections` (the query plan itself, not
-only its results),
-`test_existing_embeddings_covers_all_types_of_one_document_only`,
-`test_one_writer_keeps_two_documents_block_ids_apart`,
-`test_a_prepare_worker_asks_both_questions_over_one_connection`, and
-`test_existing_embeddings_resolves_document_without_pdf_suffix`.
-
-Caption and page-source backfill:
-`test_page_source_is_additive_and_says_which_plans_a_model_read`,
-`test_enrich_caption_takes_the_title_from_the_section_text`,
-`test_enrich_caption_is_additive_and_never_runs_twice`, and
-`test_enrich_caption_leaves_a_table_with_no_sentence_alone`.
-
-Embedding-input construction:
-`test_build_inputs_emits_vl_only_for_crops_on_disk`,
-`test_build_inputs_reads_each_crop_directory_once`,
-`test_build_inputs_does_not_hide_an_unreadable_crop_directory`, and
-`test_build_inputs_survives_a_missing_crop_directory`.
-
-Batching, flushing and crash recovery in the embed step:
-`test_a_batch_no_longer_mixes_titles_with_full_sections`,
-`test_every_input_is_embedded_exactly_once`,
-`test_ids_stay_unique_and_contiguous`,
-`test_text_and_image_inputs_stay_in_separate_batches`,
-`test_the_db_writeback_opens_one_connection_for_the_whole_call`,
-`test_the_gpus_start_before_the_last_document_is_read`,
-`test_every_document_is_embedded_exactly_once_across_the_chunks`,
-`test_the_index_is_not_written_once_per_flush`,
-`test_a_crash_mid_run_never_loses_more_than_the_insurance_interval`,
-`test_preparation_never_runs_the_whole_corpus_ahead_of_the_gpus`,
-`test_the_window_still_yields_every_item_exactly_once`,
-`test_rows_without_a_vector_in_the_index_are_dropped`,
-`test_an_empty_index_never_wipes_the_table`, `test_a_clean_run_drops_nothing`,
-`test_a_directory_without_a_documents_row_is_skipped_not_embedded`, and
-`test_the_writer_shouts_instead_of_returning_in_silence`.
-
-The api backend of the index build: `test_the_api_backend_hands_the_index_unit_vectors`,
-`test_an_input_with_a_picture_is_left_out_and_gets_no_row`,
-`test_an_embedder_that_takes_pictures_gets_the_input_that_carries_one`,
-`test_a_vector_of_another_size_never_reaches_the_index`,
-`test_the_backend_setting_decides_and_the_api_needs_no_model`,
-`test_the_query_side_setting_does_not_move_the_index_build`,
-`test_a_hosted_embedding_provider_needs_no_address` and
-`test_a_hosted_endpoint_that_says_not_now_is_asked_again`.
-
-The embedding model wrapper: `test_the_result_comes_back_in_the_caller_order`,
-`test_one_long_item_does_not_land_in_a_shard_of_short_ones`, and
-`test_a_single_replica_needs_no_sharding`.
-
-The bbox backfill: `test_insert_sections_writes_bbox`,
-`test_ensure_bbox_columns_adds_and_is_idempotent`,
-`test_enrich_bbox_backfills_without_touching_embeddings`, and
-`test_enrich_bbox_default_skips_rows_already_set`.
 
 ## Modules
 
@@ -462,22 +388,20 @@ constants instead.
 
 `merge.py` implements the merge step, `merge_single` and `merge_batch`,
 combining Stage 4 and Stage 5 output into `document.json` with an mtime cache.
-Called by `pipeline.run()` and directly by `tests/test_merge.py`.
+Called by `pipeline.run()`.
 
 `database.py` is all SQLite access: section, table and image insertion, the
 three `enrich-*` backfills, embedding-id bookkeeping (`EmbeddingWriter`,
 `get_existing_embeddings`, `next_faiss_id`,
 `drop_embeddings_missing_from_index`), and the bbox backfill. Called by
-`pipeline.py`, by `embedding.py` through `EmbeddingWriter`, and by most of
-`tests/test_database.py`, `tests/test_embedding_batching.py` and
-`tests/test_segment_bbox.py`. Its docstring's claim that no schema copy is
+`pipeline.py` and by `embedding.py` through `EmbeddingWriter`. Its docstring's claim that no schema copy is
 checked in is stale: `docpipe/store/schema.sql` is a checked-in, code-applied
 schema declaring `bbox`, `page_text_transcribed` and `caption_source`.
 
 `chunking.py` builds one document's `EmbeddingInput` records: section, title,
 table and figure inputs in text and VL form, replacing placeholders with
 captions and capping oversized section text. Called by `pipeline.py`'s
-`prepare()` and directly by `tests/test_chunking.py`.
+`prepare()`.
 
 `embedding.py` is the embed step: FAISS lifecycle (`load_or_create_index`,
 `index_ids`, `save_index`, `remove_ids_from_index`, each importing `faiss` where
@@ -485,8 +409,7 @@ it uses it), `index_backend` and
 `load_embedder` with the `ApiIndexEmbedder` it returns for the api backend, and
 `create_embeddings`, which batches, embeds, allocates ids and writes the
 database back for one flush, and `IncompleteIndex` and `Unembedded` for the
-inputs a failed batch leaves without a vector. Called by `pipeline.py` and directly by
-`tests/test_embedding_batching.py` and `tests/test_embedding_api_index.py`.
+inputs a failed batch leaves without a vector. Called by `pipeline.py`.
 
 `qwen3_vl_embedding.py` is the embedding model wrapper: `Qwen3VLForEmbedding`
 (hidden-state output head), `Qwen3VLEmbedder` (single-device embedding), and
@@ -495,7 +418,6 @@ replicas by length and reassembling results in order. Called by
 `embedding.py`'s `load_embedder` for corpus building, only when
 `EMBEDDING_INDEX_BACKEND` is `local`, and by
 `docpipe/embedding/local.py`'s `LocalEmbedder` for query-time embedding.
-Exercised directly by `tests/test_multigpu_embedder.py`.
 
 `pipeline.py` orchestrates merge, db and embed (or a single `--step`), owns the
 CLI including `--profile` resolution and logging setup, and implements the

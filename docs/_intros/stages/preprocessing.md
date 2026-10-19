@@ -27,8 +27,7 @@ PP-DocLayoutV3 forward pass, and rule-based section assembly, with one
 exception: transcribing a page that carries no PDF text layer through a
 vision model. That path runs only when a caller asks for it with
 `--transcribe-missing-text`; a run that skips the flag makes no model call
-(`docpipe/preprocessing/pipeline.py:87-90`, pinned by
-`tests/test_page_text_fallback.py: test_the_fallback_is_off_unless_asked_for`).
+(`docpipe/preprocessing/pipeline.py:87-90`, pinned by).
 Both artifacts are cached under the document's own output directory and
 reused automatically; `--force-reextract` and `--rebuild-stage3` bypass or
 narrow that resumption.
@@ -345,14 +344,12 @@ A selection of the module constants that tune detection and assembly:
   (`docpipe/preprocessing/config.py:40-45`). The pass measures 4.7 of about
   80 ms per page; autocast is 1.15 times faster, a 0.7 percent stage-wide
   gain for a precision change on box coordinates, so `LAYOUT_AUTOCAST`
-  defaults to off (`config.py:47-53`;
-  `tests/test_stage2_perf.py: test_autocast_is_off_by_default`). Its 8
+  defaults to off (`config.py:47-53`). Its 8
   mantissa bits make one representable step span several pixels on a
   roughly 1700-pixel page, enough to shift a crop's edge into neighbouring
   text, so Stage 2 casts `logits`/`pred_boxes` back to fp32 after autocast
   while leaving `out_masks`, its largest tensor, in the reduced dtype
-  (`stage2_layout.py:311-330`;
-  `tests/test_stage2_perf.py: test_boxes_come_back_as_float32`).
+  (`stage2_layout.py:311-330`).
 - Real text columns measure an aligned-left-edge fraction of at least 0.90,
   labels scattered around a chart at most 0.43, the gap
   `COLUMN_ALIGN_TOL_PT`/`COLUMN_MIN_ALIGNED_FRAC` are set to separate
@@ -378,97 +375,6 @@ A selection of the module constants that tune detection and assembly:
   resolution's own measured behaviour is documented on
   [The parts every stage uses](core.md).
 
-## Verification
-
-- `tests/test_columns.py`: `test_two_columns_are_found_at_their_gutter` and
-  `test_too_few_blocks_is_not_enough_evidence` pin gutter detection and its
-  refusal on weak evidence. `test_single_never_looks_for_columns`,
-  `test_auto_detects_per_page`, and
-  `test_double_falls_back_to_the_page_centre_when_nothing_is_detected` pin
-  the three `column_layout` modes, and `test_a_bulleted_column_is_still_a_column`
-  and `test_labels_scattered_around_a_chart_are_not_a_column` pin the
-  alignment test.
-- `tests/test_stage1_extract.py`: `test_dehyphenates_german_compound_across_line_break`
-  pins the hyphenation rule, `test_each_profile_gets_its_own_list` pins
-  that `HYPHEN_EXCEPTIONS` does not leak between profiles, and
-  `test_is_valid_text_block` pins the minimum-length rule.
-- `tests/test_stage2_layout.py`: `test_apply_nms_per_class_keeps_highest`
-  and `test_cross_class_suppresses_lower_confidence_overlap` pin
-  non-maximum suppression within and across classes.
-- `tests/test_stage2_perf.py`: `test_it_really_runs_ahead` pins that the
-  prefetch thread runs ahead, `test_boxes_come_back_as_float32` pins the
-  selective upcast after autocast, and
-  `test_a_failed_batch_refuses_the_whole_document` pins what triggers
-  `LayoutDetectionFailed`.
-- `tests/test_stage3_structure.py`: `test_empty_leading_dokument_section_is_dropped`
-  pins the synthetic "Dokument" section, and
-  `test_the_sentence_that_names_the_table_beats_the_linked_footnote` pins
-  `resolve_title`'s precedence.
-- `tests/test_stage3_segments.py` pins the segments/pages a `Section`
-  carries: `test_section_spanning_pages_gets_segments_and_pages`,
-  `test_consecutive_same_page_text_merges_into_one_segment`,
-  `test_text_run_splits_into_per_page_segments`, and
-  `test_dokument_page_number_derived_from_first_content_page`, pinning its
-  `page_number` derivation.
-- `tests/test_preprocessing_models.py` pins `Block`/`PageData`/`Section`
-  round-trip and confidence rounding:
-  `test_block_roundtrip_rounds_confidence_and_omits_none`,
-  `test_pagedata_roundtrip`, `test_block_source_text_roundtrip_and_omit`,
-  `test_tableref_source_text_roundtrip_and_omit`, and
-  `test_section_to_dict_includes_and_omits_refs`.
-- `tests/test_page_text_fallback.py`: `test_a_stamped_page_number_is_not_a_text_layer`
-  pins `needs_transcription`'s threshold, `test_headings_carry_the_label_stage_three_opens_sections_on`
-  pins that a synthesized heading opens a real section,
-  `test_every_synthesized_box_says_it_was_not_measured` pins
-  `bbox_approx = True` on every synthesized block, and
-  `test_the_fallback_is_off_unless_asked_for` pins that a normal run makes
-  no model call. A page's reply is the one object with its `markdown`, and the
-  empty string is an answer (`test_the_object_with_its_markdown_is_the_pages_text`,
-  `test_an_empty_markdown_is_an_answer_and_not_a_failure`); a reply that is not
-  that object leaves the page without text and says why, a reply cut off twice is
-  a hole after one request with more room, and a transcriber that answers
-  neither text nor a hole is an error hole
-  (`test_a_reply_that_is_not_the_object_leaves_the_page_without_text_and_says_why`,
-  `test_a_reply_cut_off_twice_is_a_hole_after_one_request_with_more_room`,
-  `test_the_failed_pages_are_the_pages_that_were_counted_failed`,
-  `test_a_transcriber_that_answers_neither_text_nor_a_hole_is_an_error_hole`,
-  `test_a_page_that_cannot_be_rendered_is_an_error_hole`). A run that
-  transcribed pages does not reuse the Stage 3 file built before, and one that
-  transcribed nothing keeps it
-  (`test_a_run_that_transcribed_pages_does_not_reuse_the_stage_three_built_before`,
-  `test_a_run_that_transcribed_nothing_keeps_the_stage_three_cache`). The
-  server is asked by the first page that needs it and once, a run whose pages
-  all have their text asks none and ends 0, a server that is not there ends the
-  run when a page needs it and a folder is not left running past it, and the
-  sentences are checked first
-  (`test_the_server_is_asked_by_the_first_page_that_needs_it_and_once`,
-  `test_a_server_that_is_not_there_ends_the_run_when_a_page_needs_it`,
-  `test_a_server_that_is_not_there_is_no_matter_to_a_run_without_such_pages`,
-  `test_a_missing_server_ends_the_folder_and_is_not_one_failed_document`,
-  `test_the_sentences_are_checked_first_and_a_run_without_such_pages_asks_no_server`,
-  `test_the_page_check_asks_the_vision_server_for_the_page_schema_and_room`,
-  `test_a_rebuild_of_stage_three_asks_the_model_nothing_even_with_the_flag`).
-  Failed pages reach the report and the one line at the end of the run, and the
-  budget of a page request counts one reply
-  (`test_a_document_with_failed_pages_adds_one_entry_in_pages_and_causes`,
-  `test_pages_without_text_leave_the_exit_code_at_zero_and_are_said_once`,
-  `test_the_budget_of_the_page_request_counts_one_reply`). `tests/test_room.py`
-  pins that the page budget is the prompt, the image and one reply and is not
-  the visuals stage's, that a server that serves exactly the budget is taken and
-  one token under it refused, and that the window the check found reaches the
-  pages
-  (`test_the_budget_of_a_page_request_is_the_prompt_the_image_and_one_reply`,
-  `test_the_page_budget_is_not_the_budget_of_the_visuals_stage`,
-  `test_the_page_transcription_takes_a_server_that_serves_exactly_its_budget`,
-  `test_the_page_transcription_refuses_a_server_one_token_under_its_budget`,
-  `test_the_page_check_hands_the_window_it_found_to_the_pages`).
-- `tests/test_preprocessing_config.py`: `test_dump_json_atomic_keeps_old_file_on_error`
-  pins that a failed atomic write leaves the original file untouched.
-- `tests/test_preprocessing_pipeline.py`: `test_write_index_keys_by_relative_path_no_collision`
-  pins that `_index.json` is keyed by relative path, and
-  `test_a_lone_path_with_rebuild_stage3_is_the_processed_root` pins the
-  CLI's positional-argument remapping.
-
 ## Modules
 
 `docpipe/preprocessing/pipeline.py` orchestrates Stages 1 to 3 for one PDF
@@ -477,8 +383,7 @@ text-fallback wiring (the check that asks the vision server before the first pag
 that needs it, and the line that says at the end which pages could not be read),
 folder-mode indexing, and the command line.
 Called directly through `python -m docpipe.preprocessing.pipeline`;
-otherwise only `run_folder()` (calling `run_single()`) and the test suite
-call into it.
+otherwise only `run_folder()` (calling `run_single()`) calls into it.
 
 `docpipe/preprocessing/stage1_extract.py` performs PyMuPDF `rawdict` text
 extraction into `PageData`/`Block` objects, including hyphenation repair

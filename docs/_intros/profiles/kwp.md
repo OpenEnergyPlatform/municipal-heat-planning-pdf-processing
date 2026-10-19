@@ -267,10 +267,6 @@ the built-in profile's, inherited byte for byte), and ten for the
 answer app, named in one table in `docpipe.inference.llm_client` and read when
 first used, under the names they had as module constants
 (`docpipe/inference/llm_client.py:66` to `77`, `82` to `103`).
-`test_a_profile_provides_every_prompt_the_core_loads` and
-`test_a_profile_carries_no_prompt_nobody_loads`
-(`tests/test_architecture.py`) hold this set to what the core actually
-asks for by name, in both directions.
 
 ## The knowledge graph
 
@@ -303,24 +299,19 @@ graph's header binds that declares no `rdfs:range`; nine carrier classes
 the plans name constantly sit outside OEO's `energy carrier` root for
 genuine ontological reasons, and reaching them through a range-bound
 predicate instead once cost 51 of 244 value nodes their carrier edge in
-the kwp pilot (`tests/test_kwp_extraction.py`,
-`test_a_carrier_oeo_does_not_call_a_carrier_keeps_its_edge_and_is_counted`).
+the kwp pilot.
 A named sub area is linked `part of` the municipality. An organisation
 node is written once per run, with the first spelling in harvest
 order, even when a later plan in the same run spells the office
 differently: a run-level `labelled` set in `make_serializer` keeps a
 second `rdfs:label` off the shared node (`profiles/kwp/kg.py:745` to
-`750`, `944` to `946`; `tests/test_kwp_extraction.py`,
-`test_an_office_two_plans_spell_differently_keeps_one_label`).
+`750`, `944` to `946`).
 
 The IRI base is `https://openenergyplatform.org/id/mhpkg/`
 (`profiles/kwp/kg.py:36`). Every minted collection draws its own UUIDv5
 sub-namespace off that base, and minting always uses UUIDv5 over an
 identifying name, never UUIDv4 (`profiles/kwp/kg.py:369` to `372`,
-`mint`), so two runs over one document produce byte-identical Turtle
-(`tests/test_kwp_extraction.py`,
-`test_value_minting_matches_the_schema_repo_reference` and
-`test_normalise_and_organisation_minting_match_the_reference`). The plan
+`mint`), so two runs over one document produce byte-identical Turtle. The plan
 and municipality nodes are not minted at all: their IRIs are built
 directly from the register key, `heatplan/AGS_<ags>_<published>` and
 `municipality/AGS_<ags>` (`profiles/kwp/kg.py:431` to `433`, `834`). A
@@ -393,10 +384,7 @@ asked for. They are English, because the instructions of those stages are
 English in this profile and only what the model reads off a German page is
 German; so the correction the chat appends to a request is English although its
 prompts and its answers are German. The table is laid over the built-in
-profile's entry by entry (`profile.layers("reading", "PHRASES")`), and
-`test_every_profile_says_every_sentence_with_the_same_names`
-(`tests/test_reading_wording.py`) holds it to the same ten names and the same
-names to fill in.
+profile's entry by entry (`profile.layers("reading", "PHRASES")`).
 
 `ROUTE_NOTES` words the five reasons `docpipe.inference.kg_route` can give
 for not answering from the graph at all: no graph loaded, no plan node for
@@ -434,59 +422,3 @@ rows one SPARQL query (`answer_from_graph`,
 `docpipe/inference/kg_route.py:272` to `305`).
 The answer app does not offer this route while no corpus graph exists
 (`docpipe/app/app.py`, see [app](../stages/app.md)).
-
-## Verification
-
-Versioning and the picker:
-`tests/test_kwp_source.py`'s `test_a_convoy_is_grouped_by_its_smallest_ags`,
-`test_the_row_order_does_not_decide_the_group`,
-`test_a_new_edition_of_a_convoy_shares_the_group_of_the_old_one` and
-`test_the_override_filename_decides_the_grouping` hold the AGS-keyed
-grouping to what this page describes; `tests/test_kwp_catalog.py`'s
-`test_the_register_decides_who_a_convoy_covers` and
-`test_a_pasted_link_does_not_hand_a_plan_to_another_municipality` hold the
-picker's own reading of the same register.
-
-Loading and the seams:
-`tests/test_profile.py`'s `test_kwp_profile_loads_and_names_itself`;
-`tests/test_every_profile_loads.py`'s `test_a_profile_loads_every_config_module`
-and `test_a_profile_states_a_usable_context_budget`; and
-`tests/test_architecture.py`'s
-`test_a_profile_provides_every_component_the_core_requires`, parametrized
-over every shipped profile including `kwp`.
-
-The extraction spec:
-`tests/test_kwp_extraction.py`'s
-`test_every_example_verifies_against_its_own_source`,
-`test_the_examples_teach_exhaustive_extraction`,
-`test_query_templates_expand_for_every_parameter`,
-`test_a_power_is_its_own_parameter_split_by_unit_family`,
-`test_the_power_class_is_the_one_the_unit_implies`,
-`test_the_aggregation_of_a_power_is_asked_and_not_derived`,
-`test_instantaneous_is_not_offered_for_a_power`,
-`test_the_units_of_the_two_numeric_parameters_share_no_spelling`,
-`test_the_two_quantity_questions_are_not_the_same_text` and
-`test_where_a_coordinates_passage_stands_is_no_warning`.
-
-The graph:
-`test_value_minting_matches_the_schema_repo_reference`,
-`test_one_heat_plan_comes_out_as_the_published_example`,
-`test_every_plan_part_the_ontology_names_is_serialized`,
-`test_a_value_conflict_on_one_coordinate_drops_every_claimant` and
-`test_a_second_document_claiming_the_same_identity_is_refused`, the full
-account on [stages/graph.md](../stages/graph.md).
-
-The ontology snapshot:
-`tests/test_kwp_vocabulary.py`'s
-`test_the_snapshot_names_the_ontology_it_was_built_from`,
-`test_the_spec_passes_the_pinned_ontology` and
-`test_a_spec_the_ontology_disagrees_with_is_named`.
-
-The graph route:
-`tests/test_kg_route.py`'s `test_the_answer_space_is_the_specs_own_list`,
-`test_a_synonym_resolves_through_the_axis_not_by_string_match`,
-`test_unstated_leaves_the_axis_unbound`,
-`test_an_out_class_is_never_bound_as_a_coordinate`,
-`test_every_reason_the_route_gives_is_reached`,
-`test_every_fallback_reason_has_a_sentence` and
-`test_a_route_note_nobody_worded_stops_the_route_being_built`.

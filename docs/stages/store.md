@@ -56,8 +56,7 @@ empty string if the file or profile is absent (`schema.py:45` to `48`).
 and then calls `migrate()` (`schema.py:51` to `55`; see Bringing an older
 database forward). Every statement of both scripts is `CREATE TABLE IF NOT
 EXISTS` or `CREATE INDEX IF NOT EXISTS`, so re-applying to an already-built
-database creates nothing (`test_apply_is_idempotent`,
-`tests/test_store.py:42` to `45`). Core first lets a profile table (kwp's
+database creates nothing. Core first lets a profile table (kwp's
 `DocumentMeta`) carry a foreign key into `Documents`; the core schema
 references no profile column.
 
@@ -68,12 +67,7 @@ names `sqlite_master` reports for the open connection, and
 `note_embedding` use `tables()` to ask whether `Meta` and `Embeddings` exist
 yet, and `migrate` uses `columns()`. Outside it `columns()` is called by
 `transcribed_documents` in `docpipe/extraction/trust.py` and by the default
-profile's catalog (`_meta_columns` in `docpipe/builtin/default/catalog.py`),
-while nothing outside the package calls `tables()` but tests, which use it
-to check what `apply()` built, such as
-`test_core_alone_creates_only_core_tables` and
-`test_profile_adds_its_own_tables` (`tests/test_store.py:23` to `32`) and
-`test_works_without_a_profile` (`tests/test_ingest.py:234`).
+profile's catalog (`_meta_columns` in `docpipe/builtin/default/catalog.py`).
 
 ### Bringing an older database forward
 
@@ -94,8 +88,7 @@ lowers a `user_version` that is higher than `FORMAT`.
 opened for writing through `apply()`, which `connect()` and file processing's
 `ingest` both do. The existing rows keep everything they had and get `NULL`
 in the new columns, and a second call finds nothing to add and returns
-`FORMAT` (`test_a_database_from_before_is_brought_up_and_loses_nothing`,
-`tests/test_identity.py:38` to `55`). Chunking's own `connect()` never calls
+`FORMAT`. Chunking's own `connect()` never calls
 `apply()` or `migrate()` (see Failure modes).
 
 `add_missing_column(connection, table, column, kind)` (`schema.py:75` to `89`)
@@ -115,19 +108,14 @@ to find it missing: `content_of` returns `(None, None)` when the column or
 the row is not there, `meta` returns an empty dict when there is no `Meta`
 table, `embedding_mismatch` then says nothing, and `note_documents` in
 `docpipe/extraction/runner.py` counts no recorded document when its
-`SELECT` fails. The promise, stated in `tests/test_identity.py`'s docstring,
-is that a database written before any of this stays readable; an older
-database says less, and nothing is compared against it or refused.
+`SELECT` fails.
 
 ### Opening a database
 
 `connect(path, profile)` (`schema.py:212` to `219`) creates `path`'s parent
-directory if missing, opens the file, and calls `apply()`
-(`test_connect_creates_the_file`, `tests/test_store.py:69` to `73`). It
+directory if missing, opens the file, and calls `apply()`. It
 is the only `connect()` that applies the schema; no production code
-calls it (see Purpose). `test_connect_creates_the_file`
-(`tests/test_store.py:71`) exercises it, and `tests/test_app_pages.py` uses
-it to build a small database. Two later modules define narrower
+calls it (see Purpose).  Two later modules define narrower
 connections against the same file: chunking's
 (`docpipe/chunking/database.py:98` to `108`) adds a busy timeout but
 never calls `apply()` or `migrate()`; inference's
@@ -162,8 +150,7 @@ connection in a Streamlit `@st.cache_resource`
 file processing checks first; a hit skips the download and quality gate.
 `add_document(...)` (`documents.py:65` to `80`) is a plain
 `INSERT ... RETURNING id`, no `ON CONFLICT`, so a repeated filename or
-`external_id` raises `sqlite3.IntegrityError`
-(`test_external_id_is_unique`, `tests/test_store.py:62` to `66`). When
+`external_id` raises `sqlite3.IntegrityError`. When
 `meta` is given, `add_document` calls `upsert_document_meta`
 (`documents.py:83` to `98`), building an `INSERT ... ON CONFLICT(document)
 DO UPDATE` from whatever keys `values` carries.
@@ -181,9 +168,7 @@ before the record gets it the first time the document is seen again. A row
 that has a record is held against the size of the file as it lies in the
 data directory; a different size logs a warning that this is not the file
 that was registered, and nothing is stopped or overwritten, so a file
-edited to the same length is not seen
-(`test_another_file_under_the_old_name_is_said_and_nothing_stops`,
-`tests/test_identity.py:75` to `95`). The extraction stage reads the record
+edited to the same length is not seen. The extraction stage reads the record
 back: `note_documents` in `docpipe/extraction/runner.py` puts each
 document's `sha256` and `bytes` into the harvest's stamp (`stamp_record`,
 key `document`), and `identity.tuple_id` in
@@ -194,18 +179,15 @@ that sha256, or the file name for a database that recorded none.
 
 `link_document_versions(connection)` (`documents.py:101` to `132`)
 recomputes which document is current for every `group_key` on every
-call, safe to re-run after one more version is registered
-(`test_idempotent`, `tests/test_document_versions.py:84` to `91`). It
+call, safe to re-run after one more version is registered. It
 orders every document with a `group_key` by
 `group_key, COALESCE(published, ''), id` (`documents.py:115` to `122`)
 into `itertools.groupby`, which only merges adjacent rows, so order
 determines correctness. Within a group, the newest `published` gets
 `is_current = 1`; each older row gets `is_current = 0` and `supersedes`
-set to its predecessor (`test_three_versions_chain`,
-`tests/test_document_versions.py:52` to `62`). A document with no
+set to its predecessor. A document with no
 `group_key`, or alone in its own, stays current with `supersedes` left
-`NULL` (`test_document_without_group_key_untouched`,
-`tests/test_document_versions.py:75` to `81`).
+`NULL`.
 
 Group membership is a profile's choice: `kwp` uses a municipality's
 `ags`, or the smallest among several sharing one PDF
@@ -275,11 +257,7 @@ lengths do not compare either. `note_index_model` in
 `docpipe/extraction/runner.py` logs the model sentence as a warning when a run
 embeds its probes with another model than the index was built with (the
 harvest, and `docpipe compile examples` under its own name), the
-doctor reads both checks and the chat the model one
-(`test_the_database_remembers_what_built_its_index_and_says_both`,
-`test_the_length_of_the_vectors_is_compared_like_their_model` and
-`test_a_database_without_a_table_of_vectors_holds_none`,
-`tests/test_identity.py:276` to `346`). `embedding/also`, where an index went on
+doctor reads both checks and the chat the model one. `embedding/also`, where an index went on
 with another model, is not looked at by either check. The format is not a
 `Meta` row: it is `PRAGMA user_version` (see Bringing an older database
 forward).
@@ -376,7 +354,7 @@ Reading the tables back out is not this package's job.
 | `DOCPIPE_PROFILE` / `--profile` | environment variable / CLI flag | unset / none | selects which profile's `schema.sql` `apply()` layers on the core schema | `docpipe/profile.py:356` to `379` (env var, `load_profile`), `415` to `418` (`--profile`, `add_profile_argument`) and `452` to `475` (`resolve_profile`) |
 | `PRAGMA foreign_keys` | fixed connection pragma | `ON` | enables foreign-key enforcement, off by default in SQLite, so `ON DELETE CASCADE`/`SET NULL` fire | `docpipe/store/schema.py:53`; re-set independently by `docpipe/chunking/database.py:101` |
 | `PRAGMA busy_timeout` | fixed pragma, chunking's own `connect()` only | 30000 ms | a reader waits for a write lock instead of failing, needed once embedding began preparing documents while writing batches | `docpipe/chunking/database.py:98` to `108` |
-| `CORE_TABLES` | module constant | the 9 core table names, as a tuple | names which tables belong to the core, not a profile; used by tests | `docpipe/store/schema.py:27` to `28` |
+| `CORE_TABLES` | module constant | the 9 core table names, as a tuple | names which tables belong to the core, not a profile | `docpipe/store/schema.py:27` to `28` |
 | `FORMAT` / `PRAGMA user_version` | module constant / pragma | `1` / `0` on a database made before the counter | the shape of the core tables; `migrate` sets the pragma to `FORMAT` when it is lower | `docpipe/store/schema.py:35`, `91` to `102` |
 | `ADDED_COLUMNS` | module constant | `Documents.sha256` (`TEXT`) and `Documents.bytes` (`INTEGER`) | the columns a later format added, which `migrate` adds to a database that lacks them | `docpipe/store/schema.py:37` to `38` |
 
@@ -429,10 +407,7 @@ Reading the tables back out is not this package's job.
   1.1 ms per document at corpus scale
   (`docpipe/chunking/database.py:47` to `52`, comment).
 - The corpus holds on the order of 134,000 `Sections` rows, with far more
-  `Segments` beneath them (`tests/test_database.py:80` to `81`,
-  docstring). A 150-child test fixture goes out as four `executemany`
-  calls, one per child table (`tests/test_database.py:92` to `95`,
-  comment and assertion).
+  `Segments` beneath them.
 - Two processed directories with no `Documents` row put 1,096 dead
   vectors into the FAISS index in one run
   (`docpipe/chunking/pipeline.py:256` to `259`, comment). The embed step
@@ -443,52 +418,6 @@ Reading the tables back out is not this package's job.
   `page_text_transcribed` count is filled by a model reading the
   rendered page instead of the PDF's own text
   (`docpipe/store/schema.sql:31` to `37`, comment).
-
-## Verification
-
-- `test_core_alone_creates_only_core_tables`,
-  `test_profile_adds_its_own_tables`,
-  `test_documents_carries_no_project_columns`, `test_apply_is_idempotent`
-  and `test_connect_creates_the_file`: `apply()` with no profile creates
-  the core tables and none of a profile's, `kwp` adds its own on top,
-  `Documents` never gains a profile column, a second `apply()` call does
-  not raise, and `connect()` creates a missing parent directory
-  (`tests/test_store.py:23` to `45` and `69` to `73`).
-- `test_a_database_from_before_is_brought_up_and_loses_nothing`: a
-  `Documents` table made without `sha256` and `bytes` reads as having no
-  `Meta` and no content record, `apply()` sets `user_version` to `FORMAT`
-  and adds both columns, the old row survives with `NULL` in them, a second
-  `migrate()` returns `FORMAT`, and `set_meta` keeps one row per key, the
-  later value winning (`tests/test_identity.py:38` to `55`).
-- `test_a_new_document_is_registered_with_its_bytes` and
-  `test_another_file_under_the_old_name_is_said_and_nothing_stops`: a new
-  row gets the sha256 and size of its file; a row from before the record
-  gets them once; the same file says nothing; another file under the same
-  name logs a warning and leaves the record as it was
-  (`tests/test_identity.py:63` to `95`).
-- `test_the_database_remembers_what_built_its_index_and_says_both` and
-  `test_a_database_without_a_table_of_vectors_holds_none`: `note_embedding`
-  records the model, replaces it while `Embeddings` is empty or absent, and
-  with vectors held raises `MixedIndex` and writes nothing, or, with the mixture
-  allowed, keeps the first model, records the other under `embedding/also` and
-  returns a sentence; `test_an_index_that_records_no_model_cannot_be_checked_and_says_so`
-  holds that an index with vectors and no record cannot be checked and says so;
-  `embedding_mismatch` is silent
-  for the recorded model and for a database that records none, and
-  `test_the_length_of_the_vectors_is_compared_like_their_model` holds
-  `dimension_mismatch` to the same, naming both lengths where they differ
-  (`tests/test_identity.py:276` to `346`).
-- `test_foreign_keys_are_enforced`, `test_document_meta_follows_its_document`
-  and `test_external_id_is_unique`: a `Sections` row against a
-  nonexistent document, a `Documents` deletion, and a repeated
-  `external_id` behave as promised (`tests/test_store.py:48` to `66`).
-- Six tests cover `link_document_versions`: one document, two, three in a
-  chain, two independent groups, no group at all, and a second call
-  changing nothing (`tests/test_document_versions.py:33` to `91`).
-- `test_per_document_lookups_drive_from_sections` and
-  `test_force_delete_cascades`: chunking's per-document lookups plan
-  through `Sections` first, and deleting a document's content empties every
-  child table (`tests/test_database.py:172` to `184` and `118` to `125`).
 
 ## Modules
 
@@ -502,21 +431,11 @@ from `docpipe.store.schema` directly.
 `docpipe/store/schema.py` implements the six functions `__init__.py`
 re-exports (see Method for what each does, and Opening a database for
 `readonly_uri`) and the rest named above (see Bringing an older database
-forward, and `Meta` under Data model). `connect()` is exercised
-by `test_connect_creates_the_file` (`tests/test_store.py:71`) and used to
-build a database in `tests/test_app_pages.py`; no
-production stage calls it (see Purpose and Method). Outside this
-package and its own tests, `apply()` is called only by
+forward, and `Meta` under Data model).  Outside this
+package, `apply()` is called only by
 `ingest` in `docpipe/ingest/pipeline.py` and by
 `profiles/kwp/migrate_profile_split.py`, against an existing
-pre-refactoring database. Twelve test files call it directly to build a
-database for a test: `tests/conftest.py`'s `kwp_db` fixture,
-`tests/test_store.py`, `tests/test_document_versions.py`,
-`tests/test_ingest.py`, `tests/test_kwp_source.py`,
-`tests/test_migrate_convoy_group_keys.py`,
-`tests/test_migrate_profile_split.py`, `tests/test_scenarios_catalog.py`,
-`tests/test_scenarios_source.py`, `tests/test_identity.py`,
-`tests/test_jsonl.py` and `tests/test_default_profile.py`.
+pre-refactoring database.
 
 `docpipe/store/documents.py` holds `document_exists`, `add_document`,
 `upsert_document_meta`, `link_document_versions`, and the three that carry

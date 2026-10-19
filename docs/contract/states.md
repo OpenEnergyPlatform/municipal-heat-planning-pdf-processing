@@ -51,18 +51,14 @@ each window's reply, `merge_field` writes `read` when the row's cited
 quote sits in a shown source and carries the answer; `unstated` when the
 model names the
 closed list's own `out:unstated` entry, since no passage can prove a
-document does not say something
-(`test_not_stated_is_an_answer_and_needs_no_passage`,
-`tests/test_extraction_fieldwise.py:290`); and `unbacked` when a quote is
+document does not say something; and `unbacked` when a quote is
 offered but fails one of those checks, or a closed-list answer names none
 of its entries (`not_an_option`). Only `read` is final: a later
 window's reply for a coordinate already `read` is discarded, and the row
-keeps its first reading (`tests/test_extraction_fieldwise.py:1171`).
+keeps its first reading.
 `open_rows` still counts `unstated`, `unbacked`, and a coordinate no
 reply has mentioned, as open, so the sweep keeps asking through
-retrieval and then the rest of the document
-(`test_one_window_saying_nothing_here_does_not_end_the_sweep`,
-`tests/test_extraction_fieldwise.py:337`).
+retrieval and then the rest of the document.
 
 The sweep of a coordinate is no longer one per batch. A batch's turn asks only
 the own stage, and what is still open after it is searched once per document
@@ -72,11 +68,7 @@ nothing left to read, the document read to its end; if its allowance ends
 first, every coordinate `open_rows` still counts, `unstated` included, is
 instead written `exhausted`, and what no reply mentioned across every
 round that did run becomes `unanswered`, written once at the end by
-`mark_unanswered`
-(`test_every_coordinate_ends_with_a_state_even_when_nothing_answered`,
-`tests/test_extraction_fieldwise.py:317`;
-`test_a_document_read_to_its_end_is_unstated_and_a_cut_one_exhausted`,
-`tests/test_extraction_document_search.py`). The allowance of the rest stage is
+`mark_unanswered`. The allowance of the rest stage is
 counted in windows and in requests, for every batch that still has an open row
 when the stage begins. A pass over a stored
 harvest (`--top-up`, `--top-up-parameters`) still walks the three stages for

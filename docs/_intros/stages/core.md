@@ -28,20 +28,13 @@ Lines file ends (`jsonl.py`).
 The eight files share a property none of the numbered stages needs: a
 profile never appears inside them by name. `docpipe/profile.py` states
 the rule in its own docstring, "The core never imports a profile; it
-receives one" (`docpipe/profile.py:6`), and
-`test_core_imports_neither_profiles_nor_streamlit`
-(`tests/test_architecture.py`) holds it mechanically, parsing the AST of
-every file under `docpipe/` for a top-level `import profiles` or `import
-streamlit`. Three further checks in the same file hold the reverse:
+receives one" (`docpipe/profile.py:6`). Three further checks in the same file hold the reverse:
 every prompt id the core loads is something each profile with prompts
-on disk supplies
-(`test_a_profile_provides_every_prompt_the_core_loads`), every
+on disk supplies, every
 component or attribute pair the core requires is something each
-profile supplies
-(`test_a_profile_provides_every_component_the_core_requires`), and no
+profile supplies, and no
 profile carries a prompt file that neither the core nor the profile's
-own code ever requests
-(`test_a_profile_carries_no_prompt_nobody_loads`). What a profile itself
+own code ever requests. What a profile itself
 contributes is on [profiles](../profiles.md); this chapter documents the
 receiving side.
 
@@ -261,7 +254,7 @@ which no complete object can be read, with the position of the break),
 label a stage gives an object that was read well and is no use to it (a window
 whose list holds no section); `read` never gives it. The names and their order
 are the harvest's (`extraction.runner._reply_fault`), which keeps its own reader
-and its own sentences; a test holds the two against each other. The sentence
+and its own sentences. The sentence
 is empty for `cut_off`: that reply is never asked again as it stands, the stage
 splits the request or gives the unit more room.
 
@@ -341,7 +334,7 @@ profile, named as the stages name it, and with a `[prices]` table in the
 project file the report ends with a cost, where `cost(row, prices, cached)`
 prices a cached input token at the model's `cached` price and, without one,
 at its `input` price. A process that never
-calls `begin()` counts nothing: the inference app, the tests, and
+calls `begin()` counts nothing: the inference app and
 library use are silent by design, as is the 1-token preflight probe in
 `llm_preflight.py`. A database that cannot be written is logged once and
 never stops the run. A ledger already upgraded to the new columns cannot be
@@ -391,15 +384,7 @@ of the profile, else of the nearest profile it extends (`:157-174`), and
 words itself), the `omitted` blocks and `what_if`, the text with one omitted
 block put back for each of them, made the first time it is read
 (`:795-814`). `owner_of()` gives the profile whose file the prompt is
-(`:177-180`). That is
-how a profile that extends the built-in one writes every prompt itself except
-those that are the built-in file byte for byte: `kwp` inherits one
-(`visuals/caption_keep`) and `scenarios` two (that one and the chat's
-`inference/json_format`),
-so the text read and its sha256 are the ones its own copy had, and
-`tests/test_default_profile.py` holds the list (see [profiles](../profiles.md));
-`placeholders` extracts the
-`{{name}}` tokens in `text` by regex (`:139-141`). `.prompt_versions.json`
+(`:177-180`).  `.prompt_versions.json`
 is a JSON object mapping each prompt id to its current sha256, written
 by `record()` next to a stage's output and read back by
 `check()`/`stale()`.
@@ -531,157 +516,24 @@ what leaves `caption` unchanged.
 
 Over one plan (Kassel), Stage 2's nearest-block caption linking attached
 a rounding-note footnote to 15 of 89 tables in place of the sentence
-naming the table (`docpipe/captions.py:8,83-85`; pinned by
-`tests/test_table_title.py`). Because the caption is the only line of a
+naming the table (`docpipe/captions.py:8,83-85`; pinned by). Because the caption is the only line of a
 table a model can quote for its own year, that mislinking propagated to
 240 of 379 tuples read off the twelve titled target tables' captions,
 and to 88 of Kassel's 100 contested value identities
 (`docpipe/captions.py:89-91`).
-
-Over three of the corpus's eleven textless plans
-`tests/test_table_title.py` measures by name (documents 795 Leipzig,
-1082 Grevesmuehlen, 210 VG Maikammer), Stage 2's linking matched none of
-169 tables, while 23 had a numbered sentence in the model-transcribed
-text that `resolve_title()` could resolve; one carried 60 characters of
-the following paragraph before the trim rule was added
-(`docpipe/captions.py:114-121`). The figure covers only these three
+ The figure covers only these three
 plans, not all eleven.
 
 A `--max-model-len` set too small for a stage's worst-case request was
 not reported as one error at the start: truncated replies accumulated
 across windows (42 of them, keeping their raw text, in the run
 measured) before the preflight check existed
-(`docpipe/llm_preflight.py:6-9`; the same figure opens
-`tests/test_context_budget.py`).
+(`docpipe/llm_preflight.py:6-9`; the same figure opens).
 
 Re-preprocessing the corpus's 1,082 documents so Stage 3 could settle
 every caption at write time is stated as costing GPU days, so
 `enrich_caption` runs instead as a one-time, additive backfill over the
 finished database (`docpipe/chunking/database.py:222`).
-
-## Verification
-
-The boundary holds both directions: `test_core_imports_neither_profiles_nor_streamlit`,
-`test_a_profile_provides_every_prompt_the_core_loads`,
-`test_a_profile_carries_no_prompt_nobody_loads`,
-`test_a_profile_provides_every_component_the_core_requires`
-(`tests/test_architecture.py`).
-
-A profile resolves to the right paths and identity, and a malformed one
-raises a named exception: `test_kwp_profile_loads_and_names_itself`,
-`test_paths_are_profile_scoped`, `test_data_root_default_follows_env`,
-`test_unknown_profile_lists_the_available_ones`,
-`test_no_profile_is_an_explicit_error`,
-`test_ambient_profile_comes_from_the_environment`,
-`test_rejects_unusable_names`, `test_rejects_unknown_column_layout`,
-`test_facet_defaults_to_multiselect`, `test_components_are_optional`,
-`test_a_broken_component_is_an_error_not_an_absence`,
-`test_late_profile_is_refused_when_it_overrides_prompts`,
-`test_late_profile_is_fine_without_prompts` (`tests/test_profile.py`).
-
-A prompt loads, hashes and renders correctly, and a missing or stale one
-is caught: `test_a_profile_ships_the_prompts_its_stages_load`,
-`test_front_matter_becomes_meta_and_leaves_the_body_alone`,
-`test_body_is_passed_through_byte_for_byte`,
-`test_a_prompt_the_profile_does_not_have_is_an_error`,
-`test_without_a_profile_there_is_no_prompt`,
-`test_render_substitutes_and_catches_typos`,
-`test_hash_changes_with_the_file`,
-`test_stale_reports_changed_and_unversioned_results`,
-`test_record_then_check_is_clean`, `test_check_flags_a_changed_prompt`,
-`test_check_flags_results_without_a_version_file`,
-`test_unusable_prompt_id` (`tests/test_prompts.py`).
-
-A prompt written in parts is composed as described, and one that does not fit
-its template is refused, in `tests/test_prompt_parts.py`, against templates made
-up in a temporary folder, each promise with a case built to break it:
-`test_the_prompt_is_the_template_with_the_parts_put_in_and_nothing_else`,
-`test_a_part_with_an_open_placeholder_is_refused`,
-`test_a_missing_required_part_names_the_prompt_the_part_the_profile_and_both_files`,
-`test_a_part_with_the_name_of_a_block_replaces_the_block`,
-`test_a_rule_that_is_left_out_moves_the_rules_after_it_and_what_points_at_them`,
-`test_a_part_whose_place_was_left_out_is_refused`,
-`test_the_fingerprint_is_the_sha_of_the_monolithic_file_with_the_same_text` and
-`test_a_stamp_from_before_the_prompts_were_composed_is_current`. The templates
-of the core are held to one shape in both languages by
-`tests/test_contract_templates.py`
-(`test_every_template_there_is_has_both_languages_and_the_same_shape`,
-`test_no_template_of_the_core_types_a_fact`), and the five composed prompts of
-each shipped profile by `tests/test_prompts_composed.py`
-(`test_the_five_prompts_of_a_profile_are_composed_in_its_language`).
-
-The preflight stops a run before the first document, not after a
-mid-run rejection: `test_preflight_rejects_a_server_with_too_little_context`,
-`test_preflight_rejects_a_server_serving_another_model`,
-`test_preflight_passes_when_the_context_fits`,
-`test_preflight_reports_an_unreachable_server_as_such`
-(`tests/test_context_budget.py`).
-
-The reader takes exactly one object and nothing else, names the cause the way
-the harvest does, and has no sentence for a cut-off reply:
-`test_only_the_one_object_is_read`, `test_it_reads_what_the_harvest_reads`,
-`test_a_reply_is_not_made_right_by_what_surrounds_it`,
-`test_a_reply_is_classified_like_the_harvests`,
-`test_the_guard_against_drift_sees_a_cause_that_changed`,
-`test_a_response_without_a_choice_is_an_empty_reply`,
-`test_the_key_has_to_be_of_the_type_asked_for`,
-`test_a_key_of_any_kind_still_has_to_be_there`,
-`test_a_cut_reply_has_no_sentence_for_the_retry`,
-`test_the_retry_names_the_cause`, `test_a_hole_names_only_known_causes`,
-`test_a_hole_is_a_value_that_cannot_be_changed`,
-`test_a_caller_with_a_profile_of_its_own_speaks_through_it`,
-`test_a_profile_in_force_speaks_unless_a_block_names_another`
-(`tests/test_reading.py`). Every profile carries every sentence, and none of the
-stages that read a reply softens one: `test_no_stage_repairs_a_reply`
-(`tests/test_architecture.py`, one case per module of refinement, the visuals
-stage and page transcription, with
-`test_the_stages_scanned_are_the_ones_that_read_a_reply` holding the list). The
-preflight puts each reply schema to the server, and only a 4xx other than 429
-refuses one: `test_a_server_that_refuses_the_cut_schema_ends_refinement_before_any_document`,
-`test_a_server_that_takes_every_schema_lets_refinement_go_on`
-(`tests/test_stage_preflight.py`) and the cases of `tests/test_llm_preflight.py`. The window the preflight
-found is kept for the role that asked, a later preflight that finds none replaces
-it, a replay keeps the window of the recorded run, and the room of a cut-off
-unit follows from it: `test_the_window_a_server_reports_is_kept_for_the_role_that_asked`,
-`test_each_role_keeps_the_window_of_its_own_server`,
-`test_a_later_preflight_that_finds_no_window_replaces_the_one_found_before`,
-`test_a_server_that_was_refused_leaves_no_window`,
-`test_a_hosted_api_that_reports_a_window_has_it_kept`,
-`test_a_replay_keeps_the_window_of_the_recorded_run`,
-`test_the_room_is_the_smaller_of_twice_and_the_reply_plus_what_is_left`,
-`test_a_hosted_model_that_reports_its_window_is_held_to_it`
-(`tests/test_room.py`).
-
-A title resolves to the sentence that names it, not a linked footnote, a
-neighbour's caption, or past its own end:
-`test_each_table_of_a_run_gets_its_own_caption`,
-`test_three_appendix_tables_of_one_quantity_keep_their_years_apart`,
-`test_a_caption_stage_two_did_link_is_never_replaced`,
-`test_a_table_with_no_caption_of_its_own_does_not_borrow_the_last_one`,
-`test_the_caption_taken_is_the_one_nearest_the_placeholder`,
-`test_a_note_is_not_a_caption_and_a_numbered_phrase_is`,
-`test_nothing_to_resolve_leaves_the_caption_alone`,
-`test_the_table_a_run_reads_carries_the_resolved_title`,
-`test_a_transcribed_page_still_yields_the_documents_own_caption`,
-`test_a_caption_followed_by_prose_ends_where_the_caption_ends`
-(`tests/test_table_title.py`).
-
-The `.env` load precedes everything else, and an explicit environment
-variable is never overwritten by the file: `test_it_reads_key_value_lines`,
-`test_an_explicit_environment_variable_wins`,
-`test_comments_blanks_and_quotes`, `test_a_missing_file_is_not_an_error`,
-`test_the_value_reaches_the_config_that_reads_it`
-(`tests/test_dotenv.py`).
-
-A record whose quote carries U+2028, U+2029 or U+0085 stays one record, read
-and written back: `test_a_line_ends_at_a_line_feed_and_nowhere_else`,
-`test_reading_a_file_folds_the_carriage_return`,
-`test_the_harvest_reader_keeps_a_row_whose_quote_carries_one`,
-`test_a_decision_with_one_in_its_note_is_read`,
-`test_a_recorded_answer_with_one_is_replayed`,
-`test_a_file_written_back_keeps_such_a_row_whole`,
-`test_no_reader_splits_a_files_text_at_more_than_the_line_feed`
-(`tests/test_jsonl.py`).
 
 ## Modules
 
@@ -753,5 +605,4 @@ folds a carriage return before the line feed into the line feed).
 from a PDF can carry one of them, which `json.dumps(ensure_ascii=False)` writes
 as it is: read with `splitlines()`, that record would become two broken ones.
 Every reader of a harvest, of the decisions file and of a cassette goes through
-it, and a test holds that no reader in the package splits a file's text with
-`splitlines()`.
+it.

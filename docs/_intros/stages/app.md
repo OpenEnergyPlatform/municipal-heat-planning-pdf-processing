@@ -346,4 +346,4 @@ imported by the app, that a deployment runs and points `CODE_EXEC_URL` at
 container with no network, every capability dropped and a memory limit.
 `scripts/inference_app_smoketest.py` checks a deployment's embedding backend
 by hand: vector dimension, normalisation, image and image-and-text queries,
-and batch against single. It is run by a person, not by pytest.
+and batch against single. It is run by a person.

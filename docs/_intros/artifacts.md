@@ -92,7 +92,7 @@ backfill, chunking's merge and database insert, `estimate` and `status`. Each
 file carries its own version under the key `version` (`SECTIONS_VERSION` and
 `VISUALS_VERSION` in `docpipe/artifacts.py`, both 1), written first by the stage
 that writes the file; stage 5 replaces the version its input brought along. A
-file without the key is version 1. The schemas are documentation and tests: no
+file without the key is version 1. The schemas are documentation: no
 stage opens them and none refuses a file because it does not fit, so a file that
 breaks one is still read.
 
