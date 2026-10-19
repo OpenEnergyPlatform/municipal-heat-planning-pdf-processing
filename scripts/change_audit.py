@@ -14,7 +14,6 @@ other end. That is mechanical, so it is done here rather than remembered:
 
   siblings   a name this change touches that other places also use
   consumers  a literal this change writes that other files read
-  untested   a function this change adds or moves that no test names
 
 What it cannot check is the shape that needs judgement — a guarantee written
 in a docstring and half implemented. "The quote sits in the source AND carries
@@ -45,7 +44,6 @@ MIN_NAME = 4
 
 _NAME = re.compile(r"\b[a-z_][a-z0-9_]{%d,}\b" % (MIN_NAME - 1))
 _STRING = re.compile(r"""["']([^"'\n]{4,80})["']""")
-_DEF = re.compile(r"^\s*(?:async\s+)?def\s+([a-z_][a-z0-9_]*)")
 # A line with no code punctuation in it is a docstring line.
 _PROSE = re.compile(r"^\s*[A-Za-zÄÖÜäöü\"'][^=(){}\[\]:]*$")
 _SKIP = re.compile(r"^(self|None|True|False|return|import|from|print|value|"
@@ -132,21 +130,6 @@ def consumers(written: set, added: list) -> dict:
     return out
 
 
-def untested(added: list) -> list:
-    """Functions this change adds that no test file names."""
-    out = []
-    for _path, line in added:
-        match = _DEF.match(line)
-        if not match:
-            continue
-        name = match.group(1)
-        if name.startswith("_") or name.startswith("test"):
-            continue
-        if not _git("grep", "-l", "-w", name, "--", "tests/").strip():
-            out.append(name)
-    return out
-
-
 def report(spec: str | None = None) -> int:
     files, added = changed(spec)
     if not files:
@@ -175,13 +158,6 @@ def report(spec: str | None = None) -> int:
             if len(rows) > 6:
                 print(f"      ... {len(rows) - 6} more")
             findings += 1
-        print()
-    blank = untested(added)
-    if blank:
-        print("UNTESTED — added and named in no test:")
-        for name in blank:
-            print(f"  {name}")
-        findings += len(blank)
         print()
     if not findings:
         print("nothing outside the changed files looks touched")

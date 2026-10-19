@@ -1,6 +1,6 @@
 # Documentation
 
-Every page here except the hand-written ones is generated from the code it describes by `scripts/build_docs.py`, and `tests/test_docs_build.py` fails when a checked-in page and a fresh render disagree. Edit the source, then run:
+Every page here except the hand-written ones is generated from the code it describes by `scripts/build_docs.py`, and `python scripts/build_docs.py --check` fails when a checked-in page and a fresh render disagree. Edit the source, then run:
 
 ```
 python scripts/build_docs.py --out docs

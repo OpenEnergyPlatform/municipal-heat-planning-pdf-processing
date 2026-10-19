@@ -16,7 +16,6 @@ other end. That is mechanical, so it is done here rather than remembered:
 
   siblings   a name this change touches that other places also use
   consumers  a literal this change writes that other files read
-  untested   a function this change adds or moves that no test names
 
 What it cannot check is the shape that needs judgement — a guarantee written
 in a docstring and half implemented. "The quote sits in the source AND carries
@@ -59,14 +58,6 @@ Literals this change writes that other files read.
 The check that would have caught the resume defect: recheck.py deleted
 *.stamp.json, and already_done reads that name to decide whether a
 document needs work.
-
-### untested
-
-```python
-def untested(added: list) -> list
-```
-
-Functions this change adds that no test file names.
 
 ### report
 

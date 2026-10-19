@@ -6,7 +6,7 @@ that goes stale: it says what a module did when somebody last looked. Every
 page under `docs/` except one is therefore rendered from what it documents --
 module docstrings, the checked-in extraction schemas, the artifact constants,
 the signatures and docstrings of every public name for the API reference --
-and `--check` fails the test suite the moment the checked-in page and a fresh
+and `--check` fails the moment the checked-in page and a fresh
 render disagree.
 
 What that buys, concretely: renaming a package, emptying a docstring, adding a
@@ -1313,8 +1313,8 @@ def render_index(pages, ledes=None) -> str:
     out = ["# Documentation", "",
            "Every page here except the hand-written ones is generated from "
            "the code it describes by `scripts/build_docs.py`, and "
-           "`tests/test_docs_build.py` fails when a checked-in page and a "
-           "fresh render disagree. Edit the source, then run:", "",
+           "`python scripts/build_docs.py --check` fails when a checked-in "
+           "page and a fresh render disagree. Edit the source, then run:", "",
            "```", "python scripts/build_docs.py --out docs", "```", "",
            "## Pages", ""]
     for name in HANDWRITTEN:

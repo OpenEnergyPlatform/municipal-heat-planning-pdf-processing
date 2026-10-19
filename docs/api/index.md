@@ -258,7 +258,7 @@ is for and what it hands to what; this is the reference.
 ## scripts
 
 - [scripts.build_docs](scripts.build_docs.md): Generate the documentation pages from the sources they describe. (1 class, 30 functions)
-- [scripts.change_audit](scripts.change_audit.md): What this change touches that is not in the files it changes. (5 functions)
+- [scripts.change_audit](scripts.change_audit.md): What this change touches that is not in the files it changes. (4 functions)
 - [scripts.chat_search_recall](scripts.chat_search_recall.md): How often the chat's search puts the passage and the page a harvested value was read from among its hits. (3 classes, 6 functions)
 - [scripts.curation_list](scripts.curation_list.md): The values a person should look at, and where to look. (4 functions)
 - [scripts.harvest_compare](scripts.harvest_compare.md): What one harvest is worth, without a GPU. (6 functions)
