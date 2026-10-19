@@ -24,6 +24,7 @@ RUN python3 /tmp/docpipe-build/install_requirements.py /tmp/docpipe-build/requir
 COPY docpipe/ docpipe/
 COPY profiles/ profiles/
 COPY scripts/ scripts/
+COPY tests/ tests/
 COPY docker/ docker/
 COPY requirements.txt ./
 
