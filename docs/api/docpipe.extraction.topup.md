@@ -227,6 +227,42 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
 
 Re-sweep one harvest file's moved coordinates, then carry its stamp.
 
+### open_coordinates
+
+```python
+def open_coordinates(tuples: list, spec: Spec) -> list
+```
+
+[(parameter, slot, rows)] of every asked coordinate some row left open.
+
+The frame's coordinates are among them: a row whose year is open was not
+under a pair, and its year is asked per row like any other coordinate.
+
+### top_up_open_file
+
+```python
+def top_up_open_file(path: Path, spec: Spec, deps: dict) -> Counter
+```
+
+Ask every open coordinate of one harvest file again, to the end of the
+document, and write what it reads.
+
+The stamp keys stay as they are: no question moved. A coordinate that
+reads, or ends `unstated` after the whole document, replaces the open one;
+one still open keeps its old block (`_sweep_one`), so a run cut short
+leaves the file as it was. The pass enters the stamp's list, and every
+coordinate it read points at its entry.
+
+### run_open
+
+```python
+def run_open(harvest_dir: Path, spec: Spec, deps: dict,
+             names: Optional[set] = None) -> Counter
+```
+
+`top_up_open_file` over a harvest directory, or over the files of
+*names* (stems) in it.
+
 ### point
 
 ```python

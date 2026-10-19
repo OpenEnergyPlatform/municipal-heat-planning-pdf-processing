@@ -995,6 +995,35 @@ Three further scripts, `curation_list.py`, `harvest_compare.py` and
 `trace_report.py`, read a harvest and print or write a report, described
 under Modules; none writes back into one.
 
+### Open coordinates and unread passages (`--top-up-open`)
+
+A harvest ends a coordinate `exhausted` where its budget ran out before the
+document did, and reads values only from the passages its searches kept.
+`--top-up-open` revisits a harvest for both, without harvesting it again and
+without moving a stamp key, since no question changed.
+
+First every coordinate a stored row left `exhausted`, `unanswered` or
+`unbacked` (`topup.OPEN`, chosen by `topup.open_coordinates`) is asked again
+through the harvest's own sweep, `topup._sweep_one`, with the rest stage
+reading the document to its end (`runner.read_to_end`, `REST_TO_END`). An
+answer replaces the open block, `unstated` after the whole document
+included; a coordinate still open keeps its old block, so a cut-short run
+leaves the file as it was. Its trace goes to `trace-open`.
+
+Then `topup_rest` reads the passages the harvest never asked for values.
+Which ones were asked is in the harvest's trace (`trace/<name>.trace.jsonl`,
+every `rows` event's sources, `topup_rest.owners_in`); `plan_batches` is
+given them as `already_read`, finds the frame over every planned passage
+with the stored pairs as its start, so the pairs keep their indices, and
+reads only the rest, the document's unplanned passages included. The rows
+it finds are asked every coordinate to the end and appended behind the
+stored lines, a row equal to a stored tuple left out
+(`topup_parameter.drop_stored_repeats`). A document without a trace is
+skipped and counted. Each pass enters the stamp's list of producers
+(`top-up-open`, `rest`); a document whose list holds `rest` was read to its
+end and is not read again. This pass's trace goes to `trace-rest`, because
+a trace is truncated by the next pass that writes it.
+
 ### A column of one's own
 
 A profile asks what its spec asks, and a spec comes from an ontology. A

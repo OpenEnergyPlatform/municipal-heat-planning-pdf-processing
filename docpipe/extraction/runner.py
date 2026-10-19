@@ -387,6 +387,16 @@ FIELD_ATTEMPTS = int(os.environ.get("EXTRACT_FIELD_ATTEMPTS", "3"))
 # passages out of it, and the two sharing a budget is what left the stage
 # unreachable for every sweep that needed it.
 REST_MAX_WINDOWS = int(os.environ.get("EXTRACT_REST_MAX_WINDOWS", "12"))
+# A rest stage that only the end of the document stops: the budget is
+# compared, never counted down window by window, so no plan comes near it.
+REST_TO_END = 1_000_000
+
+
+def read_to_end() -> None:
+    """Every sweep from here on reads the rest of its document to the end, so
+    a coordinate ends read or `unstated` and never `exhausted`."""
+    global REST_MAX_WINDOWS
+    REST_MAX_WINDOWS = REST_TO_END
 
 
 def window_budget(share: float = 1.0) -> dict:
@@ -5157,6 +5167,7 @@ QUESTION_KEYS = ("parameter/", "value/", "axis/", "slot/")
 # and scripts/harvest_compare.py reads `trace/` alone, so a top-up's requests
 # are not counted into the harvest's cost.
 TOPUP_TRACE_DIR = "trace-topup"
+OPEN_TRACE_DIR = "trace-open"
 
 
 def recorded_questions(questions: Optional[dict]) -> dict:
@@ -5793,7 +5804,8 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
                  more_sources: Optional[Callable], year_states,
                  anchor_texts: dict, only=(),
                  stored_pairs: Optional[dict] = None,
-                 rest_of_document: Optional[Callable] = None
+                 rest_of_document: Optional[Callable] = None,
+                 already_read: frozenset = frozenset()
                  ) -> PlannedDocument:
     """One document from its first search to its batches: the plan, the frame,
     one plan per pair, the rest of the document and the batches that read them.
@@ -5812,6 +5824,10 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
     without one. A search keeps `PLAN_TOP` passages, and on a long plan most
     values stand below that cut -- Mainz gave 1,409 tuples when a follow-up
     happened to walk the rest and 194 when none did.
+
+    *already_read* is {(owner_kind, owner_id)} a stored harvest already asked
+    for values (`topup_rest`): the frame is still found over every planned
+    passage, so the pairs are the stored ones, and none of these is read.
     """
     failed = 0
     name, items, report, doc_spec = plan_pool.submit(
@@ -5888,7 +5904,7 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
         unplanned = [WorkItem(report.document_id, None, source,
                               origin="rest")
                      for source in rest_of_document(report.document_id,
-                                                    planned)]
+                                                    planned | set(already_read))]
         for item in unplanned:
             trace.event("plan", report.document_id, rank=None,
                         origin=item.origin, kind=item.source.owner_kind,
@@ -5902,6 +5918,17 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
         # never reached the server against this.
         report.owners_harvested += len(unplanned)
         items = list(items) + split_long_sources(unplanned)
+    if already_read:
+        def unread(found):
+            return [item for item in found or ()
+                    if (item.source.owner_kind, item.source.owner_id)
+                    not in already_read]
+        items = unread(items)
+        pair_items = {k: unread(found) for k, found in pair_items.items()}
+        # What is read, not what was planned: `not_happened` measures
+        # against it.
+        report.owners_harvested = len({(i.source.owner_kind,
+                                        i.source.owner_id) for i in items})
 
     framed, rest, added = pair_batches(
         items, pairs, [pair_items.get(i) for i in range(len(pairs))],
@@ -6096,6 +6123,13 @@ def main(argv: Optional[list] = None) -> int:
                         help="--top-up only: sweep this stamp key and no "
                              "other, e.g. axis/energy_consumption/sector. "
                              "Repeatable")
+    parser.add_argument("--top-up-open", action="store_true",
+                        help="over the harvest in --out: ask every coordinate "
+                             "left exhausted, unanswered or unbacked again, "
+                             "reading each document to its end, then read "
+                             "the passages its trace says were never asked "
+                             "for values and append their rows. Needs the "
+                             "model, the index and the harvest's traces")
     parser.add_argument("--top-up-parameters", action="store_true",
                         help="append the parameters the spec has gained "
                              "since a document was harvested, over the "
@@ -6140,6 +6174,8 @@ def main(argv: Optional[list] = None) -> int:
         # Two passes over one harvest that write their trace into one folder
         # and truncate it per document: one command, one of them.
         parser.error("--top-up-parameters is not combined with --top-up")
+    if args.top_up_open and (args.top_up or args.top_up_parameters):
+        parser.error("--top-up-open is a pass of its own")
     logging.basicConfig(level=args.log_level,
                         format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
                         datefmt="%H:%M:%S")
@@ -6432,8 +6468,8 @@ def main(argv: Optional[list] = None) -> int:
     documents = documents_to_harvest(
         documents, args.out, spec_sha, force=args.force,
         force_stale=args.force_stale, anchors_sha=anchors_sha, spec=spec,
-        top_up=args.top_up or args.top_up_parameters)
-    if args.top_up_parameters:
+        top_up=args.top_up or args.top_up_parameters or args.top_up_open)
+    if args.top_up_parameters or args.top_up_open:
         from . import topup_parameter
         documents, unharvested = topup_parameter.with_harvest(documents,
                                                               args.out)
@@ -6522,6 +6558,39 @@ def main(argv: Optional[list] = None) -> int:
                  stats["rows"], stats["documents"],
                  stats["stamps carried forward"], stats["blocked"])
         return 1 if unheld_requests() else 0
+
+    if args.top_up_open:
+        # First what the stored rows left open, then the passages nobody
+        # read: the rows found there are asked to the end as well.
+        from . import topup
+        read_to_end()
+        trace.open_trace(args.out / OPEN_TRACE_DIR,
+                         {did: Path(fn).stem for did, fn in documents}.get)
+        listing = sqlite3.connect(readonly_uri(args.db), uri=True)
+        listing.row_factory = sqlite3.Row
+        try:
+            stats = topup.run_open(
+                args.out, spec,
+                {"sweep": make_sweeper(
+                    make_field_asker(args.image_root),
+                    more_sources=more_sources,
+                    rest_of_document=make_rest_of_document(args.db,
+                                                           content=content),
+                    parents=make_parents(args.db, content=content),
+                    anchors=anchors,
+                    search_share=search_share),
+                 "owner_sources": make_owner_sources(args.db, content=content),
+                 "document_spec": make_document_spec(listing, spec,
+                                                     document_axes),
+                 "frame_axes": frame_axes,
+                 "year_states": year_states,
+                 "locate": locate},
+                names={Path(fn).stem for _did, fn in documents})
+        finally:
+            listing.close()
+        log.info("top-up-open: %d open coordinate(s) asked over %d "
+                 "document(s), %d still open", stats["open coordinates asked"],
+                 stats["documents"], stats["open coordinates left"])
 
     ask_frame = make_frame_asker(args.image_root) if frame_axes else None
 
@@ -6613,6 +6682,9 @@ def main(argv: Optional[list] = None) -> int:
     # into them: they say what the harvest cost, and are opened for writing.
     if args.top_up_parameters:
         trace.open_trace(args.out / TOPUP_TRACE_DIR, document_name.get)
+    elif args.top_up_open:
+        from .topup_rest import TRACE_DIR as REST_TRACE_DIR
+        trace.open_trace(args.out / REST_TRACE_DIR, document_name.get)
     else:
         trace.open_trace(args.out / "trace", document_name.get)
 
@@ -6762,6 +6834,17 @@ def main(argv: Optional[list] = None) -> int:
              "dynamic_ok": document_axes is not None,
              "halted": Halted.is_set})
         harvest_document = parameter_pass
+    rest_pass = None
+    if args.top_up_open:
+        from . import topup_rest
+        rest_pass = topup_rest.RestPass(
+            args.out,
+            {"plan": plan_for, "harvest": harvest_all, "locate": locate,
+             "frame_axes": frame_axes, "halted": Halted.is_set,
+             "fold": fold_answers, "not_happened": not_happened,
+             "unserved": UNSERVED.of, "producer": producer,
+             "model": LLM_MODEL})
+        harvest_document = rest_pass
 
     install_stop_handler()
     try:
@@ -6775,6 +6858,8 @@ def main(argv: Optional[list] = None) -> int:
         plan_pool.shutdown(wait=not stopped, cancel_futures=stopped)
     if parameter_pass is not None:
         parameter_pass.report()
+    if rest_pass is not None:
+        rest_pass.report()
 
     if server_gone[0]:
         log.error("extraction: the model server stopped answering — the run "

@@ -538,6 +538,105 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
     return stats
 
 
+# A coordinate this pass asks again: still open when the budget ended, never
+# answered, or answered with a passage that did not carry it.
+OPEN = (fields.EXHAUSTED, fields.UNANSWERED, fields.UNBACKED)
+OPEN_PASS = "top-up-open"
+
+
+def open_coordinates(tuples: list, spec: Spec) -> list:
+    """[(parameter, slot, rows)] of every asked coordinate some row left open.
+
+    The frame's coordinates are among them: a row whose year is open was not
+    under a pair, and its year is asked per row like any other coordinate.
+    """
+    out: list = []
+    for parameter in spec.parameters:
+        mine = [r for r in tuples if r.get("parameter") == parameter.uri]
+        if not mine:
+            continue
+        for slot in fields.asked_slots(parameter):
+            rows = [r for r in mine if r.get(f"{slot.name}_state") in OPEN]
+            if rows:
+                out.append((parameter, slot, rows))
+    return out
+
+
+def top_up_open_file(path: Path, spec: Spec, deps: dict) -> Counter:
+    """Ask every open coordinate of one harvest file again, to the end of the
+    document, and write what it reads.
+
+    The stamp keys stay as they are: no question moved. A coordinate that
+    reads, or ends `unstated` after the whole document, replaces the open one;
+    one still open keeps its old block (`_sweep_one`), so a run cut short
+    leaves the file as it was. The pass enters the stamp's list, and every
+    coordinate it read points at its entry.
+    """
+    stats: Counter = Counter()
+    stamp_path = stamp_path_of(Path(path))
+    stored = read_harvest(path)
+    stats["unreadable line kept"] += stored.unreadable
+    tuples, refusals = stored.tuples, stored.refusals
+    document_id = stored.document_id
+    doc_spec = deps["document_spec"](document_id) if document_id else spec
+    if doc_spec is None:
+        stats["dynamic list unavailable"] += 1
+        return stats
+    work = open_coordinates(tuples, doc_spec)
+    if not work:
+        stats["nothing open"] += 1
+        return stats
+    lines: list = [row if row is not None and row.get("kind") == "tuple"
+                   else (raw[:-1] if raw.endswith("\r") else raw)
+                   for raw, row in stored.entries]
+    bases = named_years_of(tuples, deps.get("frame_axes"),
+                           deps.get("year_states"))
+    position = next_producer(stamp_path)
+    demoted: list = []
+    for parameter, slot, rows in work:
+        stats["open coordinates asked"] += len(rows)
+        _got, refused = _sweep_one(rows, parameter, slot, doc_spec, deps,
+                                   stats, bases=bases, position=position)
+        demoted.extend(refused)
+    for row in demoted:
+        if row in tuples:
+            tuples.remove(row)
+            refusals.append(row)
+    stats["open coordinates left"] += sum(
+        len(rows) for _p, _s, rows in open_coordinates(tuples, doc_spec))
+    if document_id is not None:
+        lines.append({"kind": "summary",
+                      **document_summary(document_id, tuples, refusals)})
+    out = [json.dumps(row, ensure_ascii=False) if isinstance(row, dict)
+           else row for row in lines]
+    if position is not None:
+        from . import runner
+        enter_producer(stamp_path, runner.producer(OPEN_PASS,
+                                                   runner.LLM_MODEL))
+    tmp = Path(path).with_suffix(".jsonl.tmp")
+    tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
+    tmp.replace(path)
+    stats["documents written"] += 1
+    return stats
+
+
+def run_open(harvest_dir: Path, spec: Spec, deps: dict,
+             names: Optional[set] = None) -> Counter:
+    """`top_up_open_file` over a harvest directory, or over the files of
+    *names* (stems) in it."""
+    stats: Counter = Counter()
+    for path in sorted(Path(harvest_dir).glob("*.jsonl")):
+        if path.name.endswith(".trace.jsonl"):
+            continue
+        if names is not None and path.stem not in names:
+            continue
+        stats.update(top_up_open_file(path, spec, deps))
+        stats["documents"] += 1
+    for key, value in sorted(stats.items()):
+        log.info("top-up-open: %-32s %d", key, value)
+    return stats
+
+
 def point(claim: dict, slot, position: Optional[int]) -> None:
     """Say that this pass wrote this coordinate: `<axis>_producer` is the
     position of its entry in the stamp's list. Nothing to point at, nothing

@@ -765,6 +765,15 @@ Whether a failure is the server's: it never arrived, or was `unserved`.
 These wait on the long curve and count towards the dead-server streak. A
 429 retried after two seconds is the same 429.
 
+### read_to_end
+
+```python
+def read_to_end() -> None
+```
+
+Every sweep from here on reads the rest of its document to the end, so
+a coordinate ends read or `unstated` and never `exhausted`.
+
 ### window_budget
 
 ```python
@@ -2099,7 +2108,8 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
                  more_sources: Optional[Callable], year_states,
                  anchor_texts: dict, only=(),
                  stored_pairs: Optional[dict] = None,
-                 rest_of_document: Optional[Callable] = None
+                 rest_of_document: Optional[Callable] = None,
+                 already_read: frozenset = frozenset()
                  ) -> PlannedDocument
 ```
 
@@ -2120,6 +2130,10 @@ kept, read once after the planned ones: under the pair it prints, or
 without one. A search keeps `PLAN_TOP` passages, and on a long plan most
 values stand below that cut -- Mainz gave 1,409 tuples when a follow-up
 happened to walk the rest and 194 when none did.
+
+*already_read* is {(owner_kind, owner_id)} a stored harvest already asked
+for values (`topup_rest`): the frame is still found over every planned
+passage, so the pairs are the stored ones, and none of these is read.
 
 ### accepted_rows
 
