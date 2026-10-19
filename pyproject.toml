@@ -43,7 +43,7 @@ sandbox = ["llm-sandbox"]
 # a hosted text or vision model of this provider (openai is a core package,
 # gemini needs none)
 anthropic = ["anthropic>=0.108"]
-dev = ["rdflib", "pyoxigraph", "pandas", "openpyxl"]
+dev = ["pytest", "rdflib", "pyoxigraph", "pandas", "openpyxl"]
 
 [project.scripts]
 docpipe = "docpipe.cli:main"
