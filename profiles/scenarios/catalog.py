@@ -69,13 +69,13 @@ class Ar6Catalog(Catalog):
     def detail(self, row, facets: Optional[dict] = None):
         lines = []
         if row["venue"]:
-            lines.append(f"Erschienen in: {row['venue']}")
+            lines.append(f"Published in: {row['venue']}")
         # The stored count is what the index claimed; the links are what was
         # imported. They agree, unless the corpus predates the link table.
         count = row["scenario_count"] or len((facets or {}).get("scenario", ()))
         if count:
-            lines.append(f"Dokumentierte AR6-Szenarien: {count}")
-        return (("📄 Publikation", lines),) if lines else ()
+            lines.append(f"AR6 scenarios documented: {count}")
+        return (("📄 Publication", lines),) if lines else ()
 
 
 CATALOG = Ar6Catalog

@@ -39,7 +39,7 @@ section location among them, filled in as the source allows
 `<name>_source` and a refusal's `owner` use the shorter
 `[owner_kind, owner_id]` pair instead (`:147` to `151`).
 
-`x-question` is the sentence, in German, the model was asked for a
+`x-question` is the sentence, in English, the model was asked for a
 coordinate. `x-kg` is the spec's own `kg` block, published unchanged,
 so this page cannot state something the serializer does not. Where a
 coordinate answers from a closed list, `x-options` names every entry

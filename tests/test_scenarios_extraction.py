@@ -179,17 +179,19 @@ def test_the_rows_prompt_calls_the_front_page_what_it_is():
     is exempt from "an empty list is the normal case", and it is not one of
     the citations rule 4 forbids."""
     text = _rows_prompt()
-    for satz in ("steht am Anfang ihres \"text\" und ist zitierbar",
-                 "Eine Quelle ist davon ausgenommen: die Vorderseite",
-                 "Die Vorderseite ist keine solche Stelle"):
+    for satz in ("stands at the start of its \"text\" and is quotable like any "
+                 "other line",
+                 "One source is exempt: the front page",
+                 "The front page is not such a place"):
         assert satz in text, satz
     # And the counterweight. "The heading IS the title" is a licence, and the
     # three shapes it must not be given for are the ones the corpus really
     # holds: ten of the titleless documents carry their author list as the
     # heading of section 1, and seven carry a genus word.
-    assert "Der Titel ist die Zeile ÜBER den Namen" in text
-    for gegenprobe in ("Quellenverzeichnis", "schon die Autorenliste ist",
-                       "Gattungswort"):
+    assert "The title is the line ABOVE the names" in text
+    for gegenprobe in ("a bibliography or reference list",
+                       "whose heading is itself the author list",
+                       "a generic word"):
         assert gegenprobe in text, gegenprobe
 
 
@@ -879,7 +881,7 @@ def test_the_rows_prompt_quotes_the_region_entries_exactly_as_the_list_spells_th
     prompt = _rows_prompt()
     assert _named(prompt, extraction.REGION_OUT) == []
     paragraph = [line for line in prompt.splitlines()
-                 if "KEINE Klasse sind" in line]
+                 if "expressly NOT a class" in line]
     assert paragraph, "the paragraph that introduces the entries moved"
     assert _unknown(paragraph[0], _known_labels()) == []
 
@@ -887,12 +889,16 @@ def test_the_rows_prompt_quotes_the_region_entries_exactly_as_the_list_spells_th
 def test_the_field_prompt_quotes_the_scenario_entries_exactly_as_the_list_spells_them():
     """The same promise for the scenario entries, which only the field request
     names: every entry is quoted, and what the sentence that offers an entry
-    quotes after the word is an entry of the list."""
+    quotes after the word is an entry of the list. The English template also
+    says of `out:unstated`, the code's own entry, that it is always among
+    them: that one is the core's and is not counted for the profile."""
+    from docpipe.extraction import fields
     from profiles.scenarios import extraction
 
     prompt = _field_prompt()
     assert _named(prompt, extraction.SCENARIO_OUT) == []
-    offered = re.findall(r'Eintrag "([^"]+)"', prompt)
+    offered = [name for name in re.findall(r'entry "([^"]+)"', prompt)
+               if name != fields.UNSTATED]
     assert len(offered) >= len(extraction.SCENARIO_OUT), offered
     assert _unknown(" ".join(f'"{name}"' for name in offered),
                     _known_labels()) == []
@@ -903,12 +909,12 @@ def test_the_entry_checks_find_a_spelling_the_list_does_not_hold():
     paragraph that quotes a gloss the vocabulary has no label for."""
     from profiles.scenarios import extraction
 
-    misspelt = ('der Eintrag "Szenario Familie" und der Eintrag '
-                '"nicht in AR 6"')
+    misspelt = ('the entry "Scenario Family" and the entry '
+                '"not in AR 6"')
     assert _named(misspelt, extraction.SCENARIO_OUT) == [
         "out:family", "out:not_documented"]
-    assert _unknown('bei der Region "global" und "ganz anders"',
-                    _known_labels()) == ["ganz anders"]
+    assert _unknown('for the region "global" and "something else"',
+                    _known_labels()) == ["something else"]
     assert _named("nothing quoted", extraction.REGION_OUT) == list(
         extraction.REGION_OUT)
 
@@ -1465,7 +1471,7 @@ def test_the_meanings_are_the_terms_own_and_not_a_paraphrase(spec):
     lines out of an ontology.
 
     `out:not_in_list` is not an ontology term and is held to nothing of the
-    sort: its words are this profile's own, and they are German because the
+    sort: its words are this profile's own, and they are English because the
     prompts of this profile are.
     """
     from profiles.scenarios import kg
@@ -1479,7 +1485,7 @@ def test_the_meanings_are_the_terms_own_and_not_a_paraphrase(spec):
                                    "the " + label)), uri
     assert [u for u in parameter.vocabulary if not kg.in_graph(u)] \
         == ["out:not_in_list"]
-    assert "Art" in parameter.definitions["out:not_in_list"]
+    assert "type" in parameter.definitions["out:not_in_list"]
 
 
 # The four lists a bundle is tagged from, as oekg_shapes.ttl holds them: how
@@ -1535,10 +1541,10 @@ def test_the_offered_wording_did_not_move_when_the_meanings_arrived(spec):
     assert parameter.vocabulary[
         "https://openenergyplatform.org/ontology/oeo/OEO_00020247"] == [
         "target driven scenario", "normative scenario",
-        "backcasting scenario", "Zielszenario"]
-    assert parameter.value_to_uri()["zielszenario"] == (
+        "backcasting scenario"]
+    assert parameter.value_to_uri()["backcasting scenario"] == (
         "https://openenergyplatform.org/ontology/oeo/OEO_00020247")
-    assert len(parameter.value_to_uri()) == 45
+    assert len(parameter.value_to_uri()) == 38
 
 
 # ---------------------------------------------------------------------------

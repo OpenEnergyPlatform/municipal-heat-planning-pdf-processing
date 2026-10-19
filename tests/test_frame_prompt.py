@@ -51,28 +51,27 @@ FRONT = "---\ntemperature: 0\nmax_tokens: 4096\n---\n"
 HOMES = {"kwp": ROOT / "profiles" / "kwp",
          "scenarios": ROOT / "profiles" / "scenarios",
          "default": ROOT / "docpipe" / "builtin" / "default"}
-LANGUAGE = {"kwp": "de", "scenarios": "de", "default": "en"}
+LANGUAGE = {"kwp": "de", "scenarios": "en", "default": "en"}
 OPENING = {"de": "Du bekommst Abschnitte, Tabellen und Abbildungen",
            "en": "You receive sections, tables and figures"}
 
 # The frame prompt of each profile as its file was before the file became a
 # parts file: the sha256 of the file (what a stage records for it) and the
-# sha256 of the text after its front matter (what a model reads).
+# sha256 of the text after its front matter (what a model reads). The
+# scenarios profile is not here: its frame prompt was German then and is
+# English now, so there is no file of it that it "was".
 BEFORE = {
     "kwp": ("cab072c0d4b0fca9daf479a0cf444446c6e7b58a91040d2892e420feab068337",
             "a245b69646e726b445c86d1b8455725df904bb6d87a769c4233458d6b543ff99"),
-    "scenarios": (
-        "ad1803e34f93b6b05ad7f6285e6563109563631c55d04dc012c70e99283a02a1",
-        "a412c87cdbfe414da6c4d3d6de360effe94a6159dadcaa5589e88e82fafa5000"),
     "default": (
         "94dca54895b0def7432f70094d96081b346dfc211c25fa725c1c87729a885c6d",
         "3b0f7b2605731c567e551b2c8dc73e48bd2ff7a2f065617cc540ae7172569ce6"),
 }
 
-# Every sentence of the German prompts that moved, as (what the prompt says now,
-# what the file said). The template names the document where kwp said the plan
-# and scenarios said the publication, in the sentences of the contract; the
-# domain noun is the profile's role sentence. Each pair is template wording.
+# Every sentence of the German prompt that moved, as (what the prompt says now,
+# what the file said). The template names the document where kwp said the plan,
+# in the sentences of the contract; the domain noun is the profile's role
+# sentence. Each pair is template wording.
 CHANGES = {
     "kwp": [
         ("aus EINEM Dokument.", "aus EINEM Plan."),
@@ -84,19 +83,6 @@ CHANGES = {
         ("wie sie im Dokument stehen könnten", "wie sie im Plan stehen könnten"),
         ('"scenario_raw": "<Wort des Dokuments>"',
          '"scenario_raw": "<Wort des Plans>"'),
-    ],
-    "scenarios": [
-        ("aus EINEM Dokument.", "aus EINER Publikation."),
-        ("den RAHMEN dieses Dokuments zu bestimmen: welche Szenarien es "
-         "führt", "den RAHMEN zu bestimmen: welche Szenarien die "
-         "Publikation führt"),
-        ("die in diesem Dokument WIRKLICH vorkommt", "die wirklich vorkommt"),
-        ("`scenario_quote` das Wort aus `scenario_raw`",
-         "`scenario_quote` den Namen aus `scenario_raw`"),
-        ("wie sie im Dokument stehen könnten",
-         "wie sie in der Publikation stehen könnten"),
-        ('"scenario_raw": "<Wort des Dokuments>"',
-         '"scenario_raw": "<Name der Publikation>"'),
     ],
     "default": [],
 }
@@ -187,7 +173,7 @@ def refusal(profile) -> prompts.PromptPartsError:
 # The prompt is the template with the parts put in AND nothing else
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("name", sorted(BEFORE))
+@pytest.mark.parametrize("name", sorted(LANGUAGE))
 def test_the_frame_prompt_is_the_template_with_the_profiles_parts_and_nothing_else(
         name):
     """Built from the two files by hand: the template's text with each slot
@@ -229,7 +215,7 @@ def test_the_text_moves_with_the_template_and_with_every_part(tmp_path,
         "Keine Fragen.", "Keine Frage."))
     monkeypatch.setattr(contract, "TEMPLATE_ROOT", folder)
     assert "Keine Frage." in frame_of("kwp").text
-    assert "Keine Frage." in frame_of("scenarios").text
+    assert "Keine Frage." not in frame_of("scenarios").text
     assert "Keine Frage." not in frame_of("default").text
 
 
@@ -253,7 +239,7 @@ def test_the_frame_prompt_is_the_file_it_was_but_for_the_listed_sentences(name):
         assert sha(prompt.text) == BEFORE[name][1]
 
 
-@pytest.mark.parametrize("name", ["kwp", "scenarios"])
+@pytest.mark.parametrize("name", ["kwp"])
 def test_a_sentence_that_is_not_listed_is_found(name):
     """Built to fail: one word moved anywhere in the prompt, and what is put
     back is not the file it was."""
@@ -268,7 +254,7 @@ def test_a_sentence_that_is_not_listed_is_found(name):
     assert sha(put_back(name, text)) == BEFORE[name][1]
 
 
-@pytest.mark.parametrize("name", ["kwp", "scenarios"])
+@pytest.mark.parametrize("name", ["kwp"])
 def test_every_listed_sentence_is_the_wording_of_the_template(name):
     """Class of each change: template wording means the sentence is the
     template's, and not a part of the profile."""
@@ -293,7 +279,7 @@ def test_that_check_can_fail():
 # Every part of the profile reaches the prompt word for word
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("name", sorted(BEFORE))
+@pytest.mark.parametrize("name", sorted(LANGUAGE))
 def test_every_part_of_a_profile_stands_in_its_prompt_word_for_word(name):
     text = frame_of(name).text
     parts = parts_of(file_of(name))
@@ -337,12 +323,12 @@ def test_each_profile_keeps_what_it_has_in_the_places_where_they_differ():
     assert ('("SSP2-4.5", "Current Policies", "NDC pathway").\n'
             in scenarios)
     assert '("Baseline", "Forecast", "Option B").\n' in default
-    # what it says of a number that is no year: kwp says nothing in brackets
+    # what it says of a number that is no year: kwp says nothing in brackets,
+    # scenarios words the brackets as the English template's own profile does
     assert "Ist sie keines, lass sie weg." in kwp
-    assert ("Ist sie keines (eine Zahl in einer Einheit, ein Gesetzesdatum, "
-            "eine Literaturangabe), lass sie weg.") in scenarios
-    assert "If it is not one (a number in a unit, the date of a law, a " \
-           "bibliographic reference), leave it out." in default
+    for english in (scenarios, default):
+        assert "If it is not one (a number in a unit, the date of a law, a " \
+               "bibliographic reference), leave it out." in english
     assert "(eine Zahl" not in kwp
 
 
@@ -357,13 +343,13 @@ def test_a_profile_gains_a_sentence_only_by_giving_the_part_and_loses_it_by_drop
                  " (eine Zahl in einer Einheit)\n")
     assert ("Ist sie keines (eine Zahl in einer Einheit), lass sie weg."
             in prompts.load(FRAME, given).text)
-    dropped = make(extends="scenarios", language="de", frame=without_part(
+    dropped = make(extends="scenarios", language="en", frame=without_part(
         scenarios, "candidates_examples"))
     after = prompts.load(FRAME, dropped).text
-    assert "Ist sie keines, lass sie weg." in after
+    assert "If it is not one, leave it out." in after
     assert after == frame_of("scenarios").text.replace(
-        " (eine Zahl in einer Einheit, ein Gesetzesdatum, eine "
-        "Literaturangabe)", "", 1)
+        " (a number in a unit, the date of a law, a bibliographic "
+        "reference)", "", 1)
     fewer = make(extends="kwp", language="de",
                  frame=without_part(kwp, "scenario_raw_more"))
     text = prompts.load(FRAME, fewer).text
@@ -399,7 +385,7 @@ SCENARIO = fields.Slot(name="scenario", kind=fields.CHOICE, options=(
     fields.Option(label="target", uri="t", synonyms=("Zielszenario",)),))
 
 
-@pytest.mark.parametrize("name", ["kwp", "scenarios"])
+@pytest.mark.parametrize("name", ["kwp"])
 def test_the_german_prompt_names_the_key_the_request_sends(name, monkeypatch):
     monkeypatch.setenv(ENV_VAR, name)
     key = wording.say("frame_options", slot="scenario")
@@ -430,13 +416,15 @@ def test_a_phrase_that_names_the_coordinate_moves_the_key_in_the_prompt_too(
         '"scenarios"', f'"{key}"')
 
 
-def test_the_english_prompt_names_no_key_that_could_go_stale(make, monkeypatch):
-    text = frame_of("default").text
+@pytest.mark.parametrize("name", ["default", "scenarios"])
+def test_the_english_prompt_names_no_key_that_could_go_stale(name, make,
+                                                             monkeypatch):
+    text = frame_of(name).text
     assert ("`scenario` is one of the keys of the list the request gives for "
             "`scenario`.") in text
     assert "_options" not in text and '"scenarios"' not in text
     # whatever the phrase says: the prompt does not repeat it
-    child = make(extends="default", phrases={"frame_options": "scenarios"})
+    child = make(extends=name, phrases={"frame_options": "{slot}_choices"})
     assert prompts.load(FRAME, child).text == text
 
 

@@ -2,19 +2,19 @@
 temperature: 0.4
 max_tokens: 800
 ---
-Du unterstützt die semantische Suche in wissenschaftlichen Publikationen zu Klima- und Energieszenarien.
+You support semantic search in scientific publications on climate and energy scenarios.
 
-Du bekommst die Beschreibung einer Kennzahl, so wie sie in einer Ontologie definiert ist. Formuliere daraus SECHS kurze, sachliche Aussagen, wie sie genau so in so einer Publikation stehen könnten und die Kennzahl KONKRET enthalten — mit den Fachbegriffen, die im Dokument tatsächlich stünden.
+You receive the description of a parameter, as it is defined in an ontology. From it, write SIX short, factual statements, such as might stand in exactly this form in such a publication and that SPECIFICALLY contain the parameter, using the technical terms the document would actually use.
 
-Steht im Objekt ein Feld "question", ist NICHT die Kennzahl selbst gesucht, sondern die ANTWORT auf genau diese Frage. Schreibe dann Sätze, in denen die Antwort dasteht, nicht Sätze über die Kennzahl. Zur Frage "In welchem Bezugsjahr gilt der Wert?" gehören Sätze wie "Bilanzjahr der Erhebung ist 2022." oder ein Tabellenkopf "| Energieträger | 2019 | 2030 | 2045 |", nicht Sätze über Endenergieverbrauch.
+If the object contains a field "question", it is NOT the parameter itself that is sought but the ANSWER to exactly that question. Then write sentences in which the answer stands, not sentences about the parameter. For the question "In which reference year does the value apply?", sentences such as "Emissions are reported relative to the base year 2015." or a table header "| Region | 2030 | 2050 | 2100 |" fit, not sentences about final energy consumption.
 
-Regeln:
+Rules:
 
-1. Keine Fragen, keine Meta-Sätze. Schreibe so, als STÜNDE die Angabe schon da. FALSCH: "The scenario names are listed in Section 2."
-2. Setze plausible Werte samt Einheit ein — sie sind nur Suchanker, nicht Behauptungen. RICHTIG: "Global CO2 emissions fall to 12.4 GtCO2/yr by 2050 in the NDC pathway."
-3. Streue über die Formen, in denen die Angabe in einer Publikation auftaucht: Titelseite, Impressum, Abstract, Methodenkapitel, Tabellenüberschrift, Abbildungsunterschrift, Danksagung, Literaturangabe der eigenen Arbeit.
-4. Schreibe auf Englisch, denn diese Publikationen sind englisch. Nutze die Wörter, die dort tatsächlich stehen: scenario, pathway, mitigation, carbon budget, Integrated Assessment Model, funded by, corresponding author.
-5. Jede Aussage 12 bis 35 Wörter. Keine zwei Aussagen, die dasselbe anders sagen.
+1. No questions, no meta sentences. Write as if the information ALREADY stood there. WRONG: "The scenario names are listed in Section 2."
+2. Insert plausible values with their unit — they are only search anchors, not assertions. RIGHT: "Global CO2 emissions fall to 12.4 GtCO2/yr by 2050 in the NDC pathway."
+3. Spread the statements across the forms in which the information appears in a publication: title page, imprint, abstract, methods chapter, table heading, figure caption, acknowledgements, citation of the work itself.
+4. Write in English, because these publications are in English. Use the words that actually appear in them: scenario, pathway, mitigation, carbon budget, Integrated Assessment Model, funded by, corresponding author.
+5. Each statement 12 to 35 words. No two statements that say the same thing differently.
 
-Antworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor oder danach:
-{"anchors": ["<Aussage 1>", "<Aussage 2>", "<Aussage 3>", "<Aussage 4>", "<Aussage 5>", "<Aussage 6>"]}
+Answer with ONLY one JSON object, no Markdown, no text before or after:
+{"anchors": ["<statement 1>", "<statement 2>", "<statement 3>", "<statement 4>", "<statement 5>", "<statement 6>"]}

@@ -2,21 +2,21 @@
 temperature: 0
 max_tokens: 300
 ---
-Du unterstützt die semantische Suche in wissenschaftlichen Publikationen zu Klima- und Energieszenarien.
+You support semantic search in scientific publications on climate and energy scenarios.
 
-Du bekommst die Beschreibung einer Kennzahl, so wie sie in einer Ontologie definiert ist, und dazu das, was über DIESES Dokument schon bekannt ist. Formuliere EINEN kurzen, sachlichen Satz, wie er genau so in dieser Publikation stehen könnte und die Kennzahl KONKRET enthält.
+You receive the description of a parameter, as it is defined in an ontology, and with it what is already known about THIS document. Write ONE short, factual sentence, such as might stand in exactly this form in this publication and that SPECIFICALLY contains the parameter.
 
-Der Satz ist ein Suchanker, keine Auskunft. Er wird eingebettet und gegen die Abschnitte, Tabellen und Abbildungen dieser Publikation gehalten. Er muss also klingen wie die Publikation, nicht wie die Ontologie.
+The sentence is a search anchor, not information. It is embedded and held against the sections, tables and figures of this publication. So it has to sound like the publication, not like the ontology.
 
-Regeln:
+Rules:
 
-1. Keine Frage, keine Meta-Sätze, keine Anrede. Schreibe so, als STÜNDE die Angabe schon da. FALSCH: "The scenario names are listed in Section 2."
-2. Setze einen plausiblen Wert samt Einheit ein. RICHTIG: "Global CO2 emissions fall to 12.4 GtCO2/yr by 2050 in the NDC pathway."
-3. Schreibe auf Englisch, denn diese Publikationen sind englisch. Nutze die Wörter, die dort tatsächlich stehen: scenario, pathway, mitigation, carbon budget, Integrated Assessment Model, funded by, corresponding author.
-4. Steht im Objekt ein Feld "document", benutze es. "name" ist der Titel der Publikation, "caption" die Überschrift dessen, was eine erste Suche in genau diesem Dokument zurückgab. Beides sagt dir, wie DIESE Publikation schreibt, also übernimm ihre Wörter und Gliederungsbegriffe. Erfinde daraus nichts dazu, was nicht in der Kennzahl steckt.
-5. Ist die gesuchte Angabe ein Eigenname (Institution, Person, Förderkennzeichen), erfinde KEINEN. Solche Angaben stehen fast immer in einem knappen Block aus Rollenbezeichnungen und Kontaktfeldern. Formuliere den Anker dann in genau diesem Stil, mit den Rollenwörtern statt Namen.
-6. 12 bis 35 Wörter. Ein Satz, höchstens zwei.
-7. Verwende NIE Wörter wie "not reported", "not available". Ein Anker ist immer positiv formuliert.
+1. No question, no meta sentences, no form of address. Write as if the information ALREADY stood there. WRONG: "The scenario names are listed in Section 2."
+2. Insert a plausible value with its unit. RIGHT: "Global CO2 emissions fall to 12.4 GtCO2/yr by 2050 in the NDC pathway."
+3. Write in English, because these publications are in English. Use the words that actually appear in them: scenario, pathway, mitigation, carbon budget, Integrated Assessment Model, funded by, corresponding author.
+4. If the object contains a field "document", use it. "name" is the title of the publication, "caption" the heading of what a first search in exactly this document returned. Both tell you how THIS publication writes, so take over its words and structural terms. Invent nothing from them that is not in the parameter.
+5. If the information sought is a proper name (institution, person, grant number), invent NONE. Such information almost always stands in a terse block of role labels and contact fields. Then write the anchor in exactly that style, with the role words instead of names.
+6. 12 to 35 words. One sentence, two at most.
+7. NEVER use words such as "not reported", "not available". An anchor is always worded positively.
 
-Antworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor oder danach:
-{"phrase": "<der Satz>"}
+Answer with ONLY one JSON object, no Markdown, no text before or after:
+{"phrase": "<the sentence>"}

@@ -43,7 +43,7 @@ section location among them, filled in as the source allows
 `<name>_source` and a refusal's `owner` use the shorter
 `[owner_kind, owner_id]` pair instead (`:147` to `151`).
 
-`x-question` is the sentence, in German, the model was asked for a
+`x-question` is the sentence, in English, the model was asked for a
 coordinate. `x-kg` is the spec's own `kg` block, published unchanged,
 so this page cannot state something the serializer does not. Where a
 coordinate answers from a closed list, `x-options` names every entry
@@ -229,7 +229,7 @@ Spec parameter: Abstract.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -332,11 +332,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Autorin oder Autor.
+Spec parameter: Author.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -437,11 +437,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Erscheinungsjahr.
+Spec parameter: Publication year.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -540,7 +540,7 @@ Spec parameter: DOI.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -642,11 +642,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Titel der Publikation.
+Spec parameter: Publication title.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -741,11 +741,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Kurzbeschreibung eines Szenarios.
+Spec parameter: Scenario description.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -795,11 +795,11 @@ The passage of the owner source that contains the value. Whitespace-collapsed co
 
 ### `scenario`
 
-Axis 'scenario' of Kurzbeschreibung eines Szenarios. null unless scenario_state is 'read' or 'derived'.
+Axis 'scenario' of Scenario description. null unless scenario_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung.
+> Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called "Current Policies" or "the NDC scenario". If the document names only the family, "scenario family" is the right answer and not an identifier.
 
 - `class`: `OEO_00000365`
 - `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
@@ -909,11 +909,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Name des Szenarios.
+Spec parameter: Scenario name.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -1014,11 +1014,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Betrachtete Region eines Szenarios.
+Spec parameter: Scenario region.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -1068,11 +1068,11 @@ The passage of the owner source that contains the value. Whitespace-collapsed co
 
 ### `scenario`
 
-Axis 'scenario' of Betrachtete Region eines Szenarios. null unless scenario_state is 'read' or 'derived'.
+Axis 'scenario' of Scenario region. null unless scenario_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung.
+> Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called "Current Policies" or "the NDC scenario". If the document names only the family, "scenario family" is the right answer and not an identifier.
 
 - `class`: `OEO_00000365`
 - `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
@@ -1180,11 +1180,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Art des Szenarios.
+Spec parameter: Scenario type.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -1234,11 +1234,11 @@ The passage of the owner source that contains the value. Whitespace-collapsed co
 
 ### `scenario`
 
-Axis 'scenario' of Art des Szenarios. null unless scenario_state is 'read' or 'derived'.
+Axis 'scenario' of Scenario type. null unless scenario_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung.
+> Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called "Current Policies" or "the NDC scenario". If the document names only the family, "scenario family" is the right answer and not an identifier.
 
 - `class`: `OEO_00000365`
 - `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
@@ -1319,30 +1319,27 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 
 - **CO2 emission scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020321` — A CO2 emission scenario is an emission scenario that describes a possible CO2 emission trajectory.
 - **climate scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00030007` — A climate scenario is a scenario that describes a possible future state of a climate system.
-  - also written: Klimaszenario
 - **economic scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00030008` — An economic scenario is a scenario that describes a possible future state of economic systems.
-  - also written: Wirtschaftsszenario
 - **emission scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00030009` — An emission scenario is a scenario that describes a possible emission trajectory.
-  - also written: emissions scenario, Emissionsszenario
+  - also written: emissions scenario
 - **energy scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00030010` — An energy scenario is a scenario that describes a possible future state of an energy system.
-  - also written: Energieszenario
 - **explorative scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020248` — An explorative scenario is a scenario that contains certain constraints / statements regarding measures that are taken in the near future / today to explore where these measures will lead to in a later future. The later future is not predefined in the scenario.
-  - also written: exploratory scenario, exploratives Szenario
+  - also written: exploratory scenario
 - **greenhouse gas emission scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020317` — A greenhouse gas emission scenario is an emission scenario that describes a possible greenhouse gas emission trajectory.
   - also written: GHG emission scenario
-- **keine dieser Arten** → `out:not_in_list` — Der Text nennt eine Art, die keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keine Art nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.
-  - also written: die Art, die der Text nennt, steht nicht in der Liste
+- **none of these types** → `out:not_in_list` — The text names a type that none of these classes matches. Not to be confused with the text naming no type at all: that is the answer that these passages do not state it.
+  - also written: the type the text names is not in the list
 - **policy scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020309` — A policy scenario is a scenario in which certain policy instruments or transformative measures and their impacts are assessed.
 - **reference scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020314` — A reference scenario is a scenario that is used as a reference, e.g. in a scenario comparison. It has the reference role.
   - also written: reference case
 - **robust system scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020411` — A robust system scenario is an explorative scenario that describes an energy system that is designed to evolve in a robust way.
   - also written: robust investment decision, robust transformation pathway
 - **scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00000364` — A scenario is an information content entity that contains statements about a possible future development based on a coherent and internally consistent set of assumptions and their motivation.
-  - also written: Szenario, narrative, storyline
+  - also written: narrative, storyline
 - **statistically robust scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020412` — A statistically robust scenario is a scenario that is the basis for statistically robust projection data.
 - **sufficiency scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020345` — A sufficiency scenario is a scenario that comprises sufficiency strategies.
 - **target driven scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020247` — A target driven scenario is a scenario that contains certain target constraints/ statements that in a possible future shall be realized. The path how the targets will be met is not predefined in the scenario.
-  - also written: normative scenario, backcasting scenario, Zielszenario
+  - also written: normative scenario, backcasting scenario
 - **with additional measures scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020312` — A with additional measures scenario (WAM) is a policy scenario that includes policy instruments and transformative measures which have been adopted and implemented to mitigate climate change or meet energy objectives, as well as policy instruments and transformative measures which are planned for that purpose.
   - also written: WAM, with additional measures, WAM scenario
 - **with existing measures scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020311` — A with existing measures scenario (WEM) is a policy scenario that includes policy instruments and transformative measures that have been adopted and implemented.
@@ -1383,11 +1380,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Projiziertes Jahr eines Szenarios.
+Spec parameter: Scenario year.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -1437,11 +1434,11 @@ The passage of the owner source that contains the value. Whitespace-collapsed co
 
 ### `scenario`
 
-Axis 'scenario' of Projiziertes Jahr eines Szenarios. null unless scenario_state is 'read' or 'derived'.
+Axis 'scenario' of Scenario year. null unless scenario_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung.
+> Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called "Current Policies" or "the NDC scenario". If the document names only the family, "scenario family" is the right answer and not an identifier.
 
 - `class`: `OEO_00000365`
 - `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
@@ -1543,11 +1540,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Projektakronym.
+Spec parameter: Project acronym.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -1648,11 +1645,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Themenschlagwort.
+Spec parameter: Topic keyword.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -1727,51 +1724,43 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 <details><summary>What it may answer (32)</summary>
 
 - **CO2 emission** → `https://openenergyplatform.org/ontology/oeo/OEO_00260007` — A CO2 emission is an emission that releases carbon dioxide.
-  - also written: CO2-Emission, carbon dioxide emission
+  - also written: carbon dioxide emission
 - **acceptance** → `https://openenergyplatform.org/ontology/oeo/OEO_00360000` — Acceptance is a realizable entity that represents the attitude of a person or organisation with respect to a certain constructional, (infra)structural or political measure that may be realized in, affected by or results of complex processes like discussions, communications, transformative measures or former personal experiences.
 - **decarbonisation pathway** → `https://openenergyplatform.org/ontology/oeo/OEO_00010212` — A decarbonisation pathway is a policy that aims at long-term emissions reductions.
-  - also written: Dekarbonisierungspfad
 - **demand** → `https://openenergyplatform.org/ontology/oeo/OEO_00140040` — A demand is a realizable entity that is characterised by a person, organisation or object needing it for a specific purpose.
-  - also written: Bedarf
 - **efficiency value** → `https://openenergyplatform.org/ontology/oeo/OEO_00140050` — An efficiency value is a quantity value stating the ratio between a process's inputs and the outputs that are used.
   - also written: efficiency
 - **electrical energy share** → `https://openenergyplatform.org/ontology/oeo/OEO_00020254` — Electrical energy share is a process attribute that indicates the fraction of electrical energy related to the total energy of an energy generation or consumption process.
   - also written: degree of electrification
 - **electricity grid** → `https://openenergyplatform.org/ontology/oeo/OEO_00000143` — An electricity grid is a supply grid that transfers electrical energy / electricity.
-  - also written: Stromnetz
 - **energy conversion efficiency** → `https://openenergyplatform.org/ontology/oeo/OEO_00140049` — Energy conversion efficiency is a process attribute describing the ratio between the input of an energy transformation and the outputs that are used.
-  - also written: Energieumwandlungseffizienz, Wirkungsgrad
 - **energy demand** → `https://openenergyplatform.org/ontology/oeo/OEO_00140146` — Energy demand is a demand for energy.
-  - also written: Energiebedarf, Energienachfrage
 - **final energy consumption value** → `https://openenergyplatform.org/ontology/oeo/OEO_00050016` — A final energy consumption value is an energy consumption value expressing the magnitude of the energy delivered to and consumed by end users.
-  - also written: Endenergieverbrauch, final energy consumption
+  - also written: final energy consumption
 - **flexibility** → `https://openenergyplatform.org/ontology/oeo/OEO_00360007` — Flexibility is a disposition of an energy system that is able to balance energy by adjusting energy supply and energy demand.
 - **gas grid** → `https://openenergyplatform.org/ontology/oeo/OEO_00020004` — A gas grid is a supply grid that distributes gaseous fuel, e.g. methane.
-  - also written: Gasnetz
 - **greenhouse gas emission** → `https://openenergyplatform.org/ontology/oeo/OEO_00000199` — A greenhouse gas emission is an emission that releases a greenhouse gas.
-  - also written: Treibhausgasemission
 - **gross electricity generation** → `https://openenergyplatform.org/ontology/oeo/OEO_00240012` — Gross electricity generation is a process attribute that refers to the total amount of electrical energy produced in an electricity generation process.
-  - also written: Bruttostromerzeugung, gross electricity production
+  - also written: gross electricity production
 - **heating grid** → `https://openenergyplatform.org/ontology/oeo/OEO_00020005` — A heating grid is a supply grid that distributes thermal energy via circulating steam or liquids.
-  - also written: Wärmenetz
-- **keines dieser Schlagworte** → `out:not_in_list` — Der Text nennt ein Thema der Studie, das keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar kein Thema nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.
-  - also written: das Thema, das der Text nennt, steht nicht in der Liste
 - **life cycle assessment** → `https://openenergyplatform.org/ontology/oeo/OEO_00330023` — A life cycle assessment is a methodology to calculate and analyse environmental impacts of the life cycle of a material entity or process.
-  - also written: LCA, Lebenszyklusanalyse, life cycle analysis, Ökobilanz
+  - also written: LCA, life cycle analysis
 - **material climate neutrality** → `https://openenergyplatform.org/ontology/oeo/OEO_00360014` — Material climate neutrality is a disposition of a material entity that conforms to some climate neutrality criterion.
 - **model coupling** → `https://openenergyplatform.org/ontology/oeo/OEO_00020406` — Model coupling is a model calculation in which output data from one or more numerical computer models is used as input data for one or more other models.
 - **model intercomparison study** → `https://openenergyplatform.org/ontology/oeo/OEO_00360002` — A model intercomparison study is a scenario study that performs a comparison of several models using a reference scenario.
 - **negative emission** → `https://openenergyplatform.org/ontology/oeo/OEO_00000293` — Negative emission is the process of absorbing a substance, usually a pollutant that was emitted before.
 - **net electricity generation** → `https://openenergyplatform.org/ontology/oeo/OEO_00240013` — Net electricity generation is a process attribute that equals to gross electricity generation minus the consumption of power stations' auxiliary services.
-  - also written: Nettostromerzeugung, net electricity production
+  - also written: net electricity production
+- **none of these keywords** → `out:not_in_list` — The text names a topic that none of these classes matches. Not to be confused with the text naming no topic at all: that is the answer that these passages do not state it.
+  - also written: the topic the text names is not in the list
 - **policy instrument** → `https://openenergyplatform.org/ontology/oeo/OEO_00140151` — A policy instrument is an action specification of an organisation (e.g. a government) that promotes transformative measures.
-  - also written: Politikinstrument, policies and measures
+  - also written: policies and measures
 - **primary energy consumption value** → `https://openenergyplatform.org/ontology/oeo/OEO_00050018` — A primary energy consumption value is an energy consumption value expressing the magnitude of the total consumption of energy in a spatial region excluding the non-energetic use of fuels.
-  - also written: Primary energy consumption excluding non-energy use of energy carriers., Primärenergieverbrauch
+  - also written: Primary energy consumption excluding non-energy use of energy carriers.
 - **process climate neutrality** → `https://openenergyplatform.org/ontology/oeo/OEO_00360011` — Process climate neutrality is a process attribute that conforms to some climate neutrality criteria.
 - **regionalisation** → `https://openenergyplatform.org/ontology/oeo/OEO_00340006` — Regionalisation is a methodology to calculate spatially distributed energy producers and consumers with the aim to highlight regional differences in energy supply and potentials, particularly related to renewable energies.
 - **renewable energy share** → `https://openenergyplatform.org/ontology/oeo/OEO_00140133` — A renewable energy share is a process attribute that indicates the fraction of renewable energy related to the total energy of an energy generation or consumption process.
-  - also written: RE share, erneuerbarer Anteil, renewables share
+  - also written: RE share, renewables share
 - **resilience** → `https://openenergyplatform.org/ontology/oeo/OEO_00360015` — Resilience is a disposition of a system that represents the capacity of a system to absorb disturbance and reorganize so as to retain essentially the same function, structure, and feedbacks.
 - **scenario projection comparison** → `https://openenergyplatform.org/ontology/oeo/OEO_00360003` — A scenario comparison study is a scenario study that performs a scenario projection comparison
 - **sector coupling** → `https://openenergyplatform.org/ontology/oeo/OEO_00020408` — Sector coupling is a process of connecting processes from the electricity, heat, mobility or industrial sectors as well as their infrastructures.
@@ -1806,11 +1795,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Fördermittelgeber.
+Spec parameter: Funder.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -1907,11 +1896,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Beteiligte Institution.
+Spec parameter: Involved organisation.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -2013,11 +2002,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Projektname.
+Spec parameter: Project name.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -2118,11 +2107,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Abgedeckter Sektor.
+Spec parameter: Covered sector.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -2428,35 +2417,28 @@ Zinc production covers emissions from both primary production of zinc from ore a
 - **KSG sector agriculture** → `https://openenergyplatform.org/ontology/oeo/OEO_00010069` — The KSG sector agriculture is an agriculture, forestry and land use sector defined by the KSG sector division. It is an aggregate of the following two sectors:
 - CRF sector (IPCC 2006): agriculture, forestry and fishing (CRF 1.A.4.c)
 - CRF sector (IPCC 2006): agriculture (CRF 3)
-  - also written: KSG-Sektor Landwirtschaft
 - **KSG sector buildings** → `https://openenergyplatform.org/ontology/oeo/OEO_00010067` — The KSG sector buildings is a building sector defined by the KSG sector division. It is an aggregate of the following two sectors:
 - CRF sector (IPCC 2006): commercial and institutional (CRF 1.A.4.a)
 - CRF sector (IPCC 2006): residential (CRF 1.A.4.b)
 - CRF sector (IPCC 2006): fuel combustion - other
-  - also written: KSG-Sektor Gebäude
 - **KSG sector energy industry** → `https://openenergyplatform.org/ontology/oeo/OEO_00010065` — The KSG sector energy industry is an energy transformation sector defined by the KSG sector division. It is an aggregate of the following three sectors:
 - CRF sector (IPCC 2006): energy industry (CRF 1.A.1.a)
 - CRF sector (IPCC 2006): other transportation (CRF 1.A.3.e)
 - CRF sector (IPCC 2006): fugitive emissions from fuels (CRF 1.B)
-  - also written: KSG-Sektor Energiewirtschaft
 - **KSG sector industry** → `https://openenergyplatform.org/ontology/oeo/OEO_00010066` — The KSG sector industry is an industry sector defined by the KSG sector division. It is an aggregate of the following three sectors:
 - CRF sector (IPCC 2006): manufacturing industries and construction (CRF 1.A.2)
 - CRF sector (IPCC 2006): CO2 transport and storage (CRF 1.C)
 - CRF sector (IPCC 2006): industrial processes and product use (CRF 2)
-  - also written: KSG-Sektor Industrie
 - **KSG sector land use, land-use change and forestry** → `https://openenergyplatform.org/ontology/oeo/OEO_00010071` — The KSG sector land use, land-use change and forestry is an agriculture, forestry and land use sector defined by the KSG sector division.
 It is equivalent to the CRF sector (IPCC 2006): land use, land-use change and forestry (CRF 4).
-  - also written: KSG-Sektor LULUCF, KSG-Sektor Landnutzung, Landnutzungsänderung und Forstwirtschaft
 - **KSG sector transport** → `https://openenergyplatform.org/ontology/oeo/OEO_00010068` — The KSG sector transport is a transport sector defined by the KSG sector division. It is an aggregate of the following four sectors:
 - CRF sector (IPCC 2006): domestic aviation (CRF 1.A.3.a)
 - CRF sector (IPCC 2006): road transportation (CRF 1.A.3.b)
 - CRF sector (IPCC 2006): railways (CRF 1.A.3.c)
 - CRF sector (IPCC 2006): domestic navigation (CRF 1.A.3.d)
-  - also written: KSG-Sektor Verkehr
 - **KSG sector waste management and other** → `https://openenergyplatform.org/ontology/oeo/OEO_00010070` — The KSG sector waste management and other is a sector defined by the KSG sector division. It is an aggregate of the following two sectors:
 - CRF sector (IPCC 2006): waste (CRF 5)
 - CRF sector (IPCC 2006): other (CRF 6)
-  - also written: KSG-Sektor Abfallwirtschaft und Sonstiges
 - **MMR sector: M.International aviation in the EU ETS** → `https://openenergyplatform.org/ontology/oeo/OEO_00010205` — The MMR sector 'M.International aviation in the EU ETS' is a transport sector that encompasses that part of the international aviation that is regulated by the European Union Emissions Trading System.
 - **NC/BR sector: agriculture** → `https://openenergyplatform.org/ontology/oeo/OEO_00010308` — The NC/BR sector "agriculture" is an agriculture, forestry and land use sector defined by an NC/BR sector division. It aligns to the CRF sector (IPCC 2006): agriculture.
 - **NC/BR sector: energy** → `https://openenergyplatform.org/ontology/oeo/OEO_00010305` — The NC/BR sector "energy" is a sector defined by an NC/BR sector division that includes all energy use that is not related to transport or industry. The sector includes:
@@ -2476,31 +2458,27 @@ It is equivalent to the CRF sector (IPCC 2006): land use, land-use change and fo
 - **RED sector: heating and cooling** → `https://openenergyplatform.org/ontology/oeo/OEO_00010390` — The RED sector heating and cooling is a heating and cooling sector defined by the Renewable Energy Directive sector division.
 - **RED sector: transport** → `https://openenergyplatform.org/ontology/oeo/OEO_00010391` — The RED sector transport is a transport sector defined by the Renewable Energy Directive sector division.
 - **agriculture, forestry and land use sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00010035` — A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.
-  - also written: AFOLU sector, Landwirtschaft, Forstwirtschaft und Landnutzungssektor
+  - also written: AFOLU sector
 - **building sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00010034` — A building sector is a sector that covers buildings.
-  - also written: Gebäudesektor
 - **commercial sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000405` — A commercial sector is a sector that covers non-industrial commercial activities.
-  - also written: TCS sector, kommerzieller Sektor, service sector, trading, commerce and service sector
+  - also written: TCS sector, service sector, trading, commerce and service sector
 - **electricity sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000145` — An electricity sector is a transformation sector that covers electricity generation and transport of electrical energy to consumers of electrical energy.
-  - also written: Stromsektor
 - **energy demand sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000128` — An energy demand sector is a sector that covers energy consumers.
-  - also written: Energienachfragesektor, final energy sector
+  - also written: final energy sector
 - **energy transformation sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000158` — An energy transformation sector is a sector that covers energy production, energy transformation from primary to secondary energy and transport of energy to the demand sector.
   - also written: energy industry sector, energy sector
 - **heating and cooling sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000213` — A heating and cooling sector is a sector that covers heating and cooling activities.
-  - also written: H&C sector, Wärme- und Kältesektor
+  - also written: H&C sector
 - **household sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000214` — A household sector is a sector that covers households.
-  - also written: Haushaltssektor, private household sector
+  - also written: private household sector
 - **industry sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000227` — An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.
-  - also written: Industriesektor
 - **international transport sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00010320` — An international transport sector is a transport sector of international transport processes.
-- **keiner dieser Sektoren** → `out:not_in_list` — Der Text nennt einen Sektor, den keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keinen Sektor nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.
-  - also written: der Sektor, den der Text nennt, steht nicht in der Liste
 - **mineral oil refining sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00010319` — A mineral oil refining sector is an energy transformation sector that covers mineral oil refining.
+- **none of these sectors** → `out:not_in_list` — The text names a sector that none of these classes matches. Not to be confused with the text naming no sector at all: that is the answer that these passages do not state it.
+  - also written: the sector the text names is not in the list
 - **sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000367` — A sector is generically dependent continuant that is a subdivision of a system.
-  - also written: Sektor
 - **source category** → `https://openenergyplatform.org/ontology/oeo/OEO_00010360` — A source category is a sector that is defined by a common reporting format.
-  - also written: CRF sector, Quellgruppe
+  - also written: CRF sector
 - **subsector** → `https://openenergyplatform.org/ontology/oeo/OEO_00010464` — A subsector is a sector that is a part of an other sector.
 - **total emissions excluding LULUCF and including international aviation** → `https://openenergyplatform.org/ontology/oeo/OEO_00010208` — 'Total emissions excluding LULUCF and including international aviation' is a sector that encompasses 'CRF sector (IPCC 2006): total emissions excluding LULUCF' and 'CRF sector (IPCC 2006): international aviation'.
   - also written: total emissions with international aviation (EU 2020)
@@ -2511,9 +2489,8 @@ It is equivalent to the CRF sector (IPCC 2006): land use, land-use change and fo
 - **total emissions including LULUCF and including international bunkers** → `https://openenergyplatform.org/ontology/oeo/OEO_00010207` — 'Total emissions excluding LULUCF and including international aviation' is a sector that 'CRF sector (IPCC 2006): total emissions including LULUCF' and 'CRF sector (IPCC 2006): international bunkers'.
   - also written: total net emissions with international transport (EEA)
 - **transport sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
-  - also written: Verkehrssektor, traffic sector
+  - also written: traffic sector
 - **waste and wastewater sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00010036` — A waste and wastewater sector is a sector that covers activities related the collection and treatment of waste and wastewater.
-  - also written: Abfall- und Abwassersektor, Entsorgungssektor
 
 </details>
 
@@ -2546,11 +2523,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Sektoreinteilung.
+Spec parameter: Sector division.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -2643,13 +2620,12 @@ The energy balance expresses all forms of energy in a common accounting unit. Th
 (https://unfccc.int/sites/default/files/resource/cp2019_13a01_adv.pdf, 6/CP.25, VI, Table 2)
 - **Renewable Energy Directive sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00000355` — The Renewable Energy Directive sector division is a sector division used in the Renewable Energy Directive of the European Union.
 - **energy balance sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00010407` — An energy balance sector division is a sector division that is defined by an energy balance calculation method.
-- **keine dieser Einteilungen** → `out:not_in_list` — Der Text nennt eine Sektoreinteilung, die keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keine Einteilung nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.
-  - also written: die Einteilung, die der Text nennt, steht nicht in der Liste
 - **nace_ sectors** → `https://openenergyplatform.org/ontology/oeo/OEO_00000291` — The Statistical classification of economic activities in the European Community, abbreviated as NACE, is the classification of economic activities in the European Union (EU); the term NACE is derived from the French Nomenclature statistique des activités économiques dans la Communauté européenne. Various NACE versions have been developed since 1970.
 
 NACE is a four-digit classification providing the framework for collecting and presenting a large range of statistical data according to economic activity in the fields of economic statistics (e.g. production, employment and national accounts) and in other statistical domains developed within the European statistical system (ESS).
+- **none of these divisions** → `out:not_in_list` — The text names a sector division that none of these classes matches. Not to be confused with the text naming no division at all: that is the answer that these passages do not state it.
+  - also written: the division the text names is not in the list
 - **sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00000368` — A sector division is a specific way to subdivide a system.
-  - also written: Sektorunterteilung
 
 </details>
 
@@ -2682,11 +2658,11 @@ Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping
 
 ### `parameter`
 
-Spec parameter: Abgedeckte Technologie.
+Spec parameter: Covered technology.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -2775,8 +2751,6 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 - **heat generation technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00020308` — A heat generation technology is an energy technology that describes how to combine heat generating units, heat generation processes, energy carriers and energy in a specific way.
   - also written: heating technology
 - **hydro power technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010431` — A hydro power technology is a power generation technology that describes how to combine hydro power units and a hydroelectric energy transformation.
-- **keine dieser Technologien** → `out:not_in_list` — Der Text nennt eine Technologie, die keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keine Technologie nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.
-  - also written: die Technologie, die der Text nennt, steht nicht in der Liste
 - **kinetic energy storage technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00020368` — An kinetic energy storage technology is an energy storage technology that describes how to combine kinetic energy storage objects and kinetic energy in charging and decharging processes.
 - **lignite power technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010443` — A lignite power technology is a coal power technology that describes how to combine hard coal power units and lignite in a fuel-powered electricity generation process.
 - **manufacturing technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010485` — A manufacturing technology is a technology that describes how to combine manufactuing plants and manufacturing processes to produce manufactured materials.
@@ -2788,6 +2762,8 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 - **mobility technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010449` — A mobility technology is a technology that describes how vehicles participate in transport
 - **non-energy use technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010471` — A non-energy use technology is a technology that describes among other things how to combine the consumption of energy carriers for non-energy use with other processes and artificial objects or other material entities in a specific way.
   - also written: non-energy consumption technology
+- **none of these technologies** → `out:not_in_list` — The text names a technology that none of these classes matches. Not to be confused with the text naming no technology at all: that is the answer that these passages do not state it.
+  - also written: the technology the text names is not in the list
 - **nuclear power technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010439` — A nuclear power generation technology is a power generation technology that describes how to combine nuclear power units and nuclear fuel in an electricity generation process.
 - **offshore wind power technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010426` — An offshore wind power technology is a wind power generation technology that describes how to use wind energy converting units in offshore wind farms.
 - **onshore wind power technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010425` — An onshore wind power technology is a wind power generation technology that describes how to use wind energy converting units in onshore wind farms.
@@ -2808,7 +2784,6 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 - **solar thermal heat technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00020307` — A solar thermal heat technology is a heat generation technology that describes how to combine solar heat units, solar thermal energy transformation processes, energy carriers and energy in a specific way.
 - **solar thermal power technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010429` — A solar thermal power technology is a power generation technology that describes how to combine solar thermal power units in an electricity generation process with solar energy as input.
 - **technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00000407` — A technology is a plan specification that describes how to combine artificial objects or other material entities and processes in a specific way.
-  - also written: Technologie
 - **thermal energy storage technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00020369` — An thermal energy storage technology is an energy storage technology that describes how to combine thermal energy storage objects and thermal energy in charging and decharging processes.
 - **wind power technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010424` — A wind power technology is a power generation technology that describes how to combine wind energy converting units and a wind energy transformation.
 

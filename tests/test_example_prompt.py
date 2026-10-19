@@ -39,18 +39,17 @@ EXAMPLE = "extraction/example"
 # sha256 of the text after its front matter (what a model reads), taken from
 # the files of the commit before. The text says the least length of a quote,
 # which is the code's 8, so a change of that number moves them too: that is
-# the prompt moving and is entered here on purpose.
+# the prompt moving and is entered here on purpose. The scenarios profile is
+# not here: its example prompt was German then and is English now, so there
+# is no text of it that it "was".
 BEFORE = {
     "kwp": ("e208bd8e8de87020829d0db0ced56080498cca707a22fa86193cc12a248e12ab",
             "7b62a1c34099aca9dec74f01992a6f8c11ace46ce3b9fa658f8485f4d99a5b46"),
-    "scenarios": (
-        "e79da9efa2d368c8a7554ac014058e3b5f4bf1c06bec48e419fa7ab759a0405a",
-        "c60291b7c6dfa9fbcc3e54435873e74fabfe3c10034432404cba425e762ac5e9"),
     "default": (
         "f50536809883024b2024f069172b0ff234d6243e3fc23d6b4aa32e9450d5d96c",
         "1d444b95916f0e703d7c04926211177196934735b2443a3644673ffc0fb1e1ab"),
 }
-LANGUAGE = {"kwp": "de", "scenarios": "de", "default": "en"}
+LANGUAGE = {"kwp": "de", "scenarios": "en", "default": "en"}
 OPENING = {"de": "Du liest EINE Passage eines Dokuments",
            "en": "You read ONE passage of a document"}
 HOMES = {"kwp": ROOT / "profiles" / "kwp",
@@ -133,7 +132,9 @@ def test_the_example_prompt_is_the_text_and_the_sha_it_was_before_it_was_compose
 def test_that_comparison_fails_when_a_word_of_the_template_moves(
         tmp_path, monkeypatch):
     """Built to fail: the German template with one word changed is another
-    prompt for the two German profiles and the same one for the English."""
+    prompt for the German profile and the same one for the English."""
+    unmoved = {name: prompts.load(EXAMPLE, load_profile(name))
+               for name in ("scenarios", "default")}
     folder = tmp_path / "contract"
     shutil.copytree(contract.TEMPLATE_ROOT, folder)
     path = folder / "de" / "example.md"
@@ -142,16 +143,16 @@ def test_that_comparison_fails_when_a_word_of_the_template_moves(
     write(path, text.replace("Zeichen für Zeichen kopiert",
                              "Zeichen für Zeichen abgeschrieben"))
     monkeypatch.setattr(contract, "TEMPLATE_ROOT", folder)
-    for name in ("kwp", "scenarios"):
-        moved = prompts.load(EXAMPLE, load_profile(name))
-        assert moved.sha256 != BEFORE[name][0]
-        assert sha(moved.text) != BEFORE[name][1]
-        assert "Zeichen für Zeichen abgeschrieben" in moved.text
-    english = prompts.load(EXAMPLE, load_profile("default"))
-    assert english.sha256 == BEFORE["default"][0]
+    moved = prompts.load(EXAMPLE, load_profile("kwp"))
+    assert moved.sha256 != BEFORE["kwp"][0]
+    assert sha(moved.text) != BEFORE["kwp"][1]
+    assert "Zeichen für Zeichen abgeschrieben" in moved.text
+    for name, before in unmoved.items():
+        assert prompts.load(EXAMPLE, load_profile(name)).sha256 == before.sha256
+    assert unmoved["default"].sha256 == BEFORE["default"][0]
 
 
-@pytest.mark.parametrize("name", sorted(BEFORE))
+@pytest.mark.parametrize("name", sorted(LANGUAGE))
 def test_the_profiles_example_reply_reaches_the_prompt_word_for_word(
         name, make):
     """The one domain line: it stands in the text as the profile wrote it, and
@@ -221,7 +222,7 @@ def test_a_child_with_parts_of_its_own_says_its_language_itself(make):
 
 @pytest.mark.parametrize("name, said", [
     ("kwp", "(mindestens {} Zeichen)"),
-    ("scenarios", "(mindestens {} Zeichen)"),
+    ("scenarios", "(at least {} characters)"),
     ("default", "(at least {} characters)")])
 def test_the_least_length_of_a_quote_is_the_codes_number(name, said,
                                                          monkeypatch):
@@ -251,7 +252,7 @@ class Client:
             create=lambda **kwargs: self.asked.append(kwargs) or reply))
 
 
-@pytest.mark.parametrize("name", sorted(BEFORE))
+@pytest.mark.parametrize("name", sorted(LANGUAGE))
 def test_a_request_for_an_example_carries_the_composed_text_and_no_mark(
         name, monkeypatch):
     from docpipe.compile import cli
@@ -263,7 +264,9 @@ def test_a_request_for_an_example_carries_the_composed_text_and_no_mark(
     (asked,) = client.asked
     system = asked["messages"][0]
     assert system == {"role": "system", "content": prompt.text}
-    assert sha(system["content"]) == BEFORE[name][1]
+    assert sha(system["content"]) == sha(prompt.text)
+    if name in BEFORE:
+        assert sha(system["content"]) == BEFORE[name][1]
     assert "{{" not in system["content"] and "<!--" not in system["content"]
     assert (asked["temperature"], asked["max_tokens"]) == (0.0, 1024)
 

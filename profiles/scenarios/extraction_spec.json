@@ -40,12 +40,12 @@
     "out:not_in_list is not an ontology term, so its meaning is this profile's own words, in the language of",
     "its prompts."
   ],
-  "parameter_question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.",
+  "parameter_question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.",
   "parameters": [
     {
       "uri": "publication_title",
-      "label": "Titel der Publikation",
-      "description": "Der vollständige Titel des Dokuments. In den meisten PDFs ist er die Überschrift des ersten Abschnitts und steht als erste Zeile über der Autorenliste; sonst im Kopf der ersten Seite. Der Wert ist die ganze Titelzeile. Nicht der Kolumnentitel, nicht der Name der Reihe, nicht der Name des Verlags.",
+      "label": "Publication title",
+      "description": "The full title of the document. In most PDFs it is the heading of the first section and stands as the first line above the list of authors; otherwise in the head of the first page. The value is the whole title line. Not the running head, not the name of the series, not the name of the publisher.",
       "value_type": "text",
       "example": {
         "source": "Global Energy and Climate Outlook 2023: Transforming Energy Systems for a Net Zero Future. JRC Science for Policy Report.",
@@ -69,8 +69,8 @@
     },
     {
       "uri": "publication_author",
-      "label": "Autorin oder Autor",
-      "description": "Eine einzelne Person, die als Verfasserin oder Verfasser des Dokuments genannt ist. Ein Tupel je Person, in der Schreibweise der Titelseite. Keine Institutionen, keine Herausgeber, keine Danksagungsempfänger.",
+      "label": "Author",
+      "description": "A single person named as an author of the document. One tuple per person, spelled as on the title page. No institutions, no editors, no one thanked in the acknowledgements.",
       "value_type": "text",
       "example": {
         "source": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P., Garaffa, R., Després, J.",
@@ -104,8 +104,8 @@
     },
     {
       "uri": "publication_date",
-      "label": "Erscheinungsjahr",
-      "description": "Das Jahr, in dem das Dokument veröffentlicht wurde, vierstellig und genau so, wie es im Dokument steht — Impressum, Titelseite oder Zitationshinweis. Nicht das Jahr der Daten, nicht ein im Text projiziertes Jahr.",
+      "label": "Publication year",
+      "description": "The year the document was published, four digits and exactly as it stands in the document: imprint, title page or citation note. Not the year of the data, not a year projected in the text.",
       "value_type": "text",
       "example": {
         "source": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619.",
@@ -130,7 +130,7 @@
     {
       "uri": "publication_doi",
       "label": "DOI",
-      "description": "Der Digital Object Identifier des Dokuments, wie er im Impressum oder im Zitationshinweis steht. Nur die DOI selbst, ohne das Präfix doi: und ohne die URL davor.",
+      "description": "The Digital Object Identifier of the document, as it stands in the imprint or the citation note. Only the DOI itself, without the prefix doi: and without the URL before it.",
       "value_type": "text",
       "example": {
         "source": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619.",
@@ -153,7 +153,7 @@
     {
       "uri": "publication_abstract",
       "label": "Abstract",
-      "description": "Die Zusammenfassung des Dokuments, wörtlich und vollständig, so wie sie unter der Überschrift Abstract, Summary, Zusammenfassung oder Executive Summary steht. Keine eigene Zusammenfassung schreiben.",
+      "description": "The summary of the document, word for word and complete, as it stands under the heading Abstract, Summary or Executive Summary. Do not write a summary of your own.",
       "value_type": "text",
       "example": {
         "source": "Abstract This report presents the results of the 2023 edition of the Global Energy and Climate Outlook, which assesses the implications of current climate pledges for the global energy system.",
@@ -175,8 +175,8 @@
     },
     {
       "uri": "study_organisation",
-      "label": "Beteiligte Institution",
-      "description": "Eine Institution, die an der Erstellung des Dokuments beteiligt war: die Affiliation einer Autorin, das herausgebende Institut, die beauftragte Einrichtung. Ein Tupel je Institution, in der Schreibweise des Dokuments.",
+      "label": "Involved organisation",
+      "description": "An institution that took part in producing the document: an author's affiliation, the publishing institute, the commissioned body. One tuple per institution, spelled as in the document.",
       "value_type": "text",
       "example": {
         "source": "European Commission, Joint Research Centre (JRC), Seville, Spain, and Potsdam Institute for Climate Impact Research (PIK).",
@@ -209,8 +209,8 @@
     },
     {
       "uri": "study_funder",
-      "label": "Fördermittelgeber",
-      "description": "Eine Einrichtung, die die Arbeit finanziert hat, genannt in einem Abschnitt zu Funding, Förderung, Acknowledgements oder Danksagung. Nur wer zahlt, nicht wer inhaltlich beigetragen hat.",
+      "label": "Funder",
+      "description": "A body that funded the work, named in a section on funding, support or acknowledgements. Only who pays, not who contributed to the content.",
       "value_type": "text",
       "example": {
         "source": "This work was funded by the German Federal Ministry of Education and Research under grant 01LA1809A.",
@@ -239,8 +239,8 @@
     },
     {
       "uri": "study_project_name",
-      "label": "Projektname",
-      "description": "Der ausgeschriebene Name des Forschungsprojekts, in dessen Rahmen die Studie oder die Szenarien entstanden sind. Nur wenn das Dokument ein Projekt ausdrücklich als seinen Rahmen nennt, nicht der Titel des Dokuments.",
+      "label": "Project name",
+      "description": "The full name of the research project within which the study or the scenarios were produced. Only where the document explicitly names a project as its frame; not the title of the document.",
       "value_type": "text",
       "example": {
         "source": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020.",
@@ -264,8 +264,8 @@
     },
     {
       "uri": "study_acronym",
-      "label": "Projektakronym",
-      "description": "Das Kürzel des Forschungsprojekts, meist in Klammern hinter dem ausgeschriebenen Projektnamen oder als Kopfzeile. Nur das Akronym des Projekts, nicht das eines Modells und nicht das einer Institution.",
+      "label": "Project acronym",
+      "description": "The short name of the research project, mostly in brackets after the full project name or as a header. Only the acronym of the project, not that of a model and not that of an institution.",
       "value_type": "text",
       "example": {
         "source": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020.",
@@ -286,22 +286,18 @@
     },
     {
       "uri": "study_descriptor",
-      "label": "Themenschlagwort",
-      "description": "Ein Thema, das die Studie untersucht, gewählt aus value_classes. Das sind die Schlagworte, die der OEKG für eine Studie zulässt; die Schreibweisen daneben stammen aus der Ontologie selbst. Nimm ein Schlagwort nur, wenn der Text es als Gegenstand der Studie belegt: was sie berechnet, vergleicht oder bewertet. Ein Begriff, der nur am Rand fällt, etwa als Hintergrund in der Einleitung, ist kein Thema der Studie. 'keines dieser Schlagworte' heißt, der Text nennt ein Thema der Studie, aber kein Schlagwort deckt es ab; das ist ein Befund und wird gezählt. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Schlagwort; eine Studie darf mehrere tragen.",
+      "label": "Topic keyword",
+      "description": "A topic the study examines, chosen from value_classes. These are the keywords the OEKG allows for a study; the spellings beside them come from the ontology itself. Take a keyword only where the text shows it as a subject of the study: what it calculates, compares or assesses. A term that only comes up in passing, say as background in the introduction, is not a topic of the study. 'none of these keywords' means the text names a topic of the study but no keyword covers it; that is a finding and is counted. value_raw takes the document's wording. One tuple per keyword; a study may carry several.",
       "value_type": "category",
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000143": {
           "label": "electricity grid",
-          "spellings": [
-            "Stromnetz"
-          ],
+          "spellings": [],
           "definition": "An electricity grid is a supply grid that transfers electrical energy / electricity."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00000199": {
           "label": "greenhouse gas emission",
-          "spellings": [
-            "Treibhausgasemission"
-          ],
+          "spellings": [],
           "definition": "A greenhouse gas emission is an emission that releases a greenhouse gas."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00000293": {
@@ -311,9 +307,7 @@
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010212": {
           "label": "decarbonisation pathway",
-          "spellings": [
-            "Dekarbonisierungspfad"
-          ],
+          "spellings": [],
           "definition": "A decarbonisation pathway is a policy that aims at long-term emissions reductions."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010444": {
@@ -323,16 +317,12 @@
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00020004": {
           "label": "gas grid",
-          "spellings": [
-            "Gasnetz"
-          ],
+          "spellings": [],
           "definition": "A gas grid is a supply grid that distributes gaseous fuel, e.g. methane."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00020005": {
           "label": "heating grid",
-          "spellings": [
-            "Wärmenetz"
-          ],
+          "spellings": [],
           "definition": "A heating grid is a supply grid that distributes thermal energy via circulating steam or liquids."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00020254": {
@@ -361,33 +351,25 @@
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00140049": {
           "label": "energy conversion efficiency",
-          "spellings": [
-            "Energieumwandlungseffizienz",
-            "Wirkungsgrad"
-          ],
+          "spellings": [],
           "definition": "Energy conversion efficiency is a process attribute describing the ratio between the input of an energy transformation and the outputs that are used."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00140133": {
           "label": "renewable energy share",
           "spellings": [
             "RE share",
-            "erneuerbarer Anteil",
             "renewables share"
           ],
           "definition": "A renewable energy share is a process attribute that indicates the fraction of renewable energy related to the total energy of an energy generation or consumption process."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00140146": {
           "label": "energy demand",
-          "spellings": [
-            "Energiebedarf",
-            "Energienachfrage"
-          ],
+          "spellings": [],
           "definition": "Energy demand is a demand for energy."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00140151": {
           "label": "policy instrument",
           "spellings": [
-            "Politikinstrument",
             "policies and measures"
           ],
           "definition": "A policy instrument is an action specification of an organisation (e.g. a government) that promotes transformative measures."
@@ -395,7 +377,6 @@
         "https://openenergyplatform.org/ontology/oeo/OEO_00240012": {
           "label": "gross electricity generation",
           "spellings": [
-            "Bruttostromerzeugung",
             "gross electricity production"
           ],
           "definition": "Gross electricity generation is a process attribute that refers to the total amount of electrical energy produced in an electricity generation process."
@@ -403,7 +384,6 @@
         "https://openenergyplatform.org/ontology/oeo/OEO_00260007": {
           "label": "CO2 emission",
           "spellings": [
-            "CO2-Emission",
             "carbon dioxide emission"
           ],
           "definition": "A CO2 emission is an emission that releases carbon dioxide."
@@ -442,17 +422,13 @@
           "label": "life cycle assessment",
           "spellings": [
             "LCA",
-            "Lebenszyklusanalyse",
-            "life cycle analysis",
-            "Ökobilanz"
+            "life cycle analysis"
           ],
           "definition": "A life cycle assessment is a methodology to calculate and analyse environmental impacts of the life cycle of a material entity or process."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00140040": {
           "label": "demand",
-          "spellings": [
-            "Bedarf"
-          ],
+          "spellings": [],
           "definition": "A demand is a realizable entity that is characterised by a person, organisation or object needing it for a specific purpose."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00140050": {
@@ -465,7 +441,6 @@
         "https://openenergyplatform.org/ontology/oeo/OEO_00050016": {
           "label": "final energy consumption value",
           "spellings": [
-            "Endenergieverbrauch",
             "final energy consumption"
           ],
           "definition": "A final energy consumption value is an energy consumption value expressing the magnitude of the energy delivered to and consumed by end users."
@@ -483,25 +458,23 @@
         "https://openenergyplatform.org/ontology/oeo/OEO_00050018": {
           "label": "primary energy consumption value",
           "spellings": [
-            "Primary energy consumption excluding non-energy use of energy carriers.",
-            "Primärenergieverbrauch"
+            "Primary energy consumption excluding non-energy use of energy carriers."
           ],
           "definition": "A primary energy consumption value is an energy consumption value expressing the magnitude of the total consumption of energy in a spatial region excluding the non-energetic use of fuels."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00240013": {
           "label": "net electricity generation",
           "spellings": [
-            "Nettostromerzeugung",
             "net electricity production"
           ],
           "definition": "Net electricity generation is a process attribute that equals to gross electricity generation minus the consumption of power stations' auxiliary services."
         },
         "out:not_in_list": {
-          "label": "keines dieser Schlagworte",
+          "label": "none of these keywords",
           "spellings": [
-            "das Thema, das der Text nennt, steht nicht in der Liste"
+            "the topic the text names is not in the list"
           ],
-          "definition": "Der Text nennt ein Thema der Studie, das keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar kein Thema nennt: das ist die Antwort, dass es in diesen Passagen nicht steht."
+          "definition": "The text names a topic that none of these classes matches. Not to be confused with the text naming no topic at all: that is the answer that these passages do not state it."
         }
       },
       "example": {
@@ -531,15 +504,13 @@
     },
     {
       "uri": "study_sector_division",
-      "label": "Sektoreinteilung",
-      "description": "Die Sektoreinteilung, nach der die Studie ihre Sektoren abgrenzt, gewählt aus value_classes: etwa die CRF-Sektoren der IPCC-Richtlinien, die Sektoren des Klimaschutzgesetzes oder die einer Energiebilanz. Das sind die Einteilungen, die der OEKG für dieses Feld zulässt. Nimm die spezifischste, die der Text belegt. Zwei Antworten bedeuten NICHT dasselbe: 'sector division' heißt, der Text teilt nach Sektoren ein, nennt aber keine der geführten Einteilungen als Grundlage; 'keine dieser Einteilungen' heißt, der Text nennt sehr wohl eine Einteilung, aber die Liste führt sie nicht. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Einteilung.",
+      "label": "Sector division",
+      "description": "The sector division by which the study delimits its sectors, chosen from value_classes: for instance the CRF sectors of the IPCC guidelines, the sectors of the German Climate Protection Act or those of an energy balance. These are the divisions the OEKG allows for this field. Take the most specific one the text supports. Two answers do NOT mean the same: 'sector division' means the text divides by sectors but names none of the listed divisions as its basis; 'none of these divisions' means the text does name a division, but the list does not carry it. value_raw takes the document's wording. One tuple per division.",
       "value_type": "category",
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000368": {
           "label": "sector division",
-          "spellings": [
-            "Sektorunterteilung"
-          ],
+          "spellings": [],
           "definition": "A sector division is a specific way to subdivide a system."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010055": {
@@ -628,11 +599,11 @@
           "definition": "The BSI-KritisV sector division is a sector division by the German regulation BSI-Kritisverordnung (BSI-KritisV) defining eight sectors that contain critical infrastructures."
         },
         "out:not_in_list": {
-          "label": "keine dieser Einteilungen",
+          "label": "none of these divisions",
           "spellings": [
-            "die Einteilung, die der Text nennt, steht nicht in der Liste"
+            "the division the text names is not in the list"
           ],
-          "definition": "Der Text nennt eine Sektoreinteilung, die keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keine Einteilung nennt: das ist die Antwort, dass es in diesen Passagen nicht steht."
+          "definition": "The text names a sector division that none of these classes matches. Not to be confused with the text naming no division at all: that is the answer that these passages do not state it."
         }
       },
       "example": {
@@ -657,21 +628,18 @@
     },
     {
       "uri": "study_sector",
-      "label": "Abgedeckter Sektor",
-      "description": "Ein Sektor, den die Studie abdeckt, gewählt aus value_classes. Das sind die Sektoren, die der OEKG für dieses Feld zulässt; viele gehören zu einer bestimmten Sektoreinteilung und tragen deren Namen vorn (CRF, KSG, NC/BR, RED). Nimm einen Sektor einer solchen Einteilung nur, wenn der Text diese Einteilung nennt; sonst den allgemeinen Sektor, etwa 'transport sector' oder 'industry sector'. Ein Sektor ist abgedeckt, wenn die Studie ihn modelliert oder Ergebnisse für ihn ausweist, nicht wenn er nur erwähnt wird. 'keiner dieser Sektoren' heißt, der Text nennt einen Sektor, den keine der Klassen trifft. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Sektor.",
+      "label": "Covered sector",
+      "description": "A sector the study covers, chosen from value_classes. These are the sectors the OEKG allows for this field; many belong to a particular sector division and carry its name in front (CRF, KSG, NC/BR, RED). Take a sector of such a division only where the text names that division; otherwise the general sector, such as 'transport sector' or 'industry sector'. A sector is covered when the study models it or reports results for it, not when it is only mentioned. 'none of these sectors' means the text names a sector that none of the classes matches. value_raw takes the document's wording. One tuple per sector.",
       "value_type": "category",
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000367": {
           "label": "sector",
-          "spellings": [
-            "Sektor"
-          ],
+          "spellings": [],
           "definition": "A sector is generically dependent continuant that is a subdivision of a system."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00000128": {
           "label": "energy demand sector",
           "spellings": [
-            "Energienachfragesektor",
             "final energy sector"
           ],
           "definition": "An energy demand sector is a sector that covers energy consumers."
@@ -686,32 +654,25 @@
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00000227": {
           "label": "industry sector",
-          "spellings": [
-            "Industriesektor"
-          ],
+          "spellings": [],
           "definition": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010035": {
           "label": "agriculture, forestry and land use sector",
           "spellings": [
-            "AFOLU sector",
-            "Landwirtschaft, Forstwirtschaft und Landnutzungssektor"
+            "AFOLU sector"
           ],
           "definition": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010036": {
           "label": "waste and wastewater sector",
-          "spellings": [
-            "Abfall- und Abwassersektor",
-            "Entsorgungssektor"
-          ],
+          "spellings": [],
           "definition": "A waste and wastewater sector is a sector that covers activities related the collection and treatment of waste and wastewater."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010360": {
           "label": "source category",
           "spellings": [
-            "CRF sector",
-            "Quellgruppe"
+            "CRF sector"
           ],
           "definition": "A source category is a sector that is defined by a common reporting format."
         },
@@ -723,15 +684,13 @@
         "https://openenergyplatform.org/ontology/oeo/OEO_00000213": {
           "label": "heating and cooling sector",
           "spellings": [
-            "H&C sector",
-            "Wärme- und Kältesektor"
+            "H&C sector"
           ],
           "definition": "A heating and cooling sector is a sector that covers heating and cooling activities."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00000214": {
           "label": "household sector",
           "spellings": [
-            "Haushaltssektor",
             "private household sector"
           ],
           "definition": "A household sector is a sector that covers households."
@@ -740,7 +699,6 @@
           "label": "commercial sector",
           "spellings": [
             "TCS sector",
-            "kommerzieller Sektor",
             "service sector",
             "trading, commerce and service sector"
           ],
@@ -749,23 +707,18 @@
         "https://openenergyplatform.org/ontology/oeo/OEO_00000422": {
           "label": "transport sector",
           "spellings": [
-            "Verkehrssektor",
             "traffic sector"
           ],
           "definition": "A transport sector is a sector that covers transport of people and/or goods."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010034": {
           "label": "building sector",
-          "spellings": [
-            "Gebäudesektor"
-          ],
+          "spellings": [],
           "definition": "A building sector is a sector that covers buildings."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00000145": {
           "label": "electricity sector",
-          "spellings": [
-            "Stromsektor"
-          ],
+          "spellings": [],
           "definition": "An electricity sector is a transformation sector that covers electricity generation and transport of electrical energy to consumers of electrical energy."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010319": {
@@ -795,9 +748,7 @@
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010065": {
           "label": "KSG sector energy industry",
-          "spellings": [
-            "KSG-Sektor Energiewirtschaft"
-          ],
+          "spellings": [],
           "definition": "The KSG sector energy industry is an energy transformation sector defined by the KSG sector division. It is an aggregate of the following three sectors:\n- CRF sector (IPCC 2006): energy industry (CRF 1.A.1.a)\n- CRF sector (IPCC 2006): other transportation (CRF 1.A.3.e)\n- CRF sector (IPCC 2006): fugitive emissions from fuels (CRF 1.B)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010158": {
@@ -829,9 +780,7 @@
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010066": {
           "label": "KSG sector industry",
-          "spellings": [
-            "KSG-Sektor Industrie"
-          ],
+          "spellings": [],
           "definition": "The KSG sector industry is an industry sector defined by the KSG sector division. It is an aggregate of the following three sectors:\n- CRF sector (IPCC 2006): manufacturing industries and construction (CRF 1.A.2)\n- CRF sector (IPCC 2006): CO2 transport and storage (CRF 1.C)\n- CRF sector (IPCC 2006): industrial processes and product use (CRF 2)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010164": {
@@ -1072,17 +1021,12 @@
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010069": {
           "label": "KSG sector agriculture",
-          "spellings": [
-            "KSG-Sektor Landwirtschaft"
-          ],
+          "spellings": [],
           "definition": "The KSG sector agriculture is an agriculture, forestry and land use sector defined by the KSG sector division. It is an aggregate of the following two sectors:\n- CRF sector (IPCC 2006): agriculture, forestry and fishing (CRF 1.A.4.c)\n- CRF sector (IPCC 2006): agriculture (CRF 3)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010071": {
           "label": "KSG sector land use, land-use change and forestry",
-          "spellings": [
-            "KSG-Sektor LULUCF",
-            "KSG-Sektor Landnutzung, Landnutzungsänderung und Forstwirtschaft"
-          ],
+          "spellings": [],
           "definition": "The KSG sector land use, land-use change and forestry is an agriculture, forestry and land use sector defined by the KSG sector division.\nIt is equivalent to the CRF sector (IPCC 2006): land use, land-use change and forestry (CRF 4)."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010135": {
@@ -1197,9 +1141,7 @@
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010070": {
           "label": "KSG sector waste management and other",
-          "spellings": [
-            "KSG-Sektor Abfallwirtschaft und Sonstiges"
-          ],
+          "spellings": [],
           "definition": "The KSG sector waste management and other is a sector defined by the KSG sector division. It is an aggregate of the following two sectors:\n- CRF sector (IPCC 2006): waste (CRF 5)\n- CRF sector (IPCC 2006): other (CRF 6)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010174": {
@@ -1284,9 +1226,7 @@
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010068": {
           "label": "KSG sector transport",
-          "spellings": [
-            "KSG-Sektor Verkehr"
-          ],
+          "spellings": [],
           "definition": "The KSG sector transport is a transport sector defined by the KSG sector division. It is an aggregate of the following four sectors:\n- CRF sector (IPCC 2006): domestic aviation (CRF 1.A.3.a)\n- CRF sector (IPCC 2006): road transportation (CRF 1.A.3.b)\n- CRF sector (IPCC 2006): railways (CRF 1.A.3.c)\n- CRF sector (IPCC 2006): domestic navigation (CRF 1.A.3.d)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010133": {
@@ -1321,9 +1261,7 @@
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010067": {
           "label": "KSG sector buildings",
-          "spellings": [
-            "KSG-Sektor Gebäude"
-          ],
+          "spellings": [],
           "definition": "The KSG sector buildings is a building sector defined by the KSG sector division. It is an aggregate of the following two sectors:\n- CRF sector (IPCC 2006): commercial and institutional (CRF 1.A.4.a)\n- CRF sector (IPCC 2006): residential (CRF 1.A.4.b)\n- CRF sector (IPCC 2006): fuel combustion - other"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010389": {
@@ -1494,11 +1432,11 @@
           "definition": "The CRF sector (IPCC 2006) 'CO2 transport and storage' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAny other emissions from CCS not reported elsewhere."
         },
         "out:not_in_list": {
-          "label": "keiner dieser Sektoren",
+          "label": "none of these sectors",
           "spellings": [
-            "der Sektor, den der Text nennt, steht nicht in der Liste"
+            "the sector the text names is not in the list"
           ],
-          "definition": "Der Text nennt einen Sektor, den keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keinen Sektor nennt: das ist die Antwort, dass es in diesen Passagen nicht steht."
+          "definition": "The text names a sector that none of these classes matches. Not to be confused with the text naming no sector at all: that is the answer that these passages do not state it."
         }
       },
       "example": {
@@ -1533,15 +1471,13 @@
     },
     {
       "uri": "study_technology",
-      "label": "Abgedeckte Technologie",
-      "description": "Eine Technologie, die die Studie abdeckt, gewählt aus value_classes. Das sind die Technologieklassen, die der OEKG für dieses Feld zulässt. Nimm die spezifischste Klasse, die der Text belegt: steht dort Offshore-Wind, ist das 'offshore wind power technology' und nicht bloß 'wind power technology'. Eine Technologie ist abgedeckt, wenn die Studie sie modelliert oder Ergebnisse für sie ausweist, nicht wenn sie nur erwähnt wird. 'keine dieser Technologien' heißt, der Text nennt eine Technologie, die keine der Klassen trifft; das ist ein Befund und wird gezählt. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Technologie.",
+      "label": "Covered technology",
+      "description": "A technology the study covers, chosen from value_classes. These are the technology classes the OEKG allows for this field. Take the most specific class the text supports: where it says offshore wind, that is 'offshore wind power technology' and not merely 'wind power technology'. A technology is covered when the study models it or reports results for it, not when it is only mentioned. 'none of these technologies' means the text names a technology that none of the classes matches; that is a finding and is counted. value_raw takes the document's wording. One tuple per technology.",
       "value_type": "category",
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000407": {
           "label": "technology",
-          "spellings": [
-            "Technologie"
-          ],
+          "spellings": [],
           "definition": "A technology is a plan specification that describes how to combine artificial objects or other material entities and processes in a specific way."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010449": {
@@ -1767,11 +1703,11 @@
           "definition": "A lignite power technology is a coal power technology that describes how to combine hard coal power units and lignite in a fuel-powered electricity generation process."
         },
         "out:not_in_list": {
-          "label": "keine dieser Technologien",
+          "label": "none of these technologies",
           "spellings": [
-            "die Technologie, die der Text nennt, steht nicht in der Liste"
+            "the technology the text names is not in the list"
           ],
-          "definition": "Der Text nennt eine Technologie, die keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keine Technologie nennt: das ist die Antwort, dass es in diesen Passagen nicht steht."
+          "definition": "The text names a technology that none of these classes matches. Not to be confused with the text naming no technology at all: that is the answer that these passages do not state it."
         }
       },
       "example": {
@@ -1811,8 +1747,8 @@
     },
     {
       "uri": "scenario_label",
-      "label": "Name des Szenarios",
-      "description": "Das Szenario der AR6-Datenbank, das an dieser Stelle beschrieben wird. Waehle es aus value_classes aus; die Klassennamen sind die Lauf-Kennungen der AR6-Datenbank fuer genau diese Publikation. In value_raw traegst du ein, wie das Dokument das Szenario nennt, woertlich. Ein Tupel je Szenario, und zwar fuer JEDES, das die Passage nennt - auch fuer die, die du nicht zuordnen kannst. Nennt das Dokument nur eine Familie ('NPi', 'NDC'), waehlst du 'Szenario-Familie'; steht das Szenario nicht in der AR6-Liste dieser Publikation, waehlst du 'nicht in AR6'. Bist du unsicher, laesst du value weg und traegst die Bezeichnung trotzdem in value_raw ein. Weglassen ist die einzige falsche Antwort.",
+      "label": "Scenario name",
+      "description": "The scenario of the AR6 database that is described at this place. Choose it from value_classes; the class names are the run identifiers of the AR6 database for this very publication. value_raw takes what the document calls the scenario, word for word. One tuple per scenario, for EVERY one the passage names, including those you cannot assign. If the document names only a family ('NPi', 'NDC'), choose 'scenario family'; if the scenario is not in the AR6 list of this publication, choose 'not in AR6'. If you are unsure, leave value out and still write the name into value_raw. Leaving the scenario out is the only wrong answer.",
       "value_type": "category",
       "example": {
         "source": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway.",
@@ -1828,7 +1764,7 @@
             "quote": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway."
           },
           {
-            "value": "Szenario-Familie",
+            "value": "scenario family",
             "value_raw": "a 1.5C-compatible pathway",
             "quote": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway."
           }
@@ -1852,8 +1788,8 @@
     },
     {
       "uri": "scenario_type",
-      "label": "Art des Szenarios",
-      "description": "Die Art eines Szenarios, gewaehlt aus value_classes. Das sind die Klassen, die der OEKG fuer dieses Feld zulaesst; die Schreibweisen daneben stammen aus der Ontologie selbst. Nimm die spezifischste Klasse, die der Text belegt: steht dort, dass ein Szenario nur bereits beschlossene Massnahmen enthaelt, ist das 'with existing measures scenario' und nicht blosses 'policy scenario'. Zwei Antworten bedeuten NICHT dasselbe: 'scenario' heisst, der Text sagt nichts Engeres als 'ein Szenario'; 'keine dieser Arten' heisst, der Text nennt sehr wohl eine Art, aber keine der Klassen deckt sie ab. Das zweite ist ein Befund und wird gezaehlt; das erste waere dann eine Behauptung. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Szenario und Klasse; ein Szenario darf mehrere Klassen tragen, wenn der Text sie belegt.",
+      "label": "Scenario type",
+      "description": "The type of a scenario, chosen from value_classes. These are the classes the OEKG allows for this field; the spellings beside them come from the ontology itself. Take the most specific class the text supports: where it says that a scenario only contains measures already adopted, that is 'with existing measures scenario' and not merely 'policy scenario'. Two answers do NOT mean the same: 'scenario' means the text says nothing narrower than 'a scenario'; 'none of these types' means the text does name a type, but none of the classes covers it. The second is a finding and is counted; the first would then be a claim. value_raw takes the document's wording. One tuple per scenario and class; a scenario may carry several classes where the text supports them.",
       "value_type": "category",
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00020309": {
@@ -1899,16 +1835,14 @@
           "label": "target driven scenario",
           "spellings": [
             "normative scenario",
-            "backcasting scenario",
-            "Zielszenario"
+            "backcasting scenario"
           ],
           "definition": "A target driven scenario is a scenario that contains certain target constraints/ statements that in a possible future shall be realized. The path how the targets will be met is not predefined in the scenario."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00020248": {
           "label": "explorative scenario",
           "spellings": [
-            "exploratory scenario",
-            "exploratives Szenario"
+            "exploratory scenario"
           ],
           "definition": "An explorative scenario is a scenario that contains certain constraints / statements regarding measures that are taken in the near future / today to explore where these measures will lead to in a later future. The later future is not predefined in the scenario."
         },
@@ -1933,23 +1867,18 @@
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00030007": {
           "label": "climate scenario",
-          "spellings": [
-            "Klimaszenario"
-          ],
+          "spellings": [],
           "definition": "A climate scenario is a scenario that describes a possible future state of a climate system."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00030008": {
           "label": "economic scenario",
-          "spellings": [
-            "Wirtschaftsszenario"
-          ],
+          "spellings": [],
           "definition": "An economic scenario is a scenario that describes a possible future state of economic systems."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00030009": {
           "label": "emission scenario",
           "spellings": [
-            "emissions scenario",
-            "Emissionsszenario"
+            "emissions scenario"
           ],
           "definition": "An emission scenario is a scenario that describes a possible emission trajectory."
         },
@@ -1967,33 +1896,30 @@
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00030010": {
           "label": "energy scenario",
-          "spellings": [
-            "Energieszenario"
-          ],
+          "spellings": [],
           "definition": "An energy scenario is a scenario that describes a possible future state of an energy system."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00000364": {
           "label": "scenario",
           "spellings": [
-            "Szenario",
             "narrative",
             "storyline"
           ],
           "definition": "A scenario is an information content entity that contains statements about a possible future development based on a coherent and internally consistent set of assumptions and their motivation."
         },
         "out:not_in_list": {
-          "label": "keine dieser Arten",
+          "label": "none of these types",
           "spellings": [
-            "die Art, die der Text nennt, steht nicht in der Liste"
+            "the type the text names is not in the list"
           ],
-          "definition": "Der Text nennt eine Art, die keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keine Art nennt: das ist die Antwort, dass es in diesen Passagen nicht steht."
+          "definition": "The text names a type that none of these classes matches. Not to be confused with the text naming no type at all: that is the answer that these passages do not state it."
         }
       },
       "axes": {
         "scenario": {
           "dynamic": true,
           "required": false,
-          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
+          "question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier.",
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",
@@ -2039,14 +1965,14 @@
     },
     {
       "uri": "scenario_abstract",
-      "label": "Kurzbeschreibung eines Szenarios",
-      "description": "Die Beschreibung, was ein einzelnes Szenario annimmt oder abbildet, wörtlich aus dem Dokument. Nur wenn sich der Satz eindeutig auf ein benanntes Szenario bezieht, dessen Name in derselben Passage steht.",
+      "label": "Scenario description",
+      "description": "The description of what a single scenario assumes or depicts, word for word from the document. Only where the sentence clearly refers to a named scenario whose name stands in the same passage.",
       "value_type": "text",
       "axes": {
         "scenario": {
           "dynamic": true,
           "required": false,
-          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
+          "question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier.",
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",
@@ -2081,14 +2007,14 @@
     },
     {
       "uri": "scenario_region",
-      "label": "Betrachtete Region eines Szenarios",
-      "description": "Das Land oder Gebiet, das ein Szenario abbildet. Waehle es aus value_classes aus - das sind die Studienregionen des OEKG, gefiltert auf die, die dieses Dokument nennt. Ein Tupel je Angabe. Die Liste kennt nur Laender: fuer ein weltweites Szenario waehlst du 'global', fuer einen Zusammenschluss oder eine Grossregion, die nicht als Land dasteht (EU27, OECD, Asien, R5), 'mehrere Regionen'. Beides sind richtige Antworten und werden ausgewertet - ein einzelnes Land stattdessen zu nennen, waere erfunden. In value_raw traegst du ein, wie das Dokument die Region nennt. Nur Regionen, die als Betrachtungsraum genannt sind, nicht jede erwaehnte.",
+      "label": "Scenario region",
+      "description": "The country or area a scenario depicts. Choose it from value_classes: these are the study regions of the OEKG, narrowed to those this document names. One tuple per statement. The list knows only countries: for a worldwide scenario choose 'global', for a union or a large region that does not stand as a country (EU27, OECD, Asia, R5) 'several regions'. Both are right answers and are evaluated; naming a single country instead would be invented. value_raw takes what the document calls the region. Only regions named as the area under study, not every one mentioned.",
       "value_type": "category",
       "axes": {
         "scenario": {
           "dynamic": true,
           "required": false,
-          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
+          "question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier.",
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",
@@ -2107,7 +2033,7 @@
         "source": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution.",
         "tuples": [
           {
-            "value": "mehrere Regionen",
+            "value": "several regions",
             "value_raw": "the EU27",
             "scenario": "EN_INDCi2030_1000f",
             "scenario_raw": "NDC-LTT",
@@ -2149,14 +2075,14 @@
     },
     {
       "uri": "scenario_year",
-      "label": "Projiziertes Jahr eines Szenarios",
-      "description": "Ein Jahr, für das ein Szenario Ergebnisse ausweist oder bis zu dem es rechnet, vierstellig und wörtlich aus dem Dokument. Ein Tupel je Jahr. Nicht das Erscheinungsjahr der Publikation und nicht das Basisjahr der Daten.",
+      "label": "Scenario year",
+      "description": "A year for which a scenario reports results or up to which it runs, four digits and word for word from the document. One tuple per year. Not the publication year and not the base year of the data.",
       "value_type": "text",
       "axes": {
         "scenario": {
           "dynamic": true,
           "required": false,
-          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
+          "question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier.",
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",

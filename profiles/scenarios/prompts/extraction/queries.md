@@ -1,11 +1,11 @@
-# Eine Zeile = ein Anfrage-Template. {label} ist das Parameter-Label aus dem
-# Spec. Dieses Profil hat keine Vokabelachsen, also gibt es kein {axis:...}.
+# One line = one query template. {label} is the parameter label from the
+# spec. This profile has no vocabulary axes, so there is no {axis:...}.
 #
-# Die Templates zielen auf die UMGEBUNG des gesuchten Feldes, nicht auf das
-# Feld selbst: Metadaten stehen im Vorspann, im Impressum und in der
-# Danksagung, und ein Embedding findet eine Titelseite eher über "title page
-# authors affiliation" als über das Wort "Titel". Der Korpus ist überwiegend
-# englisch, die Templates sind es deshalb auch.
+# The templates aim at the SURROUNDINGS of the field sought, not at the field
+# itself: metadata stands in the front matter, the imprint and the
+# acknowledgements, and an embedding finds a title page more readily through
+# "title page authors affiliation" than through the word "title". The corpus
+# is mostly English, and so are the templates.
 {label}
 {label} title page front matter
 {label} imprint publisher citation how to cite

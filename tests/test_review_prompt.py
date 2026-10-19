@@ -46,18 +46,16 @@ REVIEW = "extraction/review"
 # The review prompt of each profile as its file was before it became a parts
 # file: the sha256 of the file (what a stage records for it) and the sha256 of
 # the text after its front matter (what a model reads), taken from the files of
-# the commit before.
+# the commit before. The scenarios profile is not here: its review prompt was
+# German then and is English now, so there is no text of it that it "was".
 BEFORE = {
     "kwp": ("0ce5d97c928579eb188a25c66be32a4d68f186dc3c23e3909ced130574254d0f",
             "24958c3527565bbe8131bfabc084528a51f37b97a9d598a9d811aaf42059d744"),
-    "scenarios": (
-        "eb192233451815b20a110705a6125ba13f03cff3e653ec985be1cc275aa881fa",
-        "dba4aed711e3e3ba6db6a4acb913904a3462703c1709442827b45bc01ae3b67f"),
     "default": (
         "5e604818f9b2a3ee23aaa9c5026d489e1728ea65ef187ead23a37db5d20cb97c",
         "47c4b30cf97b66414837974c54a2d493d40ac731bbd64fb1d193e078840ffd34"),
 }
-LANGUAGE = {"kwp": "de", "scenarios": "de", "default": "en"}
+LANGUAGE = {"kwp": "de", "scenarios": "en", "default": "en"}
 OPENING = {"de": "Du bekommst EINEN bereits gelesenen Wert",
            "en": "You receive ONE value that has already been read"}
 HOMES = {"kwp": ROOT / "profiles" / "kwp",
@@ -77,7 +75,7 @@ DOMAIN_PARTS = ("role", "language_note", "example_reply")
 
 # One sentence of each way the profiles differ, and who has it.
 ROW_NOTE = {"kwp": "auch wenn es von `row` abweicht",
-            "scenarios": "Wiederhole nicht, was dir gezeigt wird",
+            "scenarios": "Do not repeat what you are shown",
             "default": "Do not repeat what you are shown"}
 RAW_BULLET = "`<name>_raw`"
 UNITS_ACCEPTED = "`units_accepted`"
@@ -85,7 +83,7 @@ HAS_RAW = {"kwp": True, "scenarios": False, "default": True}
 HAS_UNITS_ACCEPTED = {"kwp": True, "scenarios": False, "default": True}
 # The sentence about the language of the texts, which kwp does not have.
 LANGUAGE_NOTE = {"kwp": None,
-                 "scenarios": "Zitiere in der Sprache der Passage.",
+                 "scenarios": "Quote in the language of the passage.",
                  "default": "Quote in the language of the passage."}
 
 _names = itertools.count(1)
@@ -186,8 +184,10 @@ def test_the_review_prompt_is_the_text_and_the_sha_it_was_before_it_was_composed
 def test_that_comparison_fails_when_a_word_of_the_template_moves(
         tmp_path, monkeypatch):
     """Built to fail: the German template with one word changed is another
-    prompt for the two German profiles and the same one for the English, and
+    prompt for the German profile and the same one for the English, and
     the other way round."""
+    unmoved = {name: prompts.load(REVIEW, load_profile(name)).sha256
+               for name in ("scenarios", "default")}
     folder = tmp_path / "contract"
     shutil.copytree(contract.TEMPLATE_ROOT, folder)
     monkeypatch.setattr(contract, "TEMPLATE_ROOT", folder)
@@ -197,13 +197,13 @@ def test_that_comparison_fails_when_a_word_of_the_template_moves(
     assert text.count("Ein Zitat aus irgendetwas anderem") == 1
     write(german, text.replace("Ein Zitat aus irgendetwas anderem",
                                "Ein Zitat aus etwas anderem"))
-    for name in ("kwp", "scenarios"):
-        moved = prompts.load(REVIEW, load_profile(name))
-        assert moved.sha256 != BEFORE[name][0]
-        assert sha(moved.text) != BEFORE[name][1]
-        assert "Ein Zitat aus etwas anderem wird verworfen" in moved.text
-    assert prompts.load(REVIEW, load_profile("default")).sha256 == \
-        BEFORE["default"][0]
+    moved = prompts.load(REVIEW, load_profile("kwp"))
+    assert moved.sha256 != BEFORE["kwp"][0]
+    assert sha(moved.text) != BEFORE["kwp"][1]
+    assert "Ein Zitat aus etwas anderem wird verworfen" in moved.text
+    for name, before in unmoved.items():
+        assert prompts.load(REVIEW, load_profile(name)).sha256 == before
+    assert unmoved["default"] == BEFORE["default"][0]
 
     write(german, text)
     english = folder / "en" / "review.md"
@@ -211,10 +211,9 @@ def test_that_comparison_fails_when_a_word_of_the_template_moves(
     assert text.count("A quote from anything else") == 1
     write(english, text.replace("A quote from anything else",
                                 "A quote from something else"))
-    assert prompts.load(REVIEW, load_profile("default")).sha256 != \
-        BEFORE["default"][0]
-    for name in ("kwp", "scenarios"):
-        assert prompts.load(REVIEW, load_profile(name)).sha256 == BEFORE[name][0]
+    for name, before in unmoved.items():
+        assert prompts.load(REVIEW, load_profile(name)).sha256 != before
+    assert prompts.load(REVIEW, load_profile("kwp")).sha256 == BEFORE["kwp"][0]
 
 
 @pytest.mark.parametrize("name", sorted(BEFORE))
@@ -253,7 +252,7 @@ def test_the_template_has_sentences_to_hold_the_files_against():
         assert len(template_sentences(language)) >= 10, language
 
 
-@pytest.mark.parametrize("name", sorted(BEFORE))
+@pytest.mark.parametrize("name", sorted(LANGUAGE))
 def test_no_sentence_of_the_template_is_written_in_a_profiles_file(name):
     assert doubled(file_of(name), LANGUAGE[name]) == []
 
@@ -261,12 +260,12 @@ def test_no_sentence_of_the_template_is_written_in_a_profiles_file(name):
 def test_that_scan_can_fail():
     """Built to fail: a profile file that holds the template's sentences,
     which is what the files were before they were cut into parts."""
-    for name in sorted(BEFORE):
+    for name in sorted(LANGUAGE):
         composed = prompts.load(REVIEW, load_profile(name)).text
         assert len(doubled(composed, LANGUAGE[name])) >= 8, name
 
 
-@pytest.mark.parametrize("name", sorted(BEFORE))
+@pytest.mark.parametrize("name", sorted(LANGUAGE))
 def test_a_profiles_file_holds_its_domain_parts_and_the_blocks_it_words(name):
     parts = set(re.findall(r"^<!-- part: (\w+) -->$", file_of(name), re.M))
     assert parts == PARTS_OF[name]
@@ -279,31 +278,39 @@ def test_a_profiles_file_holds_its_domain_parts_and_the_blocks_it_words(name):
 # What the profiles worded differently stays each profile's own
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("name", sorted(BEFORE))
+@pytest.mark.parametrize("name", sorted(LANGUAGE))
 def test_each_profile_keeps_the_sentences_it_had(name):
     text = prompts.load(REVIEW, load_profile(name)).text
+    # scenarios words the row note as the English template does, so the one
+    # sentence stands in both English prompts and in no German one
     for who, sentence in ROW_NOTE.items():
-        assert (sentence in text) is (who == name), (name, who)
+        assert (sentence in text) is (sentence == ROW_NOTE[name]), (name, who)
     assert (RAW_BULLET in text) is HAS_RAW[name]
     assert (UNITS_ACCEPTED in text) is HAS_UNITS_ACCEPTED[name]
     for who, sentence in LANGUAGE_NOTE.items():
         if sentence:
-            assert (sentence in text) is (who == name), (name, who)
+            assert (sentence in text) is (sentence == LANGUAGE_NOTE[name]), (
+                name, who)
     assert ("language_note" in PARTS_OF[name]) is bool(LANGUAGE_NOTE[name])
 
 
 def test_scenarios_without_its_overrides_would_read_the_templates_sentences(make):
     """Built to fail: the same file without the part that words the row note,
     without the one that words the unit, and without the omission of the
-    `_raw` bullet. Each puts the template's own sentence back, so each is what
-    keeps the scenarios request as it was."""
+    `_raw` bullet. The unit and the omission put the template's own sentence
+    back, so they are what keeps the scenarios request as it is. The row note
+    is worded as the English template words it, so leaving the part out moves
+    no word: the loader still says the profile words it only while the part
+    is there."""
     text = file_of("scenarios")
     plain = prompts.load(REVIEW, load_profile("scenarios")).text
 
     no_note = prompts.load(REVIEW, own(make, "scenarios",
                                        without_part(text, "row_note")))
-    assert ROW_NOTE["kwp"] in no_note.text
-    assert ROW_NOTE["scenarios"] not in no_note.text
+    assert ROW_NOTE["scenarios"] in no_note.text and no_note.text == plain
+    assert no_note.composition["overrides"] == ["field_unit"]
+    assert "row_note" in prompts.load(
+        REVIEW, load_profile("scenarios")).composition["overrides"]
 
     no_unit = prompts.load(REVIEW, own(make, "scenarios",
                                        without_part(text, "field_unit")))
@@ -345,7 +352,7 @@ def test_kwp_leaves_out_the_sentence_about_the_language_of_its_texts(make):
 # The domain parts reach the request word for word
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("name", sorted(BEFORE))
+@pytest.mark.parametrize("name", sorted(LANGUAGE))
 def test_the_profiles_domain_parts_reach_the_prompt_word_for_word(name, make):
     prompt = prompts.load(REVIEW, load_profile(name))
     held = [part for part in DOMAIN_PARTS if part in PARTS_OF[name]]
@@ -377,7 +384,7 @@ def test_the_check_that_a_domain_part_stands_verbatim_can_fail():
 
 @pytest.mark.parametrize("name, said", [
     ("kwp", "mindestens {} Zeichen"),
-    ("scenarios", "mindestens {} Zeichen"),
+    ("scenarios", "at least {} characters"),
     ("default", "at least {} characters")])
 def test_the_least_length_of_a_quote_is_the_codes_number(name, said,
                                                          monkeypatch):
@@ -391,7 +398,7 @@ def test_the_least_length_of_a_quote_is_the_codes_number(name, said,
     assert moved.sha256 != before.sha256
 
 
-@pytest.mark.parametrize("name", sorted(BEFORE))
+@pytest.mark.parametrize("name", sorted(LANGUAGE))
 def test_the_word_for_not_stated_is_the_codes_word(name, monkeypatch):
     profile = load_profile(name)
     before = prompts.load(REVIEW, profile)
@@ -484,7 +491,9 @@ def test_a_request_for_a_review_carries_the_composed_text_and_no_mark(
     for request in sent:
         system = request["messages"][0]
         assert system == {"role": "system", "content": prompt.text}
-        assert sha(system["content"]) == BEFORE[name][1]
+        assert sha(system["content"]) == sha(prompt.text)
+        if name in BEFORE:
+            assert sha(system["content"]) == BEFORE[name][1]
         assert "{{" not in system["content"] and "<!--" not in system["content"]
         assert request["temperature"] == 0.0
 
@@ -555,16 +564,16 @@ def test_a_block_that_is_left_out_and_worded_is_refused(make):
     """The raw bullet is left out for scenarios, so a part of that name says
     two things about one place."""
     given = file_of("scenarios").rstrip("\n") + (
-        "\n\n<!-- part: field_raw -->\n- `<name>_raw`, wie das Dokument es "
-        "schreibt,\n")
+        "\n\n<!-- part: field_raw -->\n- `<name>_raw`, as the publication "
+        "writes it,\n")
     profile = own(make, "scenarios", given)
     problem = refusal(profile)
     assert "left out and worded" in str(problem)
-    named(problem, profile, "field_raw")
+    named(problem, profile, "field_raw", LANGUAGE["scenarios"])
     # worded and not left out, it is the profile's sentence in the template's place
     worded = given.replace("without: [field_raw]\n", "", 1)
     text = prompts.load(REVIEW, own(make, "scenarios", worded)).text
-    assert "- `<name>_raw`, wie das Dokument es schreibt,\n- bei einer Zahl" in text
+    assert "- `<name>_raw`, as the publication writes it,\n- for a number" in text
 
 
 @pytest.mark.parametrize("part", ["role", "row_note", "example_reply"])
@@ -574,7 +583,7 @@ def test_a_part_with_an_open_placeholder_is_refused(make, part):
     profile = own(make, name, file_of(name).replace(old, old + " {{x}}", 1))
     problem = refusal(profile)
     assert "{{x}}" in str(problem)
-    named(problem, profile, part)
+    named(problem, profile, part, LANGUAGE[name])
 
 
 def test_the_doctor_reads_the_review_prompt_of_a_profile_and_fails_a_broken_one(

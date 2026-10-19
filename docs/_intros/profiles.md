@@ -247,8 +247,8 @@ shipped profile provides.
 | The answer app | `inference.PHRASES`, `READOFF_MARKER`, `READOFF_NOTE` | required at first use (`profile.require`, variable `attr`, `docpipe/inference/wording.py:120`) | German phrasing, 30 keys checked against `wording.REQUIRED` | English phrasing, same 30 keys |
 | Reading the values out | `extraction.PHRASES` | required, laid over the extended profile's (`profile.layers`, `docpipe/extraction/wording.py`) | German sentences the stage writes to the model | German sentences, the language of its extraction prompts |
 | Reading the values out | `extraction.PROMPT_CHECKS` | optional, read by `docpipe preflight` (`component`); a profile that declares none has the extended profile's | two entries: the field prompt says `GENAU EIN Feld`, the rows prompt no longer fixes one parameter | the same two entries |
-| Reading the values out | `extraction.CONTRACT_LANGUAGE` | required of a profile that holds a parts file: the language of the core's template the file is put together with, read from the profile that owns the file (`Profile.own`, `docpipe/extraction/contract.py:85-88`) and not inherited | `"de"` | `"de"` for scenarios, `"en"` for the built-in profile |
-| Reading the values out | `extraction.ALT_LABEL_LANGUAGE` | required by the profile's own `vocabulary` module (`profile.require`), not by the core: the language tag of the alternative labels a vocabulary snapshot keeps (`ontology.index` and `ontology.build` take it as `language`, with no default) | `"de"` | `"de"` for scenarios, `"en"` for the built-in profile |
+| Reading the values out | `extraction.CONTRACT_LANGUAGE` | required of a profile that holds a parts file: the language of the core's template the file is put together with, read from the profile that owns the file (`Profile.own`, `docpipe/extraction/contract.py:85-88`) and not inherited | `"de"` | `"en"` for scenarios and the built-in profile |
+| Reading the values out | `extraction.ALT_LABEL_LANGUAGE` | required by the profile's own `vocabulary` module (`profile.require`), not by the core: the language tag of the alternative labels a vocabulary snapshot keeps (`ontology.index` and `ontology.build` take it as `language`, with no default) | `"de"` | `"en"` for scenarios and the built-in profile |
 | Reading the values out | `extraction.NOT_EXTRACTED` | optional (`component`), read by `docpipe preflight`: a mapping `(shape, property)` to one sentence, the properties of the profile's shapes it leaves out on purpose | not provided | 21 entries, each with its reason |
 | Reading the values out | `extraction.shapes_files` | optional (`component`), read by `docpipe preflight`: a callable returning the SHACL files the graph is held against | not provided; the shapes line says "skipped" | the shapes file of the last refresh of the OEKG sources |
 | Reading the values out | `extraction.SPEC_PATH` | required in practice; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:5433-5436`) | `extraction_spec.json` | `extraction_spec.json` |
@@ -290,7 +290,7 @@ extraction stage](stages/extraction.md)).
 Two more phrases of `extraction.PHRASES` are keys and not sentences:
 `option_means` and `option_spellings`, the keys an entry of a closed list goes
 to the model under. They are `means` and `spellings` in the built-in profile,
-`kwp` and `scenarios` alike; kwp and scenarios said them in German before, and
+`kwp` and `scenarios` alike; kwp said them in German before, and
 a profile that extends one of them has no reason to word them differently.
 
 ## The extraction prompts: the core's template and a profile's parts
@@ -363,8 +363,8 @@ key of the frame's list, which are sentences of the profile's
 request cannot disagree on it.
 
 The language is a declaration of the profile that holds the parts file,
-`extraction.CONTRACT_LANGUAGE` in its `extraction.py`: `"de"` in kwp and
-scenarios, `"en"` in the built-in profile. It is read with `Profile.own`, so it
+`extraction.CONTRACT_LANGUAGE` in its `extraction.py`: `"de"` in kwp,
+`"en"` in scenarios and the built-in profile. It is read with `Profile.own`, so it
 is not inherited. A profile that extends another and keeps its parts files gets
 the language they are in, and one that writes parts files of its own declares
 the language of those. A profile with no declaration, or one the core has no

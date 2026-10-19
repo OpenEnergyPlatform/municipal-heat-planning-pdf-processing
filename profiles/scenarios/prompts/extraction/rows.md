@@ -1,75 +1,75 @@
 ---
 template: rows
-without: [quantities_units, quantities_text, frame_keys, completeness, frame_empty, value_number, unit_raw, quote_whole_row, quote_copy, examples_foreign, status_frame, invent_chart, sandbox]
+without: [quantities_units, quantities_text, quantities_number, frame_keys, completeness, frame_empty, value_number, unit_raw, quote_whole_row, quote_copy, examples_foreign, status_frame, invent_chart, sandbox]
 temperature: 0
 max_tokens: 6144
 ---
 <!-- part: role -->
-Du liest Metadaten aus wissenschaftlichen Publikationen zu Klima- und Energieszenarien für einen Knowledge Graph.
+You read metadata from scientific publications on climate and energy scenarios for a knowledge graph.
 
 <!-- part: asked_afterwards -->
-WELCHES Feld ein Wert ist, wird DANACH gefragt, in einer eigenen Anfrage mit eigenem Beleg. Auf WELCHES Szenario sich ein Wert bezieht, wird DANACH gefragt, in einer eigenen Anfrage mit eigenem Beleg.
+WHICH field a value is gets asked AFTERWARDS, in a request of its own with its own evidence. WHICH scenario a value refers to gets asked AFTERWARDS, in a request of its own with its own evidence.
 
 <!-- part: example_reply -->
 {"tuples": [{"source": "Q1", "value": "Keramidas, K.", "quote": "Keramidas, K.,"}], "status": "complete", "need_more": []}
 
 <!-- part: example_more -->
-Ein Wert darf so lang sein wie eine ganze Zeile. Beim Titel ist er es fast immer, und dann ist "quote" der Titel selbst, genau so lang wie "value" — das ist die richtige Antwort und kein Fehler:
+A value may be as long as a whole line. For a title it almost always is, and then "quote" is the title itself, exactly as long as "value" — that is the right answer and not a mistake:
 
 {"tuples": [{"source": "Q1", "value": "Carbon dioxide removal technologies are not born equal", "quote": "Carbon dioxide removal technologies are not born equal"}], "status": "complete", "need_more": []}
 
-Felder mit einer Auswahlliste tragen zusätzlich "value_raw":
+Fields with a choice list carry "value_raw" in addition:
 
-{"tuples": [{"source": "Q3", "value": "Germany", "value_raw": "Deutschland", "quote": "Das Szenario betrachtet Deutschland bis 2050."}], "status": "complete", "need_more": []}
+{"tuples": [{"source": "Q3", "value": "Germany", "value_raw": "the Federal Republic", "quote": "The scenario covers the Federal Republic until 2050."}], "status": "complete", "need_more": []}
 
 <!-- part: empty_list_more -->
- Die allermeisten Abschnitte einer Publikation enthalten weder Titel noch DOI noch Autorenliste.
+ The vast majority of sections of a publication contain neither a title nor a DOI nor an author list.
 
 <!-- part: front_page -->
-Eine Quelle ist davon ausgenommen: die Vorderseite. Folgen auf die Überschrift am Anfang einer Quelle Personennamen, Institute, ein Eingangsdatum oder ein Zitationshinweis, dann ist das die Titelseite dieser Publikation — und diese Überschrift IST ihr Titel. Dort werden Titel, Autorinnen und Autoren, Erscheinungsjahr und DOI gelesen, der Titel zuerst: er steht vor den Namen und wird sonst überlesen. Im letzten Korpuslauf lag die Vorderseite bei 54 Publikationen vor und der Titel wurde trotzdem nicht genannt — bei 41 davon sind Autoren, Datum und Institut aus derselben Zeile geholt worden. Diese 54 fehlen im Graphen vollständig.
+One source is exempt: the front page. If the heading at the start of a source is followed by personal names, institutes, a date of receipt or a citation note, then this is the title page of this publication — and that heading IS its title. Title, authors, year of publication and DOI are read there, the title first: it stands before the names and is otherwise overlooked. In the last corpus run the front page was there for 54 publications and the title was still not named — for 41 of them authors, date and institute were read from the same line. These 54 are missing from the graph entirely.
 
-Drei Stellen sehen so aus und sind es nicht: ein Literatur- oder Quellenverzeichnis, in dem Namen und Jahre in einer Liste stehen; ein Abschnitt, dessen Überschrift selbst schon die Autorenliste ist; und einer, dessen Überschrift nur ein Gattungswort trägt — Abstract, Introduction, Contents, Disclaimer. In allen dreien steht der Titel nicht, und die leere Liste ist die richtige Antwort. Der Titel ist die Zeile ÜBER den Namen, nie die Zeile MIT den Namen.
+Three places look like this and are not: a bibliography or reference list in which names and years stand in a list; a section whose heading is itself the author list; and one whose heading carries only a generic word — Abstract, Introduction, Contents, Disclaimer. In all three the title is not there, and the empty list is the correct answer. The title is the line ABOVE the names, never the line WITH the names.
 
 <!-- part: value_more -->
-   FALSCH: aus "JRC" das ausgeschriebene "Joint Research Centre" machen, wenn nur "JRC" dasteht.
-   FALSCH: "Keramidas K." zu "Kimon Keramidas" ergänzen.
-   FALSCH: einen Titel weglassen, weil er lang ist oder wie eine Überschrift aussieht. Eine Überschrift ist genau die Form, in der ein Titel dasteht.
+   WRONG: turning "JRC" into the spelled-out "Joint Research Centre" when only "JRC" is there.
+   WRONG: completing "Keramidas K." to "Kimon Keramidas".
+   WRONG: leaving out a title because it is long or looks like a heading. A heading is exactly the form in which a title stands.
 
 <!-- part: line_number_example -->
- („Horizon 311 2020“)
+ (“Horizon 311 2020”)
 
 <!-- part: footnote_example -->
- („Riahi1,2*“)
+ (“Riahi1,2*”)
 
 <!-- part: quote_more -->
- Die Überschrift einer Quelle steht am Anfang ihres "text" und ist zitierbar wie jede andere Zeile.
+ The heading of a source stands at the start of its "text" and is quotable like any other line.
 
 <!-- part: per_value_text -->
-Ein Eintrag je Wert. Eine Autorenliste mit sechs Namen ergibt sechs Einträge, jeder mit seinem eigenen kurzen Zitat: dem Namen, wie er dort steht, samt der Zeichen, die direkt daran hängen, also "Keywan Riahi1,2*" und nicht die ganze Namenszeile. Dasselbe gilt für Institute, Geldgeber und Projekte. Die ganze Liste in jedem Eintrag zu wiederholen, macht die Antwort so lang, dass sie abgeschnitten wird und alle Einträge verloren gehen. Eine Publikation hat genau einen Titel, genau ein Erscheinungsjahr und höchstens eine DOI — steht dort mehr als eines, nimm das, was für DIESES Dokument gilt, nicht das einer zitierten Arbeit.
+One entry per value. An author list with six names gives six entries, each with its own short quote: the name as it stands there, with the characters attached directly to it, so "Keywan Riahi1,2*" and not the whole line of names. The same applies to institutes, funders and projects. Repeating the whole list in every entry makes the answer so long that it is cut off and all entries are lost. A publication has exactly one title, exactly one year of publication and at most one DOI — if more than one is stated, take the one that applies to THIS document, not that of a cited work.
 
 <!-- part: citations_text -->
-Zitate sind keine Fundstellen. Ein Literaturverzeichnis, eine Fußnote und ein Verweis im Fließtext nennen Titel, Autoren, Jahre und DOIs ANDERER Arbeiten. Aus solchen Stellen extrahierst du nichts. Erkennbar sind sie an der Umgebung: eine nummerierte oder alphabetische Liste von Quellen, ein "et al.", eine Jahreszahl in Klammern hinter einem Namen, ein Abschnitt mit der Überschrift References, Bibliography oder Literatur.
-   Die Vorderseite ist keine solche Stelle: dort steht die Publikation selbst, nicht eine, auf die sie verweist.
-   FALSCH: aus "as shown by Riahi et al. (2017)" das Jahr 2017 als Erscheinungsjahr melden.
+Citations are not places to take values from. A bibliography, a footnote and a reference in running text name titles, authors, years and DOIs of OTHER works. You extract nothing from such places. They are recognizable by their surroundings: a numbered or alphabetical list of sources, an "et al.", a year in parentheses after a name, a section headed References, Bibliography or Literature.
+   The front page is not such a place: it carries the publication itself, not one it refers to.
+   WRONG: reporting the year 2017 as the year of publication from "as shown by Riahi et al. (2017)".
 
 <!-- part: choice_entries -->
- — bei der Region "global", "mehrere Regionen" und "andere Region"
+ — for the region "global", "several regions" and "other region"
 
 <!-- part: choice_reason -->
-: die Regionsliste kennt nur Länder, und die meisten Szenarien dieser Publikationen sind global
+: the region list knows only countries, and most scenarios of these publications are global
 
 <!-- part: choice_more -->
-Eine Quelle, die viele Länder aufzählt — eine Ländergruppe, ein Regionenschlüssel, ein Länderanhang — beschreibt EINEN Betrachtungsraum und nicht fünfzig. Dann gib EINEN Eintrag mit "mehrere Länder oder eine Region, die die Liste nicht führt" aus, oder "global", wenn es die ganze Welt ist.
+A source that enumerates many countries — a country group, a regional key, a country annex — describes ONE area under study and not fifty. Then give ONE entry with "several countries or a region the list does not carry", or "global" if it is the whole world.
 
 <!-- part: choice_examples -->
-FALSCH: "value": "Deutschland", wenn die Liste "Germany" führt.
-   FALSCH: "value": "Germany" für ein weltweites Szenario, nur weil Deutschland in der Passage vorkommt.
+WRONG: "value": "the Federal Republic", when the list has "Germany".
+   WRONG: "value": "Germany" for a worldwide scenario, only because Germany comes up in the passage.
 
 <!-- part: partial_when -->
-nur, wenn hier ein Wert steht, den du nicht abschreiben kannst, weil die Passage abbricht. Ein fehlender Szenariobezug ist KEIN Grund: danach wird hier gar nicht gefragt.
+only if a value stands here that you cannot copy because the passage breaks off. A missing reference to a scenario is NOT a reason: that is not asked here at all.
 
 <!-- part: invent_figures -->
- Das gilt auch für Abbildungsbeschreibungen — was dort nicht steht, existiert nicht.
+ That holds for figure descriptions too — what does not stand there does not exist.
 
 <!-- part: source_kinds -->
-Textabschnitte, Tabellen (Markdown-Transkription) oder Abbildungsbeschreibungen
+text passages, tables (Markdown transcription) or figure descriptions

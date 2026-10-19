@@ -5,8 +5,8 @@ profile's (`preprocessing.py: DIRECTORY_TITLE_WORDS`), and for kwp, scenarios
 and the built-in profile they are today's four, so every verdict on a title
 stays what it was (VERDICTS is that, for a fixed list); AND the language tag
 of the alternative labels a vocabulary snapshot keeps is the profile's
-(`extraction.py: ALT_LABEL_LANGUAGE`), "de" for kwp and scenarios as before
-and "en" for the built-in profile, AND the core fixes none.
+(`extraction.py: ALT_LABEL_LANGUAGE`), "de" for kwp and "en" for scenarios
+and the built-in profile, AND the core fixes none.
 """
 import inspect
 import sys
@@ -236,7 +236,7 @@ def test_neither_function_of_the_core_has_a_default_language(function):
     assert parameter.default is inspect.Parameter.empty
 
 
-@pytest.mark.parametrize("name, tag", [("kwp", "de"), ("scenarios", "de"),
+@pytest.mark.parametrize("name, tag", [("kwp", "de"), ("scenarios", "en"),
                                        ("default", "en")])
 def test_each_profile_says_the_language_of_its_labels(name, tag):
     assert load_profile(name).require("extraction",
@@ -260,4 +260,4 @@ def test_a_vocabulary_module_builds_with_its_profiles_tag(name, monkeypatch):
     vocabulary.build(Path("closure.owl"))
     monkeypatch.setattr(extraction, "ALT_LABEL_LANGUAGE", "fr")
     vocabulary.build(Path("closure.owl"))
-    assert seen == ["de", "fr"]
+    assert seen == [{"kwp": "de", "scenarios": "en"}[name], "fr"]

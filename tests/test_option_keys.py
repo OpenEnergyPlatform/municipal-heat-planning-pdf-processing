@@ -2,15 +2,16 @@
 
 Promised: kwp, scenarios and the built-in profile name the two keys of every
 entry of a closed list "means" and "spellings" AND nothing else in a request
-of kwp or scenarios (the field request, the second reading, the frame request
-and the chat's coordinate question) differs from what it was, except the
-prompt sentence that names those keys AND no harvest stamped before goes
-stale by it.
+of kwp (the field request, the second reading, the frame request and the
+chat's coordinate question) differs from what it was, except the prompt
+sentence that names those keys AND no harvest stamped before goes stale by
+it. Scenarios is German no longer, so there is no German request of it to
+compare with: it is held to the first and the last promise.
 
-`tests/fixtures/option_keys_before.json` holds the four requests of both
-profiles as the code built them while the keys were still German, over one
-fixed window and fixed synthetic slots, so that it moves with the code and
-the prompts and not with a spec. What a request is now is what the fixture
+`tests/fixtures/option_keys_before.json` holds the four requests of kwp as
+the code built them while the keys were still German, over one fixed window
+and fixed synthetic slots, so that it moves with the code and the prompts and
+not with a spec. What a request is now is what the fixture
 says with exactly two words renamed. A request that differs in a third place
 is not this change: whoever changes a request of these profiles on purpose
 changes the fixture in the same commit and says so.
@@ -33,6 +34,8 @@ from docpipe.profile import load_profile
 FIXTURE = (Path(__file__).resolve().parent / "fixtures"
            / "option_keys_before.json")
 GERMAN = ("kwp", "scenarios")
+# The profiles the fixture holds a German request of.
+FIXTURE_PROFILES = ("kwp",)
 
 # The whole difference, as a table: the word that stood in a request and the
 # one that stands there now. Quoted, so the German prose of a prompt ("die
@@ -273,7 +276,7 @@ def test_a_german_key_over_the_spec_is_caught(name, monkeypatch):
 
 # -- nothing else moved ---------------------------------------------------------
 
-@pytest.mark.parametrize("name", GERMAN)
+@pytest.mark.parametrize("name", FIXTURE_PROFILES)
 def test_a_request_of_the_german_profiles_differs_by_exactly_the_two_words(
         name, before):
     got = requests_of(name)
@@ -287,7 +290,7 @@ def test_a_request_of_the_german_profiles_differs_by_exactly_the_two_words(
     assert '"bedeutet"' not in sent and '"Schreibweisen"' not in sent
 
 
-@pytest.mark.parametrize("name", GERMAN)
+@pytest.mark.parametrize("name", FIXTURE_PROFILES)
 def test_the_fixture_really_holds_the_german_keys(name, before):
     """The other half of the promise: the "before" is German. A fixture that
     had been regenerated from the new code would make the test above compare
@@ -300,7 +303,7 @@ def test_the_fixture_really_holds_the_german_keys(name, before):
         assert '"bedeutet":' in user, key
 
 
-@pytest.mark.parametrize("name", GERMAN)
+@pytest.mark.parametrize("name", FIXTURE_PROFILES)
 def test_the_keys_not_renamed_are_caught(name, before, monkeypatch):
     """The table put back to the German words is a difference, and it shows
     in the user message of every request and nowhere else."""
@@ -313,7 +316,7 @@ def test_the_keys_not_renamed_are_caught(name, before, monkeypatch):
         "field", "review", "frame", "coordinate"}
 
 
-@pytest.mark.parametrize("name", GERMAN)
+@pytest.mark.parametrize("name", FIXTURE_PROFILES)
 def test_a_third_difference_in_a_request_is_caught(name, before,
                                                     monkeypatch):
     """Not the two words but a third thing: a sentence of the stage worded
@@ -324,7 +327,7 @@ def test_a_third_difference_in_a_request_is_caught(name, before,
     assert any("messages" in path for path in found)
 
 
-@pytest.mark.parametrize("name", GERMAN)
+@pytest.mark.parametrize("name", FIXTURE_PROFILES)
 def test_a_third_difference_in_a_prompt_or_a_body_is_caught(name, before):
     """Each way a request can differ in a third place, one at a time."""
     got = requests_of(name)
@@ -383,16 +386,29 @@ def test_the_kwp_field_prompt_names_the_keys_the_request_sends(before):
     assert old != named
 
 
-def test_the_scenarios_prompts_name_no_key_of_an_entry(before):
-    """Nothing to follow there: its field prompt describes the entries and
-    names no key, so it cannot go stale by the rename."""
+def test_the_scenarios_field_prompt_names_the_keys_the_request_sends():
+    """Its English field prompt explains the entries of a closed list by the
+    two keys, and says them as the phrase table does: the keys the user
+    message sends. Its other three prompts name none.
+
+    The case that breaks it: the table put back to the German words, and the
+    prompt follows it, so a prompt that kept typed words would be found."""
     named = re.compile(r'"(means|spellings|bedeutet|Schreibweisen)"')
-    for key in ("field", "review", "frame", "coordinate"):
-        for text in (before["scenarios"][key]["messages"][0]["content"],
-                     requests_of("scenarios")[key]["messages"][0]["content"]):
-            assert not named.search(text), key
-    # the case that breaks it: the one prompt that does name them
-    assert named.search(before["kwp"]["field"]["messages"][0]["content"])
+    got = requests_of("scenarios")
+    system = got["field"]["messages"][0]["content"]
+    user = got["field"]["messages"][-1]["content"]
+    assert set(named.findall(system)) == {"means", "spellings"}
+    for key in ("means", "spellings"):
+        assert f'"{key}":' in user, key
+    for key in ("review", "frame", "coordinate"):
+        assert not named.search(got[key]["messages"][0]["content"]), key
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setitem(worded("scenarios"), "option_means", "bedeutet")
+        patch.setitem(worded("scenarios"), "option_spellings", "Schreibweisen")
+        moved = requests_of("scenarios")["field"]
+    assert set(named.findall(moved["messages"][0]["content"])) == {
+        "bedeutet", "Schreibweisen"}
+    assert '"bedeutet":' in moved["messages"][-1]["content"]
 
 
 # -- no stamp goes stale --------------------------------------------------------

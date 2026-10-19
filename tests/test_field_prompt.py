@@ -44,7 +44,7 @@ FIELD = "extraction/field"
 HOMES = {"kwp": ROOT / "profiles" / "kwp",
          "scenarios": ROOT / "profiles" / "scenarios",
          "default": ROOT / "docpipe" / "builtin" / "default"}
-LANGUAGE = {"kwp": "de", "scenarios": "de", "default": "en"}
+LANGUAGE = {"kwp": "de", "scenarios": "en", "default": "en"}
 OPENING = {"de": "Du bestimmst EINE Angabe zu", "en": "You determine ONE piece"}
 # What the profiles say about the model's parameters, which this change does not
 # touch.
@@ -102,7 +102,8 @@ WITNESS = {
 SAYS = {
     "kwp": {"by_meaning", "closed_out", "base_years", "target_years",
             "year_value", "literal_copy", "no_guessing"},
-    "scenarios": {"rows_source", "same_forms", "by_similarity"},
+    "scenarios": {"rows_source", "same_forms", "by_similarity",
+                  "options_explained"},
     "default": {"by_meaning", "base_years", "target_years", "year_value",
                 "rows_source", "same_forms", "by_similarity",
                 "options_explained"},
@@ -126,13 +127,14 @@ DOMAIN = {
         'Rate das Jahr nicht aus dem Erscheinungsjahr des Plans.',
     ],
     "scenarios": [
-        'Dafür führt die Liste den Eintrag "Szenario-Familie" — WÄHLE IHN.',
-        'Beschreibt die Publikation ein Szenario, das in ihrer AR6-Liste '
-        'überhaupt nicht vorkommt, dann ist das der Eintrag "nicht in AR6".',
-        'etwa Zeilennummern eines Manuskripts („Horizon 311 2020“): sie '
-        'gehören zur Zeichenkette.',
-        '"das erste Szenario" ist kein Name aus dem Dokument und keine '
-        'gültige Antwort.',
+        'For that case the list carries the entry "scenario family" — CHOOSE '
+        'IT.',
+        'If the publication describes a scenario that does not occur in its '
+        'AR6 list at all, that is the entry "not in AR6".',
+        'such as the line numbers of a manuscript ("Horizon 311 2020"): they '
+        'belong to the string.',
+        '"the first scenario" is not a name from the document and not a '
+        'valid answer.',
     ],
     "default": [
         'If the document describes something that none of the options covers '
@@ -237,7 +239,7 @@ def test_the_field_prompt_is_the_template_of_its_language_with_the_parts_in(name
 def test_that_comparison_fails_when_a_word_of_the_template_moves(
         tmp_path, monkeypatch):
     """Built to fail: the German template with one word changed is another
-    prompt for the two German profiles and the same one for the English."""
+    prompt for the German profile and the same one for the English ones."""
     import shutil
     folder = tmp_path / "contract"
     shutil.copytree(contract.TEMPLATE_ROOT, folder)
@@ -249,13 +251,12 @@ def test_that_comparison_fails_when_a_word_of_the_template_moves(
     write(path, text.replace("Quellen aus DEMSELBEN Dokument",
                              "Quellen aus DERSELBEN Fundstelle"))
     monkeypatch.setattr(contract, "TEMPLATE_ROOT", folder)
-    for name in ("kwp", "scenarios"):
-        moved = prompts.load(FIELD, load_profile(name))
-        assert "DERSELBEN Fundstelle" in moved.text
-        assert moved.text != before[name].text
-        assert moved.sha256 != before[name].sha256
-    assert prompts.load(FIELD, load_profile("default")).text == \
-        before["default"].text
+    moved = prompts.load(FIELD, load_profile("kwp"))
+    assert "DERSELBEN Fundstelle" in moved.text
+    assert moved.text != before["kwp"].text
+    assert moved.sha256 != before["kwp"].sha256
+    for name in ("scenarios", "default"):
+        assert prompts.load(FIELD, load_profile(name)).text == before[name].text
 
 
 # ---------------------------------------------------------------------------
@@ -386,7 +387,7 @@ def test_a_profile_that_does_not_leave_out_what_it_lacked_is_found(make):
     own = file_of("scenarios")
     assert "without: [base_years, target_years, year_value, no_guessing, " \
            "closed_out, by_meaning, found_next]" in own
-    greedy = make(extends="scenarios", language="de", field=own.replace(
+    greedy = make(extends="scenarios", language="en", field=own.replace(
         "closed_out, by_meaning, found_next]", "closed_out, found_next]"))
     prompt = prompts.load(FIELD, greedy)
     assert says("scenarios", prompt.text) != SAYS["scenarios"]
@@ -469,7 +470,7 @@ def test_no_rule_of_a_shipped_prompt_is_a_number_with_no_rule(name):
 def test_a_rule_number_with_no_text_behind_it_is_found(make):
     """Built to fail: scenarios without the part of its second rule about its
     corpus keeps the place of that rule, and the loader cannot know."""
-    gone = make(extends="scenarios", language="de",
+    gone = make(extends="scenarios", language="en",
                 field=cut(file_of("scenarios"), "domain_rule_2"))
     text = prompts.load(FIELD, gone).text
     assert empty_rules(text) == [5]
@@ -483,7 +484,7 @@ FOUND = {"de": "Was gefunden wird, kommt als nächste Anfrage mit denselben Zeil
          "en": "What is found comes as the next request with the same rows."}
 # The first line of each profile's own example for the need_more rule.
 EXAMPLE_OF_NEED_MORE = {"kwp": 'RICHTIG: ein ganzer Satz mit dem Wort',
-                        "scenarios": 'RICHTIG: "The NDC scenario assumes',
+                        "scenarios": 'RIGHT: "The NDC scenario assumes',
                         "default": 'RIGHT: "The Forecast scenario assumes'}
 # Whether the sentence stands before the example lines, as the prompts were.
 FOUND_BEFORE_EXAMPLE = {"kwp": False, "scenarios": True, "default": True}
@@ -513,10 +514,10 @@ def test_a_profile_that_keeps_both_places_says_the_sentence_twice(make):
     out says the sentence in both, which it did not."""
     own = file_of("scenarios")
     assert "closed_out, by_meaning, found_next]" in own
-    twice = make(extends="scenarios", language="de", field=own.replace(
+    twice = make(extends="scenarios", language="en", field=own.replace(
         "closed_out, by_meaning, found_next]", "closed_out, by_meaning]"))
     rule = need_more_rule(prompts.load(FIELD, twice).text)
-    assert rule.count(FOUND["de"]) == 2
+    assert rule.count(FOUND["en"]) == 2
 
 
 def test_a_profile_that_leaves_both_places_out_loses_the_sentence(make):
@@ -623,7 +624,7 @@ def test_the_example_reply_is_one_line_and_names_the_field_by_name(name):
 
 @pytest.mark.parametrize("name, said", [
     ("kwp", "(mindestens {} Zeichen)"),
-    ("scenarios", "(mindestens {} Zeichen)"),
+    ("scenarios", "(at least {} characters)"),
     ("default", "(at least {} characters)")])
 def test_the_least_length_of_a_quote_is_the_codes_number(name, said,
                                                          monkeypatch):
@@ -668,15 +669,30 @@ def test_the_two_keys_of_an_entry_are_the_keys_the_request_sends(name,
 
 
 def test_a_profile_that_does_not_name_the_keys_is_not_moved_by_them(
-        monkeypatch):
-    """Scenarios has no by-meaning rule, so no key of an entry stands in its
-    prompt: the words of the table are not in its text."""
+        make, monkeypatch):
+    """Scenarios has no by-meaning rule, and the sentence of the English
+    template that explains the entries of a closed list is the only other
+    place the keys of an entry stand in: left out, no key of an entry stands
+    in its prompt and the words of the table are not in its text.
+
+    Built to fail: the scenarios prompt as it is says that sentence, and is
+    moved by the table."""
     profile = load_profile("scenarios")
+    table = wording.phrases(profile)
+    kept = prompts.load(FIELD, profile)
+    assert '"means"' in kept.text and '"spellings"' in kept.text
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setitem(table, "option_means", "bedeutet")
+        assert prompts.load(FIELD, profile).sha256 != kept.sha256
+
+    bare = make(extends="scenarios", language="en", field=file_of(
+        "scenarios").replace("without: [", "without: [options_explained, ", 1))
+    profile = bare
     before = prompts.load(FIELD, profile)
+    assert '"means"' not in before.text and '"spellings"' not in before.text
     table = wording.phrases(profile)
     monkeypatch.setitem(table, "option_means", "bedeutet")
     assert prompts.load(FIELD, profile).sha256 == before.sha256
-    assert '"means"' not in before.text and '"spellings"' not in before.text
 
 
 # ---------------------------------------------------------------------------
@@ -715,7 +731,7 @@ def test_a_profile_with_parts_of_its_own_says_its_language_itself(make):
 # A parts file that is not right is found before a request is sent
 # ---------------------------------------------------------------------------
 
-def named(problem, profile, part) -> None:
+def named(problem, profile, part, language="de") -> None:
     """The refusal names the prompt, the part, the profile and both files."""
     assert problem.prompt_id == FIELD
     assert problem.profile == profile.name
@@ -723,7 +739,8 @@ def named(problem, profile, part) -> None:
     files = dict(problem.files)
     assert files["parts file"] == str(
         profile.prompts_dir / "extraction" / "field.md")
-    assert files["template"] == str(contract.template_path("de", "field"))
+    assert files["template"] == str(
+        contract.template_path(language, "field"))
 
 
 @pytest.mark.parametrize("part", ["subject", "groups_note", "value_raw_is",
@@ -861,14 +878,14 @@ def test_the_fingerprint_moves_with_a_part_a_block_and_the_language(make):
     own = file_of("scenarios")
     shas = {
         "a part": prompts.load(FIELD, make(
-            extends="scenarios", language="de", field=own.replace(
-                "keine gültige Antwort", "keine Antwort", 1))).sha256,
+            extends="scenarios", language="en", field=own.replace(
+                "not a valid answer", "not an answer", 1))).sha256,
         "a block": prompts.load(FIELD, make(
-            extends="scenarios", language="de", field=own.replace(
+            extends="scenarios", language="en", field=own.replace(
                 "closed_out, by_meaning, found_next]",
                 "closed_out, found_next]"))).sha256,
         "the language": prompts.load(
-            FIELD, load_profile("default")).sha256,
+            FIELD, load_profile("kwp")).sha256,
     }
     assert base not in shas.values()
     assert len(set(shas.values())) == 3
@@ -915,14 +932,19 @@ def test_the_field_template_is_held_in_both_languages():
 # ---------------------------------------------------------------------------
 
 ROWS_KEY = {
-    "scenarios": '- "rows": die Werte, jeder mit einer Kennung ("id": "R1", '
-                 '"R2", …), seiner Quelle und der Passage, in der er steht.',
+    "scenarios": '- "rows": the values, each with an identifier ("id": "R1", '
+                 '"R2", …), its source and the passage it stands in.',
+    "default": '- "rows": the values, each with an identifier ("id": "R1", '
+               '"R2", …), its source, its value ("value"), its unit ("unit", '
+               'if it has one) and the passage it stands in ("quote").',
     "kwp": '- "rows": die Werte, je mit Kennung ("id": "R1", "R2", …), Quelle, '
            'Wert, Einheit und Passage.',
 }
 UNSTATED_WHEN = {
-    "scenarios": "Nennen die gezeigten Passagen überhaupt kein Szenario, "
-                 "antworte für diese Zeile",
+    "scenarios": "If the passages shown name no scenario at all, answer for "
+                 "that row with",
+    "default": "If the shown passages name nothing that answers the question "
+               "at all, answer for that row with",
     "kwp": "Steht die Angabe in KEINER der gezeigten Quellen, antworte für "
            "diese Zeile",
 }
@@ -935,17 +957,21 @@ def test_scenarios_says_its_own_sentence_and_kwp_the_templates(make, part,
     """Promised (owner, 2026-10-07): a row of scenarios carries no unit, and
     what its field request asks for is a scenario, so scenarios says in its
     own words what a row carries and when the answer is "not stated" AND kwp
-    keeps the template's sentence.
+    and the built-in profile keep the template's sentence, each in its
+    language.
 
     Built to fail: the scenarios parts file without the part is told the
     template's sentence, and that is another prompt."""
     own = prompts.load(FIELD, load_profile("scenarios"))
-    assert said["scenarios"] in own.text and said["kwp"] not in own.text
-    assert said["kwp"] in text_of("kwp")
-    assert said["scenarios"] not in text_of("kwp")
-    bare = make(extends="scenarios", language="de",
+    assert said["scenarios"] in own.text
+    assert said["default"] not in own.text and said["kwp"] not in own.text
+    for keeper in ("kwp", "default"):
+        assert said[keeper] in text_of(keeper), keeper
+        assert said["scenarios"] not in text_of(keeper), keeper
+    bare = make(extends="scenarios", language="en",
                 field=cut(file_of("scenarios"), part))
     without = prompts.load(FIELD, bare)
     assert part not in without.composition["overrides"]
-    assert said["kwp"] in without.text and said["scenarios"] not in without.text
+    assert said["default"] in without.text
+    assert said["scenarios"] not in without.text
     assert without.sha256 != own.sha256

@@ -357,7 +357,7 @@ def scenario_key(row: dict, known: Optional[dict] = None,
     if not in_graph(resolved) and resolved:
         # An out: entry. The model said the wording names no single run, so
         # there is no identity — and no fallback either, because `value` is
-        # then the out: entry's own label ("Szenario-Familie"), which is a
+        # then the out: entry's own label ("scenario family"), which is a
         # description and not a name.
         resolved, fallback = None, None
     wording = wording or fallback

@@ -438,7 +438,9 @@
    ]
   },
   "BFO_0000051": {
-   "alt_labels": [],
+   "alt_labels": [
+    "has_part"
+   ],
    "definition": "a core relation that holds between a whole and its part",
    "deprecated": false,
    "domain": [],
@@ -534,10 +536,7 @@
    ]
   },
   "OEO_00000051": {
-   "alt_labels": [
-    "Agent",
-    "Agentin"
-   ],
+   "alt_labels": [],
    "definition": "Agent is a role of a person or organisation that directs its activity towards achieving goals.",
    "deprecated": false,
    "kind": "class",
@@ -547,10 +546,7 @@
    ]
   },
   "OEO_00000064": {
-   "alt_labels": [
-    "Autor",
-    "Autorin"
-   ],
+   "alt_labels": [],
    "definition": "An author is an agent that creates or has created written work.",
    "deprecated": false,
    "kind": "class",
@@ -561,7 +557,7 @@
   },
   "OEO_00000128": {
    "alt_labels": [
-    "Energienachfragesektor"
+    "final energy sector"
    ],
    "definition": "An energy demand sector is a sector that covers energy consumers.",
    "deprecated": false,
@@ -572,9 +568,7 @@
    ]
   },
   "OEO_00000143": {
-   "alt_labels": [
-    "Stromnetz"
-   ],
+   "alt_labels": [],
    "definition": "An electricity grid is a supply grid that transfers electrical energy / electricity.",
    "deprecated": false,
    "kind": "class",
@@ -584,9 +578,7 @@
    ]
   },
   "OEO_00000145": {
-   "alt_labels": [
-    "Stromsektor"
-   ],
+   "alt_labels": [],
    "definition": "An electricity sector is a transformation sector that covers electricity generation and transport of electrical energy to consumers of electrical energy.",
    "deprecated": false,
    "kind": "class",
@@ -596,9 +588,7 @@
    ]
   },
   "OEO_00000147": {
-   "alt_labels": [
-    "Emission"
-   ],
+   "alt_labels": [],
    "definition": "emission is a process releasing by-products from human activity (e.g. production, distribution or consumption) into the environment.",
    "deprecated": false,
    "kind": "class",
@@ -626,7 +616,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "Eurostat energy balance sector division",
-   "parents": []
+   "parents": [
+    "OEO_00010407"
+   ]
   },
   "OEO_00000162": {
    "alt_labels": [],
@@ -644,12 +636,12 @@
    "deprecated": false,
    "kind": "individual",
    "label": "German energy balance sector division",
-   "parents": []
+   "parents": [
+    "OEO_00010407"
+   ]
   },
   "OEO_00000199": {
-   "alt_labels": [
-    "Treibhausgasemission"
-   ],
+   "alt_labels": [],
    "definition": "A greenhouse gas emission is an emission that releases a greenhouse gas.",
    "deprecated": false,
    "kind": "class",
@@ -660,7 +652,8 @@
   },
   "OEO_00000200": {
    "alt_labels": [
-    "Versorgungsnetz"
+    "grid",
+    "network"
    ],
    "definition": "A supply grid is a supply system of systematically connected artificial objects that can work as a supply system.",
    "deprecated": false,
@@ -672,7 +665,7 @@
   },
   "OEO_00000213": {
    "alt_labels": [
-    "Wärme- und Kältesektor"
+    "H&C sector"
    ],
    "definition": "A heating and cooling sector is a sector that covers heating and cooling activities.",
    "deprecated": false,
@@ -684,7 +677,7 @@
   },
   "OEO_00000214": {
    "alt_labels": [
-    "Haushaltssektor"
+    "private household sector"
    ],
    "definition": "A household sector is a sector that covers households.",
    "deprecated": false,
@@ -695,9 +688,7 @@
    ]
   },
   "OEO_00000227": {
-   "alt_labels": [
-    "Industriesektor"
-   ],
+   "alt_labels": [],
    "definition": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.",
    "deprecated": false,
    "kind": "class",
@@ -712,7 +703,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sectors (IPCC 2006)",
-   "parents": []
+   "parents": [
+    "OEO_00010055"
+   ]
   },
   "OEO_00000243": {
    "alt_labels": [],
@@ -720,12 +713,12 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sectors (IPCC 1996)",
-   "parents": []
+   "parents": [
+    "OEO_00010055"
+   ]
   },
   "OEO_00000275": {
-   "alt_labels": [
-    "Modellrechnung"
-   ],
+   "alt_labels": [],
    "definition": "A model calculation is a process of solving mathematical equations of a model.",
    "deprecated": false,
    "kind": "class",
@@ -740,12 +733,12 @@
    "deprecated": false,
    "kind": "individual",
    "label": "nace_ sectors",
-   "parents": []
+   "parents": [
+    "OEO_00000368"
+   ]
   },
   "OEO_00000293": {
-   "alt_labels": [
-    "negative Emission"
-   ],
+   "alt_labels": [],
    "definition": "Negative emission is the process of absorbing a substance, usually a pollutant that was emitted before.",
    "deprecated": false,
    "kind": "class",
@@ -755,9 +748,7 @@
    ]
   },
   "OEO_00000340": {
-   "alt_labels": [
-    "Projekt"
-   ],
+   "alt_labels": [],
    "definition": "A project is a process to achieve a specified goal that is unique in the sum of its conditions like its goal, time and cost budget and its organisation.",
    "deprecated": false,
    "kind": "class",
@@ -782,11 +773,14 @@
    "deprecated": false,
    "kind": "individual",
    "label": "Renewable Energy Directive sector division",
-   "parents": []
+   "parents": [
+    "OEO_00010403"
+   ]
   },
   "OEO_00000364": {
    "alt_labels": [
-    "Szenario"
+    "narrative",
+    "storyline"
    ],
    "definition": "A scenario is an information content entity that contains statements about a possible future development based on a coherent and internally consistent set of assumptions and their motivation.",
    "deprecated": false,
@@ -807,9 +801,7 @@
    ]
   },
   "OEO_00000367": {
-   "alt_labels": [
-    "Sektor"
-   ],
+   "alt_labels": [],
    "definition": "A sector is generically dependent continuant that is a subdivision of a system.",
    "deprecated": false,
    "kind": "class",
@@ -819,9 +811,7 @@
    ]
   },
   "OEO_00000368": {
-   "alt_labels": [
-    "Sektorunterteilung"
-   ],
+   "alt_labels": [],
    "definition": "A sector division is a specific way to subdivide a system.",
    "deprecated": false,
    "kind": "class",
@@ -832,7 +822,9 @@
   },
   "OEO_00000405": {
    "alt_labels": [
-    "kommerzieller Sektor"
+    "TCS sector",
+    "service sector",
+    "trading, commerce and service sector"
    ],
    "definition": "A commercial sector is a sector that covers non-industrial commercial activities.",
    "deprecated": false,
@@ -843,9 +835,7 @@
    ]
   },
   "OEO_00000407": {
-   "alt_labels": [
-    "Technologie"
-   ],
+   "alt_labels": [],
    "definition": "A technology is a plan specification that describes how to combine artificial objects or other material entities and processes in a specific way.",
    "deprecated": false,
    "kind": "class",
@@ -856,7 +846,7 @@
   },
   "OEO_00000422": {
    "alt_labels": [
-    "Verkehrssektor"
+    "traffic sector"
    ],
    "definition": "A transport sector is a sector that covers transport of people and/or goods.",
    "deprecated": false,
@@ -915,9 +905,7 @@
    ]
   },
   "OEO_00010034": {
-   "alt_labels": [
-    "Gebäudesektor"
-   ],
+   "alt_labels": [],
    "definition": "A building sector is a sector that covers buildings.",
    "deprecated": false,
    "kind": "class",
@@ -928,7 +916,7 @@
   },
   "OEO_00010035": {
    "alt_labels": [
-    "Landwirtschaft, Forstwirtschaft und Landnutzungssektor"
+    "AFOLU sector"
    ],
    "definition": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.",
    "deprecated": false,
@@ -939,10 +927,7 @@
    ]
   },
   "OEO_00010036": {
-   "alt_labels": [
-    "Abfall- und Abwassersektor",
-    "Entsorgungssektor"
-   ],
+   "alt_labels": [],
    "definition": "A waste and wastewater sector is a sector that covers activities related the collection and treatment of waste and wastewater.",
    "deprecated": false,
    "kind": "class",
@@ -957,7 +942,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): energy",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010039": {
    "alt_labels": [],
@@ -965,7 +952,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): fuel combustion",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010040": {
    "alt_labels": [],
@@ -973,7 +962,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): energy industry",
-   "parents": []
+   "parents": [
+    "OEO_00000158"
+   ]
   },
   "OEO_00010041": {
    "alt_labels": [],
@@ -981,7 +972,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): manufacturing industries and construction",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010042": {
    "alt_labels": [],
@@ -989,7 +982,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): transport",
-   "parents": []
+   "parents": [
+    "OEO_00000422"
+   ]
   },
   "OEO_00010043": {
    "alt_labels": [],
@@ -997,7 +992,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): fuel combustion - other sectors",
-   "parents": []
+   "parents": [
+    "OEO_00000128"
+   ]
   },
   "OEO_00010044": {
    "alt_labels": [],
@@ -1005,7 +1002,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): fuel combustion - other",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010046": {
    "alt_labels": [
@@ -1015,7 +1014,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): industrial processes and product use",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010047": {
    "alt_labels": [],
@@ -1023,7 +1024,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): agriculture",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010048": {
    "alt_labels": [
@@ -1033,7 +1036,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): land use, land-use change and forestry",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010049": {
    "alt_labels": [],
@@ -1041,7 +1046,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): waste",
-   "parents": []
+   "parents": [
+    "OEO_00010036"
+   ]
   },
   "OEO_00010050": {
    "alt_labels": [],
@@ -1049,7 +1056,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): other",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010052": {
    "alt_labels": [],
@@ -1057,7 +1066,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): commercial and institutional",
-   "parents": []
+   "parents": [
+    "OEO_00000405"
+   ]
   },
   "OEO_00010053": {
    "alt_labels": [],
@@ -1065,7 +1076,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): residential",
-   "parents": []
+   "parents": [
+    "OEO_00000214"
+   ]
   },
   "OEO_00010054": {
    "alt_labels": [],
@@ -1073,7 +1086,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): agriculture, forestry and fishing",
-   "parents": []
+   "parents": [
+    "OEO_00000128"
+   ]
   },
   "OEO_00010055": {
    "alt_labels": [
@@ -1096,7 +1111,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "KSG sector division",
-   "parents": []
+   "parents": [
+    "OEO_00010402"
+   ]
   },
   "OEO_00010057": {
    "alt_labels": [],
@@ -1104,7 +1121,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): fugitive emissions from fuels",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010058": {
    "alt_labels": [],
@@ -1112,7 +1131,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): CO2 transport and storage",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010059": {
    "alt_labels": [],
@@ -1120,7 +1141,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): domestic aviation",
-   "parents": []
+   "parents": [
+    "OEO_00000422"
+   ]
   },
   "OEO_00010060": {
    "alt_labels": [],
@@ -1128,7 +1151,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): road transportation",
-   "parents": []
+   "parents": [
+    "OEO_00000422"
+   ]
   },
   "OEO_00010061": {
    "alt_labels": [],
@@ -1136,7 +1161,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): railways",
-   "parents": []
+   "parents": [
+    "OEO_00000422"
+   ]
   },
   "OEO_00010062": {
    "alt_labels": [],
@@ -1144,7 +1171,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): domestic navigation",
-   "parents": []
+   "parents": [
+    "OEO_00000422"
+   ]
   },
   "OEO_00010063": {
    "alt_labels": [],
@@ -1152,7 +1181,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): other transportation",
-   "parents": []
+   "parents": [
+    "OEO_00000422"
+   ]
   },
   "OEO_00010064": {
    "alt_labels": [],
@@ -1160,78 +1191,79 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): pipeline transport",
-   "parents": []
+   "parents": [
+    "OEO_00000422"
+   ]
   },
   "OEO_00010065": {
-   "alt_labels": [
-    "KSG-Sektor Energiewirtschaft"
-   ],
+   "alt_labels": [],
    "definition": "The KSG sector energy industry is an energy transformation sector defined by the KSG sector division. It is an aggregate of the following three sectors:\n- CRF sector (IPCC 2006): energy industry (CRF 1.A.1.a)\n- CRF sector (IPCC 2006): other transportation (CRF 1.A.3.e)\n- CRF sector (IPCC 2006): fugitive emissions from fuels (CRF 1.B)",
    "deprecated": false,
    "kind": "individual",
    "label": "KSG sector energy industry",
-   "parents": []
+   "parents": [
+    "OEO_00000158"
+   ]
   },
   "OEO_00010066": {
-   "alt_labels": [
-    "KSG-Sektor Industrie"
-   ],
+   "alt_labels": [],
    "definition": "The KSG sector industry is an industry sector defined by the KSG sector division. It is an aggregate of the following three sectors:\n- CRF sector (IPCC 2006): manufacturing industries and construction (CRF 1.A.2)\n- CRF sector (IPCC 2006): CO2 transport and storage (CRF 1.C)\n- CRF sector (IPCC 2006): industrial processes and product use (CRF 2)",
    "deprecated": false,
    "kind": "individual",
    "label": "KSG sector industry",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010067": {
-   "alt_labels": [
-    "KSG-Sektor Gebäude"
-   ],
+   "alt_labels": [],
    "definition": "The KSG sector buildings is a building sector defined by the KSG sector division. It is an aggregate of the following two sectors:\n- CRF sector (IPCC 2006): commercial and institutional (CRF 1.A.4.a)\n- CRF sector (IPCC 2006): residential (CRF 1.A.4.b)\n- CRF sector (IPCC 2006): fuel combustion - other",
    "deprecated": false,
    "kind": "individual",
    "label": "KSG sector buildings",
-   "parents": []
+   "parents": [
+    "OEO_00010034"
+   ]
   },
   "OEO_00010068": {
-   "alt_labels": [
-    "KSG-Sektor Verkehr"
-   ],
+   "alt_labels": [],
    "definition": "The KSG sector transport is a transport sector defined by the KSG sector division. It is an aggregate of the following four sectors:\n- CRF sector (IPCC 2006): domestic aviation (CRF 1.A.3.a)\n- CRF sector (IPCC 2006): road transportation (CRF 1.A.3.b)\n- CRF sector (IPCC 2006): railways (CRF 1.A.3.c)\n- CRF sector (IPCC 2006): domestic navigation (CRF 1.A.3.d)",
    "deprecated": false,
    "kind": "individual",
    "label": "KSG sector transport",
-   "parents": []
+   "parents": [
+    "OEO_00000422"
+   ]
   },
   "OEO_00010069": {
-   "alt_labels": [
-    "KSG-Sektor Landwirtschaft"
-   ],
+   "alt_labels": [],
    "definition": "The KSG sector agriculture is an agriculture, forestry and land use sector defined by the KSG sector division. It is an aggregate of the following two sectors:\n- CRF sector (IPCC 2006): agriculture, forestry and fishing (CRF 1.A.4.c)\n- CRF sector (IPCC 2006): agriculture (CRF 3)",
    "deprecated": false,
    "kind": "individual",
    "label": "KSG sector agriculture",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010070": {
-   "alt_labels": [
-    "KSG-Sektor Abfallwirtschaft und Sonstiges"
-   ],
+   "alt_labels": [],
    "definition": "The KSG sector waste management and other is a sector defined by the KSG sector division. It is an aggregate of the following two sectors:\n- CRF sector (IPCC 2006): waste (CRF 5)\n- CRF sector (IPCC 2006): other (CRF 6)",
    "deprecated": false,
    "kind": "individual",
    "label": "KSG sector waste management and other",
-   "parents": []
+   "parents": [
+    "OEO_00010036"
+   ]
   },
   "OEO_00010071": {
-   "alt_labels": [
-    "KSG-Sektor LULUCF",
-    "KSG-Sektor Landnutzung, Landnutzungsänderung und Forstwirtschaft"
-   ],
+   "alt_labels": [],
    "definition": "The KSG sector land use, land-use change and forestry is an agriculture, forestry and land use sector defined by the KSG sector division.\nIt is equivalent to the CRF sector (IPCC 2006): land use, land-use change and forestry (CRF 4).",
    "deprecated": false,
    "kind": "individual",
    "label": "KSG sector land use, land-use change and forestry",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010130": {
    "alt_labels": [],
@@ -1249,7 +1281,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "EU emission sector: ETS",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010132": {
    "alt_labels": [],
@@ -1257,7 +1291,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "EU emission sector: ETS stationary",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010133": {
    "alt_labels": [],
@@ -1265,7 +1301,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "EU emission sector: ETS aviation",
-   "parents": []
+   "parents": [
+    "OEO_00000422"
+   ]
   },
   "OEO_00010134": {
    "alt_labels": [],
@@ -1273,7 +1311,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "EU emission sector: effort sharing",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010135": {
    "alt_labels": [],
@@ -1281,7 +1321,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "EU emission sector: LULUCF",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010158": {
    "alt_labels": [],
@@ -1289,7 +1331,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): public electricity and heat production",
-   "parents": []
+   "parents": [
+    "OEO_00000158"
+   ]
   },
   "OEO_00010159": {
    "alt_labels": [],
@@ -1297,7 +1341,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): petroleum refining",
-   "parents": []
+   "parents": [
+    "OEO_00010319"
+   ]
   },
   "OEO_00010160": {
    "alt_labels": [],
@@ -1305,7 +1351,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): manufacture of solid fuels and other energy industries",
-   "parents": []
+   "parents": [
+    "OEO_00000158"
+   ]
   },
   "OEO_00010161": {
    "alt_labels": [],
@@ -1313,7 +1361,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): solid fuels",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010162": {
    "alt_labels": [],
@@ -1321,7 +1371,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): oil and natural gas",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010163": {
    "alt_labels": [],
@@ -1329,7 +1381,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "GovReg sector division",
-   "parents": []
+   "parents": [
+    "OEO_00010130"
+   ]
   },
   "OEO_00010164": {
    "alt_labels": [],
@@ -1337,7 +1391,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): mineral industry",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010165": {
    "alt_labels": [],
@@ -1345,7 +1401,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): cement production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010166": {
    "alt_labels": [],
@@ -1353,7 +1411,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): chemical industry",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010167": {
    "alt_labels": [],
@@ -1361,7 +1421,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): metal industry",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010168": {
    "alt_labels": [],
@@ -1369,7 +1431,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): iron and steel production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010169": {
    "alt_labels": [],
@@ -1377,7 +1441,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): non-energy products from fuels and solvent use",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010170": {
    "alt_labels": [],
@@ -1385,7 +1451,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): electronics industry",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010171": {
    "alt_labels": [],
@@ -1393,7 +1461,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): product uses as substitutes for ozone depleting substances",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010172": {
    "alt_labels": [],
@@ -1401,7 +1471,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): other product manufacture and use",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010173": {
    "alt_labels": [],
@@ -1409,7 +1481,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): industrial processes and product use - other",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010174": {
    "alt_labels": [],
@@ -1417,7 +1491,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): solid waste disposal",
-   "parents": []
+   "parents": [
+    "OEO_00010036"
+   ]
   },
   "OEO_00010175": {
    "alt_labels": [],
@@ -1425,7 +1501,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): biological treatment of solid waste",
-   "parents": []
+   "parents": [
+    "OEO_00010036"
+   ]
   },
   "OEO_00010176": {
    "alt_labels": [],
@@ -1433,7 +1511,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): incineration and open burning of waste",
-   "parents": []
+   "parents": [
+    "OEO_00010036"
+   ]
   },
   "OEO_00010177": {
    "alt_labels": [],
@@ -1441,7 +1521,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): waste water treatment and discharge",
-   "parents": []
+   "parents": [
+    "OEO_00010036"
+   ]
   },
   "OEO_00010178": {
    "alt_labels": [],
@@ -1449,7 +1531,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): waste - other",
-   "parents": []
+   "parents": [
+    "OEO_00010036"
+   ]
   },
   "OEO_00010179": {
    "alt_labels": [],
@@ -1457,7 +1541,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): enteric fermentation",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010180": {
    "alt_labels": [],
@@ -1465,7 +1551,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): manure management",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010181": {
    "alt_labels": [],
@@ -1473,7 +1561,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): rice cultivation",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010182": {
    "alt_labels": [],
@@ -1481,7 +1571,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): agricultural soils",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010183": {
    "alt_labels": [],
@@ -1489,7 +1581,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): prescribed burning of savannas",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010184": {
    "alt_labels": [],
@@ -1497,7 +1591,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): field burning of agricultural residues",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010185": {
    "alt_labels": [],
@@ -1505,7 +1601,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): liming",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010186": {
    "alt_labels": [],
@@ -1513,7 +1611,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): urea application",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010187": {
    "alt_labels": [],
@@ -1521,7 +1621,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): other carbon-containing fertilizers",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010188": {
    "alt_labels": [],
@@ -1529,7 +1631,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): agriculture - other",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010189": {
    "alt_labels": [],
@@ -1537,7 +1641,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): forest land",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010190": {
    "alt_labels": [],
@@ -1545,7 +1651,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): cropland",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010191": {
    "alt_labels": [],
@@ -1553,7 +1661,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): grassland",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010192": {
    "alt_labels": [],
@@ -1561,7 +1671,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): wetlands",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010193": {
    "alt_labels": [],
@@ -1569,7 +1681,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): settlements",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010194": {
    "alt_labels": [],
@@ -1577,7 +1691,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): other land",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010195": {
    "alt_labels": [],
@@ -1585,7 +1701,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): harvested wood products",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010196": {
    "alt_labels": [],
@@ -1593,7 +1711,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): land use, land-use change and forestry - other",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010197": {
    "alt_labels": [
@@ -1603,7 +1723,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): total emissions excluding LULUCF",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010198": {
    "alt_labels": [
@@ -1613,7 +1735,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): total emissions including LULUCF",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010199": {
    "alt_labels": [],
@@ -1621,7 +1745,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): international bunkers and multilateral operations",
-   "parents": []
+   "parents": [
+    "OEO_00000422"
+   ]
   },
   "OEO_00010200": {
    "alt_labels": [],
@@ -1629,7 +1755,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): international bunkers",
-   "parents": []
+   "parents": [
+    "OEO_00010320"
+   ]
   },
   "OEO_00010201": {
    "alt_labels": [],
@@ -1637,7 +1765,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): international aviation",
-   "parents": []
+   "parents": [
+    "OEO_00010320"
+   ]
   },
   "OEO_00010202": {
    "alt_labels": [],
@@ -1645,7 +1775,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): maritime navigation",
-   "parents": []
+   "parents": [
+    "OEO_00010320"
+   ]
   },
   "OEO_00010203": {
    "alt_labels": [],
@@ -1653,7 +1785,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): multilateral operations",
-   "parents": []
+   "parents": [
+    "OEO_00000422"
+   ]
   },
   "OEO_00010204": {
    "alt_labels": [],
@@ -1661,7 +1795,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "MMR sector division",
-   "parents": []
+   "parents": [
+    "OEO_00010130"
+   ]
   },
   "OEO_00010205": {
    "alt_labels": [],
@@ -1669,7 +1805,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "MMR sector: M.International aviation in the EU ETS",
-   "parents": []
+   "parents": [
+    "OEO_00010320"
+   ]
   },
   "OEO_00010206": {
    "alt_labels": [
@@ -1679,7 +1817,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "total emissions excluding LULUCF and including international bunkers",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010207": {
    "alt_labels": [
@@ -1689,7 +1829,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "total emissions including LULUCF and including international bunkers",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010208": {
    "alt_labels": [
@@ -1699,7 +1841,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "total emissions excluding LULUCF and including international aviation",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010209": {
    "alt_labels": [
@@ -1709,12 +1853,12 @@
    "deprecated": false,
    "kind": "individual",
    "label": "total emissions including LULUCF and including international aviation",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010212": {
-   "alt_labels": [
-    "Dekarbonisierungspfad"
-   ],
+   "alt_labels": [],
    "definition": "A decarbonisation pathway is a policy that aims at long-term emissions reductions.",
    "deprecated": false,
    "kind": "class",
@@ -1729,7 +1873,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): CO2 emissions from biomass",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010229": {
    "alt_labels": [],
@@ -1737,7 +1883,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): CO2 captured",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010230": {
    "alt_labels": [],
@@ -1745,12 +1893,12 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): indirect CO2",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010252": {
-   "alt_labels": [
-    "Szenariostudie"
-   ],
+   "alt_labels": [],
    "definition": "A scenario study is a study that investigates one or more scenarios.",
    "deprecated": false,
    "kind": "class",
@@ -1775,7 +1923,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "NC/BR sector: energy",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010306": {
    "alt_labels": [],
@@ -1783,7 +1933,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "NC/BR sector: transport",
-   "parents": []
+   "parents": [
+    "OEO_00000422"
+   ]
   },
   "OEO_00010307": {
    "alt_labels": [],
@@ -1791,7 +1943,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "NC/BR sector: industry/industrial processes and product use",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010308": {
    "alt_labels": [],
@@ -1799,7 +1953,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "NC/BR sector: agriculture",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010309": {
    "alt_labels": [],
@@ -1807,7 +1963,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "NC/BR sector: forestry/LULUCF",
-   "parents": []
+   "parents": [
+    "OEO_00010035"
+   ]
   },
   "OEO_00010310": {
    "alt_labels": [],
@@ -1815,7 +1973,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "NC/BR sector: waste management/waste",
-   "parents": []
+   "parents": [
+    "OEO_00010036"
+   ]
   },
   "OEO_00010311": {
    "alt_labels": [],
@@ -1823,7 +1983,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "NC/BR sector: other",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010319": {
    "alt_labels": [],
@@ -1851,7 +2013,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): transport of CO2",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010339": {
    "alt_labels": [],
@@ -1859,7 +2023,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): injection and storage",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010340": {
    "alt_labels": [],
@@ -1867,7 +2033,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): CO2 transport and storage - other",
-   "parents": []
+   "parents": [
+    "OEO_00000367"
+   ]
   },
   "OEO_00010341": {
    "alt_labels": [],
@@ -1875,7 +2043,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): lime production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010342": {
    "alt_labels": [],
@@ -1883,7 +2053,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): glass production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010343": {
    "alt_labels": [],
@@ -1891,7 +2063,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): other process uses of carbonates",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010344": {
    "alt_labels": [],
@@ -1899,7 +2073,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): ammonia production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010345": {
    "alt_labels": [],
@@ -1907,7 +2083,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): nitric acid production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010346": {
    "alt_labels": [],
@@ -1915,7 +2093,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): adipic acid production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010347": {
    "alt_labels": [],
@@ -1923,7 +2103,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): caprolactam, gloxal and glyoxylic acid production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010348": {
    "alt_labels": [],
@@ -1931,7 +2113,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): carbide production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010349": {
    "alt_labels": [],
@@ -1939,7 +2123,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): titanium dioxide production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010350": {
    "alt_labels": [],
@@ -1947,7 +2133,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): soda ash production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010351": {
    "alt_labels": [],
@@ -1955,7 +2143,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): petrochemical and carbon black production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010352": {
    "alt_labels": [],
@@ -1963,7 +2153,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): fluorochemical production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010353": {
    "alt_labels": [],
@@ -1971,7 +2163,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): chemical industry - other",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010354": {
    "alt_labels": [],
@@ -1979,7 +2173,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): ferroalloys production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010355": {
    "alt_labels": [],
@@ -1987,7 +2183,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): aluminium production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010356": {
    "alt_labels": [],
@@ -1995,7 +2193,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): magnesium production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010357": {
    "alt_labels": [],
@@ -2003,7 +2203,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): lead production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010358": {
    "alt_labels": [],
@@ -2011,7 +2213,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): zinc production",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010359": {
    "alt_labels": [],
@@ -2019,11 +2223,13 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): metal industry - other",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010360": {
    "alt_labels": [
-    "Quellgruppe"
+    "CRF sector"
    ],
    "definition": "A source category is a sector that is defined by a common reporting format.",
    "deprecated": false,
@@ -2039,7 +2245,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): integrated circuit or semiconductor",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010364": {
    "alt_labels": [],
@@ -2047,7 +2255,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): TFT flat panel display",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010365": {
    "alt_labels": [],
@@ -2055,7 +2265,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): photovoltaics",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010366": {
    "alt_labels": [],
@@ -2063,7 +2275,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): heat transfer fluid",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010367": {
    "alt_labels": [],
@@ -2071,7 +2285,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): electronics industry - other",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010368": {
    "alt_labels": [],
@@ -2079,7 +2295,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): refrigeration and air conditioning",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010369": {
    "alt_labels": [],
@@ -2087,7 +2305,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): foam blowing agents",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010370": {
    "alt_labels": [],
@@ -2095,7 +2315,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): fire protection",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010371": {
    "alt_labels": [],
@@ -2103,7 +2325,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): aerosols",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010372": {
    "alt_labels": [],
@@ -2111,7 +2335,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): solvents",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010373": {
    "alt_labels": [],
@@ -2119,7 +2345,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): other applications",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010374": {
    "alt_labels": [],
@@ -2127,7 +2355,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): electrical equipment",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010375": {
    "alt_labels": [],
@@ -2135,7 +2365,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): SF6 and PFCs from other product use",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010376": {
    "alt_labels": [],
@@ -2143,7 +2375,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): N2O from product use",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010377": {
    "alt_labels": [],
@@ -2151,7 +2385,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "CRF sector (IPCC 2006): other product manufacture and use - other",
-   "parents": []
+   "parents": [
+    "OEO_00000227"
+   ]
   },
   "OEO_00010378": {
    "alt_labels": [],
@@ -2176,7 +2412,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "RED sector: electricity",
-   "parents": []
+   "parents": [
+    "OEO_00000145"
+   ]
   },
   "OEO_00010390": {
    "alt_labels": [],
@@ -2184,7 +2422,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "RED sector: heating and cooling",
-   "parents": []
+   "parents": [
+    "OEO_00000213"
+   ]
   },
   "OEO_00010391": {
    "alt_labels": [],
@@ -2192,7 +2432,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "RED sector: transport",
-   "parents": []
+   "parents": [
+    "OEO_00000422"
+   ]
   },
   "OEO_00010402": {
    "alt_labels": [],
@@ -2465,7 +2707,9 @@
    ]
   },
   "OEO_00010455": {
-   "alt_labels": [],
+   "alt_labels": [
+    "CCS technology"
+   ],
    "definition": "A carbon capture and storage technology is a technology that describes how to combine artificial objects and a carbon capture and storage process in a specific way to permanently store CO2.",
    "deprecated": false,
    "kind": "class",
@@ -2485,7 +2729,9 @@
    ]
   },
   "OEO_00010471": {
-   "alt_labels": [],
+   "alt_labels": [
+    "non-energy consumption technology"
+   ],
    "definition": "A non-energy use technology is a technology that describes among other things how to combine the consumption of energy carriers for non-energy use with other processes and artificial objects or other material entities in a specific way.",
    "deprecated": false,
    "kind": "class",
@@ -2495,7 +2741,9 @@
    ]
   },
   "OEO_00010485": {
-   "alt_labels": [],
+   "alt_labels": [
+    "industrial technology"
+   ],
    "definition": "A manufacturing technology is a technology that describes how to combine manufactuing plants and manufacturing processes to produce manufactured materials.",
    "deprecated": false,
    "kind": "class",
@@ -2505,9 +2753,7 @@
    ]
   },
   "OEO_00020004": {
-   "alt_labels": [
-    "Gasnetz"
-   ],
+   "alt_labels": [],
    "definition": "A gas grid is a supply grid that distributes gaseous fuel, e.g. methane.",
    "deprecated": false,
    "kind": "class",
@@ -2517,9 +2763,7 @@
    ]
   },
   "OEO_00020005": {
-   "alt_labels": [
-    "Wärmenetz"
-   ],
+   "alt_labels": [],
    "definition": "A heating grid is a supply grid that distributes thermal energy via circulating steam or liquids.",
    "deprecated": false,
    "kind": "class",
@@ -2529,9 +2773,7 @@
    ]
   },
   "OEO_00020011": {
-   "alt_labels": [
-    "Studie"
-   ],
+   "alt_labels": [],
    "definition": "A study is a project with the goal to methodologically investigate something.",
    "deprecated": false,
    "kind": "class",
@@ -2571,9 +2813,7 @@
    ]
   },
   "OEO_00020247": {
-   "alt_labels": [
-    "Zielszenario"
-   ],
+   "alt_labels": [],
    "definition": "A target driven scenario is a scenario that contains certain target constraints/ statements that in a possible future shall be realized. The path how the targets will be met is not predefined in the scenario.",
    "deprecated": false,
    "kind": "class",
@@ -2583,9 +2823,7 @@
    ]
   },
   "OEO_00020248": {
-   "alt_labels": [
-    "exploratives Szenario"
-   ],
+   "alt_labels": [],
    "definition": "An explorative scenario is a scenario that contains certain constraints / statements regarding measures that are taken in the near future / today to explore where these measures will lead to in a later future. The later future is not predefined in the scenario.",
    "deprecated": false,
    "kind": "class",
@@ -2637,7 +2875,9 @@
    ]
   },
   "OEO_00020308": {
-   "alt_labels": [],
+   "alt_labels": [
+    "heating technology"
+   ],
    "definition": "A heat generation technology is an energy technology that describes how to combine heat generating units, heat generation processes, energy carriers and energy in a specific way.",
    "deprecated": false,
    "kind": "class",
@@ -2790,9 +3030,7 @@
    ]
   },
   "OEO_00020352": {
-   "alt_labels": [
-    "Modell"
-   ],
+   "alt_labels": [],
    "definition": "A model is a continuant to represent a system and its behaviours in a simplified or idealised way.",
    "deprecated": false,
    "kind": "class",
@@ -2862,7 +3100,9 @@
    ]
   },
   "OEO_00020373": {
-   "alt_labels": [],
+   "alt_labels": [
+    "legally mandatory study report"
+   ],
    "definition": "A study report due to legal obligation is a study report that is created beacause of a legal obligation.",
    "deprecated": false,
    "kind": "class",
@@ -2974,9 +3214,7 @@
    ]
   },
   "OEO_00030007": {
-   "alt_labels": [
-    "Klimaszenario"
-   ],
+   "alt_labels": [],
    "definition": "A climate scenario is a scenario that describes a possible future state of a climate system.",
    "deprecated": false,
    "kind": "class",
@@ -2986,9 +3224,7 @@
    ]
   },
   "OEO_00030008": {
-   "alt_labels": [
-    "Wirtschaftsszenario"
-   ],
+   "alt_labels": [],
    "definition": "An economic scenario is a scenario that describes a possible future state of economic systems.",
    "deprecated": false,
    "kind": "class",
@@ -2998,9 +3234,7 @@
    ]
   },
   "OEO_00030009": {
-   "alt_labels": [
-    "Emissionsszenario"
-   ],
+   "alt_labels": [],
    "definition": "An emission scenario is a scenario that describes a possible emission trajectory.",
    "deprecated": false,
    "kind": "class",
@@ -3010,9 +3244,7 @@
    ]
   },
   "OEO_00030010": {
-   "alt_labels": [
-    "Energieszenario"
-   ],
+   "alt_labels": [],
    "definition": "An energy scenario is a scenario that describes a possible future state of an energy system.",
    "deprecated": false,
    "kind": "class",
@@ -3022,9 +3254,7 @@
    ]
   },
   "OEO_00030019": {
-   "alt_labels": [
-    "Prozessattribut"
-   ],
+   "alt_labels": [],
    "definition": "A process attribute is a dependent occurrent that existentially depends on a process.",
    "deprecated": false,
    "kind": "class",
@@ -3035,7 +3265,7 @@
   },
   "OEO_00030022": {
    "alt_labels": [
-    "Organisation"
+    "organization"
    ],
    "definition": "An organisation is an immaterial entity that has the organisation role and there exists some sort of legal framework that recognises the entity and its continued existence.",
    "deprecated": false,
@@ -3046,9 +3276,7 @@
    ]
   },
   "OEO_00030025": {
-   "alt_labels": [
-    "Versorgungssystem"
-   ],
+   "alt_labels": [],
    "definition": "A supply system is a system that connects producers and consumers.",
    "deprecated": false,
    "kind": "class",
@@ -3059,7 +3287,7 @@
   },
   "OEO_00050016": {
    "alt_labels": [
-    "Endenergieverbrauch"
+    "final energy consumption"
    ],
    "definition": "A final energy consumption value is an energy consumption value expressing the magnitude of the energy delivered to and consumed by end users.",
    "deprecated": false,
@@ -3071,7 +3299,7 @@
   },
   "OEO_00050018": {
    "alt_labels": [
-    "Primärenergieverbrauch"
+    "Primary energy consumption excluding non-energy use of energy carriers."
    ],
    "definition": "A primary energy consumption value is an energy consumption value expressing the magnitude of the total consumption of energy in a spatial region excluding the non-energetic use of fuels.",
    "deprecated": false,
@@ -3083,7 +3311,8 @@
   },
   "OEO_00050019": {
    "alt_labels": [
-    "Energiemenge"
+    "energy amount value",
+    "energy quantity value"
    ],
    "definition": "An energy value is a quantity value that has an energy unit as unit.",
    "deprecated": false,
@@ -3094,9 +3323,7 @@
    ]
   },
   "OEO_00090001": {
-   "alt_labels": [
-    "Förderer"
-   ],
+   "alt_labels": [],
    "definition": "A funder is a sponsor that supports by giving money.",
    "deprecated": false,
    "kind": "class",
@@ -3124,12 +3351,7 @@
    ]
   },
   "OEO_00140009": {
-   "alt_labels": [
-    "Förderer",
-    "Förderin",
-    "Sponsor",
-    "Sponsorin"
-   ],
+   "alt_labels": [],
    "definition": "A sponsor is an agent that supports a person, organisation, or project by giving money, allowance of kind, services or other help.",
    "deprecated": false,
    "kind": "class",
@@ -3139,9 +3361,7 @@
    ]
   },
   "OEO_00140040": {
-   "alt_labels": [
-    "Bedarf"
-   ],
+   "alt_labels": [],
    "definition": "A demand is a realizable entity that is characterised by a person, organisation or object needing it for a specific purpose.",
    "deprecated": false,
    "kind": "class",
@@ -3151,10 +3371,7 @@
    ]
   },
   "OEO_00140049": {
-   "alt_labels": [
-    "Energieumwandlungseffizienz",
-    "Wirkungsgrad"
-   ],
+   "alt_labels": [],
    "definition": "Energy conversion efficiency is a process attribute describing the ratio between the input of an energy transformation and the outputs that are used.",
    "deprecated": false,
    "kind": "class",
@@ -3177,7 +3394,8 @@
   },
   "OEO_00140133": {
    "alt_labels": [
-    "erneuerbarer Anteil"
+    "RE share",
+    "renewables share"
    ],
    "definition": "A renewable energy share is a process attribute that indicates the fraction of renewable energy related to the total energy of an energy generation or consumption process.",
    "deprecated": false,
@@ -3188,10 +3406,7 @@
    ]
   },
   "OEO_00140146": {
-   "alt_labels": [
-    "Energiebedarf",
-    "Energienachfrage"
-   ],
+   "alt_labels": [],
    "definition": "Energy demand is a demand for energy.",
    "deprecated": false,
    "kind": "class",
@@ -3202,7 +3417,7 @@
   },
   "OEO_00140150": {
    "alt_labels": [
-    "Politik"
+    "policies and measures"
    ],
    "definition": "A policy is a plan specification that is a deliberate system of principles, rules and guidelines, adopted by an organisation to guide decision making with respect to particular situations and implemented to achieve stated goals.",
    "deprecated": false,
@@ -3215,7 +3430,7 @@
   },
   "OEO_00140151": {
    "alt_labels": [
-    "Politikinstrument"
+    "policies and measures"
    ],
    "definition": "A policy instrument is an action specification of an organisation (e.g. a government) that promotes transformative measures.",
    "deprecated": false,
@@ -3227,7 +3442,7 @@
   },
   "OEO_00240012": {
    "alt_labels": [
-    "Bruttostromerzeugung"
+    "gross electricity production"
    ],
    "definition": "Gross electricity generation is a process attribute that refers to the total amount of electrical energy produced in an electricity generation process.",
    "deprecated": false,
@@ -3239,7 +3454,7 @@
   },
   "OEO_00240013": {
    "alt_labels": [
-    "Nettostromerzeugung"
+    "net electricity production"
    ],
    "definition": "Net electricity generation is a process attribute that equals to gross electricity generation minus the consumption of power stations' auxiliary services.",
    "deprecated": false,
@@ -3250,9 +3465,7 @@
    ]
   },
   "OEO_00240019": {
-   "alt_labels": [
-    "Energieverbrauch"
-   ],
+   "alt_labels": [],
    "definition": "An energy consumption value is an energy amount value that measures the energy consumption over a time span.",
    "deprecated": false,
    "kind": "class",
@@ -3263,7 +3476,7 @@
   },
   "OEO_00260007": {
    "alt_labels": [
-    "CO2-Emission"
+    "carbon dioxide emission"
    ],
    "definition": "A CO2 emission is an emission that releases carbon dioxide.",
    "deprecated": false,
@@ -3276,8 +3489,8 @@
   },
   "OEO_00330023": {
    "alt_labels": [
-    "Lebenszyklusanalyse",
-    "Ökobilanz"
+    "LCA",
+    "life cycle analysis"
    ],
    "definition": "A life cycle assessment is a methodology to calculate and analyse environmental impacts of the life cycle of a material entity or process.",
    "deprecated": false,
@@ -3373,7 +3586,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "BSI-KritisV energy sector",
-   "parents": []
+   "parents": [
+    "OEO_00000158"
+   ]
   },
   "OEO_00360043": {
    "alt_labels": [],
@@ -3381,7 +3596,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "BSI-KritisV transport sector",
-   "parents": []
+   "parents": [
+    "OEO_00000422"
+   ]
   },
   "OEO_00360044": {
    "alt_labels": [],
@@ -3389,7 +3606,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "BSI-KritisV sector division",
-   "parents": []
+   "parents": [
+    "OEO_00000368"
+   ]
   },
   "OEO_00390071": {
    "alt_labels": [],

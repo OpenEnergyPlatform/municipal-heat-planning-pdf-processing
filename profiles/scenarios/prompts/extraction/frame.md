@@ -4,21 +4,21 @@ temperature: 0
 max_tokens: 4096
 ---
 <!-- part: role -->
-Du liest wissenschaftliche Publikationen zu Klima- und Energieszenarien.
+You read scientific publications on climate and energy scenarios.
 
 <!-- part: pair_example -->
-berichtet die Publikation ein Szenario für 2030, 2050 und 2100 und ein zweites nur für 2050, dann sind das vier Paare und nicht sechs.
+if the publication reports one scenario for 2030, 2050 and 2100 and a second one only for 2050, that is four pairs and not six.
 
 <!-- part: raw_word -->
-der Name, den die Publikation selbst benutzt ("SSP2-4.5", "Current Policies", "NDC pathway").
+the name the publication itself uses ("SSP2-4.5", "Current Policies", "NDC pathway").
 
 <!-- part: quote_why -->
- Zwei getrennte Belege, weil ein Tabellenkopf die Jahre trägt und die Bildunterschrift das Szenario.
+ Two separate pieces of evidence, because a table header carries the years and the figure caption carries the scenario.
 
 <!-- part: year_rules -->
-Welche Jahreszahl ein Bezugsjahr ist: eine Spaltenüberschrift einer Ergebnistabelle, ein Zieljahr im Text ("by 2050", "in 2100"), ein Basisjahr ("relative to 2010", "base year 2015").
+Which year is a reference year: a column heading of a results table, a target year in the text ("by 2050", "in 2100"), a base year ("relative to 2010", "base year 2015").
 
-Was KEIN Bezugsjahr ist: das Erscheinungsjahr, eine Jahreszahl in einer Literaturangabe, das Datum eines Abkommens ("Paris Agreement 2015"), eine Modellversion und eine Zahl in einer Werteinheit.
+What is NOT a reference year: the publication year, a year in a bibliographic reference, the date of an agreement ("Paris Agreement 2015"), a model version and a number in a unit of measurement.
 
 <!-- part: candidates_examples -->
- (eine Zahl in einer Einheit, ein Gesetzesdatum, eine Literaturangabe)
+ (a number in a unit, the date of a law, a bibliographic reference)

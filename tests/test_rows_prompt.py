@@ -41,7 +41,7 @@ from docpipe.profile import ENV_VAR, load_profile
 ROOT = Path(__file__).resolve().parent.parent
 ROWS = "extraction/rows"
 NAMES = ("kwp", "scenarios", "default")
-LANGUAGE = {"kwp": "de", "scenarios": "de", "default": "en"}
+LANGUAGE = {"kwp": "de", "scenarios": "en", "default": "en"}
 HOMES = {"kwp": ROOT / "profiles" / "kwp",
          "scenarios": ROOT / "profiles" / "scenarios",
          "default": ROOT / "docpipe" / "builtin" / "default"}
@@ -53,9 +53,9 @@ RULES = {
     "kwp": ['"value"', '"unit_raw"', '"source"', '"quote"',
             '"status" und "need_more"', "Rechnen lassen statt rechnen",
             "Nichts erfinden"],
-    "scenarios": ['"value"', '"source"', '"quote"', "Ein Eintrag je Wert",
-                  "Zitate sind keine Fundstellen", "Auswahl statt Formulierung",
-                  '"status" und "need_more"', "Nichts erfinden"],
+    "scenarios": ['"value"', '"source"', '"quote"', "One entry per value",
+                  "Citations are not places", "Choice instead of formulation",
+                  '"status" and "need_more"', "Invent nothing"],
     "default": ['"value"', '"unit_raw"', '"source"', '"quote"',
                 "One entry per value", "Citations are not places",
                 "Choice instead of formulation", '"status" and "need_more"',
@@ -64,7 +64,7 @@ RULES = {
 # What each rule of a reference is: the rule a sentence points at.
 REFERENCES = {
     "kwp": {"Regel": ["Rechnen lassen statt rechnen"]},
-    "scenarios": {"Regel": ['"value"']},
+    "scenarios": {"rule": ['"value"']},
     "default": {"rule": ["Have it calculated instead of calculating",
                          '"value"']},
 }
@@ -77,11 +77,12 @@ SAYS = {
             "Die Namen und Zahlen in den Beispielen oben",
             "zitier die ganze Zeile", "Ein Feld OHNE",
             "was dort nicht beziffert ist, existiert nicht"],
-    "scenarios": ['Steht bei einem Feld "value_classes"', "Rate nicht",
-                  "Was du aus Vorwissen", 'JEDER Eintrag trägt "source"',
-                  "und das ist der Normalfall", "Nicht aus zwei Quellen",
-                  "Zitier nur das Stück",
-                  "was dort nicht steht, existiert nicht"],
+    "scenarios": ['If a field has "value_classes"', "Do not guess",
+                  "What you would have to add from prior knowledge",
+                  'EVERY entry carries "source"', "that is the normal case",
+                  "Do not assemble it from two sources",
+                  "Quote only the piece",
+                  "what does not stand there does not exist"],
     "default": ['"units_accepted"', '"value_classes"', "Image for Q1",
                 "Do not guess", "values already fetched from this document",
                 "Do NOT calculate",
@@ -97,12 +98,11 @@ SILENT = {
             "und das ist der Normalfall", "Nicht aus zwei Quellen",
             "Zitier nur das Stück", "Schreib es Zeichen für Zeichen ab",
             "Die Vorderseite", "was dort nicht steht, existiert nicht"],
-    "scenarios": ['"units_accepted"', '"frame"', '"anchors"', "Frame",
-                  "Rechne NICHT im Kopf", "Sandbox", "unit_raw",
-                  "Die Namen und Zahlen in den Beispielen oben",
-                  "Eine Zahl, die du nur im Bild", "Tabellenzeile",
-                  "Ein Feld OHNE", "innerhalb des Frames",
-                  "was dort nicht beziffert ist"],
+    "scenarios": ['"frame"', '"anchors"', "Do NOT calculate", "sandbox",
+                  "unit_raw",
+                  "The names and numbers in the examples above",
+                  "A number that you only read off", "table row",
+                  "A field with neither", "within the frame"],
     "default": [],
 }
 
@@ -211,7 +211,7 @@ def test_the_rows_prompt_is_the_template_of_the_language_with_the_parts_in(name)
 def test_a_template_of_another_wording_makes_another_prompt(tmp_path,
                                                             monkeypatch):
     """Built to fail: the German template with one word changed is another
-    prompt for the two German profiles and the same one for the English."""
+    prompt for the German profile and the same one for the English ones."""
     folder = tmp_path / "contract"
     shutil.copytree(contract.TEMPLATE_ROOT, folder)
     path = folder / "de" / "rows.md"
@@ -221,10 +221,10 @@ def test_a_template_of_another_wording_makes_another_prompt(tmp_path,
     write(path, text.replace("Deine Aufgabe in diesem Schritt ist EINE",
                              "Deine Aufgabe in diesem Schritt ist GENAU EINE"))
     monkeypatch.setattr(contract, "TEMPLATE_ROOT", folder)
-    for name in ("kwp", "scenarios"):
-        assert load_rows(name).sha256 != before[name]
-        assert "GENAU EINE:" in load_rows(name).text
-    assert load_rows("default").sha256 == before["default"]
+    assert load_rows("kwp").sha256 != before["kwp"]
+    assert "GENAU EINE:" in load_rows("kwp").text
+    for name in ("scenarios", "default"):
+        assert load_rows(name).sha256 == before[name]
 
 
 # ---------------------------------------------------------------------------
@@ -334,7 +334,7 @@ def test_a_rule_the_template_has_and_the_profile_worded_stays_its_own():
     assert kwp.composition["overrides"] == ["value_text"]
     assert 'ohne Rechtsform: aus "endura kommunal GmbH"' in kwp.text
     assert "Ein Text muss ZEICHEN FÜR ZEICHEN" not in kwp.text
-    assert "Ein Text muss ZEICHEN FÜR ZEICHEN" in load_rows("scenarios").text
+    assert "A text must occur CHARACTER FOR CHARACTER" in load_rows("scenarios").text
     assert load_rows("default").composition["overrides"] == []
 
 
@@ -344,7 +344,7 @@ def test_a_rule_the_template_has_and_the_profile_worded_stays_its_own():
              "quote_one_source", "quote_narrow", "quote_inner_numbers",
              "per_value", "citations", "choice", "invent_knowledge",
              "quote_whole_row"}),
-    ("scenarios", {"quantities_units", "quantities_text", "frame_keys",
+    ("scenarios", {"quantities_units", "quantities_text", "quantities_number", "frame_keys",
                    "completeness", "frame_empty", "value_number", "unit_raw",
                    "quote_whole_row", "quote_copy", "examples_foreign",
                    "status_frame", "invent_chart", "sandbox"}),
@@ -470,7 +470,7 @@ def test_a_block_that_is_not_left_out_and_has_no_part_leaves_a_gap(make):
 
 @pytest.mark.parametrize("name, said", [
     ("kwp", "(mindestens {} Zeichen)"),
-    ("scenarios", "(mindestens {} Zeichen)"),
+    ("scenarios", "(at least {} characters)"),
     ("default", "(at least {} characters)")])
 def test_the_least_length_of_a_quote_is_the_codes_number(name, said,
                                                          monkeypatch):
@@ -600,10 +600,10 @@ def test_a_misspelt_part_is_refused_and_the_near_one_named(make):
 
 def test_a_part_with_a_placeholder_open_is_refused(make):
     profile = variant(make, "scenarios", file_of("scenarios").replace(
-        "Das Szenario betrachtet", "Das {{x}} betrachtet", 1))
+        "The scenario covers", "The {{x}} covers", 1))
     problem = refusal(profile)
     assert "{{x}}" in str(problem) and problem.part == "example_more"
-    named(problem, profile, "example_more")
+    named(problem, profile, "example_more", LANGUAGE["scenarios"])
 
 
 def test_a_block_that_cannot_be_left_out_is_refused(make):
@@ -679,44 +679,49 @@ def test_a_profile_without_numbers_keeps_what_it_said_of_figure_descriptions(
         make):
     """Promised: the German template says of a figure description that what is
     not NUMBERED there does not exist, which is kwp's sentence about its
-    numbers; scenarios reads titles, names and regions, and said that what
-    does not STAND there does not exist. Each profile says its own.
+    numbers; scenarios reads titles, names and regions and says that what
+    does not STAND there does not exist, in its own words ("That holds for
+    ... too") and not in the English template's ("This also holds for ...").
+    Each profile says its own.
 
     Built to fail: the scenarios parts file without its part is told the
-    numbers sentence, and the one that is told it is no longer the one that
-    said "stand"."""
+    template's sentence, and the one that is told it is no longer the one
+    that scenarios worded."""
     own = load_rows("scenarios")
     assert "invent_figures" in own.composition["overrides"]
-    assert "was dort nicht steht, existiert nicht." in own.text
-    assert "beziffert" not in own.text
+    assert "That holds for figure descriptions too" in own.text
+    assert "This also holds for figure descriptions" not in own.text
     assert "was dort nicht beziffert ist, existiert nicht." in load_rows(
         "kwp").text
     assert "nicht steht, existiert nicht" not in load_rows("kwp").text
     without = prompts.load(ROWS, variant(
         make, "scenarios", drop_part(file_of("scenarios"), "invent_figures")))
     assert "invent_figures" not in without.composition["overrides"]
-    assert "was dort nicht beziffert ist, existiert nicht." in without.text
-    assert "was dort nicht steht, existiert nicht" not in without.text
+    assert "This also holds for figure descriptions" in without.text
+    assert "That holds for figure descriptions too" not in without.text
     assert without.sha256 != own.sha256
 
 
 def test_scenarios_names_the_kinds_of_its_sources_in_its_own_words(make):
     """Promised (owner, 2026-10-07): where a sentence of the template fits a
     profile less well, the profile says its own. Scenarios lists the kinds of
-    sources it is shown in its own order and calls the description of a figure
-    what its last rule calls it AND kwp keeps the template's sentence.
+    sources it is shown and calls the description of a figure what its last
+    rule calls it AND kwp keeps the template's sentence.
 
-    Built to fail: the scenarios parts file without its part is told the
-    template's kinds, and that is another prompt."""
+    The English template lists the kinds in the same words scenarios does, so
+    leaving the part out moves no word in the English prompt: what the loader
+    still tells is that the profile words it only while the part is there.
+    Built to fail: kwp is told the German kinds, and the scenarios parts file
+    without its part is no longer listed as wording that block."""
     own = load_rows("scenarios")
     assert own.composition["overrides"] == ["invent_figures", "source_kinds"]
-    assert ("— Textabschnitte, Tabellen (Markdown-Transkription) oder "
-            "Abbildungsbeschreibungen.") in own.text
-    assert "Diagrammbeschreibungen" not in own.text
+    assert ("— text passages, tables (Markdown transcription) or figure "
+            "descriptions.") in own.text
     assert ("— Tabellen (Markdown-Transkription), Textabschnitte oder "
             "Diagrammbeschreibungen.") in load_rows("kwp").text
+    assert "Diagrammbeschreibungen" not in own.text
     without = prompts.load(ROWS, variant(
         make, "scenarios", drop_part(file_of("scenarios"), "source_kinds")))
     assert without.composition["overrides"] == ["invent_figures"]
-    assert "Textabschnitte oder Diagrammbeschreibungen." in without.text
-    assert without.sha256 != own.sha256
+    assert ("— text passages, tables (Markdown transcription) or figure "
+            "descriptions.") in without.text

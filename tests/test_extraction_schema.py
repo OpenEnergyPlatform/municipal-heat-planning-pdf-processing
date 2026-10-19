@@ -461,7 +461,7 @@ def test_a_category_parameter_publishes_the_list_it_answers_from():
     assert len(options) == 18
     assert options["policy scenario"]["meaning"].startswith("A policy scenario")
     assert options["target driven scenario"]["spellings"] == [
-        "normative scenario", "backcasting scenario", "Zielszenario"]
+        "normative scenario", "backcasting scenario"]
     # The question belongs on `value`, not here: it would be the parameter's
     # description a second time, under a key claiming to be a question.
     assert "x-question" not in closed

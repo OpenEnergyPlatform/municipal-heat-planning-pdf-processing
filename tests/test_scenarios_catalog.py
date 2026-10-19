@@ -45,7 +45,7 @@ def _add(con, doc_id, filename, meta=None):
 
 def test_the_scenarios_profile_selects_this_catalog(cat):
     assert isinstance(cat, Ar6Catalog)
-    assert cat.document_noun == "Publikation"
+    assert cat.document_noun == "publication"
 
 
 def test_entry_carries_label_and_facets(conn, cat):
@@ -70,9 +70,9 @@ def test_a_publication_is_findable_under_every_scenario_it_documents(conn, cat):
 def test_the_detail_names_the_venue_and_the_scenario_count(conn, cat):
     (entry,) = cat.entries(conn)
     ((heading, lines),) = entry.detail
-    assert "Publikation" in heading
-    assert lines == ["Erschienen in: Environmental Research Letters",
-                     "Dokumentierte AR6-Szenarien: 2"]
+    assert "Publication" in heading
+    assert lines == ["Published in: Environmental Research Letters",
+                     "AR6 scenarios documented: 2"]
 
 
 # --- what the corpus looks like before the metadata fetch caught up ----------

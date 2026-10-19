@@ -171,7 +171,7 @@ def test_every_profile_of_this_repository_names_its_own_noun():
             f"{home.name} leaves its noun to the default")
     nouns = {home.name: load_profile(home.name).document_noun for home in homes}
     assert {name: nouns[name] for name in ("default", "kwp", "scenarios")} == {
-        "default": "document", "kwp": "Wärmeplan", "scenarios": "Publikation"}
+        "default": "document", "kwp": "Wärmeplan", "scenarios": "publication"}
 
 
 def test_a_profile_file_that_names_no_noun_is_seen():

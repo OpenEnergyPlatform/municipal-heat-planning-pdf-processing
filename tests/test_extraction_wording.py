@@ -1,12 +1,12 @@
 """What the extraction stage says to the model outside its prompts.
 
 Promised: the sentences are the profile's (`extraction.py: PHRASES`) AND for
-kwp and scenarios they are, byte for byte, what the core said while they
-were German literals in it, except the two keys of a closed list, which are
-the English ones in every profile (EXPECTED is that, for a fixed set of
-cases); the built-in profile says the same things in English: every phrase
-is in all three tables with the same names to fill in; and a profile that
-lacks one is told which.
+kwp they are, byte for byte, what the core said while they were German
+literals in it, except the two keys of a closed list, which are the English
+ones in every profile (EXPECTED is that, for a fixed set of cases); scenarios
+says the same things in English, as the built-in profile does (EXPECTED_EN is
+that, for the same cases); every phrase is in all three tables with the same
+names to fill in; and a profile that lacks one is told which.
 """
 import string
 from types import SimpleNamespace as NS
@@ -205,6 +205,189 @@ EXPECTED = {'anchor_labels': [['#parameter', 'Kennzahl'], ['#unit', 'Einheit']],
                 None]}
 
 
+# What scenarios says since it is English: the same cases as above, in the
+# English sentences of its table.
+EXPECTED_EN = {'anchor_labels': [['#parameter', 'Field'], ['#unit', 'Unit']],
+ 'answerable': [{'Erdgas': {'means': 'ein Gas', 'spellings': ['Gas H']},
+                 'Strom': {'spellings': ['Elektrizität']},
+                 'out:unstated': {'means': 'these passages do not state '
+                                           'it'}},
+                {'GHD': ['Gewerbe'],
+                 'out:unstated': ['not stated in these passages']}],
+ 'compute': ['The code did not run: boom. Answer now without a '
+             'calculation, or correct the code.',
+             'The code did not run: unknown. Answer now without a '
+             'calculation, or correct the code.',
+             'The code ran but printed nothing. Print every result with '
+             'print(), or answer without a calculation.',
+             'Output of the code:\n'
+             '42\n'
+             '\n'
+             'Answer now with the tuple object. Calculated values carry '
+             '"computed": true.'],
+ 'frame_pairs': {'answer_not_in_quote': ["scenario='target' does not stand "
+                                         "in its quote 'im Jahr 2020 bei "
+                                         '120 GWh im gesamten '
+                                         "Stadtgebiet'. Write the wording "
+                                         'of the document into '
+                                         '"scenario_raw".'],
+                 'missing': ['A pair lacked "scenario".'],
+                 'no_quote': ['For scenario=\'target\', "scenario_quote" '
+                              'was missing.'],
+                 'not_a_year': ["year='Jahr 2020' does not stand in its "
+                                "quote 'im Jahr 2020 bei 120 GWh im "
+                                "gesamten Stadtgebiet'. Write the wording "
+                                'of the document into "year_raw".'],
+                 'not_an_option': ["'Stadtgebiet' is none of the keys of "
+                                   '"scenarios". Choose exactly one of '
+                                   'them, copied character for character, '
+                                   'and write the word of the document '
+                                   'into "scenario_raw".'],
+                 'quote_not_in_source': ["The quote for scenario='target' "
+                                         'stands in none of the passages '
+                                         "shown: 'das steht nicht da'. "
+                                         'Copy it character for character '
+                                         'from "sources".']},
+ 'merge_field': {'answer_not_in_quote': ['Your "quote" does not contain '
+                                         '2030. Quote the place where it '
+                                         'really stands, or answer with '
+                                         '"out:unstated".'],
+                 'not_an_option': ['Your "value" \'Kohle\' is none of the '
+                                   'entries of "options". Choose exactly '
+                                   'one name from it, copied character for '
+                                   'character, including one that starts '
+                                   'with "out:". If none fits although the '
+                                   'passage states the field, leave '
+                                   '"value" out and give the wording in '
+                                   '"value_raw".'],
+                 'quote_not_in_source': ['Your "quote" stands in none of '
+                                         'the sources shown. Copy a '
+                                         'passage character for character '
+                                         'from "sources" or from the '
+                                         '"quote" of the row itself.'],
+                 'quote_too_short': ['Your "quote" is too short to name a '
+                                     'place (at least 8 characters). Quote '
+                                     'the whole sentence or the whole line '
+                                     'the answer stands in.'],
+                 'wrong_type': ['Your "value" \'2020-2030\' is not a whole '
+                                'number. Answer with a whole number, '
+                                'exactly as the passage writes it.']},
+ 'reply_fault': {'cut_off': ['cut_off',
+                             'Your answer was cut off after 512 tokens and '
+                             'is therefore not a complete JSON object. '
+                             'Answer more briefly: quote only the short '
+                             'place where the field stands.'],
+                 'cut_off_shorter': ['cut_off',
+                                     'Your answer was cut off after 512 '
+                                     'tokens and is therefore not a '
+                                     'complete JSON object. Mach es kurz.'],
+                 'empty': ['empty',
+                           'Your answer was empty. Output ONLY the JSON '
+                           'object, on ONE line, with no text before or '
+                           'after it, no code fence, no <think> block and '
+                           'no second object. Quotation marks INSIDE a '
+                           'quote must be escaped as \\" — if that is '
+                           'tedious, shorten the quote to a place without '
+                           'quotation marks.'],
+                 'key_not_a_list': ['missing_key',
+                                    'In your answer "tuples" was not a '
+                                    'list. Output ONLY the JSON object, on '
+                                    'ONE line, with no text before or '
+                                    'after it, no code fence, no <think> '
+                                    'block and no second object. Quotation '
+                                    'marks INSIDE a quote must be escaped '
+                                    'as \\" — if that is tedious, shorten '
+                                    'the quote to a place without '
+                                    'quotation marks.'],
+                 'missing_key': ['missing_key',
+                                 'Your answer lacked "tuples". Output ONLY '
+                                 'the JSON object, on ONE line, with no '
+                                 'text before or after it, no code fence, '
+                                 'no <think> block and no second object. '
+                                 'Quotation marks INSIDE a quote must be '
+                                 'escaped as \\" — if that is tedious, '
+                                 'shorten the quote to a place without '
+                                 'quotation marks.'],
+                 'no_object': ['no_object',
+                               'Your answer contained no JSON object at '
+                               'all. Output ONLY the JSON object, on ONE '
+                               'line, with no text before or after it, no '
+                               'code fence, no <think> block and no second '
+                               'object. Quotation marks INSIDE a quote '
+                               'must be escaped as \\" — if that is '
+                               'tedious, shorten the quote to a place '
+                               'without quotation marks.'],
+                 'not_an_object': ['not_an_object',
+                                   'Your answer was a list structure and '
+                                   'not a JSON object. Output ONLY the '
+                                   'JSON object, on ONE line, with no text '
+                                   'before or after it, no code fence, no '
+                                   '<think> block and no second object. '
+                                   'Quotation marks INSIDE a quote must be '
+                                   'escaped as \\" — if that is tedious, '
+                                   'shorten the quote to a place without '
+                                   'quotation marks.'],
+                 'outside_text': ['outside_text',
+                                  'There was text beside the JSON object: '
+                                  "'Hier:  fertig'. Output ONLY the JSON "
+                                  'object, on ONE line, with no text '
+                                  'before or after it, no code fence, no '
+                                  '<think> block and no second object. '
+                                  'Quotation marks INSIDE a quote must be '
+                                  'escaped as \\" — if that is tedious, '
+                                  'shorten the quote to a place without '
+                                  'quotation marks.'],
+                 'reasoning_only': ['reasoning_only',
+                                    'You only thought and answered '
+                                    'nothing: your reply was empty. Do not '
+                                    'think ahead, output the result '
+                                    'directly. Output ONLY the JSON '
+                                    'object, on ONE line, with no text '
+                                    'before or after it, no code fence, no '
+                                    '<think> block and no second object. '
+                                    'Quotation marks INSIDE a quote must '
+                                    'be escaped as \\" — if that is '
+                                    'tedious, shorten the quote to a place '
+                                    'without quotation marks.'],
+                 'syntax': ['syntax',
+                            'Your JSON breaks at character 17 (Expecting '
+                            'value), at this place: \'{"tuples": [1, 2,, '
+                            "3]}'. Output ONLY the JSON object, on ONE "
+                            'line, with no text before or after it, no '
+                            'code fence, no <think> block and no second '
+                            'object. Quotation marks INSIDE a quote must '
+                            'be escaped as \\" — if that is tedious, '
+                            'shorten the quote to a place without '
+                            'quotation marks.'],
+                 'wrong_shape': ['wrong_shape',
+                                 'Your answer did not have the form that '
+                                 'was asked for. Output ONLY the JSON '
+                                 'object, on ONE line, with no text before '
+                                 'or after it, no code fence, no <think> '
+                                 'block and no second object. Quotation '
+                                 'marks INSIDE a quote must be escaped as '
+                                 '\\" — if that is tedious, shorten the '
+                                 'quote to a place without quotation '
+                                 'marks.']},
+ 'shape_rule': ' Output ONLY the JSON object, on ONE line, with no text '
+               'before or after it, no code fence, no <think> block and no '
+               'second object. Quotation marks INSIDE a quote must be '
+               'escaped as \\" — if that is tedious, shorten the quote to '
+               'a place without quotation marks.',
+ 'wrong_type': ['a whole number',
+                'a whole number',
+                'a whole number',
+                'a piece of text',
+                None]}
+
+EXPECTED_OF = {"kwp": EXPECTED, "scenarios": EXPECTED_EN}
+IMAGE_FOR = {"kwp": "Bild zu Q3:", "scenarios": "Image for Q3:"}
+NOT_A_YEAR = {"kwp": "year='20x' ist keine ganze Jahreszahl. Gib das Jahr "
+                     "vierstellig an.",
+              "scenarios": "year='20x' is not a whole year. Give the year "
+                           "with four digits."}
+
+
 WITH_MEANING = fields.Slot(name="carrier", kind=fields.CHOICE, options=(
     fields.Option(label="Erdgas", uri="u1", synonyms=("Gas H",),
                   definition="ein Gas"),
@@ -223,7 +406,9 @@ QUOTE = "im Jahr 2020 bei 120 GWh im gesamten Stadtgebiet"
 
 @pytest.fixture(params=["kwp", "scenarios"])
 def german(request, monkeypatch):
-    """Both profiles whose extraction prompts are German."""
+    """The two corpus profiles: kwp, whose sentences are German, and scenarios,
+    whose sentences are English (the name is the fixture's from when both were
+    German)."""
     monkeypatch.setenv("DOCPIPE_PROFILE", request.param)
     return request.param
 
@@ -236,7 +421,7 @@ def _reply(content, finish="stop", reasoning=None):
 def test_the_closed_list_names_meaning_and_spellings_under_english_keys(
         german):
     assert [WITH_MEANING.answerable(), PLAIN.answerable()] == \
-        EXPECTED["answerable"]
+        EXPECTED_OF[german]["answerable"]
     # the order of the two keys is part of the request
     assert list(WITH_MEANING.answerable()["Erdgas"]) == [
         "means", "spellings"]
@@ -259,8 +444,8 @@ def test_a_reply_that_could_not_be_read_is_told_why_as_before(german):
     }
     got = {name: list(runner._reply_fault(given, 512, **options))
            for name, (given, options) in cases.items()}
-    assert got == EXPECTED["reply_fault"]
-    assert runner._shape_rule() == EXPECTED["shape_rule"]
+    assert got == EXPECTED_OF[german]["reply_fault"]
+    assert runner._shape_rule() == EXPECTED_OF[german]["shape_rule"]
 
 
 def test_a_calculation_is_answered_as_before(german):
@@ -268,7 +453,7 @@ def test_a_calculation_is_answered_as_before(german):
             runner._compute_reply({"ok": False}),
             runner._compute_reply({"ok": True, "stdout": "  "}),
             runner._compute_reply({"ok": True, "stdout": "42\n"})] == \
-        EXPECTED["compute"]
+        EXPECTED_OF[german]["compute"]
 
 
 def _field_reasons(slot, answers):
@@ -285,7 +470,7 @@ def test_a_coordinate_that_was_not_taken_is_told_why_as_before(german):
             pipeline._wrong_type(NS(kind=fields.NUMBER), "x"),
             pipeline._wrong_type(NS(kind=fields.TEXT), 3),
             pipeline._wrong_type(NS(kind=fields.NUMBER), "2045.0")] == \
-        EXPECTED["wrong_type"]
+        EXPECTED_OF[german]["wrong_type"]
     assert {
         "not_an_option": _field_reasons(WITH_MEANING, {
             "R1": {"value": "Kohle", "quote": "Der Verbrauch an Erdgas"}}),
@@ -298,7 +483,7 @@ def test_a_coordinate_that_was_not_taken_is_told_why_as_before(german):
             "R1": {"value": 2020, "quote": "2020"}}),
         "answer_not_in_quote": _field_reasons(YEAR, {
             "R1": {"value": 2030, "quote": "im Jahr 2020 bei 120 GWh"}}),
-    } == EXPECTED["merge_field"]
+    } == EXPECTED_OF[german]["merge_field"]
 
 
 def _frame_reasons(entry):
@@ -323,11 +508,10 @@ def test_a_pair_that_was_not_taken_is_told_why_as_before(german):
         "not_a_year": _frame_reasons({
             **good, "year": "Jahr 2020", "year_raw": "Jahr 2020",
             "year_quote": QUOTE}),
-    } == EXPECTED["frame_pairs"]
+    } == EXPECTED_OF[german]["frame_pairs"]
     # the one refusal these pairs do not reach
     assert wording.say("frame_not_a_year", slot="year", given="20x") == (
-        "year='20x' ist keine ganze Jahreszahl. Gib das Jahr vierstellig "
-        "an.")
+        NOT_A_YEAR[german])
 
 
 def test_the_two_core_questions_are_labelled_as_before(german):
@@ -336,9 +520,9 @@ def test_the_two_core_questions_are_labelled_as_before(german):
     # the first target is the parameter's; the unit's follows where a spec
     # has a numeric parameter
     assert list(runner.anchor_targets(spec)[0][:2]) == \
-        EXPECTED["anchor_labels"][0]
-    assert wording.say("anchor_unit") == EXPECTED["anchor_labels"][1][1]
-    assert wording.say("image_for", label="Q3") == "Bild zu Q3:"
+        EXPECTED_OF[german]["anchor_labels"][0]
+    assert wording.say("anchor_unit") == EXPECTED_OF[german]["anchor_labels"][1][1]
+    assert wording.say("image_for", label="Q3") == IMAGE_FOR[german]
 
 
 # -- the three tables against each other --------------------------------------
@@ -463,6 +647,7 @@ def _refused_choice(slot) -> str:
     return rejected[0]["reason"]
 
 
+@pytest.mark.parametrize("german", ["kwp"], indirect=True)
 def test_the_german_frame_prompts_read_the_list_where_the_request_puts_it(
         german):
     """The key is said in four places: by the request, twice by the prompt
@@ -482,13 +667,15 @@ def test_the_german_frame_prompts_read_the_list_where_the_request_puts_it(
     assert f'"{key}"' in _refused_choice(SCENARIO)
 
 
-def test_the_built_in_frame_prompt_names_no_key_that_could_go_stale(
-        monkeypatch):
-    """The built-in profile is the one others extend. Its prompt says where
-    to choose without a key of its own, and its correction is handed the
-    key that was sent, for whichever coordinate."""
-    monkeypatch.setenv("DOCPIPE_PROFILE", "default")
-    prompt = _frame_prompt("default")
+@pytest.mark.parametrize("name", ["default", "scenarios"])
+def test_the_english_frame_prompts_name_no_key_that_could_go_stale(
+        name, monkeypatch):
+    """The built-in profile is the one others extend, and scenarios is
+    English like it. Their prompt says where to choose without a key of its
+    own, and the correction is handed the key that was sent, for whichever
+    coordinate."""
+    monkeypatch.setenv("DOCPIPE_PROFILE", name)
+    prompt = _frame_prompt(name)
     assert "_options" not in prompt and '"scenarios"' not in prompt
     assert "the list the request gives for `scenario`" in prompt
     for slot in (SCENARIO, REGION):

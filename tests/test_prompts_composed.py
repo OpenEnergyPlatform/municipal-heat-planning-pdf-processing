@@ -36,7 +36,7 @@ from tests.test_prompt_parts import holds_a_mark
 ROOT = Path(__file__).resolve().parent.parent
 BEFORE = ROOT / "tests" / "fixtures" / "prompt_shas_before_composition.json"
 FIVE = ("rows", "field", "frame", "review", "example")
-LANGUAGE = {"kwp": "de", "scenarios": "de", "default": "en"}
+LANGUAGE = {"kwp": "de", "scenarios": "en", "default": "en"}
 SPEC_SHA, ANCHORS_SHA = "a" * 64, "b" * 16
 
 
@@ -270,6 +270,18 @@ def profile_name(request, monkeypatch):
     runner.UNSERVED.clear()
 
 
+@pytest.fixture(params=["kwp"])
+def recorded_name(request, monkeypatch):
+    """The profiles whose search prompts and review prompt are still the files
+    the stamp fixture recorded. Scenarios is not one: its prompts were German
+    then and are English now, so the fixture holds shas of texts that no file
+    gives any more (it still serves as a stamp of other prompts above)."""
+    monkeypatch.setenv("DOCPIPE_PROFILE", request.param)
+    runner.UNSERVED.clear()
+    yield request.param
+    runner.UNSERVED.clear()
+
+
 def stamp_at(folder: Path, stamp: dict, name: str = "plan") -> Path:
     path = folder / f"{name}.stamp.json"
     path.write_text(json.dumps(stamp), encoding="utf-8")
@@ -278,13 +290,13 @@ def stamp_at(folder: Path, stamp: dict, name: str = "plan") -> Path:
 
 
 def test_the_stamp_before_the_prompts_were_composed_holds_other_prompts_than_now(
-        profile_name):
+        recorded_name):
     """The precondition of the tests below, held on its own so that they
     cannot pass over two stamps that are the same: the three composed prompts
     have another sha256 than the stamp's, and nothing else has."""
     today = runner._stamp_current(SPEC_SHA, ANCHORS_SHA, SPEC)
-    before = before_stamp(profile_name, today)
-    assert moved(before, today, profile_name) == COMPOSED_NOW
+    before = before_stamp(recorded_name, today)
+    assert moved(before, today, recorded_name) == COMPOSED_NOW
 
 
 def test_that_precondition_can_fail_a_stamp_of_today_has_nothing_moved(
@@ -294,13 +306,13 @@ def test_that_precondition_can_fail_a_stamp_of_today_has_nothing_moved(
     assert moved(same, today, profile_name) == set()
 
 
-def test_the_search_prompts_are_the_ones_the_stamp_recorded(profile_name):
+def test_the_search_prompts_are_the_ones_the_stamp_recorded(recorded_name):
     """The sentences the anchors are made of and the cache key that hashes the
     anchors prompt are not touched: their sha256 is the recorded one."""
-    shas = json.loads(BEFORE.read_text(encoding="utf-8"))[profile_name]
+    shas = json.loads(BEFORE.read_text(encoding="utf-8"))[recorded_name]
     for stage in ("queries", "anchors", "phrase"):
-        assert load(profile_name, stage).sha256 == shas[f"extraction/{stage}"]
-    assert load(profile_name, "review").sha256 == shas["extraction/review"]
+        assert load(recorded_name, stage).sha256 == shas[f"extraction/{stage}"]
+    assert load(recorded_name, "review").sha256 == shas["extraction/review"]
 
 
 def test_no_document_of_a_stamp_from_before_is_stale(profile_name, tmp_path):

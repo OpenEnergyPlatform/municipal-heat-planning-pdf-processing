@@ -5,39 +5,39 @@ temperature: 0
 max_tokens: 5120
 ---
 <!-- part: subject -->
-Werten, die aus einer wissenschaftlichen Publikation schon geholt sind
+values that have already been extracted from a scientific publication
 
 <!-- part: rows_more -->
-Benennt die Kopfzeile je Spalte ein Szenario, dann entscheidet diese Nummer, welches gilt.
+If the header row names a scenario for each column, this number decides which one applies.
 
 <!-- part: example_reply -->
-{"fields": {"scenario": {"groups": [{"rows": ["R1", "R2"], "value": "EN_NPi2020_400", "value_raw": "the NDC scenario", "quote": "In the NDC scenario, emissions peak before 2030 and the remaining budget is 400 GtCO2."}], "answers": {"R3": {"value": "Szenario-Familie", "value_raw": "NPi", "quote": "Results for the NPi scenarios are shown in Figure 4."}}}}}
+{"fields": {"scenario": {"groups": [{"rows": ["R1", "R2"], "value": "EN_NPi2020_400", "value_raw": "the NDC scenario", "quote": "In the NDC scenario, emissions peak before 2030 and the remaining budget is 400 GtCO2."}], "answers": {"R3": {"value": "scenario family", "value_raw": "NPi", "quote": "Results for the NPi scenarios are shown in Figure 4."}}}}}
 
 <!-- part: groups_note -->
-ein Absatz führt ein Szenario ein und belegt die Zuordnung für alle Werte, die aus ihm stammen.
+one paragraph introduces a scenario and backs the assignment for all values that come from it.
 
 <!-- part: value_raw_is -->
-der Name so, wie das Dokument ihn schreibt — "Current Policies", "the NDC scenario", "unser 1,5-Grad-Pfad"
+the words of the document you took the answer from, character for character as they stand in the quote: a scenario name such as "Current Policies" or "the NDC scenario", a label such as "Scenario name", a phrase such as "supported by"; where the document does not name the field as such, as with the name of a person or an institute, the value itself as it stands in the quote
 
 <!-- part: value_raw_more -->
-"das erste Szenario" ist kein Name aus dem Dokument und keine gültige Antwort.
+"the first scenario" is not a name from the document and not a valid answer. Neither is a name from "options", unless it stands exactly so in the quote: a list name copied in its place is discarded with the answer.
 
 <!-- part: quote_more -->
-Kurz halten: der Satzteil, der die Antwort trägt, nicht der ganze Absatz. Zeichen für Zeichen kopieren, auch Zahlen, die mitten im Text stehen, etwa Zeilennummern eines Manuskripts („Horizon 311 2020“): sie gehören zur Zeichenkette. Erfundene oder geglättete Passagen werden verworfen, und mit ihnen die Antwort.
+Keep it short: the clause that carries the answer, not the whole paragraph. Copy it character for character, including numbers that stand in the middle of the text, such as the line numbers of a manuscript ("Horizon 311 2020"): they belong to the string. Invented or smoothed passages are discarded, and with them the answer.
 
 <!-- part: domain_rule_1 -->
-Die Kennungen sind Lauf-Kennungen wie "EN_INDCi2030_300f". Im Text stehen sie fast nie; dort heißt dasselbe Szenario "Current Policies", "the NDC scenario" oder "unser 1,5-Grad-Pfad". Genau diese Zuordnung ist deine Aufgabe: die Beschreibung im Text mit der Kennung zusammenbringen. Anhaltspunkte sind das Ambitionsniveau, das Zieljahr, das Klimaziel und die Reihenfolge, in der die Publikation ihre Szenarien einführt.
+The identifiers are run identifiers such as "EN_INDCi2030_300f". They almost never stand in the text; there the same scenario is called "Current Policies", "the NDC scenario" or "our 1.5-degree pathway". Matching the description in the text with the identifier is exactly your task. Clues are the level of ambition, the target year, the climate target and the order in which the publication introduces its scenarios.
 
 <!-- part: domain_rule_2 -->
-Viele Kennungen teilen sich einen Anfang: EN_NPi2020_400, EN_NPi2020_1000 und EN_NPi2020_3000 sind DREI verschiedene Läufe. Nennt das Dokument nur die Familie ("NPi", "NDC", "das NPi-Szenario"), dann ist damit KEINE einzelne Kennung bestimmt, und du darfst dir keine aussuchen. Dafür führt die Liste den Eintrag "Szenario-Familie" — WÄHLE IHN. Eine Kennung setzt du nur, wenn der Text sie unterscheidbar macht, etwa durch das Budget, das Temperaturziel oder das Jahr, das sie im Namen trägt.
-   Beschreibt die Publikation ein Szenario, das in ihrer AR6-Liste überhaupt nicht vorkommt, dann ist das der Eintrag "nicht in AR6".
+Many identifiers share a beginning: EN_NPi2020_400, EN_NPi2020_1000 and EN_NPi2020_3000 are THREE different runs. If the document names only the family ("NPi", "NDC", "the NPi scenario"), then NO single identifier is determined, and you must not pick one. For that case the list carries the entry "scenario family" — CHOOSE IT. You set an identifier only if the text makes it distinguishable, for example through the budget, the temperature target or the year it carries in its name.
+   If the publication describes a scenario that does not occur in its AR6 list at all, that is the entry "not in AR6".
 
 <!-- part: need_more_example -->
-   RICHTIG: "The NDC scenario assumes that pledges are implemented by 2030."
-   FALSCH: "scenario" — zu kurz, findet alles und nichts.
+   RIGHT: "The NDC scenario assumes that pledges are implemented by 2030."
+   WRONG: "scenario" — too short, finds everything and nothing.
 
 <!-- part: rows_carry -->
-die Werte, jeder mit einer Kennung ("id": "R1", "R2", …), seiner Quelle und der Passage, in der er steht.
+the values, each with an identifier ("id": "R1", "R2", …), its source and the passage it stands in.
 
 <!-- part: unstated_when -->
-Nennen die gezeigten Passagen überhaupt kein Szenario
+If the passages shown name no scenario at all

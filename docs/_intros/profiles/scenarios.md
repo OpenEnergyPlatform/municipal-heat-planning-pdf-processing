@@ -6,16 +6,19 @@ cites, staged from a crawl over that citation list, each entry's PDF
 placed by hand and the AR6 scenarios it documents becoming the
 `DocumentScenarios` link table described next
 (`profiles/scenarios/source.py`'s module docstring).
-`profiles/scenarios/profile.py` sets `document_noun` to `Publikation`
+`profiles/scenarios/profile.py` sets `document_noun` to `publication`
 and three catalog facets a reader can filter by: publication year, venue,
 and the AR6 scenarios a publication documents. It declares no language:
 the language of a request and of an answer is that of the profile's
-prompts and phrase tables, which for extraction is German.
-`extraction_spec.json`'s `parameter_question` and every parameter's label
-and description are German sentences, and the spec's `_comment` states
+prompts and phrase tables, which is English throughout, as are the
+publications. `extraction_spec.json`'s `parameter_question` and every
+parameter's label and description are English sentences, the spellings of
+its closed lists are the ontology's English alternative labels
+(`ALT_LABEL_LANGUAGE = "en"`), and the spec's `_comment` states
 that `out:not_in_list`'s meaning is worded in the language of its prompts
-(`extraction_spec.json`, lines 40 to 41). The publications themselves, and
-the chat's wording, are English.
+(`extraction_spec.json`, lines 40 to 41). The labels are English because
+the model copies a label it is offered as the document's wording, and a
+German label never stands in an English quote.
 
 The corpus's own schema carries this identity in three tables, applied by
 `profiles/scenarios/schema.sql` after the core schema. `DocumentMeta` holds
@@ -56,15 +59,15 @@ table gives this profile's own answer.
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 6 prompt ids of its own | page transcription, English artefact repair, table and figure captioning; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object (`reading.REQUIRED`), in English, the language of the prompts of the first three; the extraction prompts are German and `extraction.PHRASES` is another table, the harvest's own |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and three filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, eight prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, the language (`"de"`) of the core's templates its parts files are put together with, and the harvest's own questions |
+| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, eight prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
 | The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 9 prompt ids of its own | the English chat wording and the answer loop's own prompts; the tenth, `json_format`, is the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copy gave |
 
 Five of the eight extraction prompts, `rows`, `field`, `frame`, `review` and
 `example`, are parts files (see [profiles](../profiles.md), The extraction
 prompts): each names its template of the core in its front matter, and
-`CONTRACT_LANGUAGE = "de"` in `profiles/scenarios/extraction.py` says that the
-templates are the German ones. What scenarios writes itself is its role
+`CONTRACT_LANGUAGE = "en"` in `profiles/scenarios/extraction.py` says that the
+templates are the English ones. What scenarios writes itself is its role
 (scientific publications on climate and energy scenarios), its examples and
 the sentences about its own sources. It words six blocks itself, where the
 template's sentence fits it less well. In the rows prompt `invent_figures` says

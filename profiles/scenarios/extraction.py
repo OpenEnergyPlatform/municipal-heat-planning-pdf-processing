@@ -67,12 +67,13 @@ _WORD = r"(?<!\w){}(?!\w)"
 # is 249 countries with no aggregate — no World, no EU27, no OECD, no R5.
 # Without these the correct answer for most AR6 scenarios is not in the list.
 REGION_OUT = {
-    "out:global": ["global", "weltweit", "worldwide",
-                   u"global — die ganze Welt, kein einzelnes Land"],
-    "out:multiregion": ["mehrere Regionen", "mehrere Länder", "EU27", "OECD",
-                        u"mehrere Länder oder eine Region, die die Liste "
-                        u"nicht führt"],
-    "out:other": ["andere Region", "etwas anderes, das kein Land der Liste ist"],
+    "out:global": ["global", "worldwide",
+                   u"global — the whole world, not a single country"],
+    "out:multiregion": ["several regions", "several countries", "EU27", "OECD",
+                        "several countries or a region the list does not "
+                        "carry"],
+    "out:other": ["other region",
+                  "something else that is not a country of the list"],
 }
 
 # The AR6 identifiers are finer than the language of the papers: the pilot's
@@ -81,13 +82,13 @@ REGION_OUT = {
 # kg.py drops the link when it happens. It cannot tell that case apart from a
 # scenario the publication simply does not have in AR6 — these two can.
 SCENARIO_OUT = {
-    "out:family": ["Szenario-Familie", "Familie",
-                   "eine Szenario-Familie oder eine Beschreibung, die auf "
-                   "mehrere Läufe passt und auf keinen genau",
-                   "eine Szenario-Familie, kein einzelner Lauf"],
-    "out:not_documented": ["nicht in AR6", "nicht in der AR6-Liste",
-                           u"ein Szenario dieser Publikation, das nicht in "
-                           u"ihrer AR6-Liste steht"],
+    "out:family": ["scenario family", "family",
+                   "a scenario family or a description that fits several "
+                   "runs and none of them exactly",
+                   "a scenario family, not a single run"],
+    "out:not_documented": ["not in AR6", "not in the AR6 list",
+                           "a scenario of this publication that is not in "
+                           "its AR6 list"],
 }
 
 
@@ -193,13 +194,13 @@ def document_axes(conn: sqlite3.Connection, document_id: int) -> dict:
 DECIMAL_MARK = "."
 
 # The language tag of the ontology's alternative labels that the vocabulary
-# snapshot keeps for this profile, the words its spec is held against. "de"
-# is what the committed snapshot was built with.
-ALT_LABEL_LANGUAGE = "de"
+# snapshot keeps for this profile, the words its spec is held against. The
+# publications are English, and so are the words offered for them.
+ALT_LABEL_LANGUAGE = "en"
 
 # The language of the core's contract text in this profile's prompts (see the
 # same constant of the kwp profile).
-CONTRACT_LANGUAGE = "de"
+CONTRACT_LANGUAGE = "en"
 
 
 # What the preflight (`docpipe preflight`) holds this profile's prompts to,
@@ -208,9 +209,9 @@ CONTRACT_LANGUAGE = "de"
 # (what is checked, prompt, passage, True: has to be there, False: must not)
 PROMPT_CHECKS = (
     ("field prompt asks one field", "extraction/field",
-     "GENAU EIN Feld", True),
+     "EXACTLY ONE field", True),
     ("rows prompt no longer fixes one parameter", "extraction/rows",
-     '"parameter": die gesucht', False),
+     '"parameter": the field', False),
 )
 
 
@@ -305,103 +306,103 @@ PHRASES = {
     # every profile
     "option_means": 'means',
     "option_spellings": 'spellings',
-    "unstated_means": 'in diesen Passagen steht es nicht',
-    "unstated_spelling": 'steht in diesen Passagen nicht',
+    "unstated_means": 'these passages do not state it',
+    "unstated_spelling": 'not stated in these passages',
     # why a coordinate's answer was not taken
-    "kind_whole_number": 'eine ganze Zahl',
-    "kind_text": 'eine Angabe als Text',
+    "kind_whole_number": 'a whole number',
+    "kind_text": 'a piece of text',
     "not_an_option": (
-        'Dein "value" {given!r} ist keiner der Einträge aus "options". '
-        'Wähle genau einen Namen daraus, Zeichen für Zeichen '
-        'abgeschrieben, auch einen mit "out:". Passt keiner, obwohl die '
-        'Passage die Angabe nennt, dann lass "value" weg und gib die '
-        'Bezeichnung in "value_raw".'),
+        'Your "value" {given!r} is none of the entries of "options". '
+        'Choose exactly one name from it, copied character for '
+        'character, including one that starts with "out:". If none fits '
+        'although the passage states the field, leave "value" out and '
+        'give the wording in "value_raw".'),
     "wrong_type": (
-        'Dein "value" {given!r} ist nicht {wrong}. Antworte mit {wrong}, '
-        'genau wie die Passage es schreibt.'),
+        'Your "value" {given!r} is not {wrong}. Answer with {wrong}, '
+        'exactly as the passage writes it.'),
     "quote_not_in_source": (
-        'Dein "quote" steht in keiner der gezeigten Quellen. Kopiere '
-        'eine Passage Zeichen für Zeichen aus "sources" oder aus dem '
-        '"quote" der Zeile selbst.'),
+        'Your "quote" stands in none of the sources shown. Copy a '
+        'passage character for character from "sources" or from the '
+        '"quote" of the row itself.'),
     "quote_too_short": (
-        'Dein "quote" ist zu kurz, um eine Stelle zu benennen '
-        '(mindestens {minimum} Zeichen). Zitier den ganzen Satz oder die '
-        'ganze Zeile, in der die Antwort steht.'),
+        'Your "quote" is too short to name a place (at least {minimum} '
+        'characters). Quote the whole sentence or the whole line the '
+        'answer stands in.'),
     "answer_not_in_quote": (
-        'Dein "quote" enthält {answer!r} nicht. Zitier die Stelle, an '
-        'der es wirklich steht, oder antworte mit "{unstated}".'),
+        'Your "quote" does not contain {answer!r}. Quote the place where '
+        'it really stands, or answer with "{unstated}".'),
     # The key of the frame request that holds the entries of a closed frame
     # coordinate. The frame prompt reads them there.
     "frame_options": "scenarios",
     # why a pair of the document's frame was not taken
-    "frame_missing": 'In einem Paar fehlte "{slot}".',
-    "frame_no_quote": 'Zu {slot}={given!r} fehlte "{slot}_quote".',
+    "frame_missing": 'A pair lacked "{slot}".',
+    "frame_no_quote": 'For {slot}={given!r}, "{slot}_quote" was missing.',
     "frame_quote_not_in_source": (
-        'Das Zitat zu {slot}={given!r} steht in keiner der gezeigten '
-        'Passagen: {quote!r}. Kopiere es Zeichen für Zeichen aus '
+        'The quote for {slot}={given!r} stands in none of the passages '
+        'shown: {quote!r}. Copy it character for character from '
         '"sources".'),
     "frame_answer_not_in_quote": (
-        '{slot}={given!r} steht nicht in seinem Zitat {quote!r}. Schreib '
-        'die Formulierung des Plans in "{slot}_raw".'),
+        '{slot}={given!r} does not stand in its quote {quote!r}. Write '
+        'the wording of the document into "{slot}_raw".'),
     "frame_not_an_option": (
-        '{given!r} ist keiner der Schlüssel aus "scenarios". Wähle genau '
-        'einen daraus, Zeichen für Zeichen abgeschrieben, und schreib '
-        'das Wort des Plans in "{slot}_raw".'),
+        '{given!r} is none of the keys of "{options}". Choose exactly '
+        'one of them, copied character for character, and write the word '
+        'of the document into "{slot}_raw".'),
     "frame_not_a_year": (
-        '{slot}={given!r} ist keine ganze Jahreszahl. Gib das Jahr '
-        'vierstellig an.'),
+        '{slot}={given!r} is not a whole year. Give the year with four '
+        'digits.'),
     # a reply that could not be read
     "shape_rule": (
-        ' Gib NUR das JSON-Objekt aus, in EINER Zeile, ohne Text davor '
-        'oder danach, ohne Codefence, ohne <think>-Block und ohne ein '
-        'zweites Objekt. Anführungszeichen INNERHALB eines Zitats müssen '
-        'als \\" escaped sein — ist das mühsam, kürz das Zitat auf eine '
-        'Stelle ohne Anführungszeichen.'),
+        ' Output ONLY the JSON object, on ONE line, with no text before '
+        'or after it, no code fence, no <think> block and no second '
+        'object. Quotation marks INSIDE a quote must be escaped as \\" — '
+        'if that is tedious, shorten the quote to a place without '
+        'quotation marks.'),
     "cut_off": (
-        'Deine Antwort wurde nach {limit} Tokens abgeschnitten und ist '
-        'deshalb kein vollständiges JSON-Objekt. '),
+        'Your answer was cut off after {limit} tokens and is therefore '
+        'not a complete JSON object. '),
     "shorter": (
-        'Antworte kürzer: zitiere nur die kurze Stelle, an der die '
-        'Angabe steht.'),
+        'Answer more briefly: quote only the short place where the field '
+        'stands.'),
     "shorter_frame": (
-        'Antworte mit weniger Paaren und zitiere nur die kurze Stelle, '
-        'an der das Szenario oder das Jahr steht.'),
+        'Answer with fewer pairs and quote only the short place where '
+        'the scenario or the year stands.'),
     "shorter_rows": (
-        'Antworte mit weniger Tupeln und zitiere nur die kurze Stelle, '
-        'an der die Zahl steht.'),
+        'Answer with fewer tuples and quote only the short place where '
+        'the value stands.'),
     "shorter_field": (
-        'Fasse Zeilen mit derselben Antwort in "groups" zusammen und '
-        'zitiere nur die kurze Stelle, an der die Angabe steht.'),
+        'Put rows with the same answer together in "groups" and quote '
+        'only the short place where the field stands.'),
     "shorter_review": (
-        'Zitiere nur die kurze Stelle, an der die Angabe steht, und lass '
-        'jedes Feld weg, das die zwei Passagen nicht tragen.'),
+        'Quote only the short place where the field stands, and leave '
+        'out every field the two passages do not carry.'),
     "reasoning_only": (
-        'Du hast nur nachgedacht und nichts geantwortet: dein Beitrag '
-        'war leer. Denk nicht vor, sondern gib direkt das Ergebnis aus.'),
-    "empty": 'Deine Antwort war leer.',
-    "no_object": 'Deine Antwort enthielt gar kein JSON-Objekt.',
+        'You only thought and answered nothing: your reply was empty. Do '
+        'not think ahead, output the result directly.'),
+    "empty": 'Your answer was empty.',
+    "no_object": 'Your answer contained no JSON object at all.',
     "syntax": (
-        'Dein JSON bricht bei Zeichen {position} ab ({message}), an '
-        'dieser Stelle: {around!r}.'),
-    "outside_text": 'Neben dem JSON-Objekt stand noch Text: {extra!r}.',
+        'Your JSON breaks at character {position} ({message}), at this '
+        'place: {around!r}.'),
+    "outside_text": 'There was text beside the JSON object: {extra!r}.',
     "not_an_object": (
-        'Deine Antwort war eine {kind}-Struktur und kein JSON-Objekt.'),
-    "key_missing": 'In deiner Antwort fehlte "{key}".',
-    "key_not_a_list": 'In deiner Antwort war keine Liste "{key}".',
-    "wrong_shape": 'Deine Antwort hatte nicht die Form, die verlangt war.',
+        'Your answer was a {kind} structure and not a JSON object.'),
+    "key_missing": 'Your answer lacked "{key}".',
+    "key_not_a_list": 'In your answer "{key}" was not a list.',
+    "wrong_shape": 'Your answer did not have the form that was asked for.',
     # what the model gets back after a calculation
     "code_failed": (
-        'Der Code lief nicht: {error}. Antworte jetzt ohne Berechnung, '
-        'oder korrigiere den Code.'),
-    "code_error_unknown": 'unbekannt',
+        'The code did not run: {error}. Answer now without a '
+        'calculation, or correct the code.'),
+    "code_error_unknown": 'unknown',
     "code_silent": (
-        'Der Code lief, hat aber nichts ausgegeben. Gib jedes Ergebnis '
-        'mit print() aus, oder antworte ohne Berechnung.'),
+        'The code ran but printed nothing. Print every result with '
+        'print(), or answer without a calculation.'),
     "code_output": (
-        'Ausgabe des Codes:\n{output}\n\nAntworte jetzt mit dem '
-        'Tupel-Objekt. Berechnete Werte tragen "computed": true.'),
+        'Output of the code:\n{output}\n\nAnswer now with the tuple '
+        'object. Calculated values carry "computed": true.'),
     # labels inside a request
-    "image_for": 'Bild zu {label}:',
-    "anchor_parameter": 'Kennzahl',
-    "anchor_unit": 'Einheit',
+    "image_for": 'Image for {label}:',
+    "anchor_parameter": 'Field',
+    "anchor_unit": 'Unit',
 }

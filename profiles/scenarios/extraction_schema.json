@@ -365,8 +365,8 @@
      "parameter": {
       "const": "publication_abstract",
       "description": "Spec parameter: Abstract.",
-      "x-description-source": "Die Zusammenfassung des Dokuments, wörtlich und vollständig, so wie sie unter der Überschrift Abstract, Summary, Zusammenfassung oder Executive Summary steht. Keine eigene Zusammenfassung schreiben.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "x-description-source": "The summary of the document, word for word and complete, as it stands under the heading Abstract, Summary or Executive Summary. Do not write a summary of your own.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -544,9 +544,9 @@
      },
      "parameter": {
       "const": "publication_author",
-      "description": "Spec parameter: Autorin oder Autor.",
-      "x-description-source": "Eine einzelne Person, die als Verfasserin oder Verfasser des Dokuments genannt ist. Ein Tupel je Person, in der Schreibweise der Titelseite. Keine Institutionen, keine Herausgeber, keine Danksagungsempfänger.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Author.",
+      "x-description-source": "A single person named as an author of the document. One tuple per person, spelled as on the title page. No institutions, no editors, no one thanked in the acknowledgements.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -732,9 +732,9 @@
      },
      "parameter": {
       "const": "publication_date",
-      "description": "Spec parameter: Erscheinungsjahr.",
-      "x-description-source": "Das Jahr, in dem das Dokument veröffentlicht wurde, vierstellig und genau so, wie es im Dokument steht — Impressum, Titelseite oder Zitationshinweis. Nicht das Jahr der Daten, nicht ein im Text projiziertes Jahr.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Publication year.",
+      "x-description-source": "The year the document was published, four digits and exactly as it stands in the document: imprint, title page or citation note. Not the year of the data, not a year projected in the text.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -915,8 +915,8 @@
      "parameter": {
       "const": "publication_doi",
       "description": "Spec parameter: DOI.",
-      "x-description-source": "Der Digital Object Identifier des Dokuments, wie er im Impressum oder im Zitationshinweis steht. Nur die DOI selbst, ohne das Präfix doi: und ohne die URL davor.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "x-description-source": "The Digital Object Identifier of the document, as it stands in the imprint or the citation note. Only the DOI itself, without the prefix doi: and without the URL before it.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -1094,9 +1094,9 @@
      },
      "parameter": {
       "const": "publication_title",
-      "description": "Spec parameter: Titel der Publikation.",
-      "x-description-source": "Der vollständige Titel des Dokuments. In den meisten PDFs ist er die Überschrift des ersten Abschnitts und steht als erste Zeile über der Autorenliste; sonst im Kopf der ersten Seite. Der Wert ist die ganze Titelzeile. Nicht der Kolumnentitel, nicht der Name der Reihe, nicht der Name des Verlags.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Publication title.",
+      "x-description-source": "The full title of the document. In most PDFs it is the heading of the first section and stands as the first line above the list of authors; otherwise in the head of the first page. The value is the whole title line. Not the running head, not the name of the series, not the name of the publisher.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -1310,9 +1310,9 @@
      },
      "parameter": {
       "const": "scenario_abstract",
-      "description": "Spec parameter: Kurzbeschreibung eines Szenarios.",
-      "x-description-source": "Die Beschreibung, was ein einzelnes Szenario annimmt oder abbildet, wörtlich aus dem Dokument. Nur wenn sich der Satz eindeutig auf ein benanntes Szenario bezieht, dessen Name in derselben Passage steht.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Scenario description.",
+      "x-description-source": "The description of what a single scenario assumes or depicts, word for word from the document. Only where the sentence clearly refers to a named scenario whose name stands in the same passage.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -1411,7 +1411,7 @@
       "type": "string"
      },
      "scenario": {
-      "description": "Axis 'scenario' of Kurzbeschreibung eines Szenarios. null unless scenario_state is 'read' or 'derived'.",
+      "description": "Axis 'scenario' of Scenario description. null unless scenario_state is 'read' or 'derived'.",
       "type": [
        "string",
        "null"
@@ -1428,7 +1428,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+      "x-question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier."
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
@@ -1599,9 +1599,9 @@
      },
      "parameter": {
       "const": "scenario_label",
-      "description": "Spec parameter: Name des Szenarios.",
-      "x-description-source": "Das Szenario der AR6-Datenbank, das an dieser Stelle beschrieben wird. Waehle es aus value_classes aus; die Klassennamen sind die Lauf-Kennungen der AR6-Datenbank fuer genau diese Publikation. In value_raw traegst du ein, wie das Dokument das Szenario nennt, woertlich. Ein Tupel je Szenario, und zwar fuer JEDES, das die Passage nennt - auch fuer die, die du nicht zuordnen kannst. Nennt das Dokument nur eine Familie ('NPi', 'NDC'), waehlst du 'Szenario-Familie'; steht das Szenario nicht in der AR6-Liste dieser Publikation, waehlst du 'nicht in AR6'. Bist du unsicher, laesst du value weg und traegst die Bezeichnung trotzdem in value_raw ein. Weglassen ist die einzige falsche Antwort.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Scenario name.",
+      "x-description-source": "The scenario of the AR6 database that is described at this place. Choose it from value_classes; the class names are the run identifiers of the AR6 database for this very publication. value_raw takes what the document calls the scenario, word for word. One tuple per scenario, for EVERY one the passage names, including those you cannot assign. If the document names only a family ('NPi', 'NDC'), choose 'scenario family'; if the scenario is not in the AR6 list of this publication, choose 'not in AR6'. If you are unsure, leave value out and still write the name into value_raw. Leaving the scenario out is the only wrong answer.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -1819,9 +1819,9 @@
      },
      "parameter": {
       "const": "scenario_region",
-      "description": "Spec parameter: Betrachtete Region eines Szenarios.",
-      "x-description-source": "Das Land oder Gebiet, das ein Szenario abbildet. Waehle es aus value_classes aus - das sind die Studienregionen des OEKG, gefiltert auf die, die dieses Dokument nennt. Ein Tupel je Angabe. Die Liste kennt nur Laender: fuer ein weltweites Szenario waehlst du 'global', fuer einen Zusammenschluss oder eine Grossregion, die nicht als Land dasteht (EU27, OECD, Asien, R5), 'mehrere Regionen'. Beides sind richtige Antworten und werden ausgewertet - ein einzelnes Land stattdessen zu nennen, waere erfunden. In value_raw traegst du ein, wie das Dokument die Region nennt. Nur Regionen, die als Betrachtungsraum genannt sind, nicht jede erwaehnte.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Scenario region.",
+      "x-description-source": "The country or area a scenario depicts. Choose it from value_classes: these are the study regions of the OEKG, narrowed to those this document names. One tuple per statement. The list knows only countries: for a worldwide scenario choose 'global', for a union or a large region that does not stand as a country (EU27, OECD, Asia, R5) 'several regions'. Both are right answers and are evaluated; naming a single country instead would be invented. value_raw takes what the document calls the region. Only regions named as the area under study, not every one mentioned.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -1920,7 +1920,7 @@
       "type": "string"
      },
      "scenario": {
-      "description": "Axis 'scenario' of Betrachtete Region eines Szenarios. null unless scenario_state is 'read' or 'derived'.",
+      "description": "Axis 'scenario' of Scenario region. null unless scenario_state is 'read' or 'derived'.",
       "type": [
        "string",
        "null"
@@ -1937,7 +1937,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+      "x-question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier."
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
@@ -2144,9 +2144,9 @@
      },
      "parameter": {
       "const": "scenario_type",
-      "description": "Spec parameter: Art des Szenarios.",
-      "x-description-source": "Die Art eines Szenarios, gewaehlt aus value_classes. Das sind die Klassen, die der OEKG fuer dieses Feld zulaesst; die Schreibweisen daneben stammen aus der Ontologie selbst. Nimm die spezifischste Klasse, die der Text belegt: steht dort, dass ein Szenario nur bereits beschlossene Massnahmen enthaelt, ist das 'with existing measures scenario' und nicht blosses 'policy scenario'. Zwei Antworten bedeuten NICHT dasselbe: 'scenario' heisst, der Text sagt nichts Engeres als 'ein Szenario'; 'keine dieser Arten' heisst, der Text nennt sehr wohl eine Art, aber keine der Klassen deckt sie ab. Das zweite ist ein Befund und wird gezaehlt; das erste waere dann eine Behauptung. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Szenario und Klasse; ein Szenario darf mehrere Klassen tragen, wenn der Text sie belegt.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Scenario type.",
+      "x-description-source": "The type of a scenario, chosen from value_classes. These are the classes the OEKG allows for this field; the spellings beside them come from the ontology itself. Take the most specific class the text supports: where it says that a scenario only contains measures already adopted, that is 'with existing measures scenario' and not merely 'policy scenario'. Two answers do NOT mean the same: 'scenario' means the text says nothing narrower than 'a scenario'; 'none of these types' means the text does name a type, but none of the classes covers it. The second is a finding and is counted; the first would then be a claim. value_raw takes the document's wording. One tuple per scenario and class; a scenario may carry several classes where the text supports them.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -2245,7 +2245,7 @@
       "type": "string"
      },
      "scenario": {
-      "description": "Axis 'scenario' of Art des Szenarios. null unless scenario_state is 'read' or 'derived'.",
+      "description": "Axis 'scenario' of Scenario type. null unless scenario_state is 'read' or 'derived'.",
       "type": [
        "string",
        "null"
@@ -2262,7 +2262,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+      "x-question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier."
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
@@ -2412,38 +2412,27 @@
        },
        "climate scenario": {
         "meaning": "A climate scenario is a scenario that describes a possible future state of a climate system.",
-        "spellings": [
-         "Klimaszenario"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00030007"
        },
        "economic scenario": {
         "meaning": "An economic scenario is a scenario that describes a possible future state of economic systems.",
-        "spellings": [
-         "Wirtschaftsszenario"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00030008"
        },
        "emission scenario": {
         "meaning": "An emission scenario is a scenario that describes a possible emission trajectory.",
         "spellings": [
-         "emissions scenario",
-         "Emissionsszenario"
+         "emissions scenario"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00030009"
        },
        "energy scenario": {
         "meaning": "An energy scenario is a scenario that describes a possible future state of an energy system.",
-        "spellings": [
-         "Energieszenario"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00030010"
        },
        "explorative scenario": {
         "meaning": "An explorative scenario is a scenario that contains certain constraints / statements regarding measures that are taken in the near future / today to explore where these measures will lead to in a later future. The later future is not predefined in the scenario.",
         "spellings": [
-         "exploratory scenario",
-         "exploratives Szenario"
+         "exploratory scenario"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020248"
        },
@@ -2454,10 +2443,10 @@
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020317"
        },
-       "keine dieser Arten": {
-        "meaning": "Der Text nennt eine Art, die keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keine Art nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.",
+       "none of these types": {
+        "meaning": "The text names a type that none of these classes matches. Not to be confused with the text naming no type at all: that is the answer that these passages do not state it.",
         "spellings": [
-         "die Art, die der Text nennt, steht nicht in der Liste"
+         "the type the text names is not in the list"
         ],
         "uri": "out:not_in_list"
        },
@@ -2483,7 +2472,6 @@
        "scenario": {
         "meaning": "A scenario is an information content entity that contains statements about a possible future development based on a coherent and internally consistent set of assumptions and their motivation.",
         "spellings": [
-         "Szenario",
          "narrative",
          "storyline"
         ],
@@ -2501,8 +2489,7 @@
         "meaning": "A target driven scenario is a scenario that contains certain target constraints/ statements that in a possible future shall be realized. The path how the targets will be met is not predefined in the scenario.",
         "spellings": [
          "normative scenario",
-         "backcasting scenario",
-         "Zielszenario"
+         "backcasting scenario"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020247"
        },
@@ -2619,9 +2606,9 @@
      },
      "parameter": {
       "const": "scenario_year",
-      "description": "Spec parameter: Projiziertes Jahr eines Szenarios.",
-      "x-description-source": "Ein Jahr, für das ein Szenario Ergebnisse ausweist oder bis zu dem es rechnet, vierstellig und wörtlich aus dem Dokument. Ein Tupel je Jahr. Nicht das Erscheinungsjahr der Publikation und nicht das Basisjahr der Daten.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Scenario year.",
+      "x-description-source": "A year for which a scenario reports results or up to which it runs, four digits and word for word from the document. One tuple per year. Not the publication year and not the base year of the data.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -2720,7 +2707,7 @@
       "type": "string"
      },
      "scenario": {
-      "description": "Axis 'scenario' of Projiziertes Jahr eines Szenarios. null unless scenario_state is 'read' or 'derived'.",
+      "description": "Axis 'scenario' of Scenario year. null unless scenario_state is 'read' or 'derived'.",
       "type": [
        "string",
        "null"
@@ -2737,7 +2724,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+      "x-question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier."
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
@@ -2911,9 +2898,9 @@
      },
      "parameter": {
       "const": "study_acronym",
-      "description": "Spec parameter: Projektakronym.",
-      "x-description-source": "Das Kürzel des Forschungsprojekts, meist in Klammern hinter dem ausgeschriebenen Projektnamen oder als Kopfzeile. Nur das Akronym des Projekts, nicht das eines Modells und nicht das einer Institution.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Project acronym.",
+      "x-description-source": "The short name of the research project, mostly in brackets after the full project name or as a header. Only the acronym of the project, not that of a model and not that of an institution.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -3090,9 +3077,9 @@
      },
      "parameter": {
       "const": "study_descriptor",
-      "description": "Spec parameter: Themenschlagwort.",
-      "x-description-source": "Ein Thema, das die Studie untersucht, gewählt aus value_classes. Das sind die Schlagworte, die der OEKG für eine Studie zulässt; die Schreibweisen daneben stammen aus der Ontologie selbst. Nimm ein Schlagwort nur, wenn der Text es als Gegenstand der Studie belegt: was sie berechnet, vergleicht oder bewertet. Ein Begriff, der nur am Rand fällt, etwa als Hintergrund in der Einleitung, ist kein Thema der Studie. 'keines dieser Schlagworte' heißt, der Text nennt ein Thema der Studie, aber kein Schlagwort deckt es ab; das ist ein Befund und wird gezählt. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Schlagwort; eine Studie darf mehrere tragen.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Topic keyword.",
+      "x-description-source": "A topic the study examines, chosen from value_classes. These are the keywords the OEKG allows for a study; the spellings beside them come from the ontology itself. Take a keyword only where the text shows it as a subject of the study: what it calculates, compares or assesses. A term that only comes up in passing, say as background in the introduction, is not a topic of the study. 'none of these keywords' means the text names a topic of the study but no keyword covers it; that is a finding and is counted. value_raw takes the document's wording. One tuple per keyword; a study may carry several.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -3261,7 +3248,6 @@
        "CO2 emission": {
         "meaning": "A CO2 emission is an emission that releases carbon dioxide.",
         "spellings": [
-         "CO2-Emission",
          "carbon dioxide emission"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00260007"
@@ -3272,16 +3258,10 @@
        },
        "decarbonisation pathway": {
         "meaning": "A decarbonisation pathway is a policy that aims at long-term emissions reductions.",
-        "spellings": [
-         "Dekarbonisierungspfad"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010212"
        },
        "demand": {
         "meaning": "A demand is a realizable entity that is characterised by a person, organisation or object needing it for a specific purpose.",
-        "spellings": [
-         "Bedarf"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00140040"
        },
        "efficiency value": {
@@ -3300,31 +3280,19 @@
        },
        "electricity grid": {
         "meaning": "An electricity grid is a supply grid that transfers electrical energy / electricity.",
-        "spellings": [
-         "Stromnetz"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00000143"
        },
        "energy conversion efficiency": {
         "meaning": "Energy conversion efficiency is a process attribute describing the ratio between the input of an energy transformation and the outputs that are used.",
-        "spellings": [
-         "Energieumwandlungseffizienz",
-         "Wirkungsgrad"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00140049"
        },
        "energy demand": {
         "meaning": "Energy demand is a demand for energy.",
-        "spellings": [
-         "Energiebedarf",
-         "Energienachfrage"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00140146"
        },
        "final energy consumption value": {
         "meaning": "A final energy consumption value is an energy consumption value expressing the magnitude of the energy delivered to and consumed by end users.",
         "spellings": [
-         "Endenergieverbrauch",
          "final energy consumption"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00050016"
@@ -3335,47 +3303,28 @@
        },
        "gas grid": {
         "meaning": "A gas grid is a supply grid that distributes gaseous fuel, e.g. methane.",
-        "spellings": [
-         "Gasnetz"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020004"
        },
        "greenhouse gas emission": {
         "meaning": "A greenhouse gas emission is an emission that releases a greenhouse gas.",
-        "spellings": [
-         "Treibhausgasemission"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00000199"
        },
        "gross electricity generation": {
         "meaning": "Gross electricity generation is a process attribute that refers to the total amount of electrical energy produced in an electricity generation process.",
         "spellings": [
-         "Bruttostromerzeugung",
          "gross electricity production"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00240012"
        },
        "heating grid": {
         "meaning": "A heating grid is a supply grid that distributes thermal energy via circulating steam or liquids.",
-        "spellings": [
-         "Wärmenetz"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020005"
-       },
-       "keines dieser Schlagworte": {
-        "meaning": "Der Text nennt ein Thema der Studie, das keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar kein Thema nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.",
-        "spellings": [
-         "das Thema, das der Text nennt, steht nicht in der Liste"
-        ],
-        "uri": "out:not_in_list"
        },
        "life cycle assessment": {
         "meaning": "A life cycle assessment is a methodology to calculate and analyse environmental impacts of the life cycle of a material entity or process.",
         "spellings": [
          "LCA",
-         "Lebenszyklusanalyse",
-         "life cycle analysis",
-         "Ökobilanz"
+         "life cycle analysis"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00330023"
        },
@@ -3398,15 +3347,20 @@
        "net electricity generation": {
         "meaning": "Net electricity generation is a process attribute that equals to gross electricity generation minus the consumption of power stations' auxiliary services.",
         "spellings": [
-         "Nettostromerzeugung",
          "net electricity production"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00240013"
        },
+       "none of these keywords": {
+        "meaning": "The text names a topic that none of these classes matches. Not to be confused with the text naming no topic at all: that is the answer that these passages do not state it.",
+        "spellings": [
+         "the topic the text names is not in the list"
+        ],
+        "uri": "out:not_in_list"
+       },
        "policy instrument": {
         "meaning": "A policy instrument is an action specification of an organisation (e.g. a government) that promotes transformative measures.",
         "spellings": [
-         "Politikinstrument",
          "policies and measures"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00140151"
@@ -3414,8 +3368,7 @@
        "primary energy consumption value": {
         "meaning": "A primary energy consumption value is an energy consumption value expressing the magnitude of the total consumption of energy in a spatial region excluding the non-energetic use of fuels.",
         "spellings": [
-         "Primary energy consumption excluding non-energy use of energy carriers.",
-         "Primärenergieverbrauch"
+         "Primary energy consumption excluding non-energy use of energy carriers."
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00050018"
        },
@@ -3431,7 +3384,6 @@
         "meaning": "A renewable energy share is a process attribute that indicates the fraction of renewable energy related to the total energy of an energy generation or consumption process.",
         "spellings": [
          "RE share",
-         "erneuerbarer Anteil",
          "renewables share"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00140133"
@@ -3509,9 +3461,9 @@
      },
      "parameter": {
       "const": "study_funder",
-      "description": "Spec parameter: Fördermittelgeber.",
-      "x-description-source": "Eine Einrichtung, die die Arbeit finanziert hat, genannt in einem Abschnitt zu Funding, Förderung, Acknowledgements oder Danksagung. Nur wer zahlt, nicht wer inhaltlich beigetragen hat.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Funder.",
+      "x-description-source": "A body that funded the work, named in a section on funding, support or acknowledgements. Only who pays, not who contributed to the content.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -3696,9 +3648,9 @@
      },
      "parameter": {
       "const": "study_organisation",
-      "description": "Spec parameter: Beteiligte Institution.",
-      "x-description-source": "Eine Institution, die an der Erstellung des Dokuments beteiligt war: die Affiliation einer Autorin, das herausgebende Institut, die beauftragte Einrichtung. Ein Tupel je Institution, in der Schreibweise des Dokuments.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Involved organisation.",
+      "x-description-source": "An institution that took part in producing the document: an author's affiliation, the publishing institute, the commissioned body. One tuple per institution, spelled as in the document.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -3883,9 +3835,9 @@
      },
      "parameter": {
       "const": "study_project_name",
-      "description": "Spec parameter: Projektname.",
-      "x-description-source": "Der ausgeschriebene Name des Forschungsprojekts, in dessen Rahmen die Studie oder die Szenarien entstanden sind. Nur wenn das Dokument ein Projekt ausdrücklich als seinen Rahmen nennt, nicht der Titel des Dokuments.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Project name.",
+      "x-description-source": "The full name of the research project within which the study or the scenarios were produced. Only where the document explicitly names a project as its frame; not the title of the document.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -4065,9 +4017,9 @@
      },
      "parameter": {
       "const": "study_sector",
-      "description": "Spec parameter: Abgedeckter Sektor.",
-      "x-description-source": "Ein Sektor, den die Studie abdeckt, gewählt aus value_classes. Das sind die Sektoren, die der OEKG für dieses Feld zulässt; viele gehören zu einer bestimmten Sektoreinteilung und tragen deren Namen vorn (CRF, KSG, NC/BR, RED). Nimm einen Sektor einer solchen Einteilung nur, wenn der Text diese Einteilung nennt; sonst den allgemeinen Sektor, etwa 'transport sector' oder 'industry sector'. Ein Sektor ist abgedeckt, wenn die Studie ihn modelliert oder Ergebnisse für ihn ausweist, nicht wenn er nur erwähnt wird. 'keiner dieser Sektoren' heißt, der Text nennt einen Sektor, den keine der Klassen trifft. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Sektor.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Covered sector.",
+      "x-description-source": "A sector the study covers, chosen from value_classes. These are the sectors the OEKG allows for this field; many belong to a particular sector division and carry its name in front (CRF, KSG, NC/BR, RED). Take a sector of such a division only where the text names that division; otherwise the general sector, such as 'transport sector' or 'industry sector'. A sector is covered when the study models it or reports results for it, not when it is only mentioned. 'none of these sectors' means the text names a sector that none of the classes matches. value_raw takes the document's wording. One tuple per sector.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -4828,52 +4780,30 @@
        },
        "KSG sector agriculture": {
         "meaning": "The KSG sector agriculture is an agriculture, forestry and land use sector defined by the KSG sector division. It is an aggregate of the following two sectors:\n- CRF sector (IPCC 2006): agriculture, forestry and fishing (CRF 1.A.4.c)\n- CRF sector (IPCC 2006): agriculture (CRF 3)",
-        "spellings": [
-         "KSG-Sektor Landwirtschaft"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010069"
        },
        "KSG sector buildings": {
         "meaning": "The KSG sector buildings is a building sector defined by the KSG sector division. It is an aggregate of the following two sectors:\n- CRF sector (IPCC 2006): commercial and institutional (CRF 1.A.4.a)\n- CRF sector (IPCC 2006): residential (CRF 1.A.4.b)\n- CRF sector (IPCC 2006): fuel combustion - other",
-        "spellings": [
-         "KSG-Sektor Gebäude"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010067"
        },
        "KSG sector energy industry": {
         "meaning": "The KSG sector energy industry is an energy transformation sector defined by the KSG sector division. It is an aggregate of the following three sectors:\n- CRF sector (IPCC 2006): energy industry (CRF 1.A.1.a)\n- CRF sector (IPCC 2006): other transportation (CRF 1.A.3.e)\n- CRF sector (IPCC 2006): fugitive emissions from fuels (CRF 1.B)",
-        "spellings": [
-         "KSG-Sektor Energiewirtschaft"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010065"
        },
        "KSG sector industry": {
         "meaning": "The KSG sector industry is an industry sector defined by the KSG sector division. It is an aggregate of the following three sectors:\n- CRF sector (IPCC 2006): manufacturing industries and construction (CRF 1.A.2)\n- CRF sector (IPCC 2006): CO2 transport and storage (CRF 1.C)\n- CRF sector (IPCC 2006): industrial processes and product use (CRF 2)",
-        "spellings": [
-         "KSG-Sektor Industrie"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010066"
        },
        "KSG sector land use, land-use change and forestry": {
         "meaning": "The KSG sector land use, land-use change and forestry is an agriculture, forestry and land use sector defined by the KSG sector division.\nIt is equivalent to the CRF sector (IPCC 2006): land use, land-use change and forestry (CRF 4).",
-        "spellings": [
-         "KSG-Sektor LULUCF",
-         "KSG-Sektor Landnutzung, Landnutzungsänderung und Forstwirtschaft"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010071"
        },
        "KSG sector transport": {
         "meaning": "The KSG sector transport is a transport sector defined by the KSG sector division. It is an aggregate of the following four sectors:\n- CRF sector (IPCC 2006): domestic aviation (CRF 1.A.3.a)\n- CRF sector (IPCC 2006): road transportation (CRF 1.A.3.b)\n- CRF sector (IPCC 2006): railways (CRF 1.A.3.c)\n- CRF sector (IPCC 2006): domestic navigation (CRF 1.A.3.d)",
-        "spellings": [
-         "KSG-Sektor Verkehr"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010068"
        },
        "KSG sector waste management and other": {
         "meaning": "The KSG sector waste management and other is a sector defined by the KSG sector division. It is an aggregate of the following two sectors:\n- CRF sector (IPCC 2006): waste (CRF 5)\n- CRF sector (IPCC 2006): other (CRF 6)",
-        "spellings": [
-         "KSG-Sektor Abfallwirtschaft und Sonstiges"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010070"
        },
        "MMR sector: M.International aviation in the EU ETS": {
@@ -4923,23 +4853,18 @@
        "agriculture, forestry and land use sector": {
         "meaning": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.",
         "spellings": [
-         "AFOLU sector",
-         "Landwirtschaft, Forstwirtschaft und Landnutzungssektor"
+         "AFOLU sector"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010035"
        },
        "building sector": {
         "meaning": "A building sector is a sector that covers buildings.",
-        "spellings": [
-         "Gebäudesektor"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010034"
        },
        "commercial sector": {
         "meaning": "A commercial sector is a sector that covers non-industrial commercial activities.",
         "spellings": [
          "TCS sector",
-         "kommerzieller Sektor",
          "service sector",
          "trading, commerce and service sector"
         ],
@@ -4947,15 +4872,11 @@
        },
        "electricity sector": {
         "meaning": "An electricity sector is a transformation sector that covers electricity generation and transport of electrical energy to consumers of electrical energy.",
-        "spellings": [
-         "Stromsektor"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00000145"
        },
        "energy demand sector": {
         "meaning": "An energy demand sector is a sector that covers energy consumers.",
         "spellings": [
-         "Energienachfragesektor",
          "final energy sector"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00000128"
@@ -4971,53 +4892,44 @@
        "heating and cooling sector": {
         "meaning": "A heating and cooling sector is a sector that covers heating and cooling activities.",
         "spellings": [
-         "H&C sector",
-         "Wärme- und Kältesektor"
+         "H&C sector"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00000213"
        },
        "household sector": {
         "meaning": "A household sector is a sector that covers households.",
         "spellings": [
-         "Haushaltssektor",
          "private household sector"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00000214"
        },
        "industry sector": {
         "meaning": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.",
-        "spellings": [
-         "Industriesektor"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00000227"
        },
        "international transport sector": {
         "meaning": "An international transport sector is a transport sector of international transport processes.",
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010320"
        },
-       "keiner dieser Sektoren": {
-        "meaning": "Der Text nennt einen Sektor, den keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keinen Sektor nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.",
-        "spellings": [
-         "der Sektor, den der Text nennt, steht nicht in der Liste"
-        ],
-        "uri": "out:not_in_list"
-       },
        "mineral oil refining sector": {
         "meaning": "A mineral oil refining sector is an energy transformation sector that covers mineral oil refining.",
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010319"
        },
+       "none of these sectors": {
+        "meaning": "The text names a sector that none of these classes matches. Not to be confused with the text naming no sector at all: that is the answer that these passages do not state it.",
+        "spellings": [
+         "the sector the text names is not in the list"
+        ],
+        "uri": "out:not_in_list"
+       },
        "sector": {
         "meaning": "A sector is generically dependent continuant that is a subdivision of a system.",
-        "spellings": [
-         "Sektor"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00000367"
        },
        "source category": {
         "meaning": "A source category is a sector that is defined by a common reporting format.",
         "spellings": [
-         "CRF sector",
-         "Quellgruppe"
+         "CRF sector"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010360"
        },
@@ -5056,17 +4968,12 @@
        "transport sector": {
         "meaning": "A transport sector is a sector that covers transport of people and/or goods.",
         "spellings": [
-         "Verkehrssektor",
          "traffic sector"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00000422"
        },
        "waste and wastewater sector": {
         "meaning": "A waste and wastewater sector is a sector that covers activities related the collection and treatment of waste and wastewater.",
-        "spellings": [
-         "Abfall- und Abwassersektor",
-         "Entsorgungssektor"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010036"
        }
       }
@@ -5119,9 +5026,9 @@
      },
      "parameter": {
       "const": "study_sector_division",
-      "description": "Spec parameter: Sektoreinteilung.",
-      "x-description-source": "Die Sektoreinteilung, nach der die Studie ihre Sektoren abgrenzt, gewählt aus value_classes: etwa die CRF-Sektoren der IPCC-Richtlinien, die Sektoren des Klimaschutzgesetzes oder die einer Energiebilanz. Das sind die Einteilungen, die der OEKG für dieses Feld zulässt. Nimm die spezifischste, die der Text belegt. Zwei Antworten bedeuten NICHT dasselbe: 'sector division' heißt, der Text teilt nach Sektoren ein, nennt aber keine der geführten Einteilungen als Grundlage; 'keine dieser Einteilungen' heißt, der Text nennt sehr wohl eine Einteilung, aber die Liste führt sie nicht. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Einteilung.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Sector division.",
+      "x-description-source": "The sector division by which the study delimits its sectors, chosen from value_classes: for instance the CRF sectors of the IPCC guidelines, the sectors of the German Climate Protection Act or those of an energy balance. These are the divisions the OEKG allows for this field. Take the most specific one the text supports. Two answers do NOT mean the same: 'sector division' means the text divides by sectors but names none of the listed divisions as its basis; 'none of these divisions' means the text does name a division, but the list does not carry it. value_raw takes the document's wording. One tuple per division.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -5339,22 +5246,19 @@
         "meaning": "An energy balance sector division is a sector division that is defined by an energy balance calculation method.",
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010407"
        },
-       "keine dieser Einteilungen": {
-        "meaning": "Der Text nennt eine Sektoreinteilung, die keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keine Einteilung nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.",
-        "spellings": [
-         "die Einteilung, die der Text nennt, steht nicht in der Liste"
-        ],
-        "uri": "out:not_in_list"
-       },
        "nace_ sectors": {
         "meaning": "The Statistical classification of economic activities in the European Community, abbreviated as NACE, is the classification of economic activities in the European Union (EU); the term NACE is derived from the French Nomenclature statistique des activités économiques dans la Communauté européenne. Various NACE versions have been developed since 1970.\n\nNACE is a four-digit classification providing the framework for collecting and presenting a large range of statistical data according to economic activity in the fields of economic statistics (e.g. production, employment and national accounts) and in other statistical domains developed within the European statistical system (ESS).",
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00000291"
        },
+       "none of these divisions": {
+        "meaning": "The text names a sector division that none of these classes matches. Not to be confused with the text naming no division at all: that is the answer that these passages do not state it.",
+        "spellings": [
+         "the division the text names is not in the list"
+        ],
+        "uri": "out:not_in_list"
+       },
        "sector division": {
         "meaning": "A sector division is a specific way to subdivide a system.",
-        "spellings": [
-         "Sektorunterteilung"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00000368"
        }
       }
@@ -5407,9 +5311,9 @@
      },
      "parameter": {
       "const": "study_technology",
-      "description": "Spec parameter: Abgedeckte Technologie.",
-      "x-description-source": "Eine Technologie, die die Studie abdeckt, gewählt aus value_classes. Das sind die Technologieklassen, die der OEKG für dieses Feld zulässt. Nimm die spezifischste Klasse, die der Text belegt: steht dort Offshore-Wind, ist das 'offshore wind power technology' und nicht bloß 'wind power technology'. Eine Technologie ist abgedeckt, wenn die Studie sie modelliert oder Ergebnisse für sie ausweist, nicht wenn sie nur erwähnt wird. 'keine dieser Technologien' heißt, der Text nennt eine Technologie, die keine der Klassen trifft; das ist ein Befund und wird gezählt. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Technologie.",
-      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+      "description": "Spec parameter: Covered technology.",
+      "x-description-source": "A technology the study covers, chosen from value_classes. These are the technology classes the OEKG allows for this field. Take the most specific class the text supports: where it says offshore wind, that is 'offshore wind power technology' and not merely 'wind power technology'. A technology is covered when the study models it or reports results for it, not when it is only mentioned. 'none of these technologies' means the text names a technology that none of the classes matches; that is a finding and is counted. value_raw takes the document's wording. One tuple per technology.",
+      "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
@@ -5645,13 +5549,6 @@
         "meaning": "A hydro power technology is a power generation technology that describes how to combine hydro power units and a hydroelectric energy transformation.",
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010431"
        },
-       "keine dieser Technologien": {
-        "meaning": "Der Text nennt eine Technologie, die keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keine Technologie nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.",
-        "spellings": [
-         "die Technologie, die der Text nennt, steht nicht in der Liste"
-        ],
-        "uri": "out:not_in_list"
-       },
        "kinetic energy storage technology": {
         "meaning": "An kinetic energy storage technology is an energy storage technology that describes how to combine kinetic energy storage objects and kinetic energy in charging and decharging processes.",
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020368"
@@ -5693,6 +5590,13 @@
          "non-energy consumption technology"
         ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010471"
+       },
+       "none of these technologies": {
+        "meaning": "The text names a technology that none of these classes matches. Not to be confused with the text naming no technology at all: that is the answer that these passages do not state it.",
+        "spellings": [
+         "the technology the text names is not in the list"
+        ],
+        "uri": "out:not_in_list"
        },
        "nuclear power technology": {
         "meaning": "A nuclear power generation technology is a power generation technology that describes how to combine nuclear power units and nuclear fuel in an electricity generation process.",
@@ -5773,9 +5677,6 @@
        },
        "technology": {
         "meaning": "A technology is a plan specification that describes how to combine artificial objects or other material entities and processes in a specific way.",
-        "spellings": [
-         "Technologie"
-        ],
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00000407"
        },
        "thermal energy storage technology": {
