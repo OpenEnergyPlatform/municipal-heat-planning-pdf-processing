@@ -621,17 +621,25 @@ def top_up_open_file(path: Path, spec: Spec, deps: dict) -> Counter:
 
 
 def run_open(harvest_dir: Path, spec: Spec, deps: dict,
-             names: Optional[set] = None) -> Counter:
+             names: Optional[set] = None, workers: int = 1) -> Counter:
     """`top_up_open_file` over a harvest directory, or over the files of
-    *names* (stems) in it."""
+    *names* (stems) in it, *workers* documents at a time.
+
+    In parallel, because one document's sweeps to its end are many requests
+    one after the other, and a corpus read one document at a time keeps the
+    server idle. Each file is its own and is replaced in one step; *deps*
+    must hand each thread its own connection (`document_spec_per_call`).
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    paths = [path for path in sorted(Path(harvest_dir).glob("*.jsonl"))
+             if not path.name.endswith(".trace.jsonl")
+             and (names is None or path.stem in names)]
     stats: Counter = Counter()
-    for path in sorted(Path(harvest_dir).glob("*.jsonl")):
-        if path.name.endswith(".trace.jsonl"):
-            continue
-        if names is not None and path.stem not in names:
-            continue
-        stats.update(top_up_open_file(path, spec, deps))
-        stats["documents"] += 1
+    with ThreadPoolExecutor(max_workers=max(1, workers),
+                            thread_name_prefix="open") as pool:
+        for got in pool.map(lambda p: top_up_open_file(p, spec, deps), paths):
+            stats.update(got)
+            stats["documents"] += 1
     for key, value in sorted(stats.items()):
         log.info("top-up-open: %-32s %d", key, value)
     return stats

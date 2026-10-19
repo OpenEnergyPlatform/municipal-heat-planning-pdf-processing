@@ -257,11 +257,16 @@ coordinate it read points at its entry.
 
 ```python
 def run_open(harvest_dir: Path, spec: Spec, deps: dict,
-             names: Optional[set] = None) -> Counter
+             names: Optional[set] = None, workers: int = 1) -> Counter
 ```
 
 `top_up_open_file` over a harvest directory, or over the files of
-*names* (stems) in it.
+*names* (stems) in it, *workers* documents at a time.
+
+In parallel, because one document's sweeps to its end are many requests
+one after the other, and a corpus read one document at a time keeps the
+server idle. Each file is its own and is replaced in one step; *deps*
+must hand each thread its own connection (`document_spec_per_call`).
 
 ### point
 

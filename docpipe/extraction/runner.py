@@ -6566,28 +6566,24 @@ def main(argv: Optional[list] = None) -> int:
         read_to_end()
         trace.open_trace(args.out / OPEN_TRACE_DIR,
                          {did: Path(fn).stem for did, fn in documents}.get)
-        listing = sqlite3.connect(readonly_uri(args.db), uri=True)
-        listing.row_factory = sqlite3.Row
-        try:
-            stats = topup.run_open(
-                args.out, spec,
-                {"sweep": make_sweeper(
-                    make_field_asker(args.image_root),
-                    more_sources=more_sources,
-                    rest_of_document=make_rest_of_document(args.db,
-                                                           content=content),
-                    parents=make_parents(args.db, content=content),
-                    anchors=anchors,
-                    search_share=search_share),
-                 "owner_sources": make_owner_sources(args.db, content=content),
-                 "document_spec": make_document_spec(listing, spec,
+        stats = topup.run_open(
+            args.out, spec,
+            {"sweep": make_sweeper(
+                make_field_asker(args.image_root),
+                more_sources=more_sources,
+                rest_of_document=make_rest_of_document(args.db,
+                                                       content=content),
+                parents=make_parents(args.db, content=content),
+                anchors=anchors,
+                search_share=search_share),
+             "owner_sources": make_owner_sources(args.db, content=content),
+             "document_spec": document_spec_per_call(args.db, spec,
                                                      document_axes),
-                 "frame_axes": frame_axes,
-                 "year_states": year_states,
-                 "locate": locate},
-                names={Path(fn).stem for _did, fn in documents})
-        finally:
-            listing.close()
+             "frame_axes": frame_axes,
+             "year_states": year_states,
+             "locate": locate},
+            names={Path(fn).stem for _did, fn in documents},
+            workers=in_flight)
         log.info("top-up-open: %d open coordinate(s) asked over %d "
                  "document(s), %d still open", stats["open coordinates asked"],
                  stats["documents"], stats["open coordinates left"])

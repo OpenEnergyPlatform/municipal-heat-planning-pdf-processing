@@ -1008,7 +1008,9 @@ through the harvest's own sweep, `topup._sweep_one`, with the rest stage
 reading the document to its end (`runner.read_to_end`, `REST_TO_END`). An
 answer replaces the open block, `unstated` after the whole document
 included; a coordinate still open keeps its old block, so a cut-short run
-leaves the file as it was. Its trace goes to `trace-open`.
+leaves the file as it was. `EXTRACT_BATCH_DOCS` documents are swept at a
+time (`topup.run_open`), since one document's sweeps to its end are many
+requests one after the other. Its trace goes to `trace-open`.
 
 Then `topup_rest` reads the passages the harvest never asked for values.
 Which ones were asked is in the harvest's trace (`trace/<name>.trace.jsonl`,
