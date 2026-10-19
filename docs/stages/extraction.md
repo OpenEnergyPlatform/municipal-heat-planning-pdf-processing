@@ -127,6 +127,23 @@ Bremen 13 of its 323 figures, Kassel none of its 23 figures, and on the
 30 thinnest documents only 42% of tuples came from an image, against 71%
 everywhere else.
 
+What no search kept is read as well. `plan_batches` (`runner.py:5791`)
+takes the rest of the document from `make_rest_of_document`
+(`runner.py:838`), every section with its tables and figures that neither
+the document's search nor a pair's own search planned, and adds it behind
+the planned passages with origin `rest`: under the pair it prints, or
+without one, exactly as `pair_batches` places a planned passage. It is
+counted in `owners_harvested`, which `not_happened` measures against, and
+each passage gets a `plan` event in the trace. Before, the rest of a
+document was read only when the model answered a rows request with
+`partial` and a follow-up happened to walk it: Mainz gave 1,409 tuples in
+the run of 2026-09-29, 682 of its 892 rows requests follow-ups, and 194 in
+the run of 2026-10-14, which made none. A window `split_long_sources`
+(`runner.py:4619`) cuts from a long passage keeps the passage's rank and
+origin. The stamp does not record the plan (owner decision 2026-09-10), so
+a harvest already on disk stays current and only a document harvested
+again is read to its end.
+
 ### Anchors
 
 The plan searches not with the spec's query templates but a sentence
@@ -211,7 +228,7 @@ pair, one entry per year with the frame's own quote and source, and every
 batch of the document carries them as `Batch.bases`, framed or not, since
 a passage naming only "Basisjahr" is exactly the one that needs them
 (`named_years`, `pipeline.py:921`, joins the base and the target years;
-`plan_batches`, `runner.py:5769`).
+`plan_batches`, `runner.py:5791`).
 
 A year answer whose quote carries this wording but not the number now
 reads (`named_year`, `pipeline.py:936`) when the number given is one
@@ -1708,6 +1725,11 @@ document that was not read completely and the window between file and stamp,
 harvest and the pass share: the harvest's own call plans every parameter and
 numbers the pairs from zero
 (`test_the_harvests_call_plans_every_parameter_and_numbers_pairs_from_zero`),
+reads a passage no search kept under the pair it prints
+(`test_a_passage_no_search_kept_is_read_under_the_pair_it_prints`), never a
+kept one twice (`test_a_passage_a_search_kept_is_not_read_a_second_time`)
+and counts and traces the rest
+(`test_the_rest_is_counted_as_harvested_and_traced_as_rest`),
 the pass's call searches for the named parameter alone
 (`test_the_search_is_for_the_new_parameter_alone`) and keeps a stored pair
 under its index (`test_a_stored_pair_keeps_its_index_and_a_new_pair_takes_the_next_free_one`),

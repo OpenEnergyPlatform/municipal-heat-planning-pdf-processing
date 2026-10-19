@@ -4637,7 +4637,9 @@ def split_long_sources(items: list, max_chars: int = MAX_SOURCE_CHARS) -> list:
             if not window.strip():
                 continue
             part = replace(item.source, text=window)
-            out.append(WorkItem(item.document_id, item.parameter, part))
+            # Rank and origin go with it, or the trace calls a window of a
+            # planned passage one nobody planned.
+            out.append(replace(item, source=part))
             if start + max_chars >= len(text):
                 break
     if len(out) != len(items):
@@ -5790,9 +5792,11 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
                  plan_pool, ask_frame: Optional[Callable], frame_axes: list,
                  more_sources: Optional[Callable], year_states,
                  anchor_texts: dict, only=(),
-                 stored_pairs: Optional[dict] = None) -> PlannedDocument:
+                 stored_pairs: Optional[dict] = None,
+                 rest_of_document: Optional[Callable] = None
+                 ) -> PlannedDocument:
     """One document from its first search to its batches: the plan, the frame,
-    one plan per pair and the batches that read them.
+    one plan per pair, the rest of the document and the batches that read them.
 
     The planning half of the harvest of a document, shared by the run and by
     the pass that appends a parameter to a stored harvest. *only* names the
@@ -5802,6 +5806,12 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
     plan's passages with those pairs seeded, they keep their index and the
     pairs the passages print in addition are numbered after them. Without it
     the pairs stand under 0, 1, 2 as the frame found them.
+
+    *rest_of_document* (`make_rest_of_document`) adds every passage no search
+    kept, read once after the planned ones: under the pair it prints, or
+    without one. A search keeps `PLAN_TOP` passages, and on a long plan most
+    values stand below that cut -- Mainz gave 1,409 tuples when a follow-up
+    happened to walk the rest and 194 when none did.
     """
     failed = 0
     name, items, report, doc_spec = plan_pool.submit(
@@ -5868,6 +5878,30 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
             # that parameter's too.
             for uri, keys in pair_report.sources_of.items():
                 report.sources_of.setdefault(uri, set()).update(keys)
+
+    # ---- The rest of the document: every passage no search kept ---------
+    if rest_of_document is not None:
+        planned = {(item.source.owner_kind, item.source.owner_id)
+                   for item in list(items) + [item for found in
+                                              pair_items.values()
+                                              for item in found or ()]}
+        unplanned = [WorkItem(report.document_id, None, source,
+                              origin="rest")
+                     for source in rest_of_document(report.document_id,
+                                                    planned)]
+        for item in unplanned:
+            trace.event("plan", report.document_id, rank=None,
+                        origin=item.origin, kind=item.source.owner_kind,
+                        owner=item.source.owner_id,
+                        chars=len(item.source.text or ""),
+                        image=bool(item.source.image_path), frame=None)
+        if unplanned:
+            log.info("extract: %s: %d passage(s) no search kept are read "
+                     "too", name, len(unplanned))
+        # Counted like a follow-up's passages: `not_happened` measures what
+        # never reached the server against this.
+        report.owners_harvested += len(unplanned)
+        items = list(items) + split_long_sources(unplanned)
 
     framed, rest, added = pair_batches(
         items, pairs, [pair_items.get(i) for i in range(len(pairs))],
@@ -6648,9 +6682,9 @@ def main(argv: Optional[list] = None) -> int:
     # is not in the value's own passage is looked for further out in the same
     # document. After the streak and the give-up, because the field pool
     # shares them with the rows pool. OpenAI client is thread-safe.
+    rest_of_document = make_rest_of_document(args.db, content=content)
     harvest = make_fieldwise_harvester(args.image_root, more_sources,
-                                       make_rest_of_document(args.db,
-                                                             content=content),
+                                       rest_of_document,
                                        spec=spec, anchors=anchors,
                                        slice_gate=slice_gate,
                                        parents=make_parents(args.db, content=content),
@@ -6672,7 +6706,8 @@ def main(argv: Optional[list] = None) -> int:
     plan_for = functools.partial(
         plan_batches, plan=plan, plan_pool=plan_pool, ask_frame=ask_frame,
         frame_axes=frame_axes, more_sources=more_sources,
-        year_states=year_states, anchor_texts=anchor_texts)
+        year_states=year_states, anchor_texts=anchor_texts,
+        rest_of_document=rest_of_document)
     harvest_all = functools.partial(
         harvest_batches, harvest=harvest, more_sources=more_sources,
         verify=prior_rows, workers=LLM_PARALLEL, on_give_up=give_up,

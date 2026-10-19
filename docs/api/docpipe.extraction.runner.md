@@ -2098,11 +2098,13 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
                  plan_pool, ask_frame: Optional[Callable], frame_axes: list,
                  more_sources: Optional[Callable], year_states,
                  anchor_texts: dict, only=(),
-                 stored_pairs: Optional[dict] = None) -> PlannedDocument
+                 stored_pairs: Optional[dict] = None,
+                 rest_of_document: Optional[Callable] = None
+                 ) -> PlannedDocument
 ```
 
 One document from its first search to its batches: the plan, the frame,
-one plan per pair and the batches that read them.
+one plan per pair, the rest of the document and the batches that read them.
 
 The planning half of the harvest of a document, shared by the run and by
 the pass that appends a parameter to a stored harvest. *only* names the
@@ -2112,6 +2114,12 @@ empty is every parameter, which is the harvest. *stored_pairs* is
 plan's passages with those pairs seeded, they keep their index and the
 pairs the passages print in addition are numbered after them. Without it
 the pairs stand under 0, 1, 2 as the frame found them.
+
+*rest_of_document* (`make_rest_of_document`) adds every passage no search
+kept, read once after the planned ones: under the pair it prints, or
+without one. A search keeps `PLAN_TOP` passages, and on a long plan most
+values stand below that cut -- Mainz gave 1,409 tuples when a follow-up
+happened to walk the rest and 194 when none did.
 
 ### accepted_rows
 

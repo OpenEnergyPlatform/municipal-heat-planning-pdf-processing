@@ -580,6 +580,18 @@ def test_a_long_source_becomes_overlapping_windows_of_the_same_owner():
     assert len(covered) == len(text)
 
 
+def test_a_window_keeps_the_rank_and_origin_of_its_passage():
+    """The trace says where a passage came from by its origin: a window of a
+    planned passage that lost it read as one nobody planned."""
+    from dataclasses import replace
+    text = "".join(f"{i:04d} " for i in range(1000))
+    item = replace(_item(_source(text)), rank=3, origin="rest")
+    windows = runner.split_long_sources([item], max_chars=2000)
+    assert len(windows) > 1
+    assert {(w.rank, w.origin) for w in windows} == {(3, "rest")}
+    assert all(w.parameter is SPEC.parameters[0] for w in windows)
+
+
 def _chain(item):
     from docpipe.extraction.pipeline import group_items
     return group_items([item])

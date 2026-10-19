@@ -82,7 +82,7 @@ def pool():
 
 
 def _plan(pool, planner, *, found=(), stored=None, only=(), ask=True,
-          anchor_texts=None, monkeypatch=None, states=BASE):
+          anchor_texts=None, monkeypatch=None, states=BASE, rest=None):
     """`plan_batches` over the stub planner and a frame that finds `found`
     in addition to what it is seeded with."""
     seen = {}
@@ -99,7 +99,7 @@ def _plan(pool, planner, *, found=(), stored=None, only=(), ask=True,
         ask_frame=(lambda *a, **k: {}) if ask else None, frame_axes=FRAME,
         more_sources=None, year_states=states,
         anchor_texts=anchor_texts if anchor_texts is not None else {},
-        only=only, stored_pairs=stored)
+        only=only, stored_pairs=stored, rest_of_document=rest)
     return got, seen
 
 
@@ -187,6 +187,99 @@ def test_a_pair_whose_plan_raises_is_counted(pool, monkeypatch):
             for b in got.batches if b.frame} == {0: [1], 1: [2]}, (
         "the pair whose own search failed is read over the passages the "
         "document's search kept and that print it")
+
+
+# ---------------------------------------------------------------------------
+# The rest of the document: every passage no search kept
+# ---------------------------------------------------------------------------
+
+# Two passages no search planned: one prints the pair of 2045, one no pair.
+R2045 = _source(5, "Zielszenario 2045 | Waermepumpe | 4 | MWh/a |")
+RNONE = _source(6, "| Biomasse | 3 | MWh/a |")
+
+
+class Rest:
+    """A `rest_of_document` over the whole document (P2045, P2020, NONE and
+    the two unplanned passages): every one the caller does not exclude, in
+    document order, as the real one does."""
+
+    def __init__(self, document=(P2045, P2020, NONE, R2045, RNONE)):
+        self.document = list(document)
+        self.excluded = None
+
+    def __call__(self, document_id, exclude, start=None):
+        self.excluded = set(exclude)
+        return [s for s in self.document
+                if (s.owner_kind, s.owner_id) not in exclude]
+
+
+def _owners(batches, framed):
+    return {b.frame_index if framed else None:
+            [i.source.owner_id for i in b.items]
+            for b in batches if bool(b.frame) == framed}
+
+
+def test_a_passage_no_search_kept_is_read_under_the_pair_it_prints(
+        pool, monkeypatch):
+    """The unplanned passage printing 2045 is read under that pair, behind the
+    planned one, and the one printing no pair is read without one. Violated
+    by construction: without the reader neither is read at all."""
+    got, _seen = _plan(pool, Planner(), found=[T2045, S2020], rest=Rest(),
+                       monkeypatch=monkeypatch)
+    assert _owners(got.batches, framed=True) == {0: [1, 5], 1: [2]}
+    unframed = [i.source.owner_id for b in got.batches if not b.frame
+                for i in b.items]
+    assert unframed == [3, 6]
+    without, _seen = _plan(pool, Planner(), found=[T2045, S2020],
+                           monkeypatch=monkeypatch)
+    assert {i.source.owner_id for b in without.batches
+            for i in b.items} == {1, 2, 3}
+
+
+def test_a_passage_a_search_kept_is_not_read_a_second_time(pool, monkeypatch):
+    """What the document's search and every pair's search kept is excluded
+    from the rest, the pair's own finds included; each passage stands in
+    exactly one batch."""
+    own = _source(4, "Zielszenario 2045 | Fernwaerme | 9 | MWh/a |")
+
+    class Finding(Planner):
+        def __call__(self, document_id, filename, frame=None, frame_index=0,
+                     only=()):
+            name, items, report, spec = super().__call__(
+                document_id, filename, frame, frame_index, only)
+            if frame is not None and frame_index == 0:
+                items = items + [WorkItem(document_id, None, own)]
+            return name, items, report, spec
+
+    rest = Rest(document=(P2045, P2020, NONE, own, R2045, RNONE))
+    got, _seen = _plan(pool, Finding(), found=[T2045, S2020], rest=rest,
+                       monkeypatch=monkeypatch)
+    assert rest.excluded == {("table", 1), ("table", 2), ("table", 3),
+                             ("table", 4)}
+    read = [i.source.owner_id for b in got.batches for i in b.items]
+    assert sorted(read) == [1, 2, 3, 4, 5, 6], "every passage once"
+
+
+def test_the_rest_is_counted_as_harvested_and_traced_as_rest(pool,
+                                                             monkeypatch):
+    """`not_happened` measures what never reached the server against the
+    passages harvested, so the rest is counted; the trace names it."""
+    from docpipe.extraction import trace
+    events = []
+    monkeypatch.setattr(trace, "event",
+                        lambda kind, doc=None, /, **kw: events.append(
+                            (kind, kw.get("origin"), kw.get("owner"))))
+    got, _seen = _plan(pool, Planner(), found=[T2045, S2020], rest=Rest(),
+                       monkeypatch=monkeypatch)
+    assert got.report.owners_harvested == 3 + 2
+    assert [e for e in events if e[0] == "plan"] == [
+        ("plan", "rest", 5), ("plan", "rest", 6)]
+    assert all(i.origin == "rest" for b in got.batches for i in b.items
+               if i.source.owner_id in (5, 6))
+    empty, _seen = _plan(pool, Planner(), found=[T2045, S2020],
+                         rest=Rest(document=(P2045, P2020, NONE)),
+                         monkeypatch=monkeypatch)
+    assert empty.report.owners_harvested == 3, "nothing unplanned, nothing added"
 
 
 # ---------------------------------------------------------------------------

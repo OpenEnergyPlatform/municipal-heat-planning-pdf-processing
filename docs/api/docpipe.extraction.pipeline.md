@@ -76,7 +76,7 @@ Fields:
 - `parameter: object`
 - `source: Source`
 - `rank: Optional[int] = None`: position in the fused ranking
-- `origin: str = ""`: "structure" | "retrieval"
+- `origin: str = ""`: "structure" | "retrieval" | "rest"
 
 ### Batch
 
