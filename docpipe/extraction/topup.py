@@ -43,12 +43,14 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
 from .. import jsonl
+from . import archive
 from . import fields
 from .pipeline import (Row, WorkItem, group_items, mark_unanswered,
                        named_years, row_label)
@@ -527,6 +529,7 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
         stats["documents given a producers entry"] += 1
     tmp = Path(path).with_suffix(".jsonl.tmp")
     tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
+    archive.keep(path)
     tmp.replace(path)
     if runner.UNSERVED.of(document_id) > unserved:
         # A coordinate that was never read is not a coordinate re-read. The
@@ -615,31 +618,52 @@ def top_up_open_file(path: Path, spec: Spec, deps: dict) -> Counter:
                                                    runner.LLM_MODEL))
     tmp = Path(path).with_suffix(".jsonl.tmp")
     tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
+    archive.keep(path)
     tmp.replace(path)
     stats["documents written"] += 1
     return stats
 
 
 def run_open(harvest_dir: Path, spec: Spec, deps: dict,
-             names: Optional[set] = None, workers: int = 1) -> Counter:
+             names: Optional[set] = None, workers: int = 1,
+             room=None) -> Counter:
     """`top_up_open_file` over a harvest directory, or over the files of
-    *names* (stems) in it, *workers* documents at a time.
+    *names* (stems) in it: *workers* documents at most at a time, and with
+    *room* (`runner.document_room`) as many as the server has room for.
 
     In parallel, because one document's sweeps to its end are many requests
     one after the other, and a corpus read one document at a time keeps the
     server idle. Each file is its own and is replaced in one step; *deps*
     must hand each thread its own connection (`document_spec_per_call`).
     """
-    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
     paths = [path for path in sorted(Path(harvest_dir).glob("*.jsonl"))
              if not path.name.endswith(".trace.jsonl")
              and (names is None or path.stem in names)]
     stats: Counter = Counter()
-    with ThreadPoolExecutor(max_workers=max(1, workers),
+    workers = max(1, workers)
+    pending: set = set()
+    with ThreadPoolExecutor(max_workers=workers,
                             thread_name_prefix="open") as pool:
-        for got in pool.map(lambda p: top_up_open_file(p, spec, deps), paths):
-            stats.update(got)
-            stats["documents"] += 1
+        while paths or pending:
+            allowed = workers - len(pending)
+            if room is not None:
+                allowed = min(allowed, room(len(pending)))
+            while paths and allowed > 0:
+                pending.add(pool.submit(top_up_open_file, paths.pop(0),
+                                        spec, deps))
+                allowed -= 1
+            if not pending:
+                # No room with nothing of this pass open: something else
+                # holds the server, so look again in a moment.
+                time.sleep(1)
+                continue
+            finished, pending = wait(pending,
+                                     timeout=1 if room is not None and paths
+                                     else 5, return_when=FIRST_COMPLETED)
+            for future in finished:
+                stats.update(future.result())
+                stats["documents"] += 1
     for key, value in sorted(stats.items()):
         log.info("top-up-open: %-32s %d", key, value)
     return stats

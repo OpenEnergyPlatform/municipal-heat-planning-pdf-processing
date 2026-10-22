@@ -64,6 +64,9 @@ def _handle(document_id: int):
         return handle
     name = (_name_of(document_id) if _name_of else None) or f"doc{document_id}"
     path = _root / f"{name}.trace.jsonl"
+    # What an earlier run traced is kept, not truncated (archive.py).
+    from . import archive
+    archive.keep(path)
     handle = open(path, "w", encoding="utf-8", buffering=1 << 16)
     _files[document_id] = handle
     return handle

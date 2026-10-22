@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .. import jsonl
+from . import archive
 from . import fields
 from .pipeline import answer_in_quote
 from .remap import enter_producer, stamp_path_of
@@ -328,6 +329,7 @@ def review_file(path: Path, spec: Spec, *, ask: Callable,
             ensure_ascii=False))
     tmp = Path(path).with_suffix(".jsonl.tmp")
     tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
+    archive.keep(path)
     tmp.replace(path)
     return stats
 
@@ -390,6 +392,7 @@ def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
             except (OSError, json.JSONDecodeError):
                 continue
             stored[name] = value
+            archive.keep(stamp)
             stamp.write_text(json.dumps(stored, ensure_ascii=False, indent=2),
                              encoding="utf-8")
     if producer is not None:

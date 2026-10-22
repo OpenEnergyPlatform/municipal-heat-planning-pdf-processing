@@ -7,6 +7,9 @@ max_tokens: 6144
 <!-- part: subject -->
 Zahlen, die aus einem deutschen kommunalen Wärmeplan schon geholt sind
 
+<!-- part: rows_more -->
+Dazu "known": was zu dem Wert schon gelesen ist, je Feld im Wortlaut des Plans, und "title": der Titel seiner eigenen Tabelle oder seines Abschnitts. Gefragt ist die Angabe zu GENAU dieser Zahl, nicht irgendeine im Plan.
+
 <!-- part: example_reply -->
 {"fields": {"scenario": {"groups": [{"rows": ["R1", "R2", "R3"], "value": "Bestand", "value_raw": "Ist-Zustand 2022", "quote": "<<Titel der eigenen Tabelle, wörtlich, mit „Ist-Zustand 2022“ darin>>"}], "answers": {"R4": {"value": "Zielszenario", "value_raw": "Klimaschutzszenario", "quote": "<<Satz einer gezeigten Quelle, wörtlich, mit „Klimaschutzszenario“ darin>>"}}}}}
 

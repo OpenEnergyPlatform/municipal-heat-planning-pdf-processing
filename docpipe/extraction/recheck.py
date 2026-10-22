@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .. import jsonl
+from . import archive
 from .fields import (DERIVED, LISTS_UNREADABLE, NUMBER, READ, UNANSWERED,
                      asked_slots)
 from .pipeline import answer_in_quote
@@ -151,6 +152,7 @@ def recheck_file(path: Path, spec: Spec,
             ensure_ascii=False))
     tmp = Path(path).with_suffix(".jsonl.tmp")
     tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    archive.keep(path)
     tmp.replace(path)
     return stats
 

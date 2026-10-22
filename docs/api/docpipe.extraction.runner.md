@@ -88,6 +88,33 @@ def of(self, document_id) -> int
 def clear(self) -> None
 ```
 
+### Coalescer
+
+```python
+class Coalescer
+```
+
+embed(items) from any number of threads, sent to the model in batches.
+
+The searches of every document in flight ask for vectors at the same
+time, a few probes each. One worker takes everything that has queued up,
+embeds it in one call, and hands each caller its slice; what arrives
+while that call runs is the next batch. So a batch is as large as the
+demand of the moment and no larger, and the card runs one call at a time
+instead of a hundred small ones racing for it.
+
+#### Coalescer.\_\_init\_\_
+
+```python
+def __init__(self, backend: Callable)
+```
+
+#### Coalescer.embed
+
+```python
+def embed(self, items: list) -> list
+```
+
 ### PromptCounter
 
 ```python
@@ -1480,6 +1507,48 @@ The rows request: the values of a batch of passages, with the crops of
 its tables and figures, a sandbox round for a number the model computes,
 and the split of a request whose answer did not fit.
 
+### row_context
+
+```python
+def row_context(claim: dict, asked=()) -> dict
+```
+
+{axis: the plan's wording} of every coordinate this row has READ,
+the ones asked now left out. A derived coordinate is the spec's decision
+and its wording is the unit, so it says nothing about the number.
+
+### own_title
+
+```python
+def own_title(source) -> str
+```
+
+The title of the table or figure a row comes from, else its
+section's: the heading a plan prints over the number.
+
+### question_head
+
+```python
+def question_head(question: Optional[str]) -> str
+```
+
+The question's first sentence ("Welcher Energieträger?"): what a
+probe names as asked, without the rules that follow it.
+
+### context_probes
+
+```python
+def context_probes(rows: list, asked, owner_of: dict, label: str = "") -> list
+```
+
+One search sentence per own passage of these rows: its title, the
+wording of what its rows have read, and what is asked (*label*).
+
+Per passage and not per row, because the rows of one table share their
+context and differ only in the cell: forty rows of one table would be
+forty probes that find the same passages. Rows without any context give
+none, and the caller searches with the question's anchors instead.
+
 ### keeps_row
 
 ```python
@@ -1625,15 +1694,34 @@ lost without ever being read. Windows overlap so a number is never cut in
 half at the seam; both windows carry the same owner, so the provenance and
 the dedup that hang off it do not notice the split.
 
+### document_room
+
+```python
+def document_room(limit) -> Optional[Callable]
+```
+
+(documents open) -> how many more may start now, or None without a
+steered limit (the ceiling alone decides then).
+
+A document is let in while the model requests in flight stay below what
+the throttle allows, one per look. A fixed count did not track the load:
+64 documents read to their end each kept one request open, and four
+GPUs ran at a fifth of their cache with nothing waiting. Planning sends
+nothing, so a document planning does not hold the next one back; the
+ones that start asking fill the limit, and while they hold it no further
+document starts.
+
 ### harvest_documents
 
 ```python
 def harvest_documents(documents: list, harvest_document: Callable, *,
                       in_flight: int, stop=None,
-                      halted: Optional[Callable] = None) -> tuple
+                      halted: Optional[Callable] = None,
+                      room: Optional[Callable] = None) -> tuple
 ```
 
-Run *harvest_document(id, filename)* with *in_flight* at a time.
+Run *harvest_document(id, filename)*, *in_flight* at most at a time
+and, with *room* (`document_room`), as many as the server has room for.
 
 Not in groups: the moment one document is done the next one starts, so a
 slow plan holds its own place and nobody else's. A group of sixteen used
@@ -2178,5 +2266,14 @@ folder it writes into is kept apart by `scratch.folder_problem`.
 ```python
 def main(argv: Optional[list] = None) -> int
 ```
+
+### write_stats
+
+```python
+def write_stats(out: Path, traces: list, names: set) -> None
+```
+
+Where this run found the harvest hard (stats.py), beside it. A
+failure to count is logged and never fails the run.
 
 [Back to the index](../README.md)

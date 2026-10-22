@@ -73,6 +73,7 @@ from docpipe.llm_preflight import assert_serving, request_extras
 from docpipe.profile import add_profile_argument, program, require_profile
 from docpipe.store.schema import readonly_uri
 
+from . import archive
 from . import fields
 from . import replies
 from . import scratch
@@ -459,6 +460,70 @@ def embedder():
     return _EMBEDDER
 
 
+class Coalescer:
+    """embed(items) from any number of threads, sent to the model in batches.
+
+    The searches of every document in flight ask for vectors at the same
+    time, a few probes each. One worker takes everything that has queued up,
+    embeds it in one call, and hands each caller its slice; what arrives
+    while that call runs is the next batch. So a batch is as large as the
+    demand of the moment and no larger, and the card runs one call at a time
+    instead of a hundred small ones racing for it.
+    """
+
+    def __init__(self, backend: Callable):
+        self._backend = backend
+        self._cond = threading.Condition()
+        self._queue: list = []
+        self._worker: Optional[threading.Thread] = None
+        self.calls = 0
+
+    def embed(self, items: list) -> list:
+        if not items:
+            return []
+        slot = {"items": list(items), "done": False}
+        with self._cond:
+            self._queue.append(slot)
+            if self._worker is None or not self._worker.is_alive():
+                self._worker = threading.Thread(target=self._run, daemon=True,
+                                                name="embed")
+                self._worker.start()
+            self._cond.notify_all()
+            while not slot["done"]:
+                self._cond.wait()
+        if "error" in slot:
+            raise slot["error"]
+        return slot["vectors"]
+
+    def _run(self) -> None:
+        while True:
+            with self._cond:
+                while not self._queue:
+                    if not self._cond.wait(timeout=60) and not self._queue:
+                        self._worker = None
+                        return
+                batch, self._queue = self._queue, []
+            flat = [item for slot in batch for item in slot["items"]]
+            try:
+                vectors = self._backend().embed(flat)
+                self.calls += 1
+            except Exception as exc:          # every caller hears of it
+                vectors, error = None, exc
+            with self._cond:
+                at = 0
+                for slot in batch:
+                    if vectors is None:
+                        slot["error"] = error
+                    else:
+                        slot["vectors"] = vectors[at:at + len(slot["items"])]
+                        at += len(slot["items"])
+                    slot["done"] = True
+                self._cond.notify_all()
+
+
+COALESCED = Coalescer(embedder)
+
+
 def _source_of(hit: dict, via: Optional[str] = None) -> Source:
     provenance = {"document_id": hit.get("document_id"),
                   "page": hit.get("page_number"),
@@ -573,14 +638,20 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
                        | inference_db.TABLE_EMBEDDING_TYPES
                        | inference_db.FIGURE_EMBEDDING_TYPES)
 
-    def embed(probe: str):
-        key = query_cache.make_key("text", text=probe, image_bytes=None)
-        cached = query_cache.get(cache_conn, key)
-        if cached is not None:
-            return cached
-        vec = embedder().embed_one({"text": probe})
-        query_cache.put(cache_conn, key, vec)
-        return vec
+    def embed_many(probes: list) -> list:
+        """The vectors of *probes*: the cached ones read, the others embedded
+        in one call that waits with every other thread's (`COALESCED`)."""
+        keys = [query_cache.make_key("text", text=p, image_bytes=None)
+                for p in probes]
+        vectors = [query_cache.get(cache_conn, key) for key in keys]
+        missing = [i for i, vec in enumerate(vectors) if vec is None]
+        if missing:
+            fresh = COALESCED.embed([{"text": probes[i]} for i in missing])
+            for i, vec in zip(missing, fresh):
+                vectors[i] = vec
+            query_cache.put_many(cache_conn, [(keys[i], vectors[i])
+                                              for i in missing])
+        return vectors
 
     # A sweep calls this once per parameter and per round with the same probe
     # list, and only `exclude` differs between rounds. Without these two the
@@ -601,7 +672,7 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
         key = (document_id, tuple(probes))
         if search[0] != key:
             search[:] = [key, faiss_store.search_prepared(
-                document[1], [embed(p) for p in probes])]
+                document[1], embed_many(list(probes)))]
         scores, positions = search[1]
         hits = faiss_store.fuse_prepared(
             conn, document[1], scores, positions,
@@ -971,7 +1042,10 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
         found: list = []
         taken = set(exclude)
         try:
-            for source in retrieve(list(queries)[:4], document_id, taken,
+            # Every probe: a search asks with one sentence per table of its
+            # open rows, and the ranking keeps each one's best match (max
+            # over probes). Their vectors come in one batch (`embed_many`).
+            for source in retrieve(list(queries), document_id, taken,
                                    limit=limit):
                 key = (source.owner_kind, source.owner_id)
                 if key in taken:
@@ -2856,6 +2930,68 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
     return harvest
 
 
+def row_context(claim: dict, asked=()) -> dict:
+    """{axis: the plan's wording} of every coordinate this row has READ,
+    the ones asked now left out. A derived coordinate is the spec's decision
+    and its wording is the unit, so it says nothing about the number."""
+    out = {}
+    for key in sorted(claim):
+        if not key.endswith("_state") or claim[key] != fields.READ:
+            continue
+        name = key[:-len("_state")]
+        raw = claim.get(f"{name}_raw")
+        if name in asked or name == fields.UNIT:
+            continue
+        if isinstance(raw, str) and raw.strip():
+            out[name] = raw.strip()
+    return out
+
+
+def own_title(source) -> str:
+    """The title of the table or figure a row comes from, else its
+    section's: the heading a plan prints over the number."""
+    provenance = (getattr(source, "provenance", None) or {})
+    return str(provenance.get("title") or provenance.get("section_title")
+               or "").strip()
+
+
+def question_head(question: Optional[str]) -> str:
+    """The question's first sentence ("Welcher Energieträger?"): what a
+    probe names as asked, without the rules that follow it."""
+    text = (question or "").strip()
+    end = text.find("?")
+    return text[:end + 1] if end >= 0 else text.split(".")[0]
+
+
+def context_probes(rows: list, asked, owner_of: dict, label: str = "") -> list:
+    """One search sentence per own passage of these rows: its title, the
+    wording of what its rows have read, and what is asked (*label*).
+
+    Per passage and not per row, because the rows of one table share their
+    context and differ only in the cell: forty rows of one table would be
+    forty probes that find the same passages. Rows without any context give
+    none, and the caller searches with the question's anchors instead.
+    """
+    groups: dict = {}
+    for row in rows:
+        own = (owner_of or {}).get(row.label)
+        key = ((own.owner_kind, own.owner_id) if own is not None
+               else ("row", row.label))
+        words = groups.setdefault(key, [own_title(own)] if own else [])
+        for raw in row_context(row.claim, asked).values():
+            if raw not in words:
+                words.append(raw)
+    out = []
+    for words in groups.values():
+        words = [w for w in words if w]
+        if not words:
+            continue
+        probe = " ".join(words + ([label] if label else []))
+        if probe not in out:
+            out.append(probe)
+    return out
+
+
 def _field_payload(shown: list, rows: list, slots,
                    corrections: Optional[list] = None,
                    owner_of: Optional[dict] = None,
@@ -2904,6 +3040,19 @@ def _field_payload(shown: list, rows: list, slots,
         if cell is not None:
             entry["column"], entry["columns"] = cell
         listed.append(entry)
+    asked_names = {slot.name for slot in
+                   ([slots] if not isinstance(slots, (list, tuple)) else slots)}
+    for row, entry in zip(rows, listed):
+        # What the row already is, in the plan's words, and where it stands:
+        # "which carrier?" about "Mehrfamilienhaus, Endenergiebedarf" is a
+        # question about one number, asked bare it is one about the plan.
+        known = row_context(row.claim, asked_names)
+        if known:
+            entry["known"] = known
+        own = (owner_of or {}).get(row.label)
+        title = own_title(own)
+        if title:
+            entry["title"] = title
     asked = []
     names = set()
     for slot in ([slots] if not isinstance(slots, (list, tuple)) else slots):
@@ -3733,7 +3882,17 @@ class Sweeping:
             # answer. The question itself was what this searched with before,
             # and a question is the one sentence that never stands in a
             # document.
-            probes = list(sweeper.anchors.get(self.anchor_id) or ())
+            # The rows' own context first: what they have read and the title
+            # of their table, so the ranking looks for THIS number's
+            # coordinate. The question's anchors are one set for the whole
+            # corpus and only search where no row has any context.
+            asked = {slot.name for slot in self.slots}
+            label = " ".join(question_head(slot.question)
+                             for slot in self.slots if slot.question)
+            probes = context_probes(self.still_open(self.rows), asked,
+                                    self.owner_of, label)
+            if not probes:
+                probes = list(sweeper.anchors.get(self.anchor_id) or ())
             if not probes:
                 probes = [slot.question for slot in self.slots
                           if slot.question]
@@ -4678,10 +4837,33 @@ class DeadStreak:
             self._count = 0
 
 
+def document_room(limit) -> Optional[Callable]:
+    """(documents open) -> how many more may start now, or None without a
+    steered limit (the ceiling alone decides then).
+
+    A document is let in while the model requests in flight stay below what
+    the throttle allows, one per look. A fixed count did not track the load:
+    64 documents read to their end each kept one request open, and four
+    GPUs ran at a fifth of their cache with nothing waiting. Planning sends
+    nothing, so a document planning does not hold the next one back; the
+    ones that start asking fill the limit, and while they hold it no further
+    document starts.
+    """
+    if limit is None:
+        return None
+
+    def room(open_documents: int) -> int:
+        return 1 if limit.in_flight < limit.limit else 0
+
+    return room
+
+
 def harvest_documents(documents: list, harvest_document: Callable, *,
                       in_flight: int, stop=None,
-                      halted: Optional[Callable] = None) -> tuple:
-    """Run *harvest_document(id, filename)* with *in_flight* at a time.
+                      halted: Optional[Callable] = None,
+                      room: Optional[Callable] = None) -> tuple:
+    """Run *harvest_document(id, filename)*, *in_flight* at most at a time
+    and, with *room* (`document_room`), as many as the server has room for.
 
     Not in groups: the moment one document is done the next one starts, so a
     slow plan holds its own place and nobody else's. A group of sixteen used
@@ -4709,14 +4891,21 @@ def harvest_documents(documents: list, harvest_document: Callable, *,
                               thread_name_prefix="document")
     try:
         while queue or pending:
-            while (queue and len(pending) < in_flight and not stopping()
+            allowed = in_flight - len(pending)
+            if room is not None:
+                allowed = min(allowed, room(len(pending)))
+            while (queue and allowed > 0 and not stopping()
                    and not (halted is not None and halted())):
                 document_id, filename = queue.pop(0)
                 pending[pool.submit(harvest_document, document_id,
                                     filename)] = filename
+                allowed -= 1
             if not pending or stopping():
                 break
-            finished, _ = wait(list(pending), timeout=5,
+            # Looked at every second while documents wait for room, so the
+            # next one starts soon after the load allows it.
+            finished, _ = wait(list(pending),
+                               timeout=1 if room is not None and queue else 5,
                                return_when=FIRST_COMPLETED)
             for future in finished:
                 filename = pending.pop(future)
@@ -5433,6 +5622,7 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
                       "5xx — not stamped, so a resume harvests it again",
                       name, found)
         return False
+    archive.keep(stamp)
     stamp.write_text(
         json.dumps({**_stamp_current(spec_sha, anchors_sha, spec),
                     **recorded_questions(questions),
@@ -6480,15 +6670,24 @@ def main(argv: Optional[list] = None) -> int:
     if not documents:
         log.info("extraction: nothing to harvest")
         return 0
+    # What this run replaces is kept under its name (archive.py).
+    archive.begin("top-up-open" if args.top_up_open
+                  else "top-up" if args.top_up
+                  else "top-up-parameters" if args.top_up_parameters
+                  else "harvest")
 
-    # How many documents are in flight at once. Not a group: a document that
-    # is written makes room for the next one, so a slow plan holds its own
-    # place and nobody else's.
-    in_flight = max(1, int(os.environ.get("EXTRACT_BATCH_DOCS", "64")))
+    # How many documents are in flight at once: as many as the server has
+    # room for (`document_room`), and never more than this ceiling, which
+    # only guards the runner's memory. Not a group: a document that is
+    # written makes room for the next one.
+    in_flight = max(1, int(os.environ.get("EXTRACT_BATCH_DOCS", "256")))
+    room = document_room(LIMIT)
     log.info("extraction: %d document(s), %d parameter(s), "
-             "plan_parallel=%d, llm_parallel=%d, in_flight=%d",
+             "plan_parallel=%d, llm_parallel=%d, documents in flight %s",
              len(documents), len(spec.parameters),
-             PLAN_PARALLEL, LLM_PARALLEL, in_flight)
+             PLAN_PARALLEL, LLM_PARALLEL,
+             f"by the server's room, at most {in_flight}" if room
+             else f"{in_flight}")
 
     # One call per question the field sweep asks, before anything is
     # planned: the anchors depend on the question, not on the document, and a
@@ -6557,6 +6756,8 @@ def main(argv: Optional[list] = None) -> int:
                  "carried forward, %d blocked",
                  stats["rows"], stats["documents"],
                  stats["stamps carried forward"], stats["blocked"])
+        write_stats(args.out, [TOPUP_TRACE_DIR],
+                    {Path(fn).stem for _did, fn in documents})
         return 1 if unheld_requests() else 0
 
     if args.top_up_open:
@@ -6583,7 +6784,7 @@ def main(argv: Optional[list] = None) -> int:
              "year_states": year_states,
              "locate": locate},
             names={Path(fn).stem for _did, fn in documents},
-            workers=in_flight)
+            workers=in_flight, room=room)
         log.info("top-up-open: %d open coordinate(s) asked over %d "
                  "document(s), %d still open", stats["open coordinates asked"],
                  stats["documents"], stats["open coordinates left"])
@@ -6846,7 +7047,7 @@ def main(argv: Optional[list] = None) -> int:
     try:
         done, _written, failed = harvest_documents(
             documents, harvest_document, in_flight=in_flight, stop=STOP,
-            halted=halt.is_set)
+            halted=halt.is_set, room=room)
         failures += failed
     finally:
         stopped = STOP.is_set()
@@ -6880,4 +7081,19 @@ def main(argv: Optional[list] = None) -> int:
     failures += unheld_requests()
     log.info("extraction: done in %.0f s, %d failure(s)",
              time.time() - started, failures)
+    from .topup_rest import TRACE_DIR as REST_TRACES
+    write_stats(args.out, [OPEN_TRACE_DIR, REST_TRACES] if args.top_up_open
+                else [TOPUP_TRACE_DIR] if args.top_up_parameters
+                else ["trace"], set(document_name.values()))
     return 1 if failures else 0
+
+
+def write_stats(out: Path, traces: list, names: set) -> None:
+    """Where this run found the harvest hard (stats.py), beside it. A
+    failure to count is logged and never fails the run."""
+    from . import stats
+    trace.flush()
+    try:
+        stats.write(out, [Path(out) / t for t in traces], names)
+    except Exception:
+        log.exception("stats: not written")

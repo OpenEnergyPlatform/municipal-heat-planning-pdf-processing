@@ -240,8 +240,10 @@ SETTINGS = (
     S("EXTRACT_BATCH_CHARS", "extract.batch_chars", "int", "14000",
       "Characters of passage text one value request may carry in total.",
       stages=("extract",)),
-    S("EXTRACT_BATCH_DOCS", "extract.batch_docs", "int", "64",
-      "Documents kept in flight at once during extraction.",
+    S("EXTRACT_BATCH_DOCS", "extract.batch_docs", "int", "256",
+      "Most documents in flight at once during extraction; within it a "
+      "document starts while the model requests stay below the adaptive "
+      "limit.",
       stages=("extract",)),
     S("EXTRACT_BATCH_SOURCES", "extract.batch_sources", "int", "6",
       "Passages sharing one value request; lowered at start if the context "

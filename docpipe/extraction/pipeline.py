@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
+from . import archive
 from . import queries as queries_mod
 from .wording import say
 from .spec import Spec, fold_label
@@ -1695,6 +1696,7 @@ def write_report(report: DocumentReport, out_path: Path,
                                 report.refusals)},
             ensure_ascii=False) + "\n")
         temp = Path(handle.name)
+    archive.keep(out_path)
     temp.replace(out_path)
     leftovers = {k.rsplit("/", 1)[-1]: v["leftover"]
                  for k, v in report.fallback.items()}

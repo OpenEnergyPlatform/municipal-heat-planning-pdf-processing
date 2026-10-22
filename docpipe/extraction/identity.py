@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from docpipe import jsonl
+from docpipe.extraction import archive
 from docpipe.store.schema import readonly_uri
 from docpipe.profile import (add_profile_argument, bind_command_line,
                              program, require_profile)
@@ -156,6 +157,7 @@ def reanchor_file(path: Path, connection: sqlite3.Connection,
     if changed and write:
         tmp = Path(path).with_suffix(".jsonl.tmp")
         tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
+        archive.keep(path)
         tmp.replace(path)
     return stats
 

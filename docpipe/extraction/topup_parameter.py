@@ -49,6 +49,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable, Optional
 
+from . import archive
 from . import fields
 from .pipeline import drop_repeats, repeat_key
 from .remap import _read_stamp as read_stamp
@@ -330,6 +331,7 @@ def _write_lines(path: Path, lines: list) -> None:
     spell the line feed the way the platform does."""
     tmp = Path(path).with_suffix(".jsonl.tmp")
     tmp.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))
+    archive.keep(path)
     tmp.replace(path)
 
 

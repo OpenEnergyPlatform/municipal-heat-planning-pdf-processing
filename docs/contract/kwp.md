@@ -271,7 +271,7 @@ Axis 'carrier' of Emissionen. A closed list; an entry beginning 'out:' is a deli
 
 The prompt's own wording:
 
-> Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H" und "Erdgas (netzgebunden)" meinen die Klasse Erdgas, "Nahwärme" und "Wärmenetz" die Klasse Fernwärme. Eine Summenzeile ("Summe", "Gesamt", "alle Energieträger") ist "out:total", eine Restposition ("Sonstige", "Andere") ist "out:other". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg.
+> Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H" und "Erdgas (netzgebunden)" meinen die Klasse Erdgas, "Nahwärme" und "Wärmenetz" die Klasse Fernwärme. Eine Summenzeile ("Summe", "Gesamt", "alle Energieträger") ist "out:total", eine Restposition ("Sonstige", "Andere") ist "out:other". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Gebäudetyp". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
 
 <details><summary>What it may answer (29)</summary>
 
@@ -306,7 +306,7 @@ The prompt's own wording:
 - **Steinkohle** → `OEO_00000204`
 - **Strom** → `OEO_00000139` — Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
-- **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
+- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Umweltwärme** → `OEO_00000056` — Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.
   - also written: Umgebungswärme, Umgebungsluft
@@ -604,7 +604,7 @@ Axis 'sector' of Emissionen. A closed list; an entry beginning 'out:' is a delib
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"). Eine Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist dagegen keine Summe über Sektoren. "Einfamilienhaus" und "Mehrfamilienhaus" meinen die Klasse Private Haushalte. Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit "out:unstated".
+> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"). Eine Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist dagegen keine Summe über Sektoren. "Einfamilienhaus" und "Mehrfamilienhaus" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Energieträger". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
 
 <details><summary>What it may answer (6)</summary>
 
@@ -616,7 +616,7 @@ The prompt's own wording:
   - also written: Land- und Forstwirtschaft
 - **Private Haushalte** → `OEO_00000214` — A household sector is a sector that covers households.
   - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor, Einfamilienhaus, Mehrfamilienhaus
-- **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
+- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
 - **Verkehr** → `OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
   - also written: Verkehrssektor
@@ -1004,7 +1004,7 @@ Axis 'carrier' of Energieverbrauch. A closed list; an entry beginning 'out:' is 
 
 The prompt's own wording:
 
-> Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H" und "Erdgas (netzgebunden)" meinen die Klasse Erdgas, "Nahwärme" und "Wärmenetz" die Klasse Fernwärme. Eine Summenzeile ("Summe", "Gesamt", "alle Energieträger") ist "out:total", eine Restposition ("Sonstige", "Andere") ist "out:other". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg.
+> Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H" und "Erdgas (netzgebunden)" meinen die Klasse Erdgas, "Nahwärme" und "Wärmenetz" die Klasse Fernwärme. Eine Summenzeile ("Summe", "Gesamt", "alle Energieträger") ist "out:total", eine Restposition ("Sonstige", "Andere") ist "out:other". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Gebäudetyp". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
 
 <details><summary>What it may answer (29)</summary>
 
@@ -1039,7 +1039,7 @@ The prompt's own wording:
 - **Steinkohle** → `OEO_00000204`
 - **Strom** → `OEO_00000139` — Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
-- **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
+- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Umweltwärme** → `OEO_00000056` — Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.
   - also written: Umgebungswärme, Umgebungsluft
@@ -1337,7 +1337,7 @@ Axis 'sector' of Energieverbrauch. A closed list; an entry beginning 'out:' is a
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"). Eine Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist dagegen keine Summe über Sektoren. "Einfamilienhaus" und "Mehrfamilienhaus" meinen die Klasse Private Haushalte. Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit "out:unstated".
+> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"). Eine Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist dagegen keine Summe über Sektoren. "Einfamilienhaus" und "Mehrfamilienhaus" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Energieträger". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
 
 <details><summary>What it may answer (6)</summary>
 
@@ -1349,7 +1349,7 @@ The prompt's own wording:
   - also written: Land- und Forstwirtschaft
 - **Private Haushalte** → `OEO_00000214` — A household sector is a sector that covers households.
   - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor, Einfamilienhaus, Mehrfamilienhaus
-- **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
+- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
 - **Verkehr** → `OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
   - also written: Verkehrssektor
@@ -1699,7 +1699,7 @@ Axis 'carrier' of Leistung. A closed list; an entry beginning 'out:' is a delibe
 
 The prompt's own wording:
 
-> Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H" und "Erdgas (netzgebunden)" meinen die Klasse Erdgas, "Nahwärme" und "Wärmenetz" die Klasse Fernwärme. Eine Summenzeile ("Summe", "Gesamt", "alle Energieträger") ist "out:total", eine Restposition ("Sonstige", "Andere") ist "out:other". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg.
+> Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H" und "Erdgas (netzgebunden)" meinen die Klasse Erdgas, "Nahwärme" und "Wärmenetz" die Klasse Fernwärme. Eine Summenzeile ("Summe", "Gesamt", "alle Energieträger") ist "out:total", eine Restposition ("Sonstige", "Andere") ist "out:other". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Gebäudetyp". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
 
 <details><summary>What it may answer (29)</summary>
 
@@ -1734,7 +1734,7 @@ The prompt's own wording:
 - **Steinkohle** → `OEO_00000204`
 - **Strom** → `OEO_00000139` — Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
-- **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
+- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Umweltwärme** → `OEO_00000056` — Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.
   - also written: Umgebungswärme, Umgebungsluft
@@ -2026,7 +2026,7 @@ Axis 'sector' of Leistung. A closed list; an entry beginning 'out:' is a deliber
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"). Eine Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist dagegen keine Summe über Sektoren. "Einfamilienhaus" und "Mehrfamilienhaus" meinen die Klasse Private Haushalte. Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit "out:unstated".
+> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"). Eine Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist dagegen keine Summe über Sektoren. "Einfamilienhaus" und "Mehrfamilienhaus" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Energieträger". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
 
 <details><summary>What it may answer (6)</summary>
 
@@ -2038,7 +2038,7 @@ The prompt's own wording:
   - also written: Land- und Forstwirtschaft
 - **Private Haushalte** → `OEO_00000214` — A household sector is a sector that covers households.
   - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor, Einfamilienhaus, Mehrfamilienhaus
-- **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
+- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
 - **Verkehr** → `OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
   - also written: Verkehrssektor

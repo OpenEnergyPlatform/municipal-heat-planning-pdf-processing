@@ -141,6 +141,17 @@ residual catch-all, so the model can name what a number really is
 instead of forcing it onto the nearest real class; `carrier`, `sector`
 and `scenario` offer one or two of the same kind each.
 
+`out:total` of `carrier` and `sector` is a number that holds for all entries
+together: explicitly summed, or not split by that list in its own table or
+sentence. A table split only by building type, say, has no carrier column, and
+its numbers are read `out:total` for the carrier; the same holds for the sector
+of a table without a sector column, which is not `out:unstated`. The model answers "Summe", quotes the header row or the title of the
+table (the sentence itself, for a sentence), and `value_raw` is the word of that
+quote it is split by instead, "Gebäudetyp" for example. The owner's two checks
+are the only ones, as for every answer: the quote stands in a shown passage and
+the wording in the quote. The questions of both axes say so and point to
+`known` for what the number already is.
+
 Two of the numeric parameters decide their `aggregation` on their own
 rather than asking, carried as the `derived` state
 (`docpipe/extraction/fields.py:68` to `75`; [glossary](../glossary.md)):
@@ -234,11 +245,14 @@ names its template of the core in its front matter, and
 `CONTRACT_LANGUAGE = "de"` in `profiles/kwp/extraction.py` says that the
 templates are the German ones. What kwp writes itself is its role (German
 municipal heat plans), its examples and the sentences about its own tables. It
-words two blocks itself, where the template's sentence fits it less well:
+words three blocks itself, where the template's sentence fits it less well:
 `value_text` of the rows prompt (for a text field, the designation as the plan
-writes it, without its legal form) and `closed_out_text` of the field prompt
+writes it, without its legal form), `rows_more` of the field prompt (the rows
+carry `known`, the plan's wording of what the row has already been read for,
+and `title`, that of its own table or section; the question is about exactly
+this number) and `closed_out_text` of the field prompt
 (the entries of a closed list that are expressly the opposite of a class, with
-kwp's own examples: a sum row, a remainder, an expressly unknown value, a
+kwp's own examples: a sum row or a number the list does not split, a remainder, an expressly unknown value, a
 percentage share, a potential). It leaves out the blocks of the templates it
 never had a sentence for: 14 blocks of the rows prompt, `rows_source`,
 `same_forms`, `by_similarity` and `domain_slot_2` of the field prompt, and

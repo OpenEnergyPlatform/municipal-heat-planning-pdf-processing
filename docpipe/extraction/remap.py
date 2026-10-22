@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Optional
 
 from .. import jsonl
+from . import archive
 from .fields import CHOICE, axis_slots
 from .spec import Spec, fold_label
 from .trust import document_summary
@@ -221,6 +222,7 @@ def enter_producer(stamp_path: Path, producer: dict) -> Optional[int]:
         return None
     wrote = producers_of(stored)
     stored["producers"] = [*wrote, producer]
+    archive.keep(stamp_path)
     stamp_path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
     return len(wrote)
 
@@ -263,6 +265,7 @@ def stamp_forward(stamp_path: Path, current: dict, settled: set,
     # read as current while a changed prompt sits unaddressed.
     if "spec" in changed and not (changed - earned - {"spec"}):
         stored["spec"] = current["spec"]
+    archive.keep(stamp_path)
     stamp_path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
     return True
 
@@ -326,6 +329,7 @@ def remap_file(path: Path, spec: Spec, current: dict) -> Counter:
             ensure_ascii=False))
     tmp = Path(path).with_suffix(".jsonl.tmp")
     tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    archive.keep(path)
     tmp.replace(path)
     if stamp_forward(stamp_path_of(Path(path)), current, settled,
                      producer=_producer()):
