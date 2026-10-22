@@ -29,7 +29,7 @@ a harvest already written can use without starting a document over.
 | | |
 |---|---|
 | **In** | The corpus [chunking](chunking.md) built: the SQLite database's `Sections`, `Tables`, `Images`, `Embeddings`, `Documents` and `DocumentMeta` rows, and the FAISS index. No file under `results/` is read directly. Also a profile's validated `extraction_spec.json` (`spec.load`). |
-| **Out** | One `<document>.jsonl` harvest and one `<document>.stamp.json` resume stamp per document, a per-document trace file under `trace/`, and, written once per run, `anchors.json` and `query_cache.db`, a `stats/<pass>-<run start>.json` and, for every file the run replaced, the copy it found under `archive/` (see Archive and stats). A `--serialize` call reads the harvest back and writes one Turtle file (a profile with a strict serializer, kwp, writes a second, `.strict.ttl`), feeding [the knowledge graph](graph.md) stage. |
+| **Out** | One `<document>.jsonl` harvest and one `<document>.stamp.json` resume stamp per document, a per-document trace file under `trace/`, and, written once per run, `anchors.json` and `query_cache.db`, a `places/<document>.json` per document whose map of places was asked (see The field sweep), a `stats/<pass>-<run start>.json` and, for every file the run replaced, the copy it found under `archive/` (see Archive and stats). A `--serialize` call reads the harvest back and writes one Turtle file (a profile with a strict serializer, kwp, writes a second, `.strict.ttl`), feeding [the knowledge graph](graph.md) stage. |
 | **Resumes on** | `<document>.stamp.json`, compared against what today's spec would produce, one key per parameter, value list, axis and slot; the whole-file spec sha stands in only for a stamp that carries none of those. The sha256 of the PDF the harvest was read from is compared too, where the stamp and the database both carry one. The model, the anchor set and every prompt are written into the stamp for a reader and are never compared. A document with no stamp is read as fully stale, never as finished, and a document one of whose requests ended on a 429 or a 5xx, or timed out, is not stamped, which the run counts as a failure and answers with exit code 1. |
 | **Needs** | A served LLM reached over the network, the query embedder, the FAISS index, the corpus database, and, unless `EXTRACT_LOCATE=0`, the source PDF (`--pdf-root`) to place a quote's highlight rectangles. Unless `EXTRACT_ATTACH_IMAGES=0`, also the `images/` directory (`--image-root`) with the table and figure crops that ride along with every request. |
 
@@ -341,6 +341,34 @@ own remaining sections in order, each followed by its own tables and figures
 in page order, not sections alone, rotated to start near the open rows, until
 the coordinate closes or the document runs out.
 
+**The map of places** (`places.py`) replaces retrieval and rest for the axes it
+knows. At a document's first search the model reads every passage of the
+document side by side, packed as many per request as leave the reply its
+`max_tokens`, and names for each passage the parameters whose numbers stand
+there and the axes it answers, with a verbatim quote; it reads no value. A
+place is taken only when its quote stands in its own passage and has the
+minimum length. A reply that does not fit its limit is split, not rescued. The
+map is complete only when every request was readable, and only a complete map
+is used. The search for a coordinate then shows just the places of its axis,
+nearest to the open rows' sections first, under the allowance of both search
+stages (stage `places` in traces and `<axis>_window`). When every place has
+been shown the document counts as combed, so a row still open is `unstated`.
+Without a complete map, or for an axis it does not know (unit, parameter), the
+search runs as above. The map is kept in `<harvest>/places/<document>.json`
+under a key over prompt, questions and model, and later passes read it again; a
+replaced file is archived. A profile gets it by writing the prompt
+`extraction/places` (kwp does, scenarios does not); `EXTRACT_PLACES=0` turns it
+off.
+
+In the search stages a coordinate's windows go out several at once
+(`Sweeping.run_ahead`): as many as the request limit has free places (limit,
+minus requests in flight, minus requests waiting), at least one, so a full run
+behaves as before and the last document of a run asks many at once. Replies are
+folded in window order, so an earlier window's reading stands, and once no row
+is open the windows still waiting are withdrawn and never sent (`withdrawn` on
+the `sweep` event). Only while the adaptive limit is on; the own stage asks one
+window at a time.
+
 A document is harvested in two halves, both on the callable
 `make_fieldwise_harvester` returns. The coordinates of a row have an order,
 because some decide the others: the unit, which settles the parameter where the
@@ -587,6 +615,13 @@ a preemption (`throttle.Controller.decide`, `throttle.py:237`).
 rise past, and a server with no `/metrics` gets no adaptive limit at all, the
 pools alone deciding as before. `EXTRACT_LIMIT_ADAPTIVE=0` turns it off
 (`runner.start_limit`, `runner.py:1333`).
+
+While the limit is on, every model request of the run goes through one
+dispatcher thread and one queue (`scheduler.py`), served oldest document first,
+a document's rank being the order in which it first asked. The limit still
+decides how many requests are open. A request's timeout starts when it is sent,
+not while it waits, and a waiting request can be withdrawn (`Ticket`), after
+which it is never sent.
 
 The same limit decides how many documents are in flight. `runner.document_room`
 lets one more document start, one per look and a look every second, while the
@@ -1107,6 +1142,8 @@ and never fails the run. Each count says what it counts:
 | `requests_and_fills_by_axis_stage` | requests of the trace's `field` events and the coordinates they filled, per axis and search stage |
 | `dropped_answers_by_axis_reason` | answers dropped, per axis and reason |
 | `answers_outside_the_list` | `not_an_option` drops, per entry given and wording |
+| `places_maps` | documents mapped and how many completely, passages, requests, places taken and dropped, requests unread, and places per axis |
+| `windows_withdrawn_unsent` | search windows asked ahead and withdrawn before they were sent |
 
 The same file can be made for any harvest by hand with `python -m
 docpipe.extraction.stats HARVEST_DIR [--trace DIR ...]`, trace directories
@@ -1455,6 +1492,7 @@ a `*.jsonl` or `*.stamp.json` that a reader of the harvest would list.
 | `EXTRACT_LOCATE_CACHE_PAGES` | env var | `512` | Pages of words `make_locate` keeps across documents; a cache hit is a dict lookup and takes no lock, only a miss enters MuPDF under one | `runner.make_locate` |
 | `EXTRACT_CONTENT_CACHE_OWNERS` | env var | `300000` | Passages whose text a run keeps in the one store every thread shares (the rest of the document, parents, owner sources, more passages); each is read once, past the bound the oldest goes, `0` keeps all | `runner.make_shared_content`, `runner.main` |
 | `EXTRACT_BATCH_DOCS` | env var | `256` | Most documents in flight at once under rolling admission, largest first by section count, filename breaking a tie; within that ceiling, which only guards the runner's memory, a document starts while the model requests in flight stay below the adaptive limit (`document_room`). A finished one is written at once and the next starts, so no document waits on a group | `runner.main`, `runner.harvest_documents`, `runner._documents` |
+| `EXTRACT_PLACES` | env var | `1` | `0` turns off the map of places even for a profile that writes the `extraction/places` prompt; the search then retrieves and reads the rest as before | `runner.make_places` |
 | `EXTRACT_MAX_MODEL_LEN` | env var | `32768` | Fallback context window a request's answer room is sized against; overwritten by `set_model_len` from the server's own preflight report where it gives one | `runner.set_model_len`, `runner.answer_room` |
 | `EXTRACT_RETRY_TEMPERATURE_STEP` | env var | `0.1` | Sampling temperature of a retried attempt raised by this step, once per unreadable reply, capped at `1.0`; every retry loop of this stage applies it (phrase, frame, anchors, rows, field, review) | `runner.retry_temperature` |
 | `EXTRACT_TRACE` | env var | `1` | Off, every trace call returns immediately and no trace file is written | `trace.py` (`ENABLED`) |
@@ -1644,6 +1682,9 @@ or C, from what the harvest already recorded, and folds a whole
 document's tuples into the closing summary line; every maintenance pass
 calls it to recompute a rewritten file's summary.
 
+`places.py` reads a document's map of where each axis is answered, and
+`scheduler.py` is the one request queue of a run, oldest document first (both
+described under The field sweep and The adaptive request limit).
 `archive.py` copies a harvest, stamp or trace file aside before any pass
 replaces it, and `stats.py` counts where a run's harvest is hard; both are
 described under Archive and stats. `trace.py` writes the per-event trace files this stage, `--top-up` and

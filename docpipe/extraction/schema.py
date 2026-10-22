@@ -248,8 +248,8 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"axis' own rule (own | local | any)."},
         f"{name}_window": {
             "type": "array",
-            "prefixItems": [{"enum": ["own", "retrieval", "rest", "frame",
-                                      "base_year", "target_year"]},
+            "prefixItems": [{"enum": ["own", "retrieval", "rest", "places",
+                                      "frame", "base_year", "target_year"]},
                             {"type": "integer"}],
             "minItems": 2, "maxItems": 2,
             "description": f"[stage, index] of the window '{name}' was read "
@@ -814,7 +814,7 @@ def trace_schema() -> dict:
         "field": {"slot": {"type": "string"}, "anchor": {"type": "string"},
                   "window": {"type": "integer"},
                   "stage": {"enum": ["own", "retrieval", "rest",
-                                     "frame"]},
+                                     "places", "frame"]},
                   "attempt": {"type": "integer"},
                   "parameter": {"type": ["string", "null"]},
                   # How many batches the rows of the request came from: one
@@ -831,6 +831,9 @@ def trace_schema() -> dict:
                   "combed": {"type": "boolean"},
                   "retried": {"type": "integer"}, "asked": {"type": "integer"},
                   "exhausted": {"type": "integer"},
+                  # Windows asked ahead and withdrawn unsent: the rows were
+                  # read by a window before them.
+                  "withdrawn": {"type": "integer"},
                   # What the sweep covered: a batch's own stage alone (`own`),
                   # the search of a document's open rows after the own
                   # stages (`document`), or every stage for one batch
@@ -884,6 +887,17 @@ def trace_schema() -> dict:
         # is the durable artifact and an unrecognised row is still evidence,
         # but the schema is what everyone downstream reads instead of the
         # file, so a row it does not describe must not pass unnoticed.
+        # The document's map of places (places.py): its passages and
+        # requests, the places taken and not, the requests that came back
+        # unread (then the map is not used), and the places per axis and
+        # per parameter.
+        "places": {"passages": {"type": "integer"},
+                   "windows": {"type": "integer"},
+                   "places": {"type": "integer"},
+                   "dropped": {"type": "integer"},
+                   "unread": {"type": "integer"},
+                   "complete": {"type": "boolean"},
+                   "by_axis": by_field, "by_parameter": by_field},
         "invalid": {"kind": {"enum": ["tuple", "refusal",
                                       "parameter_state"]},
                     "where": {"type": "string"},
@@ -897,7 +911,7 @@ def trace_schema() -> dict:
              "prompt_tokens", "completion_tokens", "filled_by", "unbacked_by",
              "field", "raw_missing", "raw_foreign", "cause", "owner",
              "rejected", "given", "raw", "quote", "via_base", "via_target",
-             "scope",
+             "scope", "withdrawn",
              "batches"}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",

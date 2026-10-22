@@ -120,6 +120,9 @@ def from_traces(trace_dirs: Iterable[Path],
     filled: dict = defaultdict(Counter)
     drops: dict = defaultdict(Counter)
     outside: dict = defaultdict(Counter)
+    maps: Counter = Counter()
+    places_by_axis: Counter = Counter()
+    withdrawn = 0
     for directory in trace_dirs:
         for path in sorted(Path(directory).glob("*.jsonl")):
             stem = path.name[:-len(".trace.jsonl")] \
@@ -140,7 +143,23 @@ def from_traces(trace_dirs: Iterable[Path],
                     if why == "not_an_option":
                         outside[axis][(str(event.get("given")),
                                        str(event.get("raw")))] += 1
+                elif kind == "places":
+                    maps["documents"] += 1
+                    maps["complete"] += bool(event.get("complete"))
+                    for key in ("passages", "windows", "places", "dropped",
+                                "unread"):
+                        maps[key] += int(event.get(key) or 0)
+                    places_by_axis.update(event.get("by_axis") or {})
+                elif kind == "sweep":
+                    withdrawn += int(event.get("withdrawn") or 0)
     return {
+        # The maps of places: documents mapped and how many completely,
+        # passages, requests, places taken and not, requests unread, and
+        # places per axis.
+        "places_maps": {**{k: maps[k] for k in (
+            "documents", "complete", "passages", "windows", "places",
+            "dropped", "unread")}, "places_by_axis": dict(places_by_axis)},
+        "windows_withdrawn_unsent": withdrawn,
         "requests_and_fills_by_axis_stage": {
             axis: {stage: {"requests": requests[axis][stage],
                            "coordinates_filled": filled[axis][stage]}

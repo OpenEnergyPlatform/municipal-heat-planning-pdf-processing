@@ -59,7 +59,8 @@ import signal
 import sqlite3
 import threading
 import time
-from concurrent.futures import as_completed
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
@@ -75,7 +76,9 @@ from docpipe.store.schema import readonly_uri
 
 from . import archive
 from . import fields
+from . import places as places_map
 from . import replies
+from . import scheduler
 from . import scratch
 from . import trace
 from .wording import say
@@ -1484,6 +1487,11 @@ def set_model_len(tokens: Optional[int]) -> None:
 # The adaptive request limit every client waits in, steered by the server's
 # queue (throttle.py); None while it is off or the server has no /metrics.
 LIMIT = None
+# The one queue every request of the run is sent through, oldest document
+# first (scheduler.py), and the threads a sweep asks its windows ahead on.
+# Both None while the limit is off: a sweep then asks one window at a time.
+SCHEDULER = None
+AHEAD = None
 
 
 def start_limit() -> None:
@@ -1499,6 +1507,11 @@ def start_limit() -> None:
     # A hosted API has no queue to read; what it refuses steers the limit.
     LIMIT = (throttle.start(LLM_BASE_URL) if gate is None
              else throttle.start_hosted(gate))
+    if LIMIT is not None:
+        global SCHEDULER, AHEAD
+        SCHEDULER = scheduler.Scheduler(LIMIT)
+        AHEAD = ThreadPoolExecutor(max_workers=LIMIT.maximum,
+                                   thread_name_prefix="ahead")
     if LIMIT is not None and FIELD_PARALLEL < LIMIT.maximum:
         log.info("llm limit: EXTRACT_FIELD_PARALLEL=%d opens fewer field "
                  "requests than EXTRACT_LIMIT_MAX=%d allows", FIELD_PARALLEL,
@@ -1609,6 +1622,90 @@ def answer_room(system: str, conversation: list, wanted: int) -> int:
                - prompt_tokens(system, conversation))
 
 
+def make_places(db_path: Path, spec: Spec, out: Path,
+                content: Optional[Callable] = None):
+    """The run's map of where each axis is answered (`places.Places`), or
+    None when the profile writes no prompt for it or EXTRACT_PLACES=0."""
+    if os.environ.get("EXTRACT_PLACES", "1") == "0":
+        return None
+    try:
+        prompt = prompts.load(places_map.PLACES_PROMPT_ID)
+    except (FileNotFoundError, LookupError):
+        return None
+    client = _client()
+    temperature = float(prompt.meta.get("temperature", 0))
+    max_tokens = int(prompt.meta.get("max_tokens", 4096))
+    axes, parameters = places_map.questions(spec)
+    every = make_rest_of_document(db_path, content=content)
+
+    def conversation_of(window: list) -> list:
+        return [{"role": "user", "content": json.dumps(
+            places_map.payload(window, axes, parameters),
+            ensure_ascii=False, indent=2)}]
+
+    def fits(window: list) -> bool:
+        # As many passages as leave the reply its whole allowance.
+        return answer_room(prompt.text, conversation_of(window),
+                           max_tokens) >= max_tokens
+
+    def ask(window: list, document_id: int):
+        conversation = conversation_of(window)
+        shape = places_map.response_format(window, axes, parameters)
+        faults = 0
+        for attempt in range(1, MAX_RETRIES + 1):
+            limit = answer_room(prompt.text, conversation, max_tokens)
+            if limit < MIN_ANSWER_TOKENS:
+                return places_map.CUT
+            transport = False
+            try:
+                with _for(document_id):
+                    response = client.chat.completions.create(
+                        model=LLM_MODEL,
+                        temperature=retry_temperature(temperature, faults),
+                        max_tokens=limit,
+                        messages=[{"role": "system", "content": prompt.text},
+                                  *conversation],
+                        response_format=shape,
+                        extra_body=request_extras())
+                reply = response.choices[0]
+                _observe_usage(getattr(response, "usage", None))
+                answer = _loads_object(reply.message.content)
+                if isinstance(answer, dict):
+                    return answer
+                faults += 1
+                cause, correction = _reply_fault(reply, limit, key="hits")
+                trace.event("error", document_id, where="places",
+                            kind="unreadable", cause=cause, attempt=attempt)
+                if cause == "cut_off":
+                    return places_map.CUT
+                conversation = conversation + [
+                    {"role": "assistant",
+                     "content": reply.message.content or ""},
+                    {"role": "user", "content": correction}]
+            except Exception as exc:
+                log.warning("   places %s attempt %d failed: %s",
+                            document_id, attempt, exc)
+                trace.event("error", document_id, where="places",
+                            kind="exception", attempt=attempt,
+                            detail=str(exc)[:300])
+                transport = server_side(exc)
+                if not transport:
+                    return None
+            if attempt < MAX_RETRIES:
+                time.sleep(retry_wait(attempt, transport))
+        return None
+
+    key = places_map.key_of(prompt.text, axes, parameters, LLM_MODEL)
+    log.info("places: one map per document over %d axis question(s) and "
+             "%d parameter(s), kept in %s", len(axes), len(parameters),
+             Path(out) / "places")
+    return places_map.Places(ask, lambda document_id: every(document_id,
+                                                            set()),
+                             fits, axes, parameters, key,
+                             store=Path(out) / "places", pool=AHEAD,
+                             trace=trace.event)
+
+
 def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
     """ask(sources, slots, document_id, known, usage_out) -> reply or None.
 
@@ -1661,6 +1758,7 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                 trace.event("error", document_id, where="frame",
                             kind="too_long", attempt=attempt, room=limit)
                 break
+            scheduler.serve_for(document_id)
             try:
                 completion = client.chat.completions.create(
                     model=LLM_MODEL,
@@ -2240,10 +2338,15 @@ def _client():
     client = providers.client("llm", base_url=LLM_BASE_URL,
                               api_key=LLM_API_KEY, timeout=LLM_TIMEOUT,
                               max_retries=0)
-    if LIMIT is None:
+    if SCHEDULER is None:
         return client
-    from .throttle import Limited
-    return Limited(client, LIMIT)
+    return scheduler.Scheduled(client, SCHEDULER)
+
+
+def _for(document_id):
+    """The requests sent inside belong to this document; the sweep's ticket,
+    if the calling thread carries one, stays."""
+    return scheduler.on_behalf(document_id, scheduler.current()[1])
 
 
 def _loads_object(raw_text) -> Optional[dict]:
@@ -2792,6 +2895,7 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
                             kind="too_long", attempt=attempt, room=limit,
                             owner=[first.owner_kind, first.owner_id])
                 break
+            scheduler.serve_for(batch.document_id)
             try:
                 response = client.chat.completions.create(
                     model=LLM_MODEL,
@@ -3276,16 +3380,17 @@ def make_field_asker(image_root: Optional[Path] = None, *,
             if limit < MIN_ANSWER_TOKENS:
                 break
             try:
-                response = client.chat.completions.create(
-                    model=LLM_MODEL,
-                    temperature=retry_temperature(temperature, faults),
-                    max_tokens=limit,
-                    messages=[{"role": "system", "content": prompt.text},
-                              *conversation],
-                    response_format=shape,
-                    extra_body=request_extras(),
-                    **({"timeout": RETRY_TIMEOUT} if timed_out else {}),
-                )
+                with _for(document_id):
+                    response = client.chat.completions.create(
+                        model=LLM_MODEL,
+                        temperature=retry_temperature(temperature, faults),
+                        max_tokens=limit,
+                        messages=[{"role": "system", "content": prompt.text},
+                                  *conversation],
+                        response_format=shape,
+                        extra_body=request_extras(),
+                        **({"timeout": RETRY_TIMEOUT} if timed_out else {}),
+                    )
                 transport = lost = False
                 if dead is not None:
                     dead.clear()
@@ -3312,6 +3417,9 @@ def make_field_asker(image_root: Optional[Path] = None, *,
                 conversation.append({"role": "assistant",
                                      "content": reply.message.content or ""})
                 conversation.append({"role": "user", "content": correction})
+            except scheduler.Withdrawn:
+                # A window behind one that already answered: never sent.
+                return None
             except Exception as exc:
                 log.warning("   field %s attempt %d failed: %s",
                             name, attempt, exc)
@@ -3599,7 +3707,8 @@ class Sweeping:
         self.parameter = parameters.pop() if len(parameters) == 1 else None
         self.totals = {"filled": 0, "unquoted": 0, "unbacked": 0,
                        "unstated": 0, "raw_missing": 0, "raw_foreign": 0,
-                       "via_base": 0, "via_target": 0, "retried": 0}
+                       "via_base": 0, "via_target": 0, "retried": 0,
+                       "withdrawn": 0}
         # What must not be FETCHED again, and every passage this sweep has
         # already materialised, by key. `seen` answers the first question;
         # `held` answers what may be SHOWN again, which is the opposite
@@ -3706,6 +3815,8 @@ class Sweeping:
         eat the document.
         """
         state = self.state
+        if state["stage"] != "own" and AHEAD is not None:
+            return self.run_ahead(windows)
         for window in windows:
             todo = self.still_open(self.rows)
             if not todo:
@@ -3741,102 +3852,8 @@ class Sweeping:
                 state["answer"] = self.sweeper.ask(
                     shown, todo, self.slots, corrections, self.document_id,
                     usage, self.owner_of, bases=list(self.bases))
-                # Checked against the window AND the passages the rows
-                # carry. A row's own quote is shown to the model in the
-                # rows list, so citing it is legitimate, and from the
-                # second window on it is no longer among `shown`, which
-                # threw away correct readings by the hundred: one batch
-                # logged 520 dropped against 31 read. The passages a row
-                # carries are those of ITS batch.
-                # One reply, folded field by field. A field that is
-                # missing from it is simply not folded, which leaves its
-                # rows open for the next window, the same outcome as an
-                # empty answer, and the same as before.
-                answered = (state["answer"] or {}).get("fields")
-                if not isinstance(answered, dict):
-                    answered = {}
-                counts = {"filled": 0, "unquoted": 0, "unbacked": 0,
-                          "unstated": 0, "raw_missing": 0,
-                          "raw_foreign": 0, "via_base": 0, "via_target": 0,
-                          "failed": []}
-                # Which FIELD filled and which failed, not only how many.
-                # Five fields answer in one reply, and a run that logs
-                # "aggregation+carrier+sector+year+spatial_scope: 3 of 5"
-                # cannot say which two were dropped: 7,738 unbacked and
-                # 3,110 unquoted answers of one corpus group were not
-                # attributable to a coordinate.
-                filled_by: dict = {}
-                unbacked_by: dict = {}
-                for slot in self.slots:
-                    for batch, members in self.scope.groups:
-                        got = merge_field(
-                            members, list(shown) + batch.sources, slot,
-                            answered.get(slot.name),
-                            window=(stage, sum(self.spent.values())),
-                            bases=list(self.bases))
-                        for key in ("filled", "unquoted", "unbacked",
-                                    "unstated", "raw_missing",
-                                    "raw_foreign", "via_base", "via_target"):
-                            counts[key] += got[key]
-                        if got["filled"]:
-                            filled_by[slot.name] = (
-                                filled_by.get(slot.name, 0) + got["filled"])
-                        if got["unquoted"] or got["unbacked"]:
-                            unbacked_by[slot.name] = (
-                                unbacked_by.get(slot.name, 0)
-                                + got["unquoted"] + got["unbacked"])
-                        for bad in got["failed"]:
-                            counts["failed"].append(dict(bad,
-                                                         field=slot.name))
-                for key in ("filled", "unquoted", "unbacked", "unstated",
-                            "raw_missing", "raw_foreign", "via_base",
-                            "via_target"):
-                    self.totals[key] += counts[key]
-                self.totals["retried"] += 1 if attempt else 0
-                # The window this coordinate was asked in, what was shown,
-                # and what came back. Every knob this stage has cuts
-                # through this distribution, and none of them could be set
-                # from a log line that only counted the failures. `batches`
-                # is how many batches the rows of the request came from:
-                # one for a batch's own stage, the document's for its search.
-                trace.event("field", self.document_id, slot=self.name,
-                            anchor=self.anchor_id,
-                            window=sum(self.spent.values()),
-                            stage=stage, attempt=attempt,
-                            parameter=self.parameter,
-                            batches=len(self.batches),
-                            open=len(todo),
-                            reply=state["answer"] is not None,
-                            shown=[[x.owner_kind, x.owner_id]
-                                   for x in shown],
-                            ms=int((time.time() - started) * 1000),
-                            filled_by=filled_by, unbacked_by=unbacked_by,
-                            prompt_tokens=usage.get("prompt_tokens"),
-                            completion_tokens=usage.get(
-                                "completion_tokens"),
-                            **{k: counts[k] for k in
-                               ("filled", "unquoted", "unbacked",
-                                "unstated", "raw_missing",
-                                "raw_foreign", "via_base", "via_target")})
-                for bad in counts["failed"]:
-                    # What was answered, not only that it failed: the
-                    # corpus_m5 trace counted 284,643 quantity answers
-                    # whose quote did not carry them and could not say
-                    # whether the wording, the quote or the pairing of
-                    # the two was wrong.
-                    quote = bad.get("quote")
-                    trace.event("drop", self.document_id, slot=self.name,
-                                field=bad.get("field"),
-                                window=sum(self.spent.values()),
-                                attempt=attempt,
-                                batches=len(self.batches),
-                                row=bad.get("row"),
-                                why=bad.get("why") or "unbacked",
-                                given=bad.get("given"),
-                                raw=bad.get("raw"),
-                                quote=(quote[:300] if isinstance(quote, str)
-                                       else None))
-                corrections = counts["failed"]
+                corrections = self.fold(shown, todo, stage, attempt, started,
+                                        usage, sum(self.spent.values()))
                 if not corrections:
                     break
                 named = {c["row"] for c in corrections}
@@ -3845,6 +3862,184 @@ class Sweeping:
                 if not todo:
                     break
         return True
+
+    def fold(self, shown: list, todo: list, stage: str, attempt: int,
+             started: float, usage: dict, index: int) -> list:
+        """One reply (`state["answer"]`) folded into the rows, counted and
+        traced. *index* is the window it answers. Returns what failed, the
+        corrections of a retry."""
+        state = self.state
+        # Checked against the window AND the passages the rows
+        # carry. A row's own quote is shown to the model in the
+        # rows list, so citing it is legitimate, and from the
+        # second window on it is no longer among `shown`, which
+        # threw away correct readings by the hundred: one batch
+        # logged 520 dropped against 31 read. The passages a row
+        # carries are those of ITS batch.
+        # One reply, folded field by field. A field that is
+        # missing from it is simply not folded, which leaves its
+        # rows open for the next window, the same outcome as an
+        # empty answer, and the same as before.
+        answered = (state["answer"] or {}).get("fields")
+        if not isinstance(answered, dict):
+            answered = {}
+        counts = {"filled": 0, "unquoted": 0, "unbacked": 0,
+                  "unstated": 0, "raw_missing": 0,
+                  "raw_foreign": 0, "via_base": 0, "via_target": 0,
+                  "failed": []}
+        # Which FIELD filled and which failed, not only how many.
+        # Five fields answer in one reply, and a run that logs
+        # "aggregation+carrier+sector+year+spatial_scope: 3 of 5"
+        # cannot say which two were dropped: 7,738 unbacked and
+        # 3,110 unquoted answers of one corpus group were not
+        # attributable to a coordinate.
+        filled_by: dict = {}
+        unbacked_by: dict = {}
+        for slot in self.slots:
+            for batch, members in self.scope.groups:
+                got = merge_field(
+                    members, list(shown) + batch.sources, slot,
+                    answered.get(slot.name),
+                    window=(stage, index),
+                    bases=list(self.bases))
+                for key in ("filled", "unquoted", "unbacked",
+                            "unstated", "raw_missing",
+                            "raw_foreign", "via_base", "via_target"):
+                    counts[key] += got[key]
+                if got["filled"]:
+                    filled_by[slot.name] = (
+                        filled_by.get(slot.name, 0) + got["filled"])
+                if got["unquoted"] or got["unbacked"]:
+                    unbacked_by[slot.name] = (
+                        unbacked_by.get(slot.name, 0)
+                        + got["unquoted"] + got["unbacked"])
+                for bad in got["failed"]:
+                    counts["failed"].append(dict(bad,
+                                                 field=slot.name))
+        for key in ("filled", "unquoted", "unbacked", "unstated",
+                    "raw_missing", "raw_foreign", "via_base",
+                    "via_target"):
+            self.totals[key] += counts[key]
+        self.totals["retried"] += 1 if attempt else 0
+        # The window this coordinate was asked in, what was shown,
+        # and what came back. Every knob this stage has cuts
+        # through this distribution, and none of them could be set
+        # from a log line that only counted the failures. `batches`
+        # is how many batches the rows of the request came from:
+        # one for a batch's own stage, the document's for its search.
+        trace.event("field", self.document_id, slot=self.name,
+                    anchor=self.anchor_id,
+                    window=index,
+                    stage=stage, attempt=attempt,
+                    parameter=self.parameter,
+                    batches=len(self.batches),
+                    open=len(todo),
+                    reply=state["answer"] is not None,
+                    shown=[[x.owner_kind, x.owner_id]
+                           for x in shown],
+                    ms=int((time.time() - started) * 1000),
+                    filled_by=filled_by, unbacked_by=unbacked_by,
+                    prompt_tokens=usage.get("prompt_tokens"),
+                    completion_tokens=usage.get(
+                        "completion_tokens"),
+                    **{k: counts[k] for k in
+                       ("filled", "unquoted", "unbacked",
+                        "unstated", "raw_missing",
+                        "raw_foreign", "via_base", "via_target")})
+        for bad in counts["failed"]:
+            # What was answered, not only that it failed: the
+            # corpus_m5 trace counted 284,643 quantity answers
+            # whose quote did not carry them and could not say
+            # whether the wording, the quote or the pairing of
+            # the two was wrong.
+            quote = bad.get("quote")
+            trace.event("drop", self.document_id, slot=self.name,
+                        field=bad.get("field"),
+                        window=index,
+                        attempt=attempt,
+                        batches=len(self.batches),
+                        row=bad.get("row"),
+                        why=bad.get("why") or "unbacked",
+                        given=bad.get("given"),
+                        raw=bad.get("raw"),
+                        quote=(quote[:300] if isinstance(quote, str)
+                               else None))
+        return counts["failed"]
+
+    def width(self) -> int:
+        """How many windows this sweep may have out at once: the places the
+        run's limit has that no request holds or waits for, at least one.
+        A full run leaves none, and the sweep asks as it always did; the last
+        document of a run finds the server idle and asks many."""
+        if SCHEDULER is None:
+            return 1
+        return max(1, SCHEDULER.room())
+
+    def run_ahead(self, windows) -> bool:
+        """The windows of a search stage, several out at once, folded in the
+        order of the windows: a row a window has read is not read again by
+        one behind it (`merge_field` leaves a read coordinate alone). When
+        nothing is open any more, what still waits is withdrawn and never
+        sent. False when the budget ran out, as `run`.
+        """
+        state = self.state
+        stage = state["stage"]
+        windows = iter(windows)
+        ahead: deque = deque()
+        ticket = scheduler.Ticket()
+        spent_out = False
+        try:
+            while True:
+                room = self.width() - len(ahead)
+                while room > 0 and not spent_out:
+                    if self.stop is not None and self.stop.is_set():
+                        raise SweepStopped()
+                    todo = self.still_open(self.rows)
+                    if not todo:
+                        break
+                    if self.spent[stage] >= self.budget[stage]:
+                        spent_out = True
+                        break
+                    cost = None
+                    if stage == "rest" and self.rest_requests is not None:
+                        cost = self.requests_of(todo)
+                        if self.rest_asked + cost > self.rest_requests:
+                            spent_out = True
+                            break
+                    window = next(windows, None)
+                    if window is None:
+                        break
+                    if cost is not None:
+                        self.rest_asked += cost
+                    self.spent[stage] += 1
+                    shown = self.re_entry(todo, {(s.owner_kind, s.owner_id)
+                                                 for s in window}) + list(window)
+                    usage: dict = {}
+                    ahead.append((AHEAD.submit(self._ask_for, ticket, shown,
+                                               todo, usage),
+                                  shown, todo, time.time(), usage,
+                                  sum(self.spent.values())))
+                    room -= 1
+                if not ahead:
+                    break
+                future, shown, todo, started, usage, index = ahead.popleft()
+                state["answer"] = future.result()
+                self.fold(shown, todo, stage, 0, started, usage, index)
+                if not self.still_open(self.rows):
+                    self.totals["withdrawn"] += len(ahead)
+                    return True
+        finally:
+            ticket.withdraw()
+        return not spent_out
+
+    def _ask_for(self, ticket, shown: list, todo: list, usage: dict):
+        """One window asked on an AHEAD thread, for this document and under
+        this sweep's ticket."""
+        with scheduler.on_behalf(self.document_id, ticket):
+            return self.sweeper.ask(shown, todo, self.slots, None,
+                                    self.document_id, usage, self.owner_of,
+                                    bases=list(self.bases))
+
 
     def own(self) -> bool:
         """The value's own passages AND the sections they stand in. A table
@@ -3871,6 +4066,11 @@ class Sweeping:
         coordinate that is still open is a statement about the plan.
         """
         sweeper = self.sweeper
+        if sweeper.places is not None:
+            pool = sweeper.places(self.document_id,
+                                  [slot.name for slot in self.slots])
+            if pool is not None:
+                return self.search_places(pool)
         self.state["stage"] = "retrieval"
         document = self.kind == "document"
         if document:
@@ -3994,6 +4194,39 @@ class Sweeping:
                       if rest else True)
         return combed
 
+    def search_places(self, pool: list) -> bool:
+        """The search over the places the document's map names for this
+        coordinate, nearest to the open rows first, under the allowance of
+        both search stages. True when every place was shown: the map read
+        the whole plan, so a row still open is one the plan does not answer
+        (owner decision 2026-10-22)."""
+        open_now = self.still_open(self.rows)
+        if not open_now:
+            return True
+        at = [(self.owner_of[row.label].provenance or {}).get(
+                  "section_number")
+              for row in open_now if row.label in self.owner_of]
+        fresh = [source for source in places_map.nearest_first(pool, at)
+                 if (source.owner_kind, source.owner_id) not in self.seen]
+        for source in fresh:
+            key = (source.owner_kind, source.owner_id)
+            self.seen.add(key)
+            self.held[key] = source
+        labels = {row.label for row in open_now}
+        asking = sum(1 for _batch, members in self.scope.groups
+                     if any(row.label in labels for row in members))
+        self.budget["places"] = (self.budget["retrieval"]
+                                 + self.budget["rest"] * max(1, asking))
+        self.spent["places"] = 0
+        self.state["stage"] = "places"
+        if self.kind == "document":
+            log.info("   search %s: %d row(s), %d place(s) of %d on the "
+                     "map, %d window(s) allowed", self.name, len(open_now),
+                     len(fresh), len(pool), self.budget["places"])
+        if not fresh:
+            return True
+        return self.run(window_sources(fresh, FIELD_WINDOW, 0))
+
     def close(self, combed: bool = True) -> dict:
         """What the sweep came to, in the trace and as a dict. A sweep that
         ended on its budget marks every row still open `exhausted`; an own
@@ -4041,13 +4274,14 @@ class Sweeper:
     def __init__(self, ask: Callable, *, more_sources: Optional[Callable],
                  rest_of_document: Optional[Callable],
                  parents: Optional[Callable], anchors: dict,
-                 budget_of: Callable):
+                 budget_of: Callable, places: Optional[Callable] = None):
         self.ask = ask
         self.more_sources = more_sources
         self.rest_of_document = rest_of_document
         self.parents = parents
         self.anchors = anchors
         self.budget_of = budget_of
+        self.places = places
 
     @staticmethod
     def _kept(batches: list) -> tuple:
@@ -4106,7 +4340,8 @@ def make_sweeper(ask: Callable, *,
                  rest_of_document: Optional[Callable] = None,
                  parents: Optional[Callable] = None,
                  anchors: Optional[dict] = None,
-                 search_share: Optional[dict] = None) -> Sweeper:
+                 search_share: Optional[dict] = None,
+                 places: Optional[Callable] = None) -> Sweeper:
     """sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to.
 
     Lifted out of the harvester so a pass that re-reads ONE coordinate of an
@@ -4118,7 +4353,8 @@ def make_sweeper(ask: Callable, *,
     Its five dependencies are exactly what it closed over inside the
     harvester: the asker, and the three ways of finding more passages plus
     the anchor sets that seed them. *search_share* is the profile's
-    `SEARCH_SHARE`: {coordinate: fraction of the search budget}.
+    `SEARCH_SHARE`: {coordinate: fraction of the search budget}. *places* is
+    the document's map of where each axis is answered (`places.Places`).
     """
     anchors = anchors or {}
     search_share = search_share or {}
@@ -4135,7 +4371,7 @@ def make_sweeper(ask: Callable, *,
 
     return Sweeper(ask, more_sources=more_sources,
                    rest_of_document=rest_of_document, parents=parents,
-                   anchors=anchors, budget_of=budget_of)
+                   anchors=anchors, budget_of=budget_of, places=places)
 
 
 # The keys of the coordinates a batch's rows can be held at, for the search
@@ -4693,7 +4929,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                              frame_axes: Optional[list] = None,
                              search_share: Optional[dict] = None,
                              dead=None,
-                             on_give_up: Optional[Callable] = None
+                             on_give_up: Optional[Callable] = None,
+                             places: Optional[Callable] = None
                              ) -> Callable:
     """A harvest(batch, prior) that asks the rows once and then every
     coordinate of them, one field to a request.
@@ -4722,7 +4959,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
     sweep_field = make_sweeper(ask, more_sources=more_sources,
                                rest_of_document=rest_of_document,
                                parents=parents, anchors=anchors,
-                               search_share=search_share)
+                               search_share=search_share, places=places)
 
     def turn_of(batch, prior: Optional[list], deferred: bool) -> dict:
         reply = find_rows(batch, prior)
@@ -6738,6 +6975,7 @@ def main(argv: Optional[list] = None) -> int:
     content = make_shared_content()
     more_sources = make_more_sources(args.db, faiss_index, id_to_pos,
                                      cache_path, content=content)
+    places = make_places(args.db, spec, args.out, content=content)
 
     if args.top_up:
         from . import topup
@@ -6764,7 +7002,7 @@ def main(argv: Optional[list] = None) -> int:
                                                            content=content),
                     parents=make_parents(args.db, content=content),
                     anchors=anchors,
-                    search_share=search_share),
+                    search_share=search_share, places=places),
                  "owner_sources": make_owner_sources(args.db, content=content),
                  "document_spec": document_spec,
                  "frame_names": frame_names,
@@ -6800,7 +7038,7 @@ def main(argv: Optional[list] = None) -> int:
                                                        content=content),
                 parents=make_parents(args.db, content=content),
                 anchors=anchors,
-                search_share=search_share),
+                search_share=search_share, places=places),
              "owner_sources": make_owner_sources(args.db, content=content),
              "document_spec": document_spec_per_call(args.db, spec,
                                                      document_axes),
@@ -6983,7 +7221,8 @@ def main(argv: Optional[list] = None) -> int:
                                        parents=make_parents(args.db, content=content),
                                        frame_axes=frame_axes,
                                        search_share=search_share,
-                                       dead=dead, on_give_up=give_up)
+                                       dead=dead, on_give_up=give_up,
+                                       places=places)
     # A document is harvested in two halves: each batch asks the passages its
     # values came from (`turn`), and what is still open after them is searched
     # once per coordinate for all the batches together (`search_document`). A

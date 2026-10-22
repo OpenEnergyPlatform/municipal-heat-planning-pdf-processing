@@ -73,7 +73,7 @@ table gives kwp's own answer.
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object, in English like the prompts of the first three (`reading.REQUIRED`), laid over the built-in profile's |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | plan-centric labels, convoy membership, three filters |
 | Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `BASE_YEAR`, `TARGET_YEAR`, `document_context`, `PHRASES`, `PROMPT_CHECKS`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE` | the spec, the slice gate, the frame axes, the frame pairs that are the plan's own state and its target, the German sentences the stage writes to the model (the frame request's list of a closed coordinate stands under `"scenarios"`), the passages the preflight holds its prompts to, and the language (`"de"`) of the core's templates its parts files are put together with |
-| Extraction | `prompts/extraction/*.md` | eight prompt ids | phrase, anchors and queries as plain files; frame, rows, field, review and example as parts files that name a template of the core (see The prompts) |
+| Extraction | `prompts/extraction/*.md` | nine prompt ids | phrase, anchors and queries as plain files; frame, rows, field, review and example as parts files that name a template of the core (see The prompts) |
 | The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
 | The answer app | `inference.py` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |
 | The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 10 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
@@ -231,12 +231,13 @@ that same file.
 
 ## The prompts
 
-Nine prompt ids belong to extraction and the graph route, kwp's own
+Ten prompt ids belong to extraction and the graph route, kwp's own
 wording of each spec question:
 
 | id | loaded | asks for |
 |---|---|---|
 | `extraction/phrase` | once per document, before any row | the one sentence this document is searched with |
+| `extraction/places` | once per document, at its first search | which passages answer which parameters and axes, with a quote and no value; the map the search then reads from |
 | `extraction/frame` | once per document, before any row | which scenario and year pairs the plan actually carries |
 | `extraction/anchors` | once per run, per question the field sweep asks | six hypothetical sentences a passage stating this coordinate could read |
 | `extraction/queries` | once per run, as a plain template list | one retrieval query template per parameter or per vocabulary entry |

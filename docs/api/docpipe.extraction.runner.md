@@ -281,6 +281,40 @@ without the reason are one attempt three times. Every attempt
 counts against the window budget, so a stubborn coordinate cannot
 eat the document.
 
+#### Sweeping.fold
+
+```python
+def fold(self, shown: list, todo: list, stage: str, attempt: int,
+         started: float, usage: dict, index: int) -> list
+```
+
+One reply (`state["answer"]`) folded into the rows, counted and
+traced. *index* is the window it answers. Returns what failed, the
+corrections of a retry.
+
+#### Sweeping.width
+
+```python
+def width(self) -> int
+```
+
+How many windows this sweep may have out at once: the places the
+run's limit has that no request holds or waits for, at least one.
+A full run leaves none, and the sweep asks as it always did; the last
+document of a run finds the server idle and asks many.
+
+#### Sweeping.run_ahead
+
+```python
+def run_ahead(self, windows) -> bool
+```
+
+The windows of a search stage, several out at once, folded in the
+order of the windows: a row a window has read is not read again by
+one behind it (`merge_field` leaves a read coordinate alone). When
+nothing is open any more, what still waits is withdrawn and never
+sent. False when the budget ran out, as `run`.
+
 #### Sweeping.own
 
 ```python
@@ -305,6 +339,18 @@ itself, the own stages of the batches the rows come from.
 
 True when the document was read to its end: with no budget cut the
 coordinate that is still open is a statement about the plan.
+
+#### Sweeping.search_places
+
+```python
+def search_places(self, pool: list) -> bool
+```
+
+The search over the places the document's map names for this
+coordinate, nearest to the open rows first, under the allowance of
+both search stages. True when every place was shown: the map read
+the whole plan, so a row still open is one the plan does not answer
+(owner decision 2026-10-22).
 
 #### Sweeping.close
 
@@ -337,7 +383,7 @@ that still have an open row. Built by `make_sweeper`.
 def __init__(self, ask: Callable, *, more_sources: Optional[Callable],
              rest_of_document: Optional[Callable],
              parents: Optional[Callable], anchors: dict,
-             budget_of: Callable)
+             budget_of: Callable, places: Optional[Callable] = None)
 ```
 
 #### Sweeper.own
@@ -1304,6 +1350,16 @@ def answer_room(system: str, conversation: list, wanted: int) -> int
 
 max_tokens for this request: *wanted*, or what the window leaves.
 
+### make_places
+
+```python
+def make_places(db_path: Path, spec: Spec, out: Path,
+                content: Optional[Callable] = None)
+```
+
+The run's map of where each axis is answered (`places.Places`), or
+None when the profile writes no prompt for it or EXTRACT_PLACES=0.
+
 ### make_frame_asker
 
 ```python
@@ -1636,7 +1692,8 @@ def make_sweeper(ask: Callable, *,
                  rest_of_document: Optional[Callable] = None,
                  parents: Optional[Callable] = None,
                  anchors: Optional[dict] = None,
-                 search_share: Optional[dict] = None) -> Sweeper
+                 search_share: Optional[dict] = None,
+                 places: Optional[Callable] = None) -> Sweeper
 ```
 
 sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to.
@@ -1650,7 +1707,8 @@ about this one.
 Its five dependencies are exactly what it closed over inside the
 harvester: the asker, and the three ways of finding more passages plus
 the anchor sets that seed them. *search_share* is the profile's
-`SEARCH_SHARE`: {coordinate: fraction of the search budget}.
+`SEARCH_SHARE`: {coordinate: fraction of the search budget}. *places* is
+the document's map of where each axis is answered (`places.Places`).
 
 ### make_fieldwise_harvester
 
@@ -1664,7 +1722,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                              frame_axes: Optional[list] = None,
                              search_share: Optional[dict] = None,
                              dead=None,
-                             on_give_up: Optional[Callable] = None
+                             on_give_up: Optional[Callable] = None,
+                             places: Optional[Callable] = None
                              ) -> Callable
 ```
 
