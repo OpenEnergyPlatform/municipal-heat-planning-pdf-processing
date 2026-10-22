@@ -52,6 +52,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from docpipe import prompts, providers, reading, usage
+from docpipe.profile import profile_value
 from docpipe.llm_preflight import request_extras, served_window
 from docpipe.reading import Hole
 
@@ -555,10 +556,21 @@ def _apply_actions(
                     len(sec.get("tables") or []), len(sec.get("figures") or []))
             else:
                 log.debug(f"  Removing section: {sec.get('title', '?')}")
+                # Its text goes, its heading does not: a contents page or an
+                # authors' block can be headed by the paper's title, and three
+                # scenario documents lost theirs with it. Left as a bare
+                # heading, `_fold_bare_headings` hands it to the section after.
+                # It is no section to merge into.
+                title = sec.get("title", "").strip()
+                if title and not _synthetic_heading(title):
+                    result.append({"title": title, "content": "",
+                                   "tables": [], "figures": [],
+                                   "segments": [], "_removed": True})
                 continue
 
         if action == "merge_into_previous":
-            target = result[-1] if result else previous_kept
+            kept = [s for s in result if not s.get("_removed")]
+            target = kept[-1] if kept else previous_kept
             if target is not None:
                 merge_content = sec.get("content", "")
                 if isinstance(merge_content, list):
@@ -584,7 +596,8 @@ def _apply_actions(
         # "keep" or "replace" → include in output
         result.append(sec)
 
-    last_kept = result[-1] if result else previous_kept
+    kept = [s for s in result if not s.get("_removed")]
+    last_kept = kept[-1] if kept else previous_kept
     return result, last_kept
 
 
@@ -847,6 +860,11 @@ def _is_empty_section(sec: dict) -> bool:
     return not has_content and not has_tables and not has_figures
 
 
+def _synthetic_heading(title: str) -> bool:
+    """Whether *title* is the name Stage 3 gives the text before any heading."""
+    return title == profile_value("preprocessing", "FRONT_SECTION_TITLE")
+
+
 def _fold_bare_headings(sections: list[dict]) -> list[dict]:
     """A section that is a heading and nothing else opens the text of the next.
 
@@ -859,17 +877,20 @@ def _fold_bare_headings(sections: list[dict]) -> list[dict]:
     India") then reads in its order, and a passage, which puts its heading in
     front only when its text does not open with it, is not reordered.
     Headings with nothing after them, or before a literature list, are left
-    to the filter as before.
+    to the filter as before. The profile's name for what comes before the
+    first heading is not the document's word and is never handed on.
     """
     out: list[dict] = []
     pending: list[str] = []
     for sec in sections:
+        sec.pop("_removed", None)
         title = str(sec.get("title") or "").strip()
-        if _is_empty_section(sec) and title:
-            pending.append(title)
+        own = [title] if title and not _synthetic_heading(title) else []
+        if _is_empty_section(sec):
+            pending += own
             continue
         if pending and isinstance(sec.get("content", ""), str):
-            sec["content"] = "\n".join(pending + [title] * bool(title)
+            sec["content"] = "\n".join(pending + own
                                        + [sec.get("content") or ""])
         pending = []
         out.append(sec)

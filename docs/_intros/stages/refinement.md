@@ -324,8 +324,13 @@ home at the nearest surviving output.
 `_apply_actions` reads each section's `_action`, once its provenance is
 reattached. `remove` drops the section unless it still carries tables or
 figures, in which case the removal is refused and the section kept with a
-warning. `merge_into_previous` folds a section's content, tables,
-figures, and segments into the previous kept section, whether that
+warning. The text of a removed section goes, its heading stays behind as
+a bare heading for the cleanup below to hand on, since a contents page or
+an authors' block can be headed by the document's title; the profile's
+`FRONT_SECTION_TITLE` is not a heading of the document and is not kept.
+`merge_into_previous` folds a section's content, tables,
+figures, and segments into the previous kept section (never into a heading
+left behind by a removal), whether that
 section came from the same window or, via `previous_kept`, the window
 before it. `keep` and `replace` pass the section through as is.
 
