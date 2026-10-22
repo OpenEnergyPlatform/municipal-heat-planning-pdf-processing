@@ -51,17 +51,28 @@ def qualified(identifier: str) -> str
 
 A bare ontology id as this graph writes it.
 
-### year_iri
+### schema_class_of
 
 ```python
-def year_iri(year) -> str
+def schema_class_of(row: dict) -> Optional[str]
 ```
 
-The node a value points at for its year.
+The schema class this value is in its part: the class the model chose,
+or the schema's value class it falls under (the snapshot's
+`mhpkg:<class>` set, built from the closure), or None.
 
-One node per calendar year for the whole graph, keyed by the year itself
-rather than minted from a uuid: two plans naming 2030 mean the same 2030,
-and a year is the one coordinate with no document in it.
+### strict_refusal
+
+```python
+def strict_refusal(row: dict) -> Optional[str]
+```
+
+Why this value has no place in the strict graph, or None.
+
+The strict graph holds what the schema's shapes take: a value class the
+part holds, every required slot, and every slot's answer from the
+schema's own closed list. Not a judgement about the reading -- the full
+graph keeps all of it -- but what a validator of the schema will accept.
 
 ### normalise
 
@@ -112,6 +123,17 @@ second copy diverges: ingest stores YYYYMMDD, the policy wants
 YYYY-MM-DD, and that mismatch once produced an empty graph with every
 test green.
 
+### written
+
+```python
+def written(row: dict, axis: str)
+```
+
+What the graph writes for this coordinate: the class read, or for a
+number the plan does not split by this axis (`out:total`) the class the
+spec names for it (`total_class`, the schema's parent for a figure
+without that breakdown), or nothing.
+
 ### wording_key
 
 ```python
@@ -161,10 +183,19 @@ was read in, and the page it stands on. A comment rather than triples
 because the shapes are sh:closed and an extra triple on a value node
 invalidates it.
 
+### make_strict_serializer
+
+```python
+def make_strict_serializer(db_path: Path)
+```
+
+The graph as the MHPKG schema's shapes take it (`strict_refusal`),
+written beside the full one as `<graph>.strict.ttl`.
+
 ### make_serializer
 
 ```python
-def make_serializer(db_path: Path)
+def make_serializer(db_path: Path, strict: bool = False)
 ```
 
 (document name, accepted tuple rows) -> TTL string or None.
@@ -172,6 +203,9 @@ def make_serializer(db_path: Path)
 What was written for a document is left in `serializer.claims[name]`:
 the plan's node, and for every value its node, its row and the node or
 class each coordinate became. The provenance file is written from that.
+
+*strict* writes only what the schema's shapes take, and types a value
+whose class falls under a schema value class with that class as well.
 
 ### value_bindings
 

@@ -45,9 +45,10 @@ OBO = "http://purl.obolibrary.org/obo/"
 
 # What this profile is written against, always at upstream's current version.
 # MHPO attaches nothing to its releases: its mhpo.owl is in the repository,
-# and is read at the tag of the latest release. `reviewed` is the MHPKG
-# commit kg.py was last read against: a newer schema is reported with the
-# files that changed, because kg.py mirrors it by hand.
+# and is read at the tag of the latest release. The MHPKG schema is read at
+# its branch's head and kept as mhpkg_schema.yaml (mhpkg.py), which kg.py
+# takes its terms from; `reviewed` only names the commit the report of
+# changed files starts from.
 SOURCES = {
     "oeo": {"kind": "release_asset", "repo": "OpenEnergyPlatform/ontology",
             "asset": "oeo-closure.owl"},
@@ -59,6 +60,7 @@ SOURCES = {
               "reviewed": "c18860c373eefc0ff38fb7f01a6ff0a230ef1e0d",
               "files": ["mhpkg/schema/generated/mhpkg_target_scenario.shacl.ttl",
                         "mhpkg/schema/mhpkg_iri_policy.shacl.ttl",
+                        "mhpkg/schema/mhpkg_context.shacl.ttl",
                         "mhpkg/schema/mhpkg_target_scenario.yaml",
                         "mhpkg/schema/mint_slice.py"]},
 }
@@ -73,20 +75,47 @@ SETS = {
     "energy_unit": ("class", OBO + "UO_0000111"),
     "mass_unit": ("class", OBO + "UO_0000002"),
     "aggregation_type": ("individual", OEO + "OEO_00140068"),
+    "heat_generation_technology": ("class", OEO + "OEO_00020308"),
 }
 
 # Which axis of this spec answers from which of those roots.
 AXIS_SETS = {"sector": "sector", "aggregation": "aggregation_type",
-             "quantity": "quantity_value"}
+             "quantity": "quantity_value",
+             "technology": "heat_generation_technology"}
 
 
 def build(closure: Path, mhpo: Path = None) -> dict:
+    """The snapshot: this profile's lists, every term its graph writes --
+    the schema's included, so `mhpkg.missing_terms` can say which of them
+    the pin lacks -- and for every value class of the schema the classes
+    under it (`mhpkg:<class>`), which is what decides that a CO2-equivalent
+    value IS a greenhouse gas emission value without a reasoner."""
+    from profiles.kwp import mhpkg
     spec_raw = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
+    shape = mhpkg.load()
+    sets = dict(SETS)
+    for name in value_classes(shape):
+        prefix, _, local = shape.cls(name).partition(":")
+        if prefix == "oeo":
+            sets[f"mhpkg:{name}"] = ("class", OEO + local)
+    named = {curie.partition(":")[2] for curie in shape.curies()
+             if curie.partition(":")[0] in ("oeo", "mhpo")}
     return ontology.build(
-        closure, SETS, spec_raw, extra=[mhpo] if mhpo else None, base=OEO,
-        also=edge_terms(spec_raw),
+        closure, sets, spec_raw, extra=[mhpo] if mhpo else None, base=OEO,
+        also=tuple(sorted(set(edge_terms(spec_raw)) | named)),
         language=load_profile(PROFILE).require("extraction",
                                                "ALT_LABEL_LANGUAGE"))
+
+
+def value_classes(shape) -> list:
+    """The schema classes a plan part holds values of."""
+    from profiles.kwp import kg
+    out = []
+    for container in kg.CONTAINERS:
+        for name in shape.value_classes(container, kg.CONTAINER_SLOT):
+            if name not in out:
+                out.append(name)
+    return out
 
 
 def load(path: Path = VOCABULARY_PATH) -> dict:
@@ -100,6 +129,17 @@ def refresh(cache: Path = upstream.CACHE) -> dict:
     vocabulary.json changes exactly when something upstream did.
     """
     records = upstream.fetch(SOURCES, cache)
+    from profiles.kwp import mhpkg
+    schema = [path for path in upstream.files(records["mhpkg"], ".yaml")
+              if Path(path).as_posix().endswith(mhpkg.SCHEMA_FILE)]
+    if not schema:
+        raise upstream.UpstreamError(f"{mhpkg.SCHEMA_FILE} not in the "
+                                     f"MHPKG files pulled")
+    text = Path(schema[0]).read_text(encoding="utf-8")
+    with io.open(mhpkg.SCHEMA_PATH, "w", encoding="utf-8",
+                 newline="\n") as handle:
+        handle.write(text)
+    mhpkg._SHAPE.clear()
     closure = upstream.files(records["oeo"], ".owl")[0]
     mhpo = next(iter(upstream.files(records["mhpo"])), None)
     snapshot = build(closure, mhpo)
@@ -163,8 +203,34 @@ def edges(spec_raw: dict) -> list:
     sit behind no parameter, so the two together are the whole output and the
     pin can be asked about all of it.
     """
-    from profiles.kwp import kg          # here: kg reads the spec at import
-    return list(ontology.spec_edges(spec_raw)) + list(kg.EDGES)
+    from profiles.kwp import kg, mhpkg   # here: kg reads the spec at import
+    return (list(ontology.spec_edges(mhpkg.resolve(spec_raw, mhpkg.load())))
+            + list(kg.EDGES))
+
+
+def schema_predicates() -> set:
+    """The predicates the MHPKG schema prescribes, bare."""
+    from profiles.kwp import mhpkg
+    shape = mhpkg.load()
+    return {ontology.identifier(shape.slot(name).partition(":")[2])
+            for name in shape.slots
+            if (shape.slots.get(name) or {}).get("slot_uri")} - {None}
+
+
+def schema_notes(spec_raw: dict, snapshot: dict) -> list:
+    """What the pin says against the schema's own terms: the edges it
+    prescribes that the ontology's domains or ranges contradict, and the
+    terms the pin does not have yet. The schema is a draft with open term
+    requests; these are reported with every run and stop none."""
+    from profiles.kwp import mhpkg
+    prescribed = schema_predicates()
+    notes = ontology.edge_problems(
+        [e for e in edges(spec_raw)
+         if ontology.identifier(e.get("predicate")) in prescribed], snapshot)
+    notes += [f"MHPKG names {curie}, which the pinned ontology does not have"
+              for curie in mhpkg.missing_terms(mhpkg.load(),
+                                               snapshot["terms"])]
+    return notes
 
 
 def edge_terms(spec_raw: dict) -> tuple:
@@ -176,10 +242,17 @@ def edge_terms(spec_raw: dict) -> tuple:
 
 
 def check(spec_raw: dict, snapshot: dict) -> list:
-    """Every complaint the pinned ontology has about this spec."""
+    """Every complaint the pinned ontology has about this spec; about the
+    terms the MHPKG schema prescribes, `schema_notes`."""
+    # The spec as written: a slot it names is the schema's term and is held
+    # to the pin in `schema_notes`, not here.
+    prescribed = schema_predicates()
     return (ontology.term_problems(spec_raw, snapshot)
             + ontology.kind_problems(spec_raw, snapshot)
-            + ontology.edge_problems(edges(spec_raw), snapshot)
+            + ontology.edge_problems(
+                [e for e in edges(spec_raw)
+                 if ontology.identifier(e.get("predicate")) not in prescribed],
+                snapshot)
             + carrier_problems(spec_raw, snapshot)
             + ontology.set_problems(spec_raw, snapshot, AXIS_SETS))
 
@@ -235,6 +308,8 @@ def main(argv=None) -> int:
         problems = check(spec_raw, load())
         for problem in problems:
             print(problem)
+        for note in schema_notes(spec_raw, load()):
+            print(f"  note mhpkg: {note}")
         seen = set()
         for where, uri, label, own in foreign_labels(spec_raw, load()):
             if uri in seen:

@@ -33,6 +33,20 @@ Author: Felix Vossel
 def build(closure: Path, mhpo: Path = None) -> dict
 ```
 
+The snapshot: this profile's lists, every term its graph writes --
+the schema's included, so `mhpkg.missing_terms` can say which of them
+the pin lacks -- and for every value class of the schema the classes
+under it (`mhpkg:<class>`), which is what decides that a CO2-equivalent
+value IS a greenhouse gas emission value without a reasoner.
+
+### value_classes
+
+```python
+def value_classes(shape) -> list
+```
+
+The schema classes a plan part holds values of.
+
 ### load
 
 ```python
@@ -93,6 +107,25 @@ The `kg` blocks carry most of them and `kg.py` declares the handful that
 sit behind no parameter, so the two together are the whole output and the
 pin can be asked about all of it.
 
+### schema_predicates
+
+```python
+def schema_predicates() -> set
+```
+
+The predicates the MHPKG schema prescribes, bare.
+
+### schema_notes
+
+```python
+def schema_notes(spec_raw: dict, snapshot: dict) -> list
+```
+
+What the pin says against the schema's own terms: the edges it
+prescribes that the ontology's domains or ranges contradict, and the
+terms the pin does not have yet. The schema is a draft with open term
+requests; these are reported with every run and stop none.
+
 ### edge_terms
 
 ```python
@@ -107,7 +140,8 @@ Every identifier those triple shapes name, for the snapshot to carry.
 def check(spec_raw: dict, snapshot: dict) -> list
 ```
 
-Every complaint the pinned ontology has about this spec.
+Every complaint the pinned ontology has about this spec; about the
+terms the MHPKG schema prescribes, `schema_notes`.
 
 ### foreign_labels
 

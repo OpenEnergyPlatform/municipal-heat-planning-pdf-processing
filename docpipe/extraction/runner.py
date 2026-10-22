@@ -411,10 +411,15 @@ def window_budget(share: float = 1.0) -> dict:
     *share* scales the two search stages for a coordinate the profile says
     to look for less far (`SEARCH_SHARE`): under one budget, corpus_m5's
     sector search filled 4 percent of its 392,541 requests where the scope's
-    filled 25 percent. At least one window stays, so no stage is skipped.
+    filled 25 percent. At least one window stays, so no stage is skipped;
+    a share of 0 is the exception and reads the own passage alone.
     """
     retrieval = max(0, FIELD_MAX_WINDOWS - FIELD_ATTEMPTS)
     rest = REST_MAX_WINDOWS
+    if share <= 0:
+        # Read from the value's own passage only: a coordinate the data
+        # schema leaves optional is not searched for through the plan.
+        return {"own": FIELD_ATTEMPTS, "retrieval": 0, "rest": 0}
     if share < 1.0:
         retrieval = max(1, round(retrieval * share)) if retrieval else 0
         rest = max(1, round(rest * share)) if rest else 0
@@ -3614,7 +3619,7 @@ class Sweeping:
         #     the rest allowance above the field one and it becomes 0, and the
         #     stage silently gets the whole budget.
         #
-        self.budget = sweeper.budget_of(self.slots)
+        self.budget = sweeper.budget_of(self.slots, self.parameter)
         self.spent = {stage: 0 for stage in self.budget}
         # The rest stage is bounded in requests as well: what it may send,
         # set when the stage begins (`search`), and what it has sent.
@@ -4118,11 +4123,15 @@ def make_sweeper(ask: Callable, *,
     anchors = anchors or {}
     search_share = search_share or {}
 
-    def budget_of(slots: list) -> dict:
-        """The allowance of one coordinate's sweep, per stage."""
-        budget = window_budget(min(search_share.get(slot.name, 1.0)
-                                   for slot in slots))
-        return budget
+    def budget_of(slots: list, parameter: Optional[str] = None) -> dict:
+        """The allowance of one coordinate's sweep, per stage: the share
+        named for `<parameter>.<axis>`, else for the axis, else all."""
+        def share(slot) -> float:
+            for key in (f"{parameter}.{slot.name}", slot.name):
+                if key in search_share:
+                    return search_share[key]
+            return 1.0
+        return window_budget(min(share(slot) for slot in slots))
 
     return Sweeper(ask, more_sources=more_sources,
                    rest_of_document=rest_of_document, parents=parents,
@@ -6457,6 +6466,20 @@ def main(argv: Optional[list] = None) -> int:
             return 1
         log.info("serialize: %d tuple(s) from %d document(s) -> %s",
                  sum(counts.values()), len(counts), args.serialize)
+        written = [Path(args.serialize)]
+        # A profile whose data schema closes its lists more tightly than the
+        # graph does writes the graph a second time as that schema takes it,
+        # beside the full one; the full one keeps everything that was read.
+        strict = profile.component("kg", "make_strict_serializer")
+        if strict is not None:
+            beside = Path(args.serialize).with_suffix(".strict.ttl")
+            try:
+                taken = serialize_run(args.out, beside, strict(args.db))
+                log.info("serialize: %d document(s) as the data schema takes "
+                         "them -> %s", len(taken), beside)
+                written.append(beside)
+            except ValueError as exc:
+                log.warning("serialize: strict graph not written: %s", exc)
         # The shapes the last `vocabulary --refresh` pulled. A profile that
         # names none has nothing to validate against; one that names them
         # but was never refreshed is told so rather than passed over.
@@ -6466,11 +6489,12 @@ def main(argv: Optional[list] = None) -> int:
             if paths:
                 # The graph is written by now, and the report must not take
                 # the serialize result with it when the validator fails.
-                try:
-                    validate(args.serialize, paths)
-                except Exception:
-                    log.exception("shacl: validation of %s failed, no report "
-                                  "written", args.serialize)
+                for graph_path in written:
+                    try:
+                        validate(graph_path, paths)
+                    except Exception:
+                        log.exception("shacl: validation of %s failed, no "
+                                      "report written", graph_path)
             else:
                 log.warning("shacl: no shapes from a refresh, the graph is "
                             "not validated (python -m profiles.%s.vocabulary "

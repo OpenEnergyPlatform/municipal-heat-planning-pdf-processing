@@ -98,7 +98,14 @@ TARGET_YEAR = {"scenario": "target"}
 # 23 to 25 percent. A coordinate not named here searches with the whole
 # budget. One whose search is cut short ends `exhausted`, never `unstated`
 # (owner decision 2026-09-23).
-SEARCH_SHARE = {"sector": 0.5, "aggregation": 0.5}
+#
+# 0 reads the value's own passage alone (owner decision 2026-10-22): the
+# MHPKG schema leaves an emission's carrier and sector optional, because the
+# law asks for the total, and every technology optional. A key may name the
+# parameter, `<parameter>.<axis>`, and is read before the bare axis.
+SEARCH_SHARE = {"sector": 0.5, "aggregation": 0.5,
+                "emission.carrier": 0, "emission.sector": 0,
+                "technology": 0}
 
 # How the documents write the decimal. It decides what the digits leave
 # open: "3,251 GWh" is 3.251 here, and "1.234" is 1234.

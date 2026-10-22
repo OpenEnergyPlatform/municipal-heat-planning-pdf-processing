@@ -45,7 +45,7 @@ rather than a call the ontology check makes itself.
 | | |
 |---|---|
 | **In** | A document's accepted JSONL tuple lines (`kind == "tuple"`), the profile's SQLite corpus database, and its `extraction_spec.json` `kg` blocks, parsed once at import. |
-| **Out** | One Turtle file per `--serialize` call: a shared prefix header plus one block per document that produced anything (`kwp`'s read back by `kg_route.py`; `scenarios`' by nothing here), and beside it the provenance file `<graph>.prov.ttl`. |
+| **Out** | One Turtle file per `--serialize` call: a shared prefix header plus one block per document that produced anything (`kwp`'s read back by `kg_route.py`; `scenarios`' by nothing here), and beside it the provenance file `<graph>.prov.ttl`. `kwp` also writes `<graph>.strict.ttl`, the values the MHPKG data schema takes (see below). |
 | **Resumes on** | Nothing. Every call re walks the harvest and re renders the whole output; a run's dedupe state (which identities are claimed) is never persisted. |
 | **Needs** | No served model and no GPU: a read only SQLite connection and local text; the ontology check also needs `rdflib`. `vocabulary.py --refresh` needs network access to pull `SOURCES`, and, for `scenarios`, `OEP_API_TOKEN`; `--write` needs an external OEO closure file by hand instead. The SHACL report a `kwp` `--serialize` run writes needs `pyshacl`. |
 
@@ -204,14 +204,29 @@ drops every claimant, counted `conflict`. Each winner's comment states
 what it won over. The plan node gets `has part` edges only to parts with a
 surviving value; all three parts are
 written (docstring stale, naming only target). A value node's type is
-its quantity's OEO class; its carrier, sector and year edges share one
-edgeless predicate, `obo:IAO_0000136 is about`; nine carrier classes
+its quantity's OEO class; its carrier, sector and technology edges are the
+MHPKG schema's slots (`refers to energy carrier`, `refers to sector`,
+`refers to technology`, resolved from the spec's `schema_slot` by
+`profiles/kwp/mhpkg.py`), its year an `xsd:integer` literal on
+`has scenario year value`, with no year node. A total sector (`out:total`)
+is written as the schema's parent sector `OEO_00000128`, a total carrier or
+technology as no edge. Nine carrier classes
 plans name constantly sit outside OEO's `energy carrier` root, so
-`kg.outside_root` keeps their edge, counted, not lost. A year
-is one node per calendar year, keyed by the year, not minted. Above
+`kg.outside_root` keeps their edge, counted, not lost. The inventory
+part's IRI segment is `inventoryanalysis`. Above
 each value node, `evidence_comment` writes its wording, quote,
 location and rendered trust line as Turtle comments, since target
 shapes are `sh:closed` with no triples toggle.
+
+`make_strict_serializer` writes the same graph a second time as
+`<graph>.strict.ttl`, called from the `--serialize` branch beside the
+full one. `strict_refusal` leaves a value out unless its class is one the
+part holds (typed with the schema's class as well), it carries every
+required slot and its carrier, sector and technology are on the schema's
+lists; a plan with no target-scenario value is left out whole. Each
+refusal is counted `mhpkg:<reason>`: `class`, `area`, `no_slot:<slot>`,
+`missing:<slot>`, `off_list:<slot>`. The full graph keeps everything
+read. Both files are held against the refreshed shapes.
 
 ### kwp: asking the graph
 
@@ -221,9 +236,8 @@ and `aggregation`, both part of a value's identity, are left out: no
 edge links a value to its area, and aggregation is returned rather
 than constrained. `VALUE_QUERY`, a SPARQL template built from the
 serializer's predicate constants, selects a value's quantity, number,
-unit, year, aggregation and plan part, gathering every `is about`
-object into one `abouts` string and excluding the year node by its
-class so it does not return as a carrier. `value_bindings` turns a
+unit, year, aggregation and plan part, gathering every carrier, sector
+and technology object into one `abouts` string. `value_bindings` turns a
 coordinate dict into `##CONSTRAINTS##` lines and a `{variable: (kind,
 value)}` binding map, one line per bound axis, dropping an `out:`
 quantity, since `oeo:out:potential` names no graph IRI. `label_of`
@@ -301,7 +315,8 @@ file (plus, for `kwp`, `--mhpo`) and overwrites `vocabulary.json`;
 `--refresh` does the same pull automatically, through `upstream.py`
 (below), and then runs `--check` on what it wrote. `--check` runs
 `term_problems` (name absent or deprecated),
-`kind_problems` (a `kg` predicate the ontology calls a class),
+`kind_problems` (a `kg` predicate the ontology calls a class; an edge
+may name `schema_slot` instead of `predicate`),
 `edge_problems` (a triple outside its predicate's domain or range),
 `set_problems` (an axis option outside its root), plus `kwp`'s
 `carrier_problems` or `scenarios`' `region_problems`; each a string,
@@ -343,9 +358,13 @@ fresh snapshot; a source that cannot be resolved raises and stops the
 refresh before anything is rewritten. `kwp`'s `mhpkg` source also
 carries the MHPKG SHACL files: `vocabulary.py`'s `shapes()` names the
 last refresh's copies, and `--serialize` holds the written Turtle
-against them through `serialize.validate`, which calls
-`ontology.shacl_report` and writes `<ttl>.shacl.txt` beside the graph,
-a report and not a gate.
+(the strict one too) against them through `serialize.validate`, which calls
+`ontology.shacl_report` and writes `<ttl>.shacl.txt` beside each graph,
+a report and not a gate. The same refresh also pulls the schema's LinkML
+file into `profiles/kwp/mhpkg_schema.yaml`, which `kg.py` takes its slots,
+classes and closed lists from; the vocabulary check prints `note mhpkg:` for
+schema terms the pinned OEO or MHPO lack and for schema edges the pinned
+domains or ranges contradict, and fails on neither.
 
 ## Data model
 

@@ -258,8 +258,12 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
         role = kg.get("role")
         if role not in ("type", "edge", "parent", "comment"):
             _fail(path, "kg.role must be one of: type, edge, parent, comment")
-        if role == "edge" and not str(kg.get("predicate") or "").strip():
-            _fail(path, "an edge names the predicate it writes")
+        # Or the slot of the profile's data schema that carries the
+        # predicate, which the profile resolves when it writes the graph.
+        if role == "edge" and not str(kg.get("predicate")
+                                      or kg.get("schema_slot") or "").strip():
+            _fail(path, "an edge names the predicate it writes, or the "
+                        "schema slot that does")
         _validate_kg_ids(path, kg)
     if "evidence" in raw:
         # Refused rather than ignored, so the rule cannot come back through a

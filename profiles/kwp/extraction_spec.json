@@ -16,7 +16,7 @@
     "Wortlaut in quantity_raw und wird gezaehlt, statt verworfen zu werden."
   ],
   "unit_question": "Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: \"Gigawattstunden\" ist GWh, \"t CO₂-Äq.\" ist t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" sind kWh und GWh, \"1.700 kg CO2\" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann \"value\" weg und gib die Einheit wörtlich in \"value_raw\". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht.",
-  "parameter_question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung.",
+  "parameter_question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil.",
   "parameters": [
     {
       "uri": "energy_consumption",
@@ -179,10 +179,9 @@
           },
           "kg": {
             "role": "edge",
-            "predicate": "OEO_00390023",
+            "schema_slot": "has_aggregation_type",
             "label": "has aggregation type",
-            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount.",
-            "prefix": "oeo"
+            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount."
           }
         },
         "carrier": {
@@ -407,10 +406,9 @@
           "question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Gebäudetyp\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist.",
           "kg": {
             "role": "edge",
-            "predicate": "IAO_0000136",
-            "label": "is about",
-            "note": "Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003. Those two edges together made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart. `outside_root` names the nine classes the plans write in the carrier column that OEO does not place under energy carrier: district heat, electricity, solar thermal, geothermal and the ambient heat sources. They used to lose this edge, because `covers energy carrier` ranges over energy carrier and asserting them would have contradicted the TBox; `is about` declares no range, so they keep it and only the count remains, as the argument for the axioms the ontology side is adding.",
-            "prefix": "obo",
+            "schema_slot": "refers_to_energy_carrier",
+            "label": "refers to energy carrier",
+            "note": "Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding.",
             "outside_root": {
               "OEO_00000132": "district heating",
               "OEO_00000139": "electrical energy",
@@ -491,10 +489,109 @@
           "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"). Eine Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist dagegen keine Summe über Sektoren. \"Einfamilienhaus\" und \"Mehrfamilienhaus\" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Energieträger\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist.",
           "kg": {
             "role": "edge",
-            "predicate": "IAO_0000136",
-            "label": "is about",
-            "note": "Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003. Those two edges together made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart.",
-            "prefix": "obo"
+            "schema_slot": "refers_to_sector",
+            "label": "refers to sector",
+            "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
+            "total_class": "OEO_00000128"
+          }
+        },
+        "technology": {
+          "vocabulary": {
+            "OEO_00020486": {
+              "label": "Wärmepumpe",
+              "spellings": [
+                "Wärmepumpen",
+                "Luft-Wasser-Wärmepumpe",
+                "Sole-Wasser-Wärmepumpe",
+                "Großwärmepumpe"
+              ],
+              "definition": "A heat pump technology is a heat generation technology that describes how to combine heat pumps, heat gain processes, energy carriers and energy in a specific way."
+            },
+            "OEO_00020307": {
+              "label": "Solarthermie",
+              "spellings": [
+                "Solarthermieanlage",
+                "solarthermische Anlage"
+              ],
+              "definition": "A solar thermal heat technology is a heat generation technology that describes how to combine solar heat units, solar thermal energy transformation processes, energy carriers and energy in a specific way."
+            },
+            "OEO_00020306": {
+              "label": "Geothermie",
+              "spellings": [
+                "Geothermieanlage",
+                "Tiefengeothermie",
+                "oberflächennahe Geothermie"
+              ],
+              "definition": "A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way."
+            },
+            "OEO_00020487": {
+              "label": "Direktelektrische Heizung",
+              "spellings": [
+                "Stromdirektheizung",
+                "Elektroheizung",
+                "Nachtspeicherheizung"
+              ],
+              "definition": "An electrical heating technology is a technology that describes how to combine electrical heaters in a heat gain process with electrical energy as input in a specific way."
+            },
+            "OEO_00020491": {
+              "label": "Gasheizung",
+              "spellings": [
+                "Gaskessel",
+                "Gasbrennwertkessel",
+                "Gastherme"
+              ],
+              "definition": "An gas powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, natural gas and energy in a specific way."
+            },
+            "OEO_00020490": {
+              "label": "Ölheizung",
+              "spellings": [
+                "Ölkessel",
+                "Heizölkessel"
+              ],
+              "definition": "An oil powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, heating oil and energy in a specific way."
+            },
+            "OEO_00020493": {
+              "label": "Biomasseheizung",
+              "spellings": [
+                "Holzheizung",
+                "Pelletheizung",
+                "Hackschnitzelheizung",
+                "Biomassekessel"
+              ],
+              "definition": "A biomass powered heating technology is a combustion-based heat generation technology that describes how to combine biomass boilers, heat gain processes, biomass and energy in a specific way."
+            },
+            "OEO_00020492": {
+              "label": "Wasserstoffheizung",
+              "spellings": [
+                "Wasserstoffkessel",
+                "H2-Kessel"
+              ],
+              "definition": "An hydrogen powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, hydrogen and energy in a specific way."
+            },
+            "out:total": {
+              "label": "Summe",
+              "spellings": [
+                "Gesamt",
+                "insgesamt",
+                "alle Technologien"
+              ],
+              "definition": "Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt."
+            },
+            "out:other": {
+              "label": "Sonstige",
+              "spellings": [
+                "Andere",
+                "sonstige Wärmeerzeuger"
+              ],
+              "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
+            }
+          },
+          "question": "Welche Wärmeerzeugungstechnologie? Nur wenn die Zahl ausdrücklich einer Heiztechnik zugeordnet ist, in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\" oder \"Ölheizungen\". Ein Energieträger ist keine Technologie: \"Erdgas\" allein ist der Träger, \"Gasheizung\" die Technologie. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz nicht nach Technologien aufgeteilt, antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt. Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist.",
+          "kg": {
+            "role": "edge",
+            "schema_slot": "refers_to_technology",
+            "label": "refers to technology",
+            "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional."
           }
         },
         "year": {
@@ -502,11 +599,10 @@
           "question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.",
           "kg": {
             "role": "edge",
-            "predicate": "IAO_0000136",
-            "label": "is about",
-            "note": "The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit entry that names no period carries the flag period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
-            "prefix": "obo",
-            "object_class": "OEO_00030033"
+            "schema_slot": "has_scenario_year_value",
+            "label": "has scenario year value",
+            "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
+            "datatype": "xsd:integer"
           }
         },
         "scenario": {
@@ -561,10 +657,10 @@
             "role": "parent",
             "map": {
               "target": {
-                "class": "MHPO_00020007"
+                "schema_class": "TargetScenario"
               },
               "status_quo": {
-                "class": "MHPO_00020005"
+                "schema_class": "AggregatedInventoryAnalysis"
               },
               "trend": {
                 "class": "OEO_00020311",
@@ -577,8 +673,7 @@
             "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
             "linked_by": {
               "node": "heatplan",
-              "prefix": "obo",
-              "predicate": "BFO_0000051",
+              "schema_slot": "has_part",
               "label": "has part"
             }
           }
@@ -722,17 +817,15 @@
         "node": "value",
         "class_from": "quantity",
         "number": {
-          "predicate": "OEO_00140178",
+          "schema_slot": "has_number",
           "label": "has number",
           "datatype": "xsd:float",
-          "from": "value_target",
-          "prefix": "oeo"
+          "from": "value_target"
         },
         "unit": {
-          "predicate": "OEO_00040010",
+          "schema_slot": "has_unit",
           "label": "has unit",
-          "from": "unit_target",
-          "prefix": "oeo"
+          "from": "unit_target"
         }
       }
     },
@@ -932,10 +1025,9 @@
           },
           "kg": {
             "role": "edge",
-            "predicate": "OEO_00390023",
+            "schema_slot": "has_aggregation_type",
             "label": "has aggregation type",
-            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount.",
-            "prefix": "oeo"
+            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount."
           }
         },
         "carrier": {
@@ -1160,10 +1252,9 @@
           "question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Gebäudetyp\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist.",
           "kg": {
             "role": "edge",
-            "predicate": "IAO_0000136",
-            "label": "is about",
-            "note": "Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003. Those two edges together made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart. `outside_root` names the nine classes the plans write in the carrier column that OEO does not place under energy carrier: district heat, electricity, solar thermal, geothermal and the ambient heat sources. They used to lose this edge, because `covers energy carrier` ranges over energy carrier and asserting them would have contradicted the TBox; `is about` declares no range, so they keep it and only the count remains, as the argument for the axioms the ontology side is adding.",
-            "prefix": "obo",
+            "schema_slot": "refers_to_energy_carrier",
+            "label": "refers to energy carrier",
+            "note": "Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding.",
             "outside_root": {
               "OEO_00000132": "district heating",
               "OEO_00000139": "electrical energy",
@@ -1244,10 +1335,109 @@
           "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"). Eine Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist dagegen keine Summe über Sektoren. \"Einfamilienhaus\" und \"Mehrfamilienhaus\" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Energieträger\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist.",
           "kg": {
             "role": "edge",
-            "predicate": "IAO_0000136",
-            "label": "is about",
-            "note": "Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003. Those two edges together made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart.",
-            "prefix": "obo"
+            "schema_slot": "refers_to_sector",
+            "label": "refers to sector",
+            "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
+            "total_class": "OEO_00000128"
+          }
+        },
+        "technology": {
+          "vocabulary": {
+            "OEO_00020486": {
+              "label": "Wärmepumpe",
+              "spellings": [
+                "Wärmepumpen",
+                "Luft-Wasser-Wärmepumpe",
+                "Sole-Wasser-Wärmepumpe",
+                "Großwärmepumpe"
+              ],
+              "definition": "A heat pump technology is a heat generation technology that describes how to combine heat pumps, heat gain processes, energy carriers and energy in a specific way."
+            },
+            "OEO_00020307": {
+              "label": "Solarthermie",
+              "spellings": [
+                "Solarthermieanlage",
+                "solarthermische Anlage"
+              ],
+              "definition": "A solar thermal heat technology is a heat generation technology that describes how to combine solar heat units, solar thermal energy transformation processes, energy carriers and energy in a specific way."
+            },
+            "OEO_00020306": {
+              "label": "Geothermie",
+              "spellings": [
+                "Geothermieanlage",
+                "Tiefengeothermie",
+                "oberflächennahe Geothermie"
+              ],
+              "definition": "A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way."
+            },
+            "OEO_00020487": {
+              "label": "Direktelektrische Heizung",
+              "spellings": [
+                "Stromdirektheizung",
+                "Elektroheizung",
+                "Nachtspeicherheizung"
+              ],
+              "definition": "An electrical heating technology is a technology that describes how to combine electrical heaters in a heat gain process with electrical energy as input in a specific way."
+            },
+            "OEO_00020491": {
+              "label": "Gasheizung",
+              "spellings": [
+                "Gaskessel",
+                "Gasbrennwertkessel",
+                "Gastherme"
+              ],
+              "definition": "An gas powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, natural gas and energy in a specific way."
+            },
+            "OEO_00020490": {
+              "label": "Ölheizung",
+              "spellings": [
+                "Ölkessel",
+                "Heizölkessel"
+              ],
+              "definition": "An oil powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, heating oil and energy in a specific way."
+            },
+            "OEO_00020493": {
+              "label": "Biomasseheizung",
+              "spellings": [
+                "Holzheizung",
+                "Pelletheizung",
+                "Hackschnitzelheizung",
+                "Biomassekessel"
+              ],
+              "definition": "A biomass powered heating technology is a combustion-based heat generation technology that describes how to combine biomass boilers, heat gain processes, biomass and energy in a specific way."
+            },
+            "OEO_00020492": {
+              "label": "Wasserstoffheizung",
+              "spellings": [
+                "Wasserstoffkessel",
+                "H2-Kessel"
+              ],
+              "definition": "An hydrogen powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, hydrogen and energy in a specific way."
+            },
+            "out:total": {
+              "label": "Summe",
+              "spellings": [
+                "Gesamt",
+                "insgesamt",
+                "alle Technologien"
+              ],
+              "definition": "Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt."
+            },
+            "out:other": {
+              "label": "Sonstige",
+              "spellings": [
+                "Andere",
+                "sonstige Wärmeerzeuger"
+              ],
+              "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
+            }
+          },
+          "question": "Welche Wärmeerzeugungstechnologie? Nur wenn die Zahl ausdrücklich einer Heiztechnik zugeordnet ist, in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\" oder \"Ölheizungen\". Ein Energieträger ist keine Technologie: \"Erdgas\" allein ist der Träger, \"Gasheizung\" die Technologie. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz nicht nach Technologien aufgeteilt, antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt. Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist.",
+          "kg": {
+            "role": "edge",
+            "schema_slot": "refers_to_technology",
+            "label": "refers to technology",
+            "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional."
           }
         },
         "year": {
@@ -1255,11 +1445,10 @@
           "question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.",
           "kg": {
             "role": "edge",
-            "predicate": "IAO_0000136",
-            "label": "is about",
-            "note": "The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit entry that names no period carries the flag period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
-            "prefix": "obo",
-            "object_class": "OEO_00030033"
+            "schema_slot": "has_scenario_year_value",
+            "label": "has scenario year value",
+            "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
+            "datatype": "xsd:integer"
           }
         },
         "scenario": {
@@ -1314,10 +1503,10 @@
             "role": "parent",
             "map": {
               "target": {
-                "class": "MHPO_00020007"
+                "schema_class": "TargetScenario"
               },
               "status_quo": {
-                "class": "MHPO_00020005"
+                "schema_class": "AggregatedInventoryAnalysis"
               },
               "trend": {
                 "class": "OEO_00020311",
@@ -1330,8 +1519,7 @@
             "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
             "linked_by": {
               "node": "heatplan",
-              "prefix": "obo",
-              "predicate": "BFO_0000051",
+              "schema_slot": "has_part",
               "label": "has part"
             }
           }
@@ -1422,17 +1610,15 @@
         "node": "value",
         "class_from": "quantity",
         "number": {
-          "predicate": "OEO_00140178",
+          "schema_slot": "has_number",
           "label": "has number",
           "datatype": "xsd:float",
-          "from": "value_target",
-          "prefix": "oeo"
+          "from": "value_target"
         },
         "unit": {
-          "predicate": "OEO_00040010",
+          "schema_slot": "has_unit",
           "label": "has unit",
-          "from": "unit_target",
-          "prefix": "oeo"
+          "from": "unit_target"
         }
       }
     },
@@ -1452,11 +1638,10 @@
       },
       "kg": {
         "node": "organisation",
-        "class": "OEO_00030022",
+        "schema_class": "Organisation",
         "edge_from_plan": {
-          "predicate": "OEO_00000510",
-          "label": "has organisation",
-          "prefix": "oeo"
+          "schema_slot": "has_organisation",
+          "label": "has organisation"
         },
         "label": "rdfs:label, legal form stripped"
       }
@@ -1586,9 +1771,8 @@
           "question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Bei einer Leistung ist das eine echte Frage und keine Formsache. \"maximum\" bei einer Spitzenlast, einer Höchstlast oder einem Auslegungsfall. \"integral\" bei einer Summe über mehrere Anlagen oder über ein Gebiet, erkennbar an einer Zeile oder Spalte \"Summe\", \"Gesamt\" oder \"insgesamt\". \"arithmetic mean\" bei einem Durchschnitt (\"Ø\", \"mittlere Leistung\"). Die Leistung einer EINZELNEN Anlage ist keines davon: steht in der Quelle, in ihrem Abschnitt und in dem Satz davor nichts über die Zusammenfassung, dann ist das \"out:unstated\" und keine Schätzung.",
           "kg": {
             "role": "edge",
-            "predicate": "OEO_00390023",
+            "schema_slot": "has_aggregation_type",
             "label": "has aggregation type",
-            "prefix": "oeo",
             "note": "Object is a named individual of OEO_00140068 aggregation type. ASKED here and derived on the two amount parameters: a watt is not an amount integrated over a span, so the unit fixes nothing."
           }
         },
@@ -1814,10 +1998,9 @@
           "question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Gebäudetyp\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist.",
           "kg": {
             "role": "edge",
-            "predicate": "IAO_0000136",
-            "label": "is about",
-            "note": "Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003. Those two edges together made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart. `outside_root` names the nine classes the plans write in the carrier column that OEO does not place under energy carrier: district heat, electricity, solar thermal, geothermal and the ambient heat sources. They used to lose this edge, because `covers energy carrier` ranges over energy carrier and asserting them would have contradicted the TBox; `is about` declares no range, so they keep it and only the count remains, as the argument for the axioms the ontology side is adding.",
-            "prefix": "obo",
+            "schema_slot": "refers_to_energy_carrier",
+            "label": "refers to energy carrier",
+            "note": "Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding.",
             "outside_root": {
               "OEO_00000132": "district heating",
               "OEO_00000139": "electrical energy",
@@ -1898,10 +2081,10 @@
           "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"). Eine Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist dagegen keine Summe über Sektoren. \"Einfamilienhaus\" und \"Mehrfamilienhaus\" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Energieträger\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist.",
           "kg": {
             "role": "edge",
-            "predicate": "IAO_0000136",
-            "label": "is about",
-            "note": "Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003. Those two edges together made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart.",
-            "prefix": "obo"
+            "schema_slot": "refers_to_sector",
+            "label": "refers to sector",
+            "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
+            "total_class": "OEO_00000128"
           }
         },
         "year": {
@@ -1909,11 +2092,10 @@
           "question": "Für welches Kalenderjahr gilt diese Leistung? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Eine Bestandsanlage trägt das Jahr der Bestandsaufnahme, nicht ihr Baujahr.",
           "kg": {
             "role": "edge",
-            "predicate": "IAO_0000136",
-            "label": "is about",
-            "note": "The calendar year the power is stated for, as a node and no longer as a literal. A unit entry that names no period carries the flag period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
-            "prefix": "obo",
-            "object_class": "OEO_00030033"
+            "schema_slot": "has_scenario_year_value",
+            "label": "has scenario year value",
+            "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
+            "datatype": "xsd:integer"
           }
         },
         "scenario": {
@@ -1968,10 +2150,10 @@
             "role": "parent",
             "map": {
               "target": {
-                "class": "MHPO_00020007"
+                "schema_class": "TargetScenario"
               },
               "status_quo": {
-                "class": "MHPO_00020005"
+                "schema_class": "AggregatedInventoryAnalysis"
               },
               "trend": {
                 "class": "OEO_00020311",
@@ -1984,8 +2166,7 @@
             "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
             "linked_by": {
               "node": "heatplan",
-              "prefix": "obo",
-              "predicate": "BFO_0000051",
+              "schema_slot": "has_part",
               "label": "has part"
             }
           }
@@ -2140,17 +2321,650 @@
         "node": "value",
         "class_from": "quantity",
         "number": {
-          "predicate": "OEO_00140178",
+          "schema_slot": "has_number",
           "label": "has number",
           "datatype": "xsd:float",
-          "from": "value_target",
-          "prefix": "oeo"
+          "from": "value_target"
         },
         "unit": {
-          "predicate": "OEO_00040010",
+          "schema_slot": "has_unit",
           "label": "has unit",
-          "from": "unit_target",
-          "prefix": "oeo"
+          "from": "unit_target"
+        }
+      }
+    },
+    {
+      "uri": "share",
+      "label": "Anteil",
+      "description": "Ein im Wärmeplan angegebener Anteil in Prozent: welcher Teil eines Ganzen auf einen Energieträger, einen Sektor oder eine Technologie entfällt, etwa \"Anteil Fernwärme 41 %\" oder \"davon Erdgas 20 %\". Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Einheit trennt diesen Parameter von den anderen: eine Angabe in % ist ein Anteil und keine Energiemenge, auch wenn die Menge daneben steht; die Menge ist ein eigenes Tupel ihres eigenen Parameters. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Prozentwerte, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "value_type": "float",
+      "integrated": false,
+      "unit_target": "UO_0000187",
+      "units_accepted": {
+        "%": 1.0,
+        "Prozent": 1.0
+      },
+      "axes": {
+        "quantity": {
+          "vocabulary": {
+            "OEO_00140127": {
+              "label": "fraction value",
+              "spellings": [
+                "Anteil",
+                "Prozentanteil",
+                "davon"
+              ],
+              "definition": "A fraction value is a relational quantity value that has a fraction as it's unit."
+            },
+            "out:other": {
+              "label": "keine Anteilsangabe",
+              "spellings": [
+                "Quote",
+                "Rate",
+                "Wirkungsgrad",
+                "Veränderung"
+              ],
+              "definition": "Ein Prozentwert, der keinen Teil eines Ganzen nennt: eine Rate pro Jahr, ein Wirkungsgrad, eine Anschlussquote an Gebäuden, eine Veränderung gegenüber einem Basisjahr."
+            }
+          },
+          "required": false,
+          "question": "Welche Größe ist diese Zahl? \"fraction value\" ist der Anteil eines Ganzen in Prozent: welcher Teil des Wärmebedarfs, des Verbrauchs oder der Erzeugung auf einen Energieträger, einen Sektor oder eine Technologie entfällt (\"davon Wärmenetz 41 %\", \"Anteil erneuerbarer Energien 65 %\"). Ein Prozentwert, der keinen Teil eines Ganzen nennt (eine Sanierungsrate pro Jahr, ein Wirkungsgrad, eine Anschlussquote an Gebäuden, eine Veränderung gegenüber einem Basisjahr), ist \"out:other\".",
+          "kg": {
+            "role": "type",
+            "note": "The class of the value node itself (rdf:type). OEO_00140127 fraction value falls under the MHPKG schema's RelationalQuantityValue. An out:* answer is a deliberate non-class and mints no node."
+          }
+        },
+        "carrier": {
+          "vocabulary": {
+            "OEO_00000292": {
+              "label": "Erdgas",
+              "spellings": [
+                "Gas"
+              ]
+            },
+            "OEO_00000211": {
+              "label": "Heizöl",
+              "spellings": [
+                "Öl"
+              ]
+            },
+            "OEO_00000132": {
+              "label": "Fernwärme",
+              "spellings": [
+                "Wärmenetze",
+                "Wärmenetz",
+                "Nahwärme"
+              ]
+            },
+            "OEO_00000139": {
+              "label": "Strom",
+              "spellings": [
+                "Elektrizität",
+                "Heizungsstrom",
+                "Wärmestrom",
+                "Direktstrom",
+                "E-Wärme"
+              ],
+              "definition": "Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles."
+            },
+            "OEO_00000449": {
+              "label": "Holz",
+              "spellings": [
+                "Holzpellets",
+                "Pellets",
+                "Hackschnitzel",
+                "Brennholz",
+                "Holzenergie"
+              ]
+            },
+            "OEO_00000074": {
+              "label": "Biogas",
+              "spellings": [
+                "aufbereitetes Biogas",
+                "Klärgas",
+                "Faulgas",
+                "Klärschlammgas"
+              ]
+            },
+            "OEO_00000388": {
+              "label": "Solarthermie",
+              "spellings": [
+                "solare Wärme"
+              ]
+            },
+            "OEO_00000251": {
+              "label": "Braunkohle",
+              "spellings": []
+            },
+            "OEO_00320011": {
+              "label": "Flüssiggas",
+              "spellings": [],
+              "definition": "Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane."
+            },
+            "OEO_00000220": {
+              "label": "Wasserstoff",
+              "spellings": [
+                "H2"
+              ]
+            },
+            "OEO_00000204": {
+              "label": "Steinkohle",
+              "spellings": []
+            },
+            "OEO_00010215": {
+              "label": "Biomethan",
+              "spellings": []
+            },
+            "OEO_00000332": {
+              "label": "biogener Festbrennstoff",
+              "spellings": [
+                "biogene Festbrennstoffe",
+                "sonstige biogene Festbrennstoffe"
+              ]
+            },
+            "OEO_00010214": {
+              "label": "Biomasse",
+              "spellings": [
+                "pflanzliche Biomasse",
+                "landwirtschaftliche Biomasse"
+              ]
+            },
+            "OEO_00000088": {
+              "label": "Kohle",
+              "spellings": []
+            },
+            "OEO_00000290": {
+              "label": "Siedlungsabfälle",
+              "spellings": [
+                "Abfall",
+                "thermische Abfallverwertung"
+              ],
+              "definition": "A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities."
+            },
+            "OEO_00000356": {
+              "label": "biogener Siedlungsabfall",
+              "spellings": [
+                "Biogut",
+                "Gartenabfälle",
+                "Grünschnitt"
+              ],
+              "definition": "A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin."
+            },
+            "OEO_00000439": {
+              "label": "Abfallbrennstoff",
+              "spellings": [
+                "Klärschlamm",
+                "EBS"
+              ],
+              "definition": "A waste fuel is a fuel in which the material entity is waste."
+            },
+            "OEO_00020495": {
+              "label": "landwirtschaftlicher Abfallbrennstoff",
+              "spellings": [
+                "tierische Exkremente",
+                "Gülle",
+                "Mist"
+              ],
+              "definition": "An angricultural waste fuel is waste fuel produced by agriculture."
+            },
+            "OEO_00010155": {
+              "label": "synthetische Gase",
+              "spellings": [
+                "grüne Gase",
+                "E-Gas",
+                "SNG"
+              ]
+            },
+            "OEO_00000191": {
+              "label": "Geothermie",
+              "spellings": [
+                "Erdwärme",
+                "oberflächennahe Geothermie",
+                "Tiefengeothermie",
+                "Erdwärmesonde",
+                "Erdwärmekollektor",
+                "Oberflächengeothermie"
+              ]
+            },
+            "OEO_00010114": {
+              "label": "Abwärme",
+              "spellings": [
+                "unvermeidbare Abwärme"
+              ]
+            },
+            "OEO_00310004": {
+              "label": "industrielle Abwärme",
+              "spellings": []
+            },
+            "OEO_00000056": {
+              "label": "Umweltwärme",
+              "spellings": [
+                "Umgebungswärme",
+                "Umgebungsluft"
+              ],
+              "definition": "Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps."
+            },
+            "OEO_00140105": {
+              "label": "anthropogene Umweltwärme",
+              "spellings": [
+                "Abwasserwärme",
+                "Abwasser",
+                "Abwasserwärmenutzung"
+              ],
+              "definition": "Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin."
+            },
+            "OEO_00140104": {
+              "label": "natürliche Umweltwärme",
+              "spellings": [
+                "Oberflächengewässer",
+                "Seethermie",
+                "Flusswärme"
+              ],
+              "definition": "Natural ambient thermal energy is ambient thermal energy that has a renewable origin."
+            },
+            "out:total": {
+              "label": "Summe",
+              "spellings": [
+                "Gesamt",
+                "Gesamtwert",
+                "Gesamtsumme",
+                "alle Energieträger",
+                "insgesamt"
+              ],
+              "definition": "Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt."
+            },
+            "out:other": {
+              "label": "Sonstige",
+              "spellings": [
+                "Andere",
+                "sonstige Energieträger",
+                "Sonstige Wärmequellen",
+                "Rest"
+              ],
+              "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
+            },
+            "OEO_00010223": {
+              "label": "biogener Abfallbrennstoff",
+              "spellings": [
+                "Altholz",
+                "Altholzheizung",
+                "biogene Abfälle"
+              ],
+              "definition": "A biogenic waste fuel is a waste fuel that has a biogenic origin."
+            }
+          },
+          "question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Gebäudetyp\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist.",
+          "kg": {
+            "role": "edge",
+            "schema_slot": "refers_to_energy_carrier",
+            "label": "refers to energy carrier",
+            "note": "Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding.",
+            "outside_root": {
+              "OEO_00000132": "district heating",
+              "OEO_00000139": "electrical energy",
+              "OEO_00000388": "solar thermal energy",
+              "OEO_00000191": "geothermal energy",
+              "OEO_00010114": "waste heat",
+              "OEO_00310004": "industrial waste heat",
+              "OEO_00000056": "ambient heat",
+              "OEO_00140105": "waste water heat",
+              "OEO_00140104": "surface water heat"
+            }
+          }
+        },
+        "sector": {
+          "vocabulary": {
+            "OEO_00000214": {
+              "label": "Private Haushalte",
+              "spellings": [
+                "Haushalte",
+                "Privathaushalte",
+                "Wohnen",
+                "Wohngebäude",
+                "Haushaltssektor",
+                "Einfamilienhaus",
+                "Mehrfamilienhaus"
+              ],
+              "definition": "A household sector is a sector that covers households."
+            },
+            "OEO_00000405": {
+              "label": "GHD",
+              "spellings": [
+                "Gewerbe, Handel, Dienstleistungen",
+                "Gewerbe/Handel/Dienstleistungen",
+                "öffentliche Gebäude",
+                "öffentliche Liegenschaften",
+                "kommunale Einrichtungen",
+                "GHD/Kommune",
+                "Gewerbe",
+                "wirtschaftlich genutzte Gebäude",
+                "kommerzieller Sektor"
+              ],
+              "definition": "A commercial sector is a sector that covers non-industrial commercial activities."
+            },
+            "OEO_00000227": {
+              "label": "Industrie",
+              "spellings": [
+                "Industriesektor",
+                "verarbeitendes Gewerbe"
+              ],
+              "definition": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation."
+            },
+            "OEO_00000422": {
+              "label": "Verkehr",
+              "spellings": [
+                "Verkehrssektor"
+              ],
+              "definition": "A transport sector is a sector that covers transport of people and/or goods."
+            },
+            "OEO_00010035": {
+              "label": "Landwirtschaft",
+              "spellings": [
+                "Land- und Forstwirtschaft"
+              ],
+              "definition": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change."
+            },
+            "out:total": {
+              "label": "Summe",
+              "spellings": [
+                "Gesamt",
+                "alle Sektoren",
+                "insgesamt",
+                "Gesamtverbrauch",
+                "Gesamtbedarf"
+              ],
+              "definition": "Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt."
+            }
+          },
+          "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"). Eine Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist dagegen keine Summe über Sektoren. \"Einfamilienhaus\" und \"Mehrfamilienhaus\" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Energieträger\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist.",
+          "kg": {
+            "role": "edge",
+            "schema_slot": "refers_to_sector",
+            "label": "refers to sector",
+            "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
+            "total_class": "OEO_00000128"
+          }
+        },
+        "technology": {
+          "vocabulary": {
+            "OEO_00020486": {
+              "label": "Wärmepumpe",
+              "spellings": [
+                "Wärmepumpen",
+                "Luft-Wasser-Wärmepumpe",
+                "Sole-Wasser-Wärmepumpe",
+                "Großwärmepumpe"
+              ],
+              "definition": "A heat pump technology is a heat generation technology that describes how to combine heat pumps, heat gain processes, energy carriers and energy in a specific way."
+            },
+            "OEO_00020307": {
+              "label": "Solarthermie",
+              "spellings": [
+                "Solarthermieanlage",
+                "solarthermische Anlage"
+              ],
+              "definition": "A solar thermal heat technology is a heat generation technology that describes how to combine solar heat units, solar thermal energy transformation processes, energy carriers and energy in a specific way."
+            },
+            "OEO_00020306": {
+              "label": "Geothermie",
+              "spellings": [
+                "Geothermieanlage",
+                "Tiefengeothermie",
+                "oberflächennahe Geothermie"
+              ],
+              "definition": "A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way."
+            },
+            "OEO_00020487": {
+              "label": "Direktelektrische Heizung",
+              "spellings": [
+                "Stromdirektheizung",
+                "Elektroheizung",
+                "Nachtspeicherheizung"
+              ],
+              "definition": "An electrical heating technology is a technology that describes how to combine electrical heaters in a heat gain process with electrical energy as input in a specific way."
+            },
+            "OEO_00020491": {
+              "label": "Gasheizung",
+              "spellings": [
+                "Gaskessel",
+                "Gasbrennwertkessel",
+                "Gastherme"
+              ],
+              "definition": "An gas powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, natural gas and energy in a specific way."
+            },
+            "OEO_00020490": {
+              "label": "Ölheizung",
+              "spellings": [
+                "Ölkessel",
+                "Heizölkessel"
+              ],
+              "definition": "An oil powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, heating oil and energy in a specific way."
+            },
+            "OEO_00020493": {
+              "label": "Biomasseheizung",
+              "spellings": [
+                "Holzheizung",
+                "Pelletheizung",
+                "Hackschnitzelheizung",
+                "Biomassekessel"
+              ],
+              "definition": "A biomass powered heating technology is a combustion-based heat generation technology that describes how to combine biomass boilers, heat gain processes, biomass and energy in a specific way."
+            },
+            "OEO_00020492": {
+              "label": "Wasserstoffheizung",
+              "spellings": [
+                "Wasserstoffkessel",
+                "H2-Kessel"
+              ],
+              "definition": "An hydrogen powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, hydrogen and energy in a specific way."
+            },
+            "out:total": {
+              "label": "Summe",
+              "spellings": [
+                "Gesamt",
+                "insgesamt",
+                "alle Technologien"
+              ],
+              "definition": "Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt."
+            },
+            "out:other": {
+              "label": "Sonstige",
+              "spellings": [
+                "Andere",
+                "sonstige Wärmeerzeuger"
+              ],
+              "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
+            }
+          },
+          "question": "Welche Wärmeerzeugungstechnologie? Nur wenn die Zahl ausdrücklich einer Heiztechnik zugeordnet ist, in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\" oder \"Ölheizungen\". Ein Energieträger ist keine Technologie: \"Erdgas\" allein ist der Träger, \"Gasheizung\" die Technologie. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz nicht nach Technologien aufgeteilt, antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt. Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist.",
+          "kg": {
+            "role": "edge",
+            "schema_slot": "refers_to_technology",
+            "label": "refers to technology",
+            "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional."
+          }
+        },
+        "year": {
+          "type": "int",
+          "question": "Für welches Kalenderjahr gilt dieser Anteil? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.",
+          "kg": {
+            "role": "edge",
+            "schema_slot": "has_scenario_year_value",
+            "label": "has scenario year value",
+            "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
+            "datatype": "xsd:integer"
+          }
+        },
+        "scenario": {
+          "vocabulary": {
+            "target": {
+              "label": "Zielszenario",
+              "spellings": [
+                "Zielbild",
+                "Zielwert",
+                "Zielpfad",
+                "Umsetzungsszenario",
+                "Transformationspfad"
+              ],
+              "definition": "Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will."
+            },
+            "trend": {
+              "label": "Trendszenario",
+              "spellings": [
+                "Referenzszenario",
+                "Weiter-wie-bisher",
+                "Business as usual"
+              ],
+              "definition": "Die Fortschreibung ohne zusätzliche Maßnahmen."
+            },
+            "status_quo": {
+              "label": "Bestand",
+              "spellings": [
+                "Ist-Zustand",
+                "Bilanzjahr",
+                "Status quo",
+                "Bestandsanalyse",
+                "Basisjahr",
+                "Ist-Zustandsanalyse",
+                "Ist-Analyse",
+                "Erstellungsjahr"
+              ],
+              "definition": "Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr."
+            },
+            "out:variant": {
+              "label": "Variante oder Sensitivität neben dem Szenario",
+              "spellings": [
+                "Variante",
+                "Sensitivität",
+                "Bandbreite"
+              ],
+              "definition": "Eine Rechenvariante, die der Plan neben sein Szenario stellt, um eine Bandbreite zu zeigen."
+            }
+          },
+          "required": false,
+          "question": "Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, \"bislang\", \"derzeit\", \"wird verbraucht\", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie \"wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden\" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt (\"bei erhöhter Energieeinsparung\", \"Umsetzungsszenario 2\", \"Transformationspfad\"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das \"out:unstated\" und keine Schätzung.",
+          "kg": {
+            "role": "parent",
+            "map": {
+              "target": {
+                "schema_class": "TargetScenario"
+              },
+              "status_quo": {
+                "schema_class": "AggregatedInventoryAnalysis"
+              },
+              "trend": {
+                "class": "OEO_00020311",
+                "note": "with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means."
+              },
+              "out:variant": {
+                "note": "not serialized"
+              }
+            },
+            "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
+            "linked_by": {
+              "node": "heatplan",
+              "schema_slot": "has_part",
+              "label": "has part"
+            }
+          }
+        },
+        "spatial_scope": {
+          "vocabulary": {
+            "municipality": {
+              "label": "Gemeindegebiet",
+              "spellings": [
+                "Gesamtstadt",
+                "Stadtgebiet",
+                "gesamtes Plangebiet",
+                "Gemeinde insgesamt"
+              ],
+              "definition": "Das ganze Gemeinde- oder Stadtgebiet des Plans."
+            },
+            "sub_area": {
+              "label": "Teilgebiet",
+              "spellings": [
+                "Fokusgebiet",
+                "Quartier",
+                "Stadtteil",
+                "Baublock",
+                "Wärmenetzgebiet",
+                "Ortsteil"
+              ],
+              "definition": "Ein benannter Teil davon: ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet."
+            }
+          },
+          "required": false,
+          "question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.",
+          "kg": {
+            "role": "parent",
+            "map": {
+              "municipality": {
+                "note": "the plan's own area, minted from the AGS"
+              },
+              "sub_area": {
+                "class": "MHPO_00020019",
+                "linked_by": {
+                  "node": "municipality",
+                  "prefix": "obo",
+                  "predicate": "BFO_0000050",
+                  "label": "part of"
+                }
+              }
+            },
+            "note": "The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area."
+          }
+        }
+      },
+      "example": {
+        "source": "Tabelle 14: Indikatoren der Wärmeversorgung 2025 und deren Entwicklung bis 2045 bei Klimaneutralität 2040\n| | 2025 | 2030 | 2035 | 2040 | 2045 |\n| --- | --- | --- | --- | --- | --- |\n| Wärmebedarf [GWh/a] | 26,9 | 26,3 | 25,7 | 25,1 | 24,6 |\n| Davon Wärmenetz | 1,2<br>4 % | 5,4<br>20 % | 7,7<br>30 % | 9,3<br>37 % | 10,1<br>41 % |\n| Davon Erdgas | 10,1<br>37 % | 5,4<br>20 % | 2,6<br>10 % | 0<br>0 % | 0<br>0 % |",
+        "defaults": {
+          "quantity": "fraction value",
+          "quantity_raw": "Davon",
+          "scenario": "Zielszenario",
+          "spatial_scope": "Gemeindegebiet",
+          "spatial_scope_raw": null,
+          "unit": "%",
+          "unit_raw": "%",
+          "sector": null,
+          "technology": null
+        },
+        "tuples": [
+          {
+            "value": 20,
+            "carrier": "Fernwärme",
+            "carrier_raw": "Wärmenetz",
+            "year": 2030,
+            "quote": "| Davon Wärmenetz | 1,2<br>4 % | 5,4<br>20 % | 7,7<br>30 % | 9,3<br>37 % | 10,1<br>41 % |"
+          },
+          {
+            "value": 41,
+            "carrier": "Fernwärme",
+            "carrier_raw": "Wärmenetz",
+            "year": 2045,
+            "quote": "| Davon Wärmenetz | 1,2<br>4 % | 5,4<br>20 % | 7,7<br>30 % | 9,3<br>37 % | 10,1<br>41 % |"
+          },
+          {
+            "value": 20,
+            "carrier": "Erdgas",
+            "carrier_raw": "Erdgas",
+            "year": 2030,
+            "quote": "| Davon Erdgas | 10,1<br>37 % | 5,4<br>20 % | 2,6<br>10 % | 0<br>0 % | 0<br>0 % |"
+          }
+        ]
+      },
+      "kg": {
+        "node": "value",
+        "class_from": "quantity",
+        "number": {
+          "schema_slot": "has_number",
+          "label": "has number",
+          "datatype": "xsd:float",
+          "from": "value_target"
+        },
+        "unit": {
+          "schema_slot": "has_unit",
+          "label": "has unit",
+          "from": "unit_target"
         }
       }
     }

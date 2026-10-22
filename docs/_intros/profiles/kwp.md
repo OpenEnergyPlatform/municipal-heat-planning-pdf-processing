@@ -80,9 +80,9 @@ table gives kwp's own answer.
 
 ## The extraction spec
 
-`profiles/kwp/extraction_spec.json` names four parameters. Three are
-numeric and share one shape: `energy_consumption`, `emission` and
-`heat_load`, each a `float` value carrying its own unit family and landing
+`profiles/kwp/extraction_spec.json` names five parameters. Four are
+numeric and share one shape: `energy_consumption`, `emission`, `heat_load`
+and `share`, each a `float` value carrying its own unit family and landing
 on a `value` node in the graph. The fourth, `planning_organisation`, is a
 `text` value with no unit at all, landing on an `organisation` node.
 
@@ -91,11 +91,13 @@ on a `value` node in the graph. The fourth, `planning_organisation`, is a
 | `energy_consumption` | `float` | energy (kWh to TWh) | `OEO_00050008` | 12 |
 | `emission` | `float` | mass, CO2 equivalent | `OEO_00010137` | 48 |
 | `heat_load` | `float` | power (kW to GW) | `OEO_00390001` | 5 |
+| `share` | `float` | percent | `UO_0000187` | 2 |
 | `planning_organisation` | `text` | none | none | none |
 
-`heat_load` is split from the two amounts purely by unit family, and the
-spec marks it `integrated=False` (`docpipe/extraction/spec.py:131` to
-`137`), the one field that tells a rate apart from an amount stated over
+`heat_load` is split from the two amounts purely by unit family, and `share`
+(Anteil, a part of a whole in percent, `fraction value` as its one class) by
+the percent sign; the spec marks both `integrated=False` (`docpipe/extraction/spec.py:131` to
+`137`), the flag that tells a rate apart from an amount stated over
 a span; the other two numeric parameters leave `integrated` at its
 default of true. An integrated parameter's units each say whether they name a
 period, `names_period`, and the loader refuses an entry that does not say
@@ -105,7 +107,7 @@ of `heat_load` stay bare factors. The verifier flags `period:unstated` from that
 statement alone, and it reaches no request and no stamp key, so changing one
 costs no re-read.
 
-All three numeric parameters share the same five non-quantity axes, each
+All four numeric parameters share these five non-quantity axes, each
 a closed vocabulary except `year`, a plain integer:
 
 | axis | kind | vocabulary size | of which `out:` |
@@ -116,6 +118,12 @@ a closed vocabulary except `year`, a plain integer:
 | `spatial_scope` | vocabulary | 2 | 0 |
 | `year` | integer | (not applicable) | (not applicable) |
 
+`energy_consumption`, `emission` and `share` have a sixth, `technology`, a
+heat generation technology class (10 entries, 2 of them `out:`); the data
+schema leaves it optional, so it is read from the value's own passage alone
+and a number the plan does not split by technology is `out:total` and writes
+no edge.
+
 `quantity` and `aggregation`, the two axes that carry a parameter's own
 answer space, differ by parameter, and `heat_load` differs from the two
 amounts in how its aggregation is decided:
@@ -125,6 +133,7 @@ amounts in how its aggregation is decided:
 | `energy_consumption` | 9 (7) | 5 (0) | yes, from the unit |
 | `emission` | 9 (7) | 5 (0) | yes, from the unit |
 | `heat_load` | 6 (5) | 4 (0) | no, asked |
+| `share` | 2 (1) | none | no axis |
 
 An axis or a parameter answer beginning `out:` is a deliberate non-class,
 not a gap. The convention is the core's: the sentinel a coordinate
@@ -285,7 +294,14 @@ first used, under the names they had as module constants
 ## The knowledge graph
 
 `profiles/kwp/kg.py` turns an accepted harvest into MHPKG Turtle, the
-target graph on the Open Energy Platform. Five namespaces are declared
+target graph on the Open Energy Platform. It takes its terms from the MHPKG
+LinkML data schema (`mhpkg/schema/mhpkg_target_scenario.yaml` of the OEKG
+repository): `python -m profiles.kwp.vocabulary --refresh` pulls it each time
+into `profiles/kwp/mhpkg_schema.yaml` beside the OEO and MHPO snapshots, the
+spec's `kg` blocks name `schema_slot` and `schema_class` instead of a prefix
+and predicate, and `profiles/kwp/mhpkg.py` resolves them. A schema term the
+pinned OEO or MHPO lacks is written as the schema says and printed by the
+vocabulary check as `note mhpkg:`, never a failure. Five namespaces are declared
 once, `rdfs`, `xsd`, `obo`, `mhpo` and `oeo`
 (`profiles/kwp/kg.py:49` to `55`), and every identifier the serializer
 writes is qualified against exactly that header; a predicate whose prefix
@@ -299,21 +315,22 @@ section names what is specific to kwp's own graph.
 | heat plan | `mhpo:MHPO_00020003` | AGS plus publication date, not from any harvested row |
 | municipality | `mhpo:MHPO_00020017` | AGS alone |
 | a scenario part (status quo, trend, target) | one of three MHPO classes, from the spec's own scenario map | AGS, publication date and the part's own path segment |
-| value | the row's own `quantity` class (`a oeo:<quantity>`) | the value identity tuple, below |
+| value | the row's own `quantity` class (`a oeo:<quantity>`); in the strict graph also the schema's value class it falls under | the value identity tuple, below |
 | planning organisation | `oeo:OEO_00030022` | the normalised office name |
 | a named sub area | the spec's plan-area class | AGS plus the normalised area wording |
-| year | the spec's year class | the calendar year itself, not minted |
 
 The plan node carries its publication date, its planning-organisation
 edges, and a `has part` edge to every scenario part with a surviving
 value; each part node carries a `has quantity value` edge to every value
-node under it. A value node's carrier, sector and year all ride one
-shared predicate, `obo:IAO_0000136 is about`, the one predicate this
-graph's header binds that declares no `rdfs:range`; nine carrier classes
+node under it. A value node's carrier, sector and technology ride the
+schema's own slots (`refers to energy carrier`, `refers to sector`,
+`refers to technology`), its year an `xsd:integer` literal on
+`has scenario year value`; there are no year nodes. Nine carrier classes
 the plans name constantly sit outside OEO's `energy carrier` root for
-genuine ontological reasons, and reaching them through a range-bound
-predicate instead once cost 51 of 244 value nodes their carrier edge in
-the kwp pilot.
+genuine ontological reasons; they are written all the same and counted. A
+number the plan does not split by sector (`out:total`) is written as the
+schema's parent energy demand sector, `OEO_00000128`; a total carrier or
+technology writes no edge.
 A named sub area is linked `part of` the municipality. An organisation
 node is written once per run, with the first spelling in harvest
 order, even when a later plan in the same run spells the office
@@ -328,9 +345,8 @@ identifying name, never UUIDv4 (`profiles/kwp/kg.py:369` to `372`,
 `mint`), so two runs over one document produce byte-identical Turtle. The plan
 and municipality nodes are not minted at all: their IRIs are built
 directly from the register key, `heatplan/AGS_<ags>_<published>` and
-`municipality/AGS_<ags>` (`profiles/kwp/kg.py:431` to `433`, `834`). A
-year IRI is likewise unminted, one node per calendar year, keyed by the
-year itself (`profiles/kwp/kg.py:345` to `352`).
+`municipality/AGS_<ags>` (`profiles/kwp/kg.py:431` to `433`, `834`). The
+inventory part's path segment is `inventoryanalysis`.
 
 A value's identity is a UUIDv5 over its own coordinates joined in order:
 the scenario part's IRI, the quantity class, the carrier and sector
@@ -360,6 +376,15 @@ profile, in English here, checked against the core's own list at import
 triples: MHPKG's shapes are `sh:closed`, and an unanticipated triple
 would invalidate the node it documents (`evidence_comment`,
 `profiles/kwp/kg.py:645` to `718`).
+
+Each serialize call writes two graphs. `<graph>.ttl` holds everything that
+was read, in our classes. `<graph>.strict.ttl` (the profile's
+`make_strict_serializer`) holds only the values the data schema takes: a
+class the part holds, every required slot, and carrier, sector and technology
+from the schema's own lists; a plan with no target-scenario value is left
+out. Each refusal is counted as `mhpkg:<reason>` (`class`, `area`,
+`no_slot:<slot>`, `missing:<slot>`, `off_list:<slot>`). Both files are
+SHACL-validated against the refreshed shapes.
 
 What the serializer refuses, briefly (in full on
 [stages/graph.md](../stages/graph.md)): a row failing the quantity,

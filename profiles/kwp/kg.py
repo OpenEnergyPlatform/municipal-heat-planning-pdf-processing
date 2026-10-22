@@ -30,6 +30,7 @@ from docpipe.extraction.spec import kg_name, load as load_spec
 from docpipe.store.schema import readonly_uri
 from docpipe.extraction.trust import (LEVEL_A, LEVEL_B, LEVEL_C, check_prose,
                                       render, trust)
+from profiles.kwp import mhpkg
 
 log = logging.getLogger(__name__)
 
@@ -74,22 +75,26 @@ def expand(name: str) -> str:
 # `energy carrier` (OEO_00020039) in OEO -- district heating is a grid-bound
 # heat transfer, electrical energy sits under energy and commodity, solar
 # thermal energy under thermal energy, and the ambient heat sources under
-# thermal energy too. They used to lose their carrier edge, because
-# `covers energy carrier` ranges over energy carrier and asserting them would
-# have contradicted the TBox. That predicate is gone: its DOMAIN was
-# `OEO_00020011` study, an occurrent, and every value node is a continuant,
-# which made the whole graph unsatisfiable. The edge is `is about`
-# (IAO_0000136) now, it declares no range, and the nine keep it.
+# thermal energy too. The schema's `refers to energy carrier` ranges over
+# energy carrier, so writing them types them as carriers; they are written
+# all the same, because the plans report them as carriers, and counted, as
+# the argument for the carrier axioms the ontology side is adding. The
+# strict graph (`strict_refusal`) leaves out every carrier the schema's own
+# list does not hold.
 #
 # WHICH nine is still the spec's to declare (`kg.outside_root` on the carrier
 # axis) and the pinned closure's to confirm: profiles/kwp/vocabulary.py
 # refuses a carrier that is neither under the root nor declared, so a tenth
-# cannot be added here by forgetting to mention it. The count stays in the
-# log as the argument for the carrier axioms the ontology side is adding.
+# cannot be added here by forgetting to mention it.
 LEGAL = r"(gmbh\s*&\s*co\.?\s*kg|gmbh|mbh|ag|kg|ohg|e\.?\s*v\.?|gbr|se|ug)"
 
-_SPEC = json.loads(
-    Path(__file__).with_name("extraction_spec.json").read_text(encoding="utf-8"))
+# The spec with every `schema_slot` and `schema_class` filled from the MHPKG
+# schema the last refresh pulled (mhpkg.py): the predicates and classes below
+# are the schema's, read at import, and never typed here.
+SHAPE = mhpkg.load()
+_SPEC = mhpkg.resolve(json.loads(
+    Path(__file__).with_name("extraction_spec.json").read_text(encoding="utf-8")),
+    SHAPE)
 
 
 def is_class(value) -> bool:
@@ -124,6 +129,10 @@ UNIT_TARGET = {uri: par["unit_target"]
 AGGREGATIONS = {uri for par in _SPEC["parameters"]
                 if "aggregation" in par.get("axes", {})
                 for uri in par["axes"]["aggregation"]["vocabulary"]}
+# The parameters that have one. A share has none: it is a ratio, and the
+# schema gives its class no aggregation slot.
+AGGREGATED = {par["uri"] for par in _SPEC["parameters"]
+              if "aggregation" in par.get("axes", {})}
 def _predicate(name: str) -> str:
     """The predicate the spec's `kg` block gives this axis, qualified.
 
@@ -159,7 +168,7 @@ def _value_predicate(key: str) -> str:
 # recovered here rather than repeated beside every one of them. Unknown
 # family is an error and not a default: defaulting to oeo: would mint
 # oeo:UO_0000111, an IRI that does not exist, and say nothing.
-_NAMESPACE = {"OEO_": "oeo", "MHPO_": "mhpo", "BFO_": "obo"}
+_NAMESPACE = {"OEO_": "oeo", "MHPO_": "mhpo", "BFO_": "obo", "UO_": "obo"}
 _IDENTIFIER = re.compile(r"[A-Za-z]+_[0-9]+")
 
 
@@ -230,14 +239,15 @@ def _linked_by(axis: str) -> str:
     return kg_name(block["linked_by"], PREFIXES)
 
 
-P_NUMBER = _value_predicate("number")           # oeo: has number
-P_UNIT = _value_predicate("unit")               # oeo: has unit
-# All three are `obo:IAO_0000136 is about`: see the note at the top. The year
-# points at a node, the other two at a class.
+P_NUMBER = _value_predicate("number")           # has number
+P_UNIT = _value_predicate("unit")               # has unit
+# The schema's slots: refers to energy carrier, refers to sector, refers to
+# technology, and the year as an integer literal.
 P_CARRIER = _predicate("carrier")
 P_SECTOR = _predicate("sector")
+P_TECHNOLOGY = _predicate("technology")
 P_YEAR = _predicate("year")
-P_AGGREGATION = _predicate("aggregation")       # oeo: has aggregation type
+P_AGGREGATION = _predicate("aggregation")       # has aggregation type
 
 # The spec as the extraction stage loads it. The answer app's graph route
 # reads its lists off it (`docpipe.inference.kg_route`).
@@ -257,7 +267,8 @@ SPEC = load_spec(_SPEC)
 # neither is a graph identifier -- moving them into the file that is free to
 # edit would make an IRI free to change, which it is not.
 _PART_MINT = {
-    "status_quo": ("inventory", "Bestandsanalyse"),
+    # The IRI policy's segment (mint_slice.py, `mhpkg_iri_policy.shacl.ttl`).
+    "status_quo": ("inventoryanalysis", "Bestandsanalyse"),
     "trend": ("referencescenario", "Trendszenario"),
     "target": ("targetscenario", "Zielszenario"),
 }
@@ -280,17 +291,20 @@ def _outside_root() -> dict:
     return out
 
 
-def _object_class(axis: str) -> str:
-    """The class of the node an axis' edge points at, when it mints one."""
+CARRIER_OUTSIDE_ROOT = _outside_root()
+
+
+def _total_class(axis: str) -> Optional[str]:
+    """The class an axis writes for `out:total`, where it names one: the
+    schema's parent for a figure reported without that breakdown."""
     for par in _SPEC["parameters"]:
         block = ((par.get("axes") or {}).get(axis) or {}).get("kg") or {}
-        if block.get("object_class"):
-            return qualified(block["object_class"])
-    raise KeyError(f"axis {axis!r} names no class for the node it points at")
+        if block.get("total_class"):
+            return block["total_class"]
+    return None
 
 
-CARRIER_OUTSIDE_ROOT = _outside_root()
-CLS_YEAR = _object_class("year")
+TOTAL_CLASS = {axis: _total_class(axis) for axis in ("carrier", "sector")}
 
 ORGANISATION = "planning_organisation"
 CLS_ORGANISATION = _class(ORGANISATION)                    # oeo: organisation
@@ -303,10 +317,71 @@ P_HAS_PART = _linked_by("scenario")                        # obo: has part
 # plan node and the municipality node exist for every plan whatever the model
 # answers, the publication date is a column of Documents and not a reading,
 # and the hop from a container down to a value has no key in the kg grammar.
-CLS_HEATPLAN = "mhpo:MHPO_00020003"
-CLS_MUNICIPALITY = "mhpo:MHPO_00020017"
-P_PUBLICATION_DATE = "oeo:OEO_00390096"
-P_HAS_QUANTITY_VALUE = "oeo:OEO_00140002"
+# All four are the schema's.
+CLS_HEATPLAN = SHAPE.cls("MunicipalHeatPlan")
+CLS_MUNICIPALITY = SHAPE.cls("MunicipalityArea")
+P_PUBLICATION_DATE = SHAPE.slot("has_publication_date")
+# The plan parts the schema holds values in, and the slot that holds them.
+CONTAINERS = ("TargetScenario", "AggregatedInventoryAnalysis")
+CONTAINER_SLOT = "covers_parameter"
+P_HAS_QUANTITY_VALUE = SHAPE.slot(CONTAINER_SLOT)
+# Which schema class each scenario's part is, where the schema has one.
+PART_SCHEMA = {key: entry.get("schema_class")
+               for key, entry in (_parent("scenario").get("map") or {}).items()
+               if isinstance(entry, dict) and entry.get("schema_class")}
+
+
+def schema_class_of(row: dict) -> Optional[str]:
+    """The schema class this value is in its part: the class the model chose,
+    or the schema's value class it falls under (the snapshot's
+    `mhpkg:<class>` set, built from the closure), or None."""
+    container = PART_SCHEMA.get(row.get("scenario"))
+    if container not in CONTAINERS:
+        return None
+    quantity = row.get("quantity")
+    from profiles.kwp import vocabulary
+    sets = vocabulary.load()["sets"]
+    for name in SHAPE.value_classes(container, CONTAINER_SLOT):
+        if quantity == _bare(SHAPE.cls(name)) \
+                or quantity in (sets.get(f"mhpkg:{name}") or ()):
+            return name
+    return None
+
+
+def strict_refusal(row: dict) -> Optional[str]:
+    """Why this value has no place in the strict graph, or None.
+
+    The strict graph holds what the schema's shapes take: a value class the
+    part holds, every required slot, and every slot's answer from the
+    schema's own closed list. Not a judgement about the reading -- the full
+    graph keeps all of it -- but what a validator of the schema will accept.
+    """
+    name = schema_class_of(row)
+    if name is None:
+        return "class"
+    if row.get("spatial_scope") != "municipality":
+        return "area"           # the schema relates no value to an area
+    unit = UNIT_TARGET.get(row.get("quantity"))
+    given = {"has_unit": unit,
+             "refers_to_energy_carrier": written(row, "carrier"),
+             "refers_to_sector": written(row, "sector"),
+             "refers_to_technology": row.get("technology"),
+             "has_aggregation_type": row.get("aggregation")}
+    required = SHAPE.required(name)
+    for slot, value in given.items():
+        value = value if is_class(value) or _IDENTIFIER.fullmatch(
+            str(value or "")) else None
+        if not SHAPE.has_slot(name, slot):
+            if value:
+                return f"no_slot:{slot}"
+            continue
+        if not value:
+            if slot in required:
+                return f"missing:{slot}"
+            continue
+        if not SHAPE.admits(name, slot, qualified(value)):
+            return f"off_list:{slot}"
+    return None
 
 
 def _bare(name: str) -> str:
@@ -340,16 +415,6 @@ EDGES = tuple(
        for cls, _segment, _label in PARTS.values()
        for quantity in sorted(UNIT_TARGET)]
 )
-
-
-def year_iri(year) -> str:
-    """The node a value points at for its year.
-
-    One node per calendar year for the whole graph, keyed by the year itself
-    rather than minted from a uuid: two plans naming 2030 mean the same 2030,
-    and a year is the one coordinate with no document in it.
-    """
-    return f"{BASE}year/{int(year)}"
 
 
 def normalise(label: str) -> str:
@@ -449,6 +514,17 @@ def heatplan_iri(db_path: Path, name: str) -> Optional[str]:
     return plan_iri(ags, published)
 
 
+def written(row: dict, axis: str):
+    """What the graph writes for this coordinate: the class read, or for a
+    number the plan does not split by this axis (`out:total`) the class the
+    spec names for it (`total_class`, the schema's parent for a figure
+    without that breakdown), or nothing."""
+    value = row.get(axis)
+    if value == "out:total":
+        return TOTAL_CLASS.get(axis)
+    return value
+
+
 def _value_iri(heatplan: str, row: dict, label: str = "") -> str:
     # mint_slice.py's coordinate list; absent coordinates are empty segments
     # so the arity never varies. *label* is the plan's own wording, appended
@@ -470,15 +546,20 @@ def _value_iri(heatplan: str, row: dict, label: str = "") -> str:
     # nodes were repeats of that shape.
     area = (normalise(row.get("spatial_scope_raw") or "")
             if row.get("spatial_scope") == "sub_area" else "")
+    carrier, sector = written(row, "carrier"), written(row, "sector")
+    technology = row.get("technology")
     coordinates = "|".join([
         heatplan,
         f"{OEO}{row['quantity']}",
-        f"{OEO}{row['carrier']}" if is_class(row.get("carrier")) else "",
-        f"{OEO}{row['sector']}" if is_class(row.get("sector")) else "",
+        f"{OEO}{carrier}" if is_class(carrier) else "",
+        f"{OEO}{sector}" if is_class(sector) else "",
         str(row["year"]),
-        f"{OEO}{row['aggregation']}",
+        f"{OEO}{row['aggregation']}" if row.get("aggregation") else "",
         area,
-    ] + ([label] if label else []))
+    # The technology only where one was read, so every value without one
+    # keeps the IRI it had before the axis existed.
+    ] + ([f"{OEO}{technology}"] if is_class(technology) else [])
+      + ([label] if label else []))
     return mint("value", coordinates)
 
 
@@ -728,12 +809,21 @@ def _class_iri(identifier) -> Optional[str]:
         return None
 
 
-def make_serializer(db_path: Path):
+def make_strict_serializer(db_path: Path):
+    """The graph as the MHPKG schema's shapes take it (`strict_refusal`),
+    written beside the full one as `<graph>.strict.ttl`."""
+    return make_serializer(db_path, strict=True)
+
+
+def make_serializer(db_path: Path, strict: bool = False):
     """(document name, accepted tuple rows) -> TTL string or None.
 
     What was written for a document is left in `serializer.claims[name]`:
     the plan's node, and for every value its node, its row and the node or
     class each coordinate became. The provenance file is written from that.
+
+    *strict* writes only what the schema's shapes take, and types a value
+    whose class falls under a schema value class with that class as well.
     """
     header_pending = [True]
     # (ags, published) -> document name. Value IRIs are pure functions of
@@ -796,7 +886,8 @@ def make_serializer(db_path: Path):
                 skip("sub_area_unnamed")
             elif not isinstance(row.get("year"), int):
                 skip("year")
-            elif not row.get("aggregation"):
+            elif not row.get("aggregation") \
+                    and row.get("parameter") in AGGREGATED:
                 # No aggregation, no node. It used to become a year's sum by
                 # default, which is a claim about the value that nothing in
                 # the document made: a peak load written down as an annual
@@ -807,8 +898,11 @@ def make_serializer(db_path: Path):
                 # counter is dominated by power rows whose source never
                 # worded the aggregation.
                 skip("aggregation_missing")
-            elif row["aggregation"] not in AGGREGATIONS:
+            elif row.get("aggregation") \
+                    and row["aggregation"] not in AGGREGATIONS:
                 skip(f"aggregation:{row['aggregation']}")
+            elif strict and strict_refusal(row):
+                skip(f"mhpkg:{strict_refusal(row)}")
             else:
                 kept.append(row)
         if not kept:
@@ -857,6 +951,14 @@ def make_serializer(db_path: Path):
         if not values:
             log.info("kg: %s: nothing serializable (skipped %s)", name, skipped)
             return None
+        if strict and not any(r["scenario"] == "target"
+                              for r in values.values()):
+            # The schema's plan has exactly one target scenario, and one
+            # that holds no value is a part the shapes refuse as well.
+            log.info("kg: %s: no target-scenario value, the plan is left "
+                     "out of the strict graph (%d value(s))", name,
+                     len(values))
+            return None
         if skipped:
             log.info("kg: %s: %d value(s) serialized, skipped %s",
                      name, len(values), dict(skipped))
@@ -874,7 +976,6 @@ def make_serializer(db_path: Path):
         # value in it would be an empty claim, and a has-part edge to it
         # a wrong one: the plan does not stop having an inventory because
         # we could not read one, but the graph must not say we read it.
-        years: set = set()
         by_part: dict = {}
         for iri, row in values.items():
             by_part.setdefault(row["scenario"], {})[iri] = row
@@ -912,34 +1013,39 @@ def make_serializer(db_path: Path):
         for iri, row in values.items():
             lines = evidence_comment(row, name, transcribed=bool(transcribed),
                                      **marks.get(iri, {}))
+            typed = f"oeo:{row['quantity']}"
+            schema_class = schema_class_of(row) if strict else None
+            if schema_class and SHAPE.cls(schema_class) != typed:
+                # A CO2-equivalent value IS a greenhouse gas emission value;
+                # a shape without a reasoner only sees the class written.
+                typed += f", {SHAPE.cls(schema_class)}"
             lines += [f"<{iri}>",
-                      f"    a oeo:{row['quantity']} ;",
+                      f"    a {typed} ;",
                      f"    {P_NUMBER} \"{float(row['value_target'])!r}\"^^xsd:float ;",
-                     f"    {P_UNIT} oeo:{UNIT_TARGET[row['quantity']]} ;"]
-            carrier = row.get("carrier")
+                     f"    {P_UNIT} {qualified(UNIT_TARGET[row['quantity']])} ;"]
+            carrier = written(row, "carrier")
             if carrier and is_class(carrier):
                 if carrier in CARRIER_OUTSIDE_ROOT:
-                    # Counted, not dropped. `is about` declares no range, so
-                    # the nine OEO does not call carriers keep this edge; the
-                    # count is what argues for the axioms that would let them
-                    # be called carriers.
+                    # Counted, not dropped: the count is what argues for the
+                    # axioms that would let them be called carriers.
                     label = CARRIER_OUTSIDE_ROOT[carrier]
                     outside_root[label] = outside_root.get(label, 0) + 1
                 lines.append(f"    {P_CARRIER} oeo:{carrier} ;")
-            if row.get("sector") and is_class(row["sector"]):
-                lines.append(f"    {P_SECTOR} oeo:{row['sector']} ;")
-            years.add(int(row["year"]))
-            lines.append(f"    {P_YEAR} <{year_iri(row['year'])}> ;")
-            lines.append(f"    {P_AGGREGATION} oeo:{row['aggregation']} .")
+            sector = written(row, "sector")
+            if sector and is_class(sector):
+                lines.append(f"    {P_SECTOR} oeo:{sector} ;")
+            technology = row.get("technology")
+            if technology and is_class(technology):
+                lines.append(f"    {P_TECHNOLOGY} oeo:{technology} ;")
+            lines.append(f"    {P_YEAR} \"{int(row['year'])}\"^^xsd:integer ;")
+            if row.get("aggregation"):
+                lines.append(f"    {P_AGGREGATION} oeo:{row['aggregation']} ;")
+            lines[-1] = lines[-1][:-1] + "."
             parts.append("\n".join(lines) + "\n")
         if outside_root:
             log.info("kg: %s: %d value(s) keep a carrier OEO does not call a "
                      "carrier, serialized and counted: %s", name,
                      sum(outside_root.values()), dict(outside_root))
-        for year in sorted(years):
-            parts.append(f"<{year_iri(year)}>\n"
-                         f"    a {CLS_YEAR} ;\n"
-                         f"    rdfs:label \"{year}\" .\n")
         for iri, label in office_iris.items():
             if iri in labelled:
                 continue
@@ -972,10 +1078,10 @@ def make_serializer(db_path: Path):
                 key = normalise(row["spatial_scope_raw"])
                 area = mint("heatplanarea", f"{ags}|{key}")
             found = {"quantity": _class_iri(row.get("quantity")),
-                     "carrier": _class_iri(row.get("carrier")),
-                     "sector": _class_iri(row.get("sector")),
+                     "carrier": _class_iri(written(row, "carrier")),
+                     "sector": _class_iri(written(row, "sector")),
+                     "technology": _class_iri(row.get("technology")),
                      "aggregation": _class_iri(row.get("aggregation")),
-                     "year": year_iri(row["year"]),
                      "scenario": part_iri[row["scenario"]],
                      "spatial_scope": area}
             return {axis: iri for axis, iri in found.items() if iri}
@@ -1003,9 +1109,7 @@ def make_serializer(db_path: Path):
 COORDINATE_AXES = ("scenario", "quantity", "carrier", "sector", "year")
 
 # The query, over the same constants the serializer writes with, so the two
-# cannot drift. Carrier, sector and year all ride `is about`; the year is told
-# apart by the class of the node it points at, and without that exclusion the
-# year node comes back as a carrier. Measured: it does.
+# cannot drift: the schema's slots, the year an integer literal.
 VALUE_QUERY = "\n".join(
     [f"PREFIX {prefix}: <{iri}>" for prefix, iri in PREFIX_IRI.items()]
     + [f"""
@@ -1020,11 +1124,8 @@ WHERE {{
          {P_NUMBER} ?number ;
          {P_UNIT} ?unit ;
          {P_AGGREGATION} ?aggregation ;
-         {P_YEAR} ?yearNode .
-  ?yearNode a {CLS_YEAR} ;
-            rdfs:label ?year .
-  OPTIONAL {{ ?value {P_CARRIER} ?about .
-             FILTER NOT EXISTS {{ ?about a {CLS_YEAR} }} }}
+         {P_YEAR} ?year .
+  OPTIONAL {{ ?value {P_CARRIER}|{P_SECTOR}|{P_TECHNOLOGY} ?about }}
   FILTER (?plan = ?PLAN)
 ##CONSTRAINTS##
 }}
@@ -1052,13 +1153,13 @@ def value_bindings(coordinates: dict) -> tuple:
         bindings["QUANTITY"] = ("iri", OEO + quantity)
     year = coordinates.get("year")
     if isinstance(year, int):
-        # Untyped: the year node's label is written as a plain string.
-        lines.append("  FILTER (?year = ?YEAR)")
+        lines.append("  FILTER (STR(?year) = ?YEAR)")
         bindings["YEAR"] = ("literal", str(year))
-    for axis, variable in (("carrier", "CARRIER"), ("sector", "SECTOR")):
+    for axis, variable, predicate in (("carrier", "CARRIER", P_CARRIER),
+                                      ("sector", "SECTOR", P_SECTOR)):
         uri = coordinates.get(axis)
         if uri and is_class(uri):
-            lines.append(f"  ?value {P_CARRIER} ?{variable} .")
+            lines.append(f"  ?value {predicate} ?{variable} .")
             bindings[variable] = ("iri", OEO + uri)
     return "\n".join(lines), bindings
 

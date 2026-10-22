@@ -13,10 +13,6 @@
    "BFO_0000031"
   ],
   [
-   "BFO_0000008",
-   "BFO_0000015"
-  ],
-  [
    "BFO_0000020",
    "BFO_0000031"
   ],
@@ -61,12 +57,12 @@
   ],
   "mhpo_sha256": "0ee5d1313c61eda5e6d28222c8c233850c8fae94c0db9835b1fc9b0dd8b2fd66",
   "oeo_file": "oeo-closure.owl",
-  "oeo_sha256": "df25aa5aec966be79096cb5dc1f09023fc66a99b984c485a24897adb76a99dd4",
-  "oeo_version_iri": "https://openenergyplatform.org/ontology/oeo/releases/2.13.0/oeo.owl",
+  "oeo_sha256": "0642170268b6e207fe56ff7b455a6216cc41084a56dbe67190e4bc1caf17ea1a",
+  "oeo_version_iri": "https://openenergyplatform.org/ontology/oeo/releases/2.14.0/oeo.owl",
   "sources": {
-   "mhpkg": "66df36e24c18",
+   "mhpkg": "3d3e131ec1b5",
    "mhpo": "v0.1.0",
-   "oeo": "v2.13.0"
+   "oeo": "v2.14.0"
   }
  },
  "sets": {
@@ -187,6 +183,8 @@
    "OEO_00020494",
    "OEO_00020495",
    "OEO_00020496",
+   "OEO_00020512",
+   "OEO_00020513",
    "OEO_00110000",
    "OEO_00110001",
    "OEO_00140078",
@@ -226,11 +224,43 @@
    "UO_1000112",
    "UO_1000223"
   ],
+  "heat_generation_technology": [
+   "OEO_00020306",
+   "OEO_00020307",
+   "OEO_00020486",
+   "OEO_00020487",
+   "OEO_00020488",
+   "OEO_00020489",
+   "OEO_00020490",
+   "OEO_00020491",
+   "OEO_00020492",
+   "OEO_00020493"
+  ],
   "mass_unit": [
    "OEO_00010137",
    "UO_0000009",
    "UO_0000021",
    "UO_1000021"
+  ],
+  "mhpkg:FinalEnergyConsumptionValue": [],
+  "mhpkg:GreenhouseGasEmissionValue": [
+   "OEO_00340066"
+  ],
+  "mhpkg:RelationalQuantityValue": [
+   "OEO_00010452",
+   "OEO_00020113",
+   "OEO_00020114",
+   "OEO_00020115",
+   "OEO_00020255",
+   "OEO_00020256",
+   "OEO_00140127",
+   "OEO_00160007",
+   "OEO_00240016",
+   "OEO_00240021",
+   "OEO_00320072",
+   "OEO_00330013",
+   "OEO_00340063",
+   "OEO_00350001"
   ],
   "quantity_value": [
    "MHPO_00030021",
@@ -402,16 +432,6 @@
     "BFO_0000141"
    ]
   },
-  "BFO_0000008": {
-   "alt_labels": [],
-   "definition": null,
-   "deprecated": false,
-   "kind": "class",
-   "label": "temporal region",
-   "parents": [
-    "BFO_0000003"
-   ]
-  },
   "BFO_0000015": {
    "alt_labels": [],
    "definition": "p is a process = Def. p is an occurrent that has temporal proper parts and for some time t, p s-depends_on some material entity at t. (axiom label in BFO2 Reference: [083-003])",
@@ -460,16 +480,6 @@
    "label": "generically dependent continuant",
    "parents": [
     "BFO_0000002"
-   ]
-  },
-  "BFO_0000038": {
-   "alt_labels": [],
-   "definition": null,
-   "deprecated": false,
-   "kind": "class",
-   "label": "one-dimensional temporal region",
-   "parents": [
-    "BFO_0000008"
    ]
   },
   "BFO_0000040": {
@@ -526,6 +536,16 @@
     "IAO_0000033"
    ]
   },
+  "IAO_0000027": {
+   "alt_labels": [],
+   "definition": "A data item is an information content entity that is intended to be a truthful statement about something (modulo, e.g., measurement precision or other systematic errors) and is constructed/acquired by a method which reliably tends to produce (approximately) truthful statements.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "data item",
+   "parents": [
+    "IAO_0000030"
+   ]
+  },
   "IAO_0000030": {
    "alt_labels": [],
    "definition": "A generically dependent continuant that is about some thing.",
@@ -554,6 +574,16 @@
    "label": "report",
    "parents": [
     "IAO_0000310"
+   ]
+  },
+  "IAO_0000100": {
+   "alt_labels": [],
+   "definition": "A data item that is an aggregate of other data items of the same type that have something in common. Averages and distributions can be determined for data sets.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "data set",
+   "parents": [
+    "IAO_0000027"
    ]
   },
   "IAO_0000104": {
@@ -970,6 +1000,18 @@
     "OEO_00140078"
    ]
   },
+  "OEO_00000119": {
+   "alt_labels": [
+    "metadata"
+   ],
+   "definition": "A data descriptor is an information content entity that contains additional information about some data.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "data descriptor",
+   "parents": [
+    "IAO_0000030"
+   ]
+  },
   "OEO_00000128": {
    "alt_labels": [
     "Energienachfragesektor"
@@ -1056,6 +1098,16 @@
    "label": "energy transformation sector",
    "parents": [
     "OEO_00000367"
+   ]
+  },
+  "OEO_00000162": {
+   "alt_labels": [],
+   "definition": "A factsheet is a document that collects information about a specific topic in a structured way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "factsheet",
+   "parents": [
+    "IAO_0000310"
    ]
   },
   "OEO_00000173": {
@@ -1457,6 +1509,16 @@
     "IAO_0000030"
    ]
   },
+  "OEO_00000365": {
+   "alt_labels": [],
+   "definition": "A scenario factsheet is a factsheet that contains information about a scenario.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "scenario factsheet",
+   "parents": [
+    "OEO_00000162"
+   ]
+  },
   "OEO_00000367": {
    "alt_labels": [
     "Sektor"
@@ -1508,6 +1570,8 @@
   },
   "OEO_00000405": {
    "alt_labels": [
+    "GHD",
+    "Gewerbe, Handel und Dienstleistungen",
     "kommerzieller Sektor"
    ],
    "definition": "A commercial sector is a sector that covers non-industrial commercial activities.",
@@ -1516,6 +1580,18 @@
    "label": "commercial sector",
    "parents": [
     "OEO_00000128"
+   ]
+  },
+  "OEO_00000407": {
+   "alt_labels": [
+    "Technologie"
+   ],
+   "definition": "A technology is a plan specification that describes how to combine artificial objects or other material entities and processes in a specific way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "technology",
+   "parents": [
+    "IAO_0000104"
    ]
   },
   "OEO_00000419": {
@@ -1610,6 +1686,40 @@
    ],
    "range": [
     "BFO_0000002"
+   ]
+  },
+  "OEO_00000514": {
+   "alt_labels": [],
+   "definition": "A relation that holds between a data set and the resolution it depicts.",
+   "deprecated": false,
+   "domain": [
+    "IAO_0000100"
+   ],
+   "kind": "object_property",
+   "label": "has resolution",
+   "parents": [
+    "topObjectProperty"
+   ],
+   "range": [
+    "OEO_00020121"
+   ]
+  },
+  "OEO_00000516": {
+   "alt_labels": [],
+   "definition": "A relation that holds between data set or qunatity value and the temporal resolution it uses.",
+   "deprecated": false,
+   "domain": [
+    "IAO_0000100",
+    "OEO_00000350"
+   ],
+   "kind": "object_property",
+   "label": "has temporal resolution",
+   "parents": [
+    "OEO_00000514",
+    "topObjectProperty"
+   ],
+   "range": [
+    "OEO_00020122"
    ]
   },
   "OEO_00010000": {
@@ -2134,20 +2244,6 @@
     "OEO_00010224"
    ]
   },
-  "OEO_00010231": {
-   "alt_labels": [],
-   "definition": "A relation between an entity and an information artifact.",
-   "deprecated": false,
-   "domain": [],
-   "kind": "object_property",
-   "label": "is subject of",
-   "parents": [
-    "topObjectProperty"
-   ],
-   "range": [
-    "IAO_0000030"
-   ]
-  },
   "OEO_00010233": {
    "alt_labels": [
     "Vorhersagefehler"
@@ -2508,9 +2604,7 @@
    ]
   },
   "OEO_00010418": {
-   "alt_labels": [
-    "gelber Wasserstoff"
-   ],
+   "alt_labels": [],
    "definition": "Solar electrolytic hydrogen is electrolytic hydrogen that is produced with solar electrical energy.",
    "deprecated": false,
    "kind": "class",
@@ -2814,6 +2908,30 @@
     "OEO_00040003"
    ]
   },
+  "OEO_00020121": {
+   "alt_labels": [
+    "Auflösung"
+   ],
+   "definition": "Resolution is a quality of a dataset that indicates the level of detail of the data.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "resolution",
+   "parents": [
+    "BFO_0000019"
+   ]
+  },
+  "OEO_00020122": {
+   "alt_labels": [
+    "zeitliche Auflösung"
+   ],
+   "definition": "Temporal resolution is the resolution of a time series that indicates time-dependent the level of detail.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "temporal resolution",
+   "parents": [
+    "OEO_00020121"
+   ]
+  },
   "OEO_00020124": {
    "alt_labels": [
     "Mitgliedsbeitrag"
@@ -2893,6 +3011,18 @@
    "label": "emission certificate price",
    "parents": [
     "OEO_00010268"
+   ]
+  },
+  "OEO_00020161": {
+   "alt_labels": [
+    "jährlich"
+   ],
+   "definition": "one value per year",
+   "deprecated": false,
+   "kind": "individual",
+   "label": "annual",
+   "parents": [
+    "OEO_00020122"
    ]
   },
   "OEO_00020175": {
@@ -3018,6 +3148,46 @@
     "OEO_00140127"
    ]
   },
+  "OEO_00020267": {
+   "alt_labels": [],
+   "definition": "An energy technology is a technology that describes how to combine energy transformation units, energy transformations, energy carriers and energy in a specific way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "energy technology",
+   "parents": [
+    "OEO_00000407"
+   ]
+  },
+  "OEO_00020306": {
+   "alt_labels": [],
+   "definition": "A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "geothermal heat technology",
+   "parents": [
+    "OEO_00020308"
+   ]
+  },
+  "OEO_00020307": {
+   "alt_labels": [],
+   "definition": "A solar thermal heat technology is a heat generation technology that describes how to combine solar heat units, solar thermal energy transformation processes, energy carriers and energy in a specific way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "solar thermal heat technology",
+   "parents": [
+    "OEO_00020308"
+   ]
+  },
+  "OEO_00020308": {
+   "alt_labels": [],
+   "definition": "A heat generation technology is an energy technology that describes how to combine heat generating units, heat generation processes, energy carriers and energy in a specific way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "heat generation technology",
+   "parents": [
+    "OEO_00020267"
+   ]
+  },
   "OEO_00020309": {
    "alt_labels": [],
    "definition": "A policy scenario is a scenario in which certain policy instruments or transformative measures and their impacts are assessed.",
@@ -3063,6 +3233,104 @@
     "OEO_00000350"
    ]
   },
+  "OEO_00020440": {
+   "alt_labels": [],
+   "definition": "Has scenario year value is a relation between a scenario factsheet and a xsd:dateTime value.",
+   "deprecated": false,
+   "domain": [
+    "OEO_00000365"
+   ],
+   "kind": "data_property",
+   "label": "has scenario year value",
+   "parents": [
+    "topDataProperty"
+   ],
+   "range": [
+    "xsd:dateTime"
+   ]
+  },
+  "OEO_00020486": {
+   "alt_labels": [],
+   "definition": "A heat pump technology is a heat generation technology that describes how to combine heat pumps, heat gain processes, energy carriers and energy in a specific way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "heat pump technology",
+   "parents": [
+    "OEO_00020308"
+   ]
+  },
+  "OEO_00020487": {
+   "alt_labels": [],
+   "definition": "An electrical heating technology is a technology that describes how to combine electrical heaters in a heat gain process with electrical energy as input in a specific way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "electrical heating technology",
+   "parents": [
+    "OEO_00020308"
+   ]
+  },
+  "OEO_00020488": {
+   "alt_labels": [],
+   "definition": "A combustion based heating technology is a heat generation technology that describes how to combine combustion-based heaters, heat gain processes, combustion fuels and energy in a specific way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "combustion-based heating technology",
+   "parents": [
+    "OEO_00020308"
+   ]
+  },
+  "OEO_00020489": {
+   "alt_labels": [],
+   "definition": "A coal powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, coal and energy in a specific way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "coal powered heating technology",
+   "parents": [
+    "OEO_00020488"
+   ]
+  },
+  "OEO_00020490": {
+   "alt_labels": [],
+   "definition": "An oil powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, heating oil and energy in a specific way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "oil powered heating technology",
+   "parents": [
+    "OEO_00020488"
+   ]
+  },
+  "OEO_00020491": {
+   "alt_labels": [
+    "natural gas powered heating technology"
+   ],
+   "definition": "An gas powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, natural gas and energy in a specific way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "gas powered heating technology",
+   "parents": [
+    "OEO_00020488"
+   ]
+  },
+  "OEO_00020492": {
+   "alt_labels": [],
+   "definition": "An hydrogen powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, hydrogen and energy in a specific way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "hydrogen powered heating technology",
+   "parents": [
+    "OEO_00020488"
+   ]
+  },
+  "OEO_00020493": {
+   "alt_labels": [],
+   "definition": "A biomass powered heating technology is a combustion-based heat generation technology that describes how to combine biomass boilers, heat gain processes, biomass and energy in a specific way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "biomass powered heating technology",
+   "parents": [
+    "OEO_00020488"
+   ]
+  },
   "OEO_00020494": {
    "alt_labels": [],
    "definition": "Ethene, or colloquially Ethylene, is a hydrocarbon with the chemical formula H2C=CH2. It is gaseous in its normal state and can be used as a combustion fuel.",
@@ -3096,6 +3364,27 @@
     "OEO_00010224"
    ]
   },
+  "OEO_00020512": {
+   "alt_labels": [],
+   "definition": "Liquid hydrogen is hydrogen that has been brought to a liquid state of matter at -253°C.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "liquid hydrogen",
+   "parents": [
+    "OEO_00000220"
+   ]
+  },
+  "OEO_00020513": {
+   "alt_labels": [],
+   "definition": "Methane pyrolytic hydrogen is synthetic hydrogen that is produced from pyrolysis of methane and solid CO2 storage.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "methane pyrolytic hydrogen",
+   "parents": [
+    "OEO_00000220",
+    "OEO_00010016"
+   ]
+  },
   "OEO_00030022": {
    "alt_labels": [
     "Organisation"
@@ -3106,18 +3395,6 @@
    "label": "organisation",
    "parents": [
     "BFO_0000141"
-   ]
-  },
-  "OEO_00030033": {
-   "alt_labels": [
-    "Zeitschritt"
-   ],
-   "definition": "A time step is a one-dimensional temporal region that has a start time and an ending time and thus a finite duration.",
-   "deprecated": false,
-   "kind": "class",
-   "label": "time step",
-   "parents": [
-    "BFO_0000038"
    ]
   },
   "OEO_00030035": {
@@ -3385,21 +3662,6 @@
     "OEO_00000350"
    ]
   },
-  "OEO_00140002": {
-   "alt_labels": [],
-   "definition": "A relation between an entity and a quantity value.",
-   "deprecated": false,
-   "domain": [],
-   "kind": "object_property",
-   "label": "has quantity value",
-   "parents": [
-    "OEO_00010231",
-    "topObjectProperty"
-   ],
-   "range": [
-    "OEO_00000350"
-   ]
-  },
   "OEO_00140008": {
    "alt_labels": [],
    "definition": "A relation between an information content entity / model and a continuant, in which the continuant is somehow involved in the creation of the information content entity / model.",
@@ -3599,6 +3861,18 @@
     "OEO_00140062"
    ]
   },
+  "OEO_00140068": {
+   "alt_labels": [
+    "Aggregationsart"
+   ],
+   "definition": "An aggregation type is a data descriptor that contains information on the aggregation method applied on a data set.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "aggregation type",
+   "parents": [
+    "OEO_00000119"
+   ]
+  },
   "OEO_00140069": {
    "alt_labels": [
     "instantan"
@@ -3607,7 +3881,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "instantaneous",
-   "parents": []
+   "parents": [
+    "OEO_00140068"
+   ]
   },
   "OEO_00140070": {
    "alt_labels": [
@@ -3617,7 +3893,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "integral",
-   "parents": []
+   "parents": [
+    "OEO_00140068"
+   ]
   },
   "OEO_00140071": {
    "alt_labels": [
@@ -3627,7 +3905,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "arithmetic mean",
-   "parents": []
+   "parents": [
+    "OEO_00140068"
+   ]
   },
   "OEO_00140072": {
    "alt_labels": [],
@@ -3635,7 +3915,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "minimum",
-   "parents": []
+   "parents": [
+    "OEO_00140068"
+   ]
   },
   "OEO_00140073": {
    "alt_labels": [
@@ -3645,7 +3927,9 @@
    "deprecated": false,
    "kind": "individual",
    "label": "maximum",
-   "parents": []
+   "parents": [
+    "OEO_00140068"
+   ]
   },
   "OEO_00140078": {
    "alt_labels": [
@@ -4316,6 +4600,59 @@
     "BFO_0000006"
    ]
   },
+  "OEO_00370000": {
+   "alt_labels": [],
+   "definition": "A relation between an information content entity and another entity that specifies a context in which the information content entity is to be interpreted.",
+   "deprecated": false,
+   "domain": [
+    "IAO_0000030"
+   ],
+   "kind": "object_property",
+   "label": "refers to",
+   "parents": [
+    "IAO_0000136",
+    "topObjectProperty"
+   ],
+   "range": [
+    "BFO_0000001"
+   ]
+  },
+  "OEO_00370001": {
+   "alt_labels": [],
+   "definition": "A relation between an information content entity and an energy carrier that specifies context of the information content entity with respect to an energy carrier.",
+   "deprecated": false,
+   "domain": [
+    "IAO_0000030"
+   ],
+   "kind": "object_property",
+   "label": "refers to energy carrier",
+   "parents": [
+    "IAO_0000136",
+    "OEO_00370000",
+    "topObjectProperty"
+   ],
+   "range": [
+    "OEO_00020039"
+   ]
+  },
+  "OEO_00370003": {
+   "alt_labels": [],
+   "definition": "A relation between an information content entity and a technology that specifies the technological context of the Information Content Entity.",
+   "deprecated": false,
+   "domain": [
+    "IAO_0000030"
+   ],
+   "kind": "object_property",
+   "label": "refers to technology",
+   "parents": [
+    "IAO_0000136",
+    "OEO_00370000",
+    "topObjectProperty"
+   ],
+   "range": [
+    "OEO_00000407"
+   ]
+  },
   "OEO_00390001": {
    "alt_labels": [
     "MW"
@@ -4331,15 +4668,21 @@
   },
   "OEO_00390023": {
    "alt_labels": [],
-   "definition": "A relation between a data item or data set and an aggregation type that indicates the method of data aggregation applied to the data set.",
+   "definition": "A relation between a data item or quantity value and an aggregation type that specifies the aggregation method by which the represented data or quantity value was derived.",
    "deprecated": false,
-   "domain": [],
+   "domain": [
+    "IAO_0000027",
+    "IAO_0000030",
+    "OEO_00000350"
+   ],
    "kind": "object_property",
    "label": "has aggregation type",
    "parents": [
     "topObjectProperty"
    ],
-   "range": []
+   "range": [
+    "OEO_00140068"
+   ]
   },
   "OEO_00390096": {
    "alt_labels": [],
@@ -4458,6 +4801,36 @@
    "label": "watt",
    "parents": [
     "UO_1000114"
+   ]
+  },
+  "UO_0000186": {
+   "alt_labels": [],
+   "definition": "\"A unit which is a standard measure of physical quantity consisting of only a numerical number without any units.\" [Wikipedia:Wikipedia]",
+   "deprecated": false,
+   "kind": "class",
+   "label": "dimensionless unit",
+   "parents": [
+    "OEO_00010490"
+   ]
+  },
+  "UO_0000187": {
+   "alt_labels": [],
+   "definition": "\"A dimensionless ratio unit which denotes numbers as fractions of 100.\" [Wikipedia:Wikipedia]",
+   "deprecated": false,
+   "kind": "class",
+   "label": "percent",
+   "parents": [
+    "UO_0000190"
+   ]
+  },
+  "UO_0000190": {
+   "alt_labels": [],
+   "definition": "\"A dimensionless unit which denotes an amount or magnitude of one quantity relative to another.\" [Wikipedia:Wikipedia]",
+   "deprecated": false,
+   "kind": "class",
+   "label": "ratio unit",
+   "parents": [
+    "UO_0000186"
    ]
   },
   "UO_0000223": {

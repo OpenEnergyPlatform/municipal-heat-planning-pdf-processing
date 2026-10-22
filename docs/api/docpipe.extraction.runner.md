@@ -817,7 +817,8 @@ is written here so the three numbers add up in one place instead of two.
 *share* scales the two search stages for a coordinate the profile says
 to look for less far (`SEARCH_SHARE`): under one budget, corpus_m5's
 sector search filled 4 percent of its 392,541 requests where the scope's
-filled 25 percent. At least one window stays, so no stage is skipped.
+filled 25 percent. At least one window stays, so no stage is skipped;
+a share of 0 is the exception and reads the own passage alone.
 
 ### embedder
 
