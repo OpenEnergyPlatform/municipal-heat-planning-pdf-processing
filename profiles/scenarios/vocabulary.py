@@ -10,8 +10,9 @@ ontology release and are therefore pinned differently.
     python -m profiles.scenarios.vocabulary --closure oeo-closure.owl --write
     python -m profiles.scenarios.vocabulary --check
 
-`--refresh` is what a run calls first: the OEO closure at its latest release
-and the study regions live from the OEKG, then the check. Without
+`--refresh` is what a run calls first: the OEO closure at its latest release,
+the study regions live from the OEKG and the OEKG shapes at the head of their
+branch, then the check. Without
 OEP_API_TOKEN in the environment it stops, because the regions are offered to
 the model and a list nobody pulled is not the OEKG's current one.
 
@@ -61,6 +62,17 @@ SOURCES = {
     "regions": {"kind": "sparql",
                 "endpoint": "https://openenergyplatform.org/api/v0/oekg/sparql/",
                 "token_env": "OEP_API_TOKEN", "query": REGIONS_QUERY},
+    # The shapes the serializer reads its paths, cardinalities and classes
+    # from (kg.make_serializer) and the written graph is validated against.
+    # The head of the branch, which is what the next pin will be. `reviewed`
+    # is the commit the platform pins its validator to today
+    # (oeplatform/settings.py OEKG_SHAPES_PINNED_COMMIT): while the two are
+    # the same file, the verdict here is the validator's. Every run prints
+    # whether they still are.
+    "oekg_shapes": {"kind": "repo_files", "repo": "OpenEnergyPlatform/oekg",
+                    "ref": "production",
+                    "reviewed": "b4604e02060624b381bdbe2f872df94cfd0f5630",
+                    "files": ["oekg/shapes/oekg_shapes.ttl"]},
 }
 
 OEO = "https://openenergyplatform.org/ontology/oeo/"
@@ -128,7 +140,11 @@ def merge_regions(rows: list, aliases: dict) -> dict:
 
 
 def refresh(cache: Path = upstream.CACHE) -> dict:
-    """Pull SOURCES, write regions.json and vocabulary.json, write the lock."""
+    """Pull SOURCES, write regions.json and vocabulary.json, write the lock.
+
+    The lock is what `shapes` reads: the serializer and the validation of
+    the written graph take the shapes this refresh pulled.
+    """
     records = upstream.fetch(SOURCES, cache)
     rows = json.loads(upstream.files(records["regions"])[0]
                       .read_text(encoding="utf-8"))
@@ -145,6 +161,12 @@ def refresh(cache: Path = upstream.CACHE) -> dict:
         handle.write(ontology.serialize(snapshot))
     upstream.write_lock(PROFILE, records, cache)
     return records
+
+
+def shapes(cache: Path = upstream.CACHE) -> list:
+    """The OEKG shapes of the last refresh; empty if none has run."""
+    return upstream.files((upstream.load_lock(PROFILE, cache) or {})
+                          .get("sources", {}).get("oekg_shapes"), ".ttl")
 
 
 def spec_terms(spec_raw: dict) -> dict:

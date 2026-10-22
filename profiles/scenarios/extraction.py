@@ -216,14 +216,13 @@ PROMPT_CHECKS = (
 
 
 def shapes_files() -> list:
-    """The OEKG shapes of the last refresh of the API sources, or none.
+    """The OEKG shapes of the last `vocabulary --refresh`, or none.
 
-    Where the preflight finds the file `NOT_EXTRACTED` is held against.
+    Where the preflight finds the file `NOT_EXTRACTED` is held against: the
+    same one the serializer reads its paths from.
     """
-    from docpipe import upstream
-    from profiles.scenarios import oekg_api   # lazy: it reads the spec
-    path = oekg_api._locked("oekg_shapes", upstream.CACHE)
-    return [path] if path else []
+    from profiles.scenarios import vocabulary   # lazy: it reads the spec
+    return [path for path in vocabulary.shapes() if path.is_file()]
 
 
 # The properties of the OEKG shapes that no parameter reads, each left out on

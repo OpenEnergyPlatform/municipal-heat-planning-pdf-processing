@@ -281,12 +281,32 @@ with no path segment at all (`COLLECTIONS`, `kg.py`, lines 61 to 69).
 One document mints exactly one study report and one scenario bundle. The
 report's IRI comes from the resolved title; the bundle's comes from
 `study_project_name` where the document names a project, and from the
-title again where it does not (`kg.py`, lines 656 to 659). Both carry a
-fixed has-uuid triple regardless, since the OEKG mints a UUID on every
-node it holds, although that predicate's declared domain names only a
-report or a factsheet, not a bundle; `edges()` records the gap with its
-own stated reason so the ontology check does not flag it as unexplained
-(`kg.py`, lines 185 to 194).
+title again where it does not (`kg.py`, `_make_builder`). A node carries
+a has-uuid triple where its shape has that path: today the report and the
+factsheet, not the bundle, whose `StudyShape` names none (`bind`,
+`uuid_on`).
+
+## Written to the shapes
+
+The serializer does not carry the OEKG shapes a second time. When it is
+built, `bind(model)` reads them (`docpipe/extraction/shapemodel.py`), from
+the file the last `vocabulary --refresh` pulled (`oekg_shapes` in
+`vocabulary.SOURCES`, at the head of `production`). Every path the
+serializer writes on a report, a bundle or a factsheet (`WRITTEN`) has to
+be a property of that class's shape, and the two dates have to be the
+`xsd:dateTime` it writes; a path the shapes dropped or retyped raises
+`SchemaError` before a document is read, so a run never writes a graph no
+validator accepts without saying so. Read off the shapes are which
+per-document fields occur at most once (`single`, settled by `_pick_one`
+below), which must occur (`required`, reported per document), which nodes
+get a uuid, and the class at the end of the author, organisation and funder
+edges. Without shapes from a refresh there is no serializer at all. The
+same shapes then validate the written graph (`<ttl>.shacl.txt`,
+`<ttl>.shacl.json`), and `docpipe.extraction.gate` writes the graph of the
+existing harvest before a job starts its model
+([../stages/graph.md](../stages/graph.md)). Where the shapes and the
+ontology disagree, the shapes win: the region is written with the path the
+closed `ScenarioShape` names (owner decision 2026-10-22).
 
 The bundle also carries its tags, one triple for each entry the model
 picked from the four lists above. `BUNDLE_TAGS` is every category
@@ -324,10 +344,10 @@ one would have put a 250th region under `oekg/region/` beside the 249
 already pinned (`profiles/scenarios/vocabulary.json`, `regions_count`
 249).
 
-Six fields the OEKG shapes allow at most once (`publication_title`,
-`publication_date`, `publication_doi`, `publication_abstract`,
-`study_project_name`, `study_acronym`, the `SINGLE` tuple, `kg.py`, lines
-202 to 203) are settled by `_pick_one()`, which favours the reading the
+The per-document fields the OEKG shapes allow at most once (today
+`publication_title`, `publication_date`, `publication_doi`,
+`publication_abstract`, `study_project_name` and `study_acronym`, read off
+the shapes by `bind`) are settled by `_pick_one()`, which favours the reading the
 most sources agree on: first dropping any candidate that is a strict
 substring of another (a running header would otherwise outvote a title
 on its own title page), then ranking by vote count, whether the reading
@@ -405,12 +425,16 @@ Nothing is ever sent. The module builds no call that writes, and `--live`
 is one GET of the public list, followed page by page. The two
 inputs, the platform's OpenAPI description and the shapes file, are the
 `SOURCES` of `oekg_api.py`, pulled through `docpipe/upstream.py` at the
-head of their branch. Each names a `reviewed` commit, for the shapes the
+head of their branch; the shapes source is the profile's own
+(`vocabulary.SOURCES["oekg_shapes"]`), so the dry run and the Turtle are
+held to one file, and the bodies are read with the paths of the shapes they
+are checked against. Each names a `reviewed` commit, for the shapes the
 one the platform pins its validator to, and every run prints whether the
 file has moved since: a
 verdict against shapes that moved is a verdict about another validator.
 They are locked in a file of their own (`LOCK`, not the profile's), so a
-harvest run's `vocabulary --refresh` does not come to depend on them:
+harvest run's `vocabulary --refresh` does not come to depend on the API
+description:
 
 ```bash
 python -m profiles.scenarios.oekg_api OUT DB --refresh
@@ -443,7 +467,7 @@ other property that nobody asks.
 The acronym comparison ignores case and outer spaces, which may be
 narrower than the platform's own rule.
 
-A body is not the Turtle in another syntax in four places, each on
+A body is not the Turtle in another syntax in three places, each on
 purpose.
 
 The first is one bundle per project. The Turtle mints a bundle from its
@@ -476,13 +500,10 @@ types does not hold that class yet and refuses a create for it, so the
 body leaves it out (`NOT_YET_LISTED`); a factsheet with no other type then
 has none and is refused for that instead.
 
-The fourth is the study region. The Turtle writes a region with
-`has spatial region` (`OEO_00010378`), the parent property, because
-`has study region` is domained on a scenario and the factsheet is not one
-(`extraction_spec.json`, the note on `scenario_region`'s `kg` block). The
-API's `study_regions` is `has study region` (`OEO_00020220`) on a node of
-class study region, the property and class its closed scenario shape names
-(`oekg_api.py`, the comment above `API_STUDY_REGION`).
+The study region is no longer one of them: the Turtle and the body both
+write `has study region` (`OEO_00020220`), the path the closed scenario
+shape names, the body onto a node of class study region (`oekg_api.py`,
+the comment above `API_STUDY_REGION`).
 
 ## What is refused
 
@@ -504,10 +525,12 @@ default silently.
 
 A document whose `publication_title` never resolved is refused whole:
 the serializer returns `None` and logs at `INFO` level, before a bundle,
-a factsheet or an author node is built (`kg.py`, lines 632 to 634). A
-missing `publication_date` or `publication_author` is not refused this
-way, only named in the per-document summary line as a missing required
-field (`REQUIRED`, `kg.py`, line 221 and lines 626 to 627, 963).
+a factsheet or an author node is built (`kg.py`, lines 632 to 634). Any
+other field the shapes demand on the report or the bundle, a date, an
+author, an acronym or one of the four tags, is not refused this way, only
+named in the per-document summary line as a missing required field
+(`bind`, `required`); the bundle's label never is, since it falls back to
+the title (`FALLBACK`).
 
 A scenario wording absent from its own quoted passage is refused as an
 identity for every scenario-scope parameter alike: `scenario_key()`

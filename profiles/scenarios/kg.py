@@ -35,11 +35,14 @@ import re
 import sqlite3
 from collections import Counter
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Optional
 
 from docpipe.extraction import graphkit
 from docpipe.extraction.graphkit import NOT_IN_GRAPH, ttl_comment, ttl_literal
 from docpipe.extraction.identity import tuple_ids
+from docpipe.extraction.shapemodel import (XSD, Model, SchemaError,
+                                           snapshot_ancestors)
 from docpipe.extraction.spec import kg_name, load as load_spec
 from docpipe.extraction.trust import check_prose, render, trust
 from docpipe.store.schema import readonly_uri
@@ -134,9 +137,10 @@ def _linked_by(axis: str = "scenario") -> str:
     raise KeyError(f"no kg parent link for axis {axis!r} in the spec")
 
 
-# Classes the shapes require at the end of each path, read from the parameter
-# that mints each node. Written down twice, they drifted: the test that says
-# the graph holds no predicate the shapes do not name carried a third copy.
+# The classes of the nodes this graph mints, read from the parameter that
+# mints each. The three a shape targets are held to it (`bind`); the class at
+# the end of an author, organisation or funder edge is the shape's own where
+# it names one, and these three are what the spec says otherwise.
 CLS_BUNDLE = _class("study_project_name")      # scenario bundle (StudyShape)
 CLS_REPORT = _class("publication_title")       # study report (PublicationShape)
 CLS_AUTHOR = _class("publication_author")      # author
@@ -156,7 +160,7 @@ P_ORGANISATION = _edge("study_organisation")   # has organisation
 P_FUNDER = _edge("study_funder")               # has funding source
 P_HAS_PART = _linked_by()                      # has part
 P_SCENARIO_TYPE = _property("scenario_type")   # has scenario type
-P_STUDY_REGION = _property("scenario_region")  # has spatial region
+P_STUDY_REGION = _property("scenario_region")  # has study region
 P_SCENARIO_YEAR = _property("scenario_year")   # has scenario year value
 
 # The two a factsheet writes. They spell the same as the bundle's, and they
@@ -165,13 +169,41 @@ P_SCENARIO_YEAR = _property("scenario_year")   # has scenario year value
 P_SCENARIO_ACRONYM = _property("scenario_label", "also")   # dc:acronym
 P_SCENARIO_ABSTRACT = _property("scenario_abstract")       # dc:abstract
 
-# Behind no harvested value, so behind no parameter: every node carries a uuid
-# because the OEKG mints them that way.
+# Behind no harvested value, so behind no parameter: a node carries a uuid
+# where its shape has the path, because the OEKG mints them that way.
 P_UUID = "oeo:OEO_00390095"        # has uuid
+
+PREFIX_IRI = dict(re.findall(r"@prefix (\w+):\s*<([^>]+)>", PREFIXES))
 
 
 def _bare(name: str) -> str:
     return str(name).split(":")[-1]
+
+
+def _iri(name: str) -> str:
+    """A qualified name of this graph, or a bare OEO id, as its IRI."""
+    prefix, colon, local = str(name).partition(":")
+    if not colon:
+        return OEO_BASE + name
+    if prefix not in PREFIX_IRI:
+        raise KeyError(f"{name!r} is bound to no prefix of PREFIXES")
+    return PREFIX_IRI[prefix] + local
+
+
+def default_model():
+    """The OEKG shapes of the last refresh, or SchemaError without one.
+
+    A graph written without them is one nobody can say anything about, so
+    there is no fallback to the paths this module would otherwise assume.
+    """
+    from profiles.scenarios import vocabulary
+    paths = [path for path in vocabulary.shapes() if path.is_file()]
+    if not paths:
+        raise SchemaError("no OEKG shapes from a refresh, so no path to "
+                          "write: python -m profiles.scenarios.vocabulary "
+                          "--refresh")
+    return Model.load(paths, ancestors=snapshot_ancestors(
+        vocabulary.load(), OEO_BASE))
 
 
 def edges() -> list:
@@ -179,28 +211,23 @@ def edges() -> list:
 
     `ontology.edge_problems` holds the rest of the output to the pinned
     ontology through the spec; without this the writer's own literals are the
-    part nobody checks, which is where three of kwp's defects lived.
+    part nobody checks, which is where three of kwp's defects lived. The
+    uuid is written where the shapes have its path, so without shapes from a
+    refresh nothing is said about it.
     """
-    return [
-        {"where": "kg.py uuid", "subject": _bare(cls),
-         "predicate": _bare(P_UUID), "datatype": "xsd:string",
-         # `has uuid` is domained on `report or factsheet`. The report and
-         # the factsheet are both; the BUNDLE is neither, and the OEKG mints
-         # a uuid on every node it holds. Written anyway, and named here: the
-         # fix is a wider domain and that is the ontology side's.
-         "accepted": ("the OEKG mints a uuid on every node and a scenario "
-                      "bundle is neither a report nor a factsheet")
-                     if cls == CLS_BUNDLE else None}
-        for cls in (CLS_BUNDLE, CLS_REPORT, CLS_SCENARIO)]
+    try:
+        uuid_on = bind(default_model()).uuid_on
+    except SchemaError:
+        return []
+    return [{"where": "kg.py uuid", "subject": _bare(cls),
+             "predicate": _bare(P_UUID), "datatype": "xsd:string"}
+            for node, cls in _SHAPED.items() if node in uuid_on]
 
 # Mirjam: "all IAM scenarios get the annotation for now". JH notes it is
 # not in the release nor in the shape's sh:in list yet, so a graph written
 # today will fail that constraint until it is.
 IAM_SCENARIO = "OEO_00020517"
 
-# What the shapes allow at most once. Everything else may repeat.
-SINGLE = ("publication_title", "publication_date", "publication_doi",
-          "publication_abstract", "study_project_name", "study_acronym")
 # Scenario-scope fields: everything carrying a `scenario` axis, which names
 # in the document's own words which scenario the value belongs to. Read from
 # the spec, because a fifteenth parameter added there would otherwise be
@@ -216,9 +243,95 @@ BUNDLE_TAGS = tuple(
     parameter["uri"] for parameter in _SPEC["parameters"]
     if parameter.get("value_type") == "category"
     and (parameter.get("kg") or {}).get("node") == "scenariobundle")
-# What the shapes demand at least once (sh:minCount 1). A document missing one
-# of these produces a node that will fail validation, so it is reported.
-REQUIRED = ("publication_title", "publication_date", "publication_author")
+
+# The nodes a shape targets, by the name the spec gives them.
+_SHAPED = {"studyreport": CLS_REPORT, "scenariobundle": CLS_BUNDLE,
+           "scenariofactsheet": CLS_SCENARIO}
+# The two a document has exactly one of. Which of their fields may occur once
+# and which must occur is the shapes' to say; that a document has one report
+# and one bundle is this serializer's structure.
+DOCUMENT_NODES = ("studyreport", "scenariobundle")
+# A field filled from another where the document gives none: the bundle is
+# labelled with the title where no project is named, so it is never missing.
+FALLBACK = {"study_project_name": "publication_title"}
+# Every path a node of each shaped class is written with.
+WRITTEN = {
+    "studyreport": (P_LABEL, P_AUTHOR, P_PUBDATE, P_DOI),
+    "scenariobundle": (P_LABEL, P_ACRONYM, P_ABSTRACT, P_ORGANISATION,
+                       P_FUNDER, P_HAS_PART) + tuple(
+                           _property(key) for key in BUNDLE_TAGS),
+    "scenariofactsheet": (P_LABEL, P_SCENARIO_ACRONYM, P_SCENARIO_TYPE,
+                          P_SCENARIO_ABSTRACT, P_STUDY_REGION,
+                          P_SCENARIO_YEAR),
+}
+XSD_DATETIME = XSD + "dateTime"
+
+
+def bind(model) -> SimpleNamespace:
+    """What the shapes say about the graph this module writes.
+
+    Every path WRITTEN names has to be a property of the shape its node is
+    held to, and the two dates have to be the xsd:dateTime this module
+    writes: a shapes file that dropped or retyped one stops the serializer
+    here rather than in a report after the run. What is read off them:
+
+      single    the per-document fields whose path the shapes allow once,
+                so the harvest's several readings are settled to one
+      required  the per-document fields the shapes demand, so a document
+                that misses one is reported
+      uuid_on   the shaped nodes whose shape has the uuid path
+      author, organisation, funder
+                the class at the end of each edge, where the shape names
+                exactly one
+    """
+    for node, cls in _SHAPED.items():
+        if model.shaped(OEO_BASE + cls) is None:
+            raise SchemaError(f"no shape targets {cls}, the class of the "
+                              f"{node} this graph writes")
+
+    def slot(node: str, name: str, **narrow):
+        return model.slot(OEO_BASE + _SHAPED[node], path=_iri(name), **narrow)
+
+    for node, paths in WRITTEN.items():
+        for name in paths:
+            slot(node, name)
+    for node, name in (("studyreport", P_PUBDATE),
+                       ("scenariofactsheet", P_SCENARIO_YEAR)):
+        datatype = slot(node, name).datatype
+        if datatype and datatype != XSD_DATETIME:
+            raise SchemaError(f"the shapes type {name} on the {node} as "
+                              f"{datatype}; this serializer writes "
+                              f"xsd:dateTime")
+    for cls in (CLS_REPORT, CLS_SCENARIO):
+        slot("scenariobundle", P_HAS_PART, to_class=OEO_BASE + cls)
+
+    def end(name: str, node: str, fallback: str) -> str:
+        # Bare, as every class of this graph is written `a oeo:<id>`.
+        classes = slot(node, name).classes
+        if len(classes) == 1 and classes[0].startswith(OEO_BASE):
+            return classes[0][len(OEO_BASE):]
+        return fallback
+
+    single, required = [], []
+    for parameter in _SPEC["parameters"]:
+        block = parameter.get("kg") or {}
+        if block.get("node") in DOCUMENT_NODES and block.get("property"):
+            found = slot(block["node"], _name(block["property"]))
+            if found.single:
+                single.append(parameter["uri"])
+            if found.required:
+                required.append(parameter["uri"])
+        edge = block.get("edge_from") or {}
+        if edge.get("node") in DOCUMENT_NODES \
+                and slot(edge["node"], _name(edge)).required:
+            required.append(parameter["uri"])
+    return SimpleNamespace(
+        single=tuple(single), required=tuple(required),
+        uuid_on=frozenset(node for node, cls in _SHAPED.items()
+                          if model.has(OEO_BASE + cls, _iri(P_UUID))),
+        author=end(P_AUTHOR, "studyreport", CLS_AUTHOR),
+        organisation=end(P_ORGANISATION, "scenariobundle", CLS_ORGANISATION),
+        funder=end(P_FUNDER, "scenariobundle", CLS_FUNDER))
 
 
 _LEGAL = r"(gmbh|mbh|ag|kg|ohg|e\.?\s*v\.?|gbr|se|ug|inc|ltd|llc)"
@@ -570,8 +683,12 @@ def _evidence(subject: str, predicate: str, row: dict, document: str) -> tuple:
             NL.join(node) + NL)
 
 
-def _make_builder(db_path: Path):
+def _make_builder(db_path: Path, model=None):
     """(document name, accepted tuple rows) -> (TTL body, study) or None.
+
+    *model* is the shapes the graph is written to (`shapemodel.Model`),
+    those of the last refresh when none is given; `bind` reads off them what
+    the builder needs and refuses a shapes file it cannot write to.
 
     One reading of a document's harvest and two things written from it: the
     Turtle, and `study`, the same decisions as plain data. The second is for
@@ -584,6 +701,7 @@ def _make_builder(db_path: Path):
     # written twice into one file, with two dates and two abstracts on one
     # subject, and each document's own log says "1 report, 1 bundle".
     minted: dict = {}
+    bound = bind(model if model is not None else default_model())
 
     def build(name: str, rows: list, decided: Optional[dict] = None):
         # What people decided about this document's rows, by the name a row
@@ -621,14 +739,15 @@ def _make_builder(db_path: Path):
 
         chosen: dict = {}
         contested: dict = {}
-        for key in SINGLE:
+        for key in bound.single:
             if by_param.get(key):
                 chosen[key], others = _pick_one(by_param[key])
                 if others:
                     contested[key] = others
 
-        missing = [k for k in REQUIRED
-                   if not (chosen.get(k) or by_param.get(k))]
+        missing = [k for k in bound.required
+                   if not (chosen.get(k) or by_param.get(k)
+                           or chosen.get(FALLBACK.get(k)))]
         if "publication_title" not in chosen:
             log.info("kg: %s: no title extracted — nothing to serialize", name)
             return None
@@ -773,15 +892,16 @@ def _make_builder(db_path: Path):
             return links, nodes, labels
 
         author_links, author_nodes, author_labels = entities(
-            "publication_author", "author", CLS_AUTHOR)
+            "publication_author", "author", bound.author)
         org_links, org_nodes, org_labels = entities(
-            "study_organisation", "organisation", CLS_ORGANISATION)
+            "study_organisation", "organisation", bound.organisation)
         funder_links, funder_nodes, funder_labels = entities(
-            "study_funder", "funder", CLS_FUNDER)
+            "study_funder", "funder", bound.funder)
 
         # ---- the study report ---------------------------------------------
-        pub: list = [f"<{report}>", f"    a oeo:{CLS_REPORT} ;",
-                     f"    {P_UUID} {ttl_literal(uuid_of(report))} ;"]
+        pub: list = [f"<{report}>", f"    a oeo:{CLS_REPORT} ;"]
+        if "studyreport" in bound.uuid_on:
+            pub.append(f"    {P_UUID} {ttl_literal(uuid_of(report))} ;")
         pub += evidence_for(report, P_LABEL,
                             rows_for("publication_title", value=title))
         pub.append(f"    {P_LABEL} {ttl_literal(title)} ;")
@@ -859,8 +979,9 @@ def _make_builder(db_path: Path):
                 unplaced.append(label)
             iri = mint("scenariofactsheet", f"{title}|{ident}")
             scenario_links.append(f"<{iri}>")
-            block = [f"<{iri}>", f"    a oeo:{CLS_SCENARIO} ;",
-                     f"    {P_UUID} {ttl_literal(uuid_of(iri))} ;"]
+            block = [f"<{iri}>", f"    a oeo:{CLS_SCENARIO} ;"]
+            if "scenariofactsheet" in bound.uuid_on:
+                block.append(f"    {P_UUID} {ttl_literal(uuid_of(iri))} ;")
             block += evidence_for(iri, P_LABEL,
                                   rows_for("scenario_label", scenario=norm))
             # Mirjam: with no long name beside the acronym, both carry the same
@@ -927,10 +1048,11 @@ def _make_builder(db_path: Path):
                 "years": [f"{year}-01-01T00:00:00" for year in years]})
 
         # ---- the bundle -----------------------------------------------------
-        std: list = [f"<{bundle}>", f"    a oeo:{CLS_BUNDLE} ;",
-                     f"    {P_UUID} {ttl_literal(uuid_of(bundle))} ;",
-                     f"    {P_LABEL} "
-                     f"{ttl_literal(chosen.get('study_project_name') or title)} ;"]
+        std: list = [f"<{bundle}>", f"    a oeo:{CLS_BUNDLE} ;"]
+        if "scenariobundle" in bound.uuid_on:
+            std.append(f"    {P_UUID} {ttl_literal(uuid_of(bundle))} ;")
+        std.append(f"    {P_LABEL} "
+                   f"{ttl_literal(chosen.get('study_project_name') or title)} ;")
         if chosen.get("study_acronym"):
             std.append(f"    {P_ACRONYM} {ttl_literal(chosen['study_acronym'])} ;")
         if chosen.get("publication_abstract"):
@@ -1005,14 +1127,16 @@ def _make_builder(db_path: Path):
     return build
 
 
-def make_serializer(db_path: Path):
+def make_serializer(db_path: Path, model=None):
     """(document name, accepted tuple rows) -> TTL string or None.
+
+    Written to *model*, the shapes of the last refresh by default.
 
     What people decided about the rows is left in `serializer.decisions` by
     `serialize.run`, {document: {tuple name: [decision]}}, and goes into the
     Turtle as comment lines above the value each concerns.
     """
-    build = _make_builder(db_path)
+    build = _make_builder(db_path, model)
     header_pending = [True]
 
     def serializer(name: str, rows: list):
@@ -1028,14 +1152,14 @@ def make_serializer(db_path: Path):
     return serializer
 
 
-def make_study_reader(db_path: Path):
+def make_study_reader(db_path: Path, model=None):
     """(document name, accepted tuple rows) -> study dict or None.
 
     What the serializer decided for one document, without the Turtle: the
     bundle, its one study report and its scenarios, each value as the graph
     carries it. A document with no title has no study, as it has no graph.
     """
-    build = _make_builder(db_path)
+    build = _make_builder(db_path, model)
 
     def reader(name: str, rows: list):
         built = build(name, rows)

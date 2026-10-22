@@ -31,6 +31,17 @@ wrong and neither should find that out in production.
 
 ## Functions
 
+### default_model
+
+```python
+def default_model()
+```
+
+The OEKG shapes of the last refresh, or SchemaError without one.
+
+A graph written without them is one nobody can say anything about, so
+there is no fallback to the paths this module would otherwise assume.
+
 ### edges
 
 ```python
@@ -41,7 +52,31 @@ The triple shapes this serializer writes that no `kg` block carries.
 
 `ontology.edge_problems` holds the rest of the output to the pinned
 ontology through the spec; without this the writer's own literals are the
-part nobody checks, which is where three of kwp's defects lived.
+part nobody checks, which is where three of kwp's defects lived. The
+uuid is written where the shapes have its path, so without shapes from a
+refresh nothing is said about it.
+
+### bind
+
+```python
+def bind(model) -> SimpleNamespace
+```
+
+What the shapes say about the graph this module writes.
+
+Every path WRITTEN names has to be a property of the shape its node is
+held to, and the two dates have to be the xsd:dateTime this module
+writes: a shapes file that dropped or retyped one stops the serializer
+here rather than in a report after the run. What is read off them:
+
+  single    the per-document fields whose path the shapes allow once,
+            so the harvest's several readings are settled to one
+  required  the per-document fields the shapes demand, so a document
+            that misses one is reported
+  uuid_on   the shaped nodes whose shape has the uuid path
+  author, organisation, funder
+            the class at the end of each edge, where the shape names
+            exactly one
 
 ### normalise
 
@@ -151,10 +186,12 @@ the verdict, who made it and when, and the note.
 ### make_serializer
 
 ```python
-def make_serializer(db_path: Path)
+def make_serializer(db_path: Path, model=None)
 ```
 
 (document name, accepted tuple rows) -> TTL string or None.
+
+Written to *model*, the shapes of the last refresh by default.
 
 What people decided about the rows is left in `serializer.decisions` by
 `serialize.run`, {document: {tuple name: [decision]}}, and goes into the
@@ -163,7 +200,7 @@ Turtle as comment lines above the value each concerns.
 ### make_study_reader
 
 ```python
-def make_study_reader(db_path: Path)
+def make_study_reader(db_path: Path, model=None)
 ```
 
 (document name, accepted tuple rows) -> study dict or None.

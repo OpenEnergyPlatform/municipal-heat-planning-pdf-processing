@@ -2792,6 +2792,16 @@
     "IAO_0000088"
    ]
   },
+  "OEO_00020032": {
+   "alt_labels": [],
+   "definition": "A study region is a region of relevance that has the study region role and consists entirely of one or more subregions.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "study region",
+   "parents": [
+    "OEO_00360020"
+   ]
+  },
   "OEO_00020166": {
    "alt_labels": [],
    "definition": "A methodology is a plan specification that describes processes that are part of a study.",
@@ -2800,6 +2810,24 @@
    "label": "methodology",
    "parents": [
     "IAO_0000104"
+   ]
+  },
+  "OEO_00020220": {
+   "alt_labels": [],
+   "definition": "An is-about-relation between a scenario and a study region to indicate the study region of a scenario.",
+   "deprecated": false,
+   "domain": [
+    "OEO_00000364"
+   ],
+   "kind": "object_property",
+   "label": "has study region",
+   "parents": [
+    "IAO_0000136",
+    "OEO_00010378",
+    "topObjectProperty"
+   ],
+   "range": [
+    "OEO_00020032"
    ]
   },
   "OEO_00020227": {
@@ -3578,6 +3606,16 @@
    "label": "resilience",
    "parents": [
     "BFO_0000016"
+   ]
+  },
+  "OEO_00360020": {
+   "alt_labels": [],
+   "definition": "A region of relevance is a spatial region that is used in a study or analysis, or is part of spatial planning.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "region of relevance",
+   "parents": [
+    "BFO_0000006"
    ]
   },
   "OEO_00360042": {

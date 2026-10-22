@@ -76,8 +76,9 @@ free text again.
 def shapes_files() -> list
 ```
 
-The OEKG shapes of the last refresh of the API sources, or none.
+The OEKG shapes of the last `vocabulary --refresh`, or none.
 
-Where the preflight finds the file `NOT_EXTRACTED` is held against.
+Where the preflight finds the file `NOT_EXTRACTED` is held against: the
+same one the serializer reads its paths from.
 
 [Back to the index](../README.md)

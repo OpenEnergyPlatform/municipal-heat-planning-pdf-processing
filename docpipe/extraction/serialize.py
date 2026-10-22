@@ -181,19 +181,30 @@ def run(jsonl_dir: Path, out_path: Path,
     return counts
 
 
+def kind_key(kind: tuple) -> str:
+    """(constraint, path, collection) of a violation as one JSON key."""
+    return " ".join(kind)
+
+
 def validate(out_path: Path, shapes: list, top: int = 12) -> dict:
     """Hold the written graph against the profile's SHACL shapes.
 
     A report, not a gate: the full text goes next to the graph as
-    `<name>.shacl.txt` and the most frequent kinds of violation go to the
-    log. The graph stays written either way. The harvest is the durable
-    artifact and a graph the shapes reject is still the one to look at.
+    `<name>.shacl.txt`, the violations counted by kind as `<name>.shacl.json`
+    (what `docpipe.extraction.gate` compares a later graph with), and the
+    most frequent kinds to the log. The graph stays written either way. The
+    harvest is the durable artifact and a graph the shapes reject is still
+    the one to look at.
     """
     from docpipe import ontology
     out_path = Path(out_path)
     report = ontology.shacl_report(out_path, shapes)
     text_path = out_path.with_name(out_path.name + ".shacl.txt")
     text_path.write_text(report["text"], encoding="utf-8")
+    out_path.with_name(out_path.name + ".shacl.json").write_text(json.dumps({
+        "conforms": report["conforms"], "violations": report["violations"],
+        "kinds": {kind_key(kind): count for kind, count in report["counts"]},
+    }, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     log.info("shacl: %s against %d shapes file(s): conforms=%s, %d "
              "violation(s) -> %s", out_path.name, len(shapes),
              report["conforms"], report["violations"], text_path)

@@ -25,7 +25,7 @@ reads the platform's public bundle list, a GET, to say which acronyms are
 taken: the acronym is unique over there and the only way to find a bundle
 again, because no identifier of ours is accepted.
 
-A body is not the Turtle in another syntax in four places, each on purpose:
+A body is not the Turtle in another syntax in three places, each on purpose:
 
   one bundle per project   Documents whose bundle has the same label are one
                            bundle with several study reports, as they are one
@@ -38,8 +38,6 @@ A body is not the Turtle in another syntax in four places, each on purpose:
   no IAM annotation        The Turtle types every factsheet an IAM scenario.
                            The platform's list does not hold that class yet
                            and refuses a create for it, so a body omits it.
-  study region             The Turtle writes the parent property, the API the
-                           one its closed scenario shape names.
 
 Exit 0 is a report, whatever it says. Exit 2 is a run that could not be
 made: no harvest, no database, no API description or no shapes.
@@ -68,7 +66,8 @@ from typing import Optional
 
 from docpipe import upstream
 from docpipe.extraction.serialize import collect
-from profiles.scenarios import kg
+from docpipe.extraction.shapemodel import Model
+from profiles.scenarios import kg, vocabulary
 
 HERE = Path(__file__).resolve().parent
 REGIONS_PATH = HERE / "regions.json"
@@ -79,15 +78,10 @@ SOURCES = {
                 "ref": "master",
                 "reviewed": "3432710bac7b6d91dc314bc240dbaeb99cd3d44c",
                 "files": ["docs/oeplatform-code/web-api/openapi.yaml"]},
-    # The head of the branch, which is what the next pin will be. `reviewed`
-    # is the commit the platform pins its validator to today
-    # (oeplatform/settings.py OEKG_SHAPES_PINNED_COMMIT): while the two are
-    # the same file, the verdict here is the validator's. Every run prints
-    # whether they still are.
-    "oekg_shapes": {"kind": "repo_files", "repo": "OpenEnergyPlatform/oekg",
-                    "ref": "production",
-                    "reviewed": "b4604e02060624b381bdbe2f872df94cfd0f5630",
-                    "files": ["oekg/shapes/oekg_shapes.ttl"]},
+    # The same source the profile's refresh pulls for its serializer, named
+    # once (vocabulary.SOURCES), so the dry run and the Turtle are held to
+    # one shapes file.
+    "oekg_shapes": vocabulary.SOURCES["oekg_shapes"],
 }
 # The lock of these two sources. Its own, so a harvest run's
 # `vocabulary --refresh` does not come to depend on the API description.
@@ -108,12 +102,11 @@ TAG_KEYS = {"study_descriptor": "descriptors",
 # is refused for one entry off that list.
 NOT_YET_LISTED = (kg.OEO_BASE + kg.IAM_SCENARIO,)
 
-# What `study_regions` becomes over there. The Turtle writes the parent
-# property (kg.P_STUDY_REGION, see scenario_region in the spec); the API
-# writes the one the closed scenario shape names, onto nodes of the class it
-# requires.
-API_STUDY_REGION = "OEO_00020220"       # has study region
-API_CLS_STUDY_REGION = "OEO_00020032"   # study region
+# What `study_regions` becomes over there: the path the closed scenario
+# shape names, as the Turtle writes it (kg.P_STUDY_REGION), onto nodes of the
+# class that shape requires.
+API_STUDY_REGION = kg.P_STUDY_REGION.split(":")[-1]   # has study region
+API_CLS_STUDY_REGION = "OEO_00020032"                 # study region
 
 _PREFIX = dict(re.findall(r"@prefix (\w+):\s*<([^>]+)>", kg.PREFIXES))
 SH = "http://www.w3.org/ns/shacl#"
@@ -677,7 +670,9 @@ def dry_run(harvest: Path, db: Path, openapi: dict, shapes,
     problems}. `documents` are the harvest files the bundle was read from,
     the leading one first; `formed` names what was made here and not read.
     """
-    reader = kg.make_study_reader(db)
+    # The bodies are read with the paths of the same shapes they are held
+    # to, so the dry run and the verdict speak of one file.
+    reader = kg.make_study_reader(db, model=Model.from_graph(shapes))
     schema = RequestSchema(openapi)
     studies, without = [], []
     for name, rows in collect(harvest).items():

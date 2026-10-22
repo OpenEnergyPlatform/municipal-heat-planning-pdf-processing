@@ -31,7 +31,8 @@ stays ahead of a corpus run rather than inspecting Turtle afterward,
 with one exception: where a profile's `vocabulary.shapes()` names
 SHACL files pulled by the last refresh, `--serialize` holds the
 written graph against them and logs a report, never a gate on the
-write. The two tools otherwise do
+write. The gate is a step of its own, before a corpus run
+(`docpipe.extraction.gate`, below). The two tools otherwise do
 not call each other: `vocabulary.py`'s `edges()` imports the profile's
 `kg.py` module directly to read its `EDGES` table, and that import
 alone runs `kg.py`'s own module level calls to `spec.py`'s
@@ -45,7 +46,7 @@ rather than a call the ontology check makes itself.
 | **In** | A document's accepted JSONL tuple lines (`kind == "tuple"`), the profile's SQLite corpus database, and its `extraction_spec.json` `kg` blocks, parsed once at import. |
 | **Out** | One Turtle file per `--serialize` call: a shared prefix header plus one block per document that produced anything (`kwp`'s read back by `kg_route.py`; `scenarios`' by nothing here), and beside it the provenance file `<graph>.prov.ttl`. `kwp` also writes `<graph>.strict.ttl`, the values the MHPKG data schema takes (see below). |
 | **Resumes on** | Nothing. Every call re walks the harvest and re renders the whole output; a run's dedupe state (which identities are claimed) is never persisted. |
-| **Needs** | No served model and no GPU: a read only SQLite connection and local text; the ontology check also needs `rdflib`. `vocabulary.py --refresh` needs network access to pull `SOURCES`, and, for `scenarios`, `OEP_API_TOKEN`; `--write` needs an external OEO closure file by hand instead. The SHACL report a `kwp` `--serialize` run writes needs `pyshacl`. |
+| **Needs** | No served model and no GPU: a read only SQLite connection and local text; the ontology check also needs `rdflib`. `vocabulary.py --refresh` needs network access to pull `SOURCES`, and, for `scenarios`, `OEP_API_TOKEN`; `--write` needs an external OEO closure file by hand instead. The SHACL report a `--serialize` run writes, and the gate, need `pyshacl`. |
 
 Extraction precedes this stage
 ([Reading the values out](extraction.md)); `kwp`'s output is followed
@@ -358,7 +359,19 @@ carries the MHPKG SHACL files: `vocabulary.py`'s `shapes()` names the
 last refresh's copies, and `--serialize` holds the written Turtle
 (the strict one too) against them through `serialize.validate`, which calls
 `ontology.shacl_report` and writes `<ttl>.shacl.txt` beside each graph,
-a report and not a gate. The same refresh also pulls the schema's LinkML
+a report and not a gate, and `<ttl>.shacl.json`, the same violations
+counted by kind (constraint, path, collection). `scenarios`' refresh pulls
+the OEKG shapes (`oekg_shapes`, `oekg/shapes/oekg_shapes.ttl` at the head
+of `production`) the same way, and its `shapes()` names them. Its `kg.py`
+is written to them: `bind` reads, through
+`docpipe/extraction/shapemodel.py`, which properties a report, a bundle
+and a factsheet have, which occur once and which must occur, and refuses
+with `SchemaError` a shapes file that no longer has a path it writes
+([../profiles/scenarios.md](../profiles/scenarios.md)). `shapemodel.Model`
+answers by path, by the class at a property's end, by the entries of its
+`sh:in` list or by its datatype, holds a class no shape targets to the
+nearest one above it, and treats no answer and two answers alike as an
+error. The same refresh also pulls the schema's LinkML
 file into `profiles/kwp/mhpkg_schema.yaml`, which `kg.py` takes its slots,
 classes and closed lists from; the vocabulary check prints `note mhpkg:` for
 schema terms the pinned OEO or MHPO lack and for schema edges the pinned
@@ -449,11 +462,20 @@ marks a trust line is built from are at
   unset token, no release yet, an unreachable host, prints
   `refresh failed: ...` and returns exit code 2 before rewriting
   anything.
-- The SHACL check a `kwp` `--serialize` run makes never raises and
+- The SHACL check a `--serialize` run makes never raises and
   never withholds the graph: a profile with no refreshed shapes only
   logs a warning naming the missing `--refresh`, and a graph the
   shapes reject is still written, with the violations in
-  `<ttl>.shacl.txt` and the log.
+  `<ttl>.shacl.txt`, `<ttl>.shacl.json` and the log.
+- `python -m docpipe.extraction.gate HARVEST DB TTL --against
+  REPORT.shacl.json` is the gate. It writes the graph of the harvest that
+  is already there, with the code and the shapes a run will use, and exits
+  3 when the serializer does not build, no document reaches the graph, the
+  Turtle does not parse, there are no shapes, the validator does not run,
+  or a kind of violation appears that the report of the last written
+  graph did not have. Counts are not compared, since they move with the
+  harvest. Without an earlier report it stays open and says so. A job
+  runs it before it starts its model.
 
 ## Measured behaviour
 

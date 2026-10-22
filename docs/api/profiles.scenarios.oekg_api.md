@@ -28,7 +28,7 @@ reads the platform's public bundle list, a GET, to say which acronyms are
 taken: the acronym is unique over there and the only way to find a bundle
 again, because no identifier of ours is accepted.
 
-A body is not the Turtle in another syntax in four places, each on purpose:
+A body is not the Turtle in another syntax in three places, each on purpose:
 
   one bundle per project   Documents whose bundle has the same label are one
                            bundle with several study reports, as they are one
@@ -41,8 +41,6 @@ A body is not the Turtle in another syntax in four places, each on purpose:
   no IAM annotation        The Turtle types every factsheet an IAM scenario.
                            The platform's list does not hold that class yet
                            and refuses a create for it, so a body omits it.
-  study region             The Turtle writes the parent property, the API the
-                           one its closed scenario shape names.
 
 Exit 0 is a report, whatever it says. Exit 2 is a run that could not be
 made: no harvest, no database, no API description or no shapes.

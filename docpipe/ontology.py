@@ -481,10 +481,13 @@ def spec_edges(spec_raw: dict) -> list:
     def add(where, subject, block, object_=None, datatype=None):
         predicate = (block or {}).get("predicate")
         if predicate:
+            # A block may say why it is written against the ontology, and
+            # the reason travels with it to `edge_problems`.
             out.append({"where": where, "subject": subject,
                         "predicate": predicate,
                         "object": object_,
-                        "datatype": datatype or (block or {}).get("datatype")})
+                        "datatype": datatype or (block or {}).get("datatype"),
+                        "accepted": (block or {}).get("accepted")})
 
     for parameter in spec_raw.get("parameters", []):
         uri = parameter.get("uri")

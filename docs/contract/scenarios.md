@@ -984,11 +984,11 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 How the row becomes a node:
 
 - `node`: `scenariofactsheet`
-- `property`: `{'label': 'has spatial region', 'predicate': 'OEO_00010378', 'prefix': 'oeo'}`
+- `property`: `{'accepted': 'the closed ScenarioShape names this path on the factsheet, and the shapes win over its declared domain scenario (owner decision 2026-10-22)', 'label': 'has study region', 'predicate': 'OEO_00020220', 'prefix': 'oeo'}`
 
 <details><summary>Why</summary>
 
-The object is an OEKG region individual that already exists over there and is only referenced. A wording the list did not hold mints nothing: writing our own gloss under oekg/region/ would put a 250th region beside the 249 real ones. The predicate is oeo:OEO_00010378 has spatial region and not oeo:OEO_00020220 has study region, although the second says exactly what we mean: its domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET, which is not one. has spatial region is its direct parent, domained on information content entity, which the factsheet is.
+The object is an OEKG region individual that already exists over there and is only referenced. A wording the list did not hold mints nothing: writing our own gloss under oekg/region/ would put a 250th region beside the 249 real ones. The predicate is the one the closed ScenarioShape names. Its declared domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET; the shapes win over that mismatch (owner decision 2026-10-22), which is the ontology side's to settle.
 
 </details>
 

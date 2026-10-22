@@ -13,8 +13,9 @@ ontology release and are therefore pinned differently.
     python -m profiles.scenarios.vocabulary --closure oeo-closure.owl --write
     python -m profiles.scenarios.vocabulary --check
 
-`--refresh` is what a run calls first: the OEO closure at its latest release
-and the study regions live from the OEKG, then the check. Without
+`--refresh` is what a run calls first: the OEO closure at its latest release,
+the study regions live from the OEKG and the OEKG shapes at the head of their
+branch, then the check. Without
 OEP_API_TOKEN in the environment it stops, because the regions are offered to
 the model and a list nobody pulled is not the OEKG's current one.
 
@@ -62,6 +63,17 @@ def refresh(cache: Path = upstream.CACHE) -> dict
 ```
 
 Pull SOURCES, write regions.json and vocabulary.json, write the lock.
+
+The lock is what `shapes` reads: the serializer and the validation of
+the written graph take the shapes this refresh pulled.
+
+### shapes
+
+```python
+def shapes(cache: Path = upstream.CACHE) -> list
+```
+
+The OEKG shapes of the last refresh; empty if none has run.
 
 ### spec_terms
 

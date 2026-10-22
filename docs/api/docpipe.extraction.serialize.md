@@ -91,6 +91,14 @@ harvest is collected and not in `collect`, which the review page and
 `evaluate` read their rows from: counting a decision against a harvest
 that already held it would hide the row it was made on.
 
+### kind_key
+
+```python
+def kind_key(kind: tuple) -> str
+```
+
+(constraint, path, collection) of a violation as one JSON key.
+
 ### validate
 
 ```python
@@ -100,8 +108,10 @@ def validate(out_path: Path, shapes: list, top: int = 12) -> dict
 Hold the written graph against the profile's SHACL shapes.
 
 A report, not a gate: the full text goes next to the graph as
-`<name>.shacl.txt` and the most frequent kinds of violation go to the
-log. The graph stays written either way. The harvest is the durable
-artifact and a graph the shapes reject is still the one to look at.
+`<name>.shacl.txt`, the violations counted by kind as `<name>.shacl.json`
+(what `docpipe.extraction.gate` compares a later graph with), and the
+most frequent kinds to the log. The graph stays written either way. The
+harvest is the durable artifact and a graph the shapes reject is still
+the one to look at.
 
 [Back to the index](../README.md)
