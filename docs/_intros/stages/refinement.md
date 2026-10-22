@@ -333,8 +333,14 @@ before it. `keep` and `replace` pass the section through as is.
 
 Once every window is assembled, `_reattach_media_bbox` restamps each
 table's and figure's `bbox` from the Stage 3 input, since the model
-re-emits those objects and may drop or alter the field. Sections left
-with no content, tables, or figures are dropped (`_is_empty_section`).
+re-emits those objects and may drop or alter the field. A section that
+is a heading and nothing else, such as a paper's title set apart from
+its authors, hands that heading to the next section, as the first line
+of its text and followed by that section's own heading
+(`_fold_bare_headings`), so the title stays readable and quotable and a
+title broken over several headings reads in its order. Sections left with no content, tables, or figures are then
+dropped (`_is_empty_section`); a heading with no text after it, or one
+before a literature list, goes with them.
 `_finalize_pages` recomputes each section's `pages` from its segments and
 media; `_backfill_empty_pages` gives a still-empty one its nearest
 neighbour's page rather than leaving it uncitable. With

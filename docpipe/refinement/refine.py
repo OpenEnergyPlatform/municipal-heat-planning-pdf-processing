@@ -847,6 +847,38 @@ def _is_empty_section(sec: dict) -> bool:
     return not has_content and not has_tables and not has_figures
 
 
+def _fold_bare_headings(sections: list[dict]) -> list[dict]:
+    """A section that is a heading and nothing else opens the text of the next.
+
+    The empty-section filter counts no title, and a paper's title is set apart
+    from its authors as a heading with no body of its own: 9 of the AR6
+    documents lost it here, and with it every node of their graph. Its heading
+    goes in front of the next section's text instead, where it can be read and
+    quoted, and the next section's own heading follows it there: a title
+    broken over three headings ("pathways to", "deep decarbonization", "in
+    India") then reads in its order, and a passage, which puts its heading in
+    front only when its text does not open with it, is not reordered.
+    Headings with nothing after them, or before a literature list, are left
+    to the filter as before.
+    """
+    out: list[dict] = []
+    pending: list[str] = []
+    for sec in sections:
+        title = str(sec.get("title") or "").strip()
+        if _is_empty_section(sec) and title:
+            pending.append(title)
+            continue
+        if pending and isinstance(sec.get("content", ""), str):
+            sec["content"] = "\n".join(pending + [title] * bool(title)
+                                       + [sec.get("content") or ""])
+        pending = []
+        out.append(sec)
+    if pending:
+        log.info("Stage 4: %d heading(s) with no text after them: %s",
+                 len(pending), "; ".join(t[:60] for t in pending))
+    return out
+
+
 # Leading numbering prefix. A 1–2 digit bare number is stripped; 4-digit years
 # are not.
 _TITLE_NUM_PREFIX_RE = re.compile(
@@ -1176,6 +1208,7 @@ def refine_sections(sections: list[dict],
     _reattach_media_bbox(sections, refined)
 
     # ── Post-filter: remove empty sections ───────────────────────────────
+    refined = _fold_bare_headings(refined)
     before = len(refined)
     refined = [s for s in refined if not _is_empty_section(s)]
     removed = before - len(refined)
