@@ -554,6 +554,12 @@ def _apply_actions(
                     "  Refusing to remove '%s': it carries %d table(s) and "
                     "%d figure(s)", sec.get("title", "?"),
                     len(sec.get("tables") or []), len(sec.get("figures") or []))
+            elif _synthetic_heading(sec.get("title", "").strip()):
+                # What stands before the first heading is the head of the first
+                # page: a journal line, and often the title with it. Removed
+                # as a running head, it took a scenario document's title along.
+                log.info("  Refusing to remove the text before the first "
+                         "heading: the title may stand in it")
             else:
                 log.debug(f"  Removing section: {sec.get('title', '?')}")
                 # Its text goes, its heading does not: a contents page or an
@@ -562,7 +568,7 @@ def _apply_actions(
                 # heading, `_fold_bare_headings` hands it to the section after.
                 # It is no section to merge into.
                 title = sec.get("title", "").strip()
-                if title and not _synthetic_heading(title):
+                if title:
                     result.append({"title": title, "content": "",
                                    "tables": [], "figures": [],
                                    "segments": [], "_removed": True})

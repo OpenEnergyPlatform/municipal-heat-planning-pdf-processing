@@ -144,6 +144,17 @@ origin. The stamp does not record the plan (owner decision 2026-09-10), so
 a harvest already on disk stays current and only a document harvested
 again is read to its end.
 
+The parameters a profile names in `FRONT_PAGE_PARAMETERS` are asked once
+more on their own. `plan_batches` takes the sections of the document's
+first page from `make_front_page` (the lowest page any section stands on,
+its sections in their order) and adds requests over them that offer those
+parameters and nothing else, with origin `front`. Wherever else the
+harvest reads them still counts, and the checks are the same. The scenarios
+profile names its title: asked among forty other rows of one request, the
+model left it out, and a publication with no title has no node in the
+graph. A pass over a stored harvest's unread passages (`already_read`)
+asks none of these.
+
 ### Anchors
 
 The plan searches not with the spec's query templates but a sentence

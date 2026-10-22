@@ -324,7 +324,9 @@ home at the nearest surviving output.
 `_apply_actions` reads each section's `_action`, once its provenance is
 reattached. `remove` drops the section unless it still carries tables or
 figures, in which case the removal is refused and the section kept with a
-warning. The text of a removed section goes, its heading stays behind as
+warning. It is refused too for the text before the first heading (the
+profile's `FRONT_SECTION_TITLE`): the head of the first page, a journal line
+and often the title with it. The text of a removed section goes, its heading stays behind as
 a bare heading for the cleanup below to hand on, since a contents page or
 an authors' block can be headed by the document's title; the profile's
 `FRONT_SECTION_TITLE` is not a heading of the document and is not kept.

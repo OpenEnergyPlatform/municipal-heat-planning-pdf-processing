@@ -1002,6 +1002,46 @@ def make_rest_of_document(db_path: Path,
     return rest_of_document
 
 
+def make_front_page(db_path: Path,
+                    content: Optional[Callable] = None) -> Callable:
+    """(document_id) -> the sections of the document's first page, in order.
+
+    The passages a title stands in. Where it stood among forty other rows of
+    one request, the model left it out: a document with no title has no node in
+    the graph, and the scenarios run lost 17 that way. So the parameters the
+    profile names in FRONT_PAGE_PARAMETERS are asked once more on their own,
+    over these sections (`plan_batches`). The first page is the lowest page
+    any section stands on, a cover with no text being no page of this.
+    """
+    local = threading.local()
+    shared = content or make_shared_content()
+
+    def front_page(document_id: int) -> list:
+        if getattr(local, "conn", None) is None:
+            local.conn = sqlite3.connect(readonly_uri(db_path), uri=True)
+            local.conn.row_factory = sqlite3.Row
+        conn = local.conn
+        try:
+            ids = [int(r[0]) for r in conn.execute(
+                "SELECT id FROM Sections WHERE document = ? AND page_number = "
+                "(SELECT MIN(page_number) FROM Sections WHERE document = ?) "
+                "ORDER BY COALESCE(section_number, id)",
+                (document_id, document_id))]
+        except Exception as exc:
+            log.warning("   first page of document %s unreadable: %s",
+                        document_id, exc)
+            return []
+        out: list = []
+        for owner_id in ids:
+            hit = shared(conn, "section", owner_id)
+            if hit is not None:
+                out.append(_source_of({**hit, "owner_kind": "section",
+                                       "owner_id": owner_id}, via="front"))
+        return out
+
+    return front_page
+
+
 def make_more_sources(db_path: Path, index, id_to_pos: dict,
                       cache_path: Path,
                       content: Optional[Callable] = None) -> Callable:
@@ -6241,7 +6281,9 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
                  anchor_texts: dict, only=(),
                  stored_pairs: Optional[dict] = None,
                  rest_of_document: Optional[Callable] = None,
-                 already_read: frozenset = frozenset()
+                 already_read: frozenset = frozenset(),
+                 front_page: Optional[Callable] = None,
+                 front_parameters=()
                  ) -> PlannedDocument:
     """One document from its first search to its batches: the plan, the frame,
     one plan per pair, the rest of the document and the batches that read them.
@@ -6264,6 +6306,12 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
     *already_read* is {(owner_kind, owner_id)} a stored harvest already asked
     for values (`topup_rest`): the frame is still found over every planned
     passage, so the pairs are the stored ones, and none of these is read.
+
+    *front_page* (`make_front_page`) gives the sections of the first page, and
+    of the parameters asked, those in *front_parameters* are asked once more
+    there in requests of their own that offer nothing else. Every other place
+    may still give them; the checks are the same. A pass over a stored
+    harvest's unread passages asks none.
     """
     failed = 0
     name, items, report, doc_spec = plan_pool.submit(
@@ -6404,6 +6452,24 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
         # What the plan searched with is what the requests offer and
         # what their answers are checked against.
         batch.spec = asked
+    front = [p.uri for p in asked.parameters if p.uri in set(front_parameters)]
+    if front_page is not None and front and not already_read:
+        items_front = [WorkItem(report.document_id, None, source,
+                                origin="front")
+                       for source in front_page(report.document_id)]
+        for item in items_front:
+            trace.event("plan", report.document_id, rank=None,
+                        origin=item.origin, kind=item.source.owner_kind,
+                        owner=item.source.owner_id,
+                        chars=len(item.source.text or ""), image=False,
+                        frame=None)
+        only_front = narrow_spec(doc_spec, front)
+        for batch in group_items(items_front, max_sources=BATCH_SOURCES,
+                                 max_chars=BATCH_CHARS):
+            batch.bases = bases
+            batch.spec = only_front
+            batches.append(batch)
+        report.owners_harvested += len(items_front)
     log.info("extraction: %s planned — %d batch(es) over %d source(s)",
              name, len(batches), sum(len(b.items) for b in batches))
     return PlannedDocument(name=name, report=report, batches=batches,
@@ -7239,7 +7305,10 @@ def main(argv: Optional[list] = None) -> int:
         plan_batches, plan=plan, plan_pool=plan_pool, ask_frame=ask_frame,
         frame_axes=frame_axes, more_sources=more_sources,
         year_states=year_states, anchor_texts=anchor_texts,
-        rest_of_document=rest_of_document)
+        rest_of_document=rest_of_document,
+        front_page=make_front_page(args.db, content=content),
+        front_parameters=tuple(profile.component(
+            "extraction", "FRONT_PAGE_PARAMETERS") or ()))
     harvest_all = functools.partial(
         harvest_batches, harvest=harvest, more_sources=more_sources,
         verify=prior_rows, workers=LLM_PARALLEL, on_give_up=give_up,

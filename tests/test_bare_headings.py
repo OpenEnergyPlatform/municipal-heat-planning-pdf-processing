@@ -64,10 +64,12 @@ def test_a_continuation_after_a_removed_section_joins_the_section_before_it():
     assert [s["title"] for s in applied] == ["Contents"]
 
 
-def test_the_profiles_front_title_is_never_handed_on():
+def test_the_text_before_the_first_heading_stays_and_its_name_is_never_handed_on():
     front = profile_value("preprocessing", "FRONT_SECTION_TITLE")
     applied, _ = _apply_actions([
-        {**section(front, "Energy Policy 110"), "_action": "remove"},
+        {**section(front, f"Energy Policy 110 {TITLE}"), "_action": "remove"},
         {**section(front), "_action": "keep"},
         {**section("Abstract", "This study"), "_action": "keep"}], None)
-    assert _fold_bare_headings(applied) == [section("Abstract", "This study")]
+    assert _fold_bare_headings(applied) == [
+        section(front, f"Energy Policy 110 {TITLE}"),
+        section("Abstract", "This study")]

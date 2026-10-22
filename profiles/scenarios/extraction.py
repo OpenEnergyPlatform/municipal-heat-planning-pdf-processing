@@ -193,6 +193,11 @@ def document_axes(conn: sqlite3.Connection, document_id: int) -> dict:
 # open: "3,251" is 3251 here, and "1.234" is 1.234.
 DECIMAL_MARK = "."
 
+# Asked once more on their own over the sections of the first page, besides
+# wherever else they are read. Without a title the serializer writes no node
+# for a publication, and asked among forty other rows it was left out.
+FRONT_PAGE_PARAMETERS = ("publication_title",)
+
 # The language tag of the ontology's alternative labels that the vocabulary
 # snapshot keeps for this profile, the words its spec is held against. The
 # publications are English, and so are the words offered for them.

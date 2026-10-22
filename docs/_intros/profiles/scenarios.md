@@ -67,6 +67,15 @@ table gives this profile's own answer.
 fact and question, with a quote and no value; the search then reads from
 that map (see [extraction](../stages/extraction.md)).
 
+`FRONT_PAGE_PARAMETERS = ("publication_title",)` in `extraction.py` has the
+title asked once more on its own over the sections of the first page,
+besides wherever else it is read. Without a title the serializer writes no
+node for a publication: 17 of the 164 publications of the run of 2026-10-22
+had none, 14 of them because refinement had dropped the title before the
+harvest (a heading with no body, or the heading of a section the model
+removed; see [refinement](../stages/refinement.md)), and one because the
+model left it out of a crowded request.
+
 Five of the nine extraction prompts, `rows`, `field`, `frame`, `review` and
 `example`, are parts files (see [profiles](../profiles.md), The extraction
 prompts): each names its template of the core in its front matter, and

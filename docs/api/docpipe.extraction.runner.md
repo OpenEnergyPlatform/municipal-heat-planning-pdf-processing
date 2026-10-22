@@ -1069,6 +1069,22 @@ sections only, and 71 percent of corpus_m5's tuples came out of images:
 Each call reads a whole document, so what it read goes into *content*, the
 run's shared store, and not into a store per thread.
 
+### make_front_page
+
+```python
+def make_front_page(db_path: Path,
+                    content: Optional[Callable] = None) -> Callable
+```
+
+(document_id) -> the sections of the document's first page, in order.
+
+The passages a title stands in. Where it stood among forty other rows of
+one request, the model left it out: a document with no title has no node in
+the graph, and the scenarios run lost 17 that way. So the parameters the
+profile names in FRONT_PAGE_PARAMETERS are asked once more on their own,
+over these sections (`plan_batches`). The first page is the lowest page
+any section stands on, a cover with no text being no page of this.
+
 ### make_more_sources
 
 ```python
@@ -2257,7 +2273,9 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
                  anchor_texts: dict, only=(),
                  stored_pairs: Optional[dict] = None,
                  rest_of_document: Optional[Callable] = None,
-                 already_read: frozenset = frozenset()
+                 already_read: frozenset = frozenset(),
+                 front_page: Optional[Callable] = None,
+                 front_parameters=()
                  ) -> PlannedDocument
 ```
 
@@ -2282,6 +2300,12 @@ happened to walk the rest and 194 when none did.
 *already_read* is {(owner_kind, owner_id)} a stored harvest already asked
 for values (`topup_rest`): the frame is still found over every planned
 passage, so the pairs are the stored ones, and none of these is read.
+
+*front_page* (`make_front_page`) gives the sections of the first page, and
+of the parameters asked, those in *front_parameters* are asked once more
+there in requests of their own that offer nothing else. Every other place
+may still give them; the checks are the same. A pass over a stored
+harvest's unread passages asks none.
 
 ### accepted_rows
 
