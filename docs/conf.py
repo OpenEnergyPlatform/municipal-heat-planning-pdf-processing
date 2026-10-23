@@ -45,7 +45,10 @@ exclude_patterns = ["_build", "_intros", "requirements.txt",
 
 html_theme = "furo"
 html_title = "docpipe"
-html_static_path = []
+html_static_path = ["_static"]
+# Links under each drawn diagram that open or save it as SVG.
+html_js_files = ["diagram-links.js"]
+html_css_files = ["diagram-links.css"]
 
 # A link to a page that does not exist is a broken site, and the generated
 # index links every page there is. Warnings are errors in .readthedocs.yaml,
