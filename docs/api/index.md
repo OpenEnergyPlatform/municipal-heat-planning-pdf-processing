@@ -104,7 +104,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.graphkit](docpipe.extraction.graphkit.md): The small tools the graph writers share. (7 functions)
 - [docpipe.extraction.identity](docpipe.extraction.identity.md): Which value a harvested row is, and where its passage is now. (7 functions)
 - [docpipe.extraction.pipeline](docpipe.extraction.pipeline.md): The harvest loop that turns a document's retrieved passages into verified value tuples. (6 classes, 35 functions)
-- [docpipe.extraction.places](docpipe.extraction.places.md): Where a document says something to each axis, read once per document before its coordinates are searched. (2 classes, 7 functions)
+- [docpipe.extraction.places](docpipe.extraction.places.md): Where a document says something to each axis, read once per document before its coordinates are searched. (2 classes, 8 functions)
 - [docpipe.extraction.preflight](docpipe.extraction.preflight.md): A profile, everything a corpus run rests on. (11 functions)
 - [docpipe.extraction.provenance](docpipe.extraction.provenance.md): Where every value of a graph comes from, as a graph. (1 class, 3 functions)
 - [docpipe.extraction.queries](docpipe.extraction.queries.md): Expands a profile's query templates into retrieval probes drawn from the spec. (1 function)

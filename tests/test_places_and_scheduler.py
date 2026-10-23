@@ -5,6 +5,7 @@ complete, splits a reply that does not fit, and is read again from disk.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
+import dataclasses
 import json
 import threading
 import time
@@ -26,9 +27,10 @@ CARRIER = {slot.name: slot for slot in fields.axis_slots(
     SPEC.by_uri["energy_consumption"])}["carrier"]
 
 
-def section(n, text):
+def section(n, text, at=None):
     return Source("section", n, text, {"document_id": 7,
-                                       "section_number": n})
+                                       "section_number": n if at is None
+                                       else at})
 
 
 # -- the queue -----------------------------------------------------------------
@@ -145,13 +147,16 @@ def test_a_place_is_taken_on_a_quote_from_its_own_passage_only():
     assert dropped == 3
 
 
-def make_places(reply_of, store=None, key="k"):
+ONE_SECTION = [section(s.owner_id, s.text, at=1) for s in DOC]
+
+
+def make_places(reply_of, store=None, key="k", doc=ONE_SECTION):
     calls = []
 
     def ask(window, document_id):
         calls.append(len(window))
         return reply_of(window)
-    found = places.Places(ask, lambda _d: list(DOC), lambda w: len(w) <= 4,
+    found = places.Places(ask, lambda _d: list(doc), lambda w: len(w) <= 4,
                           AXES, PARAMETERS, key, store=store)
     return found, calls
 
@@ -172,6 +177,24 @@ def test_a_reply_that_does_not_fit_is_split_until_it_does(tmp_path):
     assert [s.owner_id for s in found(7, ["year"])] == [2, 4]
     assert [s.owner_id for s in found(7, ["carrier"])] == [2]
     assert calls == [4, 2, 1, 1, 2, 1, 1]
+
+
+def test_a_window_ends_where_its_section_ends():
+    found, calls = make_places(full_map, doc=DOC)
+    assert [s.owner_id for s in found(7, ["year"])] == [2, 4]
+    assert calls == [1, 1, 1, 1]                  # four sections, fits all
+    two = [section(1, "a", at=1), section(2, "b", at=1), section(3, "c", at=2)]
+    assert [[s.owner_id for s in w] for w in
+            places.windows_of(two, lambda w: True)] == [[1, 2], [3]]
+    assert [[s.owner_id for s in w] for w in
+            places.windows_of(two, lambda w: len(w) < 2)] == [[1], [2], [3]]
+
+
+def test_the_map_asks_for_the_unit_when_the_spec_asks_for_one():
+    axes, _named = places.questions(SPEC)
+    assert fields.UNIT in axes and "carrier" in axes
+    silent = dataclasses.replace(SPEC, unit_question=None)
+    assert fields.UNIT not in places.questions(silent)[0]
 
 
 def test_a_map_with_an_unread_window_is_not_used():

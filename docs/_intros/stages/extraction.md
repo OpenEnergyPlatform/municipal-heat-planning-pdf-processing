@@ -352,9 +352,10 @@ the coordinate closes or the document runs out.
 
 **The map of places** (`places.py`) replaces retrieval and rest for the axes it
 knows. At a document's first search the model reads every passage of the
-document side by side, packed as many per request as leave the reply its
-`max_tokens`, and names for each passage the parameters whose numbers stand
-there and the axes it answers, with a verbatim quote; it reads no value. A
+document, one section with its tables and figures per request (a section too
+long to leave the reply its `max_tokens` is split), and names for each passage
+the parameters whose numbers stand there and the axes it answers, the unit
+among them, with a verbatim quote; it reads no value. A
 place is taken only when its quote stands in its own passage and has the
 minimum length. A reply that does not fit its limit is split, not rescued. The
 map is complete only when every request was readable, and only a complete map
@@ -362,12 +363,12 @@ is used. The search for a coordinate then shows just the places of its axis,
 nearest to the open rows' sections first, under the allowance of both search
 stages (stage `places` in traces and `<axis>_window`). When every place has
 been shown the document counts as combed, so a row still open is `unstated`.
-Without a complete map, or for an axis it does not know (unit, parameter), the
-search runs as above. The map is kept in `<harvest>/places/<document>.json`
-under a key over prompt, questions and model, and later passes read it again; a
-replaced file is archived. A profile gets it by writing the prompt
-`extraction/places` (kwp does, scenarios does not); `EXTRACT_PLACES=0` turns it
-off.
+Without a complete map, or for a coordinate it does not know (the parameter,
+or the unit of a spec without a unit question), the search runs as above. The
+map is kept in `<harvest>/places/<document>.json` under a key over prompt,
+questions and model, and later passes read it again; a replaced file is
+archived. A profile gets it by writing the prompt `extraction/places` (kwp and
+scenarios do); `EXTRACT_PLACES=0` turns it off.
 
 In the search stages a coordinate's windows go out several at once
 (`Sweeping.run_ahead`): as many as the request limit has free places (limit,

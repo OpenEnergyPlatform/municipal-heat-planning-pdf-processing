@@ -93,7 +93,9 @@ def questions(spec) -> tuple
 ```
 
 ({axis: question}, {parameter: label}) the map is asked with: every
-axis the spec asks with a question, the first wording of each.
+axis the spec asks with a question, the first wording of each, and the
+unit. The unit off the map searched the whole plan: in the test of
+2026-10-23, 26,499 of about 35,000 requests read 71 units.
 
 ### key_of
 
@@ -129,15 +131,24 @@ def read_hits(reply: dict, window: list, axes: dict,
 A place is taken when its quote stands in its own passage and is long
 enough to name a place there. Nothing else is checked.
 
+### section_of
+
+```python
+def section_of(source)
+```
+
 ### windows_of
 
 ```python
 def windows_of(sources: list, fits: Callable) -> list
 ```
 
-The passages in document order, as many to a request as *fits*
-allows. A passage that does not fit alone goes alone, and its request
-says so (`ask` returns CUT when the prompt leaves no room).
+The passages in document order, one section with its tables and
+figures to a request, split where *fits* says the section is too long. A
+passage that does not fit alone goes alone, and its request says so
+(`ask` returns CUT when the prompt leaves no room). Packed to fit, about
+73 passages went to one request and the map named the passage of 38 % of
+the coordinates read afterwards (test of 2026-10-23).
 
 ### nearest_first
 
