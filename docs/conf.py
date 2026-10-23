@@ -30,6 +30,10 @@ myst_heading_anchors = 4
 # sphinxcontrib-mermaid's directive instead of asking for a second, Sphinx
 # only spelling.
 myst_fence_as_directive = ["mermaid"]
+# Labels as SVG text, not HTML in <foreignObject>: a saved diagram then
+# shows its labels outside a browser too.
+mermaid_init_config = {"startOnLoad": False, "htmlLabels": False,
+                       "flowchart": {"htmlLabels": False}}
 
 source_suffix = {".md": "markdown"}
 master_doc = "index"

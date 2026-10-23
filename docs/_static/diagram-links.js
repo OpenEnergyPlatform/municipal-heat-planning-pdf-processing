@@ -14,6 +14,13 @@
   function svgText(svg) {
     var copy = svg.cloneNode(true);
     copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    // Its own size instead of the page's 100% width.
+    var box = svg.viewBox && svg.viewBox.baseVal;
+    if (box && box.width) {
+      copy.setAttribute("width", box.width);
+      copy.setAttribute("height", box.height);
+      copy.style.maxWidth = "";
+    }
     copy.style.backgroundColor = getComputedStyle(document.body).backgroundColor;
     return new XMLSerializer().serializeToString(copy);
   }
@@ -42,23 +49,30 @@
     return a;
   }
 
+  // The SVG is read at the click and not when it first appears: Mermaid
+  // inserts an empty <svg><g/></svg> and draws into it afterwards, and the
+  // copy taken then was that empty frame.
   function addLinks(box, index) {
-    var svg = box.querySelector("svg");
-    if (!svg || box.dataset.diagramLinks) return;
+    if (!box.querySelector("svg") || box.dataset.diagramLinks) return;
     box.dataset.diagramLinks = "1";
-    var text = svgText(svg);
     var name = fileName(index);
-    var url = URL.createObjectURL(new Blob([text], {type: "image/svg+xml"}));
     var bar = document.createElement("p");
     bar.className = "diagram-links";
-    var open = link("Open as SVG", url, {});
+    var open = link("Open as SVG", "#", {});
     open.addEventListener("click", function (event) {
       event.preventDefault();
-      openSvg(text, name);
+      openSvg(svgText(box.querySelector("svg")), name);
+    });
+    var save = link("Download SVG", "#", {download: name});
+    save.addEventListener("click", function () {
+      // Runs before the link is followed, so it saves this file.
+      if (save.href.indexOf("blob:") === 0) URL.revokeObjectURL(save.href);
+      save.href = URL.createObjectURL(new Blob(
+        [svgText(box.querySelector("svg"))], {type: "image/svg+xml"}));
     });
     bar.appendChild(open);
     bar.appendChild(document.createTextNode(" · "));
-    bar.appendChild(link("Download SVG", url, {download: name}));
+    bar.appendChild(save);
     box.insertAdjacentElement("afterend", bar);
   }
 
