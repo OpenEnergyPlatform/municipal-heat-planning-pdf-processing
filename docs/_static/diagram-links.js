@@ -11,12 +11,27 @@
     return (page || "diagram") + "-" + (index + 1) + ".svg";
   }
 
-  function svgUrl(svg) {
+  function svgText(svg) {
     var copy = svg.cloneNode(true);
     copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     copy.style.backgroundColor = getComputedStyle(document.body).backgroundColor;
-    var text = new XMLSerializer().serializeToString(copy);
-    return URL.createObjectURL(new Blob([text], {type: "image/svg+xml"}));
+    return new XMLSerializer().serializeToString(copy);
+  }
+
+  // The site is served with Cross-Origin-Opener-Policy: same-origin, so a
+  // blob: URL opened in a new tab lands in another browsing context group
+  // and shows nothing. An empty tab stays with its opener, and the SVG is
+  // written into it.
+  function openSvg(text, title) {
+    var tab = window.open("", "_blank");
+    if (!tab) return;
+    var background = getComputedStyle(document.body).backgroundColor;
+    tab.document.open();
+    tab.document.write("<!doctype html><meta charset=\"utf-8\"><title></title>"
+      + "<body style=\"margin:0;background:" + background + "\">"
+      + text + "</body>");
+    tab.document.close();
+    tab.document.title = title;
   }
 
   function link(label, url, extra) {
@@ -31,12 +46,19 @@
     var svg = box.querySelector("svg");
     if (!svg || box.dataset.diagramLinks) return;
     box.dataset.diagramLinks = "1";
-    var url = svgUrl(svg);
+    var text = svgText(svg);
+    var name = fileName(index);
+    var url = URL.createObjectURL(new Blob([text], {type: "image/svg+xml"}));
     var bar = document.createElement("p");
     bar.className = "diagram-links";
-    bar.appendChild(link("Open as SVG", url, {target: "_blank", rel: "noopener"}));
+    var open = link("Open as SVG", url, {});
+    open.addEventListener("click", function (event) {
+      event.preventDefault();
+      openSvg(text, name);
+    });
+    bar.appendChild(open);
     bar.appendChild(document.createTextNode(" · "));
-    bar.appendChild(link("Download SVG", url, {download: fileName(index)}));
+    bar.appendChild(link("Download SVG", url, {download: name}));
     box.insertAdjacentElement("afterend", bar);
   }
 
