@@ -143,15 +143,19 @@ a harvest already on disk stays current and only a document harvested
 again is read to its end.
 
 The parameters a profile names in `FRONT_PAGE_PARAMETERS` are asked once
-more on their own. `plan_batches` takes the sections of the document's
-first page from `make_front_page` (the lowest page any section stands on,
-its sections in their order) and adds requests over them that offer those
+more on their own. `plan_batches` takes the document's sections from its
+start from `make_front_page` (in reading order, page by page, as many as
+one request of `EXTRACT_BATCH_SOURCES` and `EXTRACT_BATCH_CHARS` holds,
+the first always) and adds ONE request over them that offers those
 parameters and nothing else, with origin `front`. Wherever else the
 harvest reads them still counts, and the checks are the same. The scenarios
-profile names its title: asked among forty other rows of one request, the
-model left it out, and a publication with no title has no node in the
-graph. A pass over a stored harvest's unread passages (`already_read`)
-asks none of these.
+profile names what a publication says about itself, title, authors, date,
+DOI and abstract: asked among forty other rows of one request, the model
+left them out, the title in 17 of 164 publications and the abstract in 132,
+though nearly every one prints them at its start. Reading the opening
+rather than the first page leaves room for a cover, a repository's title
+sheet or a bibliography entry in front of the paper. A pass over a stored
+harvest's unread passages (`already_read`) asks none of these.
 
 ### Anchors
 
@@ -1567,7 +1571,7 @@ a `*.jsonl` or `*.stamp.json` that a reader of the harvest would list.
 | `shapes_files` | profile hook | none (the check is skipped) | A callable that returns the SHACL files the profile's graph is held against, those of its last refresh. Scenarios finds its own there; kwp names none | `preflight.shapes_verdict` |
 | `ALT_LABEL_LANGUAGE` | profile hook | required by the profile's `vocabulary` module | The language tag of the alternative labels a vocabulary snapshot keeps: `de` for kwp, `en` for scenarios and the built-in profile. The core fixes none | `profiles/*/vocabulary.py`, `ontology.build` |
 | `BASE_YEAR` / `TARGET_YEAR` | profile hook | none (the state has no years) | Which frame pairs are the plan's own state and which are its target: a mapping from a frame coordinate to its entry, kwp's `{"scenario": "status_quo"}` and `{"scenario": "target"}`. Their years date a row that names the state by its word and prints no year (see Base years) | `runner.year_states_of`, `pipeline.state_years` |
-| `FRONT_PAGE_PARAMETERS` | profile hook | none | The uris of the parameters asked once more on their own over the sections of the document's first page, with origin `front`; scenarios names its title | `runner.make_front_page`, `runner.plan_batches` |
+| `FRONT_PAGE_PARAMETERS` | profile hook | none | The uris of the parameters asked once more on their own in one request over the document's opening sections, with origin `front`; scenarios names title, authors, date, DOI and abstract | `runner.make_front_page`, `runner.plan_batches` |
 | `DECIMAL_MARK` | profile hook | `,` | `,` or `.`: how the profile's documents write the decimal, which decides what the digits alone leave open ("3,251" is 3.251 or 3251); any other value is an error | `verify.decimal_mark` |
 | `document_axes` | profile hook | none | A callable `(connection, document_id)` that returns `{axis name: {uri: [labels]}}`, the closed lists of the spec's dynamic axes for that document (AR6 closes its scenarios and regions); every batch of the document carries the spec with them | `runner.fill_dynamic_axes`, `runner.make_document_spec` |
 | `document_context` | profile hook | none | A callable `(connection, document_id)` that returns `{"name": ...}`, what the document itself contributes to its own search anchor (the municipality); the caption of the first passage found is added to it | `runner.document_anchor` |

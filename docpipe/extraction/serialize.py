@@ -186,7 +186,13 @@ def kind_key(kind: tuple) -> str:
     return " ".join(kind)
 
 
-def validate(out_path: Path, shapes: list, top: int = 12) -> dict:
+def profile_context(profile) -> list:
+    """What the profile's last refresh pulled of the target graph, or []."""
+    context = profile.component("vocabulary", "context")
+    return context() if context else []
+
+
+def validate(out_path: Path, shapes: list, top: int = 12, context=()) -> dict:
     """Hold the written graph against the profile's SHACL shapes.
 
     A report, not a gate: the full text goes next to the graph as
@@ -195,10 +201,15 @@ def validate(out_path: Path, shapes: list, top: int = 12) -> dict:
     most frequent kinds to the log. The graph stays written either way. The
     harvest is the durable artifact and a graph the shapes reject is still
     the one to look at.
+
+    *context* is what the target graph holds about the nodes this one only
+    points at (`profile_context`), checked together with it.
     """
     from docpipe import ontology
     out_path = Path(out_path)
-    report = ontology.shacl_report(out_path, shapes)
+    report = ontology.shacl_report(out_path, shapes, context)
+    log.info("shacl: %d triple(s) the target graph holds about nodes %s only "
+             "references", report["context"], out_path.name)
     text_path = out_path.with_name(out_path.name + ".shacl.txt")
     text_path.write_text(report["text"], encoding="utf-8")
     out_path.with_name(out_path.name + ".shacl.json").write_text(json.dumps({

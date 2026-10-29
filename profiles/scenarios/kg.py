@@ -701,6 +701,23 @@ def _make_builder(db_path: Path, model=None):
     # written twice into one file, with two dates and two abstracts on one
     # subject, and each document's own log says "1 report, 1 bundle".
     minted: dict = {}
+    # A node several documents describe is one node of the file. The value
+    # the first of them gave a single-valued property is the node's, and a
+    # later document's other reading goes unwritten with its evidence: an
+    # author spelt "Sergey Paltsev" and "SERGEY PALTSEV", or one project's
+    # bundle with two papers' abstracts, otherwise carried two labels or two
+    # abstracts on a maxCount-1 path.
+    settled: dict = {}
+
+    def settles(subject: str, predicate: str, value) -> bool:
+        """Whether *value* is what this file says for the single-valued
+        *predicate* of *subject*: the first to say it, or the same again."""
+        held = settled.setdefault((subject, predicate), value)
+        if held != value:
+            log.info("kg: <%s> %s stays %r, a later document read %r",
+                     subject, predicate, held, value)
+        return held == value
+
     bound = bind(model if model is not None else default_model())
 
     def build(name: str, rows: list, decided: Optional[dict] = None):
@@ -883,6 +900,7 @@ def _make_builder(db_path: Path, model=None):
             links, nodes, labels = [], [], []
             for label, sources in groups.values():
                 iri = mint(collection, label)
+                label = settled.setdefault((iri, P_LABEL), label)
                 links.append(f"<{iri}>")
                 labels.append(label)
                 block = [f"<{iri}>", f"    a oeo:{cls} ;"]
@@ -902,22 +920,24 @@ def _make_builder(db_path: Path, model=None):
         pub: list = [f"<{report}>", f"    a oeo:{CLS_REPORT} ;"]
         if "studyreport" in bound.uuid_on:
             pub.append(f"    {P_UUID} {ttl_literal(uuid_of(report))} ;")
-        pub += evidence_for(report, P_LABEL,
-                            rows_for("publication_title", value=title))
-        pub.append(f"    {P_LABEL} {ttl_literal(title)} ;")
+        if settles(report, P_LABEL, title):
+            pub += evidence_for(report, P_LABEL,
+                                rows_for("publication_title", value=title))
+            pub.append(f"    {P_LABEL} {ttl_literal(title)} ;")
         if author_links:
             pub.append(f"    {P_AUTHOR} " +
                        " ,\n        ".join(author_links) + " ;")
         stamp = ""
         if chosen.get("publication_date"):
             stamp = _publication_date(chosen["publication_date"])
-            if stamp:
+            if stamp and settles(report, P_PUBDATE, stamp):
                 pub += evidence_for(
                     report, P_PUBDATE,
                     rows_for("publication_date",
                              value=chosen["publication_date"]))
                 pub.append(f'    {P_PUBDATE} "{stamp}"^^xsd:dateTime ;')
-        if chosen.get("publication_doi"):
+        if chosen.get("publication_doi") \
+                and settles(report, P_DOI, chosen["publication_doi"]):
             pub += evidence_for(report, P_DOI,
                                 rows_for("publication_doi",
                                          value=chosen["publication_doi"]))
@@ -982,12 +1002,14 @@ def _make_builder(db_path: Path, model=None):
             block = [f"<{iri}>", f"    a oeo:{CLS_SCENARIO} ;"]
             if "scenariofactsheet" in bound.uuid_on:
                 block.append(f"    {P_UUID} {ttl_literal(uuid_of(iri))} ;")
-            block += evidence_for(iri, P_LABEL,
-                                  rows_for("scenario_label", scenario=norm))
-            # Mirjam: with no long name beside the acronym, both carry the same
-            # string. That is the usual case in this corpus.
-            block.append(f"    {P_LABEL} {ttl_literal(known.get(norm, ident))} ;")
-            block.append(f"    {P_SCENARIO_ACRONYM} {ttl_literal(label or ident)} ;")
+            if settles(iri, P_LABEL, known.get(norm, ident)):
+                block += evidence_for(iri, P_LABEL,
+                                      rows_for("scenario_label", scenario=norm))
+                # Mirjam: with no long name beside the acronym, both carry the
+                # same string. That is the usual case in this corpus.
+                block.append(f"    {P_LABEL} {ttl_literal(known.get(norm, ident))} ;")
+            if settles(iri, P_SCENARIO_ACRONYM, label or ident):
+                block.append(f"    {P_SCENARIO_ACRONYM} {ttl_literal(label or ident)} ;")
 
             # The types the model chose from the shapes' own list, each with
             # the passage it read them in. On top of that Mirjam asks every IAM
@@ -1006,6 +1028,7 @@ def _make_builder(db_path: Path, model=None):
             best = None
             if described:
                 best, _ = _pick_one(described)
+            if best is not None and settles(iri, P_SCENARIO_ABSTRACT, best):
                 block += evidence_for(iri, P_SCENARIO_ABSTRACT,
                                       rows_for("scenario_abstract", value=best,
                                                scenario=norm))
@@ -1051,11 +1074,14 @@ def _make_builder(db_path: Path, model=None):
         std: list = [f"<{bundle}>", f"    a oeo:{CLS_BUNDLE} ;"]
         if "scenariobundle" in bound.uuid_on:
             std.append(f"    {P_UUID} {ttl_literal(uuid_of(bundle))} ;")
-        std.append(f"    {P_LABEL} "
-                   f"{ttl_literal(chosen.get('study_project_name') or title)} ;")
-        if chosen.get("study_acronym"):
+        if settles(bundle, P_LABEL, chosen.get("study_project_name") or title):
+            std.append(f"    {P_LABEL} "
+                       f"{ttl_literal(chosen.get('study_project_name') or title)} ;")
+        if chosen.get("study_acronym") \
+                and settles(bundle, P_ACRONYM, chosen["study_acronym"]):
             std.append(f"    {P_ACRONYM} {ttl_literal(chosen['study_acronym'])} ;")
-        if chosen.get("publication_abstract"):
+        if chosen.get("publication_abstract") and settles(
+                bundle, P_ABSTRACT, chosen["publication_abstract"]):
             std += evidence_for(bundle, P_ABSTRACT,
                                 rows_for("publication_abstract",
                                          value=chosen["publication_abstract"]))

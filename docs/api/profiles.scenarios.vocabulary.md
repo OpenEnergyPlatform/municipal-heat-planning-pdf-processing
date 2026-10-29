@@ -75,6 +75,15 @@ def shapes(cache: Path = upstream.CACHE) -> list
 
 The OEKG shapes of the last refresh; empty if none has run.
 
+### context
+
+```python
+def context(cache: Path = upstream.CACHE) -> list
+```
+
+[(subject, predicate, object)] the OEKG holds about the nodes it already
+has, as the last refresh pulled them; empty if none has pulled them.
+
 ### spec_terms
 
 ```python

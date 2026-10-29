@@ -163,6 +163,61 @@ def test_the_scenarios_graph_parses_and_carries_the_shapes_paths():
     assert len(list(graph.subject_objects(uuid))) == 2
 
 
+def test_a_node_two_documents_describe_keeps_the_first_value_of_a_single_path():
+    def rows(title, author, abstract):
+        return [{"parameter": "publication_title", "value": title,
+                 "quote": title},
+                {"parameter": "publication_author", "value": author,
+                 "quote": author},
+                {"parameter": "study_project_name", "value": "ENGAGE",
+                 "quote": "the ENGAGE project"},
+                {"parameter": "publication_abstract", "value": abstract,
+                 "quote": abstract}]
+    serializer = kg.make_serializer(Path("no-such.db"), model=oekg())
+    first = serializer("a", rows("Paper A", "Sergey Paltsev", "Abstract A"))
+    second = serializer("b", rows("Paper B", "SERGEY PALTSEV", "Abstract B"))
+    graph = Graph().parse(data=first + "\n" + second, format="turtle")
+    label = URIRef("http://www.w3.org/2000/01/rdf-schema#label")
+    author = next(graph.objects(predicate=URIRef(OEO + "OEO_00000506")))
+    assert [str(o) for o in graph.objects(author, label)] == ["Sergey Paltsev"]
+    bundle = next(graph.subjects(predicate=None,
+                                 object=URIRef(OEO + "OEO_00020227")))
+    abstract = URIRef("http://purl.org/dc/terms/abstract")
+    assert [str(o) for o in graph.objects(bundle, abstract)] == ["Abstract A"]
+    # Both reports are their own nodes and keep their own titles.
+    reports = set(graph.subjects(predicate=None,
+                                 object=URIRef(OEO + "OEO_00020012")))
+    assert {str(graph.value(r, label)) for r in reports} == {"Paper A",
+                                                             "Paper B"}
+
+
+def test_a_referenced_node_is_checked_as_the_target_graph_holds_it():
+    from docpipe.ontology import with_context
+    oekg_ = "https://openenergyplatform.org/ontology/oekg/"
+    graph = Graph().parse(data=f"""
+        @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+        <{oekg_}s> <{OEO}OEO_00020220> <{oekg_}region/China> ,
+                                       <{oekg_}region/Atlantis> ;
+                   <{OEO}OEO_00000506> <{oekg_}author> .
+        <{oekg_}author> rdfs:label "Ada Lovelace" .""", format="turtle")
+    rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+    label = "http://www.w3.org/2000/01/rdf-schema#label"
+    context = [(f"{oekg_}region/China", rdf_type, f"{OEO}OEO_00020032"),
+               (f"{oekg_}region/China", label, "China"),
+               (f"{oekg_}author", label, "Somebody else"),
+               (f"{oekg_}region/Germany", label, "Germany")]
+    assert with_context(graph, context) == 2
+    china = URIRef(f"{oekg_}region/China")
+    assert (china, URIRef(rdf_type), URIRef(f"{OEO}OEO_00020032")) in graph
+    assert [str(o) for o in graph.objects(china, URIRef(label))] == ["China"]
+    # The graph's own description stands alone; what the target lacks
+    # stays bare, for the shapes to find.
+    assert [str(o) for o in graph.objects(URIRef(f"{oekg_}author"),
+                                          URIRef(label))] == ["Ada Lovelace"]
+    assert not list(graph.predicate_objects(URIRef(f"{oekg_}region/Atlantis")))
+    assert not list(graph.predicate_objects(URIRef(f"{oekg_}region/Germany")))
+
+
 # -- the gate -----------------------------------------------------------------
 
 def test_a_kind_of_violation_the_last_graph_lacked_is_new():

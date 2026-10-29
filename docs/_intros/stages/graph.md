@@ -358,7 +358,9 @@ refresh before anything is rewritten. `kwp`'s `mhpkg` source also
 carries the MHPKG SHACL files: `vocabulary.py`'s `shapes()` names the
 last refresh's copies, and `--serialize` holds the written Turtle
 (the strict one too) against them through `serialize.validate`, which calls
-`ontology.shacl_report` and writes `<ttl>.shacl.txt` beside each graph,
+`ontology.shacl_report` (with what the profile's `vocabulary.context()`
+pulled of the target graph about the nodes the graph only references) and
+writes `<ttl>.shacl.txt` beside each graph,
 a report and not a gate, and `<ttl>.shacl.json`, the same violations
 counted by kind (constraint, path, collection). `scenarios`' refresh pulls
 the OEKG shapes (`oekg_shapes`, `oekg/shapes/oekg_shapes.ttl` at the head

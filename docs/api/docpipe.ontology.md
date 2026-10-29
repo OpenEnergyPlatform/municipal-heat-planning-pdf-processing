@@ -140,10 +140,23 @@ name. `edge_problems` asks whether a subject is under a predicate's
 domain, and a subject the snapshot does not carry has no parents to
 answer with.
 
+### with_context
+
+```python
+def with_context(graph, context) -> int
+```
+
+Add to *graph* what *context* says about the nodes it only points at.
+
+*context* is [(subject, predicate, object)] the target graph already
+holds, classes and labels: an rdf:type object is an IRI, any other a
+literal. A node the graph describes itself gets nothing from it, so the
+graph's own statements are what is checked. Returns the triples added.
+
 ### shacl_report
 
 ```python
-def shacl_report(data: Path, shapes: list) -> dict
+def shacl_report(data: Path, shapes: list, context=()) -> dict
 ```
 
 A written graph held against SHACL shapes: {conforms, violations, counts, text}.
@@ -154,6 +167,10 @@ otherwise not be consulted at all (the schema repository's validate.py
 was bitten by exactly that). `counts` groups the violations by
 constraint, shape target and path, most frequent first, so a report of
 fifty thousand lines can still be read in the log.
+
+The graph is held together with *context* (`with_context`): a region or
+a term it references is checked as the target graph holds it, not as a
+bare IRI that has neither class nor label.
 
 ### serialize
 

@@ -1076,14 +1076,17 @@ def make_front_page(db_path: Path,
                     content: Optional[Callable] = None) -> Callable
 ```
 
-(document_id) -> the sections of the document's first page, in order.
+(document_id, max_sources, max_chars) -> the document's sections from
+its start, in reading order, as many as one request of those limits holds.
 
-The passages a title stands in. Where it stood among forty other rows of
-one request, the model left it out: a document with no title has no node in
-the graph, and the scenarios run lost 17 that way. So the parameters the
-profile names in FRONT_PAGE_PARAMETERS are asked once more on their own,
-over these sections (`plan_batches`). The first page is the lowest page
-any section stands on, a cover with no text being no page of this.
+The passages a publication says what it is in: title, authors, date,
+DOI and abstract. Where they stood among forty other rows of one request,
+the model left them out, a title in 17 documents of the scenarios run and
+an abstract in 132. So the parameters the profile names in
+FRONT_PAGE_PARAMETERS are asked once more on their own over the opening
+of the document, and `plan_batches` reads as much of it as one request
+holds: a cover, a repository's title sheet or a bibliography entry in
+front of the paper takes a place, and the abstract still follows.
 
 ### make_more_sources
 
@@ -2301,9 +2304,10 @@ happened to walk the rest and 194 when none did.
 for values (`topup_rest`): the frame is still found over every planned
 passage, so the pairs are the stored ones, and none of these is read.
 
-*front_page* (`make_front_page`) gives the sections of the first page, and
-of the parameters asked, those in *front_parameters* are asked once more
-there in requests of their own that offer nothing else. Every other place
+*front_page* (`make_front_page`) gives the document's sections from its
+start, and of the parameters asked, those in *front_parameters* are asked
+once more over as many of them as one request holds, in a request of its
+own that offers nothing else. Every other place
 may still give them; the checks are the same. A pass over a stored
 harvest's unread passages asks none.
 

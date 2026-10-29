@@ -193,10 +193,13 @@ def document_axes(conn: sqlite3.Connection, document_id: int) -> dict:
 # open: "3,251" is 3251 here, and "1.234" is 1.234.
 DECIMAL_MARK = "."
 
-# Asked once more on their own over the sections of the first page, besides
-# wherever else they are read. Without a title the serializer writes no node
-# for a publication, and asked among forty other rows it was left out.
-FRONT_PAGE_PARAMETERS = ("publication_title",)
+# What a publication says about itself, asked once more on its own over the
+# opening of the document, besides wherever else it is read. Asked among
+# forty other rows it was left out: the title in 17 documents, the abstract
+# in 132 of 164, the date in 60, though nearly every one prints them there.
+FRONT_PAGE_PARAMETERS = ("publication_title", "publication_author",
+                         "publication_date", "publication_doi",
+                         "publication_abstract")
 
 # The language tag of the ontology's alternative labels that the vocabulary
 # snapshot keeps for this profile, the words its spec is held against. The

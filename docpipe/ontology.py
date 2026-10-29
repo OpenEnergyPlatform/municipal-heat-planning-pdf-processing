@@ -347,7 +347,29 @@ def build(closure: Path, sets: dict, spec_raw: dict, *, language: str,
             "disjoint": [list(pair) for pair in disjoint]}
 
 
-def shacl_report(data: Path, shapes: list) -> dict:
+def with_context(graph, context) -> int:
+    """Add to *graph* what *context* says about the nodes it only points at.
+
+    *context* is [(subject, predicate, object)] the target graph already
+    holds, classes and labels: an rdf:type object is an IRI, any other a
+    literal. A node the graph describes itself gets nothing from it, so the
+    graph's own statements are what is checked. Returns the triples added.
+    """
+    from rdflib import Literal, URIRef
+    from rdflib.namespace import RDF
+    described = set(graph.subjects())
+    referenced = {o for o in graph.objects()
+                  if isinstance(o, URIRef) and o not in described}
+    added = 0
+    for s, p, o in context:
+        if URIRef(s) in referenced:
+            graph.add((URIRef(s), URIRef(p),
+                       URIRef(o) if p == str(RDF.type) else Literal(o)))
+            added += 1
+    return added
+
+
+def shacl_report(data: Path, shapes: list, context=()) -> dict:
     """A written graph held against SHACL shapes: {conforms, violations, counts, text}.
 
     The shapes files are parsed into ONE graph first. pyshacl takes repeated
@@ -356,6 +378,10 @@ def shacl_report(data: Path, shapes: list) -> dict:
     was bitten by exactly that). `counts` groups the violations by
     constraint, shape target and path, most frequent first, so a report of
     fifty thousand lines can still be read in the log.
+
+    The graph is held together with *context* (`with_context`): a region or
+    a term it references is checked as the target graph holds it, not as a
+    bare IRI that has neither class nor label.
     """
     import re
     from pyshacl import validate
@@ -363,9 +389,10 @@ def shacl_report(data: Path, shapes: list) -> dict:
     shapes_graph = Graph()
     for path in shapes:
         shapes_graph.parse(str(path), format="turtle")
+    graph = Graph().parse(str(data), format="turtle")
+    added = with_context(graph, context)
     conforms, _results, text = validate(
-        Graph().parse(str(data), format="turtle"),
-        shacl_graph=shapes_graph, advanced=True)
+        graph, shacl_graph=shapes_graph, advanced=True)
     counts: collections.Counter = collections.Counter()
     blocks = text.split("Constraint Violation")[1:]
     for block in blocks:
@@ -378,7 +405,7 @@ def shacl_report(data: Path, shapes: list) -> dict:
                 path.group(1) if path else "-",
                 focus.group(1) if focus else "?")] += 1
     return {"conforms": bool(conforms), "violations": len(blocks),
-            "counts": counts.most_common(), "text": text}
+            "counts": counts.most_common(), "text": text, "context": added}
 
 
 def serialize(snapshot: dict) -> str:

@@ -182,10 +182,11 @@ not cover raises: a verdict over half a body would read as a verdict.
 ### shape_problems
 
 ```python
-def shape_problems(data, shapes, known: dict) -> list
+def shape_problems(data, shapes, known: dict, context=()) -> list
 ```
 
-What the shapes say against one bundle graph.
+What the shapes say against one bundle graph, held together with what
+the OEKG already holds about the nodes it points at (*context*).
 
 ### platform_acronyms
 

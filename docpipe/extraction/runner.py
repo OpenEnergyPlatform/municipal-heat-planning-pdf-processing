@@ -1004,39 +1004,46 @@ def make_rest_of_document(db_path: Path,
 
 def make_front_page(db_path: Path,
                     content: Optional[Callable] = None) -> Callable:
-    """(document_id) -> the sections of the document's first page, in order.
+    """(document_id, max_sources, max_chars) -> the document's sections from
+    its start, in reading order, as many as one request of those limits holds.
 
-    The passages a title stands in. Where it stood among forty other rows of
-    one request, the model left it out: a document with no title has no node in
-    the graph, and the scenarios run lost 17 that way. So the parameters the
-    profile names in FRONT_PAGE_PARAMETERS are asked once more on their own,
-    over these sections (`plan_batches`). The first page is the lowest page
-    any section stands on, a cover with no text being no page of this.
+    The passages a publication says what it is in: title, authors, date,
+    DOI and abstract. Where they stood among forty other rows of one request,
+    the model left them out, a title in 17 documents of the scenarios run and
+    an abstract in 132. So the parameters the profile names in
+    FRONT_PAGE_PARAMETERS are asked once more on their own over the opening
+    of the document, and `plan_batches` reads as much of it as one request
+    holds: a cover, a repository's title sheet or a bibliography entry in
+    front of the paper takes a place, and the abstract still follows.
     """
     local = threading.local()
     shared = content or make_shared_content()
 
-    def front_page(document_id: int) -> list:
+    def front_page(document_id: int, max_sources: int, max_chars: int) -> list:
         if getattr(local, "conn", None) is None:
             local.conn = sqlite3.connect(readonly_uri(db_path), uri=True)
             local.conn.row_factory = sqlite3.Row
         conn = local.conn
         try:
             ids = [int(r[0]) for r in conn.execute(
-                "SELECT id FROM Sections WHERE document = ? AND page_number = "
-                "(SELECT MIN(page_number) FROM Sections WHERE document = ?) "
-                "ORDER BY COALESCE(section_number, id)",
-                (document_id, document_id))]
+                "SELECT id FROM Sections WHERE document = ? "
+                "ORDER BY page_number, COALESCE(section_number, id)",
+                (document_id,))]
         except Exception as exc:
             log.warning("   first page of document %s unreadable: %s",
                         document_id, exc)
             return []
         out: list = []
+        chars = 0
         for owner_id in ids:
+            # As far as one request reaches; the first section always.
+            if out and (len(out) >= max_sources or chars >= max_chars):
+                break
             hit = shared(conn, "section", owner_id)
             if hit is not None:
                 out.append(_source_of({**hit, "owner_kind": "section",
                                        "owner_id": owner_id}, via="front"))
+                chars += len(out[-1].text or "")
         return out
 
     return front_page
@@ -6307,9 +6314,10 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
     for values (`topup_rest`): the frame is still found over every planned
     passage, so the pairs are the stored ones, and none of these is read.
 
-    *front_page* (`make_front_page`) gives the sections of the first page, and
-    of the parameters asked, those in *front_parameters* are asked once more
-    there in requests of their own that offer nothing else. Every other place
+    *front_page* (`make_front_page`) gives the document's sections from its
+    start, and of the parameters asked, those in *front_parameters* are asked
+    once more over as many of them as one request holds, in a request of its
+    own that offers nothing else. Every other place
     may still give them; the checks are the same. A pass over a stored
     harvest's unread passages asks none.
     """
@@ -6456,7 +6464,8 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
     if front_page is not None and front and not already_read:
         items_front = [WorkItem(report.document_id, None, source,
                                 origin="front")
-                       for source in front_page(report.document_id)]
+                       for source in front_page(report.document_id,
+                                                BATCH_SOURCES, BATCH_CHARS)]
         for item in items_front:
             trace.event("plan", report.document_id, rank=None,
                         origin=item.origin, kind=item.source.owner_kind,
@@ -6464,12 +6473,13 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
                         chars=len(item.source.text or ""), image=False,
                         frame=None)
         only_front = narrow_spec(doc_spec, front)
+        # One request: the opening of the document as far as it holds.
         for batch in group_items(items_front, max_sources=BATCH_SOURCES,
-                                 max_chars=BATCH_CHARS):
+                                 max_chars=BATCH_CHARS)[:1]:
             batch.bases = bases
             batch.spec = only_front
             batches.append(batch)
-        report.owners_harvested += len(items_front)
+            report.owners_harvested += len(batch.items)
     log.info("extraction: %s planned — %d batch(es) over %d source(s)",
              name, len(batches), sum(len(b.items) for b in batches))
     return PlannedDocument(name=name, report=report, batches=batches,
@@ -6759,7 +6769,8 @@ def main(argv: Optional[list] = None) -> int:
         if args.provenance and provenance.enabled() \
                 and described.get("base"):
             writer = provenance.Writer(described["base"], described)
-        from .serialize import run as serialize_run, validate
+        from .serialize import (profile_context, run as serialize_run,
+                                validate)
         held, gold_path = _decisions_file(args.out)
         try:
             counts = serialize_run(args.out, args.serialize, serializer,
@@ -6792,9 +6803,10 @@ def main(argv: Optional[list] = None) -> int:
             if paths:
                 # The graph is written by now, and the report must not take
                 # the serialize result with it when the validator fails.
+                context = profile_context(profile)
                 for graph_path in written:
                     try:
-                        validate(graph_path, paths)
+                        validate(graph_path, paths, context=context)
                     except Exception:
                         log.exception("shacl: validation of %s failed, no "
                                       "report written", graph_path)

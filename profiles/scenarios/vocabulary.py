@@ -56,12 +56,28 @@ SELECT DISTINCT ?region ?label WHERE {{
   OPTIONAL {{ ?region rdfs:label ?label }}
 }}"""
 
+# What the OEKG already says about the nodes a written graph only points at:
+# the class and the label of each region and each OEO term it holds. The
+# graph references them without repeating them (kg.py), and the shapes check
+# both, so the graph is validated together with these (`context`).
+CONTEXT_QUERY = f"""PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?s ?p ?o WHERE {{
+  VALUES ?p {{ rdf:type rdfs:label }}
+  ?s ?p ?o .
+  FILTER(STRSTARTS(STR(?s), "{REGION_BASE}")
+         || STRSTARTS(STR(?s), "https://openenergyplatform.org/ontology/oeo/"))
+}}"""
+
 SOURCES = {
     "oeo": {"kind": "release_asset", "repo": "OpenEnergyPlatform/ontology",
             "asset": "oeo-closure.owl"},
     "regions": {"kind": "sparql",
                 "endpoint": "https://openenergyplatform.org/api/v0/oekg/sparql/",
                 "token_env": "OEP_API_TOKEN", "query": REGIONS_QUERY},
+    "oekg_context": {"kind": "sparql",
+                     "endpoint": "https://openenergyplatform.org/api/v0/oekg/sparql/",
+                     "token_env": "OEP_API_TOKEN", "query": CONTEXT_QUERY},
     # The shapes the serializer reads its paths, cardinalities and classes
     # from (kg.make_serializer) and the written graph is validated against.
     # The head of the branch, which is what the next pin will be. `reviewed`
@@ -167,6 +183,17 @@ def shapes(cache: Path = upstream.CACHE) -> list:
     """The OEKG shapes of the last refresh; empty if none has run."""
     return upstream.files((upstream.load_lock(PROFILE, cache) or {})
                           .get("sources", {}).get("oekg_shapes"), ".ttl")
+
+
+def context(cache: Path = upstream.CACHE) -> list:
+    """[(subject, predicate, object)] the OEKG holds about the nodes it already
+    has, as the last refresh pulled them; empty if none has pulled them."""
+    paths = upstream.files((upstream.load_lock(PROFILE, cache) or {})
+                           .get("sources", {}).get("oekg_context"))
+    if not paths:
+        return []
+    return [(row["s"], row["p"], row["o"])
+            for row in json.loads(paths[0].read_text(encoding="utf-8"))]
 
 
 def spec_terms(spec_raw: dict) -> dict:

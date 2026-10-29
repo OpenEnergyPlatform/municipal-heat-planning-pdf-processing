@@ -69,9 +69,11 @@ table gives this profile's own answer.
 fact and question, with a quote and no value; the search then reads from
 that map (see [extraction](../stages/extraction.md)).
 
-`FRONT_PAGE_PARAMETERS = ("publication_title",)` in `extraction.py` has the
-title asked once more on its own over the sections of the first page,
-besides wherever else it is read. Without a title the serializer writes no
+`FRONT_PAGE_PARAMETERS` in `extraction.py` has what a publication says
+about itself (title, authors, date, DOI, abstract) asked once more on its
+own over the opening of the document, besides wherever else it is read.
+The abstract was left out in 132 of 164 publications and the date in 60
+when they were only asked among all the other rows. Without a title the serializer writes no
 node for a publication: 17 of the 164 publications of the run of 2026-10-22
 had none, 14 of them because refinement had dropped the title before the
 harvest (a heading with no body, or the heading of a section the model
@@ -320,6 +322,18 @@ existing harvest before a job starts its model
 ([../stages/graph.md](../stages/graph.md)). Where the shapes and the
 ontology disagree, the shapes win: the region is written with the path the
 closed `ScenarioShape` names (owner decision 2026-10-22).
+
+The graph only references a region or an OEO term the OEKG already has, and
+the shapes check its class and label. So the validation holds the graph
+together with what the OEKG says about those nodes: the refresh pulls their
+`rdf:type` and `rdfs:label` (`oekg_context`), `vocabulary.context()` hands
+them over and `ontology.with_context` adds them for every node the graph
+points at without describing it. Without that, 475 of the 5,902 violations
+of the run of 2026-10-22 were regions and terms that are fine in the OEKG.
+A node several documents describe, an author or a project's bundle, is one
+node of the file: its single-valued properties carry the value of the first
+document that gave one, and a later document's other reading goes unwritten
+(`settles` in `_make_builder`).
 
 The bundle also carries its tags, one triple for each entry the model
 picked from the four lists above. `BUNDLE_TAGS` is every category

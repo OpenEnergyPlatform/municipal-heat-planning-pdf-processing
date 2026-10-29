@@ -31,7 +31,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.jsonl](docpipe.jsonl.md): The lines of a JSON Lines file. (2 functions)
 - [docpipe.llm_preflight](docpipe.llm_preflight.md): Asks the server what it can do, before the first document. (1 class, 11 functions)
 - [docpipe.migrate_artifact_names](docpipe.migrate_artifact_names.md): Rename the per-document artefacts of an already processed tree to the names in ``docpipe.artifacts``. (3 functions)
-- [docpipe.ontology](docpipe.ontology.md): Reads the ontology a spec is written against once and pins it in a snapshot. (21 functions)
+- [docpipe.ontology](docpipe.ontology.md): Reads the ontology a spec is written against once and pins it in a snapshot. (22 functions)
 - [docpipe.profile](docpipe.profile.md): A profile is everything a project contributes to the generic pipeline: where its documents come from, what extra tables it needs, which prompts it overrides and which filters its app offers. (2 classes, 14 functions)
 - [docpipe.prompts](docpipe.prompts.md): Loads a profile's prompts, one Markdown file per stage, from `profiles/<profile>/prompts/<stage>/<name>.md`. (3 classes, 12 functions)
 - [docpipe.reading](docpipe.reading.md): The one JSON object a stage asked a model for, or why there is none. (1 class, 6 functions)
@@ -116,7 +116,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.scheduler](docpipe.extraction.scheduler.md): One queue for every model request of a run, served oldest document first. (5 classes, 2 functions)
 - [docpipe.extraction.schema](docpipe.extraction.schema.md): Builds a JSON Schema for the harvest, the stamp and the trace. (7 functions)
 - [docpipe.extraction.scratch](docpipe.extraction.scratch.md): Where a column of one's own lives, and why its harvest stays there. (1 function)
-- [docpipe.extraction.serialize](docpipe.extraction.serialize.md): Turns a document harvest into the profile's target graph. (6 functions)
+- [docpipe.extraction.serialize](docpipe.extraction.serialize.md): Turns a document harvest into the profile's target graph. (7 functions)
 - [docpipe.extraction.shapemodel](docpipe.extraction.shapemodel.md): The graph a writer produces, as the shapes it is held to say. (3 classes, 1 function)
 - [docpipe.extraction.spec](docpipe.extraction.spec.md): The contract between a profile's ontology knowledge and the core. (4 classes, 9 functions)
 - [docpipe.extraction.stats](docpipe.extraction.stats.md): Where a harvest is hard, written beside it after every run. (5 functions)
@@ -261,7 +261,7 @@ is for and what it hands to what; this is the reference.
 - [profiles.scenarios.reading](profiles.scenarios.reading.md): What the refinement, visuals and page-transcription stages say to the model when its reply was not the one JSON object that was asked for.
 - [profiles.scenarios.source](profiles.scenarios.source.md): Where the AR6 corpus comes from: pdf_index.json, the crawl over the publications the AR6 scenario database cites. (1 class, 5 functions)
 - [profiles.scenarios.store](profiles.scenarios.store.md): The project's own tables: publication metadata, the AR6 scenarios and the links between them. (4 functions)
-- [profiles.scenarios.vocabulary](profiles.scenarios.vocabulary.md): This profile's half of the ontology snapshot. (11 functions)
+- [profiles.scenarios.vocabulary](profiles.scenarios.vocabulary.md): This profile's half of the ontology snapshot. (12 functions)
 
 ## scripts
 

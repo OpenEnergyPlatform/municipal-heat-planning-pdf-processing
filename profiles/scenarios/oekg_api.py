@@ -574,10 +574,13 @@ def _named(iri, known: dict) -> str:
     return f"{label} ({local})" if label else local
 
 
-def shape_problems(data, shapes, known: dict) -> list:
-    """What the shapes say against one bundle graph."""
+def shape_problems(data, shapes, known: dict, context=()) -> list:
+    """What the shapes say against one bundle graph, held together with what
+    the OEKG already holds about the nodes it points at (*context*)."""
     from pyshacl import validate
     from rdflib import RDF, URIRef
+    from docpipe.ontology import with_context
+    with_context(data, context)
     _conforms, results, _text = validate(data, shacl_graph=shapes)
     out = []
     for report in results.subjects(RDF.type, URIRef(SH + "ValidationReport")):
@@ -674,6 +677,7 @@ def dry_run(harvest: Path, db: Path, openapi: dict, shapes,
     # to, so the dry run and the verdict speak of one file.
     reader = kg.make_study_reader(db, model=Model.from_graph(shapes))
     schema = RequestSchema(openapi)
+    context = vocabulary.context()
     studies, without = [], []
     for name, rows in collect(harvest).items():
         study = reader(name, rows)
@@ -687,7 +691,8 @@ def dry_run(harvest: Path, db: Path, openapi: dict, shapes,
     for item in bundles:
         payload = body(item, known)
         problems = schema.problems(payload)
-        problems += shape_problems(graph(payload, known), shapes, known)
+        problems += shape_problems(graph(payload, known), shapes, known,
+                                   context)
         entries.append({"documents": item["documents"], "formed": item["formed"],
                         "method": "POST", "path": PATH, "body": payload,
                         "problems": problems})

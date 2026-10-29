@@ -61,7 +61,7 @@ def check(harvest: Path, db: Path, out: Path,
     """Why the graph of *harvest* cannot be written as the run would write
     it; empty when it can."""
     from docpipe.profile import load_profile
-    from .serialize import run as serialize_run, validate
+    from .serialize import profile_context, run as serialize_run, validate
     profile = profile or load_profile()
     try:
         serializer = _serializer(profile, db)
@@ -84,7 +84,7 @@ def check(harvest: Path, db: Path, out: Path,
         return [f"no shapes from a refresh to hold the graph against "
                 f"(python -m profiles.{profile.name}.vocabulary --refresh)"]
     try:
-        validate(out, paths)
+        validate(out, paths, context=profile_context(profile))
     except Exception as exc:
         return [f"the validator does not run: {exc}"]
     written = json.loads(out.with_name(out.name + ".shacl.json")

@@ -99,10 +99,18 @@ def kind_key(kind: tuple) -> str
 
 (constraint, path, collection) of a violation as one JSON key.
 
+### profile_context
+
+```python
+def profile_context(profile) -> list
+```
+
+What the profile's last refresh pulled of the target graph, or [].
+
 ### validate
 
 ```python
-def validate(out_path: Path, shapes: list, top: int = 12) -> dict
+def validate(out_path: Path, shapes: list, top: int = 12, context=()) -> dict
 ```
 
 Hold the written graph against the profile's SHACL shapes.
@@ -113,5 +121,8 @@ A report, not a gate: the full text goes next to the graph as
 most frequent kinds to the log. The graph stays written either way. The
 harvest is the durable artifact and a graph the shapes reject is still
 the one to look at.
+
+*context* is what the target graph holds about the nodes this one only
+points at (`profile_context`), checked together with it.
 
 [Back to the index](../README.md)
