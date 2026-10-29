@@ -208,6 +208,9 @@
         "pattern": "^value .* does not occur in the quote$"
        },
        {
+        "pattern": "^value .* not in vocabulary$"
+       },
+       {
         "pattern": "^text value not in its quote$"
        },
        {

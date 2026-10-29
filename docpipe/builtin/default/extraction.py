@@ -52,6 +52,10 @@ PHRASES = {
         'character, including one that starts with "out:". If none fits '
         'although the passage states the field, leave "value" out and '
         'give the wording in "value_raw".'),
+    "value_not_an_option": (
+        'The value {value!r} of this row is none of the entries of '
+        '{given!r}. Choose the field whose list holds this value, or '
+        'answer that these passages do not state it.'),
     "wrong_type": (
         'Your "value" {given!r} is not {wrong}. Answer with {wrong}, '
         'exactly as the passage writes it.'),

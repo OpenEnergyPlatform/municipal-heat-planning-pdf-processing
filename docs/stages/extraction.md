@@ -715,7 +715,11 @@ decision 2026-09-23). A closed-list coordinate answers a third clause
 too: naming one of
 the list's own entries, by label, spelling or URI, or it is never marked
 read (`option_named`, `not_an_option`, `pipeline.py`, the owner's
-rule of 2026-09-11). Which table the
+rule of 2026-09-11). The same rule holds one list further: a row takes a
+parameter only if that parameter's own list holds the row's value
+(`fields.holds`, the parameter slot's `admits`), since the value is read
+before the parameter; a parameter whose list lacks it is never read and is
+asked again with the value named (`value_not_an_option`). Which table the
 passage belongs to, how far from the row it stands and which column of a
 table it heads are the model's reading, not a rule. Failures are recorded
 separately, `unquoted` against `unbacked`, so a retry can name what to fix. A
@@ -730,7 +734,10 @@ last check against the spec's closed lists and the literal source text. A
 number is compared digit for digit after `canonical_number` normalises
 locale grouping and decimal marks; a category or text value is compared
 case- and whitespace-folded against its own wording, through `verify.flat`
-(`verify.py`). The set of numbers a quote is checked against,
+(`verify.py`). A category value that is none of its list's entries is
+refused (`value ... not in vocabulary`), and a grown list reopens that
+answer space for `remap` (`refused_spaces`); a value left out with its
+wording in `value_raw` is the answer that no entry fits and is kept. The set of numbers a quote is checked against,
 `numbers_in` (`verify.py`), also credits the year of a dotted
 German date, "09.12.2025" or "03.2030", since read as one token it is the
 ungrouped number 09122025 and the year it plainly prints would otherwise

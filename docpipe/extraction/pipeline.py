@@ -1067,8 +1067,9 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             row.claim[f"{slot.name}_state"] = SAID_UNSTATED
             unstated += 1
             continue
-        if slot.kind == CHOICE and slot.options \
-                and option_named(slot, given) is None:
+        option = (option_named(slot, given)
+                  if slot.kind == CHOICE and slot.options else None)
+        if slot.kind == CHOICE and slot.options and option is None:
             # An answer to a closed list that is not on it. It used to be read
             # whenever its wording stood in the quote, and the class lookup
             # behind it came back empty: 171 tuples of corpus_m5 said "read"
@@ -1085,6 +1086,20 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             failed.append({"row": row.label, "why": "not_an_option",
                            "given": given, "reason": say(
                                "not_an_option", given=given)})
+            unbacked += 1
+            continue
+        if option is not None and slot.admits is not None \
+                and not slot.admits(row.claim, option.uri):
+            # An entry of the list that this row cannot take: a parameter
+            # whose own closed list does not hold the row's value
+            # (`fields.holds`). The same rule one list further, so the same
+            # outcome: asked again, told which value, and never read.
+            value = row.claim.get("value")
+            row.claim[f"{slot.name}_state"] = UNBACKED
+            failed.append({"row": row.label, "why": "not_an_option",
+                           "given": given, "raw": value, "reason": say(
+                               "value_not_an_option", given=given,
+                               value=value)})
             unbacked += 1
             continue
         wrong = _wrong_type(slot, given)

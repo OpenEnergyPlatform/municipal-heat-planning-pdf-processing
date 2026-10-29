@@ -22,11 +22,11 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Callable, Optional
 
 from . import wording
-from .spec import Parameter
+from .spec import Parameter, fold_label
 
 # What a slot wants back. VALUE is the only one that decides how many rows
 # there are; every other slot fills a column of rows that already exist.
@@ -129,6 +129,10 @@ class Slot:
     options: tuple = ()
     # {"from": "unit", "value": uri} when the spec decides this coordinate.
     derive: Optional[dict] = None
+    # (claim, option uri) -> bool: may this row take that entry? None where
+    # every entry fits every row.
+    admits: Optional[Callable] = field(default=None, compare=False,
+                                       repr=False)
 
     @property
     def is_closed(self) -> bool:
@@ -205,7 +209,32 @@ def parameter_slot(spec) -> Slot:
     return Slot(name="parameter", kind=CHOICE, required=True,
                 question=spec.parameter_question,
                 options=tuple(Option(label=p.label, uri=p.uri)
-                              for p in spec.parameters))
+                              for p in spec.parameters),
+                admits=lambda claim, uri: (uri not in spec.by_uri
+                                           or holds(spec.by_uri[uri], claim)))
+
+
+def holds(parameter: Parameter, claim: dict) -> bool:
+    """Can this parameter hold the row's value?
+
+    A category parameter's value is an answer to its closed list, so only a
+    row whose value is one of its entries can be of it -- the owner's rule
+    for a closed list (2026-09-11), applied where the value meets its list.
+    The value is read before the parameter, and on the AR6 run 2,234 rows
+    took a parameter whose list did not hold their value: "transport sector"
+    as a sector division, "2050" as a sector. The lookup is the one
+    `verify._check_value` resolves the value with.
+
+    A value left out with the wording beside it is the answer that no entry
+    fits, and fits every category parameter. A text or numeric parameter
+    holds any value here; its own checks are elsewhere.
+    """
+    if parameter.value_type != "category":
+        return True
+    value = claim.get("value")
+    if not isinstance(value, str) or not value.strip():
+        return True
+    return fold_label(value.strip()) in parameter.value_to_uri()
 
 
 # The coordinate that says which entry of units_accepted a number is in.

@@ -22,9 +22,10 @@ the real entries are. A closed list without an escape hatch does not stop the
 model from answering; it stops it from answering CORRECTLY, and what comes back
 is the nearest entry that is not quite right. The OEKG knows 249 countries and
 no aggregates, while an AR6 scenario is usually global — so without
-`out:global` the honest answer to "which region" does not exist in the list,
+a world entry the honest answer to "which region" does not exist in the list,
 and a paper about worldwide emissions that happens to mention Germany once
-invites "Germany". The same holds for a run identifier: naming a family is not
+invites "Germany". The world and the groups of countries are entries of the
+list now and are written as their member countries. The same holds for a run identifier: naming a family is not
 naming a run, and the model needs a way to say so that is not silence.
 
 Silence is the other half of the argument. An empty field already meant
@@ -40,6 +41,8 @@ from pathlib import Path
 
 SPEC_PATH = Path(__file__).with_name("extraction_spec.json")
 REGIONS_PATH = Path(__file__).with_name("regions.json")
+AGGREGATES_PATH = Path(__file__).with_name("region_aggregates.json")
+WORLD = "aggregate:World"
 
 # Every label is matched on word boundaries, short or long. "US" hides inside
 # "thus" and "UK" inside "Ukraine", but so does Niger inside Nigeria, India
@@ -65,12 +68,12 @@ _WORD = r"(?<!\w){}(?!\w)"
 #
 # A scenario is global far more often than national, and the OEKG's region list
 # is 249 countries with no aggregate — no World, no EU27, no OECD, no R5.
-# Without these the correct answer for most AR6 scenarios is not in the list.
+# The groups are entries now (`region_aggregates.json`, from the AR6
+# database's regions and the UN's M49): a group is written as its member
+# countries. "several regions" stays for a group neither source has.
 REGION_OUT = {
-    "out:global": ["global", "worldwide",
-                   u"global — the whole world, not a single country"],
     "out:multiregion": ["several regions", "several countries", "EU27", "OECD",
-                        "several countries or a region the list does not "
+                        "several countries or a group the list does not "
                         "carry"],
     "out:other": ["other region",
                   "something else that is not a country of the list"],
@@ -94,6 +97,14 @@ SCENARIO_OUT = {
 
 def _regions() -> dict:
     return json.loads(REGIONS_PATH.read_text(encoding="utf-8"))
+
+
+def aggregates() -> dict:
+    """{key: {labels, members, ...}}, the groups of countries of the last
+    refresh; empty before one has written them."""
+    if not AGGREGATES_PATH.is_file():
+        return {}
+    return json.loads(AGGREGATES_PATH.read_text(encoding="utf-8"))
 
 
 def _document_text(conn: sqlite3.Connection, document_id: int) -> str:
@@ -163,11 +174,27 @@ def document_scenarios(conn: sqlite3.Connection, document_id: int) -> dict:
 
 
 def document_regions(conn: sqlite3.Connection, document_id: int) -> dict:
+    """The countries and groups of countries this document names.
+
+    The world is always offered, as `global` was. A group of the AR6
+    database is also offered by its bare name where the document names its
+    family: a paper writes "the R10 regions" and then "Europe".
+    """
+    groups = aggregates()
+    out = ({WORLD: groups[WORLD]["labels"]} if WORLD in groups else {})
     text = _document_text(conn, document_id)
     if not text:
-        return {}
-    return {iri: labels for iri, labels in _regions().items()
-            if _mentioned(text, labels)}
+        return out
+    out.update({iri: labels for iri, labels in _regions().items()
+                if _mentioned(text, labels)})
+    for key, group in groups.items():
+        labels = group["labels"]
+        family = group.get("family")
+        named = labels + ([labels[0].rsplit(" (", 1)[0]]
+                          if family and _mentioned(text, [family]) else [])
+        if key not in out and _mentioned(text, named):
+            out[key] = labels
+    return out
 
 
 def document_axes(conn: sqlite3.Connection, document_id: int) -> dict:
@@ -255,6 +282,11 @@ NOT_EXTRACTED = {
         "covers energy carrier: optional in the shapes, a closed list; the "
         "sector and technology tags of the study are asked and its energy "
         "carrier tag is not",
+    # the study's sector division tag
+    ("study", "OEO_00390079"):
+        "based on sector division: a closed list the AR6 papers almost never "
+        "answer; on the AR6 run 531 of 535 answers were a sector and four "
+        "publications named a listed division (owner, 2026-10-29)",
     # interacting region
     ("scenario", "OEO_00020222"):
         "has interacting region: optional in the shapes; a scenario's study "
@@ -324,6 +356,10 @@ PHRASES = {
         'character, including one that starts with "out:". If none fits '
         'although the passage states the field, leave "value" out and '
         'give the wording in "value_raw".'),
+    "value_not_an_option": (
+        'The value {value!r} of this row is none of the entries of '
+        '{given!r}. Choose the field whose list holds this value, or '
+        'answer that these passages do not state it.'),
     "wrong_type": (
         'Your "value" {given!r} is not {wrong}. Answer with {wrong}, '
         'exactly as the passage writes it.'),

@@ -93,7 +93,6 @@ LIST_URL = "https://openenergyplatform.org" + PATH
 
 # The tags of a bundle, as the spec names them and as the API does.
 TAG_KEYS = {"study_descriptor": "descriptors",
-            "study_sector_division": "sector_divisions",
             "study_sector": "sectors",
             "study_technology": "technologies"}
 

@@ -26,9 +26,10 @@ the real entries are. A closed list without an escape hatch does not stop the
 model from answering; it stops it from answering CORRECTLY, and what comes back
 is the nearest entry that is not quite right. The OEKG knows 249 countries and
 no aggregates, while an AR6 scenario is usually global — so without
-`out:global` the honest answer to "which region" does not exist in the list,
+a world entry the honest answer to "which region" does not exist in the list,
 and a paper about worldwide emissions that happens to mention Germany once
-invites "Germany". The same holds for a run identifier: naming a family is not
+invites "Germany". The world and the groups of countries are entries of the
+list now and are written as their member countries. The same holds for a run identifier: naming a family is not
 naming a run, and the model needs a way to say so that is not silence.
 
 Silence is the other half of the argument. An empty field already meant
@@ -38,6 +39,15 @@ chosen `out:` entry means exactly one of them, and it is the one worth
 counting.
 
 ## Functions
+
+### aggregates
+
+```python
+def aggregates() -> dict
+```
+
+{key: {labels, members, ...}}, the groups of countries of the last
+refresh; empty before one has written them.
 
 ### document_scenarios
 
@@ -55,6 +65,12 @@ identity the corpus links against, and kg.py resolves it the same way.
 ```python
 def document_regions(conn: sqlite3.Connection, document_id: int) -> dict
 ```
+
+The countries and groups of countries this document names.
+
+The world is always offered, as `global` was. A group of the AR6
+database is also offered by its bare name where the document names its
+family: a paper writes "the R10 regions" and then "Europe".
 
 ### document_axes
 

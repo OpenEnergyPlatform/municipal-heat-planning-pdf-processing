@@ -790,7 +790,7 @@ module resolves each one to a version, downloads it into a cache keyed by that
 version, and returns a record of what it got. What a file is for (a closure to
 snapshot, shapes to validate against, regions to offer) is the profile's.
 
-Four kinds:
+Five kinds:
 
   release_asset  An asset of the repository's latest GitHub release. A
                  repository without a release is an error, unless the source
@@ -804,8 +804,11 @@ Four kinds:
                  differs from that commit.
   sparql         A query against the OEKG endpoint. The token comes from the
                  environment variable `token_env` names and is written nowhere.
+  url            One file at a fixed address, for a publisher that is not a
+                 repository. Fetched again on every refresh; the version is a
+                 digest over its bytes.
 
-Only github.com and raw.githubusercontent.com are asked, never
+Of GitHub, only github.com and raw.githubusercontent.com are asked, never
 api.github.com: the API allows 60 unauthenticated requests an hour per
 address, and every user of a shared machine shares one address.
 

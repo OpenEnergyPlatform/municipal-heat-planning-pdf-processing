@@ -160,7 +160,9 @@ def refused_spaces(refusals: list, spaces: set) -> set:
             continue
         match = _AXIS_REASON.search(reason)
         uri = row.get("parameter")
-        key = f"axis/{uri}/{match.group(1)}" if match and uri else None
+        key = (f"axis/{uri}/{match.group(1)}" if match and uri
+               else f"value/{uri}" if uri and reason.startswith("value ")
+               else None)
         if key in spaces:
             out.add(key)
         else:

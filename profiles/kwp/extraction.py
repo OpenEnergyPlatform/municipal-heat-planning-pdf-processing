@@ -154,6 +154,10 @@ PHRASES = {
         'abgeschrieben, auch einen mit "out:". Passt keiner, obwohl die '
         'Passage die Angabe nennt, dann lass "value" weg und gib die '
         'Bezeichnung in "value_raw".'),
+    "value_not_an_option": (
+        'Der Wert {value!r} dieser Zeile ist keiner der Einträge von '
+        '{given!r}. Wähle das Feld, in dessen Liste dieser Wert steht, oder '
+        'antworte, dass es in diesen Passagen nicht steht.'),
     "wrong_type": (
         'Dein "value" {given!r} ist nicht {wrong}. Antworte mit {wrong}, '
         'genau wie die Passage es schreibt.'),

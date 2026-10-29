@@ -240,10 +240,13 @@ def _check_value(raw: dict, parameter: Parameter, flags: list):
     if parameter.value_type == "category":
         uri = parameter.value_to_uri().get(fold_label(value.strip()))
         if uri is None:
-            # The model was handed the closed class list and still found
-            # nothing that fits. That is a mapping gap to review, not a
-            # reason to drop the finding: the wording stays on the tuple.
-            flags.append(f"unmapped:value:{value.strip()}")
+            # An answer to a closed list that is none of its entries, never
+            # read (owner, 2026-09-11). It was kept with a flag, and 2,234
+            # tuples of the AR6 run said "read" with no class at all. The
+            # claim stays on the refusal, wording included; the no-class
+            # answer above is how a value says the list lacks it.
+            return None, Refusal(raw, f"value {value.strip()!r} not in "
+                                      f"vocabulary")
         out["value_uri"] = uri
         if wording:
             out["value_raw"] = wording

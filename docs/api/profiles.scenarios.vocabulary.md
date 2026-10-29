@@ -14,8 +14,9 @@ ontology release and are therefore pinned differently.
     python -m profiles.scenarios.vocabulary --check
 
 `--refresh` is what a run calls first: the OEO closure at its latest release,
-the study regions live from the OEKG and the OEKG shapes at the head of their
-branch, then the check. Without
+the study regions live from the OEKG, the OEKG shapes at the head of their
+branch and the groups of countries a scenario may cover (IIASA, UN M49),
+then the check. Without
 OEP_API_TOKEN in the environment it stops, because the regions are offered to
 the model and a list nobody pulled is not the OEKG's current one.
 
@@ -55,6 +56,23 @@ spellings a document writes that the graph does not carry (both "Cabo
 Verde" and "Cape Verde", say); they come first, in
 their order, and a live label they lack is appended. A region with no
 label from either side cannot be offered to the model and raises.
+
+### aggregates
+
+```python
+def aggregates(families: list, tree: list, regions: dict) -> tuple
+```
+
+({key: {labels, members, source}}, Counter of what could not be placed).
+
+*families* are the parsed IIASA region files, *tree* the M49 tree,
+*regions* regions.json. A member is an OEKG region, found by one of its
+labels, or by a label with the same words in another order and
+punctuation ("Republic of Moldova", "Moldova (the Republic of)"), so a
+country both lists spell alike needs no table; one no label names, or
+two regions' labels do, is counted, never guessed. A group's label that is a country's
+label is the country, and a label two groups share is the first one's:
+both would make one answer mean two things, so each is counted too.
 
 ### refresh
 

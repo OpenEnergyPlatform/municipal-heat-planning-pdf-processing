@@ -10,16 +10,19 @@
     "its own evidence. The crawl values become the cross-check, not the source.",
     "",
     "Where a finite list of correct answers exists, the model chooses from it",
-    "instead of writing one. Seven fields are of that kind:",
+    "instead of writing one. Six fields are of that kind:",
     "  scenario_label   the AR6 scenarios this publication documents (per",
     "                   document, from DocumentScenarios)",
-    "  scenario_region  the 249 study regions the OEKG uses, narrowed to those",
-    "                   the document names (per document, from regions.json)",
+    "  scenario_region  the 249 study regions the OEKG uses and the groups of",
+    "                   countries of region_aggregates.json, narrowed to those",
+    "                   the document names (per document)",
     "  scenario_type    the 17 classes the OEKG shapes accept for `has scenario",
     "                   type` (corpus-wide, listed below)",
-    "  study_descriptor, study_sector_division, study_sector, study_technology",
-    "                   the 31, 17, 153 and 43 classes the OEKG shapes accept",
-    "                   for the four tags a scenario bundle has to carry",
+    "  study_descriptor, study_sector, study_technology",
+    "                   the 31, 153 and 43 classes the OEKG shapes accept",
+    "                   for three of the four tags a scenario bundle carries;",
+    "                   the sector division is not asked, as the AR6 papers",
+    "                   name one of the listed divisions almost never",
     "                   (corpus-wide, listed below)",
     "The first two are marked `vocabulary_dynamic` and filled by",
     "profiles/scenarios/extraction.py:document_axes before the harvest starts. In every",
@@ -36,7 +39,7 @@
     "df25aa5aec966be79096cb5dc1f09023fc66a99b984c485a24897adb76a99dd4 -- the same pin profiles/kwp/vocabulary.json",
     "records. The property is IAO_0000115 except where an entry says otherwise in its own note. A class the",
     "ontology gives no definition carries none. profiles/scenarios/vocabulary.json is the snapshot of that release,",
-    "and tests/test_scenarios_extraction.py holds the four tag lists' definitions against it.",
+    "and tests/test_scenarios_extraction.py holds the three tag lists' definitions against it.",
     "out:not_in_list is not an ontology term, so its meaning is this profile's own words, in the language of",
     "its prompts."
   ],
@@ -498,130 +501,6 @@
           "prefix": "oeo",
           "predicate": "OEO_00390071",
           "label": "has study descriptor tag"
-        },
-        "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
-      }
-    },
-    {
-      "uri": "study_sector_division",
-      "label": "Sector division",
-      "description": "The sector division by which the study delimits its sectors, chosen from value_classes: for instance the CRF sectors of the IPCC guidelines, the sectors of the German Climate Protection Act or those of an energy balance. These are the divisions the OEKG allows for this field. Take the most specific one the text supports. Two answers do NOT mean the same: 'sector division' means the text divides by sectors but names none of the listed divisions as its basis; 'none of these divisions' means the text does name a division, but the list does not carry it. value_raw takes the document's wording. One tuple per division.",
-      "value_type": "category",
-      "vocabulary": {
-        "https://openenergyplatform.org/ontology/oeo/OEO_00000368": {
-          "label": "sector division",
-          "spellings": [],
-          "definition": "A sector division is a specific way to subdivide a system."
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00010055": {
-          "label": "CRF sector division",
-          "spellings": [
-            "CRF",
-            "NIR sector division",
-            "common reporting format",
-            "national inventory report sector division"
-          ],
-          "definition": "The common reporting format (CRF) is a sector division used for compiling national inventory reports on greenhouse gas emissions and providing emission relevant data in so called CRF tables."
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00010402": {
-          "label": "CRF-based sector division",
-          "spellings": [],
-          "definition": "A CRF-based sector division is a sector division that is derived from a common reporting format."
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00010403": {
-          "label": "EU legislation sector division",
-          "spellings": [],
-          "definition": "An EU legislation sector division is a sector division that is used in EU legislation."
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00010407": {
-          "label": "energy balance sector division",
-          "spellings": [],
-          "definition": "An energy balance sector division is a sector division that is defined by an energy balance calculation method."
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00010304": {
-          "label": "NC/BR sector division",
-          "spellings": [],
-          "definition": "The NC/BR sector division is a CRF-based sector division defined by the UNFCCC reporting guidelines on national communications for Parties included in Annex I to the Convention.\n(https://unfccc.int/sites/default/files/resource/cp2019_13a01_adv.pdf, 6/CP.25, VI, Table 2)"
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00010130": {
-          "label": "EU emission sector division",
-          "spellings": [],
-          "definition": "An EU emission sector division is an EU legislation sector division used in the EU climate policy."
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00000242": {
-          "label": "CRF sectors (IPCC 2006)",
-          "spellings": [],
-          "definition": "CRF sectors (IPCC 2006) is a version of the common reporting format that was used for national greenhouse gas inventories since the year 2015. It implements the 2006 IPCC Guidelines for National Greenhouse Gas Inventories (with some deviations)."
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00000243": {
-          "label": "CRF sectors (IPCC 1996)",
-          "spellings": [],
-          "definition": "CRF sectors (IPCC 1996) is a version of the common reporting format that was used for national greenhouse gas inventories until the year 2014. It implements the Revised 1996 IPCC Guidelines for National Greenhouse Gas Inventories (with some deviations)."
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00010056": {
-          "label": "KSG sector division",
-          "spellings": [],
-          "definition": "The KSG sector division is a CRF-based sector division defined in annex 1 of the Bundes-Klimaschutzgesetz (KSG)."
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00000355": {
-          "label": "Renewable Energy Directive sector division",
-          "spellings": [],
-          "definition": "The Renewable Energy Directive sector division is a sector division used in the Renewable Energy Directive of the European Union."
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00000160": {
-          "label": "Eurostat energy balance sector division",
-          "spellings": [],
-          "definition": "The concept of \"energy balance\" is an accounting framework for the compilation and understanding of data on all energy products entering, exiting and being used in a country. The energy balance is the most complete statistical accounting of energy products and their flow in the economy. Columns of the energy balance represent energy products (fuels). Rows represent energy flows.\n\nThe energy balance expresses all forms of energy in a common accounting unit. The balance shows the relationships between supply, inputs to the energy transformation processes and their outputs as well as the actual energy consumption by different sectors of end-use."
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00000193": {
-          "label": "German energy balance sector division",
-          "spellings": [],
-          "definition": "The German energy balance sector division is an energy balance used by AG Energiebilanzen (Working Group on Energy Balances) to compile the official national German energy balances."
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00010163": {
-          "label": "GovReg sector division",
-          "spellings": [],
-          "definition": "The GovReg sector division is a sector division defined in Annex XXV, Table 1a of Commission Implementing Regulation (EU) 2020/1208. It uses CRF sectors (IPCC 2006) and adds further sectors."
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00010204": {
-          "label": "MMR sector division",
-          "spellings": [],
-          "definition": "The MMR sector division is an EU emission sector division defined in Annex XII, Table 1 of Commission Implementing Regulation (EU) 749/2014. It uses CRF sectors (IPCC 2006) and adds further sectors."
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00000291": {
-          "label": "nace_ sectors",
-          "spellings": [],
-          "definition": "The Statistical classification of economic activities in the European Community, abbreviated as NACE, is the classification of economic activities in the European Union (EU); the term NACE is derived from the French Nomenclature statistique des activités économiques dans la Communauté européenne. Various NACE versions have been developed since 1970.\n\nNACE is a four-digit classification providing the framework for collecting and presenting a large range of statistical data according to economic activity in the fields of economic statistics (e.g. production, employment and national accounts) and in other statistical domains developed within the European statistical system (ESS)."
-        },
-        "https://openenergyplatform.org/ontology/oeo/OEO_00360044": {
-          "label": "BSI-KritisV sector division",
-          "spellings": [],
-          "definition": "The BSI-KritisV sector division is a sector division by the German regulation BSI-Kritisverordnung (BSI-KritisV) defining eight sectors that contain critical infrastructures."
-        },
-        "out:not_in_list": {
-          "label": "none of these divisions",
-          "spellings": [
-            "the division the text names is not in the list"
-          ],
-          "definition": "The text names a sector division that none of these classes matches. Not to be confused with the text naming no division at all: that is the answer that these passages do not state it."
-        }
-      },
-      "example": {
-        "source": "Emissions are reported by sector following the Common Reporting Format (CRF) of the 2006 IPCC Guidelines.",
-        "tuples": [
-          {
-            "value": "CRF sectors (IPCC 2006)",
-            "value_raw": "Common Reporting Format (CRF) of the 2006 IPCC Guidelines",
-            "quote": "Emissions are reported by sector following the Common Reporting Format (CRF) of the 2006 IPCC Guidelines."
-          }
-        ]
-      },
-      "kg": {
-        "node": "scenariobundle",
-        "property": {
-          "prefix": "oeo",
-          "predicate": "OEO_00390079",
-          "label": "based on sector division"
         },
         "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
       }
@@ -2008,7 +1887,7 @@
     {
       "uri": "scenario_region",
       "label": "Scenario region",
-      "description": "The country or area a scenario depicts. Choose it from value_classes: these are the study regions of the OEKG, narrowed to those this document names. One tuple per statement. The list knows only countries: for a worldwide scenario choose 'global', for a union or a large region that does not stand as a country (EU27, OECD, Asia, R5) 'several regions'. Both are right answers and are evaluated; naming a single country instead would be invented. value_raw takes what the document calls the region. Only regions named as the area under study, not every one mentioned.",
+      "description": "The country or area a scenario depicts. Choose it from value_classes: these are the study regions of the OEKG, narrowed to those this document names. One tuple per statement. The list carries countries and groups of countries: the regions of the AR6 database (such as 'Europe (R10)' or 'Asia (R5)') and the UN's world regions (such as 'Sub-Saharan Africa' or 'Western Europe'). Choose a group where the scenario covers that group, not each of its countries; a group stands for its members. For a worldwide scenario choose 'global'; for a group the list does not carry (EU27, OECD) 'several regions'. Naming a single country instead would be invented. value_raw takes what the document calls the region. Only regions named as the area under study, not every one mentioned.",
       "value_type": "category",
       "axes": {
         "scenario": {

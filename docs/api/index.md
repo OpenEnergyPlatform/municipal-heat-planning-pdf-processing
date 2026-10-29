@@ -97,7 +97,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.benchmark](docpipe.extraction.benchmark.md): One harvest, recorded once and made again without a model. (7 functions)
 - [docpipe.extraction.contract](docpipe.extraction.contract.md): The core's half of the extraction prompts: where its templates are, which languages they come in and the facts the code fills into them. (8 functions)
 - [docpipe.extraction.evaluate](docpipe.extraction.evaluate.md): Holds a harvest against what people decided about it. (1 class, 11 functions)
-- [docpipe.extraction.fields](docpipe.extraction.fields.md): Computes the deterministic skeleton of a tuple from the spec. (2 classes, 13 functions)
+- [docpipe.extraction.fields](docpipe.extraction.fields.md): Computes the deterministic skeleton of a tuple from the spec. (2 classes, 14 functions)
 - [docpipe.extraction.gate](docpipe.extraction.gate.md): Whether the graph of a run can still be written, before the run. (3 functions)
 - [docpipe.extraction.gold](docpipe.extraction.gold.md): What a person decided about harvested values, kept beside the harvest and never in it. (1 class, 16 functions)
 - [docpipe.extraction.graph](docpipe.extraction.graph.md): Writes a harvest as the graph a compiled spec describes. (2 classes, 2 functions)
@@ -252,16 +252,16 @@ is for and what it hands to what; this is the reference.
 
 - [profiles.scenarios.catalog](profiles.scenarios.catalog.md): How AR6 publications present themselves in the picker: by title and year, filtered by year, venue and the scenarios they document. (1 class)
 - [profiles.scenarios.config](profiles.scenarios.config.md): Constants for the AR6 profile.
-- [profiles.scenarios.extraction](profiles.scenarios.extraction.md): Extraction stage wiring: where the ar6 spec lives, and the lists that are only closed once a document is named. (4 functions)
+- [profiles.scenarios.extraction](profiles.scenarios.extraction.md): Extraction stage wiring: where the ar6 spec lives, and the lists that are only closed once a document is named. (5 functions)
 - [profiles.scenarios.inference](profiles.scenarios.inference.md): What the answer loop says around the ar6 prompts.
-- [profiles.scenarios.kg](profiles.scenarios.kg.md): Harvested publication metadata to OEKG Turtle. (14 functions)
+- [profiles.scenarios.kg](profiles.scenarios.kg.md): Harvested publication metadata to OEKG Turtle. (15 functions)
 - [profiles.scenarios.oekg_api](profiles.scenarios.oekg_api.md): What the OEKG scenario-bundle API would be asked, and what it would answer. (1 class, 14 functions)
 - [profiles.scenarios.preprocessing](profiles.scenarios.preprocessing.md): What text extraction has to know about English.
 - [profiles.scenarios.profile](profiles.scenarios.profile.md): AR6 scenario literature: the publications the IIASA AR6 scenario database cites.
 - [profiles.scenarios.reading](profiles.scenarios.reading.md): What the refinement, visuals and page-transcription stages say to the model when its reply was not the one JSON object that was asked for.
 - [profiles.scenarios.source](profiles.scenarios.source.md): Where the AR6 corpus comes from: pdf_index.json, the crawl over the publications the AR6 scenario database cites. (1 class, 5 functions)
 - [profiles.scenarios.store](profiles.scenarios.store.md): The project's own tables: publication metadata, the AR6 scenarios and the links between them. (4 functions)
-- [profiles.scenarios.vocabulary](profiles.scenarios.vocabulary.md): This profile's half of the ontology snapshot. (12 functions)
+- [profiles.scenarios.vocabulary](profiles.scenarios.vocabulary.md): This profile's half of the ontology snapshot. (13 functions)
 
 ## scripts
 

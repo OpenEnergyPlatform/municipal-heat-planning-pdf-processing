@@ -236,9 +236,9 @@ SCENARIO_FIELDS = tuple(
     parameter["uri"] for parameter in _SPEC["parameters"]
     if "scenario" in (parameter.get("axes") or {}))
 # The tags of a bundle: what the study is about, which sectors and
-# technologies it covers, which sector division it follows. Each is an entry
-# of a list the shapes fix, so the object is an IRI the model chose and never
-# a string it wrote. Read from the spec, for the reason SCENARIO_FIELDS is.
+# technologies it covers, and any other category field of the bundle. Each is
+# an entry of a list the shapes fix, so the object is an IRI the model chose
+# and never a string it wrote. Read from the spec, for the reason SCENARIO_FIELDS is.
 BUNDLE_TAGS = tuple(
     parameter["uri"] for parameter in _SPEC["parameters"]
     if parameter.get("value_type") == "category"
@@ -370,6 +370,19 @@ def _squeeze(text) -> str:
 def in_graph(value) -> bool:
     """Is this answer something the graph takes, or one of the out: entries?"""
     return bool(value) and not str(value).startswith(NOT_IN_GRAPH)
+
+
+# A chosen group of countries: the world, a region of the AR6 database or of
+# the UN (vocabulary.aggregates). The OEKG holds countries only.
+AGGREGATE = "aggregate:"
+
+
+def region_members(value, groups: dict) -> list:
+    """The OEKG regions a scenario_region answer stands for: a country is
+    itself, a group its members, an out: entry none."""
+    if str(value or "").startswith(AGGREGATE):
+        return list((groups.get(value) or {}).get("members") or ())
+    return [value] if in_graph(value) else []
 
 
 def graph_value(row: dict):
@@ -683,12 +696,14 @@ def _evidence(subject: str, predicate: str, row: dict, document: str) -> tuple:
             NL.join(node) + NL)
 
 
-def _make_builder(db_path: Path, model=None):
+def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None):
     """(document name, accepted tuple rows) -> (TTL body, study) or None.
 
     *model* is the shapes the graph is written to (`shapemodel.Model`),
     those of the last refresh when none is given; `bind` reads off them what
-    the builder needs and refuses a shapes file it cannot write to.
+    the builder needs and refuses a shapes file it cannot write to. *groups*
+    are the groups of countries a region answer may name, those of the last
+    refresh when none are given.
 
     One reading of a document's harvest and two things written from it: the
     Turtle, and `study`, the same decisions as plain data. The second is for
@@ -700,6 +715,9 @@ def _make_builder(db_path: Path, model=None):
     # study report and the same bundle. The single-valued triples are then
     # written twice into one file, with two dates and two abstracts on one
     # subject, and each document's own log says "1 report, 1 bundle".
+    if groups is None:
+        from profiles.scenarios.extraction import aggregates
+        groups = aggregates()
     minted: dict = {}
     # A node several documents describe is one node of the file. The value
     # the first of them gave a single-valued property is the node's, and a
@@ -737,8 +755,8 @@ def _make_builder(db_path: Path, model=None):
         # What the model said does NOT belong in the graph. Counted once, here,
         # so the number is a measurement of the corpus rather than a side
         # effect of whichever loop happened to look at the row: a run of
-        # publications that is 80% out:global is telling us the OEKG's region
-        # list is missing its aggregates, not that the harvest is failing.
+        # publications that is 80% out:multiregion is telling us the groups
+        # of countries are missing one, not that the harvest is failing.
         out_of_graph: Counter = Counter()
         for row in rows:
             for field in ("value_uri", "scenario"):
@@ -1047,12 +1065,18 @@ def _make_builder(db_path: Path, model=None):
             # Everything else — an out: entry, or a wording the list did not
             # hold — is counted and not minted. Minting put a German gloss
             # under oekg/region/ next to the 249 real ones.
+            # A group of countries is written as its members, and its
+            # passage is cited once, above the first of them.
             regions: dict = {}
             for row in rows_for("scenario_region", scenario=norm):
-                if in_graph(row.get("value_uri")):
-                    regions.setdefault(row["value_uri"], []).append(row)
+                for region_iri in region_members(row.get("value_uri"),
+                                                 groups):
+                    regions.setdefault(region_iri, []).append(row)
+            cited: set = set()
             for region_iri, sources in regions.items():
-                block += evidence_for(iri, P_STUDY_REGION, sources)
+                new = [row for row in sources if id(row) not in cited]
+                cited.update(id(row) for row in new)
+                block += evidence_for(iri, P_STUDY_REGION, new)
                 block.append(f"    {P_STUDY_REGION} <{region_iri}> ;")
 
             years = sorted({re.search(r"\d{4}", str(r["value"])).group(0)
@@ -1153,7 +1177,7 @@ def _make_builder(db_path: Path, model=None):
     return build
 
 
-def make_serializer(db_path: Path, model=None):
+def make_serializer(db_path: Path, model=None, groups: Optional[dict] = None):
     """(document name, accepted tuple rows) -> TTL string or None.
 
     Written to *model*, the shapes of the last refresh by default.
@@ -1162,7 +1186,7 @@ def make_serializer(db_path: Path, model=None):
     `serialize.run`, {document: {tuple name: [decision]}}, and goes into the
     Turtle as comment lines above the value each concerns.
     """
-    build = _make_builder(db_path, model)
+    build = _make_builder(db_path, model, groups)
     header_pending = [True]
 
     def serializer(name: str, rows: list):

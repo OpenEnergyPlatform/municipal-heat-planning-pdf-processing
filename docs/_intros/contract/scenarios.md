@@ -48,14 +48,16 @@ coordinate is `null` unless its own `<name>_state` says `read` or
 
 ## The lists this page cannot publish
 
-Seven parameters answer from a list rather than write a wording:
+Six parameters answer from a list rather than write a wording:
 `scenario_label`, `scenario_type` and `scenario_region`
 (`profiles/scenarios/extraction_spec.json`), and
-the four tags of a bundle, `study_descriptor`, `study_sector_division`,
-`study_sector` and `study_technology`. Five publish their list as
+three of the four tags of a bundle, `study_descriptor`, `study_sector`
+and `study_technology`. The fourth, the sector division, is not asked:
+the AR6 papers almost never name one of the listed divisions. Four
+publish their list as
 `x-options` below: `scenario_type` carries seventeen OEO classes plus
 one `out:` entry for a type none of them cover, and each tag the
-shapes' own list (31, 17, 153 and 43 entries) plus such an entry, for
+shapes' own list (31, 153 and 43 entries) plus such an entry, for
 every document, so the spec states each list once.
 
 The other two are marked `vocabulary_dynamic` in the spec: their value
@@ -75,10 +77,12 @@ What the list holds is decided once, before harvest starts, by
 the AR6 runs the publication documents in the `Scenarios` and
 `DocumentScenarios` tables (`document_scenarios`,
 `profiles/scenarios/extraction.py:149`), and narrows the 249 study
-regions of `profiles/scenarios/regions.json` to the ones the
-publication's own text names (`document_regions`,
-`profiles/scenarios/extraction.py:164`). Both lists always carry
-fixed `out:` entries, three for the region list and two for the
+regions of `profiles/scenarios/regions.json` and the groups of
+countries of `profiles/scenarios/region_aggregates.json` to the ones the
+publication's own text names (`document_regions`); the world is always
+offered. A group's key starts with `aggregate:` and the graph writes its
+member countries. Both lists always carry
+fixed `out:` entries, two for the region list and two for the
 scenario list (`REGION_OUT`, `SCENARIO_OUT`,
 `profiles/scenarios/extraction.py:69` to `91`). `value_raw` and
 `<axis>_raw` keep the publication's own wording beside the resolved

@@ -116,7 +116,7 @@ FLAG_PATTERN = (
     r"|review:(agree|disagree|unbacked)"
     r"|quote_repaired|computed|not_located)$")
 
-# The thirteen families a refusal reason belongs to. Every one is raised in
+# The fourteen families a refusal reason belongs to. Every one is raised in
 # verify.py or pipeline.py and none is composed at runtime from user text.
 REFUSAL_REASONS = [
     r"^claim names no parameter of the spec$",
@@ -131,6 +131,7 @@ REFUSAL_REASONS = [
     r"^quote missing or too short to identify anything$",
     r"^quote not found in the source it cites$",
     r"^value .* does not occur in the quote$",
+    r"^value .* not in vocabulary$",
     r"^text value not in its quote$",
     r"^passage is not of this pair$",
 ]

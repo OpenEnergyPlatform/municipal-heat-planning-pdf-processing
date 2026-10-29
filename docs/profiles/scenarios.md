@@ -149,7 +149,11 @@ corpus links against and `kg.py` resolves it the same way
 `scenario` axis and the `scenario_label` parameter, so one run identifier
 resolves the same way whichever field asks about it. `document_regions`
 reads the 249 entries of `regions.json` and keeps only the ones whose
-label is mentioned somewhere in this document's own text.
+label is mentioned somewhere in this document's own text, and does the
+same with the groups of countries in `region_aggregates.json`; a region of
+the AR6 database also counts as named by its bare name ("Europe") where the
+document names its family ("R10"). The world, `aggregate:World`, is always
+offered.
 
 `_document_text` concatenates every row of `Sections.content`,
 `Tables.markdown`, `Tables.caption`, `Images.description` and
@@ -179,11 +183,13 @@ and hold an answer to the same lists the search used. `--review` and
 alone, stamp included, a document whose lists cannot be closed.
 
 The fixed kind carries the rest of the list-valued fields: `scenario_type`,
-and the four tags the OEKG shapes demand of every bundle,
-`study_descriptor` (`OEO_00390071`), `study_sector_division`
-(`OEO_00390079`), `study_sector` (`OEO_00020439`) and `study_technology`
-(`OEO_00020438`). Each tag is a `category` parameter without axes whose
-vocabulary is the shapes' own `sh:in` list for its path, 31, 17, 153 and
+and three of the four tags the OEKG shapes demand of every bundle,
+`study_descriptor` (`OEO_00390071`), `study_sector` (`OEO_00020439`) and
+`study_technology` (`OEO_00020438`). The sector division (`OEO_00390079`)
+is not asked: in the AR6 run 531 of its 535 answers were a sector, and
+four publications named a listed division. Each tag is a `category`
+parameter without axes whose
+vocabulary is the shapes' own `sh:in` list for its path, 31, 153 and
 43 entries with the OEO label, spellings and definition of each, plus an
 `out:not_in_list` entry. The model picks an entry and quotes the passage,
 exactly as for `scenario_type`. The lists are written into
@@ -207,13 +213,12 @@ vocabulary, which behaves the same way. `SCENARIO_OUT` offers
 `out:family`, for a wording that names a group of runs (a policy
 family, for example) rather than one identified run, and `out:not_documented`, for a scenario the paper names
 that this document's own AR6 list does not carry (`extraction.py`, lines
-83 to 91). `REGION_OUT` offers `out:global` (a worldwide scenario, since
-the OEKG's own region list holds only individual countries and no
-aggregate), `out:multiregion` (a named grouping, such as a trade bloc,
-that the list does not carry as a country) and `out:other` (a spatial
-statement fitting neither). An AR6 scenario is global far more often than
-national, so without `out:global`, most scenarios would have no matching
-entry among the 249 countries at all (`extraction.py`, lines 66 to 76).
+83 to 91). `REGION_OUT` offers `out:multiregion` (a named grouping,
+such as a trade bloc, that neither the countries nor the groups carry) and
+`out:other` (a spatial statement fitting neither). The world and the
+groups of countries are entries of the list (`region_aggregates.json`),
+since the OEKG's own region list holds only individual countries and an
+AR6 scenario is global far more often than national.
 Finally, the fixed vocabularies are corpus-wide rather than per-document,
 but carry the same idea as their last entry, `out:not_in_list`. In
 `scenario_type` it is the eighteenth: the passage names a kind of
@@ -272,12 +277,18 @@ half of that audit, `profiles/scenarios/vocabulary.py`, pins 280 ontology
 identifiers named in the spec, plus the 249 OEKG study regions, against
 the same OEO release the kwp profile's own 58-identifier snapshot uses.
 `python -m profiles.scenarios.vocabulary --refresh` pulls the OEO
-closure and the live study regions, rewrites `vocabulary.json` and
-`regions.json`, and runs the same check `--check` alone runs against
+closure, the live study regions and the groups of countries (the AR6
+database's R5, R9 and R10 regions from IAMconsortium/common-definitions
+and the UN's M49 regions from the SDG API), rewrites `vocabulary.json`,
+`regions.json` and `region_aggregates.json`, and runs the same check `--check` alone runs against
 the checked-in snapshot; `region_aliases.json` keeps the hand-written
 spellings a document uses that the OEKG's own labels do not, merged in
 ahead of the live ones by `merge_regions` (`vocabulary.py`, lines 1 to
-26; [../stages/graph.md](../stages/graph.md)).
+26; [../stages/graph.md](../stages/graph.md)). `aggregates` places each
+member of a group on an OEKG region by one of its labels, or by a label
+with the same words in another order; a member no label places, a group
+label that is a country's and a label two groups share are counted and
+printed, never guessed.
 
 Every IRI is minted under `BASE`, which defaults to
 `https://openenergyplatform.org/ontology/oekg/` and can be overridden by
@@ -364,9 +375,11 @@ to that region's existing IRI, carrying no `rdfs:type` and no
 `rdfs:label` of its own, since the individual already exists on the OEKG
 under its own type and label, and asserting them again would place a
 second label where the shapes allow only one
-(`kg.py`, the comment above the region block). An `out:global`,
-`out:multiregion` or `out:other` choice, or a wording the narrowed list
-did not hold, mints no region node at all and is only counted; minting
+(`kg.py`, the comment above the region block). A group of countries is
+written as a link to each of its members, its passage cited once above
+the first (`region_members`). An `out:multiregion` or `out:other`
+choice, or a wording the narrowed list did not hold, mints no region
+node at all and is only counted; minting
 one would have put a 250th region under `oekg/region/` beside the 249
 already pinned (`profiles/scenarios/vocabulary.json`, `regions_count`
 249).
@@ -437,7 +450,7 @@ does not name, which it would let through. `graph` builds a model
 of the bundle as the server would hold it after the create, and
 `shape_problems` asks the shapes about it through `pyshacl`.
 `list_problems` compares the spec's choice lists, `scenario_type` and the
-four tags, with the shapes' `sh:in` lists for their paths: a class the
+three tags, with the shapes' `sh:in` lists for their paths: a class the
 shapes dropped would be harvested and then refused, and one they gained
 could never be chosen.
 `acronym_problems` compares acronyms, without case, across the harvest
@@ -554,7 +567,7 @@ A document whose `publication_title` never resolved is refused whole:
 the serializer returns `None` and logs at `INFO` level, before a bundle,
 a factsheet or an author node is built (`kg.py`, lines 632 to 634). Any
 other field the shapes demand on the report or the bundle, a date, an
-author, an acronym or one of the four tags, is not refused this way, only
+author, an acronym or one of the tags, is not refused this way, only
 named in the per-document summary line as a missing required field
 (`bind`, `required`); the bundle's label never is, since it falls back to
 the title (`FALLBACK`).
@@ -612,7 +625,6 @@ Read from `profiles/scenarios/extraction_schema.json` by `scripts/build_docs.py`
 | `study_organisation` | string | `parameter` (one of the spec's parameters) | `organisation` |
 | `study_project_name` | string | `parameter` (one of the spec's parameters) | `scenariobundle` |
 | `study_sector` | string | `parameter` (one of the spec's parameters) | `scenariobundle` |
-| `study_sector_division` | string | `parameter` (one of the spec's parameters) | `scenariobundle` |
 | `study_technology` | string | `parameter` (one of the spec's parameters) | `scenariobundle` |
 
 [Back to the index](../README.md)

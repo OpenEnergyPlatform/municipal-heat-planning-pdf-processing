@@ -109,6 +109,15 @@ def in_graph(value) -> bool
 
 Is this answer something the graph takes, or one of the out: entries?
 
+### region_members
+
+```python
+def region_members(value, groups: dict) -> list
+```
+
+The OEKG regions a scenario_region answer stands for: a country is
+itself, a group its members, an out: entry none.
+
 ### graph_value
 
 ```python
@@ -186,7 +195,7 @@ the verdict, who made it and when, and the note.
 ### make_serializer
 
 ```python
-def make_serializer(db_path: Path, model=None)
+def make_serializer(db_path: Path, model=None, groups: Optional[dict] = None)
 ```
 
 (document name, accepted tuple rows) -> TTL string or None.

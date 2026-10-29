@@ -52,14 +52,16 @@ coordinate is `null` unless its own `<name>_state` says `read` or
 
 ## The lists this page cannot publish
 
-Seven parameters answer from a list rather than write a wording:
+Six parameters answer from a list rather than write a wording:
 `scenario_label`, `scenario_type` and `scenario_region`
 (`profiles/scenarios/extraction_spec.json`), and
-the four tags of a bundle, `study_descriptor`, `study_sector_division`,
-`study_sector` and `study_technology`. Five publish their list as
+three of the four tags of a bundle, `study_descriptor`, `study_sector`
+and `study_technology`. The fourth, the sector division, is not asked:
+the AR6 papers almost never name one of the listed divisions. Four
+publish their list as
 `x-options` below: `scenario_type` carries seventeen OEO classes plus
 one `out:` entry for a type none of them cover, and each tag the
-shapes' own list (31, 17, 153 and 43 entries) plus such an entry, for
+shapes' own list (31, 153 and 43 entries) plus such an entry, for
 every document, so the spec states each list once.
 
 The other two are marked `vocabulary_dynamic` in the spec: their value
@@ -79,10 +81,12 @@ What the list holds is decided once, before harvest starts, by
 the AR6 runs the publication documents in the `Scenarios` and
 `DocumentScenarios` tables (`document_scenarios`,
 `profiles/scenarios/extraction.py:149`), and narrows the 249 study
-regions of `profiles/scenarios/regions.json` to the ones the
-publication's own text names (`document_regions`,
-`profiles/scenarios/extraction.py:164`). Both lists always carry
-fixed `out:` entries, three for the region list and two for the
+regions of `profiles/scenarios/regions.json` and the groups of
+countries of `profiles/scenarios/region_aggregates.json` to the ones the
+publication's own text names (`document_regions`); the world is always
+offered. A group's key starts with `aggregate:` and the graph writes its
+member countries. Both lists always carry
+fixed `out:` entries, two for the region list and two for the
 scenario list (`REGION_OUT`, `SCENARIO_OUT`,
 `profiles/scenarios/extraction.py:69` to `91`). `value_raw` and
 `<axis>_raw` keep the publication's own wording beside the resolved
@@ -2485,141 +2489,6 @@ It is equivalent to the CRF sector (IPCC 2006): land use, land-use change and fo
 - **transport sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
   - also written: traffic sector
 - **waste and wastewater sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00010036` — A waste and wastewater sector is a sector that covers activities related the collection and treatment of waste and wastewater.
-
-</details>
-
-## `study_sector_division`
-
-How the row becomes a node:
-
-- `node`: `scenariobundle`
-- `property`: `{'label': 'based on sector division', 'predicate': 'OEO_00390079', 'prefix': 'oeo'}`
-
-<details><summary>Why</summary>
-
-The object is one of the entries the shapes accept on this path, chosen from the list, never written.
-
-</details>
-
-### `compute`
-
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
-
-### `computed`
-
-The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
-
-### `flags`
-
-Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
-
-### `kind`
-
-### `parameter`
-
-Spec parameter: Sector division.
-
-The prompt's own wording:
-
-> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
-
-### `parameter_link_quote`
-
-Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.
-
-### `parameter_link_source`
-
-Which source 'parameter_link_quote' was found in.
-
-### `parameter_producer`
-
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
-
-### `parameter_quote`
-
-The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
-
-### `parameter_raw`
-
-The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
-
-### `parameter_raw_foreign`
-
-The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
-
-### `parameter_seen`
-
-A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
-
-### `parameter_source`
-
-Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).
-
-### `parameter_state`
-
-How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike.
-
-### `parameter_window`
-
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
-
-### `provenance`
-
-### `quote`
-
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
-
-### `tier`
-
-text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
-
-### `unit`
-
-Empty: a wording has no unit. The key is present so every row has the same shape.
-
-### `unit_raw`
-
-Empty, as unit.
-
-### `value`
-
-The wording as the document writes it.
-
-### `value_raw`
-
-The wording before any tidying (an organisation's legal form, a title's line break).
-
-### `value_uri`
-
-The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is closed. An entry beginning 'out:' is a deliberate non-class answer and mints no node.
-
-<details><summary>What it may answer (18)</summary>
-
-- **BSI-KritisV sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00360044` — The BSI-KritisV sector division is a sector division by the German regulation BSI-Kritisverordnung (BSI-KritisV) defining eight sectors that contain critical infrastructures.
-- **CRF sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00010055` — The common reporting format (CRF) is a sector division used for compiling national inventory reports on greenhouse gas emissions and providing emission relevant data in so called CRF tables.
-  - also written: CRF, NIR sector division, common reporting format, national inventory report sector division
-- **CRF sectors (IPCC 1996)** → `https://openenergyplatform.org/ontology/oeo/OEO_00000243` — CRF sectors (IPCC 1996) is a version of the common reporting format that was used for national greenhouse gas inventories until the year 2014. It implements the Revised 1996 IPCC Guidelines for National Greenhouse Gas Inventories (with some deviations).
-- **CRF sectors (IPCC 2006)** → `https://openenergyplatform.org/ontology/oeo/OEO_00000242` — CRF sectors (IPCC 2006) is a version of the common reporting format that was used for national greenhouse gas inventories since the year 2015. It implements the 2006 IPCC Guidelines for National Greenhouse Gas Inventories (with some deviations).
-- **CRF-based sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00010402` — A CRF-based sector division is a sector division that is derived from a common reporting format.
-- **EU emission sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00010130` — An EU emission sector division is an EU legislation sector division used in the EU climate policy.
-- **EU legislation sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00010403` — An EU legislation sector division is a sector division that is used in EU legislation.
-- **Eurostat energy balance sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00000160` — The concept of "energy balance" is an accounting framework for the compilation and understanding of data on all energy products entering, exiting and being used in a country. The energy balance is the most complete statistical accounting of energy products and their flow in the economy. Columns of the energy balance represent energy products (fuels). Rows represent energy flows.
-
-The energy balance expresses all forms of energy in a common accounting unit. The balance shows the relationships between supply, inputs to the energy transformation processes and their outputs as well as the actual energy consumption by different sectors of end-use.
-- **German energy balance sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00000193` — The German energy balance sector division is an energy balance used by AG Energiebilanzen (Working Group on Energy Balances) to compile the official national German energy balances.
-- **GovReg sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00010163` — The GovReg sector division is a sector division defined in Annex XXV, Table 1a of Commission Implementing Regulation (EU) 2020/1208. It uses CRF sectors (IPCC 2006) and adds further sectors.
-- **KSG sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00010056` — The KSG sector division is a CRF-based sector division defined in annex 1 of the Bundes-Klimaschutzgesetz (KSG).
-- **MMR sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00010204` — The MMR sector division is an EU emission sector division defined in Annex XII, Table 1 of Commission Implementing Regulation (EU) 749/2014. It uses CRF sectors (IPCC 2006) and adds further sectors.
-- **NC/BR sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00010304` — The NC/BR sector division is a CRF-based sector division defined by the UNFCCC reporting guidelines on national communications for Parties included in Annex I to the Convention.
-(https://unfccc.int/sites/default/files/resource/cp2019_13a01_adv.pdf, 6/CP.25, VI, Table 2)
-- **Renewable Energy Directive sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00000355` — The Renewable Energy Directive sector division is a sector division used in the Renewable Energy Directive of the European Union.
-- **energy balance sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00010407` — An energy balance sector division is a sector division that is defined by an energy balance calculation method.
-- **nace_ sectors** → `https://openenergyplatform.org/ontology/oeo/OEO_00000291` — The Statistical classification of economic activities in the European Community, abbreviated as NACE, is the classification of economic activities in the European Union (EU); the term NACE is derived from the French Nomenclature statistique des activités économiques dans la Communauté européenne. Various NACE versions have been developed since 1970.
-
-NACE is a four-digit classification providing the framework for collecting and presenting a large range of statistical data according to economic activity in the fields of economic statistics (e.g. production, employment and national accounts) and in other statistical domains developed within the European statistical system (ESS).
-- **none of these divisions** → `out:not_in_list` — The text names a sector division that none of these classes matches. Not to be confused with the text naming no division at all: that is the answer that these passages do not state it.
-  - also written: the division the text names is not in the list
-- **sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00000368` — A sector division is a specific way to subdivide a system.
 
 </details>
 

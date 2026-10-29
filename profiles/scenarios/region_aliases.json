@@ -332,7 +332,8 @@
   "Honduras"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/HongKong": [
-  "Hong Kong"
+  "Hong Kong",
+  "China, Hong Kong Special Administrative Region"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Hungary": [
   "Hungary"
@@ -434,7 +435,8 @@
   "Luxembourg"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Macao": [
-  "Macao"
+  "Macao",
+  "China, Macao Special Administrative Region"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Macedonia": [
   "North Macedonia",
@@ -512,7 +514,8 @@
   "Namibia"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Nauru": [
-  "Nauru"
+  "Nauru",
+  "Naoero"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Nepal": [
   "Nepal"
@@ -521,7 +524,8 @@
   "Netherlands",
   "the Netherlands",
   "Holland",
-  "Netherlands (the)"
+  "Netherlands (the)",
+  "Netherlands (Kingdom of the)"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/NewCaledonia": [
   "New Caledonia"
@@ -703,7 +707,8 @@
   "Suriname"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/SvalbardAndJanMayen": [
-  "Svalbard and Jan Mayen"
+  "Svalbard and Jan Mayen",
+  "Svalbard and Jan Mayen Islands"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Sweden": [
   "Sweden"
@@ -815,10 +820,12 @@
   "Virgin Islands British"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/VirginIslandsUS": [
-  "Virgin Islands US"
+  "Virgin Islands US",
+  "United States Virgin Islands"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/WallisAndFutuna": [
-  "Wallis and Futuna"
+  "Wallis and Futuna",
+  "Wallis and Futuna Islands"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/WesternSahara": [
   "Western Sahara"

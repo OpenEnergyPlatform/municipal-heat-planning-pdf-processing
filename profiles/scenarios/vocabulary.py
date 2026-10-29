@@ -11,8 +11,9 @@ ontology release and are therefore pinned differently.
     python -m profiles.scenarios.vocabulary --check
 
 `--refresh` is what a run calls first: the OEO closure at its latest release,
-the study regions live from the OEKG and the OEKG shapes at the head of their
-branch, then the check. Without
+the study regions live from the OEKG, the OEKG shapes at the head of their
+branch and the groups of countries a scenario may cover (IIASA, UN M49),
+then the check. Without
 OEP_API_TOKEN in the environment it stops, because the regions are offered to
 the model and a list nobody pulled is not the OEKG's current one.
 
@@ -30,7 +31,9 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
@@ -43,6 +46,7 @@ VOCABULARY_PATH = HERE / "vocabulary.json"
 SPEC_PATH = HERE / "extraction_spec.json"
 REGIONS_PATH = HERE / "regions.json"
 ALIASES_PATH = HERE / "region_aliases.json"
+AGGREGATES_PATH = HERE / "region_aggregates.json"
 PROFILE = HERE.name
 REGION_BASE = "https://openenergyplatform.org/ontology/oekg/region/"
 
@@ -89,7 +93,27 @@ SOURCES = {
                     "ref": "production",
                     "reviewed": "b4604e02060624b381bdbe2f872df94cfd0f5630",
                     "files": ["oekg/shapes/oekg_shapes.ttl"]},
+    # The groups of countries a scenario covers, with their members: the
+    # regions the AR6 database itself defines (R5, R9, R10) and the UN's
+    # statistical regions (M49), which carry the names a paper writes
+    # ("Sub-Saharan Africa", "Western Europe"). The OEKG has countries only,
+    # so a group is written as its members (`aggregates`).
+    "iiasa_regions": {"kind": "repo_files",
+                      "repo": "IAMconsortium/common-definitions",
+                      "ref": "main",
+                      "files": ["definitions/region/common.yaml"]},
+    "m49": {"kind": "url",
+            "url": "https://unstats.un.org/SDGAPI/v1/sdg/GeoArea/Tree",
+            "file": "tree.json"},
 }
+
+# The group a worldwide scenario covers: every region the OEKG holds. Its
+# spellings are the answer the list always offered for it.
+WORLD = "aggregate:World"
+WORLD_LABELS = ["global", "worldwide", "World",
+                u"global — the whole world, not a single country"]
+# The M49 code of the world, which WORLD already is.
+M49_WORLD = "1"
 
 OEO = "https://openenergyplatform.org/ontology/oeo/"
 
@@ -155,6 +179,98 @@ def merge_regions(rows: list, aliases: dict) -> dict:
     return out
 
 
+def aggregates(families: list, tree: list, regions: dict) -> tuple:
+    """({key: {labels, members, source}}, Counter of what could not be placed).
+
+    *families* are the parsed IIASA region files, *tree* the M49 tree,
+    *regions* regions.json. A member is an OEKG region, found by one of its
+    labels, or by a label with the same words in another order and
+    punctuation ("Republic of Moldova", "Moldova (the Republic of)"), so a
+    country both lists spell alike needs no table; one no label names, or
+    two regions' labels do, is counted, never guessed. A group's label that is a country's
+    label is the country, and a label two groups share is the first one's:
+    both would make one answer mean two things, so each is counted too.
+    """
+    from docpipe.extraction.spec import fold_label
+    def words(name) -> frozenset:
+        return frozenset(w for w in re.split(r"[^\w]+", fold_label(str(name)))
+                         if w and w not in ("the", "of"))
+
+    country, worded = {}, {}
+    for iri, labels in regions.items():
+        for label in labels:
+            country.setdefault(fold_label(label), iri)
+            worded.setdefault(words(label), set()).add(iri)
+    missing: Counter = Counter()
+    taken: dict = {}
+
+    def placed(names) -> list:
+        out = []
+        for name in names:
+            iri = country.get(fold_label(str(name)))
+            if iri is None and len(worded.get(words(name), ())) == 1:
+                iri = next(iter(worded[words(name)]))
+            if iri is None:
+                missing[f"member {name}"] += 1
+            elif iri not in out:
+                out.append(iri)
+        return out
+
+    out = {WORLD: {"labels": list(WORLD_LABELS), "members": sorted(regions),
+                   "source": "every region of the OEKG"}}
+
+    def add(key, labels, members, source, family=None) -> None:
+        kept = []
+        for label in labels:
+            folded = fold_label(label)
+            if folded in country:
+                missing[f"label {label} is a country"] += 1
+            elif taken.setdefault(folded, key) != key:
+                missing[f"label {label} names two groups"] += 1
+            elif label not in kept:
+                kept.append(label)
+        if not kept or not members:
+            missing[f"group {labels[0]}"] += 1
+            return
+        out[key] = {"labels": kept, "members": members, "source": source}
+        if family:
+            out[key]["family"] = family
+
+    for parsed in families:
+        for block in parsed or ():
+            for family, entries in (block or {}).items():
+                for entry in entries or ():
+                    # A bare name is a country or a group without members.
+                    if not isinstance(entry, dict):
+                        continue
+                    for name, attrs in entry.items():
+                        countries = (attrs or {}).get("countries")
+                        if not countries:
+                            continue
+                        labels = [name] + ([attrs["ar6"]] if attrs.get("ar6")
+                                           else [])
+                        add(f"aggregate:iiasa:{name}", labels,
+                            placed(countries), "iiasa", family)
+
+    def walk(node: dict) -> list:
+        # The members are the countries below a group. A leaf that is not a
+        # country is a group the tree lists without its members.
+        kids = node.get("children") or []
+        names = ([node.get("geoAreaName")]
+                 if node.get("type") == "Country" else [])
+        for kid in kids:
+            names += walk(kid)
+        code = str(node.get("geoAreaCode"))
+        if kids and code != M49_WORLD and f"aggregate:m49:{code}" not in out:
+            add(f"aggregate:m49:{code}", [str(node.get("geoAreaName"))],
+                placed(dict.fromkeys(names)), "m49")
+        return names
+
+    for node in tree or ():
+        walk(node)
+    return out, missing
+
+
 def refresh(cache: Path = upstream.CACHE) -> dict:
     """Pull SOURCES, write regions.json and vocabulary.json, write the lock.
 
@@ -169,6 +285,18 @@ def refresh(cache: Path = upstream.CACHE) -> dict:
     with io.open(REGIONS_PATH, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(json.dumps(regions, ensure_ascii=False, indent=1,
                                 sort_keys=True) + "\n")
+    import yaml
+    families = [yaml.safe_load(path.read_text(encoding="utf-8"))
+                for path in upstream.files(records["iiasa_regions"])]
+    tree = json.loads(upstream.files(records["m49"])[0]
+                      .read_text(encoding="utf-8"))
+    groups, missing = aggregates(families, tree, regions)
+    with io.open(AGGREGATES_PATH, "w", encoding="utf-8",
+                 newline="\n") as handle:
+        handle.write(json.dumps(groups, ensure_ascii=False, indent=1,
+                                sort_keys=True) + "\n")
+    records["iiasa_regions"]["aggregates"] = len(groups)
+    records["iiasa_regions"]["not_placed"] = dict(missing)
     snapshot = build(upstream.files(records["oeo"], ".owl")[0])
     snapshot["pin"]["sources"] = {name: record["version"]
                                   for name, record in records.items()}
@@ -266,6 +394,11 @@ def main(argv=None) -> int:
             return 2
         for name, record in records.items():
             print(upstream.summary(name, record))
+        groups = records["iiasa_regions"]
+        print(f"region groups: {groups['aggregates']} group(s), "
+              f"{sum(groups['not_placed'].values())} name(s) not placed")
+        for what, count in sorted(groups["not_placed"].items()):
+            print(f"  not placed: {what} ({count}x)")
         after = set(json.loads(REGIONS_PATH.read_text(encoding="utf-8")))
         for iri in sorted(after - before):
             print(f"regions: new {iri}")

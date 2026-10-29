@@ -56,10 +56,10 @@ Citations are not places to take values from. A bibliography, a footnote and a r
  — for the region "global", "several regions" and "other region"
 
 <!-- part: choice_reason -->
-: the region list knows only countries, and most scenarios of these publications are global
+: the region list knows countries and groups of countries, and most scenarios of these publications are global
 
 <!-- part: choice_more -->
-A source that enumerates many countries — a country group, a regional key, a country annex — describes ONE area under study and not fifty. Then give ONE entry with "several countries or a region the list does not carry", or "global" if it is the whole world.
+A source that enumerates many countries — a country group, a regional key, a country annex — describes ONE area under study and not fifty. Then give ONE entry: the group, where the list carries it; "several countries or a group the list does not carry" where it does not; or "global" if it is the whole world.
 
 <!-- part: choice_examples -->
 WRONG: "value": "the Federal Republic", when the list has "Germany".
