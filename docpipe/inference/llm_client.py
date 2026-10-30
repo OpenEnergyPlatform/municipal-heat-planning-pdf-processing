@@ -28,8 +28,9 @@ import io
 import json
 import logging
 import re
+import threading
 import time
-from typing import Optional
+from typing import Callable, Optional
 
 from .config import (
     LLM_BASE_URL,
@@ -46,7 +47,7 @@ from docpipe import prompts, providers, reading
 from docpipe.llm_preflight import request_extras
 from docpipe.prompts import per_profile as prompts_per_profile
 
-from . import replies, wording
+from . import pool, replies, wording
 
 log = logging.getLogger(__name__)
 
@@ -71,6 +72,7 @@ _PROMPTS = {
     "_ANSWER_PROMPT_TAIL": "inference/answer_tail",
     "JSON_FORMAT_PROMPT": "inference/json_format",
     "COMPARE_PROMPT": "inference/compare",
+    "REPEATS_PROMPT": "inference/repeats",
     "_COMPUTE_HINT": "inference/compute_hint",
     "_IMAGE_HINT": "inference/image_hint",
     "READOFF_PROMPT": "inference/readoff",
@@ -130,20 +132,23 @@ def _w() -> dict:
 # Client + parsing helpers
 # ---------------------------------------------------------------------------
 _client = None
+_client_lock = threading.Lock()
 
 
 def get_client():
-    """Lazily build the client (own retry loop → max_retries=0)."""
+    """Lazily build the client (own retry loop → max_retries=0), behind the
+    places of the pool where there are several."""
     global _client
-    if _client is None:
-        _client = providers.client(
-            "llm",
-            base_url=LLM_BASE_URL,
-            api_key=LLM_API_KEY,
-            timeout=LLM_TIMEOUT,
-            max_retries=0,
-        )
-    return _client
+    with _client_lock:
+        if _client is None:
+            _client = pool.over(providers.client(
+                "llm",
+                base_url=LLM_BASE_URL,
+                api_key=LLM_API_KEY,
+                timeout=LLM_TIMEOUT,
+                max_retries=0,
+            ))
+        return _client
 
 
 # Why a request of the chat ended without its reply: a cause of the shared
@@ -192,6 +197,26 @@ def collecting():
         yield faults
     finally:
         _FAULTS.reset(token)
+
+
+def together(thunks) -> list:
+    """`pool.together`, with the fault list of the turn kept right: a list
+    belongs to one thread, because `_ask` takes back what it noted by position.
+    Each thunk notes into its own, and they are added in the order of
+    *thunks*, whichever finished first."""
+    outer = _FAULTS.get()
+
+    def alone(thunk: Callable) -> Callable:
+        def run():
+            with collecting() as own:
+                return thunk(), own
+        return run
+
+    done = pool.together([alone(thunk) for thunk in thunks])
+    if outer is not None:
+        for _result, own in done:
+            outer.extend(own)
+    return [result for result, _own in done]
 
 
 def note_fault(request: str, cause: str) -> None:
@@ -381,6 +406,8 @@ def _chat_json(messages: list, temperature: float) -> dict:
                 max_tokens=_ROOM.get() or LLM_MAX_TOKENS,
                 extra_body=request_extras(),
             )
+        except pool.Withdrawn:
+            raise
         except Exception as e:  # transport / timeout: start over, back off
             log.warning("LLM call failed (attempt %d/%d): %s", attempt,
                         LLM_MAX_RETRIES, e)
@@ -868,18 +895,19 @@ def answer_from_sources(task: str, chunk_items: list[dict],
             log.warning("answer_from_sources: cut off with %d excerpt(s); "
                         "asked again as %d and %d excerpt(s)",
                         len(chunk_items), cut, len(chunk_items) - cut)
-            halves = []
-            for part in (chunk_items[:cut], chunk_items[cut:]):
+            def half(part: list) -> Callable:
                 kept = {item["index"] for item in part}
-                halves.append(answer_from_sources(
+                return lambda: answer_from_sources(
                     task, part, prior=prior, code_runner=code_runner,
                     code_context=code_context, max_compute=max_compute,
                     history=history,
                     images={i: path for i, path in (images or {}).items()
                             if i in kept} or None,
                     image_requester=image_requester,
-                    max_image_requests=max_image_requests, _depth=_depth + 1))
-            return _joined(*halves)
+                    max_image_requests=max_image_requests, _depth=_depth + 1)
+
+            return _joined(*together([half(chunk_items[:cut]),
+                                      half(chunk_items[cut:])]))
         return {"statements": [], "complete": False, "compute": compute,
                 "attached_images": attached, "requested": requested,
                 "fault": unread.cause}
@@ -911,6 +939,29 @@ def format_as_json(task: str, answer_text: str) -> Optional[str]:
     messages = [{"role": "user", "content": f"{_prompt('inference/json_format')}\n\n{payload}"}]
     obj = _ask(None, messages, temperature=LLM_TEMPERATURE)
     return json.dumps(obj, ensure_ascii=False, indent=2)
+
+
+def repeats_among(task: str, texts: list) -> list:
+    """Which of the checked *texts* say what an earlier one already said:
+    what the model named, [{"statement", "of"}], numbered from 1
+    (`statements.repeated` reads them). Empty on any failure, which leaves a
+    fault in the collecting turn and every statement standing.
+    """
+    if LLM_STUB_MODE:
+        return []
+    payload = json.dumps(
+        {"task": task, "statements": [{"number": n, "text": text} for n, text
+                                      in enumerate(texts, start=1)]},
+        ensure_ascii=False)
+    try:
+        parsed = _ask(
+            replies.REPEATS,
+            [{"role": "user", "content": f"{_prompt('inference/repeats')}\n\n{payload}"}],
+            temperature=LLM_TEMPERATURE)
+    except Exception as e:
+        log.warning("Repeats not read, every statement stays: %s", e)
+        return []
+    return parsed.get("repeats") or []
 
 
 def compare_answers(task: str, plans: list) -> Optional[str]:

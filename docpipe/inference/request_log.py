@@ -16,8 +16,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Optional
+
+# One connection, and the documents of a comparison write from their threads.
+_LOCK = threading.Lock()
 
 # The columns every older table has: the ones `_allow_no_document` copies from
 # a table it replaces. A column added later is NOT in this list (the old table
@@ -108,27 +112,28 @@ def log_request(
     n_dropped: Optional[int] = None,
 ) -> int:
     """Log a single request. Returns the request_id."""
-    cur = conn.execute(
-        """
-        INSERT INTO requests
-        (plan_id, query_text, mode, scopes, latency_ms, n_hits, n_citations,
-         answer_hash, error_message, cache_hit, n_statements, n_dropped)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            plan_id,
-            query_text,
-            mode,
-            json.dumps(sorted(scopes or []), separators=(",", ":")),
-            latency_ms,
-            n_hits,
-            n_citations,
-            answer_hash,
-            error_message,
-            cache_hit,
-            n_statements,
-            n_dropped,
-        ),
-    )
-    conn.commit()
-    return cur.lastrowid
+    with _LOCK:
+        cur = conn.execute(
+            """
+            INSERT INTO requests
+            (plan_id, query_text, mode, scopes, latency_ms, n_hits, n_citations,
+             answer_hash, error_message, cache_hit, n_statements, n_dropped)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                plan_id,
+                query_text,
+                mode,
+                json.dumps(sorted(scopes or []), separators=(",", ":")),
+                latency_ms,
+                n_hits,
+                n_citations,
+                answer_hash,
+                error_message,
+                cache_hit,
+                n_statements,
+                n_dropped,
+            ),
+        )
+        conn.commit()
+        return cur.lastrowid

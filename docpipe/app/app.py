@@ -29,6 +29,7 @@ import logging
 import mimetypes
 import os
 import sys
+import threading
 from pathlib import Path
 
 # A pdf.js viewer behind PDF_VIEWER_PREFIX is served as ES modules; some Python
@@ -46,6 +47,8 @@ if _PACKAGE_PARENT not in sys.path:
     sys.path.insert(0, _PACKAGE_PARENT)
 
 import streamlit as st
+from streamlit.runtime.scriptrunner import (
+    add_script_run_ctx, get_script_run_ctx)
 
 from docpipe import prompts
 from docpipe.app import config, pdf_link
@@ -53,7 +56,7 @@ from docpipe.extraction import gold, trust
 from docpipe.extraction.verify import canonical_number
 from docpipe.inference import (
     answer, catalog, chunker, compare, faiss_store, kg_route, lexical,
-    llm_client, query_cache, replies, request_log, values_route, wording,
+    llm_client, pool, query_cache, replies, request_log, values_route, wording,
 )
 from docpipe.inference import db
 from docpipe.profile import load_profile
@@ -70,6 +73,7 @@ T: dict = {}
 # Streamlit refuses two widgets of one identity in a run, and two citations of
 # one document are two download buttons of the same label: each takes a key.
 _downloads = itertools.count()
+_EMBEDDING = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +89,7 @@ def get_index():
 
 @st.cache_resource
 def get_db():
-    return db.connect_readonly(config.DB_PATH)
+    return db.PerThread(lambda: db.connect_readonly(config.DB_PATH))
 
 
 @st.cache_resource
@@ -195,11 +199,17 @@ def embed_query(item: dict, cache_conn, cache_key: str):
     if cached is not None:
         log.info("Query cache hit (%s)", cache_key[:12])
         return cached, True
-    # Heavy backend imported lazily so a cache-hit turn never touches torch;
-    # which backend that is (local model or an endpoint) is configuration.
-    from docpipe.embedding import get_embedder
-    vec = get_embedder().embed_one(item)
-    query_cache.put(cache_conn, cache_key, vec)
+    # One after the other, on one card. Whoever waited here may find the
+    # vector of the same words already there.
+    with _EMBEDDING:
+        cached = query_cache.get(cache_conn, cache_key)
+        if cached is not None:
+            return cached, True
+        # Heavy backend imported lazily so a cache-hit turn never touches torch;
+        # which backend that is (local model or an endpoint) is configuration.
+        from docpipe.embedding import get_embedder
+        vec = get_embedder().embed_one(item)
+        query_cache.put(cache_conn, cache_key, vec)
     return vec, False
 
 
@@ -236,13 +246,14 @@ def _corpus(image_bytes: bytes | None = None) -> answer.Corpus:
 
 def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
              document_id: int | None, scopes: list[str], as_json: bool = False,
-             history: list | None = None):
+             history: list | None = None, corpus: answer.Corpus | None = None,
+             progress=None):
     """One turn, with this app's resources and its spinners attached.
     `document_id` None asks the whole corpus."""
     return answer.answer_question(
-        task, _corpus(image_bytes), document_id, scopes,
+        task, corpus or _corpus(image_bytes), document_id, scopes,
         image_bytes=image_bytes, image_only=image_only, as_json=as_json,
-        history=history, progress=_spinner,
+        history=history, progress=progress or _spinner,
     )
 
 
@@ -304,7 +315,9 @@ def values_outcome(task: str, document_id: int | None) -> dict | None:
 
 
 def run_values_answer(task: str, got: dict, document_id: int | None,
-                      history: list | None = None) -> dict:
+                      history: list | None = None,
+                      corpus: answer.Corpus | None = None,
+                      progress=None) -> dict:
     """The question answered from the passages the found values were read
     from (`answer.answer_from_values`), and the values the answer stands on.
 
@@ -313,8 +326,8 @@ def run_values_answer(task: str, got: dict, document_id: int | None,
     ones, `shown` how many the answer was given, `total` how many matched.
     """
     result = answer.answer_from_values(
-        task, _corpus(), got["values"], document_id, history=history,
-        progress=_spinner)
+        task, corpus or _corpus(), got["values"], document_id, history=history,
+        progress=progress or _spinner)
     return {"answer": result["answer"], "answer_text": result["answer_text"],
             "citations": result["citations"],
             "made": result.get("statements_made", 0),
@@ -367,6 +380,18 @@ def routes_offered(whole: bool) -> list:
 def _ask_value_coordinate(task: str, slot):
     return llm_client.choose(get_coordinate_prompt(), task, slot.question,
                              slot.answerable() if slot.is_closed else {})
+
+
+def _in_this_run(work):
+    """*work* for another thread: it may read the cached resources of this
+    run, and it shows nothing itself."""
+    ctx = get_script_run_ctx()
+
+    def run():
+        add_script_run_ctx(threading.current_thread(), ctx)
+        return work()
+
+    return run
 
 
 def _spinner(label: str):
@@ -576,14 +601,24 @@ def chat_page() -> None:
     # out of the passages the harvest read its values from, not out of the
     # search below. Not for a question that is only an image: it names
     # nothing.
-    values = (None if image_only or route == "route_documents"
-              else run_values_turn(task, doc_id))
-    harvest = (None if values is None
-               else _kept(run_values_answer(task, values, doc_id,
-                                            by_doc.get(doc_id, []))))
+    corpus = _corpus(image_bytes)
 
-    result = run_turn(task, image_bytes, image_only, doc_id, scopes, as_json=as_json,
-                      history=by_doc.get(doc_id, []))
+    def from_harvest():
+        values = (None if image_only or route == "route_documents"
+                  else run_values_turn(task, doc_id))
+        return None if values is None else _kept(run_values_answer(
+            task, values, doc_id, by_doc.get(doc_id, []), corpus=corpus,
+            progress=answer._silent))
+
+    def from_documents():
+        return run_turn(task, image_bytes, image_only, doc_id, scopes,
+                        as_json=as_json, history=by_doc.get(doc_id, []),
+                        corpus=corpus, progress=answer._silent)
+
+    # The two run side by side, so the one spinner stands for both.
+    with _spinner(T["preparing"]), pool.turn():
+        harvest, result = llm_client.together(
+            [_in_this_run(from_harvest), _in_this_run(from_documents)])
 
     recheck_note = None
     if result.get("recheck"):

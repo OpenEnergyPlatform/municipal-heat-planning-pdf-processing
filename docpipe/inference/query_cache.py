@@ -14,12 +14,16 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 
 from docpipe.embedding import config as embedding_config
+
+# One connection, and the documents of a comparison ask it from their threads.
+_LOCK = threading.Lock()
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS query_cache (
@@ -81,9 +85,10 @@ def make_key(mode: str, text: Optional[str] = None,
 
 def get(conn: sqlite3.Connection, key: str) -> Optional[np.ndarray]:
     """Return the cached (float32) vector for `key`, or None on a miss."""
-    row = conn.execute(
-        "SELECT vector FROM query_cache WHERE query_key = ?", (key,)
-    ).fetchone()
+    with _LOCK:
+        row = conn.execute(
+            "SELECT vector FROM query_cache WHERE query_key = ?", (key,)
+        ).fetchone()
     if row is None:
         return None
     return np.frombuffer(row[0], dtype="float32").copy()
@@ -100,8 +105,9 @@ def put_many(conn: sqlite3.Connection, pairs) -> None:
             for key, vector in pairs]
     if not rows:
         return
-    conn.executemany(
-        "INSERT OR REPLACE INTO query_cache (query_key, vector) VALUES (?, ?)",
-        rows,
-    )
-    conn.commit()
+    with _LOCK:
+        conn.executemany(
+            "INSERT OR REPLACE INTO query_cache (query_key, vector) VALUES (?, ?)",
+            rows,
+        )
+        conn.commit()

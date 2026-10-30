@@ -169,7 +169,8 @@ Return the query vector, from cache or a fresh on-demand embed.
 ```python
 def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
              document_id: int | None, scopes: list[str], as_json: bool = False,
-             history: list | None = None)
+             history: list | None = None, corpus: answer.Corpus | None = None,
+             progress=None)
 ```
 
 One turn, with this app's resources and its spinners attached.
@@ -220,7 +221,9 @@ database does not know.
 
 ```python
 def run_values_answer(task: str, got: dict, document_id: int | None,
-                      history: list | None = None) -> dict
+                      history: list | None = None,
+                      corpus: answer.Corpus | None = None,
+                      progress=None) -> dict
 ```
 
 The question answered from the passages the found values were read

@@ -23,6 +23,9 @@ a model anything or reads a file.
 
 Statements are carried forward as checked and never rewritten: what a later
 batch is shown of the earlier ones is `texts`, and what it adds is appended.
+A batch sent ahead did not see them and can say the same thing again from
+another source; `repeated` reads which ones a model names as such, and those
+leave the answer while the others stay as they were checked.
 
 Author: Felix Vossel
 
@@ -72,6 +75,20 @@ def texts(shown: list) -> list
 
 What a later batch is told was already said: the checked statements,
 exactly as they were checked.
+
+### repeated
+
+```python
+def repeated(pairs, count: int) -> set
+```
+
+Which of *count* statements repeat an earlier one, as their positions
+from 0. *pairs* is what the model named: {"statement", "of"}, numbered
+from 1.
+
+Only a later statement can repeat an earlier one, so the first of a
+repeated thing always stays. A pair that does not name two of the
+statements that way names no repeat.
 
 ### citations_of
 

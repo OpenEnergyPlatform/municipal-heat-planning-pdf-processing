@@ -9,8 +9,8 @@ reads back an answer made of statements, each grounded in a quote, with
 citations that trace to a page and, where possible, to the passage on it. It has
 two pages:
 
-- the chat, over one document, several (each asked by itself, then compared)
-  or the whole corpus;
+- the chat, over one document, several (each asked by itself, side by side, then
+  compared) or the whole corpus;
 - the review page, where a person decides whether harvested values are what
   the documents say (see below). It is offered only where a harvest is
   configured.
@@ -70,7 +70,8 @@ real model differs from that name is not noticed. Changing the selection
 resets the history. A turn then runs in this order:
 
 1. If a harvest is configured (`INFERENCE_HARVEST_DIR`) and the question is
-   not only an image, the harvest answers first. `values_route` finds the
+   not only an image, the harvest answers, side by side with step 2 and shown
+   above its answer. `values_route` finds the
    values the question asks for (`docpipe/serve/values.py`; the parameter is
    chosen with the profile's own question for a person's question,
    `chat_parameter_question`, and not with the extraction's question about a
@@ -87,8 +88,14 @@ resets the history. A turn then runs in this order:
    names no parameter gets nothing here. `INFERENCE_VALUES_LEVEL` leaves out
    values below a trust level and `INFERENCE_VALUES_LIMIT` caps how many
    values, and so passages, the answer is given.
-2. The answer from the documents follows: a search anchor, the query
-   embedding, retrieval, and the answer across token-budgeted batches.
+2. The answer from the documents, asked at the same time: a search anchor, the
+   query embedding, retrieval, and the answer across token-budgeted batches.
+   Where the model has more than one place for requests, the next batch is sent
+   ahead onto a free place, and one more request drops what a batch sent ahead
+   said again; the batches are taken in their order all the same (see [Asking
+   the corpus](inference.md)). The two steps are two threads that read the app's
+   cached resources and show no stage of their own (`_in_this_run`), so one
+   spinner stands for both; the query embedding stays one at a time.
    Retrieval is by meaning and, where a word index exists beside the database
    and is current, also by word, and the two rankings are merged
    (`docpipe/inference/hybrid.py`). `INFERENCE_LEXICAL=0` turns the word
@@ -104,7 +111,8 @@ resets the history. A turn then runs in this order:
      were removed because their quote does not stand in the source they cite,
      "2 of 5 statement(s) removed". It does not say which or why: the cause per
      statement goes to the log. It stands also where every statement was
-     removed.
+     removed. The number made includes the statements a repeats request took
+     out, which the sentence does not count as removed.
    - Where sources were found and no statement stood there is no answer, and the
      page says one of two things. `nothing_backed` says the examined sources hold nothing that backs
      an answer: statements were made and none stood, or the model's replies were
@@ -126,8 +134,8 @@ resets the history. A turn then runs in this order:
      (`run_label`, "Run 1", "Run 2"), so that the number in the caption can be
      found. A value read off a figure keeps its own caption.
 3. With several documents selected there is no values step and no joint
-   search: `run_comparison` asks each document by itself and one more call
-   compares the finished answers, since one top-k over several plans would
+   search: `run_comparison` asks each document by itself, all of them side by
+   side under one spinner, and one more call compares the finished answers, since one top-k over several plans would
    give the longest chapter most of the slots. The comparison is given only
    the statements that stood, as plain text. Each document's own row carries its
    own caption of removed statements and its own warning of unreadable requests,
@@ -145,8 +153,8 @@ harvested document, older versions included, and the help text of the
 checkbox (`whole_corpus_help` of the profile) says so.
 
 The answer route (`route` of the profile's UI words) chooses where an answer
-comes from. Automatic is the order above: the harvest's answer, then the
-answer from the documents. Harvest answers from the harvest alone, and where
+comes from. Automatic is both of the steps above at once: the harvest's answer
+above the answer from the documents. Harvest answers from the harvest alone, and where
 it holds nothing it says why in the profile's words (`values_no_parameter`,
 `values_no_values`, one per reason of `values_route.REASONS`); the
 documents are not asked, because a silent fallback would hide that the
@@ -266,6 +274,7 @@ the profile's own.
 | `QUERY_CACHE_PATH`, `REQUEST_LOG_PATH` | the two files of the app's own |
 | `PDF_URL_PREFIX`, `PDF_VIEWER_PREFIX` | where the PDFs and a pdf.js viewer are served from the app's own origin; with both set the button beside every drawn page opens the PDF in pdf.js with the quote boxed, with only the first in the browser's own viewer; both are empty by default |
 | `COMPARE_MAX_DOCUMENTS`, `TOP_K`, `MAX_CHUNK_ATTEMPTS`, `ANSWER_CONTEXT_TOKENS` | how many documents one comparison asks, and the retrieval and answer budgets |
+| `LLM_MODELS`, `LLM_SLOTS_PER_MODEL` | the model names at the endpoint that requests are spread over (empty is `LLM_MODEL` alone) and how many requests each takes at once; the default is one place in all, the plain client and one request after the other |
 | `CODE_EXEC_URL`, `CODE_EXEC_TOKEN`, `CODE_EXEC_MAX_ROUNDS`, `CODE_EXEC_TIMEOUT` | the calculation sandbox; an empty URL turns the feature off |
 
 `config.py` re-exports every retrieval and model setting it shares with

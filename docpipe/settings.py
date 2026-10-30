@@ -478,6 +478,10 @@ SETTINGS = (
     S("LLM_MODEL", "llm.model", "str", "Qwen/Qwen3.5-122B-A10B-FP8",
       "Name the text model is served under.",
       stages=("refine", "extract", "chat")),
+    S("LLM_MODELS", "llm.models", "str", None,
+      "Chat only: the model names the requests are spread over, "
+      "comma-separated; empty is LLM_MODEL alone.",
+      stages=("chat",)),
     S("LLM_NUM_PARALLEL", "llm.num_parallel", "int", "8",
       "Refinement only: windows sent to the model at once per document.",
       stages=("refine",)),
@@ -509,6 +513,9 @@ SETTINGS = (
       "Tokens a hosted model may think in, on top of the answer room of "
       "each request.",
       stages=("preprocess", "refine", "visuals", "extract", "chat")),
+    S("LLM_SLOTS_PER_MODEL", "llm.slots_per_model", "int", "1",
+      "Chat only: requests each model of LLM_MODELS takes at once.",
+      stages=("chat",)),
     S("LLM_TIMEOUT", "llm.timeout", "int", "180",
       "Seconds before one text model request is given up.",
       stages=("refine", "extract", "chat")),

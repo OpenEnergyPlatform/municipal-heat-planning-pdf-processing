@@ -31,12 +31,14 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Optional
 
 from .. import prompts
 from ..extraction import fields
 from ..extraction.spec import fold_label
+from . import llm_client
 from ..extraction.trust import LEVEL_A, LEVEL_B, LEVEL_C
 
 # The profile's prompt for one closed question. Optional the way the
@@ -219,10 +221,11 @@ def coordinates_of(task: str, parameter, ask, axes=None) -> dict:
     """{axis: uri | int} for the coordinates of *parameter* the question
     fixes. *axes* limits which are asked; None asks every one."""
     out: dict = {}
-    for slot in fields.axis_slots(parameter):
-        if axes is not None and slot.name not in axes:
-            continue
-        answer = ask(task, slot)
+    slots = [slot for slot in fields.axis_slots(parameter)
+             if axes is None or slot.name in axes]
+    answers = llm_client.together(
+        [partial(ask, task, slot) for slot in slots])
+    for slot, answer in zip(slots, answers):
         if answer is None or str(answer).strip() == fields.UNSTATED:
             continue
         if slot.kind == fields.NUMBER:

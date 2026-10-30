@@ -8,8 +8,9 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import threading
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from ..captions import resolve_title
 from ..store.schema import readonly_uri, recorded_model
@@ -34,6 +35,22 @@ def connect_readonly(db_path: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+class PerThread:
+    """A connection that is one object to whoever holds it and a connection
+    of its own in every thread that uses it, opened by *open_connection*: the
+    requests of one turn read from several threads at once."""
+
+    def __init__(self, open_connection: Callable):
+        self._open = open_connection
+        self._local = threading.local()
+
+    def __getattr__(self, name: str):
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = self._local.conn = self._open()
+        return getattr(conn, name)
+
 
 def available_scopes(conn: sqlite3.Connection) -> list[str]:
     """The search scopes whose embedding types the database holds vectors of,

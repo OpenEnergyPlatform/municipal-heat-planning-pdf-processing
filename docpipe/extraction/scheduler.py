@@ -16,7 +16,9 @@ server's slowness.
 
 A request may be withdrawn while it waits (`Ticket.withdraw`): the sweep
 that asked several windows ahead has its answer, and the windows behind it
-are not sent. A withdrawn request raises `Withdrawn` in its caller.
+are not sent. A withdrawn request raises `Withdrawn` in its caller. A request
+sent ahead of knowing it is needed (`Ticket(ahead=True)`) waits behind every
+other one until its ticket is promoted.
 
 Author: Felix Vossel
 """
@@ -37,8 +39,9 @@ class Withdrawn(Exception):
 class Ticket:
     """What a sweep withdraws the requests it no longer needs with."""
 
-    def __init__(self):
+    def __init__(self, ahead: bool = False):
         self._withdrawn = threading.Event()
+        self.ahead = ahead
 
     def withdraw(self) -> None:
         self._withdrawn.set()
@@ -122,11 +125,23 @@ class Scheduler:
     def submit(self, send: Callable, document: Optional[int] = None,
                ticket: Optional[Ticket] = None) -> Future:
         future: Future = Future()
-        entry = (self.rank(document), next(self._seq), send, future, ticket)
+        ahead = int(ticket is not None and ticket.ahead)
+        entry = (ahead, self.rank(document), next(self._seq), send, future,
+                 ticket)
         with self._cond:
             heapq.heappush(self._heap, entry)
             self._cond.notify_all()
         return future
+
+    def promote(self, ticket: Ticket) -> None:
+        """The requests of *ticket* are needed now: they stop waiting behind
+        the others, and so do the ones it sends from here on."""
+        ticket.ahead = False
+        with self._cond:
+            self._heap = [(0, *entry[1:]) if entry[-1] is ticket else entry
+                          for entry in self._heap]
+            heapq.heapify(self._heap)
+            self._cond.notify_all()
 
     def _dispatch(self) -> None:
         while True:
@@ -134,7 +149,7 @@ class Scheduler:
                 while not self._heap or (self.limit.in_flight
                                          >= self.limit.limit):
                     self._cond.wait(timeout=1.0)
-                _rank, _seq, send, future, ticket = heapq.heappop(self._heap)
+                *_order, send, future, ticket = heapq.heappop(self._heap)
             if ticket is not None and ticket.withdrawn:
                 future.set_exception(Withdrawn())
                 continue

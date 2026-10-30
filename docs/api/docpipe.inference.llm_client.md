@@ -52,7 +52,8 @@ def __init__(self, cause: str, request: str, attempts: int = 1)
 def get_client()
 ```
 
-Lazily build the client (own retry loop → max_retries=0).
+Lazily build the client (own retry loop → max_retries=0), behind the
+places of the pool where there are several.
 
 ### collecting
 
@@ -63,6 +64,17 @@ def collecting()
 
 The faults of the requests made inside the block, as a list of
 {"request": the reply asked for, "cause": why there is none}.
+
+### together
+
+```python
+def together(thunks) -> list
+```
+
+`pool.together`, with the fault list of the turn kept right: a list
+belongs to one thread, because `_ask` takes back what it noted by position.
+Each thunk notes into its own, and they are added in the order of
+*thunks*, whichever finished first.
 
 ### note_fault
 
@@ -233,6 +245,17 @@ in, and a model that is asked inside schemas only is not asked for it.
 That is noted as a fault of the turn, so the reader is told that the
 answer stays prose, where it used to get a JSON that was only the answer
 wrapped in a key. A request that stays unreadable raises `ReplyError`.
+
+### repeats_among
+
+```python
+def repeats_among(task: str, texts: list) -> list
+```
+
+Which of the checked *texts* say what an earlier one already said:
+what the model named, [{"statement", "of"}], numbered from 1
+(`statements.repeated` reads them). Empty on any failure, which leaves a
+fault in the collecting turn and every statement standing.
 
 ### compare_answers
 

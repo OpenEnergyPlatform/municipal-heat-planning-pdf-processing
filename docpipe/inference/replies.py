@@ -50,6 +50,15 @@ READOFF = _only("readoff_reply",
 COMPARE = _only("comparison_reply",
                 comparison={"type": "string", "_required": True})
 
+REPEATS = _only("repeats_reply",
+                repeats={"type": "array", "_required": True,
+                         "items": {"type": "object",
+                                   "properties": {
+                                       "statement": {"type": "integer"},
+                                       "of": {"type": "integer"}},
+                                   "required": ["statement", "of"],
+                                   "additionalProperties": False}})
+
 _STATEMENT = {"type": "object",
               "properties": {"statement": TEXT,
                              "basis": {"enum": list(BASES)},

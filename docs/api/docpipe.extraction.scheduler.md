@@ -19,7 +19,9 @@ server's slowness.
 
 A request may be withdrawn while it waits (`Ticket.withdraw`): the sweep
 that asked several windows ahead has its answer, and the windows behind it
-are not sent. A withdrawn request raises `Withdrawn` in its caller.
+are not sent. A withdrawn request raises `Withdrawn` in its caller. A request
+sent ahead of knowing it is needed (`Ticket(ahead=True)`) waits behind every
+other one until its ticket is promoted.
 
 Author: Felix Vossel
 
@@ -44,7 +46,7 @@ What a sweep withdraws the requests it no longer needs with.
 #### Ticket.\_\_init\_\_
 
 ```python
-def __init__(self)
+def __init__(self, ahead: bool = False)
 ```
 
 #### Ticket.withdraw
@@ -129,6 +131,15 @@ Places the limit has that no request holds or waits for.
 def submit(self, send: Callable, document: Optional[int] = None,
            ticket: Optional[Ticket] = None) -> Future
 ```
+
+#### Scheduler.promote
+
+```python
+def promote(self, ticket: Ticket) -> None
+```
+
+The requests of *ticket* are needed now: they stop waiting behind
+the others, and so do the ones it sends from here on.
 
 ### Scheduled
 
