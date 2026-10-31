@@ -26,8 +26,11 @@ only. What does
 call `get_embedder()` is code asking the already-built corpus a question
 after the fact: the retrieval sweep of stage 7 embedding a probe, or a
 batch of probes, against the FAISS index
-(`docpipe/extraction/runner.py:422`, `517`, `1938`), and the inference app
-embedding one chat turn's query (`docpipe/app/app.py`, `embed_query`). Both can run on hardware not used for the corpus build: a laptop
+(`docpipe/extraction/runner.py:422`, `517`, `1938`), the inference app
+embedding one chat turn's query (`docpipe/app/app.py`, `embed_query`), and
+`docpipe values-index` embedding a line for each harvested value so that the
+chat can find values by meaning (`docpipe/inference/values_index.py`). All of
+them can run on hardware not used for the corpus build: a laptop
 with no GPU pointed at `api`, or a small card that cannot hold an 8B model
 resident, which is what the import-path form exists for.
 
@@ -35,7 +38,7 @@ resident, which is what the import-path form exists for.
 
 | | |
 |---|---|
-| In | Item dicts from a caller already holding the corpus: a probe's text from the retrieval sweep (`docpipe/extraction/runner.py`), a chat query from the app (`docpipe/app/app.py`); plus the `EMBEDDING_*` variables `docpipe/embedding/config.py` reads once |
+| In | Item dicts from a caller already holding the corpus: a probe's text from the retrieval sweep (`docpipe/extraction/runner.py`), a chat query from the app (`docpipe/app/app.py`), a line of a harvested value from `docpipe values-index`; plus the `EMBEDDING_*` variables `docpipe/embedding/config.py` reads once |
 | Out | A list of float vectors, in input order; nothing is written to disk, the database, or the FAISS index by this package |
 | Resumes on | Nothing: `embed()` and `embed_one()` are plain functions of their input, so there is no cache or stamp file to clear |
 | Needs | No GPU by default: `local` needs a CUDA device or falls back to the CPU; `api` needs network access; import-path needs whatever the deployment's class requires |
@@ -43,9 +46,10 @@ resident, which is what the import-path form exists for.
 No numbered stage in the diagram on [How the parts fit together](../pipeline.md)
 owns this page. It sits below stage 6's FAISS index and takes no part in
 building it except through `ApiEmbedder` when `EMBEDDING_INDEX_BACKEND=api`
-(see Purpose), and is called from two places downstream of that index: the
-retrieval sweep inside [extraction](extraction.md) and one chat turn
-inside [the app](app.md). Neither caller reconstructs the corpus's own
+(see Purpose), and is called from three places downstream of that index: the
+retrieval sweep inside [extraction](extraction.md), one chat turn inside
+[the app](app.md) and the build of the values index (`docpipe values-index`).
+No caller reconstructs the corpus's own
 `embedding_type` vocabulary (`docpipe/chunking/config.py`); that label is
 attached only after this package has already returned a vector.
 
@@ -135,7 +139,7 @@ package; storing a returned vector is the caller's job.
 | `EMBEDDING_MODEL` | environment variable | `"Qwen/Qwen3-VL-Embedding-8B"` | HF model id, or served model name for `api` | `docpipe/embedding/config.py:21` |
 | `EMBEDDING_DIM` | environment variable | `4096` | Vector width the rest of the pipeline sizes its FAISS index to; not checked here | `docpipe/embedding/config.py:22` |
 | `EMBEDDING_MAX_TOKEN_LENGTH` | environment variable | `16384` | Token ceiling passed as `max_length`, overriding `qwen3_vl_embedding.py`'s own default of `8192` | `docpipe/embedding/config.py:23` |
-| `EMBEDDING_BATCH_SIZE` | environment variable | `8` | Texts per `/v1/embeddings` request; read only by `ApiEmbedder` | `docpipe/embedding/config.py:24` |
+| `EMBEDDING_BATCH_SIZE` | environment variable | `8` | Texts per `/v1/embeddings` request; read by `ApiEmbedder`, and by `docpipe values-index` for the lines it embeds per call | `docpipe/embedding/config.py:24` |
 | `EMBEDDING_BASE_URL` | environment variable | `""` | Endpoint for `api`; empty raises `ValueError` at construction | `docpipe/embedding/config.py:27` |
 | `EMBEDDING_API_KEY` | environment variable | `"EMPTY"` | API key for `api`; the placeholder works against endpoints that do not check it | `docpipe/embedding/config.py:28` |
 
@@ -217,8 +221,9 @@ error raised anywhere (`docpipe/chunking/config.py:13` to `16`).
 
 `docpipe/embedding/__init__.py` defines the `Embedder` protocol and
 `get_embedder()`, the one factory every caller uses to obtain a backend.
-It is what `docpipe/extraction/runner.py`, `docpipe/app/app.py`
-and `scripts/inference_app_smoketest.py` import `get_embedder` from.
+It is what `docpipe/extraction/runner.py`, `docpipe/app/app.py`,
+`docpipe/inference/values_index.py` and `scripts/inference_app_smoketest.py`
+import `get_embedder` from.
 
 `docpipe/embedding/config.py` declares the `EMBEDDING_*` environment
 variables once, read directly by the other modules here and re-exported,

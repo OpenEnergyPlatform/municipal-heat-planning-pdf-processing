@@ -55,15 +55,17 @@ class MetaCatalog(Catalog):
                               if row[field] not in (None, "")}
         return out
 
+    def name(self, row, facets: Optional[dict] = None) -> str:
+        title = row["title"] if "title" in row.keys() else None
+        return str(title or Path(row["filename"] or "").stem
+                   or row["external_id"] or f"#{row['id']}")
+
     def label(self, row, facets: Optional[dict] = None) -> str:
         """The title, else the file name, and the date where there is one.
         No current/old tag: a folder has no versions, every file is its own
         document."""
-        columns = row.keys()
-        title = row["title"] if "title" in columns else None
-        name = str(title or Path(row["filename"] or "").stem
-                   or row["external_id"] or f"#{row['id']}")
-        created = row["created"] if "created" in columns else None
+        name = self.name(row, facets)
+        created = row["created"] if "created" in row.keys() else None
         return f"{name} · {created}" if created else name
 
 

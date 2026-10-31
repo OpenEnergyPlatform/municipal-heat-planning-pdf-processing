@@ -40,9 +40,9 @@ def rows_to_review(tuples: list, *, force: bool = False) -> list
 
 The values a second reading is worth spending a request on.
 
-The lowest level and nothing above it: a value whose coordinates were all
-read and whose quote needed no repair has nothing for a narrower window
-to find. And each row once -- a row already carrying a review flag
+The levels a curator examines and nothing above them: a value whose
+coordinates were all read and whose quote needed no repair has nothing for
+a narrower window to find. And each row once -- a row already carrying a review flag
 is not asked again, because the second answer would be the second answer
 to the same question and no more.
 

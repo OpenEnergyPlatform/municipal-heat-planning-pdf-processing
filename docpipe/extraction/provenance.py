@@ -139,7 +139,10 @@ CONCEPTS = {
                    "read or derived.",
     trust.LEVEL_B: "As A, but read from an image a model transcribed, or "
                    "from a document without a text layer.",
-    trust.LEVEL_C: "Something is open; the reasons say what.",
+    trust.LEVEL_C: "A coordinate was not read, and nothing speaks against "
+                   "what was; the reasons say which.",
+    trust.LEVEL_D: "Something speaks against the reading; the reasons say "
+                   "what.",
     "page_transcribed": "The document had no text layer; a model "
                         "transcribed its pages.",
     "repaired": "The value's quote had to be brought into line with the "
@@ -157,7 +160,7 @@ SCHEMES = {
                      fields.UNANSWERED, fields.EXHAUSTED, fields.UNBACKED),
     "OutsideVocabulary": ("total", "other"),
     "ReadingNote": ("period_unstated", "quote_repaired"),
-    "TrustLevel": (trust.LEVEL_A, trust.LEVEL_B, trust.LEVEL_C),
+    "TrustLevel": trust.LEVELS,
     "TrustReason": ("page_transcribed", fields.EXHAUSTED, fields.UNBACKED,
                     fields.UNANSWERED, "repaired", "computed",
                     "not_located", "disagree", "conflict"),

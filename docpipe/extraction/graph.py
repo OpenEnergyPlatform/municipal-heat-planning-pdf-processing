@@ -55,7 +55,7 @@ WELL_KNOWN = {"xsd": XSD,
               "rdfs": "http://www.w3.org/2000/01/rdf-schema#"}
 WHOLE = {"integer", "int", "long", "short", "nonNegativeInteger",
          "positiveInteger", "gYear"}
-_RANK = {trust.LEVEL_A: 0, trust.LEVEL_B: 1, trust.LEVEL_C: 2}
+_RANK = {level: rank for rank, level in enumerate(trust.LEVELS)}
 _IRI = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://[^\s<>\"{}|\\^`]+$")
 
 

@@ -95,7 +95,9 @@ cost 178 of 853 field requests, 20.9 percent
 filled in before being dropped for the two gate coordinates
 (`Turn.walk` in `docpipe/extraction/runner.py`). The same split holds past
 the coordinate: `docpipe/extraction/trust.py`'s `reasons` counts
-`exhausted`, `unbacked` and `unanswered` as doubt about a reading, and
+`exhausted`, `unbacked` and `unanswered` as reasons, and
 treats every other state, `derived`, `unstated` and `out_of_slice`, as a
 fact about the document or the run's scope, not about the value itself.
-[Trust](trust.md) grades a tuple from exactly that split.
+[Trust](trust.md) grades a tuple from exactly that split: a coordinate nobody
+read, `exhausted` or `unanswered`, makes it a `C`, a reading that could not be
+backed, `unbacked`, a `D`.

@@ -50,6 +50,15 @@ READOFF = _only("readoff_reply",
 COMPARE = _only("comparison_reply",
                 comparison={"type": "string", "_required": True})
 
+
+def picked(ids: list) -> tuple:
+    """The entries of a list the model chooses, by *ids*: its grammar is the
+    list, and an id it does not hold is no word of it."""
+    return _only("picked_reply",
+                 chosen={"type": "array", "items": {"enum": list(ids)},
+                         "_required": True})
+
+
 REPEATS = _only("repeats_reply",
                 repeats={"type": "array", "_required": True,
                          "items": {"type": "object",

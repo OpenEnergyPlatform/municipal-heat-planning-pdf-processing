@@ -19,6 +19,7 @@ PHRASES = {
     "history_task": "Question",
     "history_phrase": "Search anchor",
     "history_answer": "Answer",
+    "pick_outside": "{ids} are not on the list. Choose entries of the list only.",
     "chat_parameter_question": ("What does the user ask for? Choose the entry "
                                 "of the list the question asks about, by what "
                                 "it means and not by its words. A question "

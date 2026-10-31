@@ -77,6 +77,15 @@ class KwpCatalog(Catalog):
     def label(self, row, facets: Optional[dict] = None) -> str:
         return document_label(row, (facets or {}).get("gemeinde"))
 
+    def name(self, row, facets: Optional[dict] = None) -> str:
+        covered = (facets or {}).get("gemeinde") or []
+        if len(covered) > 1:
+            return str(row["organisation_unit_name"]
+                       or _konvoi_lead(row["filename"] or "") or covered[0])
+        return str((covered[0] if covered else None)
+                   or row["municipality_name"]
+                   or row["organisation_unit_name"] or row["filename"])
+
     def detail(self, row, facets: Optional[dict] = None):
         covered = (facets or {}).get("gemeinde") or []
         if len(covered) <= 1:

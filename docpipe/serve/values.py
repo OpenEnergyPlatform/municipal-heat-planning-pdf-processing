@@ -19,9 +19,9 @@ about it and nothing added:
     coordinates   each with what was read, the wording it was read from and
                   how the reading ended (`fields.py`)
     quote, page   the words of the document the value stands in, and where
-    level         A, B or C with the reasons (`trust.py`)
+    level         A, B, C or D with the reasons (`trust.py`)
 
-Nothing is filtered: a value of level C is served like one of level A, and
+Nothing is filtered: a value of level D is served like one of level A, and
 says that it is one. Leaving a level out is the asker's decision
 (`level="B"` asks for B and better).
 
@@ -59,13 +59,15 @@ from typing import Iterable, Optional
 
 from .. import jsonl
 from ..extraction import identity, trust
+from ..extraction.fields import OUT_OF_SLICE
+from ..extraction.gold import UNIT
 from ..extraction.gold import coordinates as coordinate_names
 from ..extraction.gold import same
 from ..extraction.schema import PARAMETER_STATE_DOC
 
 log = logging.getLogger(__name__)
 
-LEVELS = (trust.LEVEL_A, trust.LEVEL_B, trust.LEVEL_C)
+LEVELS = trust.LEVELS
 MAX_LIMIT = 1000
 
 # What the harvest holds no line for. Not harvest states: see the docstring.
@@ -82,6 +84,8 @@ MEANINGS = {
                   "refusals of it are served",
 }
 TRACE_SUFFIX = ".trace.jsonl"
+# A coordinate in one of these was not read.
+UNREAD = trust.OPEN_STATES + (OUT_OF_SLICE,)
 
 
 class NotFound(LookupError):
@@ -156,6 +160,10 @@ def _same_number(left: dict, right: dict) -> bool:
         return same(here, there)
     return same(left.get("value"), right.get("value")) \
         and same(left.get("unit"), right.get("unit"))
+
+
+def _is_number(content) -> bool:
+    return isinstance(content, (int, float)) and not isinstance(content, bool)
 
 
 def _text(content) -> str:
@@ -243,12 +251,24 @@ class Values:
     @staticmethod
     def _contested(rows: list) -> set:
         """The rows of one document that claim the same thing with another
-        number: the same parameter and the same coordinates."""
+        number: the same parameter and the same coordinates, every one of
+        them read.
+
+        A coordinate nobody read says nothing about what a row is a number
+        of, so two rows that both lack it are not two claims about one thing.
+        Nor are two names: a plan can have several offices, and only a number
+        contradicts a number. The unit is the number's and no part of what it
+        is a number of: 5 GWh and 9,000 MWh disagree.
+        """
         claims: dict = {}
         for row in rows:
+            names = coordinate_names(row)
+            if not _is_number(row.get("value")) or any(
+                    row.get(f"{name}_state") in UNREAD for name in names):
+                continue
             key = (row.get("parameter"),
-                   tuple((name, _text(row.get(name)))
-                         for name in coordinate_names(row)))
+                   tuple((name, _text(row.get(name))) for name in names
+                         if name != UNIT))
             claims.setdefault(key, []).append(row)
         contested = set()
         for claimants in claims.values():
@@ -331,6 +351,9 @@ class Values:
 
     def __len__(self) -> int:
         return len(self._values)
+
+    def __iter__(self):
+        return iter(self._values)
 
     def get(self, name: str) -> Optional[dict]:
         return self._by_id.get(name)

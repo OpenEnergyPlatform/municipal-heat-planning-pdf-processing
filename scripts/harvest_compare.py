@@ -346,13 +346,14 @@ def main(argv=None) -> int:
         print("\nTrust per value (harvest's own view, no conflict or second read)")
         print("  " + ", ".join("%s=%d (%.0f%%)" % (level, levels[level],
                                                    100.0 * levels[level] / total)
-                               for level in ("A", "B", "C")))
+                               for level in ("A", "B", "C", "D")))
         print("  reasons: " + (", ".join(f"{k}={v}" for k, v
                                          in reasons.most_common(8)) or "none"))
         shares = sorted(
-            ((s["levels"].get("C", 0) / (s["tuples"] or 1), name, s)
+            (((s["levels"].get("C", 0) + s["levels"].get("D", 0))
+              / (s["tuples"] or 1), name, s)
              for name, s in summaries), reverse=True)[:5]
-        print("  Plans with the highest C share")
+        print("  Plans with the highest share of C and D")
         for share, name, s in shares:
             print("      %s: %.0f%% of %d tuples" % (name, 100.0 * share,
                                                       s["tuples"]))

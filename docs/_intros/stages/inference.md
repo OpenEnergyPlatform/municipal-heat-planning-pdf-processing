@@ -24,17 +24,19 @@ path exists once the extraction stage's `--serialize` step has written a
 plan's numbers as a graph (see [The knowledge graph](./graph.md)):
 `kg_route.answer_from_graph` reads that graph directly, with no
 retrieval or free-text generation. A third path reads the harvest itself:
-`values_route.answer_from_values` turns a question into a parameter and the
-coordinates it names and finds the values the harvest holds for them, and
-`answer.answer_from_values` answers the question from the passages those
-values were read from (see Method).
+`values_route` finds the values the harvest holds for a question, by meaning
+among the vectors `docpipe values-index` made of them (`answer_from_index`)
+or, where there are none, by turning the question into a parameter and the
+coordinates it names (`answer_from_values`), and `answer.answer_from_values`
+answers the question from the passages those values were read from (see
+Method).
 
 ## Position in the pipeline
 
 | | |
 |---|---|
 | **In** | The read-only corpus SQLite database and global FAISS index stage 6, chunking (see [Chunking, embedding, database](./chunking.md)), wrote; the source PDF; the profile's wording and prompts; and, where configured, the word index beside the database, a harvest
-directory, the graph stage's Turtle file (see [The knowledge graph](./graph.md)) and a code-execution sandbox. |
+directory and the vectors of its values beside it (`docpipe values-index`), the graph stage's Turtle file (see [The knowledge graph](./graph.md)) and a code-execution sandbox. |
 | **Out** | A per-turn result dict, plus one appended row per turn in a request-log database apart from the corpus; the corpus is never written. |
 | **Resumes on** | Nothing. There is no batch and, by design, no answer cache (see Failure modes). |
 | **Needs** | A model endpoint (`LLM_PROVIDER`, `LLM_BASE_URL`; see [the provider layer](./providers.md)); a query embedder supplied through `Corpus.embed` (this package runs no embedding model); optionally `CODE_EXEC_URL` and a profile's knowledge-graph hooks. |
@@ -318,8 +320,9 @@ is logged through `request_log.log_request` (`answer.py:546-551`).
 ### Reading a model's reply
 
 Every request of the chat names the reply it asks for as a JSON schema
-(`replies.py`: the search phrase, a closed question, the answer, the focused
-read-off, the comparison, the repeats) and sends it as the grammar of the request, its
+(`replies.py`: the search phrase, a closed question, a choice among values, the
+answer, the focused read-off, the comparison, the repeats) and sends it as the
+grammar of the request, its
 `response_format`, on every provider (`providers.grammar`,
 `llm_client._reply_format`, `llm_client.py:333-346`). `LLM_SCHEMA` has no say in
 that. The one request with no schema, the JSON answer above, asks for a JSON
@@ -334,7 +337,8 @@ block is stripped, no object is cut out of surrounding text, no bracket is
 closed, and nothing is rescued from a reply that was cut off. The key the request needs has to be in the object
 and of the kind its schema gives it (`replies.needs` says which: `statements`, a
 list, for the answer, or `action` where the model may ask for a calculation or a
-crop instead; `answer` of a closed question; `phrase`; `reading`; `comparison`; `repeats`).
+crop instead; `answer` of a closed question; `phrase`; `reading`; `comparison`; `repeats`;
+`chosen`, a list, of a choice among values).
 It has to be there also where its kind is any, as for the `answer` of a closed
 question, so a reply without it is not read as "no answer" but asked again, and
 ends as `ReplyError` with the cause `missing_key` where it stays missing.
@@ -377,21 +381,22 @@ it could read, `llm_client.collecting()` (`answer_question` opens one, and
 `compare_documents` one for its comparison call): a list of `{"request",
 "cause"}`, the request being the name of its reply (`answer_reply`,
 `search_phrase_reply`, `choice_reply`, `readoff_reply`, `comparison_reply`,
-`repeats_reply`, `json_reply`) or `json_format`. So a caller that swallows the error of a request
+`repeats_reply`, `picked_reply`, `json_reply`) or `json_format`. So a caller that swallows the error of a request
 still leaves a record: the search phrase falls back to the raw task, the
 read-off keeps the reading the batch gave, the comparison comes back `None`. The
 causes are `reading.HOLE_CAUSES` plus `not_asked` (`llm_client.FAULT_CAUSES`) and
 `note_fault` refuses any other. A request that was read but came back blank is
 noted `wrong_shape`: an empty search phrase, a read-off with a blank reading, a
-blank comparison. A server that refuses a request is not told from one that does
+blank comparison. A choice among values that names an id outside its list on every
+attempt is noted `wrong_shape` too, and chooses nothing. A server that refuses a request is not told from one that does
 not answer; both are `not_served`, so the chat never notes `refused` or `error`.
 
 ### The profile's wording contract
 
 Every phrase and label the loop wraps around the model comes from the
 active profile through `wording.py`. `phrases()` checks a profile's
-`PHRASES` dict against `REQUIRED`, a frozenset of 30 keys
-(`wording.py:33-44`). `llm_client.py` calls `phrases()` on first use
+`PHRASES` dict against `REQUIRED`, a frozenset of 32 keys
+(`wording.py:33-46`). `llm_client.py` calls `phrases()` on first use
 (`llm_client.py:108-110`), so this package imports with no active profile.
 A lookup with none does not fail: `wording.chat_profile` is the one place
 that falls back, to the built-in `default` profile, for the phrases, the
@@ -401,10 +406,10 @@ replaced. `prompts.load` and `require_profile` are untouched, so the stages
 that write a corpus still stop without a profile and only the chat answers on
 the built-in one.
 
-The loop loads eleven prompts, `llm_client.PROMPT_IDS` (`llm_client.py:67-81`), all
+The loop loads twelve prompts, `llm_client.PROMPT_IDS` (`llm_client.py:67-82`), all
 under `inference/`: `phrase`, `chunk_qa`, `image_phrase`, `answer_head`,
-`answer_tail`, `json_format`, `compare`, `repeats`, `compute_hint`, `image_hint`
-and `readoff`. The answer prompt is `answer_head` and `answer_tail`, with
+`answer_tail`, `json_format`, `compare`, `repeats`, `pick_values`, `compute_hint`,
+`image_hint` and `readoff`. The answer prompt is `answer_head` and `answer_tail`, with
 `compute_hint` added where a sandbox is configured and `image_hint` where crop
 requests are on. The prompts themselves state the shape of the reply: no
 separate prompt splices an answer format into them, none corrects a reply, and
@@ -452,22 +457,51 @@ the caller.
 
 ### Numbers from the harvest
 
-`values_route.answer_from_values`, called by the app beside the search of the
-documents (the two run side by side; see Several requests at once), needs no graph and no query of the profile: the harvest and the spec
-are enough, so it works for every profile that has both, over one document or
-all of them. The question is turned into a parameter and the coordinates it
-names, one closed question each over the spec's own lists (the parameter first,
-then the coordinates side by side), asked with the same
-`llm_client.choose` and the `kg/coordinate` prompt as the graph route; the
-parameter is asked with `parameter_question` where the caller gives one (the
-chat gives the profile's `chat_parameter_question`), because the spec's own
-asks what a number in a source is. An
-answer outside a list leaves that coordinate open, and an open coordinate
-narrows nothing; a question that names no parameter is not one for this
-route, and the caller searches the documents. What is shown is what
-`docpipe/serve/values.py` holds for the values, as it holds them (see
-[handing the values on](./serve.md)), limited only by the caller's worst
-trust level and count.
+`values_route`, called by the app beside the search of the documents (the two
+run side by side; see Several requests at once), needs no graph and no query
+of the profile: the harvest and the spec are enough, so it works for every
+profile that has both, over one document or all of them. It finds the values
+in one of two ways.
+
+By meaning (`answer_from_index`), where the harvest has its vectors
+(`values_index.py`). Every value has one line of words (`entry_text`): whose it
+is (`Catalog.name` of its document), what it is a number of with its
+coordinates, the number as the plan writes it with its unit, and the title of
+the passage it stands in. `docpipe values-index HARVEST` embeds the lines into
+`<harvest>.values.db`, a SQLite file beside the harvest and never written into
+it, with one vector per different line filed under a digest of the line: a
+line that stayed keeps its vector through a new harvest, and a build that
+stopped goes on from `<index>.building`. `--check` says whether the index is
+`current`, `stale` or `missing`. A turn embeds the question's search anchor,
+the sentence the documents are searched with too (`make_search_phrase`), and
+puts the values of the selected document, or of all, with the nearest lines
+before the model as a list of `{id, text}` entries, as long as it fits
+`ANSWER_CONTEXT_TOKENS` (the nearest line is always in) and holding only the
+levels the caller's worst trust level leaves. `llm_client.pick_values` has the
+model choose among them by id (prompt `inference/pick_values`): the ids are
+the grammar of its reply, an id outside the list is asked again with the
+profile's `pick_outside` sentence, and a reply is never cut down to the ids
+that are right. When the attempts are used up, nothing is chosen and the
+turn's faults say so (`picked_reply`). No word of the question has to land on
+an entry, and no closed question is asked. An index with a value that has no
+vector, or vectors of another embedding model, is stale and is not asked: the
+log says so, once, and the closed questions answer instead.
+
+By closed questions (`answer_from_values`), for a harvest without a current
+index. The question is turned into a parameter and the coordinates it names,
+one closed question each over the spec's own lists (the parameter first, then
+the coordinates side by side), asked with the same `llm_client.choose` and the
+`kg/coordinate` prompt as the graph route; the parameter is asked with
+`parameter_question` where the caller gives one (the chat gives the profile's
+`chat_parameter_question`), because the spec's own asks what a number in a
+source is. An answer outside a list leaves that coordinate open, and an open
+coordinate narrows nothing; a question that names no parameter is not one for
+this route, and the caller searches the documents.
+
+Either way what is shown is what `docpipe/serve/values.py` holds for the
+values, as it holds them (see [handing the values on](./serve.md)), limited
+only by the caller's worst trust level and, on the closed questions' way, by
+its count.
 
 `answer.answer_from_values` answers the question from those values: it
 fetches the passage each was read from (`db.fetch_owner_content`, each
@@ -628,7 +662,7 @@ chat` lists them all.
 | `SPLIT_DEPTH` | module constant | `3` | how often a batch of excerpts whose reply was cut off is halved | `llm_client.py:56` |
 | `SCOPE_*` (6), `SCOPE_TO_EMBEDDING_TYPES`, `ALL_SCOPES`, `VISUAL_SCOPES` | module constants | 6 fixed strings, e.g. `"Body text"` | the `scopes` vocabulary, its embedding-type map, and the visual-only subset `scopes_are_visual` (`answer.py:69-71`) checks | `config.py:80-106` |
 | `TOP_K`, `MAX_CHUNK_ATTEMPTS` | env vars | `50`, `10` | candidates kept per retrieval; sources examined per turn | `config.py:44, 46` |
-| `ANSWER_CONTEXT_TOKENS`, `ANSWER_MAX_IMAGES` | env vars | `10000`, `4` | token budget per answer batch; crops attached to one answer call | `config.py:49, 52` |
+| `ANSWER_CONTEXT_TOKENS`, `ANSWER_MAX_IMAGES` | env vars | `10000`, `4` | token budget per answer batch, and per list of harvested values the model chooses among; crops attached to one answer call | `config.py:49, 52` |
 | `ANSWER_IMAGE_MAX_SIDE`, `READOFF_IMAGE_MAX_SIDE` | env vars | `1280`, `1600` | crop downscale side, answer call and read-off | `config.py:53, 66` |
 | `REQUEST_IMAGE_MAX`, `READOFF_MAX_CALLS` | env vars | `2` (`0` off), `3` | crop requests per batch; focused re-reads of an image value | `config.py:59, 65` |
 | `COMPARE_MAX_DOCUMENTS` | env var | `5` | documents one comparison may ask | `config.py:63` |
@@ -677,8 +711,9 @@ first at once with its cause named, the second after a pause of at most 10
 seconds, before it raises `ReplyError` with the cause (`llm_client.py:380-430`;
 see Reading a model's reply). Callers above it degrade instead:
 `make_search_phrase` falls back to the raw task, `read_off_image` keeps the
-reading the batch gave, `compare_answers` comes back `None`, and
-`answer_from_sources` comes back with no statements and the cause as `fault`; the
+reading the batch gave, `compare_answers` comes back `None`, `pick_values`
+chooses no value, and `answer_from_sources` comes back with no statements and
+the cause as `fault`; the
 request is left in the turn's `faults`, which the app shows under the answer.
 `format_as_json` raises `ReplyError` past its own function and
 `answer.py` catches it, so the answer stays the prose (`llm_client.py:920-941`,
@@ -746,7 +781,9 @@ both, the turn's entry point and the dataclass every step reads. `answer_questio
 `catalog.py` holds the generic `Catalog` class, `load_catalog`,
 `facet_options` and `apply_filters`. `profiles/kwp/catalog.py` and
 `profiles/scenarios/catalog.py` each extend `Catalog` with their own
-facets; the app calls `load_catalog` to pick between them. The words the
+facets; the app calls `load_catalog` to pick between them. `Catalog.name` is what
+a document is called in a line about it, without date or version, as the values
+index asks for it (`values_index.document_names`). The words the
 generic label needs, the tag after a document's name (`version_current`,
 `version_old`) and the noun for a document where a profile names none
 (`document_noun_fallback`), are not in the module: it reads them from the
@@ -762,14 +799,14 @@ app also calls `citation_label` directly.
 `llm_client.py` holds every call to the LLM endpoint: `make_search_phrase`,
 `answer_from_sources`, the grounding checks `grounded_quote` and
 `visual_reading`, `read_off_image`, `format_as_json`, `repeats_among`,
-`compare_answers`, and `choose`. `get_client` hands out the client behind the pool
+`compare_answers`, `pick_values` and `choose`. `get_client` hands out the client behind the pool
 (`pool.over`), and `together` is `pool.together` with the faults of each thread
 kept apart. It holds the way a reply is asked for and read as well: `_chat_json`
 and `_ask`, `ReplyError`, and the record of unreadable requests, `collecting`,
 `note_fault` and `describe_faults` (see Method). `answer.py` calls all of it
-except `compare_answers` and `choose`; `compare.py` calls `compare_answers` and
-opens its own `collecting`, and the app calls `choose` and `describe_faults`
-directly.
+except `compare_answers`, `pick_values` and `choose`; `compare.py` calls
+`compare_answers` and opens its own `collecting`, and the app calls `choose`,
+`pick_values` and `describe_faults` directly.
 
 `statements.py` holds what a model's statements go through between the model and
 the reader: `back`, the check of each statement against its passage, `texts`,
@@ -820,7 +857,9 @@ described in Method. Called only by the app, and `coordinates_of` by `values_rou
 and the search by word, over one document or all; `answer.py` calls it.
 `lexical.py` builds and asks the word index (`docpipe lexical`), called by
 `hybrid.py` and the app. `values_route.py` answers a question for a number
-from the harvest, called only by the app. `replies.py` holds the reply schema of
+from the harvest, by meaning or by closed questions, called only by the app.
+`values_index.py` builds and asks the vectors of the harvest's values
+(`docpipe values-index`), called by the app. `replies.py` holds the reply schema of
 every chat request, which is sent as the grammar of that request, and `needs`,
 which says from the schema which key the reader requires of a reply.
 

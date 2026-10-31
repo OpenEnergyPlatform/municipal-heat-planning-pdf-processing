@@ -28,8 +28,7 @@ from docpipe.extraction.graphkit import NOT_IN_GRAPH, ttl_comment, ttl_escape
 from docpipe.extraction.identity import tuple_ids
 from docpipe.extraction.spec import kg_name, load as load_spec
 from docpipe.store.schema import readonly_uri
-from docpipe.extraction.trust import (LEVEL_A, LEVEL_B, LEVEL_C, check_prose,
-                                      render, trust)
+from docpipe.extraction.trust import LEVELS, check_prose, render, trust
 from profiles.kwp import mhpkg
 
 log = logging.getLogger(__name__)
@@ -567,7 +566,7 @@ def _value_iri(heatplan: str, row: dict, label: str = "") -> str:
 # statement of it: "rund 1,6 Mio. MWh" beside a table's 1.626.000. corpus_m5
 # dropped both sides of 642 such identities.
 ROUNDING_TOLERANCE = 0.02
-_RANK = {LEVEL_A: 0, LEVEL_B: 1, LEVEL_C: 2}
+_RANK = {level: rank for rank, level in enumerate(LEVELS)}
 
 
 def _precision(row: dict) -> int:

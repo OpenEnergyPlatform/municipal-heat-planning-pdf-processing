@@ -35,6 +35,12 @@ def facet_values(self, conn: sqlite3.Connection, rows) -> dict
 
 document id -> {year, venue, scenario}.
 
+#### Ar6Catalog.name
+
+```python
+def name(self, row, facets: Optional[dict] = None) -> str
+```
+
 #### Ar6Catalog.label
 
 ```python

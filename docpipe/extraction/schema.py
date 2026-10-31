@@ -41,7 +41,7 @@ from pathlib import Path
 
 from . import fields
 from .spec import load as load_spec
-from .trust import (FLAG_REASONS, LEVEL_A, LEVEL_B, LEVEL_C,
+from .trust import (FLAG_REASONS, LEVEL_A, LEVEL_B, LEVEL_C, LEVEL_D, LEVELS,
                     PARAMETER_STATES)
 from .verify import MIN_QUOTE_CHARS, TIER_TEXT, TIER_VISUAL
 
@@ -51,13 +51,14 @@ BASE_ID = "https://openenergyplatform.org/schema/mhpkg/extraction"
 # The levels and the reason families of trust.py, so the published schema and
 # the code that fills it cannot drift: a level the schema does not list is a
 # level nobody downstream can act on.
-TRUST_LEVELS = (LEVEL_A, LEVEL_B, LEVEL_C)
+TRUST_LEVELS = LEVELS
 
 TRUST_LEVEL_DOC = {
     LEVEL_A: "read off its own passage, in the document's own text",
     LEVEL_B: "the same, but out of an image transcription or a page a model "
              "transcribed",
-    LEVEL_C: "something is off; see reasons",
+    LEVEL_C: "a coordinate was not read; see reasons",
+    LEVEL_D: "something speaks against the reading; see reasons",
 }
 
 # Anchored, so a reason nobody named, or one without its axis, cannot slip in.

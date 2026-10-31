@@ -83,11 +83,11 @@ HARVEST_DIR = (Path(os.environ["INFERENCE_HARVEST_DIR"])
 GOLD_PATH = (Path(os.environ["INFERENCE_GOLD_PATH"])
              if os.environ.get("INFERENCE_GOLD_PATH")
              else (path_beside(HARVEST_DIR) if HARVEST_DIR else None))
-# The worst trust level of a harvested value the chat still shows: A, B or C.
+# The worst trust level of a harvested value the chat still shows: A to D.
 # Unset shows every value, each with its level.
 VALUES_LEVEL = (os.environ.get("INFERENCE_VALUES_LEVEL") or "").strip() or None
-# How many harvested values one answer shows before it says how many more
-# there are.
+# How many harvested values the closed questions give one answer before it
+# says how many more there are. The search by meaning ends with its budget.
 VALUES_LIMIT = int(os.environ.get("INFERENCE_VALUES_LIMIT", "20"))
 # 0 searches by meaning only, also where a word index was built
 # (`docpipe lexical`).

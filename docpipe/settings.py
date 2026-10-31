@@ -170,12 +170,13 @@ SETTINGS = (
       "Passages kept per retrieval in chat.",
       stages=("chat",)),
     S("INFERENCE_VALUES_LEVEL", "chat.values_level", "str", None,
-      "Worst trust level (A, B or C) of a harvested value the chat still "
+      "Worst trust level (A, B, C or D) of a harvested value the chat still "
       "shows; unset: every value.",
       stages=("chat",)),
     S("INFERENCE_VALUES_LIMIT", "chat.values_limit", "int", "20",
-      "Harvested values one answer shows before it says how many more there "
-      "are.",
+      "Harvested values the closed questions give one answer before it says "
+      "how many more there are; the search by meaning ends with its budget "
+      "(`ANSWER_CONTEXT_TOKENS`).",
       stages=("chat",)),
     S("DOCPIPE_CONFIG", "config", "path", None,
       "The project file to read instead of the nearest docpipe.toml; empty "

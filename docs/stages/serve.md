@@ -22,7 +22,7 @@ docpipe serve HARVEST_DIR --mcp
 A value is served as the harvest holds it: its `id` (see
 [extraction](extraction.md)), the value and unit, every coordinate with what
 was read, the wording and how the reading ended, the quote and the page, and
-the trust level with its reasons. Nothing is filtered: a value of level C is
+the trust level with its reasons. Nothing is filtered: a value of level D is
 served like one of level A and says that it is one. Leaving a level out is
 the asker's choice (`--level B` asks for B and better). A number handed on
 without what backs it is no longer a verified one, which is why the quote and
@@ -33,7 +33,7 @@ the page are in every line.
 | `export` | `--what values` (the default): one line per value, CSV or JSON lines; a coordinate is three columns (what was read, its label, its state), and its quote is appended after the others. `--what states`: one line per document and parameter. `--what refusals`: one line per claim that was refused |
 | `serve --http` | a read-only JSON API: `/documents`, `/parameters`, `/values`, `/values/<id>`, `/states`, `/coverage`, `/refusals` and `/search`; nothing can be written through it |
 | `serve --mcp` | the same eight questions as tools of a Model Context Protocol server on standard input and output: `list_documents`, `list_parameters`, `find_values`, `get_value`, `get_states`, `get_coverage`, `find_refusals` and `search` |
-| the chat | answers a question for a number from the same store (see [asking the corpus](inference.md)) |
+| the chat | answers a question for a number from the same store, finding its values by meaning (the vectors `docpipe values-index` makes of them) or, without those, by closed questions over `find` (see [asking the corpus](inference.md)) |
 
 ## What the harvest says when it has no value
 
@@ -112,10 +112,15 @@ written as text, with a leading apostrophe.
 
 Two rows of one document conflict when they state the same parameter under
 the same coordinates with another number, and both then say so in their
-reasons. The numbers are compared in the unit the parameter is kept in
-(`value_target`) where both rows have it, so 241 GWh and 241000 MWh are one
-reading written twice and not a conflict; where one has none, in the value
-and unit as read.
+reasons (`conflict`, which makes each a level D). Only numbers contradict: two
+names for one parameter, such as two planning offices, do not conflict. The
+coordinates are the same only where every one of them was read, so rows with a
+coordinate that is `exhausted`, `unanswered` or `out_of_slice` are not two
+claims about one thing, and the unit is not one of the coordinates compared.
+The numbers are compared in the unit the parameter is kept in (`value_target`)
+where both rows have it, so 241 GWh and 241000 MWh are one reading written
+twice and not a conflict, while 5 GWh and 9000 MWh are two; where one has
+none, in the value and unit as read.
 
 The HTTP server listens on this machine only unless told otherwise (an IPv6
 host is served too), and does not listen anywhere else without a token
@@ -173,9 +178,9 @@ about it and nothing added:
     coordinates   each with what was read, the wording it was read from and
                   how the reading ended (`fields.py`)
     quote, page   the words of the document the value stands in, and where
-    level         A, B or C with the reasons (`trust.py`)
+    level         A, B, C or D with the reasons (`trust.py`)
 
-Nothing is filtered: a value of level C is served like one of level A, and
+Nothing is filtered: a value of level D is served like one of level A, and
 says that it is one. Leaving a level out is the asker's decision
 (`level="B"` asks for B and better).
 

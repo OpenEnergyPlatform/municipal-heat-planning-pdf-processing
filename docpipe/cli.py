@@ -57,6 +57,8 @@ STAGES = {
               "states and the corpus passages: HTTP API or MCP server"),
     "lexical": ("docpipe.inference.lexical", "build the word index the chat "
                 "searches beside the vectors"),
+    "values-index": ("docpipe.inference.values_index", "build the vectors "
+                     "the chat finds harvested values by"),
     "sandbox": ("docpipe.app.sandbox_service", "the service that runs code "
                 "a model wrote, in a container without a network"),
 }

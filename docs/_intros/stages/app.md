@@ -35,7 +35,7 @@ a real run on the wrong prompts. A profile that is named is never replaced.
 
 | | |
 |---|---|
-| In | One profile's corpus, read-only: the database and the FAISS index (chunking), the image root and the PDF folder for table, figure and PDF paths. Optionally the word index (`docpipe lexical`) and a harvest directory (`docpipe extract`). One chat turn: a task, an optional image, a selection. |
+| In | One profile's corpus, read-only: the database and the FAISS index (chunking), the image root and the PDF folder for table, figure and PDF paths. Optionally the word index (`docpipe lexical`), a harvest directory (`docpipe extract`) and the vectors of its values beside it (`docpipe values-index`). One chat turn: a task, an optional image, a selection. |
 | Out | Nothing written to the corpus. Two SQLite files on first use, the query cache and the request log; and, from the review page, decisions appended to `gold.jsonl`. History lives only in Streamlit's session state. |
 | Resumes on | Nothing: one question is one turn. An identical query skips only the embedding, from the query cache; the model calls always run. |
 | Needs | A model endpoint for the search phrase, the answer and the comparison (`LLM_PROVIDER`, `LLM_BASE_URL`), the embedding backend `docpipe.embedding.get_embedder()` returns, and a corpus chunking already wrote. A code sandbox is optional. |
@@ -71,11 +71,18 @@ resets the history. A turn then runs in this order:
 
 1. If a harvest is configured (`INFERENCE_HARVEST_DIR`) and the question is
    not only an image, the harvest answers, side by side with step 2 and shown
-   above its answer. `values_route` finds the
-   values the question asks for (`docpipe/serve/values.py`; the parameter is
-   chosen with the profile's own question for a person's question,
+   above its answer. `values_route` finds the values the question asks for.
+   Where the harvest has its vectors (`docpipe values-index`, a file beside
+   the harvest), it finds them by meaning: the values of the selected
+   document, or of all, whose line of words (whose it is, what it is a number
+   of, the number, the title of its passage) is nearest to the question's
+   search anchor become a list as long as `ANSWER_CONTEXT_TOKENS` allows, and
+   the model chooses among them by id (`answer_from_index`; see [Asking the
+   corpus](inference.md)). Without a current index, which the log says once,
+   it asks closed questions instead (`docpipe/serve/values.py`; the parameter
+   is chosen with the profile's own question for a person's question,
    `chat_parameter_question`, and not with the extraction's question about a
-   number), and `answer.answer_from_values` answers the question from the
+   number). `answer.answer_from_values` then answers the question from the
    passages those values were read from, each passage once. The model decides
    which of their numbers answer it (the total or a carrier, which variant),
    and every statement stands its check against its passage as in a document
@@ -84,10 +91,11 @@ resets the history. A turn then runs in this order:
    value's quote, or a part of it that names the value as the plan writes
    it), one line each in the profile's words (number, coordinates, document
    and page, level), with their coordinates by name and the reasons of their
-   level, in words (`AXIS_NAMES`, `reason_*`), in an expander. A question that
-   names no parameter gets nothing here. `INFERENCE_VALUES_LEVEL` leaves out
-   values below a trust level and `INFERENCE_VALUES_LIMIT` caps how many
-   values, and so passages, the answer is given.
+   level, in words (`AXIS_NAMES`, `reason_*`), in an expander. A question for
+   which the model chooses no value, or that names no parameter, gets nothing
+   here. `INFERENCE_VALUES_LEVEL` leaves out values below a trust level and
+   `INFERENCE_VALUES_LIMIT` caps how many values, and so passages, the closed
+   questions give the answer.
 2. The answer from the documents, asked at the same time: a search anchor, the
    query embedding, retrieval, and the answer across token-budgeted batches.
    Where the model has more than one place for requests, the next batch is sent
@@ -268,7 +276,7 @@ the profile's own.
 | setting | what it is |
 |---|---|
 | `INFERENCE_DB_PATH`, `INFERENCE_INDEX_PATH`, `INFERENCE_IMAGE_ROOT`, `INFERENCE_PDF_ROOT` | the corpus database (read-only; `docpipe serve` reads it too, for its passage search, and has no default), the FAISS index, the root of table and figure images, the folder of source PDFs the cited page is drawn from |
-| `INFERENCE_HARVEST_DIR`, `INFERENCE_GOLD_PATH`, `INFERENCE_VALUES_LEVEL`, `INFERENCE_VALUES_LIMIT` | the harvest the values and the review page read, the decisions file the review page appends to (`--serialize` reads the one beside the harvest and ignores this setting), how many and how trustworthy a value must be to be shown |
+| `INFERENCE_HARVEST_DIR`, `INFERENCE_GOLD_PATH`, `INFERENCE_VALUES_LEVEL`, `INFERENCE_VALUES_LIMIT` | the harvest the values and the review page read, the decisions file the review page appends to (`--serialize` reads the one beside the harvest and ignores this setting), how trustworthy a value must be to be shown, and how many the closed questions give |
 | `INFERENCE_LEXICAL` | search by word beside the search by meaning where a word index exists |
 | `INFERENCE_KG_TTL_PATH` | the Turtle file the knowledge-graph route reads; the route is offered only where it exists |
 | `QUERY_CACHE_PATH`, `REQUEST_LOG_PATH` | the two files of the app's own |

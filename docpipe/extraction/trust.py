@@ -18,12 +18,17 @@ threshold anybody tuned.
      description (a model's reading of a picture), or out of a
      document whose pages had no text layer and were transcribed page
      by page
-  C  something is off: a coordinate the run gave up on or could not
-     back, a repaired quote, a computed number, a contested identity
+  C  open: a coordinate nobody read, and nothing speaks against what
+     was read
+  D  in doubt: a coordinate that could not be backed, a repaired quote,
+     a computed number, a contested identity, a second reading that
+     came to something else
 
 The reasons form a closed list, because a reason nobody can enumerate
-is a reason nobody can count. What makes a value a C is what a curator
-should examine.
+is a reason nobody can count. C and D are told apart because they ask
+for different things: a C wants its gap filled, a D wants a person to
+look at what was read. A value that is both is a D. What makes a value
+a C or a D is what a curator should examine.
 
 Where in the document a coordinate's passage stands is not a reason.
 The harvest takes a reading whose quote stands in a shown passage and
@@ -52,6 +57,13 @@ from .verify import TIER_TEXT
 LEVEL_A = "A"
 LEVEL_B = "B"
 LEVEL_C = "C"
+LEVEL_D = "D"
+# Best first: "this level and better" is a cut through this order.
+LEVELS = (LEVEL_A, LEVEL_B, LEVEL_C, LEVEL_D)
+# The levels a curator should examine.
+REVIEW_LEVELS = (LEVEL_C, LEVEL_D)
+# A coordinate in one of these was not read, and that is all it says.
+OPEN_STATES = (EXHAUSTED, UNANSWERED)
 
 # What a second reading of one value came to. The same model reads a
 # window that is a strict subset of the one the sweep already walked,
@@ -120,7 +132,9 @@ def trust(row: dict, *, conflict: bool = False, transcribed: bool = False,
     corroborated = corroborated or REVIEW_AGREE in (row.get("flags") or [])
     hard = [r for r in why if r != "page_transcribed"]
     image = row.get("tier") != TIER_TEXT
-    if hard:
+    if any(r.partition(":")[0] not in OPEN_STATES for r in hard):
+        level = LEVEL_D
+    elif hard:
         level = LEVEL_C
     elif image or transcribed:
         level = LEVEL_B
@@ -195,7 +209,7 @@ def marks(verdict: dict, row: Optional[dict] = None) -> tuple:
     if verdict["reasons"]:
         out.append(("reasons",
                     {"reasons": REASON_JOIN.join(verdict["reasons"])}))
-    if verdict["level"] == LEVEL_C:
+    if verdict["level"] in REVIEW_LEVELS:
         out.append(("review", {}))
     return tuple(out)
 
@@ -246,7 +260,7 @@ def document_summary(document_id, tuples, refusals) -> dict:
     this line is written, so neither is counted. `trust` takes them as
     arguments for exactly that reason, and the graph side recomputes the
     levels with them. The levels here are the floor: a value that is a C
-    already will not become an A later.
+    already will not become an A later, and an A or a C may become a D.
 
     A pass that appends a parameter to a file builds the line again over every
     tuple and refusal the file now holds. The refusals of the first pass are
@@ -254,7 +268,7 @@ def document_summary(document_id, tuples, refusals) -> dict:
     for want of the parameter stays in the count, so the number says what the
     harvest refused and not how many of those a later pass could read.
     """
-    levels = {LEVEL_A: 0, LEVEL_B: 0, LEVEL_C: 0}
+    levels = dict.fromkeys(LEVELS, 0)
     why: dict = {}
     image = 0
     for row in tuples:

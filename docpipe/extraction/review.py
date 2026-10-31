@@ -42,7 +42,7 @@ from . import fields
 from .pipeline import answer_in_quote
 from .remap import enter_producer, stamp_path_of
 from .spec import Spec, fold_label
-from .trust import (LEVEL_C, REVIEW_AGREE, REVIEW_DISAGREE, REVIEW_UNBACKED,
+from .trust import (REVIEW_AGREE, REVIEW_DISAGREE, REVIEW_LEVELS, REVIEW_UNBACKED,
                     document_summary, trust)
 from .verify import MIN_QUOTE_CHARS, quote_in, value_in_quote
 
@@ -71,15 +71,15 @@ def _cell(text) -> str:
 def rows_to_review(tuples: list, *, force: bool = False) -> list:
     """The values a second reading is worth spending a request on.
 
-    The lowest level and nothing above it: a value whose coordinates were all
-    read and whose quote needed no repair has nothing for a narrower window
-    to find. And each row once -- a row already carrying a review flag
+    The levels a curator examines and nothing above them: a value whose
+    coordinates were all read and whose quote needed no repair has nothing for
+    a narrower window to find. And each row once -- a row already carrying a review flag
     is not asked again, because the second answer would be the second answer
     to the same question and no more.
     """
     out = []
     for row in tuples:
-        if trust(row)["level"] != LEVEL_C:
+        if trust(row)["level"] not in REVIEW_LEVELS:
             continue
         if not force and any(f.startswith("review:")
                              for f in row.get("flags") or ()):

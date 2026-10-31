@@ -199,9 +199,9 @@ different numbers under different plan wording (`carrier_raw`/
 `sector_raw`) split into a node per wording, named by it, counted
 `split:wording`; failing that, a reading within `ROUNDING_TOLERANCE`
 (2%) of another loses to the more precise one, counted
-`conflict:rounding`; failing that, the lower trust level loses to the
-higher, counted `conflict:trust`; what none of those settles still
-drops every claimant, counted `conflict`. Each winner's comment states
+`conflict:rounding`; failing that, the lower trust level (`A` best, `D` worst)
+loses to the higher, counted `conflict:trust`; what none of those settles
+still drops every claimant, counted `conflict`. Each winner's comment states
 what it won over. The plan node gets `has part` edges only to parts with a
 surviving value; all three parts are
 written (docstring stale, naming only target). A value node's type is

@@ -24,6 +24,15 @@ Author: Felix Vossel
 
 ## Functions
 
+### picked
+
+```python
+def picked(ids: list) -> tuple
+```
+
+The entries of a list the model chooses, by *ids*: its grammar is the
+list, and an id it does not hold is no word of it.
+
 ### answer
 
 ```python

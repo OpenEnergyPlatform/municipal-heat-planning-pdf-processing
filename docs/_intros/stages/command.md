@@ -40,6 +40,7 @@ project file say when it is imported, so the command settles both first.
 | `evaluate`, `benchmark` | measure a harvest; `evaluate NEW --diff OLD` compares two harvests without decisions (see [measuring a harvest](evaluation.md)) |
 | `export`, `serve` | hand the harvested values on, with the states and refusals beside them and a search over the corpus passages (see [handing the values on](serve.md)) |
 | `lexical` | build the word index the chat searches beside the vectors |
+| `values-index` | build the vectors the chat finds harvested values by (see [asking the corpus](inference.md)) |
 | `chat` | the chat over a processed corpus (see [the app](app.md)) |
 | `sandbox` | the service that runs code a model wrote, in a container without a network |
 | `init` | start a project in this folder |

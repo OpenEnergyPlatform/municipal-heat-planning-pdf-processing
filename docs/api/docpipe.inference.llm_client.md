@@ -257,6 +257,22 @@ what the model named, [{"statement", "of"}], numbered from 1
 (`statements.repeated` reads them). Empty on any failure, which leaves a
 fault in the collecting turn and every statement standing.
 
+### pick_values
+
+```python
+def pick_values(task: str, entries: list,
+                history: Optional[list] = None) -> list
+```
+
+The ids of those *entries* ({"id", "text"}) that belong to the answer
+of *task*, in their order; none where none does.
+
+A closed list: its ids are the grammar of the reply, and where a server
+does not hold to that, a reply that names another id is asked again with
+what was wrong. It is never cut down to the ids that are right, and when
+the attempts are used up nothing is chosen and the turn's fault list says
+so. Empty on any failure.
+
 ### compare_answers
 
 ```python

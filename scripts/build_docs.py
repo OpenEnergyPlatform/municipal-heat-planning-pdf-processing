@@ -362,6 +362,7 @@ SOURCES = (
            "docpipe/inference/kg_route.py",
            "docpipe/inference/hybrid.py", "docpipe/inference/lexical.py",
            "docpipe/inference/values_route.py",
+           "docpipe/inference/values_index.py",
            "docpipe/inference/wording.py",
            "docpipe/inference/replies.py",
            "docpipe/inference/statements.py",

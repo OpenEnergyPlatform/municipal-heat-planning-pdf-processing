@@ -58,6 +58,8 @@ PHRASES = {
                                 "Planungsbüro; wie viel Wärme gebraucht wird, "
                                 "ist ein Energieverbrauch. Fragt sie nach "
                                 "keinem davon, ist die Antwort out:unstated."),
+    "pick_outside": ("{ids} stehen nicht in der Liste. Wähle nur Einträge der "
+                     "Liste."),
 
     "code_heading": "Ausgeführter Code",
     "exec_stdout": "Ausführungsergebnis (stdout)",

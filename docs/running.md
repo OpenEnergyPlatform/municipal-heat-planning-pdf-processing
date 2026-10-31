@@ -37,6 +37,7 @@ arguments, and that form keeps working:
 | `docpipe export` | `python -m docpipe.serve.export` |
 | `docpipe serve` | `python -m docpipe.serve` |
 | `docpipe lexical` | `python -m docpipe.inference.lexical` |
+| `docpipe values-index` | `python -m docpipe.inference.values_index` |
 | `docpipe sandbox` | `python -m docpipe.app.sandbox_service` |
 
 `docpipe chat` starts the chat, and `docpipe init`, `doctor`, `config` and
@@ -515,6 +516,7 @@ docpipe benchmark benchmarks/kwp
 docpipe export data/kwp/extraction --out values.csv
 docpipe serve data/kwp/extraction --http
 docpipe lexical data/kwp/kwp.db
+docpipe values-index data/kwp/extraction
 docpipe compile spec --shapes shapes.ttl --out draft.json
 ```
 
@@ -538,6 +540,10 @@ docpipe compile spec --shapes shapes.ttl --out draft.json
 - `lexical` builds the word index beside the database that the chat searches
   with the vectors (`--check` says whether it is current); see [asking the
   corpus](stages/inference.md).
+- `values-index` builds the vectors the chat finds the harvest's values by, in
+  `<harvest>.values.db` beside the harvest (`--check` says whether it is
+  current; `--db` names the corpus database where the profile has none); see
+  [asking the corpus](stages/inference.md).
 - `compile` drafts an extraction spec from the shapes of a graph; see [the
   spec compiler](stages/compile.md).
 
@@ -586,7 +592,7 @@ their values and where each value comes from.
 | App | `INFERENCE_KG_TTL_PATH` | profile `root/graph.ttl`, else `data/graph.ttl` | Turtle file from `--serialize` | `docpipe/app/config.py` |
 | App | `INFERENCE_HARVEST_DIR` | unset | harvest directory the chat shows values from and the review page reads; unset: neither | `docpipe/app/config.py` |
 | App | `INFERENCE_GOLD_PATH` | `gold.jsonl` beside the harvest directory | file the review page appends decisions to | `docpipe/app/config.py` |
-| App | `INFERENCE_VALUES_LEVEL`, `INFERENCE_VALUES_LIMIT` | unset, `20` | worst trust level of a value the chat still shows; how many it shows before the count of the rest | `docpipe/app/config.py` |
+| App | `INFERENCE_VALUES_LEVEL`, `INFERENCE_VALUES_LIMIT` | unset, `20` | worst trust level of a value the chat still shows; how many the closed questions give before the count of the rest | `docpipe/app/config.py` |
 | App | `INFERENCE_LEXICAL` | `1` | search by word beside the search by meaning where a word index exists; `0` turns it off | `docpipe/app/config.py` |
 | App | `CODE_EXEC_URL` | `""` (off) | calculation sandbox endpoint | `docpipe/inference/config.py:65` |
 | Refinement, visuals, extraction, chat | `LLM_PROVIDER`, `VLM_PROVIDER`, `EMBEDDING_PROVIDER` | `openai-compatible` | the API behind a role: a server of one's own, `openai`, `anthropic` or `gemini` (embeddings: not `anthropic`) | `docpipe/providers/__init__.py` |
@@ -637,7 +643,7 @@ already-written harvest directory, instead of or before harvesting.
   second run asks nothing about a document that has the key. Traces go to
   `trace-topup/`; see [extraction](stages/extraction.md).
 - `--review`, bounded with `--review-limit N`, needs the model. It reads
-  every value nobody can stand behind a second time, over its own
+  every value of level C or D a second time, over its own
   passage and section, and records only a disagreement as a trust
   reason (`docpipe/extraction/runner.py` lines 5438 to 5489); see
   [the trust contract](contract/trust.md). Each document is read against
@@ -667,8 +673,10 @@ whole GPU. Optional:
   chat searches beside the vectors (`INFERENCE_LEXICAL=0` turns that off);
 - a harvest directory (`INFERENCE_HARVEST_DIR`): a question for a number then
   shows the values the harvest holds for it first, each with its quote, page
-  and trust level, and a review page offers the decisions that
-  `docpipe evaluate` counts against (`INFERENCE_GOLD_PATH`);
+  and trust level, found by meaning where `docpipe values-index` built their
+  vectors beside the harvest and by closed questions where it did not, and a
+  review page offers the decisions that `docpipe evaluate` counts against
+  (`INFERENCE_GOLD_PATH`);
 - the Turtle file a `--serialize` run wrote (`INFERENCE_KG_TTL_PATH`), which no
   route reads while the graph route is not offered;
 - a code-execution sandbox (`CODE_EXEC_URL`, run with `docpipe sandbox`);

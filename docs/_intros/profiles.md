@@ -229,7 +229,7 @@ shipped profile provides.
 | Repairing the text | `refinement.WINDOW_SIZE` | optional (`component`, `docpipe/refinement/config.py:41`) | not set, falls back to 3 | not set, falls back to 3 |
 | Repairing the text, the visuals, page transcription, the answer app | `reading.PHRASES` | required, laid over the extended profile's entry by entry (`profile.require`, `profile.layers`, `docpipe/reading.py:87-105`); checked as a set against `reading.REQUIRED`, ten names, before the first request of refinement, of the visuals stage and of page transcription, and in the chat when a reply was not the one object asked for | the ten sentences said to a model whose reply was not the one JSON object, in English, the language of the profile's prompts for these stages | the same ten, in English; its extraction prompts are German and `extraction.PHRASES` is another table |
 | The answer app | `catalog.CATALOG` | optional (`component`, `docpipe/inference/catalog.py:158`) | `KwpCatalog`: municipality, Land, year | `Ar6Catalog`: year, venue, AR6 scenario |
-| The answer app | `inference.PHRASES`, `READOFF_MARKER`, `READOFF_NOTE` | required at first use (`profile.require`, variable `attr`, `docpipe/inference/wording.py:120`) | German phrasing, 30 keys checked against `wording.REQUIRED` | English phrasing, same 30 keys |
+| The answer app | `inference.PHRASES`, `READOFF_MARKER`, `READOFF_NOTE` | required at first use (`profile.require`, variable `attr`, `docpipe/inference/wording.py:120`) | German phrasing, 32 keys checked against `wording.REQUIRED` | English phrasing, same 32 keys |
 | Reading the values out | `extraction.PHRASES` | required, laid over the extended profile's (`profile.layers`, `docpipe/extraction/wording.py`) | German sentences the stage writes to the model | German sentences, the language of its extraction prompts |
 | Reading the values out | `extraction.PROMPT_CHECKS` | optional, read by `docpipe preflight` (`component`); a profile that declares none has the extended profile's | two entries: the field prompt says `GENAU EIN Feld`, the rows prompt no longer fixes one parameter | the same two entries |
 | Reading the values out | `extraction.CONTRACT_LANGUAGE` | required of a profile that holds a parts file: the language of the core's template the file is put together with, read from the profile that owns the file (`Profile.own`, `docpipe/extraction/contract.py:85-88`) and not inherited | `"de"` | `"en"` for scenarios and the built-in profile |
@@ -436,7 +436,7 @@ word" (see [Running the pipeline](running.md)).
    file, regardless of whether its corpus has a textless PDF.
 
 5. **Wire up the answer app.** Add `inference.py`
-   (`PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`) and the ten
+   (`PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`) and the twelve
    `prompts/inference/*.md` the answer loop loads (`llm_client.PROMPT_IDS`), then
    `catalog.py` if the generic picker (filename, published date, current or superseded) is not enough. A
    missing one of these three `inference.py` attributes fails only at the

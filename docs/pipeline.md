@@ -38,7 +38,7 @@ flowchart LR
 | [6. Chunking, embedding, database](stages/chunking.md) | `sections_refined.json` and `visuals.json`, then `document.json` | `document.json`, then rows in SQLite and vectors in the FAISS index |
 | [7. Extraction](stages/extraction.md) | the corpus itself: SQLite and the FAISS index, plus, by default, the table and figure crops under each document's `images/` directory | one `<doc>.jsonl` harvest and one `<doc>.stamp.json` per document |
 | [8. The graph](stages/graph.md) | the accepted tuple lines of a harvest | one Turtle file, written by the profile's own `kg.make_serializer` or from the `graph` block of its spec, and beside it the provenance file |
-| [Inference](stages/inference.md) | one question, SQLite and the FAISS index, a word index and a harvest where there are ones, read live | a grounded answer with a citation; nothing written to the corpus |
+| [Inference](stages/inference.md) | one question, SQLite and the FAISS index, a word index, a harvest and the vectors of its values, where there are ones, read live | a grounded answer with a citation; nothing written to the corpus |
 | [The app](stages/app.md) | the same corpus, one chat turn at a time | a rendered answer, plus its own query cache and request log; from its review page, decisions for `gold.jsonl` |
 
 ## The stages
@@ -238,7 +238,7 @@ reapplies the answer-in-quote rule with no model, `--remap` re-resolves a
 coordinate's wording against a changed vocabulary with no model, `--top-up`
 resweeps only the coordinates a stamp says moved, `--top-up-parameters`
 appends the rows of a parameter the spec has gained since the harvest,
-`--review` reads the lowest trust level values a second time, and
+`--review` reads the values of trust levels C and D a second time, and
 `--serialize` hands accepted tuples to stage 8.
 Resume answers per question rather than per document; see
 [The extraction stamp](#the-extraction-stamp) below.
@@ -282,7 +282,9 @@ the corpus, so one question does not need a whole GPU.
 Two further answer paths read what extraction wrote, and carry its
 guarantee. Where a harvest is configured, a question for a number is first
 answered from the harvest itself, with the quote, page and trust level
-extraction wrote, and the answer from the documents follows. Where a profile's
+extraction wrote, and the answer from the documents follows. The values are
+found by meaning among the vectors `docpipe values-index` builds beside the
+harvest, or by closed questions where there are none. Where a profile's
 Turtle graph exists, a closed question can be answered from it directly (the
 app does not offer that route while no corpus graph exists). An answer from
 the documents carries a different guarantee: a claim extraction would refuse
@@ -596,6 +598,8 @@ With `INFERENCE_HARVEST_DIR` set to the harvest directory, the chat shows the
 numbers the harvest holds for a question before it searches the documents, and
 offers the review page. A word index built with `docpipe lexical
 data/kwp/kwp.db` makes it search by word beside the search by meaning. The
+vectors `docpipe values-index data/kwp/extraction` builds make it find those
+numbers by meaning, and without them it asks closed questions. The
 Turtle file at `INFERENCE_KG_TTL_PATH` is read by no route while the app does
 not offer the graph route.
 
@@ -633,8 +637,8 @@ profile default and always have to be spelled out.
 names the seven states a coordinate can carry, so `unstated` (the plan does
 not say it) and `exhausted` (the run stopped looking) stay two different
 findings rather than one. [How much of a value the run can stand
-behind](contract/trust.md) names the three trust levels and the closed
-list of reasons behind the lowest one. The harvest contract per profile,
+behind](contract/trust.md) names the four trust levels and the closed
+list of reasons behind the two lowest ones. The harvest contract per profile,
 [kwp](contract/kwp.md) and [scenarios](contract/scenarios.md), is
 generated from `profiles/<name>/extraction_schema.json`, itself generated
 from the spec that profile names (`extraction.SPEC_PATH`) by `docpipe/extraction/

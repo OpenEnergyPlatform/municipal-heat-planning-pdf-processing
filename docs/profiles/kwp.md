@@ -7,7 +7,7 @@ publish under the federal Wärmeplanungsgesetz, sourced from the KWW
 register, an Excel sheet the source module filters to rows marked
 "abgeschlossen" (completed) that carry a usable PDF link
 (`profiles/kwp/source.py:34` to `44`, `load_and_filter_excel`). The corpus
-stands at 1,082 documents (`docpipe/extraction/trust.py:234`,
+stands at 1,082 documents (`docpipe/extraction/trust.py:248`,
 `docpipe/extraction/remap.py:6`). Eleven carry no PDF text layer and are
 read page by page by a vision model instead
 (`docpipe/store/schema.sql:31` to `37`, `page_text_transcribed`); their
@@ -73,12 +73,12 @@ table gives kwp's own answer.
 | Refinement | `prompts/refinement/*.md` | `refine`, `refine_corrections`, `split` | repairs German extraction artefacts, proposes section cuts |
 | Visuals | `prompts/visuals/*.md` | six prompt ids of its own | table transcription, figure description and captions, in German; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object, in English like the prompts of the first three (`reading.REQUIRED`), laid over the built-in profile's |
-| The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | plan-centric labels, convoy membership, three filters |
+| The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | plan-centric labels and names (a name opens each line of the values index), convoy membership, three filters |
 | Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `BASE_YEAR`, `TARGET_YEAR`, `document_context`, `PHRASES`, `PROMPT_CHECKS`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE` | the spec, the slice gate, the frame axes, the frame pairs that are the plan's own state and its target, the German sentences the stage writes to the model (the frame request's list of a closed coordinate stands under `"scenarios"`), the passages the preflight holds its prompts to, and the language (`"de"`) of the core's templates its parts files are put together with |
 | Extraction | `prompts/extraction/*.md` | nine prompt ids | phrase, anchors and queries as plain files; frame, rows, field, review and example as parts files that name a template of the core (see The prompts) |
 | The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
 | The answer app | `inference.py` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |
-| The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 10 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
+| The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 12 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
 
 ## The extraction spec
 
@@ -405,7 +405,7 @@ stands. Trust levels and their closed reason list are on
 ## The chat wording and the graph route
 
 `profiles/kwp/inference.py` supplies the German wording the answer app
-wraps around every turn. `PHRASES`, 30 keys matching
+wraps around every turn. `PHRASES`, 32 keys matching
 `docpipe.inference.wording.REQUIRED` exactly, covers the task and history
 headings, the code-execution sandbox's own headings, the image read-off
 headings, and how a citation names its page, section, table or figure

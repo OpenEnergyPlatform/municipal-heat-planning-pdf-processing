@@ -30,6 +30,7 @@ import mimetypes
 import os
 import sys
 import threading
+from functools import partial
 from pathlib import Path
 
 # A pdf.js viewer behind PDF_VIEWER_PREFIX is served as ES modules; some Python
@@ -56,7 +57,8 @@ from docpipe.extraction import gold, trust
 from docpipe.extraction.verify import canonical_number
 from docpipe.inference import (
     answer, catalog, chunker, compare, faiss_store, kg_route, lexical,
-    llm_client, pool, query_cache, replies, request_log, values_route, wording,
+    llm_client, pool, query_cache, replies, request_log, values_index,
+    values_route, wording,
 )
 from docpipe.inference import db
 from docpipe.profile import load_profile
@@ -156,6 +158,18 @@ def get_values():
     store = Values(rows, spec=spec,
                    transcribed=trust.transcribed_documents(config.DB_PATH))
     return store, rows
+
+
+@st.cache_resource
+def get_values_index():
+    """The vectors of the harvest's values, or None: no harvest, or none
+    that is current. `values_index.load` says which in the log."""
+    store, _rows = get_values()
+    if store is None:
+        return None
+    return values_index.load(config.HARVEST_DIR, store,
+                             values_index.document_names(get_catalog(),
+                                                         get_db()))
 
 
 @st.cache_resource
@@ -286,18 +300,31 @@ def _ask_coordinate(task: str, slot):
                              slot.answerable() if slot.is_closed else {})
 
 
-def run_values_turn(task: str, document_id: int | None) -> dict | None:
+def run_values_turn(task: str, document_id: int | None,
+                    history: list | None = None) -> dict | None:
     """What the harvest holds for the question, or None: no harvest, or
     the question names nothing it has. `document_id` None asks every
     document's harvest."""
-    got = values_outcome(task, document_id)
+    got = values_outcome(task, document_id, history)
     return got if got is not None and got["route"] == "values" else None
 
 
-def values_outcome(task: str, document_id: int | None) -> dict | None:
+def _anchor_vector(task: str, history: list | None):
+    """The vector of the question's search anchor: the one sentence the
+    documents are searched with too, so a vector made for one is there for
+    the other."""
+    phrase, _recheck = llm_client.make_search_phrase(task, history=history)
+    vector, _cached = embed_query({"text": phrase}, get_cache(),
+                                  query_cache.make_key("text", text=phrase))
+    return vector
+
+
+def values_outcome(task: str, document_id: int | None,
+                   history: list | None = None) -> dict | None:
     """The harvest's answer with its reason where it has none
     (`values_route.REASONS`), or None: no harvest, or a document the
-    database does not know."""
+    database does not know. By meaning where the harvest has its vectors,
+    else by closed questions."""
     store, _rows = get_values()
     if store is None:
         return None
@@ -307,6 +334,15 @@ def values_outcome(task: str, document_id: int | None) -> dict | None:
         if not filename:
             return None
         name = Path(filename).stem
+    index = get_values_index()
+    if index is not None:
+        return values_route.answer_from_index(
+            task, index, embed=partial(_anchor_vector, history=history),
+            pick=partial(llm_client.pick_values, history=history),
+            count=partial(chunker.count_tokens,
+                          tokenizer=chunker.get_tokenizer()),
+            budget=config.ANSWER_CONTEXT_TOKENS, document=name,
+            level=config.VALUES_LEVEL)
     return values_route.answer_from_values(
         task, store, ask=_ask_value_coordinate, document=name,
         level=config.VALUES_LEVEL, limit=config.VALUES_LIMIT,
@@ -580,7 +616,8 @@ def chat_page() -> None:
         history.append(message)
         return
     if route == "route_harvest":
-        got = None if image_only else values_outcome(task, doc_id)
+        got = (None if image_only
+               else values_outcome(task, doc_id, by_doc.get(doc_id, [])))
         if got is not None and got["route"] == "values":
             harvest = run_values_answer(task, got, doc_id,
                                         by_doc.get(doc_id, []))
@@ -605,7 +642,7 @@ def chat_page() -> None:
 
     def from_harvest():
         values = (None if image_only or route == "route_documents"
-                  else run_values_turn(task, doc_id))
+                  else run_values_turn(task, doc_id, by_doc.get(doc_id, [])))
         return None if values is None else _kept(run_values_answer(
             task, values, doc_id, by_doc.get(doc_id, []), corpus=corpus,
             progress=answer._silent))
@@ -937,8 +974,8 @@ def _render_kg(values: list) -> None:
     """The graph's values, each under the trust line the serializer wrote.
 
     The badge is the LAST comment line above the node and the evidence the
-    rest, which is the order evidence_comment writes them in. A C is a
-    warning because the profile's own word for it is a review request.
+    rest, which is the order evidence_comment writes them in. A C or a D is
+    a warning because the profile's own word for it is a review request.
     """
     hooks = get_kg_hooks()
     for value in values:
@@ -952,7 +989,7 @@ def _render_kg(values: list) -> None:
                      hooks.spec, hooks.axes, (value.get("abouts") or "").split())]
         st.caption("🏷 " + " · ".join([value["partLabel"]] + about))
         level = kg_route.trust_level(value["trust"], hooks.prose)
-        if level == kg_route.LEVEL_C:
+        if level in kg_route.REVIEW_LEVELS:
             st.warning(value["trust"])
         elif level == kg_route.LEVEL_B:
             st.caption(value["trust"])

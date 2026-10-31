@@ -55,13 +55,16 @@ class Ar6Catalog(Catalog):
             out[row["id"]] = values
         return out
 
+    def name(self, row, facets: Optional[dict] = None) -> str:
+        return str(row["title"] or row["doi"]
+                   or Path(row["filename"] or "").stem
+                   or row["external_id"] or f"#{row['id']}")
+
     def label(self, row, facets: Optional[dict] = None) -> str:
         """Title and year — the DOI, then the crawl slug, while the title is
         unknown. No current/old tag: every publication is its own version
         group, so it would be on every entry."""
-        name = (row["title"] or row["doi"] or Path(row["filename"] or "").stem
-                or row["external_id"] or f"#{row['id']}")
-        parts = [str(name)]
+        parts = [self.name(row, facets)]
         if row["year"]:
             parts.append(str(row["year"]))
         return " · ".join(parts)

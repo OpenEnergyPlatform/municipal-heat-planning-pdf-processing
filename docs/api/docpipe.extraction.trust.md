@@ -21,12 +21,17 @@ threshold anybody tuned.
      description (a model's reading of a picture), or out of a
      document whose pages had no text layer and were transcribed page
      by page
-  C  something is off: a coordinate the run gave up on or could not
-     back, a repaired quote, a computed number, a contested identity
+  C  open: a coordinate nobody read, and nothing speaks against what
+     was read
+  D  in doubt: a coordinate that could not be backed, a repaired quote,
+     a computed number, a contested identity, a second reading that
+     came to something else
 
 The reasons form a closed list, because a reason nobody can enumerate
-is a reason nobody can count. What makes a value a C is what a curator
-should examine.
+is a reason nobody can count. C and D are told apart because they ask
+for different things: a C wants its gap filled, a D wants a person to
+look at what was read. A value that is both is a D. What makes a value
+a C or a D is what a curator should examine.
 
 Where in the document a coordinate's passage stands is not a reason.
 The harvest takes a reading whose quote stands in a shown passage and
@@ -141,7 +146,7 @@ value IRI, and a second reading is a later pass: neither exists yet when
 this line is written, so neither is counted. `trust` takes them as
 arguments for exactly that reason, and the graph side recomputes the
 levels with them. The levels here are the floor: a value that is a C
-already will not become an A later.
+already will not become an A later, and an A or a C may become a D.
 
 A pass that appends a parameter to a file builds the line again over every
 tuple and refusal the file now holds. The refusals of the first pass are

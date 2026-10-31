@@ -21,8 +21,8 @@ is in no share.
 
 The numbers are split by parameter, by the level the harvest gave a value
 (`trust.py`) and by where it was read (text, table or figure), because
-those are the splits a decision hangs on: whether level C may be left out
-of a graph is a question about the precision of level C.
+those are the splits a decision hangs on: whether level D may be left out
+of a graph is a question about the precision of level D.
 
 `--baseline` holds a second harvest of the same documents beside this one,
 row by row: which rows both carry, which only one does, and what was
@@ -331,7 +331,7 @@ def compare(rows_by_document: dict, baseline: dict,
 
 # The state of a coordinate that one side's row does not carry at all.
 ABSENT = "(none)"
-LEVELS = (trust.LEVEL_A, trust.LEVEL_B, trust.LEVEL_C)
+LEVELS = trust.LEVELS
 DIFF_TOP = 20
 
 

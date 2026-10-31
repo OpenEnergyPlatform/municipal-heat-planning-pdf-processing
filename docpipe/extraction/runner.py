@@ -6659,8 +6659,9 @@ def main(argv: Optional[list] = None) -> int:
                              "second time, over its own passage and the "
                              "section that passage stands in, and record "
                              "what the second reading came to. One request "
-                             "per C value: `python scripts/curation_list.py "
-                             "OUT --level C` prints that count for free")
+                             "per C or D value: `python "
+                             "scripts/curation_list.py OUT --level C` prints "
+                             "that count for free")
     parser.add_argument("--review-limit", type=int, default=0, metavar="N",
                         help="--review only: stop after N values (0 = all)")
     parser.add_argument("--remap", action="store_true",

@@ -23,6 +23,13 @@ Unlike `kg_route` this needs no graph and no query of the profile's: the
 harvest and the spec are enough, so it works for every profile that has
 both, across one document or all of them.
 
+Where the harvest has its vectors (`values_index.py`) the chat takes the
+other way in, `answer_from_index`: the values nearest to the question's
+search anchor are put before the model as a list, and it chooses. No word of
+the question has to land on a list entry, and the closed questions are not
+asked. The way in by closed questions stays for a harvest without vectors,
+and the exact filter behind it for the API and the export.
+
 Author: Felix Vossel
 
 ## Functions
@@ -47,6 +54,26 @@ whole corpus. *ask(task, slot)* answers one closed question with one
 label or None. *level* is the worst trust level still shown.
 *parameter_question* is the question the parameter is chosen with; the
 profile words one for a person's question (`chat_parameter_question`).
+
+### answer_from_index
+
+```python
+def answer_from_index(task: str, index, *, embed, pick, count, budget: int,
+                      document: Optional[str] = None,
+                      level: Optional[str] = None) -> dict
+```
+
+The harvest's answer by meaning, or why there is none, in the shape
+of `answer_from_values`.
+
+*embed(task)* is the vector of the question's search anchor. The values
+nearest to it become a list as long as it fits *budget*, in what
+*count(line)* says a line costs: the first always does. *pick(task,
+entries)* is the model's choice among them, by id. The values come back
+in the order of the search, and each one still has to stand its check in
+the answer: this says which passages are read and nothing about them.
+*document* limits it to one document (its harvest name); *level* is the
+worst trust level still shown.
 
 ### used_values
 

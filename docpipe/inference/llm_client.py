@@ -73,6 +73,7 @@ _PROMPTS = {
     "JSON_FORMAT_PROMPT": "inference/json_format",
     "COMPARE_PROMPT": "inference/compare",
     "REPEATS_PROMPT": "inference/repeats",
+    "PICK_VALUES_PROMPT": "inference/pick_values",
     "_COMPUTE_HINT": "inference/compute_hint",
     "_IMAGE_HINT": "inference/image_hint",
     "READOFF_PROMPT": "inference/readoff",
@@ -962,6 +963,45 @@ def repeats_among(task: str, texts: list) -> list:
         log.warning("Repeats not read, every statement stays: %s", e)
         return []
     return parsed.get("repeats") or []
+
+
+def pick_values(task: str, entries: list,
+                history: Optional[list] = None) -> list:
+    """The ids of those *entries* ({"id", "text"}) that belong to the answer
+    of *task*, in their order; none where none does.
+
+    A closed list: its ids are the grammar of the reply, and where a server
+    does not hold to that, a reply that names another id is asked again with
+    what was wrong. It is never cut down to the ids that are right, and when
+    the attempts are used up nothing is chosen and the turn's fault list says
+    so. Empty on any failure.
+    """
+    if LLM_STUB_MODE:
+        return []
+    ids = [entry["id"] for entry in entries]
+    shape = replies.picked(ids)
+    payload = json.dumps({"task": task, "entries": entries},
+                         ensure_ascii=False)
+    base = [{"role": "user",
+             "content": f"{_prompt('inference/pick_values')}"
+                        f"{_history_context(history)}\n\n{payload}"}]
+    messages = base
+    for _attempt in range(LLM_MAX_RETRIES):
+        try:
+            parsed = _ask(shape, messages, temperature=LLM_TEMPERATURE)
+        except Exception as e:
+            log.warning("No value chosen: %s", e)
+            return []
+        chosen = [str(entry) for entry in parsed.get("chosen") or []]
+        outside = [entry for entry in chosen if entry not in ids]
+        if not outside:
+            wanted = set(chosen)
+            return [entry for entry in ids if entry in wanted]
+        log.warning("Chosen outside the list: %s", ", ".join(outside))
+        messages = _with_correction(base, _w()["pick_outside"].format(
+            ids=", ".join(outside)))
+    note_fault(shape[0], "wrong_shape")
+    return []
 
 
 def compare_answers(task: str, plans: list) -> Optional[str]:

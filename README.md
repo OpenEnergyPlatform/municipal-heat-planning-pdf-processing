@@ -253,9 +253,10 @@ types the index holds, and it warns when the index was built with another
 model than the one that embeds the questions. Retrieval is by meaning and, where
 `docpipe lexical` built a word index, by word as well. Pointed at a harvest
 directory, the app shows the verified values the harvest holds for a question
-before it answers from the documents, and has a review page where people decide
-whether harvested values are right; `docpipe evaluate` counts against those
-decisions. [`scripts/inference_app/README.md`](scripts/inference_app/README.md)
+before it answers from the documents, found by meaning where `docpipe
+values-index` built their vectors and by closed questions where it did not, and
+has a review page where people decide whether harvested values are right;
+`docpipe evaluate` counts against those decisions. [`scripts/inference_app/README.md`](scripts/inference_app/README.md)
 documents its configuration.
 
 ## Collaboration

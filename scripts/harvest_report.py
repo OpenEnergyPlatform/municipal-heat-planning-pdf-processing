@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from docpipe import usage                                     # noqa: E402
 from docpipe.extraction import fields                          # noqa: E402
 from docpipe.extraction.schema import REFUSAL_REASONS           # noqa: E402
-from docpipe.extraction.trust import (LEVEL_A, LEVEL_B, LEVEL_C,  # noqa: E402
+from docpipe.extraction.trust import (LEVELS,  # noqa: E402
                                       PARAMETER_STATES)
 from docpipe.extraction.verify import TIER_TEXT                 # noqa: E402
 
@@ -212,7 +212,7 @@ def build_stats(files: list, scanned: dict, usage_rows: list,
         tokens = {"available": False, "path": str(usage_db)}
 
     levels = {lvl: scanned["trust_levels"].get(lvl, 0)
-              for lvl in (LEVEL_A, LEVEL_B, LEVEL_C)}
+              for lvl in LEVELS}
 
     return {
         "plans": {"total": n, "distribution": distribution, "under": under},
@@ -283,7 +283,7 @@ def render_report(stats: dict) -> str:
     total_levels = sum(levels.values()) or 1
     lines.append("  " + ", ".join(
         "%s=%d (%.0f%%)" % (lvl, levels[lvl], 100.0 * levels[lvl] / total_levels)
-        for lvl in (LEVEL_A, LEVEL_B, LEVEL_C)))
+        for lvl in LEVELS))
     top_reasons = stats["trust"]["top_reasons"]
     lines.append("  top reasons: " + (
         ", ".join(f"{k}={v}" for k, v in top_reasons.items()) or "none"))

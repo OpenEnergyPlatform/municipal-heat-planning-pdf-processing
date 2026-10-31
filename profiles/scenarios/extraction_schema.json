@@ -276,18 +276,23 @@
        },
        "C": {
         "type": "integer"
+       },
+       "D": {
+        "type": "integer"
        }
       },
       "required": [
        "A",
        "B",
-       "C"
+       "C",
+       "D"
       ],
       "type": "object",
       "x-doc": {
        "A": "read off its own passage, in the document's own text",
        "B": "the same, but out of an image transcription or a page a model transcribed",
-       "C": "something is off; see reasons"
+       "C": "a coordinate was not read; see reasons",
+       "D": "something speaks against the reading; see reasons"
       }
      },
      "reasons": {

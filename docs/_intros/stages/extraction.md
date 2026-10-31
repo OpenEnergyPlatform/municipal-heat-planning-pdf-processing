@@ -47,11 +47,11 @@ flowchart TD
     rows --> turn[Turn of each batch: the passages its values came from, one coordinate at a time]
     turn --> sweep[Document search: what is still open, once per coordinate for all batches]
     sweep --> verify{Verification: quote in passage, answer in quote}
-    verify -->|passes| tuple[Accepted tuple, graded A, B or C]
+    verify -->|passes| tuple[Accepted tuple, graded A, B, C or D]
     verify -->|fails| refusal[Refusal, with a closed reason]
     tuple --> harvest[Harvest file: tuples, refusals, parameter states, summary row]
     refusal --> harvest
-    harvest -. later, on demand .-> review[Review: reread the lowest trust values]
+    harvest -. later, on demand .-> review[Review: reread the values of levels C and D]
     harvest -. later, on demand .-> topup[Top up: resweep one stamp-changed coordinate]
     harvest -. later, on demand .-> append[Append: read a parameter the spec gained, its rows follow the stored lines]
 ```
@@ -775,9 +775,13 @@ names no period (`names_period: false`).
 the harvest already recorded, no further model call and no tuned
 threshold. Level A: its own text states it, every coordinate read.
 Level B: the same, from an image transcription or a model-transcribed
-page. Level C: one of the following holds: a coordinate the sweep could
-not back or gave up on, a repaired quote, a computed number, or a
-contested identity decided at graph build time. Where a coordinate's
+page. Level C: open, a coordinate nobody read (`exhausted` or
+`unanswered`) and nothing that speaks against what was read. Level D: in
+doubt, one of the following holds: a coordinate the sweep could not back, a
+repaired quote, a computed number, a second reading that came to something
+else, or a contested identity decided at graph build time; a value that is
+both open and in doubt is a D. A C wants its gap filled, a D wants a person
+to look at what was read. Where a coordinate's
 passage stands is no reason. A second
 reading from `--review` can mark a tuple `corroborated`, described
 under The passes that revisit a harvest, but never raises its level.
@@ -1108,8 +1112,8 @@ PROV-O file of a graph gives a coordinate with a pointer an activity of its own
 
 `--review` (`review.py`) differs from the other five: it writes only
 `review/prompt` and `review/model`, recorded and never compared, so it
-never makes a document look stale. It rereads a harvest's lowest-trust
-values once more, over a window narrowed to the value's own two legal
+never makes a document look stale. It rereads a harvest's values of levels
+C and D once more, over a window narrowed to the value's own two legal
 passages, a self-consistency check rather than an independent opinion.
 Only a disagreement counts as a trust reason; an agreement is marked
 `corroborated` without raising the level. The second reading goes to
@@ -1567,7 +1571,7 @@ a `*.jsonl` or `*.stamp.json` that a reader of the harvest would list.
 | `--recheck` / `--remap` / `--keep-stamps` | CLI flag | off | Runs `recheck.run` / `remap.run` over `--out`, no model needed, though `--recheck` opens the database read-only where a profile closes lists per document; `--keep-stamps` (recheck only) leaves stamps instead of clearing them | `runner.main`, `recheck.run` |
 | `--top-up` / `--top-up-key KEY` | CLI flag (KEY repeatable) | off / none named | Runs `topup.run`, needing the model and index; `--top-up-key` restricts the changed keys swept to the named coordinates | `runner.main`, `topup.actionable` |
 | `--top-up-parameters` | CLI flag | off | Appends the parameters the spec has gained since a document was harvested to the harvest in `--out`, per document, with the harvest's own loop, instead of harvesting it again; needs the model and index. Refused together with `--top-up` (exit 2); `--top-up-key`, `--force` and `--force-stale` change nothing for it; its traces go to `trace-topup/`. Exit 1 when a document was not read completely, and nothing is written for it | `runner.main`, `topup_parameter.append_document` |
-| `--review` / `--review-limit N` | CLI flag | off / `0` | Runs `review.run`, one request per level-C value, up to N total | `review.run` |
+| `--review` / `--review-limit N` | CLI flag | off / `0` | Runs `review.run`, one request per value of level C or D, up to N total | `review.run` |
 | `--profile NAME` | CLI flag | `$DOCPIPE_PROFILE` | names the profile whose spec, prompts and hooks the run reads; the stage refuses to run without one, in a line naming the available profiles, and `__main__.py` binds the flag before `runner` is imported | `runner.main`, `docpipe/profile.py` |
 | `--serialize TTL` / `--print-context-budget` | CLI flag | none / off | `--serialize`: no harvest, hands `--out` to `serialize.run`, which calls the profile's `kg.make_serializer`. `--print-context-budget`: prints the tokens, per request, that the largest request of a harvest needs, then exits | `serialize.run`, `runner.main` |
 | `--no-provenance` | CLI flag | off (the file is written) | With `--serialize`: no provenance file beside the graph, as `EXTRACT_PROVENANCE=0` | `runner.main`, `provenance.enabled` |
@@ -1751,8 +1755,8 @@ sharing verified answers across a document's batches regardless of
 order. `verify.py` is the last
 check a claimed tuple passes, value against the spec's closed lists and
 units, quote against the literal source text, returning a `Verified`
-tuple or a `Refusal`. `trust.py` grades an accepted tuple's evidence, A, B
-or C, from what the harvest already recorded, and folds a whole
+tuple or a `Refusal`. `trust.py` grades an accepted tuple's evidence, A, B,
+C or D, from what the harvest already recorded, and folds a whole
 document's tuples into the closing summary line; every maintenance pass
 calls it to recompute a rewritten file's summary.
 

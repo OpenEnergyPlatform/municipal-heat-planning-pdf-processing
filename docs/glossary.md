@@ -383,8 +383,8 @@ resume stamp
   and the run exits 1 for the document. See [extraction](stages/extraction.md).
 
 review
-: The `--review` pass reading each of a harvest's level-C values a second
-  time, by the same model, over a window narrowed to that value's own two
+: The `--review` pass reading each of a harvest's level-C and level-D values
+  a second time, by the same model, over a window narrowed to that value's own two
   legal passages, where only a disagreement counts as a trust reason.
   Implemented in `docpipe/extraction/review.py` and written to
   `review.csv`. See [extraction](stages/extraction.md).
@@ -525,16 +525,19 @@ trace
   `EXTRACT_TRACE=0`. See [extraction](stages/extraction.md).
 
 trust level
-: The deterministic A, B or C grade `docpipe/extraction/trust.py`'s
+: The deterministic A, B, C or D grade `docpipe/extraction/trust.py`'s
   `trust` computes for an accepted tuple from what the harvest already
-  recorded, with no model and no second opinion. Published at
-  [trust](contract/trust.md).
+  recorded, with no model and no second opinion: a C is open (a coordinate
+  nobody read), a D is in doubt (something speaks against the reading).
+  Published at [trust](contract/trust.md).
 
 trust reason
 : One token in a verdict's `reasons` list, naming why a tuple is not
   level A: `repaired`, `computed`, `not_located`, `review:disagree`,
-  `conflict`, `page_transcribed`, or an `exhausted:<axis>` or
-  `unbacked:<axis>` pointer at the axis at fault.
+  `conflict`, `page_transcribed`, or an `exhausted:<axis>`,
+  `unanswered:<axis>` or `unbacked:<axis>` pointer at the axis at fault.
+  `exhausted` and `unanswered` make a C, `page_transcribed` caps a tuple at B,
+  every other reason makes a D.
   Produced by `docpipe/extraction/trust.py`'s `reasons` and published as
   the closed pattern list `docpipe/extraction/schema.py`'s
   `TRUST_REASONS`; see [trust](contract/trust.md).
@@ -566,6 +569,13 @@ value request
   for the document as a whole. Turned into `Row` objects by
   `docpipe.extraction.pipeline.rows_from_reply`, the only request that
   creates rows; see [extraction](stages/extraction.md).
+
+values index
+: The SQLite file `<harvest>.values.db` beside a harvest: one line of words per
+  value and one vector per different line, built by `docpipe values-index`.
+  The chat finds harvested values by meaning with it; a stale one is not asked.
+  Defined in `docpipe/inference/values_index.py`; see [asking the
+  corpus](stages/inference.md).
 
 verdict
 : The `{level, reasons, image_origin, corroborated}` dict

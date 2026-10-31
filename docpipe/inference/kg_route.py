@@ -39,7 +39,7 @@ from .. import prompts
 from ..extraction import fields
 from ..extraction.spec import fold_label
 from . import llm_client
-from ..extraction.trust import LEVEL_A, LEVEL_B, LEVEL_C
+from ..extraction.trust import LEVEL_B, LEVELS, REVIEW_LEVELS
 
 # The profile's prompt for one closed question. Optional the way the
 # extraction prompts are: a profile without kg.VALUE_QUERY has no route and
@@ -61,8 +61,6 @@ REASONS = ("no_graph", "no_plan", "no_coordinates", "no_rows", "no_trust")
 # The axes that decide whether a question is one the graph can answer at all.
 # A carrier alone is not: "Erdgas" names every gas figure of every year.
 DECIDING_AXES = ("quantity", "scenario", "year")
-
-LEVELS = (LEVEL_A, LEVEL_B, LEVEL_C)
 
 
 @dataclass(frozen=True)

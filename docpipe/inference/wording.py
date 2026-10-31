@@ -42,6 +42,7 @@ REQUIRED = frozenset({
     "citation_section", "citation_table", "citation_figure",
     "readoff_value", "exec_none", "image_requested",
     "chat_parameter_question",
+    "pick_outside",
 })
 
 
