@@ -131,8 +131,9 @@ def share_class(found: int, numbers: int) -> str:
 
 
 def numbers_of(text: str) -> set:
-    """The distinct numbers of *text*, each in its one canonical spelling."""
-    return {n for n in numbers_in(text) if n}
+    """The distinct numbers of *text*, each in its one canonical spelling and
+    without its sign, which `numbers_in` lists beside the magnitude."""
+    return {n for n in numbers_in(text) if n and not n.startswith("-")}
 
 
 def frame_of(bbox_json) -> Optional[tuple]:
@@ -293,7 +294,7 @@ def read_harvest(directory: Path, documents=None) -> dict:
             value = row.get("value")
             number = (None if isinstance(value, bool)
                       or not isinstance(value, (int, float))
-                      else canonical_number(value))
+                      else canonical_number(abs(value)))
             out["wanted"][owner].append({
                 "parameter": row.get("parameter"), "number": number,
                 "computed": row.get("computed") is True,

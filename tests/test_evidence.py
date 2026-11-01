@@ -36,6 +36,11 @@ UNIT = next(iter(PARAMETER.units_accepted))
     (126656132, ",", "126656132"),
     (0.5, ",", "0.5"),
     ("12a", ",", None),
+    ("-1.155", ",", "-1155"),
+    ("\u22121.155", ",", "-1155"),
+    (-1155, ",", "-1155"),
+    ("-", ",", None),
+    ("--5", ",", None),
 ])
 def test_a_number_has_one_spelling_whatever_wrote_it(written, decimal, read):
     assert canonical_number(written, decimal) == read
@@ -43,6 +48,29 @@ def test_a_number_has_one_spelling_whatever_wrote_it(written, decimal, read):
 
 def test_a_dated_year_is_in_its_quote():
     assert "2025" in numbers_in("Stand 09.12.2025")
+
+
+@pytest.mark.parametrize("quote", [
+    "| Picher | -1.155 | -40,8% |",
+    "| Picher | \u22121.155 |",
+    "| Picher | \u20131.155 |",
+    "| Picher | - 1.155 |",
+])
+def test_a_printed_sign_is_part_of_the_number(quote):
+    assert "-1155" in numbers_in(quote)
+
+
+@pytest.mark.parametrize("quote", [
+    "| Picher | 1.155 |",
+    "Szenario KWP-1155",
+    "die Jahre 2020-1155",
+])
+def test_a_dash_that_is_no_sign_makes_no_negative_number(quote):
+    assert "-1155" not in numbers_in(quote)
+
+
+def test_a_group_of_digits_keeps_its_sign():
+    assert "-45000" in numbers_in("Einsparung -45 000 MWh")
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +91,20 @@ def test_a_value_whose_quote_stands_in_its_source_and_holds_it_is_kept():
     got = verify_tuple(claim(), PARAMETER, SOURCE, owner_kind="table")
     assert isinstance(got, Verified)
     assert got.tuple["parameter"] == "energy_consumption"
+
+
+def test_a_negative_value_is_kept_where_its_quote_prints_the_sign():
+    quote = "| Erdgas | -2.463 | -40,8% |"
+    got = verify_tuple(claim(value=-2463, quote=quote), PARAMETER,
+                       "Einsparung\n" + quote, owner_kind="table")
+    assert isinstance(got, Verified)
+
+
+def test_a_negative_value_is_refused_where_its_quote_has_no_sign():
+    quote = "| Erdgas | 2.463 | 40,8% |"
+    got = verify_tuple(claim(value=-2463, quote=quote), PARAMETER,
+                       "Einsparung\n" + quote, owner_kind="table")
+    assert isinstance(got, Refusal)
 
 
 def test_typographic_marks_and_spacing_do_not_make_a_second_sentence():

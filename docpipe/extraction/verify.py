@@ -56,6 +56,15 @@ _DATED_YEAR = re.compile(r"(?<![\d.,])(?:\d{1,2}\.){1,2}((?:19|20)\d{2})(?!\d|[.
 _SPACE_GROUPED = re.compile(r"\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?")
 
 
+# The signs of a negative number, as a PDF prints them and a model retypes them.
+_MINUS = ("-", "–", "−")
+# A number with its sign in front. After a letter, a digit or a separator the
+# dash joins two things ("KWP-2030", "2020-2030") and is no sign.
+_SIGNED = re.compile(
+    rf"(?<![\w.,])[{''.join(_MINUS)}]\s?"
+    rf"({_SPACE_GROUPED.pattern}|{_NUMBER.pattern})")
+
+
 MARKS = (",", ".")
 _marks: dict = {}
 
@@ -97,6 +106,10 @@ def canonical_number(raw, decimal: Optional[str] = None) -> Optional[str]:
     if not isinstance(raw, str):
         return None
     s = raw.strip().replace(" ", "").replace(" ", "").replace(" ", "")
+    if s[:1] in _MINUS:
+        magnitude = canonical_number(s[1:], decimal)
+        return ("-" + magnitude
+                if magnitude and not magnitude.startswith("-") else None)
     if not s or not re.fullmatch(r"[\d.,]+", s):
         return None
     # Mixed separator kinds are unambiguous: the rightmost kind is the
@@ -134,6 +147,11 @@ def numbers_in(text: str) -> set:
     # and reads as the grouped number 09122025, so the 2025 it plainly prints
     # was not in the quote: 12 years on the corpus_m5 canary were dropped so.
     found.update(m.group(1) for m in _DATED_YEAR.finditer(text or ""))
+    # A printed sign is part of the number: "-1.155" holds -1155, and a table
+    # of savings lost all its values while the sign stayed outside this set.
+    # The magnitude stays in too: the dash of "2020 - 2030" may be no sign.
+    found.update("-" + canonical_number(m.group(1))
+                 for m in _SIGNED.finditer(text or ""))
     return found
 
 
@@ -302,10 +320,11 @@ def _occurrences(raw: dict, parameter: Parameter, source: str) -> list:
         wanted = canonical_number(raw.get("value"))
         if wanted is None:
             return []
+        magnitude = wanted.lstrip("-")
         spans = [m.span() for m in _NUMBER.finditer(source)
-                 if canonical_number(m.group(0)) == wanted]
+                 if canonical_number(m.group(0)) == magnitude]
         spans += [m.span() for m in _SPACE_GROUPED.finditer(source)
-                  if canonical_number(m.group(0)) == wanted]
+                  if canonical_number(m.group(0)) == magnitude]
         return sorted(set(spans))
     wording = raw.get("value_raw") or raw.get("value")
     if not isinstance(wording, str) or len(wording.strip()) < 2:

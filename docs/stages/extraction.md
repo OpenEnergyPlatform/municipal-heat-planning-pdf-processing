@@ -334,6 +334,11 @@ A year is a number in the profile's `YEAR_RANGE` (kwp: 1900 to 2100): the
 frame refuses another with `frame_not_a_year` and a field answer is a
 `wrong_type` drop. A profile without the constant takes every whole number.
 
+A printed sign is part of a number: `-1.155` backs -1155, and -1155 is not
+backed by a quote that prints `1.155`. A dash after a letter, a digit or a
+separator is no sign. The magnitude stays readable, so a positive answer still
+stands in a quote that prints the number with a minus.
+
 A profile may close a choice list per document (`document_axes`; the AR6
 profile closes its scenarios and its regions). `runner.fill_dynamic_axes`
 copies the spec with those lists filled in, parameter and unit questions
