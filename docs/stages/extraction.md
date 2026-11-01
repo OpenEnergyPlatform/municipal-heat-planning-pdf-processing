@@ -326,6 +326,10 @@ everything behind it sees the usual tuples and checks each number alone.
 The kwp prompt asks for this form; the scenarios prompt does not
 (`values_row`), since its quotes are narrow passages and not table rows.
 
+`scripts/probe_rows.py` asks this request over named passages against any
+LLM_BASE_URL, without a job and without retrieval, and reports tokens, seconds
+and how many values stand the two checks.
+
 A year is a number in the profile's `YEAR_RANGE` (kwp: 1900 to 2100): the
 frame refuses another with `frame_not_a_year` and a field answer is a
 `wrong_type` drop. A profile without the constant takes every whole number.
