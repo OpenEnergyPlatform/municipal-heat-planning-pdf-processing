@@ -5919,6 +5919,45 @@
    {
     "additionalProperties": false,
     "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "code": {
+      "type": "string"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "error": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "ok": {
+      "type": "boolean"
+     },
+     "stdout": {
+      "type": "string"
+     },
+     "t": {
+      "const": "code"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt",
+     "code",
+     "stdout",
+     "ok",
+     "error"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
      "anchor": {
       "type": "string"
      },

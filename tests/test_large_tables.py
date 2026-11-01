@@ -1,13 +1,19 @@
 """A row of a table is written once with its numbers, a table too long for one
 answer is read in halves, a request's time follows its room, and a year is a
 number the profile takes for a year."""
+import json
 from dataclasses import dataclass, replace
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
 
 import pytest
 
 from docpipe.extraction import pipeline, runner
+
+SPEC = runner.load_spec(json.loads(
+    (Path(__file__).resolve().parent.parent / "profiles" / "kwp"
+     / "extraction_spec.json").read_text(encoding="utf-8")))
 
 TABLE = "\n".join([
     "Tab. 11: Einsparpotenzial",
@@ -178,3 +184,35 @@ def test_the_frame_takes_a_year_it_can_read(years):
         {"pairs": [{"year": 2045, "year_quote": "Zieljahr 2045 im Szenario",
                     "year_source": "Q1"}]}, [year], [source], [])
     assert [p["year"] for p in pairs] == [2045]
+
+
+@pytest.mark.parametrize("ran, kept", [
+    ({"ok": True, "stdout": "48\n", "error": None}, "48\n"),
+    ({"ok": False, "stdout": "", "error": "code-exec disabled"}, ""),
+])
+def test_a_sandbox_round_is_on_the_trace_and_on_the_values(monkeypatch, ran,
+                                                           kept):
+    replies = iter(['{"action": "python", "code": "print(48)"}',
+                    '{"tuples": [{"source": "Q1", "value": 48, "computed": true,'
+                    ' "quote": "120 GWh, davon 40 Prozent"}], "status": "complete"}'])
+
+    def create(**_):
+        return SimpleNamespace(
+            usage=None, choices=[SimpleNamespace(
+                finish_reason="stop",
+                message=SimpleNamespace(content=next(replies)))])
+
+    client = SimpleNamespace(chat=SimpleNamespace(
+        completions=SimpleNamespace(create=create)))
+    events = []
+    monkeypatch.setattr(runner, "_client", lambda *a, **k: client)
+    monkeypatch.setattr(runner.trace, "event",
+                        lambda kind, doc=None, /, **f: events.append((kind, f)))
+    monkeypatch.setattr("docpipe.inference.code_exec.run_code",
+                        lambda *a, **k: ran)
+    source = pipeline.Source(owner_kind="section", owner_id=1,
+                             text="120 GWh, davon 40 Prozent", provenance={})
+    batch = pipeline.Batch(1, None, [pipeline.WorkItem(1, None, source)])
+    got = runner.make_harvester(spec=SPEC)(batch, [])
+    assert [f["ok"] for kind, f in events if kind == "code"] == [ran["ok"]]
+    assert got["tuples"][0]["compute"][0]["stdout"] == kept

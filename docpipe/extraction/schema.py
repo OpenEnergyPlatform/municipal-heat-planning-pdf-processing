@@ -813,6 +813,11 @@ def trace_schema() -> dict:
                  "prompt_tokens": {"type": ["integer", "null"]},
                  "completion_tokens": {"type": ["integer", "null"]},
                  "ms": {"type": "integer"}},
+        # A sandbox round of a rows request: what the model ran and what came
+        # back, so a run can say whether it computed anything at all.
+        "code": {"attempt": {"type": "integer"}, "code": {"type": "string"},
+                 "stdout": {"type": "string"}, "ok": {"type": "boolean"},
+                 "error": {"type": ["string", "null"]}},
         "field": {"slot": {"type": "string"}, "anchor": {"type": "string"},
                   "window": {"type": "integer"},
                   "stage": {"enum": ["own", "retrieval", "rest",

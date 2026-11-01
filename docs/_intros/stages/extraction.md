@@ -327,6 +327,10 @@ The kwp prompt asks for this form; the scenarios prompt does not
 `scripts/probe_rows.py` asks this request over named passages against any
 LLM_BASE_URL, without a job and without retrieval, and reports tokens, seconds
 and how many values stand the two checks.
+With `--whole` it asks what a run asks of those passages, the frame, the rows
+and every coordinate, without a search. Several model names in `LLM_MODELS` share
+their places through the chat's pool, in this stage too. Each sandbox round
+leaves a `code` event in the trace.
 
 A year is a number in the profile's `YEAR_RANGE` (kwp: 1900 to 2100): the
 frame refuses another with `frame_not_a_year` and a field answer is a

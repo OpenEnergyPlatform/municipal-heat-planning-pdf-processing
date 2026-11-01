@@ -2390,7 +2390,10 @@ def _client():
                               api_key=LLM_API_KEY, timeout=LLM_TIMEOUT,
                               max_retries=0)
     if SCHEDULER is None:
-        return client
+        # Several model names on one endpoint share their places as the chat's
+        # do. One model and one place is the plain client.
+        from ..inference import pool
+        return pool.over(client)
     return scheduler.Scheduled(client, SCHEDULER)
 
 
@@ -3085,6 +3088,8 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
                                     "stdout": (out.get("stdout") or "")[:2000],
                                     "ok": bool(out.get("ok")),
                                     "error": out.get("error")})
+                    trace.event("code", batch.document_id, attempt=attempt,
+                                **compute[-1])
                     conversation.append({"role": "assistant",
                                          "content": reply.message.content or ""})
                     conversation.append({"role": "user",
