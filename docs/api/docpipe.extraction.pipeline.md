@@ -537,6 +537,16 @@ document's word belongs to a class the spec spells differently. What we
 have no measurement of is how often it decides wrongly, and that is
 exactly what this counter is for.
 
+### year_in_range
+
+```python
+def year_in_range(year) -> bool
+```
+
+Is this number one the profile takes for a year? Zones and districts
+carry numbers of their own, and one printed beside a value was answered
+as its year (169002). Without a `YEAR_RANGE` every number is.
+
 ### state_years
 
 ```python

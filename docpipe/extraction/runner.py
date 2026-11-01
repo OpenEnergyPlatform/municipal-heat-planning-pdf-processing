@@ -1910,7 +1910,7 @@ def frame_pairs(reply: Optional[dict], slots: list, sources: list,
     pair was refused, nobody said so, and the next window was asked the same
     question in the same way.
     """
-    from .pipeline import answer_in_quote, option_named
+    from .pipeline import answer_in_quote, option_named, year_in_range
     from .verify import quote_in
 
     where = {f"Q{i + 1}": s for i, s in enumerate(sources)}
@@ -1971,6 +1971,10 @@ def frame_pairs(reply: Optional[dict], slots: list, sources: list,
                 try:
                     given = int(str(given).strip())
                 except (TypeError, ValueError):
+                    refuse(say("frame_not_a_year",
+                                       slot=slot.name, given=given))
+                    break
+                if not year_in_range(given):
                     refuse(say("frame_not_a_year",
                                        slot=slot.name, given=given))
                     break
@@ -2424,7 +2428,7 @@ def _loads_object(raw_text) -> Optional[dict]:
 # hand every tuple in the reply the same evidence, which is the one thing
 # this stage exists to prevent. Underscore keys are ours, not the model's.
 NOT_DEFAULTABLE = frozenset({
-    "value", "quote", "value_raw",
+    "value", "values", "quote", "value_raw",
     # Not a coordinate at all but a switch: `computed` decides WHICH evidence
     # check applies, letting the value be absent from its own quote as long
     # as the sandbox printed it. Shared across a reply it would open that
@@ -2463,6 +2467,28 @@ def expand_defaults(defaults: Optional[dict], tuples: list) -> list:
     return out
 
 
+def expand_values(tuples: list) -> list:
+    """One tuple per number of an entry that gives several under one quote.
+
+    A row of a table carries several values, and writing that row out once
+    per value was most of a long answer: 59 tokens a value at the median, so
+    6,144 tokens end at about 100 values, and a table of 20 municipalities in
+    8 columns does not fit. Each value leaves here as a tuple of its own, so
+    the check that its number stands in the quote runs per value, and one that
+    does not is refused alone.
+    """
+    out = []
+    for claim in tuples:
+        if not isinstance(claim, dict) or "values" not in claim:
+            out.append(claim)
+            continue
+        own = {k: v for k, v in claim.items() if k not in ("value", "values")}
+        values = claim["values"]
+        out.extend({**own, "value": value}
+                   for value in (values if isinstance(values, list) else ()))
+    return out
+
+
 def _parse_reply(raw_text) -> Optional[dict]:
     """The whole answer object, not just its tuples.
 
@@ -2480,9 +2506,21 @@ def _parse_reply(raw_text) -> Optional[dict]:
         return None
     status = data.get("status")
     need = data.get("need_more")
-    return {"tuples": expand_defaults(data.get("defaults"), tuples),
+    return {"tuples": expand_values(
+                expand_defaults(data.get("defaults"), tuples)),
             "status": status if status in ("complete", "partial") else "partial",
             "need_more": [q for q in (need or []) if isinstance(q, str) and q.strip()]}
+
+
+def _cut_ends(reply, cause: str) -> dict:
+    """The start and the end of a reply that was cut off, for the trace: they
+    tell a long answer from a model repeating itself."""
+    if cause != "cut_off":
+        return {}
+    text = getattr(getattr(reply, "message", None), "content", None)
+    if not isinstance(text, str):
+        return {}
+    return {"head": text[:300], "tail": text[-300:]}
 
 
 _UNPARSABLE_SHOWN = 0
@@ -2619,38 +2657,102 @@ def _relabel_sources(entries, offset: int, suffix: str = "source"):
     return entries
 
 
+_TABLE_RULE = re.compile(r"\|(\s*:?-+:?\s*\|)+")
+
+
+def split_table(source) -> Optional[tuple]:
+    """A table's passage as two, or None when it has no rows to divide.
+
+    Each half keeps everything above the first row with a number: the title,
+    the header, the sub-headers. Without them a number has no column. The crop
+    stays behind, because it shows the rows of the other half and a long
+    answer is what this split is for. Both halves are the same passage, and a
+    quote is checked against the whole of it.
+    """
+    lines = (source.text or "").split("\n")
+    rule = next((i for i, line in enumerate(lines)
+                 if _TABLE_RULE.fullmatch(line.strip())), None)
+    if rule is None:
+        return None
+    start = rule + 1
+    while start < len(lines) and not re.search(r"\d", lines[start]):
+        start += 1
+    body = lines[start:]
+    if len(body) < 2:
+        return None
+    cut = len(body) // 2
+    return tuple(replace(source, image_path=None,
+                         text="\n".join(lines[:start] + part))
+                 for part in (body[:cut], body[cut:]))
+
+
+def _halves(batch, depth: int) -> Optional[list]:
+    """[(offset of its labels, its items)] of a batch in two, or None when it
+    has been halved enough or is one passage that cannot be divided. The
+    halves of one table are both that table, so neither moves its label."""
+    items = list(batch.items)
+    if depth >= SPLIT_DEPTH:
+        return None
+    if len(items) > 1:
+        cut = len(items) // 2
+        return [(0, items[:cut]), (cut, items[cut:])]
+    source = items[0].source
+    halves = split_table(source) if source.owner_kind == "table" else None
+    if halves is None:
+        return None
+    return [(0, [replace(items[0], source=half)]) for half in halves]
+
+
+def _ask_halves(batch, halves: list, prior, harvest: Callable,
+                depth: int) -> dict:
+    """The halves asked one after the other, as one reply of the whole batch."""
+    merged: dict = {"tuples": [], "status": "complete", "need_more": []}
+    for offset, part in halves:
+        got = harvest(replace(batch, items=list(part)), prior,
+                      depth=depth + 1)
+        if not isinstance(got, dict):
+            merged["status"] = "partial"
+            continue
+        merged["tuples"].extend(_relabel_sources(
+            [t for t in (got.get("tuples") or ()) if isinstance(t, dict)],
+            offset))
+        if got.get("status") != "complete":
+            merged["status"] = str(got.get("status") or "partial")
+        merged["need_more"].extend(
+            q for q in (got.get("need_more") or ()) if isinstance(q, str))
+    return merged
+
+
+def request_timeout(wanted: int, usual: int, timed_out: bool) -> Optional[int]:
+    """What a harvest request may take, None for the client's own limit.
+
+    The time follows the room: a reply given twice the tokens takes twice as
+    long, and 12,288 tokens at the 3.7 tokens a second a long reply gets could
+    never arrive in the 600 s of a repeat.
+    """
+    if wanted > usual:
+        return LLM_TIMEOUT * wanted // usual
+    return RETRY_TIMEOUT if timed_out else None
+
+
 def _split_harvest(batch, prior, harvest: Callable, limit: int,
                    ceiling: int, first, depth: int = 0) -> Optional[dict]:
     """A cut-off batch asked again in pieces, or None when it cannot be.
 
-    Two ways to make an answer fit: fewer passages per request, and -- when a
-    single passage already IS the request -- more room for the answer. The
-    reply that was cut off is not used at all. It was, once: the tuples
-    written before the cut were kept and the passages after it became holes,
-    which put a half-read request into the harvest as if it had been read.
+    Two ways to make an answer fit: fewer passages or fewer rows of a table
+    per request, and -- when what is left cannot be divided -- more room for
+    the answer. The reply that was cut off is not used at all. It was, once:
+    the tuples written before the cut were kept and the passages after it
+    became holes, which put a half-read request into the harvest as if it had
+    been read.
     """
     items = list(batch.items)
-    if len(items) > 1 and depth < SPLIT_DEPTH:
-        cut = len(items) // 2
+    halves = _halves(batch, depth)
+    if halves is not None:
         log.warning("   harvest %s/%s+%d cut off at %d tokens: asked again "
-                    "as %d and %d passage(s)", first.owner_kind,
-                    first.owner_id, len(items) - 1, limit, cut,
-                    len(items) - cut)
-        merged: dict = {"tuples": [], "status": "complete", "need_more": []}
-        for offset, part in ((0, items[:cut]), (cut, items[cut:])):
-            got = harvest(replace(batch, items=list(part)), prior,
-                          depth=depth + 1)
-            if not isinstance(got, dict):
-                merged["status"] = "partial"
-                continue
-            merged["tuples"].extend(_relabel_sources(
-                [t for t in (got.get("tuples") or ()) if isinstance(t, dict)],
-                offset))
-            if got.get("status") != "complete":
-                merged["status"] = str(got.get("status") or "partial")
-            merged["need_more"].extend(
-                q for q in (got.get("need_more") or ()) if isinstance(q, str))
-        return merged
+                    "in two", first.owner_kind, first.owner_id,
+                    len(items) - 1, limit)
+        return _ask_halves(batch, halves, prior, harvest, depth)
     if limit < ceiling * 4:
         log.warning("   harvest %s/%s cut off at %d tokens: %s, asked again "
                     "with %d", first.owner_kind, first.owner_id, limit,
@@ -2933,6 +3035,7 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
         # the attempt budget grows with the rounds actually used.
         for attempt in range(1, MAX_RETRIES + CODE_ROUNDS + 1):
             limit = answer_room(prompt.text, conversation, wanted)
+            allowed = request_timeout(wanted, max_tokens, timed_out)
             if limit < MIN_ANSWER_TOKENS:
                 log.warning("   harvest %s/%s+%d: the prompt leaves %d answer "
                             "token(s) in a window of %d -- not sent",
@@ -2958,7 +3061,7 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
                     # 1093 of 16102 harvests to replies with no 'tuples' in
                     # them, HTTP 200 every one.
                     extra_body=request_extras(),
-                    **({"timeout": RETRY_TIMEOUT} if timed_out else {}),
+                    **({"timeout": allowed} if allowed else {}),
                     **providers.formatted("llm", "rows_reply", replies.rows(
                         sandbox=CODE_ROUNDS > 0)),
                 )
@@ -3019,7 +3122,8 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
                 trace.event("error", batch.document_id, where=ROWS_PROMPT_ID,
                             kind="unreadable", cause=cause, attempt=attempt,
                             owner=[first.owner_kind, first.owner_id],
-                            finish=getattr(reply, "finish_reason", None))
+                            finish=getattr(reply, "finish_reason", None),
+                            **_cut_ends(reply, cause))
                 if cause == "cut_off":
                     smaller = _split_harvest(batch, prior, harvest, limit,
                                              max_tokens, first, depth)
@@ -3060,6 +3164,15 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
                     # A request the server refuses is refused every time. The
                     # last run spent three tries and eight seconds of sleep on
                     # each over-long section before writing the same sentinel.
+                    break
+                if timed_out and wanted > max_tokens:
+                    # More room did not bring the answer, and the same request
+                    # would not either: it is divided, or it is a hole.
+                    halves = _halves(batch, depth)
+                    if halves is not None:
+                        return _ask_halves(batch, halves, prior, harvest,
+                                           depth)
+                    why[0] = "cut_off"
                     break
             # Every attempt but the last, and the loop runs to
             # MAX_RETRIES + CODE_ROUNDS: the old bound stopped two short of it.

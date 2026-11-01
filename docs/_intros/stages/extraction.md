@@ -308,10 +308,25 @@ review) raises the step, `retry_temperature` (`runner.py`, env
 `EXTRACT_RETRY_TEMPERATURE_STEP`, default `0.1`), once per fault and
 capped at `1.0`. One cut off at the token ceiling is asked again as two
 halves instead of kept half-read, its labels renumbered onto the whole
-batch, `_split_harvest` (`runner.py`). A single passage still too
-long for that gets its own ceiling doubled, up to twice (so up to four
-times the rows prompt's `max_tokens`), before it is written as a
-`_why: cut_off` sentinel instead.
+batch, `_split_harvest` (`runner.py`). A single table is halved by its
+rows, each half with the table's headers and without the crop, and both
+keep the table's label (`split_table`). What cannot be divided gets its
+own ceiling doubled, up to twice (so up to four times the rows prompt's
+`max_tokens`), with its time limit raised alike (`request_timeout`); one
+that times out in that room is divided or written as a `_why: cut_off`
+sentinel, and is not asked the same way again. The trace keeps both ends
+of a reply that was cut off (`head`, `tail`).
+
+A row of a table with several values under one unit is one entry of the
+reply: the row once as `quote`, its numbers in `values`
+(`expand_values`). Each leaves the reader as a tuple of its own, so
+everything behind it sees the usual tuples and checks each number alone.
+The kwp prompt asks for this form; the scenarios prompt does not
+(`values_row`), since its quotes are narrow passages and not table rows.
+
+A year is a number in the profile's `YEAR_RANGE` (kwp: 1900 to 2100): the
+frame refuses another with `frame_not_a_year` and a field answer is a
+`wrong_type` drop. A profile without the constant takes every whole number.
 
 A profile may close a choice list per document (`document_axes`; the AR6
 profile closes its scenarios and its regions). `runner.fill_dynamic_axes`

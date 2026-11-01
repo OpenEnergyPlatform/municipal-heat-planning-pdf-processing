@@ -3271,7 +3271,7 @@ One event per line; `t` names it and `doc` the document. Read by scripts/trace_r
 - `field`: `anchor`, `attempt`, `batches`, `completion_tokens`, `doc`, `filled`, `filled_by`, `ms`, `open`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `via_base`, `via_target`, `window`
 - `sweep`: `anchor`, `asked`, `batches`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `scope`, `slot`, `unbacked`, `unquoted`, `unstated`, `via_base`, `via_target`, `windows`, `withdrawn`
 - `drop`: `attempt`, `batches`, `doc`, `field`, `given`, `quote`, `raw`, `row`, `slot`, `why`, `window`
-- `error`: `attempt`, `cause`, `detail`, `doc`, `finish`, `kind`, `ms`, `owner`, `slot`, `sources`, `status`, `where`, `why`
+- `error`: `attempt`, `cause`, `detail`, `doc`, `finish`, `head`, `kind`, `ms`, `owner`, `slot`, `sources`, `status`, `tail`, `where`, `why`
 - `coord`: `doc`, `kind`, `owner`, `parameter`, `states`, `tier`, `unit`, `value`
 - `refusal`: `doc`, `owner`, `parameter`, `reason`
 - `places`: `by_axis`, `by_parameter`, `complete`, `doc`, `dropped`, `passages`, `places`, `unread`, `windows`

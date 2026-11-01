@@ -1,6 +1,6 @@
 ---
 template: rows
-without: [quantities_units, quantities_text, quantities_number, frame_keys, completeness, frame_empty, value_number, unit_raw, quote_whole_row, quote_copy, examples_foreign, status_frame, invent_chart, sandbox]
+without: [values_row, quantities_units, quantities_text, quantities_number, frame_keys, completeness, frame_empty, value_number, unit_raw, quote_whole_row, quote_copy, examples_foreign, status_frame, invent_chart, sandbox]
 temperature: 0
 max_tokens: 6144
 ---

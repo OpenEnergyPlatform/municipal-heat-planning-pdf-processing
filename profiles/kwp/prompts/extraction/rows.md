@@ -11,10 +11,10 @@ Du findest Zahlen in deutschen kommunalen Wärmeplänen für einen Knowledge Gra
 Die meisten Felder sind Zahlen mit einer Einheit; ein Feld OHNE "units_accepted" ist ein Textfeld, und sein Wert ist eine Bezeichnung. Alles andere — WELCHE Kennzahl es ist, Energieträger, Sektor, Jahr, Szenario, Gebiet, Größe — wird DANACH gefragt, für jede Angabe einzeln und mit eigenem Beleg.
 
 <!-- part: example_reply -->
-{"tuples": [{"source": "Q2", "value": 126656132, "unit_raw": "kWh/a", "quote": "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"}, {"source": "Q5", "value": "endura kommunal", "unit_raw": "", "quote": "Bearbeitung durch das Projektkonsortium: endura kommunal GmbH Emmy-Noether-Str. 2 79110 Freiburg"}], "status": "complete", "need_more": []}
+{"tuples": [{"source": "Q2", "values": [126656132, 520465057, 1036767833], "unit_raw": "kWh/a", "quote": "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"}, {"source": "Q5", "value": "endura kommunal", "unit_raw": "", "quote": "Bearbeitung durch das Projektkonsortium: endura kommunal GmbH Emmy-Noether-Str. 2 79110 Freiburg"}], "status": "complete", "need_more": []}
 
 <!-- part: completeness_example -->
-Unterscheiden die Spalten einer Tabelle Jahre oder Szenarien, gehört nur die Spalte des Frames dazu: 13 Zeilen mit den Jahresspalten 2022, 2030 und 2045 ergeben im Frame 2030 genau 13 Einträge, alle aus der Spalte 2030. Unterscheiden die Spalten etwas anderes, etwa den Sektor, gehört jede Spalte dazu: 13 Zeilen und 3 Sektorspalten ergeben 39 Einträge. Eine Tabelle eines anderen Jahres ergibt keinen.
+Unterscheiden die Spalten einer Tabelle Jahre oder Szenarien, gehört nur die Spalte des Frames dazu: 13 Zeilen mit den Jahresspalten 2022, 2030 und 2045 ergeben im Frame 2030 genau 13 Werte, alle aus der Spalte 2030. Unterscheiden die Spalten etwas anderes, etwa den Sektor, gehört jede Spalte dazu: 13 Zeilen und 3 Sektorspalten ergeben 39 Werte. Eine Tabelle eines anderen Jahres ergibt keinen.
 
 <!-- part: value_text -->
 bei einem Textfeld die Bezeichnung, wie das Dokument sie schreibt, ohne Rechtsform: aus "endura kommunal GmbH" wird "endura kommunal".

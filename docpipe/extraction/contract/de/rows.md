@@ -1,8 +1,8 @@
 ---
 required: [role, asked_afterwards, example_reply, partial_when]
 optional: [example_more, completeness_example, empty_list_more, front_page, number_examples, value_more, unit_examples, unit_heading, line_number_example, footnote_example, quote_more, quote_lines, per_value_text, citations_text, choice_entries, choice_reason, choice_more, choice_examples, status_more, sandbox_more]
-blocks: [source_kinds, quantities_units, quantities_choice, quantities_text, frame_keys, place_example_more, completeness, frame_empty, normal_case, no_guessing, place_front_page, value_text, value_number, unit_raw, source_every, quote_whole_row, quote_one_source, quote_narrow, quote_copy, quote_inner_numbers, examples_foreign, per_value, citations, choice, status_frame, invent_knowledge, invent_figures, invent_chart, sandbox]
-omittable: [quantities_units, quantities_choice, quantities_text, frame_keys, place_example_more, completeness, frame_empty, normal_case, no_guessing, place_front_page, value_number, unit_raw, source_every, quote_whole_row, quote_one_source, quote_narrow, quote_copy, quote_inner_numbers, examples_foreign, per_value, citations, choice, status_frame, invent_knowledge, invent_chart, sandbox]
+blocks: [source_kinds, quantities_units, quantities_choice, quantities_text, frame_keys, place_example_more, completeness, frame_empty, normal_case, no_guessing, place_front_page, value_text, value_number, unit_raw, source_every, quote_whole_row, values_row, quote_one_source, quote_narrow, quote_copy, quote_inner_numbers, examples_foreign, per_value, citations, choice, status_frame, invent_knowledge, invent_figures, invent_chart, sandbox]
+omittable: [quantities_units, quantities_choice, quantities_text, frame_keys, place_example_more, completeness, frame_empty, normal_case, no_guessing, place_front_page, value_number, unit_raw, source_every, quote_whole_row, values_row, quote_one_source, quote_narrow, quote_copy, quote_inner_numbers, examples_foreign, per_value, citations, choice, status_frame, invent_knowledge, invent_chart, sandbox]
 ---
 {{role}}
 
@@ -27,7 +27,7 @@ Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, OHNE
 
 <!-- /block -->
 <!-- block: completeness -->
-Ein Wert pro Eintrag, und innerhalb des Frames vollständig: JEDER Wert des Frames in JEDER Quelle, die zum Frame gehört, bekommt seinen Eintrag, jede Zeile einzeln. {{completeness_example}}
+Innerhalb des Frames vollständig: JEDER Wert des Frames in JEDER Quelle, die zum Frame gehört, wird ausgegeben, jede Zeile für sich. {{completeness_example}}
 
 <!-- /block -->
 Eine leere Liste {"tuples": []} ist das richtige Ergebnis, wenn <!-- block: frame_empty -->keine der Quellen zum Frame gehört oder <!-- /block -->keine der Quellen einen gesuchten Wert enthält<!-- block: normal_case --> — und das ist der Normalfall<!-- /block -->.{{empty_list_more}}<!-- block: no_guessing --> Rate nicht, nur weil gefragt wurde.<!-- /block -->
@@ -52,6 +52,10 @@ Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die P
 <!-- rule: quote --> "quote": eine wörtliche, zusammenhängende Zeichenkette aus dem Text GENAU DIESER Quelle (mindestens {{min_quote_chars}} Zeichen), die den Wert EXAKT wie gedruckt enthält.<!-- block: quote_whole_row --> Bei einer Zahl in einer Tabelle ist das Stück, das sie trägt, die ganze Tabellenzeile.<!-- /block --><!-- block: quote_one_source --> Nicht aus zwei Quellen zusammensetzen.<!-- /block --><!-- block: quote_narrow --> Zitier nur das Stück, das DEINEN Wert trägt: den Satzteil, den Listeneintrag, die Tabellenzelle mit ihrer Beschriftung, nicht den ganzen Absatz und nicht die ganze Liste.<!-- /block --><!-- block: quote_inner_numbers --> Schreib es Zeichen für Zeichen ab, auch Zahlen, die mitten im Text stehen, etwa Zeilennummern eines Manuskripts{{line_number_example}} oder Fußnotenzeichen{{footnote_example}}: sie gehören zur Zeichenkette, und ohne sie steht das Zitat nicht in der Quelle.<!-- /block --><!-- block: quote_copy --> Zeichen für Zeichen kopieren, nichts umformatieren, nichts auslassen.<!-- /block --><!-- block: examples_foreign --> Die Namen und Zahlen in den Beispielen oben stammen aus einem anderen Dokument: übernimm sie nie, sondern nur, was in DIESEN Quellen steht.<!-- /block -->{{quote_more}}
 {{quote_lines}}
 
+<!-- block: values_row -->
+<!-- rule: values_row --> "values": Trägt eine Tabellenzeile mehrere gesuchte Zahlen mit derselben Einheit, schreibst du sie als EINEN Eintrag: die Zeile einmal in "quote" und die Zahlen als Liste in "values" statt in "value". Jede Zahl zählt als eigener Wert, wird einzeln geprüft und muss in dieser Zeile stehen. Haben die Spalten verschiedene Einheiten, bekommt jede Einheit einen Eintrag mit derselben "quote".
+
+<!-- /block -->
 <!-- block: per_value -->
 <!-- rule: per_value --> {{per_value_text}}
 

@@ -349,6 +349,7 @@ PHRASES = {
     "unstated_spelling": 'not stated in these passages',
     # why a coordinate's answer was not taken
     "kind_whole_number": 'a whole number',
+    "kind_year": 'a calendar year with four digits',
     "kind_text": 'a piece of text',
     "not_an_option": (
         'Your "value" {given!r} is none of the entries of "options". '

@@ -6231,6 +6231,9 @@
        "null"
       ]
      },
+     "head": {
+      "type": "string"
+     },
      "kind": {
       "enum": [
        "unreadable",
@@ -6297,6 +6300,9 @@
      "t": {
       "const": "error"
      },
+     "tail": {
+      "type": "string"
+     },
      "where": {
       "type": "string"
      },
@@ -6314,7 +6320,9 @@
      "doc",
      "where",
      "kind",
-     "attempt"
+     "attempt",
+     "head",
+     "tail"
     ],
     "type": "object"
    },

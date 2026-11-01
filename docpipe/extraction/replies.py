@@ -83,12 +83,14 @@ def review(slots) -> dict:
 def rows(*, sandbox: bool = True) -> dict:
     """The harvest reply: the values of the passages, or a sandbox action.
 
-    A row is a value with its wording, its unit's wording and its quote; the
-    coordinates are asked per field afterwards.
+    A row is a value with its wording, its unit's wording and its quote, or
+    `values` under one shared quote; the coordinates are asked per field
+    afterwards.
     """
     shared: dict = {"source": TEXT, "unit_raw": TEXT_OR_NULL}
     row = {**shared,
            "value": NUMBER_OR_TEXT, "value_raw": TEXT_OR_NULL,
+           "values": {"type": "array", "items": NUMBER_OR_TEXT},
            "quote": TEXT, "computed": {"type": "boolean"}}
     reply = {
         "tuples": {"type": "array",

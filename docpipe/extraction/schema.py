@@ -871,6 +871,8 @@ def trace_schema() -> dict:
                   "finish": {"type": ["string", "null"]},
                   "status": {"type": ["integer", "string", "null"]},
                   "detail": {"type": "string"},
+                  # Both ends of a reply that was cut off.
+                  "head": {"type": "string"}, "tail": {"type": "string"},
                   "why": {"enum": ["unreachable", "unserved", "no_answer",
                                    "cut_off"]},
                   "owner": owner,

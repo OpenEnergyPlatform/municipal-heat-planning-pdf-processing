@@ -1565,6 +1565,47 @@ tuples, and rewriting them costs 52% of the whole answer. So the model
 writes them once. A tuple's own key always wins, and a key in
 NOT_DEFAULTABLE is dropped however the model labelled it.
 
+### expand_values
+
+```python
+def expand_values(tuples: list) -> list
+```
+
+One tuple per number of an entry that gives several under one quote.
+
+A row of a table carries several values, and writing that row out once
+per value was most of a long answer: 59 tokens a value at the median, so
+6,144 tokens end at about 100 values, and a table of 20 municipalities in
+8 columns does not fit. Each value leaves here as a tuple of its own, so
+the check that its number stands in the quote runs per value, and one that
+does not is refused alone.
+
+### split_table
+
+```python
+def split_table(source) -> Optional[tuple]
+```
+
+A table's passage as two, or None when it has no rows to divide.
+
+Each half keeps everything above the first row with a number: the title,
+the header, the sub-headers. Without them a number has no column. The crop
+stays behind, because it shows the rows of the other half and a long
+answer is what this split is for. Both halves are the same passage, and a
+quote is checked against the whole of it.
+
+### request_timeout
+
+```python
+def request_timeout(wanted: int, usual: int, timed_out: bool) -> Optional[int]
+```
+
+What a harvest request may take, None for the client's own limit.
+
+The time follows the room: a reply given twice the tokens takes twice as
+long, and 12,288 tokens at the 3.7 tokens a second a long reply gets could
+never arrive in the 600 s of a repeat.
+
 ### log_usage
 
 ```python

@@ -57,7 +57,8 @@ def rows(*, sandbox: bool = True) -> dict
 
 The harvest reply: the values of the passages, or a sandbox action.
 
-A row is a value with its wording, its unit's wording and its quote; the
-coordinates are asked per field afterwards.
+A row is a value with its wording, its unit's wording and its quote, or
+`values` under one shared quote; the coordinates are asked per field
+afterwards.
 
 [Back to the index](../README.md)

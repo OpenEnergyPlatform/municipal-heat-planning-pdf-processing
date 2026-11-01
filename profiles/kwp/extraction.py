@@ -82,6 +82,11 @@ FRAME = ("scenario", "year")
 # number did not, "Basisjahr" among the most common.
 BASE_YEAR = {"scenario": "status_quo"}
 
+# What counts as a year here: a zone number printed beside a value (169002)
+# was answered as its year, in the frame and on a row (owner decision
+# 2026-11-01).
+YEAR_RANGE = (1900, 2100)
+
 # Which frame pairs are the plan's target. Their years are the plan's target
 # years, each with the frame's quote that prints it. A row whose table says
 # only "Zieljahr" answers one of them the same way (owner decision
@@ -147,6 +152,7 @@ PHRASES = {
     "unstated_spelling": 'steht in diesen Passagen nicht',
     # why a coordinate's answer was not taken
     "kind_whole_number": 'eine ganze Zahl',
+    "kind_year": 'ein Kalenderjahr mit vier Ziffern',
     "kind_text": 'eine Angabe als Text',
     "not_an_option": (
         'Dein "value" {given!r} ist keiner der Einträge aus "options". '

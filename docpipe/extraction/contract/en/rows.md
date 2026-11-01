@@ -1,8 +1,8 @@
 ---
 required: [role, asked_afterwards, example_reply, partial_when]
 optional: [example_more, completeness_example, empty_list_more, front_page, number_examples, value_more, unit_examples, unit_heading, line_number_example, footnote_example, quote_more, quote_lines, per_value_text, citations_text, choice_entries, choice_reason, choice_more, choice_examples, status_more, sandbox_more]
-blocks: [source_kinds, quantities_units, quantities_choice, quantities_text, frame_keys, place_example_more, completeness, frame_empty, normal_case, no_guessing, place_front_page, value_text, value_number, unit_raw, source_every, quote_whole_row, quote_one_source, quote_narrow, quote_copy, quote_inner_numbers, examples_foreign, per_value, citations, choice, status_frame, invent_knowledge, invent_figures, invent_chart, sandbox, quantities_number, images]
-omittable: [quantities_units, quantities_choice, quantities_text, frame_keys, place_example_more, completeness, frame_empty, normal_case, no_guessing, place_front_page, value_number, unit_raw, source_every, quote_whole_row, quote_one_source, quote_narrow, quote_copy, quote_inner_numbers, examples_foreign, per_value, citations, choice, status_frame, invent_knowledge, invent_chart, sandbox, quantities_number, images]
+blocks: [source_kinds, quantities_units, quantities_choice, quantities_text, frame_keys, place_example_more, completeness, frame_empty, normal_case, no_guessing, place_front_page, value_text, value_number, unit_raw, source_every, quote_whole_row, values_row, quote_one_source, quote_narrow, quote_copy, quote_inner_numbers, examples_foreign, per_value, citations, choice, status_frame, invent_knowledge, invent_figures, invent_chart, sandbox, quantities_number, images]
+omittable: [quantities_units, quantities_choice, quantities_text, frame_keys, place_example_more, completeness, frame_empty, normal_case, no_guessing, place_front_page, value_number, unit_raw, source_every, quote_whole_row, values_row, quote_one_source, quote_narrow, quote_copy, quote_inner_numbers, examples_foreign, per_value, citations, choice, status_frame, invent_knowledge, invent_chart, sandbox, quantities_number, images]
 ---
 {{role}}
 
@@ -52,6 +52,10 @@ Every entry is checked mechanically and literally against the source; whatever f
 <!-- rule: quote --> "quote": a literal, contiguous string from the text of EXACTLY THIS source (at least {{min_quote_chars}} characters) that contains the value exactly.<!-- block: quote_whole_row --> For a number in a table, the piece that carries it is the whole table row.<!-- /block --><!-- block: quote_one_source --> Do not assemble it from two sources.<!-- /block --><!-- block: quote_narrow --> Quote only the piece that carries YOUR value: the clause, the list entry, the table cell with its label, not the whole paragraph and not the whole list.<!-- /block --><!-- block: quote_inner_numbers --> Copy it character for character, including numbers that stand in the middle of the text, such as line numbers of a manuscript{{line_number_example}} or footnote marks{{footnote_example}}: they belong to the string, and without them the quote is not in the source.<!-- /block --><!-- block: quote_copy --> Copy character for character, reformat nothing, leave nothing out.<!-- /block --><!-- block: examples_foreign --> The names and numbers in the examples above come from another document: never take them over, only what stands in THESE sources.<!-- /block -->{{quote_more}}
 {{quote_lines}}
 
+<!-- block: values_row -->
+<!-- rule: values_row --> "values": If a table row carries several values you are looking for with the same unit, write them as ONE entry: the row once in "quote" and the numbers as a list in "values" instead of "value". Each number counts as a value of its own, is checked on its own and must stand in that row. If the columns have different units, each unit gets an entry with the same "quote".
+
+<!-- /block -->
 <!-- block: per_value -->
 <!-- rule: per_value --> {{per_value_text}}
 

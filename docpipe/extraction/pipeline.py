@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
+from ..profile import active_profile
 from . import archive
 from . import queries as queries_mod
 from .wording import say
@@ -833,6 +834,15 @@ def wording_names_option(slot, given, wording) -> bool:
     return False
 
 
+def year_in_range(year) -> bool:
+    """Is this number one the profile takes for a year? Zones and districts
+    carry numbers of their own, and one printed beside a value was answered
+    as its year (169002). Without a `YEAR_RANGE` every number is."""
+    profile = active_profile()
+    span = profile.component("extraction", "YEAR_RANGE") if profile else None
+    return span is None or span[0] <= year <= span[1]
+
+
 def _wrong_type(slot, given) -> Optional[str]:
     """What this slot wanted, when the answer is not of that kind at all.
 
@@ -845,9 +855,11 @@ def _wrong_type(slot, given) -> Optional[str]:
         if isinstance(given, bool):
             return whole
         if isinstance(given, float):
-            return None if given.is_integer() else whole
+            if not given.is_integer():
+                return whole
+            return None if year_in_range(given) else say("kind_year")
         if isinstance(given, int):
-            return None
+            return None if year_in_range(given) else say("kind_year")
         try:
             # "2045.0" is the same answer as 2045.0 and used to be the only
             # one of the two that was refused. verify.py reads it the same
@@ -856,7 +868,9 @@ def _wrong_type(slot, given) -> Optional[str]:
             number = float(str(given).strip().replace(",", "."))
         except (TypeError, ValueError):
             return whole
-        return None if number.is_integer() else whole
+        if not number.is_integer():
+            return whole
+        return None if year_in_range(number) else say("kind_year")
     if slot.kind == TEXT and not isinstance(given, str):
         return say("kind_text")
     return None

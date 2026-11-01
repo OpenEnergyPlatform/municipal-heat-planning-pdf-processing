@@ -90,8 +90,8 @@ def test_every_reply_schema_has_a_strict_form(name):
 def test_a_left_out_key_comes_home_left_out():
     rewritten, decode = strict_schema.strict(replies.rows())
     generated = {"tuples": [{"source": "Q1", "unit_raw": None, "value": 12,
-                             "value_raw": None, "quote": "| Gas | 12 |",
-                             "computed": None}],
+                             "value_raw": None, "values": None,
+                             "quote": "| Gas | 12 |", "computed": None}],
                  "defaults": None, "status": "complete", "need_more": None,
                  "action": None, "code": None}
     jsonschema.validate(generated, rewritten)
