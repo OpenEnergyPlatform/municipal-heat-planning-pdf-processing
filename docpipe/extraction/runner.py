@@ -1669,10 +1669,13 @@ def answer_room(system: str, conversation: list, wanted: int) -> int:
                - prompt_tokens(system, conversation))
 
 
-def make_places(db_path: Path, spec: Spec, out: Path,
-                content: Optional[Callable] = None):
+def make_places(db_path: Optional[Path], spec: Spec, out: Path,
+                content: Optional[Callable] = None,
+                every: Optional[Callable] = None):
     """The run's map of where each axis is answered (`places.Places`), or
-    None when the profile writes no prompt for it or EXTRACT_PLACES=0."""
+    None when the profile writes no prompt for it or EXTRACT_PLACES=0.
+    *every* is (document, exclude) -> passages, read from *db_path* when
+    not given."""
     if os.environ.get("EXTRACT_PLACES", "1") == "0":
         return None
     try:
@@ -1683,7 +1686,7 @@ def make_places(db_path: Path, spec: Spec, out: Path,
     temperature = float(prompt.meta.get("temperature", 0))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
     axes, parameters = places_map.questions(spec)
-    every = make_rest_of_document(db_path, content=content)
+    every = every or make_rest_of_document(db_path, content=content)
 
     def conversation_of(window: list) -> list:
         return [{"role": "user", "content": json.dumps(

@@ -25,8 +25,10 @@ the quote stands in the passage and the number in the quote.
 pair and every coordinate of them, with the prompts and the checks of the run.
 There is no search: a coordinate is looked for in the other passages given,
 in their order, and a list a document closes from the database stays empty.
-It writes each document's report when it is done, and reports the pairs and
-each coordinate's states. Several agents share the work through LLM_MODELS and
+With `--places` the coordinates are searched over the map of the run instead,
+and `--every-row` asks each of its windows for every open row. It writes each
+document's report when it is done, and reports the pairs and each coordinate's
+states. Several agents share the work through LLM_MODELS and
 LLM_SLOTS_PER_MODEL, as in the chat.
 
 A sandbox round needs CODE_EXEC_URL; `report.json` counts the rounds either way.

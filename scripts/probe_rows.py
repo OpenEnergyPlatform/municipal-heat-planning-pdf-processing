@@ -23,8 +23,10 @@ the quote stands in the passage and the number in the quote.
 pair and every coordinate of them, with the prompts and the checks of the run.
 There is no search: a coordinate is looked for in the other passages given,
 in their order, and a list a document closes from the database stays empty.
-It writes each document's report when it is done, and reports the pairs and
-each coordinate's states. Several agents share the work through LLM_MODELS and
+With `--places` the coordinates are searched over the map of the run instead,
+and `--every-row` asks each of its windows for every open row. It writes each
+document's report when it is done, and reports the pairs and each coordinate's
+states. Several agents share the work through LLM_MODELS and
 LLM_SLOTS_PER_MODEL, as in the chat.
 
 A sandbox round needs CODE_EXEC_URL; `report.json` counts the rounds either way.
@@ -120,9 +122,15 @@ def whole(hits: list, spec, args) -> list:
                 for source in documents.get(document, ())
                 if (source.owner_kind, source.owner_id) not in exclude]
 
+    places = (runner.make_places(None, spec, args.out, every=rest_of_document)
+              if args.places else None)
+    if places is not None:
+        places.pool = ThreadPoolExecutor(args.parallel)
+        if args.every_row:
+            places.rows_for = None
     harvest = runner.make_fieldwise_harvester(
         args.image_root, rest_of_document=rest_of_document, spec=spec,
-        slice_gate=gate, frame_axes=frame_axes)
+        slice_gate=gate, frame_axes=frame_axes, places=places)
     slots = {slot.name: slot for parameter in spec.parameters
              for slot in fields.axis_slots(parameter)}
 
@@ -175,6 +183,10 @@ def main() -> int:
     parser.add_argument("--image-root", type=Path, default=None)
     parser.add_argument("--whole", action="store_true",
                         help="also the frame and every coordinate")
+    parser.add_argument("--places", action="store_true",
+                        help="with --whole: search over the map of places")
+    parser.add_argument("--every-row", action="store_true",
+                        help="with --places: no window narrows its rows")
     args = parser.parse_args()
 
     from docpipe.extraction import runner, trace

@@ -1381,12 +1381,15 @@ max_tokens for this request: *wanted*, or what the window leaves.
 ### make_places
 
 ```python
-def make_places(db_path: Path, spec: Spec, out: Path,
-                content: Optional[Callable] = None)
+def make_places(db_path: Optional[Path], spec: Spec, out: Path,
+                content: Optional[Callable] = None,
+                every: Optional[Callable] = None)
 ```
 
 The run's map of where each axis is answered (`places.Places`), or
 None when the profile writes no prompt for it or EXTRACT_PLACES=0.
+*every* is (document, exclude) -> passages, read from *db_path* when
+not given.
 
 ### make_frame_asker
 

@@ -481,8 +481,7 @@ have had no rest stage. A profile's `SEARCH_SHARE` scales a named coordinate's
 retrieval and rest allowance by a fraction, at least one window staying; a key
 may be `<parameter>.<axis>` and is read before the bare axis, and a share of 0
 reads the value's own passage alone, with no retrieval and no rest stage (kwp
-halves `sector`, and sets 0 for `aggregation`, whose search cost 77 million
-prompt tokens for 730 coordinates on 100 plans, and for `technology`,
+halves `sector` and `aggregation`, and sets 0 for `technology`,
 `emission.carrier` and `emission.sector`, which the data schema leaves
 optional; `profiles/kwp/extraction.py`).
 The run's first log line about the sweep states the allowance of one

@@ -108,7 +108,7 @@ TARGET_YEAR = {"scenario": "target"}
 # MHPKG schema leaves an emission's carrier and sector optional, because the
 # law asks for the total, and every technology optional. A key may name the
 # parameter, `<parameter>.<axis>`, and is read before the bare axis.
-SEARCH_SHARE = {"sector": 0.5, "aggregation": 0,
+SEARCH_SHARE = {"sector": 0.5, "aggregation": 0.5,
                 "emission.carrier": 0, "emission.sector": 0,
                 "technology": 0}
 
