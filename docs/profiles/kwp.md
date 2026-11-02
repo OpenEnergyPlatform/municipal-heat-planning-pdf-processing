@@ -202,8 +202,10 @@ to. Where it says so is the section around the table, which is the first
 window the field sweep reads.
 
 The slice gate decides, before any other coordinate is asked, whether a
-row belongs in this run's graph at all: `SLICE = {"quantity": None}`
-(`profiles/kwp/extraction.py:28`). `None` means any real class the graph
+row belongs in this run's graph at all: `SLICE = {"quantity": None, "year":
+None}` (`profiles/kwp/extraction.py`). The year closes no row and stands there
+for its order: every axis behind it reads with the year in `known`. `None` means
+any real class the graph
 takes, every entry that does not begin `out:`. Asking this axis first and
 alone is cheaper when a row fails it, three requests spent rather than
 eight, and on a 20-plan draft it dropped 1,554 of 6,763 harvested tuples
@@ -475,6 +477,6 @@ Read from `profiles/kwp/extraction_schema.json` by `scripts/build_docs.py`. Each
 | `energy_consumption` | number | `aggregation` (5 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (9 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `technology` (10 options), `unit` (12 options), `year` (integer) | `value` |
 | `heat_load` | number | `aggregation` (4 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (6 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `unit` (5 options), `year` (integer) | `value` |
 | `planning_organisation` | string | `parameter` (one of the spec's parameters) | `organisation` |
-| `share` | number | `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (2 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `technology` (10 options), `unit` (2 options), `year` (integer) | `value` |
+| `share` | number | `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (2 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `technology` (10 options), `unit` (2 options), `whole` (string), `year` (integer) | `value` |
 
 [Back to the index](../README.md)

@@ -2558,13 +2558,15 @@
                 "Quote",
                 "Rate",
                 "Wirkungsgrad",
-                "Veränderung"
+                "Veränderung",
+                "Förderquote",
+                "Anteil der Gebäude"
               ],
-              "definition": "Ein Prozentwert, der keinen Teil eines Ganzen nennt: eine Rate pro Jahr, ein Wirkungsgrad, eine Anschlussquote an Gebäuden, eine Veränderung gegenüber einem Basisjahr."
+              "definition": "Ein Prozentwert, der keinen Teil von Energie oder Emissionen nennt: eine Rate pro Jahr, ein Wirkungsgrad, eine Veränderung gegenüber einem Basisjahr, oder der Anteil an etwas anderem: an Gebäuden, Anlagen, Heizungen, Flächen, Kosten oder Fördermitteln."
             }
           },
           "required": false,
-          "question": "Welche Größe ist diese Zahl? \"fraction value\" ist der Anteil eines Ganzen in Prozent: welcher Teil des Wärmebedarfs, des Verbrauchs oder der Erzeugung auf einen Energieträger, einen Sektor oder eine Technologie entfällt (\"davon Wärmenetz 41 %\", \"Anteil erneuerbarer Energien 65 %\"). Ein Prozentwert, der keinen Teil eines Ganzen nennt (eine Sanierungsrate pro Jahr, ein Wirkungsgrad, eine Anschlussquote an Gebäuden, eine Veränderung gegenüber einem Basisjahr), ist \"out:other\".",
+          "question": "Welche Größe ist diese Zahl? \"fraction value\" ist der Anteil eines Ganzen in Prozent: welcher Teil des Wärmebedarfs, des Verbrauchs oder der Erzeugung auf einen Energieträger, einen Sektor oder eine Technologie entfällt (\"davon Wärmenetz 41 %\", \"Anteil erneuerbarer Energien 65 %\"). Ein Prozentwert, der keinen Teil eines Ganzen nennt (eine Sanierungsrate pro Jahr, ein Wirkungsgrad, eine Veränderung gegenüber einem Basisjahr), und ein Anteil an etwas anderem als Energie oder Emissionen (an Gebäuden, Anlagen, Heizungen, Flächen, Kosten, Fördermitteln) ist \"out:other\".",
           "kg": {
             "role": "type",
             "note": "The class of the value node itself (rdf:type). OEO_00140127 fraction value falls under the MHPKG schema's RelationalQuantityValue. An out:* answer is a deliberate non-class and mints no node."
@@ -2574,6 +2576,11 @@
           "type": "text",
           "required": false,
           "question": "Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist die Bezeichnung ihrer eigenen Zeile, Spalte oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Quartier, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit dieser Bezeichnung wörtlich. Unterscheidet sie nichts davon, sagt der Plan es nicht."
+        },
+        "whole": {
+          "type": "text",
+          "required": false,
+          "question": "Wovon ist diese Zahl ein Anteil? Gemeint ist das Ganze, das die Stelle selbst nennt: der Wärmebedarf, der Endenergieverbrauch, die Emissionen, die Gebäude, die Fläche. Antworte mit dem Wort des Plans. Nennt die Stelle das Ganze nicht, sagt der Plan es nicht."
         },
         "carrier": {
           "vocabulary": {

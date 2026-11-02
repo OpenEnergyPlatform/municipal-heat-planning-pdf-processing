@@ -200,8 +200,10 @@ to. Where it says so is the section around the table, which is the first
 window the field sweep reads.
 
 The slice gate decides, before any other coordinate is asked, whether a
-row belongs in this run's graph at all: `SLICE = {"quantity": None}`
-(`profiles/kwp/extraction.py:28`). `None` means any real class the graph
+row belongs in this run's graph at all: `SLICE = {"quantity": None, "year":
+None}` (`profiles/kwp/extraction.py`). The year closes no row and stands there
+for its order: every axis behind it reads with the year in `known`. `None` means
+any real class the graph
 takes, every entry that does not begin `out:`. Asking this axis first and
 alone is cheaper when a row fails it, three requests spent rather than
 eight, and on a 20-plan draft it dropped 1,554 of 6,763 harvested tuples

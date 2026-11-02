@@ -21,7 +21,7 @@ das Wort, das der Plan selbst benutzt ("Zielszenario", "Transformationspfad", "U
 <!-- part: year_rules -->
 Welche Jahreszahl ein Bezugsjahr ist:
 
-1. Eine Spaltenüberschrift einer Tabelle mit Werten: "| Energieträger | 2019 | 2030 | 2045 |" sind drei Jahre.
+1. Eine Spaltenüberschrift einer Tabelle mit Werten: "| Energieträger | 2019 | 2030 | 2045 |" sind drei Jahre. Das Wort für den Bestand in einer Spalte gilt nur für seine Spalte: in "| Energieträger | Status-Quo | 2030 | 2045 |" sind 2030 und 2045 keine Jahre des Bestands.
 2. Ein Zieljahr im Text: "bis 2045 klimaneutral", "im Zieljahr 2040".
 3. Ein Bilanzjahr der Bestandsaufnahme: "Bilanzjahr 2022", "Stand 2021".
 

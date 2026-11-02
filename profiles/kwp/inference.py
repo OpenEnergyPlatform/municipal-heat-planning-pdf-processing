@@ -31,6 +31,7 @@ ROUTE_NOTES = {
 AXIS_NAMES = {
     "quantity": "Größe",
     "subject": "Bezug",
+    "whole": "Anteil von",
     "aggregation": "Art des Werts",
     "carrier": "Energieträger",
     "sector": "Sektor",

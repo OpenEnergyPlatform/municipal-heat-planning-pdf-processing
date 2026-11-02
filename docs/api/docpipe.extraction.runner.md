@@ -243,6 +243,21 @@ def fitting(self, todo: list, window: list) -> list
 The open rows a window of the map's places is for, all of them on
 any other stage.
 
+#### Sweeping.portions
+
+```python
+def portions(self, windows)
+```
+
+(window, the open rows to ask it for), one after another.
+
+On the map's places, a window is asked once per batch with an open
+row. Of 35,217 quotes of corpus_m7_100 that stood in the plan and not
+in what the check was given, 32,613 came from requests with rows of
+four batches or more: half of them the quote of a number row, which
+the row answered with it cannot be checked against. Everywhere else a
+window is one question for all the open rows.
+
 #### Sweeping.re_entry
 
 ```python
@@ -1645,6 +1660,17 @@ def row_context(claim: dict, asked=()) -> dict
 {axis: the plan's wording} of every coordinate this row has READ,
 the ones asked now left out. A derived coordinate is the spec's decision
 and its wording is the unit, so it says nothing about the number.
+
+### cell_facts
+
+```python
+def cell_facts(value, quote, own=None) -> dict
+```
+
+Which cell of the quoted table row a number sits in and the head of
+that column. Three numbers under three year columns share one quote, and
+the column is what tells them apart: a fact already in hand here, so it
+is handed over rather than left to be counted.
 
 ### own_title
 

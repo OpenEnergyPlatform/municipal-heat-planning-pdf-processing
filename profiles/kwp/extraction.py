@@ -25,7 +25,12 @@ SPEC_PATH = Path(__file__).with_name("extraction_spec.json")
 #
 # None means "any class the graph takes", which is every entry that does not
 # start with out:. A tuple names the answers that keep the row.
-SLICE = {"quantity": None}
+#
+# The year closes no row and stands here for its order alone: every axis behind
+# it reads with the year known. Asked side by side, up to 1,368 tuples of
+# corpus_m7_100 took the scenario of a chart's title for a year it does not
+# hold (owner decision 2026-11-02).
+SLICE = {"quantity": None, "year": None}
 
 
 def document_context(conn, document_id: int) -> dict:
@@ -108,7 +113,7 @@ TARGET_YEAR = {"scenario": "target"}
 # MHPKG schema leaves an emission's carrier and sector optional, because the
 # law asks for the total, and every technology optional. A key may name the
 # parameter, `<parameter>.<axis>`, and is read before the bare axis.
-SEARCH_SHARE = {"sector": 0.5, "aggregation": 0.5, "subject": 0,
+SEARCH_SHARE = {"sector": 0.5, "aggregation": 0.5, "subject": 0, "whole": 0,
                 "emission.carrier": 0, "emission.sector": 0,
                 "technology": 0}
 

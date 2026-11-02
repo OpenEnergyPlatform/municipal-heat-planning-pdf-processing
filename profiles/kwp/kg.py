@@ -582,7 +582,8 @@ def _precision(row: dict) -> int:
 
 def wording_key(row: dict) -> str:
     """The plan's words for what tells two numbers on one identity apart: the
-    number's own subject, and the two coordinates that fold onto one class.
+    number's own subject, the whole a share is part of, and the two
+    coordinates that fold onto one class.
 
     "Wirtschaftlich genutzte Gebäude" and "Öffentliche Gebäude" are both
     OEO_00000405 and are not one number, and neither are "Bis 1918" and
@@ -590,7 +591,7 @@ def wording_key(row: dict) -> str:
     apart, and it is what the node is named by when they collide.
     """
     return " / ".join(str(row.get(key) or "").strip()
-                      for key in ("subject", "carrier_raw", "sector_raw")
+                      for key in ("subject", "whole", "carrier_raw", "sector_raw")
                       ).strip(" /")
 
 

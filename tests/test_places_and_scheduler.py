@@ -333,3 +333,31 @@ def test_a_search_outside_the_map_keeps_every_row(monkeypatch):
     sweeping.spent["rest"] = 0
     sweeping.run(iter([[DOC[2]]]))
     assert asked == [["R1", "R2"]]
+
+
+def two_batches(monkeypatch):
+    first = [row_of("R1", "energy_consumption")]
+    second = [row_of("R2", "energy_consumption")]
+    sweeping, asked = fitted_sweep(monkeypatch, wide_map(TABLE), first)
+    batch = sweeping.batches[0]
+    other = SimpleNamespace(document_id=7, bases=(), parameter=None,
+                            items=batch.items, sources=batch.sources)
+    scope = runner.Scope([(batch, first), (other, second)])
+    sweeping.scope, sweeping.rows = scope, scope.rows
+    sweeping.batches, sweeping.owner_of = scope.batches, scope.owner_of
+    return sweeping, asked
+
+
+def test_rows_of_two_batches_are_never_asked_in_one_request(monkeypatch):
+    sweeping, asked = two_batches(monkeypatch)
+    sweeping.run(iter([[DOC[2]]]))
+    assert [len(rows) for rows in asked] == [1, 1]
+
+
+def test_a_search_outside_the_map_asks_all_batches_together(monkeypatch):
+    sweeping, asked = two_batches(monkeypatch)
+    sweeping.state["stage"] = "retrieval"
+    sweeping.budget["retrieval"] = 9
+    sweeping.spent["retrieval"] = 0
+    sweeping.run(iter([[DOC[2]]]))
+    assert [len(rows) for rows in asked] == [2]

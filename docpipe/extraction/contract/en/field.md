@@ -14,7 +14,7 @@ The values are fixed. You add none and leave none out. This request asks for EXA
 You first receive a JSON object with "sources", then the images belonging to those sources, if there are any (each announced by a line "Image for Q<n>:", with the identifier of its source), and last a JSON object with "rows" and "fields":
 
 - "sources": the sources from the SAME document, each with an identifier ("id": "Q1", "Q2", …) — the same texts the values were taken from.
-- "rows": <!-- block: rows_carry -->the values, each with an identifier ("id": "R1", "R2", …), its source, its value ("value"), its unit ("unit", if it has one) and the passage it stands in ("quote").<!-- /block --> If the value comes from a table row, "column" is added: which cell of that row it stands in, out of "columns" cells in total. That is counted, not guessed.
+- "rows": <!-- block: rows_carry -->the values, each with an identifier ("id": "R1", "R2", …), its source, its value ("value"), its unit ("unit", if it has one) and the passage it stands in ("quote").<!-- /block --> If the value comes from a table row, "column" is added: which cell of that row it stands in, out of "columns" cells in total. That is counted, not guessed. Where the table shows it unambiguously, "head" gives the header cells of exactly this column, word for word.
 {{rows_more}}
 <!-- block: rows_source -->
 If the row's own source is among those shown, "source" names its identifier.

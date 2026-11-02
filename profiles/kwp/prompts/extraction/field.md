@@ -8,7 +8,7 @@ max_tokens: 6144
 Zahlen, die aus einem deutschen kommunalen Wärmeplan schon geholt sind
 
 <!-- part: rows_more -->
-Dazu "known": was zu dem Wert schon gelesen ist, je Feld im Wortlaut des Plans, und "title": der Titel seiner eigenen Tabelle oder seines Abschnitts. Gefragt ist die Angabe zu GENAU dieser Zahl, nicht irgendeine im Plan.
+Dazu "known": was zu dem Wert schon gelesen ist, je Feld im Wortlaut des Plans, und "title": der Titel seiner eigenen Tabelle oder seines Abschnitts. Gefragt ist die Angabe zu GENAU dieser Zahl, nicht irgendeine im Plan. Steht unter "known" ein Jahr, gilt deine Antwort für dieses Jahr: ein Diagrammtitel über mehreren Jahren sagt nichts über jedes einzelne. Das Jahr, in dem der Plan seinen Bestand aufnimmt, ist auch im Diagramm eines Zielszenarios der Bestand.
 
 <!-- part: example_reply -->
 {"fields": {"scenario": {"groups": [{"rows": ["R1", "R2", "R3"], "value": "Bestand", "value_raw": "Ist-Zustand 2022", "quote": "<<Titel der eigenen Tabelle, wörtlich, mit „Ist-Zustand 2022“ darin>>"}], "answers": {"R4": {"value": "Zielszenario", "value_raw": "Klimaschutzszenario", "quote": "<<Satz einer gezeigten Quelle, wörtlich, mit „Klimaschutzszenario“ darin>>"}}}}}
@@ -36,7 +36,7 @@ Es ist die Stelle, an der "value_raw" steht, und oft NICHT die Zeile der Zahl: d
    Was in den Beispielen dieser Anleitung zwischen << und >> steht, beschreibt eine Stelle und ist keine. Es steht in keiner Quelle: schreib es nie ab, auch nicht in "need_more".
 
 <!-- part: domain_rule_1 -->
-Tabellen mit mehreren Wertspalten sind der Normalfall; die Zeilen unterscheiden sich dann genau in dem Feld, das die Spalte bestimmt. "column": 2 heißt: es gilt, was die ZWEITE Kopfzelle benennt, von links gezählt, die erste ist 1. Zähl nicht selbst nach. Die Kopfzeile ist die der EIGENEN Tabelle (Quelle unter "source"); drei Tabellentitel hintereinander im Abschnittstext sind keine Kopfzeile.
+Tabellen mit mehreren Wertspalten sind der Normalfall; die Zeilen unterscheiden sich dann genau in dem Feld, das die Spalte bestimmt. "column": 2 heißt: es gilt, was die ZWEITE Kopfzelle benennt, von links gezählt, die erste ist 1. Zähl nicht selbst nach. Steht "head" dabei, ist das die Kopfzelle dieser Spalte, und sie entscheidet das Feld, das die Spalte bestimmt: "head": "<<Energieträger>>" über einer Zahl heißt dieser Energieträger, nicht alle zusammen. Die Kopfzeile ist die der EIGENEN Tabelle (Quelle unter "source"); drei Tabellentitel hintereinander im Abschnittstext sind keine Kopfzeile.
    Die Spalte bestimmt nicht immer das Jahr: "| Energieträger | <<Jahr>> | <<Jahr>> | <<Jahr>> |" bestimmt das JAHR, drei Zahlen einer Zeile haben drei Jahre. "| Energieträger | <<Sektor 1>> Endenergie in kWh/a | <<Sektor 2>> Endenergie in kWh/a | <<Sektor 3>> Endenergie in kWh/a |" bestimmt den SEKTOR, und die Zahl mit "column": 2 gehört zu <<Sektor 1>>. Gib so viele Gruppen aus, wie die Spalten unterscheiden.
 
 <!-- part: closed_out_text -->

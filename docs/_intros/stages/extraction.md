@@ -274,6 +274,13 @@ itself: only where different numbers meet on one identity does it split them
 rounding and trust stays in the full graph as a node of its own, marked as
 contested, and stays out of the strict graph (owner decision 2026-11-02).
 
+A number from a table carries the words over its column (`head`,
+`column_head`), where a head line has as many cells as the row. On the map's
+places a window is asked once per batch with an open row (`Sweeping.portions`):
+in one request with rows of other batches the model answered a row with a quote
+that row cannot be checked against. A share carries `whole`, what it is a share
+of, read from its own passage alone.
+
 A rows reply that gives a number under a quote not printing it gets one more
 turn (`reread`, `runner.py`): the model is told which numbers and answers those
 again under their own rows. The check does not change. A number not given

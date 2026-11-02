@@ -363,6 +363,19 @@ year the header's nth cell names.
 None whenever it is not certain: no table row, the value in no cell, or
 the same number in two of them. A wrong column is worse than none.
 
+### column_head
+
+```python
+def column_head(table: str, cell: int, cells: int) -> Optional[str]
+```
+
+The words over this cell of a table, or None.
+
+The number of a column leaves the model to find the head of that column,
+and over a wide row it often read none: "no carrier" under a column headed
+"Wärmenetze". The head is in hand here, so it goes over as words. Only from
+head lines with as many cells as the row: a wrong head is worse than none.
+
 ### pair_in_text
 
 ```python

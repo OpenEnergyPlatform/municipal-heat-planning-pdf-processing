@@ -2892,14 +2892,14 @@ Axis 'quantity' of Anteil. A closed list; an entry beginning 'out:' is a deliber
 
 The prompt's own wording:
 
-> Welche Größe ist diese Zahl? "fraction value" ist der Anteil eines Ganzen in Prozent: welcher Teil des Wärmebedarfs, des Verbrauchs oder der Erzeugung auf einen Energieträger, einen Sektor oder eine Technologie entfällt ("davon Wärmenetz 41 %", "Anteil erneuerbarer Energien 65 %"). Ein Prozentwert, der keinen Teil eines Ganzen nennt (eine Sanierungsrate pro Jahr, ein Wirkungsgrad, eine Anschlussquote an Gebäuden, eine Veränderung gegenüber einem Basisjahr), ist "out:other".
+> Welche Größe ist diese Zahl? "fraction value" ist der Anteil eines Ganzen in Prozent: welcher Teil des Wärmebedarfs, des Verbrauchs oder der Erzeugung auf einen Energieträger, einen Sektor oder eine Technologie entfällt ("davon Wärmenetz 41 %", "Anteil erneuerbarer Energien 65 %"). Ein Prozentwert, der keinen Teil eines Ganzen nennt (eine Sanierungsrate pro Jahr, ein Wirkungsgrad, eine Veränderung gegenüber einem Basisjahr), und ein Anteil an etwas anderem als Energie oder Emissionen (an Gebäuden, Anlagen, Heizungen, Flächen, Kosten, Fördermitteln) ist "out:other".
 
 <details><summary>What it may answer (2)</summary>
 
 - **fraction value** → `OEO_00140127` — A fraction value is a relational quantity value that has a fraction as it's unit.
   - also written: Anteil, Prozentanteil, davon, %
-- **keine Anteilsangabe** → `out:other` — Ein Prozentwert, der keinen Teil eines Ganzen nennt: eine Rate pro Jahr, ein Wirkungsgrad, eine Anschlussquote an Gebäuden, eine Veränderung gegenüber einem Basisjahr.
-  - also written: Quote, Rate, Wirkungsgrad, Veränderung
+- **keine Anteilsangabe** → `out:other` — Ein Prozentwert, der keinen Teil von Energie oder Emissionen nennt: eine Rate pro Jahr, ein Wirkungsgrad, eine Veränderung gegenüber einem Basisjahr, oder der Anteil an etwas anderem: an Gebäuden, Anlagen, Heizungen, Flächen, Kosten oder Fördermitteln.
+  - also written: Quote, Rate, Wirkungsgrad, Veränderung, Förderquote, Anteil der Gebäude
 
 </details>
 
@@ -3365,6 +3365,54 @@ The number as the document prints it, with the grouping removed and a decimal po
 ### `value_target`
 
 value x factor(unit), in the spec's unit_target UO_0000187. This is the number the graph carries.
+
+### `whole`
+
+Axis 'whole' of Anteil. null unless whole_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Wovon ist diese Zahl ein Anteil? Gemeint ist das Ganze, das die Stelle selbst nennt: der Wärmebedarf, der Endenergieverbrauch, die Emissionen, die Gebäude, die Fläche. Antworte mit dem Wort des Plans. Nennt die Stelle das Ganze nicht, sagt der Plan es nicht.
+
+### `whole_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('whole_raw'). 'whole_quote' is then the frame's passage that prints the number.
+
+### `whole_link_source`
+
+Which source 'whole_link_quote' was found in.
+
+### `whole_producer`
+
+Who re-read 'whole': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `whole_quote`
+
+The verbatim passage carrying 'whole'. Present exactly when whole_state is 'read'.
+
+### `whole_raw`
+
+The document's own wording 'whole' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `whole_raw_foreign`
+
+The wording does not name the option chosen for 'whole': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `whole_seen`
+
+A wording the model noticed for 'whole' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `whole_source`
+
+Which source the passage for 'whole' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `whole_state`
+
+How the coordinate 'whole' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `whole_window`
+
+[stage, index] of the window 'whole' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `year`
 

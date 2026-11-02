@@ -84,6 +84,7 @@ from . import trace
 from .wording import say
 from .pipeline import (YEAR_STATES, Source, WorkItem, apply_frame, batch_uri,
                        build_sweeps, cell_index as pipeline_cell_index,
+                       column_head,
                        drop_repeats, fold_batch, follow_up, group_items,
                        harvest_document, merge_field, mark_unanswered,
                        named_years,
@@ -3285,7 +3286,27 @@ def row_context(claim: dict, asked=()) -> dict:
             continue
         if isinstance(raw, str) and raw.strip():
             out[name] = raw.strip()
+        elif isinstance(claim.get(name), int):
+            # A year has no wording where its number stands in the quote, and
+            # the scenario read after it has to see it.
+            out[name] = str(claim[name])
     return out
+
+
+def cell_facts(value, quote, own=None) -> dict:
+    """Which cell of the quoted table row a number sits in and the head of
+    that column. Three numbers under three year columns share one quote, and
+    the column is what tells them apart: a fact already in hand here, so it
+    is handed over rather than left to be counted."""
+    cell = pipeline_cell_index(quote, value)
+    if cell is None:
+        return {}
+    facts = {"column": cell[0], "columns": cell[1]}
+    if own is not None and own.owner_kind == "table":
+        head = column_head(own.text, *cell)
+        if head:
+            facts["head"] = head
+    return facts
 
 
 def own_title(source) -> str:
@@ -3373,13 +3394,7 @@ def _field_payload(shown: list, rows: list, slots,
         unit = row.claim.get("unit_raw") or row.claim.get("unit")
         if unit:
             entry["unit"] = unit
-        # Which cell of the quoted table row this number sits in. Three
-        # numbers under three year columns share one quote, and the column is
-        # what tells them apart — a fact already in hand here, so it is handed
-        # over rather than left to be counted.
-        cell = pipeline_cell_index(entry["quote"], entry["value"])
-        if cell is not None:
-            entry["column"], entry["columns"] = cell
+        entry.update(cell_facts(entry["value"], entry["quote"], own))
         listed.append(entry)
     asked_names = {slot.name for slot in
                    ([slots] if not isinstance(slots, (list, tuple)) else slots)}
@@ -3744,12 +3759,11 @@ def _review_payload(row: dict, shown: list, parameter, slots) -> dict:
         # The second reading names its unit as one entry too: the first
         # reading's is compared by factor, and a wording has none.
         listed["units_accepted"] = sorted(parameter.units_accepted)
-    # Which cell of the quoted table row the number sits in. Three numbers
-    # under three year columns share one quote, and the column is what tells
-    # them apart.
-    cell = pipeline_cell_index(listed.get("quote"), listed.get("value"))
-    if cell is not None:
-        listed["column"], listed["columns"] = cell
+    owner = next((s for s in shown
+                  if (s.owner_kind, s.owner_id) == (
+                      provenance.get("owner_kind"),
+                      provenance.get("owner_id"))), None)
+    listed.update(cell_facts(listed.get("value"), listed.get("quote"), owner))
     asked = []
     for slot in slots:
         field = {"name": slot.name, "question": slot.question}
@@ -3989,6 +4003,32 @@ class Sweeping:
             return todo
         return rows_for(self.document_id, window, todo)
 
+    def portions(self, windows):
+        """(window, the open rows to ask it for), one after another.
+
+        On the map's places, a window is asked once per batch with an open
+        row. Of 35,217 quotes of corpus_m7_100 that stood in the plan and not
+        in what the check was given, 32,613 came from requests with rows of
+        four batches or more: half of them the quote of a number row, which
+        the row answered with it cannot be checked against. Everywhere else a
+        window is one question for all the open rows.
+        """
+        for window in windows:
+            todo = self.still_open(self.rows)
+            if not todo:
+                return
+            todo = self.fitting(todo, window)
+            if self.state["stage"] != "places":
+                if todo:
+                    yield window, todo
+                continue
+            fitting = {row.label for row in todo}
+            for _batch, members in self.scope.groups:
+                rows = [row for row in self.still_open(members)
+                        if row.label in fitting]
+                if rows:
+                    yield window, rows
+
     def re_entry(self, todo: list, already: set) -> list:
         """The passages these rows were last read in, to ride along.
 
@@ -4059,13 +4099,7 @@ class Sweeping:
         state = self.state
         if state["stage"] != "own" and AHEAD is not None:
             return self.run_ahead(windows)
-        for window in windows:
-            todo = self.still_open(self.rows)
-            if not todo:
-                return True
-            todo = self.fitting(todo, window)
-            if not todo:
-                continue
+        for window, todo in self.portions(windows):
             # The re-entry rides in FRONT of the window and is not part
             # of it: the window generator is untouched, so the frontier
             # still advances by exactly one window per request and a
@@ -4229,7 +4263,7 @@ class Sweeping:
         """
         state = self.state
         stage = state["stage"]
-        windows = iter(windows)
+        portions = self.portions(windows)
         ahead: deque = deque()
         ticket = scheduler.Ticket()
         spent_out = False
@@ -4251,12 +4285,10 @@ class Sweeping:
                         if self.rest_asked + cost > self.rest_requests:
                             spent_out = True
                             break
-                    window = next(windows, None)
-                    if window is None:
+                    portion = next(portions, None)
+                    if portion is None:
                         break
-                    todo = self.fitting(todo, window)
-                    if not todo:
-                        continue
+                    window, todo = portion
                     if cost is not None:
                         self.rest_asked += cost
                     self.spent[stage] += 1
@@ -4463,8 +4495,9 @@ class Sweeping:
         labels = {row.label for row in open_now}
         asking = sum(1 for _batch, members in self.scope.groups
                      if any(row.label in labels for row in members))
-        self.budget["places"] = (self.budget["retrieval"]
-                                 + self.budget["rest"] * max(1, asking))
+        # In requests of one batch: a window is asked once for each.
+        self.budget["places"] = (self.budget["retrieval"] + self.budget["rest"]
+                                 * max(1, asking)) * max(1, asking)
         self.spent["places"] = 0
         self.state["stage"] = "places"
         if self.kind == "document":

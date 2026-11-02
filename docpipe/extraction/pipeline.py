@@ -502,6 +502,28 @@ def cell_index(quote: str, value) -> Optional[tuple]:
     return (hits[0], len(cells)) if len(hits) == 1 else None
 
 
+def column_head(table: str, cell: int, cells: int) -> Optional[str]:
+    """The words over this cell of a table, or None.
+
+    The number of a column leaves the model to find the head of that column,
+    and over a wide row it often read none: "no carrier" under a column headed
+    "Wärmenetze". The head is in hand here, so it goes over as words. Only from
+    head lines with as many cells as the row: a wrong head is worse than none.
+    """
+    lines = [line for line in (table or "").splitlines()
+             if line.count("|") >= 2]
+    rule = next((index for index, line in enumerate(lines)
+                 if "-" in line and set(line) <= set("|:- \t")), None)
+    if not rule:
+        return None
+    words: list = []
+    for line in lines[:rule]:
+        row = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(row) == cells and row[cell - 1] and row[cell - 1] not in words:
+            words.append(row[cell - 1])
+    return " / ".join(words) or None
+
+
 def _invented_wording(claim: dict, spec=None) -> bool:
     """A non-numeric value that its own quote does not contain.
 
