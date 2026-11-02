@@ -241,3 +241,95 @@ def test_a_complete_map_without_a_place_ends_combed_not_exhausted(
     assert combed and not asked
     sweeping.close(combed)
     assert rows[0].claim.get("carrier_state") != fields.EXHAUSTED
+
+
+# -- which rows a window of places is for --------------------------------------
+
+def mapped(*hits):
+    found, _calls = make_places(lambda window: {"hits": [
+        h for h in hits if h["passage"] == "P1"
+        and h["quote"] in window[0].text]}, doc=DOC)
+    return found
+
+
+TABLE = hit("P1", ["carrier"], "| Erdgas | 120 | MWh/a |", ["energy_consumption"])
+PLAIN = hit("P1", ["carrier"], "Ausblick auf das Jahr 2045.")
+
+
+def row_of(label, parameter):
+    return Row(label=label, item_index=0,
+               claim={"value": 1, "parameter": parameter})
+
+
+ROWS = [row_of("R1", "energy_consumption"), row_of("R2", "emission"),
+        row_of("R3", None)]
+PARAMETERED = dict(PARAMETERS, emission="Emission")
+
+
+def labels(rows):
+    return [row.label for row in rows]
+
+
+def wide_map(*hits):
+    found = mapped(*hits)
+    found.parameters = PARAMETERED
+    return found
+
+
+def test_a_place_naming_a_parameter_is_for_its_rows_and_the_unsettled():
+    assert labels(wide_map(TABLE).rows_for(7, [DOC[2]], ROWS)) == ["R1", "R3"]
+
+
+def test_a_place_naming_no_parameter_is_for_every_row():
+    assert labels(wide_map(PLAIN).rows_for(7, [DOC[3]], ROWS)) == \
+        ["R1", "R2", "R3"]
+
+
+def test_one_place_without_a_parameter_opens_its_whole_window():
+    assert labels(wide_map(TABLE, PLAIN).rows_for(7, [DOC[2], DOC[3]], ROWS)) \
+        == ["R1", "R2", "R3"]
+
+
+def fitted_sweep(monkeypatch, found, rows):
+    asked = []
+
+    def ask(shown, todo, slots, corrections, document_id, usage, owner_of,
+            bases=None):
+        asked.append(labels(todo))
+        return {"fields": {"carrier": {}}}
+
+    own = section(9, "| Wohngebäude | 120 | MWh/a |")
+    batch = SimpleNamespace(document_id=7, bases=(), parameter=None,
+                            items=[SimpleNamespace(source=own)], sources=[own])
+    sweeping = runner.Sweeping(runner.make_sweeper(ask, places=found),
+                               runner.Scope([(batch, rows)]), [CARRIER], "",
+                               seen=set(), held={}, kind="document")
+    sweeping.state["stage"] = "places"
+    sweeping.budget["places"] = 9
+    sweeping.spent["places"] = 0
+    monkeypatch.setattr(runner, "AHEAD", None)
+    return sweeping, asked
+
+
+def test_a_window_asks_only_the_rows_it_is_for(monkeypatch):
+    rows = [row_of("R1", "energy_consumption"), row_of("R2", "emission")]
+    sweeping, asked = fitted_sweep(monkeypatch, wide_map(TABLE), rows)
+    sweeping.run(iter([[DOC[2]]]))
+    assert asked == [["R1"]]
+
+
+def test_a_window_no_row_fits_is_not_sent(monkeypatch):
+    rows = [row_of("R2", "emission")]
+    sweeping, asked = fitted_sweep(monkeypatch, wide_map(TABLE), rows)
+    assert sweeping.run(iter([[DOC[2]]]))
+    assert asked == []
+
+
+def test_a_search_outside_the_map_keeps_every_row(monkeypatch):
+    rows = [row_of("R1", "energy_consumption"), row_of("R2", "emission")]
+    sweeping, asked = fitted_sweep(monkeypatch, wide_map(TABLE), rows)
+    sweeping.state["stage"] = "rest"
+    sweeping.budget["rest"] = 9
+    sweeping.spent["rest"] = 0
+    sweeping.run(iter([[DOC[2]]]))
+    assert asked == [["R1", "R2"]]

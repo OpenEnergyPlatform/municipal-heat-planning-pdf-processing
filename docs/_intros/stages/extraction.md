@@ -259,6 +259,13 @@ quote until corpus_m7_100, where 110,792 of 125,192 year answers refused as
 `quote_not_in_source` had copied that quote from a passage the request did
 not show; the quote stays on this side and `merge_field` writes it.
 
+A window of the map's places asks only the rows it is for (`rows_for`,
+`places.py`): a place that names parameters is for their rows, a window holding
+a place that names none is for every row, and so is a row whose parameter is
+not settled yet, which covers the search for the unit. A window no row fits is
+not sent. On corpus_m7_100 a window carried 59 open rows at the mean, and 60
+percent of the map's places name a parameter.
+
 A rows reply that gives a number under a quote not printing it gets one more
 turn (`reread`, `runner.py`): the model is told which numbers and answers those
 again under their own rows. The check does not change. A number not given

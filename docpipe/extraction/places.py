@@ -64,6 +64,14 @@ class Map:
             return None
         return set().union(*(self.by_axis[axis] for axis in axes))
 
+    def named_at(self) -> dict:
+        """{passage: the parameters whose numbers the map found in it}."""
+        named: dict = {}
+        for parameter, owners in self.by_parameter.items():
+            for owner in owners:
+                named.setdefault(owner, set()).add(parameter)
+        return named
+
 
 def questions(spec) -> tuple:
     """({axis: question}, {parameter: label}) the map is asked with: every
@@ -203,6 +211,22 @@ class Places:
             return None
         return [s for s in self.passages_of(document_id)
                 if (s.owner_kind, s.owner_id) in keys]
+
+    def rows_for(self, document_id: int, window: list, rows: list) -> list:
+        """The rows of *rows* this window of places can answer.
+
+        A window of 59 open rows at the mean cost 53 % of the field tokens of
+        corpus_m7_100 for 10 % of its fills. A place that names parameters is
+        for their rows; one window holding a place that names none is for
+        every row, as is a row whose parameter is not settled yet.
+        """
+        named = self.map_for(document_id).named_at()
+        at = [named.get((s.owner_kind, s.owner_id)) for s in window]
+        if not all(at):
+            return rows
+        wanted = set().union(*at)
+        return [row for row in rows if row.claim.get("parameter") in wanted
+                or row.claim.get("parameter") not in self.parameters]
 
     def map_for(self, document_id: int) -> Map:
         with self._guard:

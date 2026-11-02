@@ -3978,6 +3978,14 @@ class Sweeping:
                   for row in open_rows(pool, slot)}
         return [row for row in pool if row.label in wanted]
 
+    def fitting(self, todo: list, window: list) -> list:
+        """The open rows a window of the map's places is for, all of them on
+        any other stage."""
+        rows_for = getattr(self.sweeper.places, "rows_for", None)
+        if self.state["stage"] != "places" or rows_for is None:
+            return todo
+        return rows_for(self.document_id, window, todo)
+
     def re_entry(self, todo: list, already: set) -> list:
         """The passages these rows were last read in, to ride along.
 
@@ -4052,6 +4060,9 @@ class Sweeping:
             todo = self.still_open(self.rows)
             if not todo:
                 return True
+            todo = self.fitting(todo, window)
+            if not todo:
+                continue
             # The re-entry rides in FRONT of the window and is not part
             # of it: the window generator is untouched, so the frontier
             # still advances by exactly one window per request and a
@@ -4240,6 +4251,9 @@ class Sweeping:
                     window = next(windows, None)
                     if window is None:
                         break
+                    todo = self.fitting(todo, window)
+                    if not todo:
+                        continue
                     if cost is not None:
                         self.rest_asked += cost
                     self.spent[stage] += 1

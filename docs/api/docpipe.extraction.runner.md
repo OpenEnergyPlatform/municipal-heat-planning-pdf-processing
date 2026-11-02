@@ -234,6 +234,15 @@ def still_open(self, pool: list) -> list
 
 Rows with at least one of these fields still unread.
 
+#### Sweeping.fitting
+
+```python
+def fitting(self, todo: list, window: list) -> list
+```
+
+The open rows a window of the map's places is for, all of them on
+any other stage.
+
 #### Sweeping.re_entry
 
 ```python

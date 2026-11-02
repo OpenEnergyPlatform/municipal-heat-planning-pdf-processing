@@ -56,6 +56,14 @@ def keys_of(self, axes) -> Optional[set]
 The passages that answer any of *axes*, or None when the map does
 not stand for the document or does not know one of them.
 
+#### Map.named_at
+
+```python
+def named_at(self) -> dict
+```
+
+{passage: the parameters whose numbers the map found in it}.
+
 ### Places
 
 ```python
@@ -77,6 +85,19 @@ def __init__(self, ask: Callable, passages_of: Callable, fits: Callable,
              axes: dict, parameters: dict, key: str, *,
              store: Optional[Path] = None, pool=None, trace=None)
 ```
+
+#### Places.rows_for
+
+```python
+def rows_for(self, document_id: int, window: list, rows: list) -> list
+```
+
+The rows of *rows* this window of places can answer.
+
+A window of 59 open rows at the mean cost 53 % of the field tokens of
+corpus_m7_100 for 10 % of its fills. A place that names parameters is
+for their rows; one window holding a place that names none is for
+every row, as is a row whose parameter is not settled yet.
 
 #### Places.map_for
 
