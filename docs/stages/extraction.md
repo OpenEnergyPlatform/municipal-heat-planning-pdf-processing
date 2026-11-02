@@ -859,6 +859,78 @@ Non-fatal findings are carried as flags: `quote_repaired`, `computed`
 span, `period:unstated` when the spec says the entry chosen for the unit
 names no period (`names_period: false`).
 
+### The compute step
+
+The rows request copies what stands in a passage, so from where it stands
+nothing is ever missing: of six test cases its prompt took the sandbox in none,
+a request of its own naming the number wanted in four. A tool is used where a
+question stands open, so this step asks that question itself (owner decision
+2026-11-02). It runs inside the run, after a document is folded and before its
+file is written (`runner.make_computer`, `compute.py`), and works from rows that
+passed `verify_tuple`. The step does not exist for a profile that names no open
+question (`compute.py` of the profile, `questions`) or writes no prompt
+(`extraction/compute`), or for a run without a sandbox: a number the model works
+out itself has no evidence. A stop during the step leaves the document unwritten,
+like one half read.
+
+kwp names two kinds of question (`profiles/kwp/compute.py`):
+
+- **A share without its absolute number:** a `share` with its year, scenario and
+  `whole` read, no amount of the same carrier, sector and technology in that
+  frame, and an amount in that frame that covers it. All such totals are offered
+  and the model says which one is the whole, or none. On eight plans 71 percent
+  of 3,323 shares had their absolute number printed and 13 percent had a total
+  but no absolute number; in a sample of 12 of those, about 7 totals fitted.
+- **Parts without their sum:** a sum closes exactly one axis (`carrier`, `sector`,
+  `technology`, or the area, where sub-areas are told apart by name), so the parts
+  agree on everything else and none says it is the total. Parts may stand in
+  several passages. Only an amount over a span qualifies, `integrated` in the
+  spec: two peak loads do not add up. An `out:` quantity is a number the gate
+  closed and is no part.
+
+A zero is neither a part, a share nor a total: it adds nothing, and rows of it
+fill plans' tables.
+
+A sum over passages must not count one statement twice (`one_statement`): the
+same part with the same number, within the graph's `ROUNDING_TOLERANCE`, in two
+passages or under one quote, in any unit, since `value_target` is compared. The
+most precisely printed of them stays. Two rows of one passage under two quotes
+are two rows. A set whose largest number is the sum of the others has printed
+its sum under another word and is not asked. What cannot be told by machine stays
+with the model and its prompt: a part contained in another, alternatives of one
+plant, a list of only the largest parts.
+
+Each question is a conversation of its own. The request names the number wanted,
+the numbers with their quotes and what was read about them, and their passages;
+parts in different units are shown in the unit of the first. The model answers
+with `{"action": "python", "code": ...}`, the sandbox runs the code with `numbers`,
+`sources` as in the rows request and `tables` as in the chat, and the output goes
+back. Then the model answers `{"value": ..., "used": [...]}`, or `{"value": null}`
+where there is nothing to compute. A number without a code run that succeeded is
+asked for again, told why. At most `EXTRACT_CODE_ROUNDS` runs; a share answered
+from anything but one total makes no row.
+
+The answer becomes a claim like any other and goes through `verify_tuple` under
+the quote and passage of one of its numbers: the anchor, the share itself or the
+first part. Its coordinates come from its numbers by code and are not asked. A
+share's row takes parameter, quantity, unit, year, scenario and area from the
+total, and carrier, sector, technology and `subject` from the share. A sum's row
+keeps what its parts share, its closed axis is the total with state `derived`, and
+its `subject` is `unstated`. `compute` holds the runs, and the last one the numbers
+it was worked out from, each with quote and source. The row is flagged `computed`,
+so it never stands above a printed number in `settle`, and it is refused like any
+other when its value is not in the code's output (`computed_in_output`).
+
+The trace has a `code` event per run and a `compute` event per question with how
+it ended: `read`, `refused`, `none`, `too_long`, `unanswered` or `stopped`. The
+stats count them as `computed_questions_by_kind_outcome`. The sandbox takes one
+container at a time by default; `KWP_SANDBOX_PARALLEL` on the service and
+`CODE_EXEC_PARALLEL` in the run widen that for a machine that has the cores.
+Every run stays a fresh container, so none sees what an earlier one left. With
+the image store in memory that costs about a second per run, on a network disk a
+few seconds: the container builds nothing, the image holds what a run imports,
+and stopping it kills it.
+
 ### Trust levels
 
 `trust.trust` grades every accepted tuple deterministically, from what
@@ -1316,6 +1388,7 @@ and never fails the run. Each count says what it counts:
 | `places_maps` | maps of places, one per document: `documents` mapped, `complete` of them, `passages` read, `windows` (requests) asked, `places` taken, `dropped` and `unread` requests, and `places_by_axis`, places per axis |
 | `windows_withdrawn_unsent` | search windows asked ahead and withdrawn before they were sent |
 | `coordinates_taken_from_their_table` | coordinates a row took from the reading of its table, without being asked |
+| `computed_questions_by_kind_outcome` | open questions of the compute step, per kind and how they ended |
 | `passages_planned_by_origin` | passages planned, per origin: a search or a found place |
 
 The same file can be made for any harvest by hand with `python -m
@@ -1628,8 +1701,9 @@ coordinate of a row the pass for a new parameter appended, carries `<name>_produ
 that pass in `producers`; the harvest writes none. An entry of the second
 pass also carries `parameters` (their uris) and `frame`. A trace event is one JSON
 line, `{"t": kind, "doc": document_id, ...}`, of one of twelve kinds
-(`schema.py`'s `trace_schema`): `plan`, `anchor`, `frame`, `rows`,
-`field`, `sweep`, `drop` and `error` from the harvest loop, `places` once for
+(`schema.py`'s `trace_schema`): `plan`, `anchor`, `frame`, `rows`, `code`,
+`field`, `sweep`, `drop` and `error` from the harvest loop, `compute` once per
+open question of the compute step, `places` once for
 every document whose map of places was built (`passages`, `windows`, `places`,
 `dropped`, `unread`, `complete`, `by_axis` and `by_parameter`), `coord` and
 `refusal` per folded tuple or refusal, and `invalid` from the schema
@@ -1670,7 +1744,8 @@ a `*.jsonl` or `*.stamp.json` that a reader of the harvest would list.
 | `EXTRACT_MAX_SOURCE_CHARS` / `EXTRACT_PARENT_CHARS` | env var | `16000` / `4000` | `MAX_SOURCE_CHARS`: the longest stretch of passage text one request carries; a longer passage is cut into windows that overlap by 400 characters, each keeping the passage's rank and origin. `PARENT_CHARS`: how much of a table's parent section rides along with it; a longer one is cut around the table's placeholder | `runner.split_long_sources`, `runner.make_parents` |
 | `EXTRACT_FRAME_ROUNDS` / `_SOURCES` / `EXTRACT_FRAME_YEAR_MIN` / `_MAX` | env var | `3` / `12` / `1990` / `2100` | Rounds and passages per round the frame request may spend; bounds of a calendar year for `years_in_sources`, its deterministic cross-check | `runner.find_frame`, `runner.years_in_sources` |
 | `EXTRACT_FRAME_CHARS` | env var | `14000` (the value of `EXTRACT_BATCH_CHARS`) | Characters of passage text one frame request holds; the frame reads all of the plan's passages in as many windows as that takes | `runner.frame_windows` |
-| `EXTRACT_CODE_ROUNDS` / `EXTRACT_FIELD_RE_ENTRY` | env var | `2` / `3` | Sandbox rounds the row request may spend on a self-checked value; already-shown passages carried into a coordinate's next field window | `runner.make_harvester`, `runner.Sweeping.re_entry` |
+| `EXTRACT_CODE_ROUNDS` / `EXTRACT_FIELD_RE_ENTRY` | env var | `2` / `3` | Sandbox rounds a row request or a compute question may spend on a self-checked value; already-shown passages carried into a coordinate's next field window | `runner.make_harvester`, `runner.make_computer`, `runner.Sweeping.re_entry` |
+| `CODE_EXEC_PARALLEL` | env var | `1` | Code runs one run has out at the sandbox at a time; match the service's `KWP_SANDBOX_PARALLEL` | `runner.SANDBOX_SLOTS` |
 | `EXTRACT_LLM_PARALLEL` / `EXTRACT_PLAN_PARALLEL` / `EXTRACT_FIELD_PARALLEL` | env var | `128` / `8` / `192` | Pool sizes: rows-request batches in flight for the whole run, planning threads (retrieval, SQL and the document's phrase requests, which run in parallel per parameter), and field-sweep threads beneath row-request batches, which a document's search runs on as well. Without the adaptive limit they bound the requests. With it on, `FIELD_PARALLEL` bounds the sweeps running at once, the limit (`EXTRACT_LIMIT_MAX` at most) bounds the requests, and the search windows a sweep asks ahead and the requests of the map of places run on a pool sized to the limit's maximum (see The adaptive request limit) | `runner.harvest_batches`, `runner.main`, `runner.make_fieldwise_harvester` |
 | `EXTRACT_ATTACH_IMAGES` / `EXTRACT_LOCATE` | env var | `1` / `1` | Off, respectively: no crop attaches to a row, field, frame or review request (no `images/` dir needed), or `make_locate` returns `None`, no quote placed on the page | `runner.py` askers, `runner.make_locate` |
 | `EXTRACT_IMAGE_MAX_SIDE` | env var | `1280` | Longest side, in pixels, of a crop that rides along with a request; a larger one is shrunk to it, and the tokens counted for a crop follow from it | `runner._image_data_url`, `runner.IMAGE_TOKENS` |
@@ -1886,7 +1961,8 @@ calls it to recompute a rewritten file's summary.
 
 `places.py` reads a document's map of where each axis is answered, and
 `scheduler.py` is the one request queue of a run, oldest document first (both
-described under The field sweep and The adaptive request limit).
+described under The field sweep and The adaptive request limit). `compute.py`
+holds what every open question of the compute step has (see The compute step).
 `found.py` reads where earlier harvests found something (see Starting at what
 was found). `archive.py` copies a harvest, stamp or trace file aside before any pass
 replaces it, and `stats.py` counts where a run's harvest is hard; both are

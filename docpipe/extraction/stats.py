@@ -17,7 +17,8 @@ numbers a report and the ontology side can act on:
   a plan does not split by that axis at all;
 - per axis and search stage, the requests sent and the coordinates they
   filled, which is what a coordinate costs;
-- the reasons answers were dropped, per axis.
+- the reasons answers were dropped, per axis;
+- the open questions of the compute step, per kind and how they ended.
 
 Every count says what it counts. Read from the harvest files and the trace
 directories named; written to `<harvest dir>/stats/<pass>-<run start>.json`.
@@ -125,6 +126,7 @@ def from_traces(trace_dirs: Iterable[Path],
     planned: Counter = Counter()
     withdrawn = 0
     from_table = 0
+    computed: dict = defaultdict(Counter)
     for directory in trace_dirs:
         for path in sorted(Path(directory).glob("*.jsonl")):
             stem = path.name[:-len(".trace.jsonl")] \
@@ -157,6 +159,9 @@ def from_traces(trace_dirs: Iterable[Path],
                 elif kind == "sweep":
                     withdrawn += int(event.get("withdrawn") or 0)
                     from_table += int(event.get("via_table") or 0)
+                elif kind == "compute":
+                    computed[str(event.get("kind"))][
+                        str(event.get("outcome"))] += 1
     return {
         # The maps of places: documents mapped and how many completely,
         # passages, requests, places taken and not, requests unread, and
@@ -167,6 +172,8 @@ def from_traces(trace_dirs: Iterable[Path],
         "windows_withdrawn_unsent": withdrawn,
         # Rows that took the frame their table was asked for.
         "coordinates_taken_from_their_table": from_table,
+        "computed_questions_by_kind_outcome": {k: dict(c)
+                                               for k, c in computed.items()},
         # Where the plans' passages came from: a search or a found place.
         "passages_planned_by_origin": dict(planned),
         "requests_and_fills_by_axis_stage": {

@@ -11,6 +11,7 @@ the run, and needs neither a GPU job nor retrieval:
     python scripts/probe_rows.py data/KWP.db --out probe --document 1021 --largest 5
     python scripts/probe_rows.py --hits passages.json --out probe
     python scripts/probe_rows.py --hits passages.json --out probe --whole
+    python scripts/probe_rows.py --hits passages.json --out new --compute probe
 
 `--hits` takes the passages from a file, as `fetch_owner_content` returns them,
 so a machine without the database can run the probe.
@@ -28,6 +29,10 @@ and `--every-row` asks each of its windows for every open row. It writes each
 document's report when it is done, and reports the pairs and each coordinate's
 states. Several agents share the work through LLM_MODELS and
 LLM_SLOTS_PER_MODEL, as in the chat.
+
+`--compute` takes the verified rows of such a stored probe and asks only what
+the compute step leaves open, so its prompt can be tried without reading the
+plans again.
 
 A sandbox round needs CODE_EXEC_URL; `report.json` counts the rounds either way.
 """
@@ -104,7 +109,8 @@ def source_of(hit: dict, args):
 def whole(hits: list, spec, args) -> list:
     """The frame, the rows and the coordinates of each document's passages."""
     from docpipe.extraction import fields, runner
-    from docpipe.extraction.pipeline import WorkItem, group_items
+    from docpipe.extraction.pipeline import (DocumentReport, WorkItem,
+                                             group_items)
     from docpipe.profile import active_profile
 
     profile = active_profile()
@@ -131,6 +137,7 @@ def whole(hits: list, spec, args) -> list:
     harvest = runner.make_fieldwise_harvester(
         args.image_root, rest_of_document=rest_of_document, spec=spec,
         slice_gate=gate, frame_axes=frame_axes, places=places)
+    computer = runner.make_computer(profile)
     slots = {slot.name: slot for parameter in spec.parameters
              for slot in fields.axis_slots(parameter)}
 
@@ -151,6 +158,11 @@ def whole(hits: list, spec, args) -> list:
         with ThreadPoolExecutor(args.parallel) as pool:
             replies = list(pool.map(lambda batch: harvest(batch, []), batches))
         tuples = [claim for got in replies for claim in got.get("tuples") or ()]
+        answered = list(zip(batches, replies))
+        report = DocumentReport(document_id=document)
+        runner.fold_answers(answered, report, locate=None, spec=spec)
+        if computer is not None:
+            computer(answered, report, spec=spec)
         row = {
             "document": document, "passages": len(sources),
             "seconds": round(time.time() - started, 1),
@@ -158,6 +170,7 @@ def whole(hits: list, spec, args) -> list:
                       for pair in pairs],
             "frame_status": status, "years_not_named": missed,
             "batches": len(batches), "tuples": tuples,
+            "verified": report.tuples, "refusals": len(report.refusals),
             "states": states_of(tuples, slots.values())}
         (args.out / f"doc{document}.json").write_text(
             json.dumps(row, ensure_ascii=False, default=str), encoding="utf-8")
@@ -165,6 +178,42 @@ def whole(hits: list, spec, args) -> list:
 
     with ThreadPoolExecutor(len(documents) or 1) as pool:
         return list(pool.map(one, documents))
+
+
+def compute_over(stored: Path, hits: list, spec, args) -> list:
+    """The compute step over the verified rows of a stored `--whole` probe.
+    The raw claims cannot be folded again: their source is a label of the batch
+    they were read in, and the batches are not stored."""
+    from docpipe.extraction import runner
+    from docpipe.extraction.pipeline import Batch, DocumentReport, WorkItem
+    from docpipe.profile import active_profile
+
+    computer = runner.make_computer(active_profile())
+    if computer is None:
+        raise SystemExit("no compute step: is CODE_EXEC_URL set?")
+    documents: dict = {}
+    for hit in hits:
+        documents.setdefault(hit.get("document_id") or 0, []).append(
+            WorkItem(hit.get("document_id") or 0, None, source_of(hit, args)))
+    rows = []
+    for path in sorted(stored.glob("doc*.json")):
+        probe = json.loads(path.read_text(encoding="utf-8"))
+        document = probe["document"]
+        if "verified" not in probe:
+            raise SystemExit(f"{path} is older than its verified rows")
+        started = time.time()
+        report = DocumentReport(document_id=document)
+        report.tuples.extend(row for row in probe["verified"]
+                             if not row.get("computed"))
+        before = len(report.tuples)
+        computer([(Batch(document, None, documents[document]), {})], report,
+                 spec=spec)
+        row = {"document": document, "seconds": round(time.time() - started, 1),
+               "verified": before, "tuples": report.tuples[before:]}
+        (args.out / f"doc{document}.json").write_text(
+            json.dumps(row, ensure_ascii=False, default=str), encoding="utf-8")
+        rows.append(row)
+    return rows
 
 
 def main() -> int:
@@ -187,6 +236,8 @@ def main() -> int:
                         help="with --whole: search over the map of places")
     parser.add_argument("--every-row", action="store_true",
                         help="with --places: no window narrows its rows")
+    parser.add_argument("--compute", type=Path,
+                        help="the compute step over this stored --whole probe")
     args = parser.parse_args()
 
     from docpipe.extraction import runner, trace
@@ -207,11 +258,18 @@ def main() -> int:
 
     args.out.mkdir(parents=True, exist_ok=True)
     trace.open_trace(args.out, lambda document_id: f"doc{document_id}")
+    if args.compute:
+        report = compute_over(args.compute, hits, spec, args)
+        trace.close()
+        for row in report:
+            print(json.dumps({k: v for k, v in row.items() if k != "tuples"}))
+        return write_report(args.out, report)
     if args.whole:
         report = whole(hits, spec, args)
         trace.close()
         for row in report:
-            print(json.dumps({k: v for k, v in row.items() if k != "tuples"},
+            print(json.dumps({k: v for k, v in row.items()
+                              if k not in ("tuples", "verified")},
                              ensure_ascii=False))
         return write_report(args.out, report)
     harvest = runner.make_harvester(args.image_root, spec=spec)

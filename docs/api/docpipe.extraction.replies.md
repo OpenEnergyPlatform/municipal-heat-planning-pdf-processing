@@ -49,6 +49,15 @@ def review(slots) -> dict
 The fields of one stored value, read again: each under its own name
 with its wording and its quote; the value also with its unit.
 
+### compute
+
+```python
+def compute(labels: list) -> dict
+```
+
+The reply of a compute request: a sandbox action, or the number with
+the numbers it came from.
+
 ### rows
 
 ```python

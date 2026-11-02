@@ -117,6 +117,12 @@ PHRASES = {
         'These numbers are not printed in the "quote" you gave them under: '
         '{values}. Give only these entries again, each under the quote of '
         'the row that prints it, and leave out a number no row prints.'),
+    "compute_output": (
+        'Output of the code:\n{output}\n\nAnswer now with "value" and '
+        '"used".'),
+    "compute_needs_code": (
+        'A number without code has no evidence. Work it out with the action '
+        'object, or answer with "value": null.'),
     "value_in_several_rows": (
         'The "quote" of these numbers runs over several table rows and '
         'prints the number on more than one of them: {values}. Give only '

@@ -227,6 +227,12 @@ PHRASES = {
         'hast: {values}. Gib nur diese Einträge noch einmal an, jede Zahl '
         'unter dem Zitat der Zeile, die sie druckt, und lass eine Zahl weg, '
         'die keine Zeile druckt.'),
+    "compute_output": (
+        'Ausgabe des Codes:\n{output}\n\nAntworte jetzt mit "value" und '
+        '"used".'),
+    "compute_needs_code": (
+        'Eine Zahl ohne Code ist nicht belegt. Rechne sie mit dem '
+        'Aktions-Objekt aus, oder antworte mit "value": null.'),
     "value_in_several_rows": (
         'Das "quote" dieser Zahlen läuft über mehrere Tabellenzeilen, und '
         'mehr als eine davon druckt die Zahl: {values}. Gib nur diese '

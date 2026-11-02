@@ -20,7 +20,8 @@ numbers a report and the ontology side can act on:
   a plan does not split by that axis at all;
 - per axis and search stage, the requests sent and the coordinates they
   filled, which is what a coordinate costs;
-- the reasons answers were dropped, per axis.
+- the reasons answers were dropped, per axis;
+- the open questions of the compute step, per kind and how they ended.
 
 Every count says what it counts. Read from the harvest files and the trace
 directories named; written to `<harvest dir>/stats/<pass>-<run start>.json`.

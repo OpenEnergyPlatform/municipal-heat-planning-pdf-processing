@@ -1958,6 +1958,20 @@ own values only, and `harvest.search_document(answered)` is what is still
 open after them, searched once per document and coordinate with the rows
 of all the batches together.
 
+### make_computer
+
+```python
+def make_computer(profile) -> Optional[Callable]
+```
+
+The step that works out what a document's verified rows leave open
+(`compute.py`): `compute(answered, report, locate=, spec=, stop=)`, which
+folds what it computed into the report and says False if a stop ended it.
+
+None where it cannot run: the profile names no open question or writes no
+prompt, or the run has no sandbox, since a number the model works out
+itself has no evidence.
+
 ### split_long_sources
 
 ```python

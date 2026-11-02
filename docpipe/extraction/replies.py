@@ -80,6 +80,16 @@ def review(slots) -> dict:
             "additionalProperties": False}
 
 
+def compute(labels: list) -> dict:
+    """The reply of a compute request: a sandbox action, or the number with
+    the numbers it came from."""
+    return {"type": "object",
+            "properties": {**ACTION, "value": {"type": ["number", "null"]},
+                           "used": {"type": "array",
+                                    "items": {"enum": list(labels)}}},
+            "additionalProperties": False}
+
+
 def rows(*, sandbox: bool = True) -> dict:
     """The harvest reply: the values of the passages, or a sandbox action.
 

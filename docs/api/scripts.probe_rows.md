@@ -13,6 +13,7 @@ the run, and needs neither a GPU job nor retrieval:
     python scripts/probe_rows.py data/KWP.db --out probe --document 1021 --largest 5
     python scripts/probe_rows.py --hits passages.json --out probe
     python scripts/probe_rows.py --hits passages.json --out probe --whole
+    python scripts/probe_rows.py --hits passages.json --out new --compute probe
 
 `--hits` takes the passages from a file, as `fetch_owner_content` returns them,
 so a machine without the database can run the probe.
@@ -30,6 +31,10 @@ and `--every-row` asks each of its windows for every open row. It writes each
 document's report when it is done, and reports the pairs and each coordinate's
 states. Several agents share the work through LLM_MODELS and
 LLM_SLOTS_PER_MODEL, as in the chat.
+
+`--compute` takes the verified rows of such a stored probe and asks only what
+the compute step leaves open, so its prompt can be tried without reading the
+plans again.
 
 A sandbox round needs CODE_EXEC_URL; `report.json` counts the rounds either way.
 
@@ -76,6 +81,16 @@ def whole(hits: list, spec, args) -> list
 ```
 
 The frame, the rows and the coordinates of each document's passages.
+
+### compute_over
+
+```python
+def compute_over(stored: Path, hits: list, spec, args) -> list
+```
+
+The compute step over the verified rows of a stored `--whole` probe.
+The raw claims cannot be folded again: their source is a label of the batch
+they were read in, and the batches are not stored.
 
 ### main
 

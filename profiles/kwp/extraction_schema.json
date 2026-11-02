@@ -9923,6 +9923,45 @@
    {
     "additionalProperties": false,
     "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "kind": {
+      "type": "string"
+     },
+     "numbers": {
+      "type": "integer"
+     },
+     "outcome": {
+      "enum": [
+       "read",
+       "refused",
+       "none",
+       "too_long",
+       "unanswered",
+       "stopped"
+      ]
+     },
+     "runs": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "compute"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "kind",
+     "numbers",
+     "outcome",
+     "runs"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
      "anchor": {
       "type": "string"
      },

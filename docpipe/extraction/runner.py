@@ -75,6 +75,7 @@ from docpipe.profile import add_profile_argument, program, require_profile
 from docpipe.store.schema import readonly_uri
 
 from . import archive
+from . import compute as computing
 from . import fields
 from . import found as found_places
 from . import places as places_map
@@ -87,7 +88,8 @@ from .pipeline import (YEAR_STATES, DocumentReport, Source, WorkItem,
                        apply_frame, batch_uri,
                        build_sweeps, cell_index as pipeline_cell_index,
                        column_head,
-                       drop_repeats, fold_batch, follow_up, group_items,
+                       drop_repeats, fold_batch, fold_claims, follow_up,
+                       group_items,
                        harvest_document, in_several_rows, merge_field,
                        mark_unanswered,
                        named_years, narrow_quote,
@@ -264,6 +266,10 @@ LLM_PARALLEL = int(os.environ.get("EXTRACT_LLM_PARALLEL", "128"))
 # output as evidence; without the sandbox the model would have to work the
 # number out itself, and that number would have no evidence at all.
 CODE_ROUNDS = int(os.environ.get("EXTRACT_CODE_ROUNDS", "2"))
+# How many code runs the sandbox takes at a time, for the whole run. A code
+# run waiting for its turn stands on the sandbox's own timeout otherwise.
+SANDBOX_SLOTS = threading.BoundedSemaphore(
+    int(os.environ.get("CODE_EXEC_PARALLEL", "1")))
 # How many sources share one request, and how much text they may bring. The
 # ceiling is the model's window minus the parameter payload, which
 # context_budget measures: at 17.5k tokens of spec for kwp, six sources of
@@ -2782,7 +2788,7 @@ def _parse_action(text) -> Optional[str]:
     return code if isinstance(code, str) and code.strip() else None
 
 
-def _compute_reply(run: dict) -> str:
+def _compute_reply(run: dict, done: str = "code_output") -> str:
     """What the model gets back after a sandbox round."""
     if not run.get("ok"):
         return say("code_failed", error=run.get("error")
@@ -2790,7 +2796,7 @@ def _compute_reply(run: dict) -> str:
     out = (run.get("stdout") or "").strip()
     if not out:
         return say("code_silent")
-    return say("code_output", output=out)
+    return say(done, output=out)
 
 
 def _parameter_payload(parameter) -> dict:
@@ -5531,6 +5537,143 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
     return harvest
 
 
+def make_computer(profile) -> Optional[Callable]:
+    """The step that works out what a document's verified rows leave open
+    (`compute.py`): `compute(answered, report, locate=, spec=, stop=)`, which
+    folds what it computed into the report and says False if a stop ended it.
+
+    None where it cannot run: the profile names no open question or writes no
+    prompt, or the run has no sandbox, since a number the model works out
+    itself has no evidence.
+    """
+    from docpipe.inference import code_exec
+
+    open_questions = profile.component("compute", "questions")
+    if open_questions is None or CODE_ROUNDS < 1 or not code_exec.is_enabled():
+        return None
+    try:
+        prompt = prompts.load(computing.COMPUTE_PROMPT_ID)
+    except (FileNotFoundError, LookupError):
+        return None
+    client = _client()
+    temperature = float(prompt.meta.get("temperature", 0))
+    max_tokens = int(prompt.meta.get("max_tokens", 2048))
+    pool = ThreadPoolExecutor(max_workers=FIELD_PARALLEL,
+                              thread_name_prefix="compute")
+
+    def ask(question, items: dict, document_id: int, stop) -> tuple:
+        """(how it ended, the new row or None, code runs). The conversation
+        of one question: code, its output, the number."""
+        shown = computing.passages(question, items)
+        conversation = [{"role": "user", "content": json.dumps(
+            computing.payload(question, shown), ensure_ascii=False, indent=2)}]
+        handed = computing.context(question, shown)
+        shape = replies.compute(computing.labels(question))
+        runs: list = []
+        faults = 0
+
+        def told(said: Optional[str], text: str) -> None:
+            conversation.extend(({"role": "assistant", "content": said or ""},
+                                 {"role": "user", "content": text}))
+
+        for attempt in range(1, MAX_RETRIES + CODE_ROUNDS + 1):
+            if stop is not None and stop.is_set():
+                return "stopped", None, runs
+            limit = answer_room(prompt.text, conversation, max_tokens)
+            if limit < MIN_ANSWER_TOKENS:
+                return "too_long", None, runs
+            try:
+                with _for(document_id):
+                    response = client.chat.completions.create(
+                        model=LLM_MODEL,
+                        temperature=retry_temperature(temperature, faults),
+                        max_tokens=limit,
+                        messages=[{"role": "system", "content": prompt.text},
+                                  *conversation],
+                        extra_body=request_extras(),
+                        response_format=providers.grammar("compute_reply",
+                                                          shape))
+            except Exception as exc:
+                log.warning("   compute %s attempt %d failed: %s",
+                            document_id, attempt, exc)
+                trace.event("error", document_id, where="compute",
+                            kind="exception", attempt=attempt,
+                            detail=str(exc)[:300])
+                continue
+            reply = response.choices[0]
+            _observe_usage(getattr(response, "usage", None))
+            said = reply.message.content
+            code = _parse_action(said)
+            if code and len(runs) < CODE_ROUNDS:
+                with SANDBOX_SLOTS:
+                    out = code_exec.run_code(code, context=handed)
+                runs.append({"code": code,
+                             "stdout": (out.get("stdout") or "")[:2000],
+                             "ok": bool(out.get("ok")),
+                             "error": out.get("error")})
+                trace.event("code", document_id, attempt=attempt, **runs[-1])
+                told(said, _compute_reply(runs[-1], "compute_output"))
+                continue
+            answer = _loads_object(said)
+            if not isinstance(answer, dict) or "value" not in answer:
+                faults += 1
+                cause, correction = _reply_fault(reply, limit)
+                trace.event("error", document_id, where="compute",
+                            kind="unreadable", cause=cause, attempt=attempt,
+                            finish=getattr(reply, "finish_reason", None))
+                told(said, correction)
+                continue
+            if answer["value"] is None:
+                return "none", None, runs
+            if not any(run["ok"] for run in runs):
+                faults += 1
+                told(said, say("compute_needs_code"))
+                continue
+            claim = computing.claim_of(
+                question, answer["value"],
+                computing.used_numbers(question, answer), runs)
+            return ("read", claim, runs) if claim else ("none", None, runs)
+        return "unanswered", None, runs
+
+    def compute(answered: list, report, *, locate: Optional[Callable] = None,
+                spec=None, stop=None) -> bool:
+        if not answered:
+            return True
+        doc_spec = spec_of(answered[0][0], spec)
+        questions = open_questions(report.tuples, doc_spec)
+        if not questions:
+            return True
+        items: dict = {}
+        for batch, _reply in answered:
+            for item in batch.items:
+                source = item.source
+                items.setdefault((source.owner_kind, source.owner_id),
+                                 []).append(item)
+        started = time.time()
+        asked = [(question, pool.submit(ask, question, items,
+                                        report.document_id, stop))
+                 for question in questions]
+        for question, future in asked:
+            outcome, claim, runs = future.result()
+            if claim is not None:
+                before = len(report.tuples)
+                # The row's parameter is its own, whatever its anchor's is.
+                item = replace(computing.item_of(items, question.anchor),
+                               parameter=None)
+                fold_claims(item, [claim], report, locate=locate,
+                            spec=doc_spec)
+                if len(report.tuples) == before:
+                    outcome = "refused"
+            trace.event("compute", report.document_id, kind=question.kind,
+                        numbers=len(question.numbers), outcome=outcome,
+                        runs=len(runs))
+        log.info("   compute %s: %d question(s) in %.0f s",
+                 report.document_id, len(questions), time.time() - started)
+        return stop is None or not stop.is_set()
+
+    return compute
+
+
 def split_long_sources(items: list, max_chars: int = MAX_SOURCE_CHARS) -> list:
     """Work items whose source text fits one request.
 
@@ -7742,10 +7885,17 @@ def main(argv: Optional[list] = None) -> int:
     # far, with the run's spec for a batch that carries none of its own.
     prior_rows = functools.partial(accepted_rows, spec=spec)
 
+    computer = make_computer(profile)
+
     def verify(entry: tuple) -> bool:
         name, report, answered = entry
         replies = len(answered)
         fold_answers(answered, report, locate=locate, spec=spec)
+        # Stopped half way a document is half worked out, and unwritten like
+        # one half read.
+        if computer is not None and not computer(
+                answered, report, locate=locate, spec=spec, stop=Halted):
+            return False
         stamped = finish_document(report, name, args.out, spec_sha,
                                   anchors_sha, answered=replies, spec=spec,
                                   questions=asked.pop(name, None),

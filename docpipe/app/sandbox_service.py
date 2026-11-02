@@ -43,19 +43,24 @@ PORT = int(os.environ.get("KWP_SANDBOX_PORT", "8600"))
 DEFAULT_TIMEOUT = int(os.environ.get("KWP_SANDBOX_TIMEOUT", "20"))
 MAX_TIMEOUT = int(os.environ.get("KWP_SANDBOX_MAX_TIMEOUT", "30"))
 MEM = os.environ.get("KWP_SANDBOX_MEM", "512m")
+PARALLEL = int(os.environ.get("KWP_SANDBOX_PARALLEL", "1"))
 
 # Container hardening. `network_mode: none` is the key guard. Resource limits are
 # best-effort under rootless cgroupfs but do not break container creation.
+# `stop_signal`: the idle process of the image ignores SIGTERM, and every run
+# would wait ten seconds for its container to go. Podman takes the number only.
 HARDENING = {
     "network_mode": "none",
     "mem_limit": MEM,
     "pids_limit": 128,
     "cap_drop": ["ALL"],
     "security_opt": ["no-new-privileges"],
+    "stop_signal": 9,
 }
 
-# One container at a time; keeps resource use bounded.
-_LOCK = threading.Lock()
+# Containers at a time, one by default; keeps resource use bounded. A
+# harvest has a machine to itself and many short runs.
+_LOCK = threading.BoundedSemaphore(PARALLEL)
 
 
 def _preamble(context: dict) -> str:
@@ -74,8 +79,11 @@ def run_code(code: str, context: dict | None, timeout: int) -> dict:
     timeout = max(1, min(int(timeout or DEFAULT_TIMEOUT), MAX_TIMEOUT))
     with _LOCK:
         try:
+            # No venv in the container: without a network nothing can be
+            # installed into it, and the image holds what a run imports.
             with SandboxSession(backend=SandboxBackend.PODMAN, lang="python",
                                 image=IMAGE, keep_template=True,
+                                skip_environment_setup=True,
                                 runtime_configs=HARDENING) as session:
                 result = session.run(full, timeout=timeout)
                 return {
