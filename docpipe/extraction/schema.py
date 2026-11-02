@@ -250,8 +250,9 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"axis' own rule (own | local | any)."},
         f"{name}_window": {
             "type": "array",
-            "prefixItems": [{"enum": ["own", "retrieval", "rest", "places",
-                                      "frame", "base_year", "target_year"]},
+            "prefixItems": [{"enum": ["own", "found", "retrieval", "rest",
+                                      "places", "frame", "base_year",
+                                      "target_year"]},
                             {"type": "integer"}],
             "minItems": 2, "maxItems": 2,
             "description": f"[stage, index] of the window '{name}' was read "
@@ -779,7 +780,8 @@ def trace_schema() -> dict:
     by_field = {"type": "object", "additionalProperties": {"type": "integer"}}
     kinds = {
         "plan": {"rank": {"type": ["integer", "null"]},
-                 "origin": {"enum": ["structure", "retrieval"]},
+                 "origin": {"enum": ["structure", "retrieval", "rest",
+                                      "front", "found"]},
                  "kind": {"enum": ["section", "table", "figure"]},
                  "owner": {"type": "integer"}, "chars": {"type": "integer"},
                  "image": {"type": "boolean"}},
@@ -820,7 +822,7 @@ def trace_schema() -> dict:
                  "error": {"type": ["string", "null"]}},
         "field": {"slot": {"type": "string"}, "anchor": {"type": "string"},
                   "window": {"type": "integer"},
-                  "stage": {"enum": ["own", "retrieval", "rest",
+                  "stage": {"enum": ["own", "found", "retrieval", "rest",
                                      "places", "frame"]},
                   "attempt": {"type": "integer"},
                   "parameter": {"type": ["string", "null"]},

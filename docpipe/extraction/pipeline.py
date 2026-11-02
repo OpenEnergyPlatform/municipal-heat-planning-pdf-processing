@@ -102,7 +102,8 @@ class WorkItem:
     parameter: object
     source: Source
     rank: Optional[int] = None            # position in the fused ranking
-    origin: str = ""          # "structure" | "retrieval" | "rest" | "front"
+    # "structure" | "retrieval" | "rest" | "front" | "found"
+    origin: str = ""
 
 
 @dataclass

@@ -256,7 +256,8 @@ row. Of 35,217 quotes of corpus_m7_100 that stood in the plan and not
 in what the check was given, 32,613 came from requests with rows of
 four batches or more: half of them the quote of a number row, which
 the row answered with it cannot be checked against. Everywhere else a
-window is one question for all the open rows.
+window is one question for all the open rows. A found place comes
+with the rows of its batch already (`search_found`).
 
 #### Sweeping.re_entry
 
@@ -364,6 +365,27 @@ itself, the own stages of the batches the rows come from.
 True when the document was read to its end: with no budget cut the
 coordinate that is still open is a statement about the plan.
 
+#### Sweeping.sections_of
+
+```python
+def sections_of(self, rows: list) -> list
+```
+
+The sections these rows' own passages stand in.
+
+#### Sweeping.search_found
+
+```python
+def search_found(self) -> None
+```
+
+The passages this coordinate was read in last time for a row of
+the same passage (`found.py`), before any search, one batch at a time
+as on the map's places. A passage the batch has asked already is not
+asked again. Nothing here marks a passage as seen: it was shown to
+the rows of one batch, and the search after it stays what it is for
+every row still open.
+
 #### Sweeping.search_places
 
 ```python
@@ -407,7 +429,8 @@ that still have an open row. Built by `make_sweeper`.
 def __init__(self, ask: Callable, *, more_sources: Optional[Callable],
              rest_of_document: Optional[Callable],
              parents: Optional[Callable], anchors: dict,
-             budget_of: Callable, places: Optional[Callable] = None)
+             budget_of: Callable, places: Optional[Callable] = None,
+             found=None)
 ```
 
 #### Sweeper.own
@@ -1791,7 +1814,8 @@ def make_sweeper(ask: Callable, *,
                  parents: Optional[Callable] = None,
                  anchors: Optional[dict] = None,
                  search_share: Optional[dict] = None,
-                 places: Optional[Callable] = None) -> Sweeper
+                 places: Optional[Callable] = None,
+                 found=None) -> Sweeper
 ```
 
 sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to.
@@ -1807,6 +1831,7 @@ harvester: the asker, and the three ways of finding more passages plus
 the anchor sets that seed them. *search_share* is the profile's
 `SEARCH_SHARE`: {coordinate: fraction of the search budget}. *places* is
 the document's map of where each axis is answered (`places.Places`).
+*found* is what earlier harvests found (`found.Found`).
 
 ### make_fieldwise_harvester
 
@@ -1821,8 +1846,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                              search_share: Optional[dict] = None,
                              dead=None,
                              on_give_up: Optional[Callable] = None,
-                             places: Optional[Callable] = None
-                             ) -> Callable
+                             places: Optional[Callable] = None,
+                             found=None) -> Callable
 ```
 
 A harvest(batch, prior) that asks the rows once and then every
@@ -1996,11 +2021,12 @@ one the database's index was built with. A line in the log, no more;
 ### stamp_record
 
 ```python
-def stamp_record(name: str) -> dict
+def stamp_record(name: str, kind: str = "harvest") -> dict
 ```
 
-The stamp keys that place a harvest. The version and the producers
-decide nothing; `document` is compared (`document_moved`).
+The stamp keys that place a harvest. The version decides nothing,
+`document` is compared (`document_moved`), and of the producers
+`read_in_part` reads whether the document was read to its end.
 
 ### document_current
 
@@ -2081,7 +2107,8 @@ it was no longer compared.
 def documents_to_harvest(documents, out_dir: Path, spec_sha: str, *,
                          force: bool = False, force_stale: bool = False,
                          anchors_sha: str = "", spec: Optional[Spec] = None,
-                         top_up: bool = False) -> list
+                         top_up: bool = False,
+                         start_at: bool = False) -> list
 ```
 
 Which of these documents this run has work for.
@@ -2102,16 +2129,28 @@ def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
                  anchors_sha: str = "") -> bool
 ```
 
+### read_in_part
+
+```python
+def read_in_part(stamp_path: Path) -> bool
+```
+
+Whether the stamp's document was read at its found places alone, with
+nothing having read the rest of it since.
+
 ### already_done
 
 ```python
 def already_done(name: str, out_dir: Path, spec_sha: str, *,
                  force: bool = False, force_stale: bool = False,
-                 anchors_sha: str = "", spec: Optional[Spec] = None) -> bool
+                 anchors_sha: str = "", spec: Optional[Spec] = None,
+                 start_at: bool = False) -> bool
 ```
 
 True when this document needs no work: harvested under the current
-ontology keys — or stale with nobody asking for the redo.
+ontology keys — or stale with nobody asking for the redo. A document read
+at its found places alone is no work only for a run that starts at them:
+any other run owes it the rest of the plan.
 
 ### not_happened
 
@@ -2357,7 +2396,8 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
                  rest_of_document: Optional[Callable] = None,
                  already_read: frozenset = frozenset(),
                  front_page: Optional[Callable] = None,
-                 front_parameters=()
+                 front_parameters=(),
+                 plan_known: Optional[Callable] = None
                  ) -> PlannedDocument
 ```
 
@@ -2389,6 +2429,11 @@ once more over as many of them as one request holds, in a request of its
 own that offers nothing else. Every other place
 may still give them; the checks are the same. A pass over a stored
 harvest's unread passages asks none.
+
+*plan_known* is (document_id, filename) -> what `plan` gives, over the
+passages earlier harvests found something in, or None when there are
+none (`found.py`). Then nothing is searched: no plan, no plan per pair and
+no rest of the document, and the frame is read over those passages.
 
 ### accepted_rows
 

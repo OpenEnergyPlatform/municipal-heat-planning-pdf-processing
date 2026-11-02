@@ -1220,13 +1220,45 @@ skipped and counted. Each pass enters the stamp's list of producers
 end and is not read again. This pass's trace goes to `trace-rest`, because
 a trace is truncated by the next pass that writes it.
 
+### Starting at what was found (`--start-at`)
+
+A harvest says which passages carried something, and a run that starts from
+nothing does not use it: of the 24,308 passages of corpus_m7_100 (100
+documents), 7,229 gave a tuple. `--start-at HARVEST` (repeatable, the places
+add up) is a harvest that begins there (`found.py`). A found place is a passage
+a stored row stands in, a stored row was refused in, or a coordinate of a
+stored row was read in; on corpus_m7_100 that is 8,634 passages. Only the place
+is taken and never an answer, so it outlives a change of a prompt, the
+ontology or the graph: the model reads the passage again, the frame included,
+and every check runs as ever. Stored pairs are answers and are not taken.
+
+`plan_batches` takes these passages, with origin `found`, instead of the
+document's plan. No anchor is written, nothing is ranked, there is no plan per
+pair and no rest of the document. The field sweep gains a stage in front of
+its search (`Sweeping.search_found`, stage `found`): a coordinate open after
+the row's own passages is first asked in the passages it was read in last time
+for a row of the same passage, one batch at a time, leaving out what the batch
+has asked already. What is still open then goes through the search as in any
+run, the map of places included, so `unstated` keeps its meaning. The stage
+marks nothing as seen: a passage shown to one batch stays open to the search
+of every other row.
+
+A number in a passage no harvest found anything in stays unread. The stamp
+says so with the producer `harvest-found`: a run without `--start-at` harvests
+such a document again (`read_in_part`), and `--top-up-open` reads the passages
+the trace did not ask and enters `rest`, after which the document counts as
+whole. A document is planned as in any run when no stamped harvest holds it,
+when nothing was found in it, or when it no longer holds every place. HARVEST
+has to be another directory than OUT, and the flag does not combine with a
+top-up.
+
 ### Archive and stats
 
 **Nothing is replaced unkept.** Before a run replaces a harvest `.jsonl`, a
 stamp or a trace file, `archive.keep` copies the file as it was to
 `<its directory>/archive/<pass>-<run start>/<name>`, once per run: a pass that
 rewrites a stamp three times keeps the stamp it found. The pass is `harvest`,
-`top-up`, `top-up-open` or `top-up-parameters` (named by `runner.main` through
+`harvest-found`, `top-up`, `top-up-open` or `top-up-parameters` (named by `runner.main` through
 `archive.begin` once it knows which documents it will touch); `--remap`,
 `--recheck` and `--review`, which run before that point, and the identity pass
 keep under `write`. The hooks stand in `pipeline.write_report`, the stamp write
@@ -1825,7 +1857,8 @@ calls it to recompute a rewritten file's summary.
 `places.py` reads a document's map of where each axis is answered, and
 `scheduler.py` is the one request queue of a run, oldest document first (both
 described under The field sweep and The adaptive request limit).
-`archive.py` copies a harvest, stamp or trace file aside before any pass
+`found.py` reads where earlier harvests found something (see Starting at what
+was found). `archive.py` copies a harvest, stamp or trace file aside before any pass
 replaces it, and `stats.py` counts where a run's harvest is hard; both are
 described under Archive and stats. `trace.py` writes the per-event trace files this stage, `--top-up`,
 `--top-up-parameters` and `--top-up-open` produce, never aggregating anything itself; `schema.py` generates the

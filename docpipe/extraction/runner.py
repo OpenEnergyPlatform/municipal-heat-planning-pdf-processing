@@ -76,13 +76,15 @@ from docpipe.store.schema import readonly_uri
 
 from . import archive
 from . import fields
+from . import found as found_places
 from . import places as places_map
 from . import replies
 from . import scheduler
 from . import scratch
 from . import trace
 from .wording import say
-from .pipeline import (YEAR_STATES, Source, WorkItem, apply_frame, batch_uri,
+from .pipeline import (YEAR_STATES, DocumentReport, Source, WorkItem,
+                       apply_frame, batch_uri,
                        build_sweeps, cell_index as pipeline_cell_index,
                        column_head,
                        drop_repeats, fold_batch, follow_up, group_items,
@@ -4011,8 +4013,15 @@ class Sweeping:
         in what the check was given, 32,613 came from requests with rows of
         four batches or more: half of them the quote of a number row, which
         the row answered with it cannot be checked against. Everywhere else a
-        window is one question for all the open rows.
+        window is one question for all the open rows. A found place comes
+        with the rows of its batch already (`search_found`).
         """
+        if self.state["stage"] == found_places.STAGE:
+            for window, rows in windows:
+                rows = self.still_open(rows)
+                if rows:
+                    yield window, rows
+            return
         for window in windows:
             todo = self.still_open(self.rows)
             if not todo:
@@ -4346,6 +4355,10 @@ class Sweeping:
         coordinate that is still open is a statement about the plan.
         """
         sweeper = self.sweeper
+        if sweeper.found is not None:
+            self.search_found()
+            if not self.still_open(self.rows):
+                return True
         if sweeper.places is not None:
             pool = sweeper.places(self.document_id,
                                   [slot.name for slot in self.slots])
@@ -4474,6 +4487,48 @@ class Sweeping:
                       if rest else True)
         return combed
 
+    def sections_of(self, rows: list) -> list:
+        """The sections these rows' own passages stand in."""
+        return [(self.owner_of[row.label].provenance or {}).get(
+                    "section_number")
+                for row in rows if row.label in self.owner_of]
+
+    def search_found(self) -> None:
+        """The passages this coordinate was read in last time for a row of
+        the same passage (`found.py`), before any search, one batch at a time
+        as on the map's places. A passage the batch has asked already is not
+        asked again. Nothing here marks a passage as seen: it was shown to
+        the rows of one batch, and the search after it stays what it is for
+        every row still open.
+        """
+        sweeper = self.sweeper
+        read_at = sweeper.found.read_at(self.document_id,
+                                        [slot.name for slot in self.slots])
+        portions: list = []
+        for batch, members in self.scope.groups:
+            rows = self.still_open(members)
+            asked = {(s.owner_kind, s.owner_id) for s in [
+                *batch.sources,
+                *(sweeper.parents(batch.sources) if sweeper.parents else ())]}
+            places: dict = {}
+            for row in rows:
+                own = self.owner_of.get(row.label)
+                if own is None:
+                    continue
+                for place in read_at.get((own.owner_kind, own.owner_id), ()):
+                    key = (place.owner_kind, place.owner_id)
+                    if key not in asked:
+                        places[key] = place
+            self.held.update(places)
+            near = places_map.nearest_first(list(places.values()),
+                                            self.sections_of(rows))
+            portions += [(window, rows) for window
+                         in window_sources(near, FIELD_WINDOW, 0)]
+        stage = found_places.STAGE
+        self.budget[stage], self.spent[stage] = len(portions), 0
+        self.state["stage"] = stage
+        self.run(portions)
+
     def search_places(self, pool: list) -> bool:
         """The search over the places the document's map names for this
         coordinate, nearest to the open rows first, under the allowance of
@@ -4483,10 +4538,8 @@ class Sweeping:
         open_now = self.still_open(self.rows)
         if not open_now:
             return True
-        at = [(self.owner_of[row.label].provenance or {}).get(
-                  "section_number")
-              for row in open_now if row.label in self.owner_of]
-        fresh = [source for source in places_map.nearest_first(pool, at)
+        fresh = [source for source
+                 in places_map.nearest_first(pool, self.sections_of(open_now))
                  if (source.owner_kind, source.owner_id) not in self.seen]
         for source in fresh:
             key = (source.owner_kind, source.owner_id)
@@ -4555,7 +4608,8 @@ class Sweeper:
     def __init__(self, ask: Callable, *, more_sources: Optional[Callable],
                  rest_of_document: Optional[Callable],
                  parents: Optional[Callable], anchors: dict,
-                 budget_of: Callable, places: Optional[Callable] = None):
+                 budget_of: Callable, places: Optional[Callable] = None,
+                 found=None):
         self.ask = ask
         self.more_sources = more_sources
         self.rest_of_document = rest_of_document
@@ -4563,6 +4617,7 @@ class Sweeper:
         self.anchors = anchors
         self.budget_of = budget_of
         self.places = places
+        self.found = found
 
     @staticmethod
     def _kept(batches: list) -> tuple:
@@ -4622,7 +4677,8 @@ def make_sweeper(ask: Callable, *,
                  parents: Optional[Callable] = None,
                  anchors: Optional[dict] = None,
                  search_share: Optional[dict] = None,
-                 places: Optional[Callable] = None) -> Sweeper:
+                 places: Optional[Callable] = None,
+                 found=None) -> Sweeper:
     """sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to.
 
     Lifted out of the harvester so a pass that re-reads ONE coordinate of an
@@ -4636,6 +4692,7 @@ def make_sweeper(ask: Callable, *,
     the anchor sets that seed them. *search_share* is the profile's
     `SEARCH_SHARE`: {coordinate: fraction of the search budget}. *places* is
     the document's map of where each axis is answered (`places.Places`).
+    *found* is what earlier harvests found (`found.Found`).
     """
     anchors = anchors or {}
     search_share = search_share or {}
@@ -4652,7 +4709,8 @@ def make_sweeper(ask: Callable, *,
 
     return Sweeper(ask, more_sources=more_sources,
                    rest_of_document=rest_of_document, parents=parents,
-                   anchors=anchors, budget_of=budget_of, places=places)
+                   anchors=anchors, budget_of=budget_of, places=places,
+                   found=found)
 
 
 # The keys of the coordinates a batch's rows can be held at, for the search
@@ -5211,8 +5269,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                              search_share: Optional[dict] = None,
                              dead=None,
                              on_give_up: Optional[Callable] = None,
-                             places: Optional[Callable] = None
-                             ) -> Callable:
+                             places: Optional[Callable] = None,
+                             found=None) -> Callable:
     """A harvest(batch, prior) that asks the rows once and then every
     coordinate of them, one field to a request.
 
@@ -5240,7 +5298,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
     sweep_field = make_sweeper(ask, more_sources=more_sources,
                                rest_of_document=rest_of_document,
                                parents=parents, anchors=anchors,
-                               search_share=search_share, places=places)
+                               search_share=search_share, places=places,
+                               found=found)
 
     def turn_of(batch, prior: Optional[list], deferred: bool) -> dict:
         reply = find_rows(batch, prior)
@@ -5824,12 +5883,13 @@ def note_index_model(db_path, command: str = "extraction") -> None:
         log.warning("%s: %s", command, mismatch)
 
 
-def stamp_record(name: str) -> dict:
-    """The stamp keys that place a harvest. The version and the producers
-    decide nothing; `document` is compared (`document_moved`)."""
+def stamp_record(name: str, kind: str = "harvest") -> dict:
+    """The stamp keys that place a harvest. The version decides nothing,
+    `document` is compared (`document_moved`), and of the producers
+    `read_in_part` reads whether the document was read to its end."""
     from docpipe import __version__
     record = {"docpipe": __version__,
-              "producers": [producer("harvest", LLM_MODEL)]}
+              "producers": [producer(kind, LLM_MODEL)]}
     if name in DOCUMENT_CONTENT:
         record[DOCUMENT_KEY] = DOCUMENT_CONTENT[name]
     return record
@@ -5960,7 +6020,8 @@ def stale(stamp_path: Path, current: dict) -> list:
 def documents_to_harvest(documents, out_dir: Path, spec_sha: str, *,
                          force: bool = False, force_stale: bool = False,
                          anchors_sha: str = "", spec: Optional[Spec] = None,
-                         top_up: bool = False) -> list:
+                         top_up: bool = False,
+                         start_at: bool = False) -> list:
     """Which of these documents this run has work for.
 
     A top-up is the exception and it is not a small one: this filter drops
@@ -5975,7 +6036,8 @@ def documents_to_harvest(documents, out_dir: Path, spec_sha: str, *,
     return [(did, fn) for did, fn in documents
             if not already_done(Path(fn).stem, out_dir, spec_sha,
                                 force=force, force_stale=force_stale,
-                                anchors_sha=anchors_sha, spec=spec)]
+                                anchors_sha=anchors_sha, spec=spec,
+                                start_at=start_at)]
 
 
 def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
@@ -5999,11 +6061,25 @@ def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
     return stamped
 
 
+def read_in_part(stamp_path: Path) -> bool:
+    """Whether the stamp's document was read at its found places alone, with
+    nothing having read the rest of it since."""
+    from .remap import _read_stamp
+    from .topup_rest import read_to_end
+    stamp = _read_stamp(stamp_path) or {}
+    return not read_to_end(stamp_path) and any(
+        isinstance(p, dict) and p.get("pass") == found_places.PASS
+        for p in stamp.get("producers") or ())
+
+
 def already_done(name: str, out_dir: Path, spec_sha: str, *,
                  force: bool = False, force_stale: bool = False,
-                 anchors_sha: str = "", spec: Optional[Spec] = None) -> bool:
+                 anchors_sha: str = "", spec: Optional[Spec] = None,
+                 start_at: bool = False) -> bool:
     """True when this document needs no work: harvested under the current
-    ontology keys — or stale with nobody asking for the redo."""
+    ontology keys — or stale with nobody asking for the redo. A document read
+    at its found places alone is no work only for a run that starts at them:
+    any other run owes it the rest of the plan."""
     if force or not (out_dir / f"{name}.jsonl").exists():
         return False
     stamp_path = out_dir / f"{name}.stamp.json"
@@ -6015,6 +6091,10 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
         # Treating that as "already done" is how deleting the stamps to force
         # a redo caused every document to be skipped instead.
         log.info("extraction: %s carries no stamp — harvested again", name)
+        return False
+    if not start_at and read_in_part(stamp_path):
+        log.info("extraction: %s was read at its found places alone — "
+                 "harvested again", name)
         return False
     changed = stale(stamp_path, {**_stamp_current(spec_sha, anchors_sha, spec),
                                  **document_current(name)})
@@ -6153,7 +6233,10 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
     stamp.write_text(
         json.dumps({**_stamp_current(spec_sha, anchors_sha, spec),
                     **recorded_questions(questions),
-                    **stamp_record(name)},
+                    **stamp_record(name, found_places.PASS
+                                   if found_places.STAGE
+                                   in getattr(report, "planned", ())
+                                   else "harvest")},
                    ensure_ascii=False, indent=2),
         encoding="utf-8")
     return True
@@ -6524,7 +6607,8 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
                  rest_of_document: Optional[Callable] = None,
                  already_read: frozenset = frozenset(),
                  front_page: Optional[Callable] = None,
-                 front_parameters=()
+                 front_parameters=(),
+                 plan_known: Optional[Callable] = None
                  ) -> PlannedDocument:
     """One document from its first search to its batches: the plan, the frame,
     one plan per pair, the rest of the document and the batches that read them.
@@ -6554,9 +6638,15 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
     own that offers nothing else. Every other place
     may still give them; the checks are the same. A pass over a stored
     harvest's unread passages asks none.
+
+    *plan_known* is (document_id, filename) -> what `plan` gives, over the
+    passages earlier harvests found something in, or None when there are
+    none (`found.py`). Then nothing is searched: no plan, no plan per pair and
+    no rest of the document, and the frame is read over those passages.
     """
     failed = 0
-    name, items, report, doc_spec = plan_pool.submit(
+    known = plan_known(document_id, filename) if plan_known else None
+    name, items, report, doc_spec = known or plan_pool.submit(
         plan, document_id, filename, only=only).result()
     # ---- Frame: which scenarios and years, once per document -------------
     # Before any value. Every value request below asks for ONE of these
@@ -6602,7 +6692,7 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
     # print and the value request for 2040 is asked over what THAT
     # sentence finds.
     pair_items: dict = {}
-    if pairs:
+    if pairs and not known:
         futures = {plan_pool.submit(plan, document_id, filename, pair,
                                     indices[position], only=only): position
                    for position, pair in enumerate(pairs)}
@@ -6622,7 +6712,7 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
                 report.sources_of.setdefault(uri, set()).update(keys)
 
     # ---- The rest of the document: every passage no search kept ---------
-    if rest_of_document is not None:
+    if rest_of_document is not None and not known:
         planned = {(item.source.owner_kind, item.source.owner_id)
                    for item in list(items) + [item for found in
                                               pair_items.values()
@@ -6888,6 +6978,18 @@ def main(argv: Optional[list] = None) -> int:
                              "read completely is left as it was and ends the "
                              "run non-zero. Needs the model and the index. "
                              "Not combined with --top-up")
+    parser.add_argument("--start-at", type=Path, action="append",
+                        metavar="HARVEST",
+                        help="start each document at the passages this "
+                             "stored harvest found something in, instead of "
+                             "searching: no anchors, no ranking, no rest of "
+                             "the plan. Only the places are taken, the model "
+                             "reads them again. A coordinate still open "
+                             "afterwards is searched as in any run; a number "
+                             "in another passage stays unread until "
+                             "--top-up-open. A document without places is "
+                             "planned as usual. Repeatable: the places add "
+                             "up")
     parser.add_argument("--review", action="store_true",
                         help="read every value nobody can stand behind a "
                              "second time, over its own passage and the "
@@ -6923,6 +7025,15 @@ def main(argv: Optional[list] = None) -> int:
         parser.error("--top-up-parameters is not combined with --top-up")
     if args.top_up_open and (args.top_up or args.top_up_parameters):
         parser.error("--top-up-open is a pass of its own")
+    if args.start_at and (args.top_up or args.top_up_parameters
+                          or args.top_up_open):
+        parser.error("--start-at starts a harvest, it is no top-up")
+    for harvest in args.start_at or ():
+        if not harvest.is_dir():
+            parser.error(f"--start-at: {harvest} is no harvest")
+        if harvest.resolve() == args.out.resolve():
+            parser.error("--start-at names another harvest than OUT, which "
+                         "this run writes")
     logging.basicConfig(level=args.log_level,
                         format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
                         datefmt="%H:%M:%S")
@@ -7232,7 +7343,8 @@ def main(argv: Optional[list] = None) -> int:
     documents = documents_to_harvest(
         documents, args.out, spec_sha, force=args.force,
         force_stale=args.force_stale, anchors_sha=anchors_sha, spec=spec,
-        top_up=args.top_up or args.top_up_parameters or args.top_up_open)
+        top_up=args.top_up or args.top_up_parameters or args.top_up_open,
+        start_at=bool(args.start_at))
     if args.top_up_parameters or args.top_up_open:
         from . import topup_parameter
         documents, unharvested = topup_parameter.with_harvest(documents,
@@ -7248,6 +7360,7 @@ def main(argv: Optional[list] = None) -> int:
     archive.begin("top-up-open" if args.top_up_open
                   else "top-up" if args.top_up
                   else "top-up-parameters" if args.top_up_parameters
+                  else found_places.PASS if args.start_at
                   else "harvest")
 
     # How many documents are in flight at once: as many as the server has
@@ -7370,6 +7483,21 @@ def main(argv: Optional[list] = None) -> int:
     # so the request that reads the pair's passages can say what it asks.
     anchor_texts: dict = {}
 
+    def closed_spec(conn, document_id: int, filename: str) -> Spec:
+        """The spec with the lists this document closes. A dynamic axis only
+        becomes a closed list here, where the document is known."""
+        if document_axes is None:
+            return spec
+        lists = document_axes(conn, document_id)
+        if lists:
+            # The one line that says whether the model was given a
+            # choice at all: an empty list means it was asked to pick
+            # from nothing and every answer will come back unmapped.
+            log.info("extract: %s: choice lists %s", Path(filename).stem,
+                     ", ".join(f"{k}={len(v)}"
+                               for k, v in sorted(lists.items())))
+        return fill_dynamic_axes(spec, lists)
+
     def plan(document_id: int, filename: str, frame: Optional[dict] = None,
              frame_index: int = 0, only=()) -> tuple:
         # Both connections per thread, cache included. Sharing one across the
@@ -7382,19 +7510,7 @@ def main(argv: Optional[list] = None) -> int:
             # One memo per document: retrieval and the fallback floor meet the
             # same section in every round and for every parameter.
             fetch = make_content_fetcher()
-            # A dynamic axis only becomes a closed list here, where the
-            # document is known.
-            doc_spec = spec
-            if document_axes is not None:
-                lists = document_axes(conn, document_id)
-                doc_spec = fill_dynamic_axes(spec, lists)
-                if lists:
-                    # The one line that says whether the model was given a
-                    # choice at all: an empty list means it was asked to pick
-                    # from nothing and every answer will come back unmapped.
-                    log.info("extract: %s: choice lists %s", Path(filename).stem,
-                             ", ".join(f"{k}={len(v)}"
-                                       for k, v in sorted(lists.items())))
+            doc_spec = closed_spec(conn, document_id, filename)
             # What this search is for: the whole spec, or only the parameters
             # `only` names. The document's spec itself is handed back either
             # way, so the caller still reads every list the document closes.
@@ -7527,6 +7643,37 @@ def main(argv: Optional[list] = None) -> int:
     # document. After the streak and the give-up, because the field pool
     # shares them with the rows pool. OpenAI client is thread-safe.
     rest_of_document = make_rest_of_document(args.db, content=content)
+    found = (found_places.Found(args.start_at, document_name.get,
+                                rest_of_document)
+             if args.start_at else None)
+
+    def plan_known(document_id: int, filename: str) -> Optional[tuple]:
+        """What `plan` gives, over the passages earlier harvests found
+        something in; None when they found nothing."""
+        sources = found.passages(document_id)
+        if not sources:
+            return None
+        conn = sqlite3.connect(readonly_uri(args.db), uri=True)
+        conn.row_factory = sqlite3.Row
+        try:
+            doc_spec = closed_spec(conn, document_id, filename)
+        finally:
+            conn.close()
+        items = [WorkItem(document_id, None, source,
+                          origin=found_places.STAGE) for source in sources]
+        for item in items:
+            trace.event("plan", document_id, rank=None, origin=item.origin,
+                        kind=item.source.owner_kind,
+                        owner=item.source.owner_id,
+                        chars=len(item.source.text or ""),
+                        image=bool(item.source.image_path), frame=None)
+        report = DocumentReport(document_id=document_id,
+                                owners_harvested=len(items),
+                                planned={found_places.STAGE: len(items)})
+        log.info("extract: %s: starts at %d found passage(s)",
+                 Path(filename).stem, len(items))
+        return Path(filename).stem, split_long_sources(items), report, doc_spec
+
     harvest = make_fieldwise_harvester(args.image_root, more_sources,
                                        rest_of_document,
                                        spec=spec, anchors=anchors,
@@ -7535,7 +7682,7 @@ def main(argv: Optional[list] = None) -> int:
                                        frame_axes=frame_axes,
                                        search_share=search_share,
                                        dead=dead, on_give_up=give_up,
-                                       places=places)
+                                       places=places, found=found)
     # A document is harvested in two halves: each batch asks the passages its
     # values came from (`turn`), and what is still open after them is searched
     # once per coordinate for all the batches together (`search_document`). A
@@ -7555,7 +7702,8 @@ def main(argv: Optional[list] = None) -> int:
         rest_of_document=rest_of_document,
         front_page=make_front_page(args.db, content=content),
         front_parameters=tuple(profile.component(
-            "extraction", "FRONT_PAGE_PARAMETERS") or ()))
+            "extraction", "FRONT_PAGE_PARAMETERS") or ()),
+        plan_known=plan_known if found is not None else None)
     harvest_all = functools.partial(
         harvest_batches, harvest=harvest, more_sources=more_sources,
         verify=prior_rows, workers=LLM_PARALLEL, on_give_up=give_up,

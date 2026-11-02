@@ -810,6 +810,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -1168,6 +1169,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -1285,6 +1287,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -1478,6 +1481,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -1656,6 +1660,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -1832,6 +1837,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -1976,6 +1982,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -2073,6 +2080,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -2279,6 +2287,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -2628,6 +2637,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -2740,6 +2750,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -3267,6 +3278,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -3625,6 +3637,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -3742,6 +3755,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -3936,6 +3950,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -4114,6 +4129,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -4290,6 +4306,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -4434,6 +4451,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -4531,6 +4549,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -4737,6 +4756,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -4906,6 +4926,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -5018,6 +5039,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -5505,6 +5527,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -5863,6 +5886,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -5980,6 +6004,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -6152,6 +6177,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -6330,6 +6356,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -6506,6 +6533,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -6650,6 +6678,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -6747,6 +6776,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -6881,6 +6911,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -6993,6 +7024,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -7159,6 +7191,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -7904,6 +7937,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -8021,6 +8055,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -8154,6 +8189,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -8332,6 +8368,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -8508,6 +8545,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -8652,6 +8690,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -8749,6 +8788,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -8955,6 +8995,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -9074,6 +9115,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -9179,6 +9221,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -9283,6 +9326,7 @@
        {
         "enum": [
          "own",
+         "found",
          "retrieval",
          "rest",
          "places",
@@ -9551,7 +9595,10 @@
      "origin": {
       "enum": [
        "structure",
-       "retrieval"
+       "retrieval",
+       "rest",
+       "front",
+       "found"
       ]
      },
      "owner": {
@@ -9893,6 +9940,7 @@
      "stage": {
       "enum": [
        "own",
+       "found",
        "retrieval",
        "rest",
        "places",
