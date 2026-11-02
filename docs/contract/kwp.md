@@ -739,6 +739,54 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 [stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
+### `subject`
+
+Axis 'subject' of Emissionen. null unless subject_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist die Bezeichnung ihrer eigenen Zeile, Spalte oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Quartier, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit dieser Bezeichnung wörtlich. Unterscheidet sie nichts davon, sagt der Plan es nicht.
+
+### `subject_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('subject_raw'). 'subject_quote' is then the frame's passage that prints the number.
+
+### `subject_link_source`
+
+Which source 'subject_link_quote' was found in.
+
+### `subject_producer`
+
+Who re-read 'subject': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `subject_quote`
+
+The verbatim passage carrying 'subject'. Present exactly when subject_state is 'read'.
+
+### `subject_raw`
+
+The document's own wording 'subject' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `subject_raw_foreign`
+
+The wording does not name the option chosen for 'subject': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `subject_seen`
+
+A wording the model noticed for 'subject' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `subject_source`
+
+Which source the passage for 'subject' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `subject_state`
+
+How the coordinate 'subject' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `subject_window`
+
+[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+
 ### `technology`
 
 Axis 'technology' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless technology_state is 'read' or 'derived'.
@@ -1552,6 +1600,54 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 [stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
+### `subject`
+
+Axis 'subject' of Energieverbrauch. null unless subject_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist die Bezeichnung ihrer eigenen Zeile, Spalte oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Quartier, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit dieser Bezeichnung wörtlich. Unterscheidet sie nichts davon, sagt der Plan es nicht.
+
+### `subject_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('subject_raw'). 'subject_quote' is then the frame's passage that prints the number.
+
+### `subject_link_source`
+
+Which source 'subject_link_quote' was found in.
+
+### `subject_producer`
+
+Who re-read 'subject': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `subject_quote`
+
+The verbatim passage carrying 'subject'. Present exactly when subject_state is 'read'.
+
+### `subject_raw`
+
+The document's own wording 'subject' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `subject_raw_foreign`
+
+The wording does not name the option chosen for 'subject': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `subject_seen`
+
+A wording the model noticed for 'subject' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `subject_source`
+
+Which source the passage for 'subject' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `subject_state`
+
+How the coordinate 'subject' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `subject_window`
+
+[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+
 ### `technology`
 
 Axis 'technology' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless technology_state is 'read' or 'derived'.
@@ -2321,6 +2417,54 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 [stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
+### `subject`
+
+Axis 'subject' of Leistung. null unless subject_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist die Bezeichnung ihrer eigenen Zeile, Spalte oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Quartier, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit dieser Bezeichnung wörtlich. Unterscheidet sie nichts davon, sagt der Plan es nicht.
+
+### `subject_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('subject_raw'). 'subject_quote' is then the frame's passage that prints the number.
+
+### `subject_link_source`
+
+Which source 'subject_link_quote' was found in.
+
+### `subject_producer`
+
+Who re-read 'subject': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `subject_quote`
+
+The verbatim passage carrying 'subject'. Present exactly when subject_state is 'read'.
+
+### `subject_raw`
+
+The document's own wording 'subject' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `subject_raw_foreign`
+
+The wording does not name the option chosen for 'subject': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `subject_seen`
+
+A wording the model noticed for 'subject' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `subject_source`
+
+Which source the passage for 'subject' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `subject_state`
+
+How the coordinate 'subject' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `subject_window`
+
+[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+
 ### `tier`
 
 text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
@@ -3023,6 +3167,54 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 ### `spatial_scope_window`
 
 [stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+
+### `subject`
+
+Axis 'subject' of Anteil. null unless subject_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist die Bezeichnung ihrer eigenen Zeile, Spalte oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Quartier, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit dieser Bezeichnung wörtlich. Unterscheidet sie nichts davon, sagt der Plan es nicht.
+
+### `subject_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('subject_raw'). 'subject_quote' is then the frame's passage that prints the number.
+
+### `subject_link_source`
+
+Which source 'subject_link_quote' was found in.
+
+### `subject_producer`
+
+Who re-read 'subject': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `subject_quote`
+
+The verbatim passage carrying 'subject'. Present exactly when subject_state is 'read'.
+
+### `subject_raw`
+
+The document's own wording 'subject' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `subject_raw_foreign`
+
+The wording does not name the option chosen for 'subject': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `subject_seen`
+
+A wording the model noticed for 'subject' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `subject_source`
+
+Which source the passage for 'subject' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `subject_state`
+
+How the coordinate 'subject' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `subject_window`
+
+[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `technology`
 

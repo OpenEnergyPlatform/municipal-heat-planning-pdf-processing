@@ -471,10 +471,10 @@ Read from `profiles/kwp/extraction_schema.json` by `scripts/build_docs.py`. Each
 
 | parameter | value | axes | graph node |
 |---|---|---|---|
-| `emission` | number | `aggregation` (5 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (9 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `technology` (10 options), `unit` (48 options), `year` (integer) | `value` |
-| `energy_consumption` | number | `aggregation` (5 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (9 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `technology` (10 options), `unit` (12 options), `year` (integer) | `value` |
-| `heat_load` | number | `aggregation` (4 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (6 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `unit` (5 options), `year` (integer) | `value` |
+| `emission` | number | `aggregation` (5 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (9 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `technology` (10 options), `unit` (48 options), `year` (integer) | `value` |
+| `energy_consumption` | number | `aggregation` (5 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (9 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `technology` (10 options), `unit` (12 options), `year` (integer) | `value` |
+| `heat_load` | number | `aggregation` (4 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (6 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `unit` (5 options), `year` (integer) | `value` |
 | `planning_organisation` | string | `parameter` (one of the spec's parameters) | `organisation` |
-| `share` | number | `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (2 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `technology` (10 options), `unit` (2 options), `year` (integer) | `value` |
+| `share` | number | `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (2 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `technology` (10 options), `unit` (2 options), `year` (integer) | `value` |
 
 [Back to the index](../README.md)

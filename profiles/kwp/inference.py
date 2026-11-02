@@ -30,6 +30,7 @@ ROUTE_NOTES = {
 # coordinates and the reasons of its level.
 AXIS_NAMES = {
     "quantity": "Größe",
+    "subject": "Bezug",
     "aggregation": "Art des Werts",
     "carrier": "Energieträger",
     "sector": "Sektor",

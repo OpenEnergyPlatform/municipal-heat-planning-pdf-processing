@@ -25,18 +25,54 @@
       "value_type": "float",
       "unit_target": "OEO_00050008",
       "units_accepted": {
-        "kWh": {"factor": 0.001, "names_period": false},
-        "kWh/a": {"factor": 0.001, "names_period": true},
-        "MWh": {"factor": 1.0, "names_period": false},
-        "MWh/a": {"factor": 1.0, "names_period": true},
-        "GWh": {"factor": 1000.0, "names_period": false},
-        "GWh/a": {"factor": 1000.0, "names_period": true},
-        "Mio. kWh": {"factor": 1000.0, "names_period": false},
-        "Mio. kWh/a": {"factor": 1000.0, "names_period": true},
-        "Millionen kWh": {"factor": 1000.0, "names_period": false},
-        "Mrd. kWh": {"factor": 1000000.0, "names_period": false},
-        "TWh": {"factor": 1000000.0, "names_period": false},
-        "TWh/a": {"factor": 1000000.0, "names_period": true}
+        "kWh": {
+          "factor": 0.001,
+          "names_period": false
+        },
+        "kWh/a": {
+          "factor": 0.001,
+          "names_period": true
+        },
+        "MWh": {
+          "factor": 1.0,
+          "names_period": false
+        },
+        "MWh/a": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "GWh": {
+          "factor": 1000.0,
+          "names_period": false
+        },
+        "GWh/a": {
+          "factor": 1000.0,
+          "names_period": true
+        },
+        "Mio. kWh": {
+          "factor": 1000.0,
+          "names_period": false
+        },
+        "Mio. kWh/a": {
+          "factor": 1000.0,
+          "names_period": true
+        },
+        "Millionen kWh": {
+          "factor": 1000.0,
+          "names_period": false
+        },
+        "Mrd. kWh": {
+          "factor": 1000000.0,
+          "names_period": false
+        },
+        "TWh": {
+          "factor": 1000000.0,
+          "names_period": false
+        },
+        "TWh/a": {
+          "factor": 1000000.0,
+          "names_period": true
+        }
       },
       "axes": {
         "quantity": {
@@ -126,6 +162,11 @@
             "role": "type",
             "note": "The class of the value node itself (rdf:type). An out:* answer is a deliberate non-class and mints no node."
           }
+        },
+        "subject": {
+          "type": "text",
+          "required": false,
+          "question": "Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist die Bezeichnung ihrer eigenen Zeile, Spalte oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Quartier, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit dieser Bezeichnung wörtlich. Unterscheidet sie nichts davon, sagt der Plan es nicht."
         },
         "aggregation": {
           "vocabulary": {
@@ -836,54 +877,198 @@
       "value_type": "float",
       "unit_target": "OEO_00010137",
       "units_accepted": {
-        "Tonnen": {"factor": 1.0, "names_period": false},
-        "Tonnen CO2": {"factor": 1.0, "names_period": false},
-        "Tonnen CO2 im Jahr": {"factor": 1.0, "names_period": true},
-        "Tonnen CO2 jährlich": {"factor": 1.0, "names_period": true},
-        "Tonnen CO2 pro Jahr": {"factor": 1.0, "names_period": true},
-        "Tonnen CO2eq/a": {"factor": 1.0, "names_period": true},
-        "Tonnen CO2äquivalent": {"factor": 1.0, "names_period": false},
-        "Tonnen pro Jahr": {"factor": 1.0, "names_period": true},
-        "t": {"factor": 1.0, "names_period": false},
-        "t CO2": {"factor": 1.0, "names_period": false},
-        "t CO2-eq./a": {"factor": 1.0, "names_period": true},
-        "t CO2-eq/a": {"factor": 1.0, "names_period": true},
-        "t CO2-Äq./a": {"factor": 1.0, "names_period": true},
-        "t CO2-Äq/a": {"factor": 1.0, "names_period": true},
-        "t CO2-Äquivalent": {"factor": 1.0, "names_period": false},
-        "t CO2-Äquivalente/a": {"factor": 1.0, "names_period": true},
-        "t CO2/a": {"factor": 1.0, "names_period": true},
-        "t CO2e": {"factor": 1.0, "names_period": false},
-        "t CO2e/a": {"factor": 1.0, "names_period": true},
-        "t CO2eq": {"factor": 1.0, "names_period": false},
-        "t CO2eq/a": {"factor": 1.0, "names_period": true},
-        "t CO2äq": {"factor": 1.0, "names_period": false},
-        "t CO2äq.": {"factor": 1.0, "names_period": false},
-        "t/a": {"factor": 1.0, "names_period": true},
-        "t/a CO2eq": {"factor": 1.0, "names_period": true},
-        "tCO2": {"factor": 1.0, "names_period": false},
-        "tCO2/a": {"factor": 1.0, "names_period": true},
-        "Tsd. t": {"factor": 1000.0, "names_period": false},
-        "Tsd. t/a": {"factor": 1000.0, "names_period": true},
-        "kt": {"factor": 1000.0, "names_period": false},
-        "kt CO2 pro Jahr": {"factor": 1000.0, "names_period": true},
-        "kt CO2-Äq./a": {"factor": 1000.0, "names_period": true},
-        "kt CO2/a": {"factor": 1000.0, "names_period": true},
-        "kt CO2eq": {"factor": 1000.0, "names_period": false},
-        "kt CO2eq/a": {"factor": 1000.0, "names_period": true},
-        "kt/a": {"factor": 1000.0, "names_period": true},
-        "kt/a CO2": {"factor": 1000.0, "names_period": true},
-        "Mio. t CO2/a": {"factor": 1000000.0, "names_period": true},
-        "Mio. t CO2eq": {"factor": 1000000.0, "names_period": false},
-        "Mio. t CO2eq/a": {"factor": 1000000.0, "names_period": true},
-        "Mt": {"factor": 1000000.0, "names_period": false},
-        "Mt/a": {"factor": 1000000.0, "names_period": true},
-        "kg": {"factor": 0.001, "names_period": false},
-        "kg/a": {"factor": 0.001, "names_period": true},
-        "kg CO2": {"factor": 0.001, "names_period": false},
-        "kg CO2/a": {"factor": 0.001, "names_period": true},
-        "kg CO2eq": {"factor": 0.001, "names_period": false},
-        "kg CO2eq/a": {"factor": 0.001, "names_period": true}
+        "Tonnen": {
+          "factor": 1.0,
+          "names_period": false
+        },
+        "Tonnen CO2": {
+          "factor": 1.0,
+          "names_period": false
+        },
+        "Tonnen CO2 im Jahr": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "Tonnen CO2 jährlich": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "Tonnen CO2 pro Jahr": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "Tonnen CO2eq/a": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "Tonnen CO2äquivalent": {
+          "factor": 1.0,
+          "names_period": false
+        },
+        "Tonnen pro Jahr": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "t": {
+          "factor": 1.0,
+          "names_period": false
+        },
+        "t CO2": {
+          "factor": 1.0,
+          "names_period": false
+        },
+        "t CO2-eq./a": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "t CO2-eq/a": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "t CO2-Äq./a": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "t CO2-Äq/a": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "t CO2-Äquivalent": {
+          "factor": 1.0,
+          "names_period": false
+        },
+        "t CO2-Äquivalente/a": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "t CO2/a": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "t CO2e": {
+          "factor": 1.0,
+          "names_period": false
+        },
+        "t CO2e/a": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "t CO2eq": {
+          "factor": 1.0,
+          "names_period": false
+        },
+        "t CO2eq/a": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "t CO2äq": {
+          "factor": 1.0,
+          "names_period": false
+        },
+        "t CO2äq.": {
+          "factor": 1.0,
+          "names_period": false
+        },
+        "t/a": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "t/a CO2eq": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "tCO2": {
+          "factor": 1.0,
+          "names_period": false
+        },
+        "tCO2/a": {
+          "factor": 1.0,
+          "names_period": true
+        },
+        "Tsd. t": {
+          "factor": 1000.0,
+          "names_period": false
+        },
+        "Tsd. t/a": {
+          "factor": 1000.0,
+          "names_period": true
+        },
+        "kt": {
+          "factor": 1000.0,
+          "names_period": false
+        },
+        "kt CO2 pro Jahr": {
+          "factor": 1000.0,
+          "names_period": true
+        },
+        "kt CO2-Äq./a": {
+          "factor": 1000.0,
+          "names_period": true
+        },
+        "kt CO2/a": {
+          "factor": 1000.0,
+          "names_period": true
+        },
+        "kt CO2eq": {
+          "factor": 1000.0,
+          "names_period": false
+        },
+        "kt CO2eq/a": {
+          "factor": 1000.0,
+          "names_period": true
+        },
+        "kt/a": {
+          "factor": 1000.0,
+          "names_period": true
+        },
+        "kt/a CO2": {
+          "factor": 1000.0,
+          "names_period": true
+        },
+        "Mio. t CO2/a": {
+          "factor": 1000000.0,
+          "names_period": true
+        },
+        "Mio. t CO2eq": {
+          "factor": 1000000.0,
+          "names_period": false
+        },
+        "Mio. t CO2eq/a": {
+          "factor": 1000000.0,
+          "names_period": true
+        },
+        "Mt": {
+          "factor": 1000000.0,
+          "names_period": false
+        },
+        "Mt/a": {
+          "factor": 1000000.0,
+          "names_period": true
+        },
+        "kg": {
+          "factor": 0.001,
+          "names_period": false
+        },
+        "kg/a": {
+          "factor": 0.001,
+          "names_period": true
+        },
+        "kg CO2": {
+          "factor": 0.001,
+          "names_period": false
+        },
+        "kg CO2/a": {
+          "factor": 0.001,
+          "names_period": true
+        },
+        "kg CO2eq": {
+          "factor": 0.001,
+          "names_period": false
+        },
+        "kg CO2eq/a": {
+          "factor": 0.001,
+          "names_period": true
+        }
       },
       "axes": {
         "quantity": {
@@ -972,6 +1157,11 @@
             "role": "type",
             "note": "The class of the value node itself (rdf:type). An out:* answer is a deliberate non-class and mints no node."
           }
+        },
+        "subject": {
+          "type": "text",
+          "required": false,
+          "question": "Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist die Bezeichnung ihrer eigenen Zeile, Spalte oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Quartier, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit dieser Bezeichnung wörtlich. Unterscheidet sie nichts davon, sagt der Plan es nicht."
         },
         "aggregation": {
           "vocabulary": {
@@ -1730,6 +1920,11 @@
             "note": "The class of the value node itself (rdf:type). OEO_00010157 is defined by its unit (\"a quantity value that has a power unit as unit\"), so it follows from units_accepted and is not a second assertion. An out:* answer is a deliberate non-class and mints no node."
           }
         },
+        "subject": {
+          "type": "text",
+          "required": false,
+          "question": "Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist die Bezeichnung ihrer eigenen Zeile, Spalte oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Quartier, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit dieser Bezeichnung wörtlich. Unterscheidet sie nichts davon, sagt der Plan es nicht."
+        },
         "aggregation": {
           "vocabulary": {
             "OEO_00140070": {
@@ -2374,6 +2569,11 @@
             "role": "type",
             "note": "The class of the value node itself (rdf:type). OEO_00140127 fraction value falls under the MHPKG schema's RelationalQuantityValue. An out:* answer is a deliberate non-class and mints no node."
           }
+        },
+        "subject": {
+          "type": "text",
+          "required": false,
+          "question": "Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist die Bezeichnung ihrer eigenen Zeile, Spalte oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Quartier, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit dieser Bezeichnung wörtlich. Unterscheidet sie nichts davon, sagt der Plan es nicht."
         },
         "carrier": {
           "vocabulary": {

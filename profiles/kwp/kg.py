@@ -581,18 +581,21 @@ def _precision(row: dict) -> int:
 
 
 def wording_key(row: dict) -> str:
-    """The plan's words for the two coordinates that fold onto one class.
+    """The plan's words for what tells two numbers on one identity apart: the
+    number's own subject, and the two coordinates that fold onto one class.
 
     "Wirtschaftlich genutzte Gebäude" and "Öffentliche Gebäude" are both
-    OEO_00000405 and are not one number; the wording is what tells them
+    OEO_00000405 and are not one number, and neither are "Bis 1918" and
+    "Unbekannt" in one column of a table; the wording is what tells them
     apart, and it is what the node is named by when they collide.
     """
-    return " / ".join((row.get(key) or "").strip()
-                      for key in ("carrier_raw", "sector_raw")).strip(" /")
+    return " / ".join(str(row.get(key) or "").strip()
+                      for key in ("subject", "carrier_raw", "sector_raw")
+                      ).strip(" /")
 
 
 def settle(iri: str, rows: list, part: str, *,
-           transcribed: bool = False) -> tuple:
+           transcribed: bool = False, keep_open: bool = False) -> tuple:
     """({iri: row} kept, Counter skipped, {iri: marks}) for one identity.
 
     One number several times is one node, marked as read twice. Different
@@ -600,10 +603,14 @@ def settle(iri: str, rows: list, part: str, *,
     different wording splits them into a node each, named by that wording; a
     rounded statement of the other loses to the more precise one; a lower
     trust grade loses to the higher; and what is left is a question for a
-    human, so nothing stays. Every winner says in its comment what it won
-    over, so a curator can still audit the pick. The counts are per tuple
-    that left the graph: a repeat of the winner is a `duplicate`, a repeat
-    of a loser is one too, and the losers are `conflict:<rule>`.
+    human. With *keep_open* each of those stays as a node of its own, marked
+    as contested (owner decision 2026-11-02: 13,015 tuples of 100 plans left
+    the graph here, most of them different rows of one table); without it,
+    as for the strict graph, nothing stays. Every winner says in its comment
+    what it won over, so a curator can still audit the pick. The counts are
+    per tuple that left the graph: a repeat of the winner is a `duplicate`, a
+    repeat of a loser is one too, and the losers are `conflict:<rule>`.
+    `conflict:open` counts nodes kept, not tuples lost.
     """
     kept: dict = {}
     skipped: Counter = Counter()
@@ -617,7 +624,8 @@ def settle(iri: str, rows: list, part: str, *,
             label = wording_key(group[0])
             sub_iri = _value_iri(part, group[0], label=key)
             got, lost, named = settle(sub_iri, group, part,
-                                      transcribed=transcribed)
+                                      transcribed=transcribed,
+                                      keep_open=keep_open)
             kept.update(got)
             skipped.update(lost)
             for node in got:
@@ -655,6 +663,15 @@ def settle(iri: str, rows: list, part: str, *,
     if len(winners) == 1:
         keep(winners[0][2], resolved="trust")
         skipped["conflict:trust"] += len(distinct) - 1
+        return kept, skipped, marks
+    if keep_open:
+        for row in distinct:
+            node = _value_iri(part, row, label="|".join((
+                wording_key(row), normalise(row.get("quote") or ""),
+                str(row["value_target"]))))
+            kept[node] = row
+            marks[node] = {"conflict": True}
+        skipped["conflict:open"] += len(distinct)
         return kept, skipped, marks
     skipped["conflict"] += len(distinct)
     return kept, skipped, marks
@@ -942,7 +959,8 @@ def make_serializer(db_path: Path, strict: bool = False):
         marks: dict = {}
         for iri, rows_of in claims.items():
             got, lost, named = settle(iri, rows_of, part_iri[rows_of[0]["scenario"]],
-                                      transcribed=bool(transcribed))
+                                      transcribed=bool(transcribed),
+                                      keep_open=not strict)
             values.update(got)
             marks.update(named)
             for reason, n in lost.items():

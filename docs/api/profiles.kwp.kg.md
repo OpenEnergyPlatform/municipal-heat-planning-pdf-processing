@@ -140,17 +140,19 @@ without that breakdown), or nothing.
 def wording_key(row: dict) -> str
 ```
 
-The plan's words for the two coordinates that fold onto one class.
+The plan's words for what tells two numbers on one identity apart: the
+number's own subject, and the two coordinates that fold onto one class.
 
 "Wirtschaftlich genutzte Gebäude" and "Öffentliche Gebäude" are both
-OEO_00000405 and are not one number; the wording is what tells them
+OEO_00000405 and are not one number, and neither are "Bis 1918" and
+"Unbekannt" in one column of a table; the wording is what tells them
 apart, and it is what the node is named by when they collide.
 
 ### settle
 
 ```python
 def settle(iri: str, rows: list, part: str, *,
-           transcribed: bool = False) -> tuple
+           transcribed: bool = False, keep_open: bool = False) -> tuple
 ```
 
 ({iri: row} kept, Counter skipped, {iri: marks}) for one identity.
@@ -160,10 +162,14 @@ numbers are settled in this order (owner decision 2026-09-23): the plan's
 different wording splits them into a node each, named by that wording; a
 rounded statement of the other loses to the more precise one; a lower
 trust grade loses to the higher; and what is left is a question for a
-human, so nothing stays. Every winner says in its comment what it won
-over, so a curator can still audit the pick. The counts are per tuple
-that left the graph: a repeat of the winner is a `duplicate`, a repeat
-of a loser is one too, and the losers are `conflict:<rule>`.
+human. With *keep_open* each of those stays as a node of its own, marked
+as contested (owner decision 2026-11-02: 13,015 tuples of 100 plans left
+the graph here, most of them different rows of one table); without it,
+as for the strict graph, nothing stays. Every winner says in its comment
+what it won over, so a curator can still audit the pick. The counts are
+per tuple that left the graph: a repeat of the winner is a `duplicate`, a
+repeat of a loser is one too, and the losers are `conflict:<rule>`.
+`conflict:open` counts nodes kept, not tuples lost.
 
 ### evidence_comment
 

@@ -266,6 +266,14 @@ not settled yet, which covers the search for the unit. A window no row fits is
 not sent. On corpus_m7_100 a window carried 59 open rows at the mean, and 60
 percent of the map's places name a parameter.
 
+A number carries `subject` (kwp spec): what tells it from its neighbours beyond
+the other coordinates, in the plan's words, such as a building age class, a zone
+or a network. It is read from the value's own passage alone and names no node by
+itself: only where different numbers meet on one identity does it split them
+(`wording_key`, `profiles/kwp/kg.py`). What still disagrees after the wording,
+rounding and trust stays in the full graph as a node of its own, marked as
+contested, and stays out of the strict graph (owner decision 2026-11-02).
+
 A rows reply that gives a number under a quote not printing it gets one more
 turn (`reread`, `runner.py`): the model is told which numbers and answers those
 again under their own rows. The check does not change. A number not given
