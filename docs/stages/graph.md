@@ -195,14 +195,15 @@ a real OEO class; a deliberate `out:` answer or an unmapped wording is
 left out exactly like an absent one, so the identity matches what gets
 an edge. `settle` resolves every row minting one identity together: the
 same number twice is one node, marked read twice, counted `duplicate`;
-different numbers under different plan wording (`carrier_raw`/
-`sector_raw`) split into a node per wording, named by it, counted
-`split:wording`; failing that, a reading within `ROUNDING_TOLERANCE`
+different numbers under different plan wording (`wording_key`: `subject`,
+`head`, `whole`, `carrier_raw`, `sector_raw`) split into a node per wording,
+named by it, counted `split:wording`; failing that, a reading within `ROUNDING_TOLERANCE`
 (2%) of another loses to the more precise one, counted
 `conflict:rounding`; failing that, the lower trust level (`A` best, `D` worst)
 loses to the higher, counted `conflict:trust`; what none of those settles
-still drops every claimant, counted `conflict`. Each winner's comment states
-what it won over. The plan node gets `has part` edges only to parts with a
+stays in the full graph as a node per number, marked as contested and counted
+`conflict:open`, and stays out of the strict graph, counted `conflict`. Each
+winner's comment states what it won over. The plan node gets `has part` edges only to parts with a
 surviving value; all three parts are
 written (docstring stale, naming only target). A value node's type is
 its quantity's OEO class; its carrier, sector and technology edges are the

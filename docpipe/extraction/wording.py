@@ -42,6 +42,7 @@ REQUIRED = frozenset({
     "key_not_a_list", "wrong_shape",
     "code_failed", "code_error_unknown", "code_silent", "code_output",
     "image_for", "anchor_parameter", "anchor_unit", "value_outside_quote",
+    "value_in_several_rows",
 })
 
 _checked: dict = {}

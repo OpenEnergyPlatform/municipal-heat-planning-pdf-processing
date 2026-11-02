@@ -251,7 +251,7 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
         f"{name}_window": {
             "type": "array",
             "prefixItems": [{"enum": ["own", "found", "retrieval", "rest",
-                                      "places", "frame", "base_year",
+                                      "places", "frame", "table", "base_year",
                                       "target_year"]},
                             {"type": "integer"}],
             "minItems": 2, "maxItems": 2,
@@ -265,7 +265,9 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"passage names the document's base state by "
                            f"word, and the index is the pair whose quote "
                            f"prints the number. `target_year`: the same for "
-                           f"the document's target."},
+                           f"the document's target. `table`: read once for "
+                           f"the row's table and taken by this row, and the "
+                           f"index is the window it was read in."},
         f"{name}_link_quote": {
             "type": "string", "minLength": MIN_QUOTE_CHARS,
             "description": f"Only with window `base_year` or `target_year`: "
@@ -322,6 +324,12 @@ def _tuple_schema(spec, parameter) -> dict:
                                  "containment; a retyped table row may be "
                                  "repaired, which sets the flag "
                                  "quote_repaired."},
+        "head": {"type": "string",
+                 "description": "The head of the table column the number "
+                                "stands in, as the plan prints it. Taken from "
+                                "the table, never asked. Absent where the "
+                                "number is no table cell or its column is not "
+                                "certain."},
         "tier": {"enum": [TIER_TEXT, TIER_VISUAL],
                  "description": "text_located: the quote sits in the "
                                 "document's own refined text, so it can be "
@@ -773,10 +781,11 @@ def trace_schema() -> dict:
     owner = _owner()
     # `via_base`: of `filled`, the years read as one of the plan's base years
     # by the word the row's passage uses for its state. `via_target`: the
-    # same for the plan's target years.
+    # same for the plan's target years. `via_table`: rows that took the frame
+    # their table was asked for.
     counts = {k: {"type": "integer"} for k in
               ("filled", "unquoted", "unbacked", "unstated", "raw_missing",
-               "raw_foreign", "via_base", "via_target")}
+               "raw_foreign", "via_base", "via_target", "via_table")}
     by_field = {"type": "object", "additionalProperties": {"type": "integer"}}
     kinds = {
         "plan": {"rank": {"type": ["integer", "null"]},
@@ -922,7 +931,7 @@ def trace_schema() -> dict:
              "prompt_tokens", "completion_tokens", "filled_by", "unbacked_by",
              "field", "raw_missing", "raw_foreign", "cause", "owner",
              "rejected", "given", "raw", "quote", "via_base", "via_target",
-             "scope", "withdrawn",
+             "via_table", "scope", "withdrawn",
              "batches"}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",

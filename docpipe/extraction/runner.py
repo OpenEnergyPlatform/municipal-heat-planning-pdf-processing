@@ -88,10 +88,12 @@ from .pipeline import (YEAR_STATES, DocumentReport, Source, WorkItem,
                        build_sweeps, cell_index as pipeline_cell_index,
                        column_head,
                        drop_repeats, fold_batch, follow_up, group_items,
-                       harvest_document, merge_field, mark_unanswered,
-                       named_years,
+                       harvest_document, in_several_rows, merge_field,
+                       mark_unanswered,
+                       named_years, narrow_quote,
                        open_rows, plan_document,
-                       names_pair, refused_upstream, route_claims,
+                       names_pair, printed_lines, prints_no_frame,
+                       refused_upstream, route_claims,
                        option_named, row_label, rows_from_reply, sweep_key,
                        window_sources,
                        write_report)
@@ -2515,8 +2517,8 @@ def _parse_reply(raw_text) -> Optional[dict]:
         return None
     status = data.get("status")
     need = data.get("need_more")
-    return {"tuples": expand_values(
-                expand_defaults(data.get("defaults"), tuples)),
+    return {"tuples": [narrow_quote(claim) for claim in expand_values(
+                expand_defaults(data.get("defaults"), tuples))],
             "status": status if status in ("complete", "partial") else "partial",
             "need_more": [q for q in (need or []) if isinstance(q, str) and q.strip()]}
 
@@ -2880,7 +2882,8 @@ def _prior_payload(prior: list) -> list:
     out: list = []
     for row in prior[-PRIOR_MAX:]:
         item = {k: v for k, v in row.items()
-                if k not in ("provenance", "flags", "tier", "compute", "quote")
+                if k not in ("provenance", "flags", "tier", "compute", "quote",
+                             "head")
                 and not k.endswith(_EVIDENCE) and v is not None}
         quote = row.get("quote")
         if isinstance(quote, str):
@@ -3047,17 +3050,27 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
         model names the right rows; the check stays what it is. A number the
         second reply does not give again stays and is refused as before, and
         a second reply that fails leaves the first as it was.
+
+        The same turn for a number its quote prints on several table rows:
+        which one it is cannot be cut out by machine (`narrow_quote`), and
+        such a number stays as it is when the model does not say.
         """
-        wrong = [claim for claim in answer["tuples"] if isinstance(claim, dict)
-                 and number_outside_quote(claim)]
+        outside = [claim for claim in answer["tuples"]
+                   if isinstance(claim, dict) and number_outside_quote(claim)]
+        several = [claim for claim in answer["tuples"]
+                   if in_several_rows(claim)]
+        wrong = outside + several
         if not wrong:
             return answer
+        told = [say(key, values=json.dumps(
+                    [{"value": claim.get("value"),
+                      "quote": claim.get("quote")} for claim in claims],
+                    ensure_ascii=False))
+                for key, claims in (("value_outside_quote", outside),
+                                    ("value_in_several_rows", several))
+                if claims]
         asked = [*conversation, {"role": "assistant", "content": said or ""},
-                 {"role": "user", "content": say(
-                     "value_outside_quote", values=json.dumps(
-                         [{"value": claim.get("value"),
-                           "quote": claim.get("quote")} for claim in wrong],
-                         ensure_ascii=False))}]
+                 {"role": "user", "content": " ".join(told)}]
         limit = answer_room(prompt.text, asked, max_tokens)
         if limit < MIN_ANSWER_TOKENS:
             return answer
@@ -3319,6 +3332,14 @@ def own_title(source) -> str:
                or "").strip()
 
 
+def table_head(source) -> Optional[str]:
+    """The first line of a table, which says which table a request means
+    once a window no longer shows it."""
+    text = getattr(source, "body", None) or getattr(source, "text", None)
+    lines = printed_lines(text)
+    return lines[0].strip()[:300] if lines else None
+
+
 def question_head(question: Optional[str]) -> str:
     """The question's first sentence ("Welcher Energieträger?"): what a
     probe names as asked, without the rules that follow it."""
@@ -3385,12 +3406,23 @@ def _field_payload(shown: list, rows: list, slots,
              for i, s in enumerate(shown)}
     listed = []
     for row in rows:
-        entry = {"id": row.label,
-                 "value": row.claim.get("value"),
-                 "quote": row.claim.get("quote")}
         own = (owner_of or {}).get(row.label)
         here = (where.get((own.owner_kind, own.owner_id))
                 if own is not None else None)
+        if row.table:
+            # The table and not a number of it: nothing the answer could
+            # lean on one row's words for (owner decision 2026-11-02).
+            entry = {"id": row.label, "table": True}
+            if here:
+                entry["source"] = here
+            head = table_head(own)
+            if head:
+                entry["head"] = head
+            listed.append(entry)
+            continue
+        entry = {"id": row.label,
+                 "value": row.claim.get("value"),
+                 "quote": row.claim.get("quote")}
         if here:
             entry["source"] = here
         unit = row.claim.get("unit_raw") or row.claim.get("unit")
@@ -3405,6 +3437,9 @@ def _field_payload(shown: list, rows: list, slots,
         # "which carrier?" about "Mehrfamilienhaus, Endenergiebedarf" is a
         # question about one number, asked bare it is one about the plan.
         known = row_context(row.claim, asked_names)
+        if row.table:
+            known = {axis: said for axis, said in known.items()
+                     if axis in row.table}
         if known:
             entry["known"] = known
         own = (owner_of or {}).get(row.label)
@@ -3900,6 +3935,63 @@ class Scope:
             self.groups.append((batch, views))
 
 
+class TableFrames:
+    """The scenario and the year of each table that has one frame, read once.
+
+    Such a table (`prints_no_frame`) says them in its title or around it, and
+    its rows were asked in portions of FIELD_ROWS, each portion reading its
+    own answer: 65 of 678 such tables of corpus_m7_100 took several years. The
+    frame belongs to the table, so it is searched once for the table and not
+    for a value, and every row of the table takes the answer with its evidence
+    (owner decision 2026-11-02). One store for a run, since a table's rows can
+    stand in several batches, and the first reading stands.
+    """
+
+    def __init__(self, slots: list):
+        self.slots = list(slots)
+        self.axes = tuple(slot.name for slot in self.slots)
+        self.lock = threading.Lock()
+        self.one_frame: dict = {}   # (document, table) -> bool
+        self.read: dict = {}        # (document, table, axis) -> the reading
+
+    def key_of(self, document_id: int, source) -> Optional[tuple]:
+        """The key of this passage if it is a table with one frame."""
+        if source is None or source.owner_kind != "table":
+            return None
+        key = (document_id, source.owner_id)
+        with self.lock:
+            if key not in self.one_frame:
+                self.one_frame[key] = prints_no_frame(source, self.slots)
+            return key if self.one_frame[key] else None
+
+    def keep(self, key: tuple, axis: str, claim: dict) -> None:
+        """A reading of this table, unless it has one. What the other rows
+        take says that it was the table's: `table`, not the window it was
+        read in, whose question they were not asked."""
+        with self.lock:
+            if (*key, axis) in self.read:
+                return
+            # A copy: the other coordinates' sweeps write into the claim.
+            reading = {name: value for name, value in list(claim.items())
+                       if name == axis or name.startswith(f"{axis}_")}
+            window = reading.get(f"{axis}_window") or (None, 0)
+            reading[f"{axis}_window"] = ["table", window[1]]
+            self.read[(*key, axis)] = reading
+
+    def reading(self, key: tuple, axis: str) -> Optional[dict]:
+        with self.lock:
+            return self.read.get((*key, axis))
+
+    @staticmethod
+    def take(claim: dict, axis: str, reading: dict) -> None:
+        """This row reads the table's reading and nothing it held before: a
+        link quote of its own must not stay beside another year."""
+        for name in list(claim):
+            if name.startswith(f"{axis}_"):
+                claim.pop(name, None)
+        claim.update(reading)
+
+
 class Sweeping:
     """One coordinate asked over a scope of rows, window after window.
 
@@ -3957,8 +4049,12 @@ class Sweeping:
         self.parameter = parameters.pop() if len(parameters) == 1 else None
         self.totals = {"filled": 0, "unquoted": 0, "unbacked": 0,
                        "unstated": 0, "raw_missing": 0, "raw_foreign": 0,
-                       "via_base": 0, "via_target": 0, "retried": 0,
-                       "withdrawn": 0}
+                       "via_base": 0, "via_target": 0, "via_table": 0,
+                       "retried": 0, "withdrawn": 0}
+        # The frame of a table is one question, not one per number.
+        tables = sweeper.tables
+        self.tables = (tables if tables is not None and len(self.slots) == 1
+                       and self.slots[0].name in tables.axes else None)
         # What must not be FETCHED again, and every passage this sweep has
         # already materialised, by key. `seen` answers the first question;
         # `held` answers what may be SHOWN again, which is the opposite
@@ -4005,6 +4101,64 @@ class Sweeping:
             return todo
         return rows_for(self.document_id, window, todo)
 
+    def table_of(self, row) -> Optional[tuple]:
+        return self.tables.key_of(self.document_id,
+                                  self.owner_of.get(row.label))
+
+    def for_the_tables(self, todo: list) -> list:
+        """One row for each table with one frame, sent as the table and
+        without its number; the other rows of the table are not asked."""
+        if self.tables is None:
+            return todo
+        out, asked = [], set()
+        for row in todo:
+            key = self.table_of(row)
+            if key is None:
+                out.append(row)
+            elif key not in asked:
+                asked.add(key)
+                out.append(replace(row, table=self.tables.axes))
+        return out
+
+    def share_tables(self) -> None:
+        """What a row of a table with one frame has read goes to the rows of
+        that table still open, and what one has said to those not asked: a
+        row that stands for its table and comes back `unstated` speaks for
+        them too, and the end of the sweep must not take them for unanswered.
+        A row the document's frame was written on is left alone, so a table
+        read under two pairs of the document keeps both; a row that answered
+        beside another of its table takes the reading that came first."""
+        if self.tables is None:
+            return
+        slot = self.slots[0]
+        state = f"{slot.name}_state"
+        for row in self.rows:
+            key = (self.table_of(row)
+                   if row.claim.get(state) == fields.READ else None)
+            if key is None:
+                continue
+            self.tables.keep(key, slot.name, row.claim)
+            reading = self.tables.reading(key, slot.name)
+            window = row.claim.get(f"{slot.name}_window") or (None,)
+            if (row.claim.get(slot.name) != reading.get(slot.name)
+                    and window[0] != "frame"):
+                self.tables.take(row.claim, slot.name, reading)
+        said: dict = {}
+        still = open_rows(self.rows, slot)
+        for row in still:
+            key = self.table_of(row)
+            reading = (self.tables.reading(key, slot.name)
+                       if key is not None else None)
+            if reading is not None:
+                self.tables.take(row.claim, slot.name, reading)
+                self.totals["via_table"] += 1
+            elif key is not None and row.claim.get(state):
+                said.setdefault(key, row.claim[state])
+        for row in still:
+            key = self.table_of(row)
+            if key in said and not row.claim.get(state):
+                row.claim[state] = said[key]
+
     def portions(self, windows):
         """(window, the open rows to ask it for), one after another.
 
@@ -4020,7 +4174,7 @@ class Sweeping:
             for window, rows in windows:
                 rows = self.still_open(rows)
                 if rows:
-                    yield window, rows
+                    yield window, self.for_the_tables(rows)
             return
         for window in windows:
             todo = self.still_open(self.rows)
@@ -4029,14 +4183,14 @@ class Sweeping:
             todo = self.fitting(todo, window)
             if self.state["stage"] != "places":
                 if todo:
-                    yield window, todo
+                    yield window, self.for_the_tables(todo)
                 continue
             fitting = {row.label for row in todo}
             for _batch, members in self.scope.groups:
                 rows = [row for row in self.still_open(members)
                         if row.label in fitting]
                 if rows:
-                    yield window, rows
+                    yield window, self.for_the_tables(rows)
 
     def re_entry(self, todo: list, already: set) -> list:
         """The passages these rows were last read in, to ride along.
@@ -4106,6 +4260,7 @@ class Sweeping:
         eat the document.
         """
         state = self.state
+        self.share_tables()
         if state["stage"] != "own" and AHEAD is not None:
             return self.run_ahead(windows)
         for window, todo in self.portions(windows):
@@ -4142,11 +4297,13 @@ class Sweeping:
                     usage, self.owner_of, bases=list(self.bases))
                 corrections = self.fold(shown, todo, stage, attempt, started,
                                         usage, sum(self.spent.values()))
+                self.share_tables()
                 if not corrections:
                     break
                 named = {c["row"] for c in corrections}
-                todo = [r for r in self.still_open(self.rows)
-                        if r.label in named]
+                todo = self.for_the_tables(
+                    [r for r in self.still_open(self.rows)
+                     if r.label in named])
                 if not todo:
                     break
         return True
@@ -4314,6 +4471,7 @@ class Sweeping:
                 future, shown, todo, started, usage, index = ahead.popleft()
                 state["answer"] = future.result()
                 self.fold(shown, todo, stage, 0, started, usage, index)
+                self.share_tables()
                 if not self.still_open(self.rows):
                     self.totals["withdrawn"] += len(ahead)
                     return True
@@ -4609,7 +4767,7 @@ class Sweeper:
                  rest_of_document: Optional[Callable],
                  parents: Optional[Callable], anchors: dict,
                  budget_of: Callable, places: Optional[Callable] = None,
-                 found=None):
+                 found=None, frame_axes: Optional[list] = None):
         self.ask = ask
         self.more_sources = more_sources
         self.rest_of_document = rest_of_document
@@ -4618,6 +4776,7 @@ class Sweeper:
         self.budget_of = budget_of
         self.places = places
         self.found = found
+        self.tables = TableFrames(frame_axes) if frame_axes else None
 
     @staticmethod
     def _kept(batches: list) -> tuple:
@@ -4678,7 +4837,7 @@ def make_sweeper(ask: Callable, *,
                  anchors: Optional[dict] = None,
                  search_share: Optional[dict] = None,
                  places: Optional[Callable] = None,
-                 found=None) -> Sweeper:
+                 found=None, frame_axes: Optional[list] = None) -> Sweeper:
     """sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to.
 
     Lifted out of the harvester so a pass that re-reads ONE coordinate of an
@@ -4692,7 +4851,8 @@ def make_sweeper(ask: Callable, *,
     the anchor sets that seed them. *search_share* is the profile's
     `SEARCH_SHARE`: {coordinate: fraction of the search budget}. *places* is
     the document's map of where each axis is answered (`places.Places`).
-    *found* is what earlier harvests found (`found.Found`).
+    *found* is what earlier harvests found (`found.Found`). *frame_axes* are
+    the coordinates a table with one frame is asked once for (`TableFrames`).
     """
     anchors = anchors or {}
     search_share = search_share or {}
@@ -4710,7 +4870,7 @@ def make_sweeper(ask: Callable, *,
     return Sweeper(ask, more_sources=more_sources,
                    rest_of_document=rest_of_document, parents=parents,
                    anchors=anchors, budget_of=budget_of, places=places,
-                   found=found)
+                   found=found, frame_axes=frame_axes)
 
 
 # The keys of the coordinates a batch's rows can be held at, for the search
@@ -5299,7 +5459,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                                rest_of_document=rest_of_document,
                                parents=parents, anchors=anchors,
                                search_share=search_share, places=places,
-                               found=found)
+                               found=found, frame_axes=frame_axes)
 
     def turn_of(batch, prior: Optional[list], deferred: bool) -> dict:
         reply = find_rows(batch, prior)
@@ -7428,7 +7588,8 @@ def main(argv: Optional[list] = None) -> int:
                                                            content=content),
                     parents=make_parents(args.db, content=content),
                     anchors=anchors,
-                    search_share=search_share, places=places),
+                    search_share=search_share, places=places,
+                    frame_axes=frame_axes),
                  "owner_sources": make_owner_sources(args.db, content=content),
                  "document_spec": document_spec,
                  "frame_names": frame_names,
@@ -7464,7 +7625,8 @@ def main(argv: Optional[list] = None) -> int:
                                                        content=content),
                 parents=make_parents(args.db, content=content),
                 anchors=anchors,
-                search_share=search_share, places=places),
+                search_share=search_share, places=places,
+                frame_axes=frame_axes),
              "owner_sources": make_owner_sources(args.db, content=content),
              "document_spec": document_spec_per_call(args.db, spec,
                                                      document_axes),

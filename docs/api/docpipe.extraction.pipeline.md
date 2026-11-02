@@ -165,6 +165,7 @@ Fields:
 - `claim: dict = field(default_factory=dict)`
 - `pair: Optional[dict] = None`: The pair this row belongs to, when that is NOT the pair its request asked for. The request's pair is written by `project`; a row that names another pair of the same document carries it here and keeps it.
 - `pair_index: int = 0`
+- `table: tuple = ()`: The frame axes, on a view of a row that is asked for its whole table and not for its number (`Sweeping.for_the_tables`).
 
 ### Sweep
 
@@ -344,6 +345,45 @@ fold the label the field-wise harvester had put back for it.
 def row_label(index: int) -> str
 ```
 
+### printed_lines
+
+```python
+def printed_lines(text) -> list
+```
+
+The table rows of this text, the rule under a head left out.
+
+### lines_of_number
+
+```python
+def lines_of_number(quote, value) -> list
+```
+
+The table rows of this quote that print this number.
+
+### narrow_quote
+
+```python
+def narrow_quote(claim)
+```
+
+The claim under the one table row that prints its number.
+
+A quote is one row, and 184 of 1,540 table rows of seven plans of
+corpus_m7_100 quoted several. The other lines are other numbers' words:
+Erdgas read `Summe` from the sum line its quote ran into. A number one
+line prints is cut to that line, by machine and at no cost: the quote
+still stands in the passage and the number in the quote. A number several
+lines print keeps its quote and is asked again (`in_several_rows`).
+
+### in_several_rows
+
+```python
+def in_several_rows(claim) -> bool
+```
+
+Does the quote of this claim print its number on more than one row?
+
 ### cell_index
 
 ```python
@@ -360,8 +400,9 @@ from are both in hand. Handing it over turns "count the cells" into a
 given and leaves the model the part that actually needs reading: which
 year the header's nth cell names.
 
-None whenever it is not certain: no table row, the value in no cell, or
-the same number in two of them. A wrong column is worse than none.
+None whenever it is not certain: no table row, the value in no cell, the
+same number in two of them, or on two rows of the quote. A wrong column is
+worse than none.
 
 ### column_head
 
@@ -375,6 +416,19 @@ The number of a column leaves the model to find the head of that column,
 and over a wide row it often read none: "no carrier" under a column headed
 "Wärmenetze". The head is in hand here, so it goes over as words. Only from
 head lines with as many cells as the row: a wrong head is worse than none.
+
+### with_head
+
+```python
+def with_head(claim: dict, source) -> dict
+```
+
+The claim with the head of its column, a fact of the table.
+
+"0 %" in a row of seven classes says nothing without its column, and 28 of
+90 rows read from corpus tables did not know theirs: the head was shown to
+the model and left no trace. Kept beside the number, it tells two numbers
+of one row apart wherever a graph or a reader needs that.
 
 ### pair_in_text
 
@@ -398,6 +452,24 @@ Does this passage print the scenario and the year of this pair?
 
 The whole passage, not a line of it. Where the year stands is the plan's
 business: a column header, a caption, a sentence above the table.
+
+### prints_no_frame
+
+```python
+def prints_no_frame(source, slots: list) -> bool
+```
+
+Does this table print nothing of its frame in its head or its rows?
+
+Then every row of it has the one scenario and the one year the table
+stands for, and they are read off the table, not off a number of it. A
+table with a column per year or a profile with rows "IST-Zustand" and
+"Zieljahr (2040)" prints its frame and is read number by number. Its
+title does not count: that is where the frame of such a table stands.
+
+In corpus_m7_100 this holds for 678 of 1,140 tables with a read year, and
+the rows of 65 of the 678 took several years. Of the 43 tables with several
+years on seven plans it names the 8 that print no year.
 
 ### pair_of_claim
 

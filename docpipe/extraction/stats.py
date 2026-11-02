@@ -124,6 +124,7 @@ def from_traces(trace_dirs: Iterable[Path],
     places_by_axis: Counter = Counter()
     planned: Counter = Counter()
     withdrawn = 0
+    from_table = 0
     for directory in trace_dirs:
         for path in sorted(Path(directory).glob("*.jsonl")):
             stem = path.name[:-len(".trace.jsonl")] \
@@ -155,6 +156,7 @@ def from_traces(trace_dirs: Iterable[Path],
                     planned[str(event.get("origin"))] += 1
                 elif kind == "sweep":
                     withdrawn += int(event.get("withdrawn") or 0)
+                    from_table += int(event.get("via_table") or 0)
     return {
         # The maps of places: documents mapped and how many completely,
         # passages, requests, places taken and not, requests unread, and
@@ -163,6 +165,8 @@ def from_traces(trace_dirs: Iterable[Path],
             "documents", "complete", "passages", "windows", "places",
             "dropped", "unread")}, "places_by_axis": dict(places_by_axis)},
         "windows_withdrawn_unsent": withdrawn,
+        # Rows that took the frame their table was asked for.
+        "coordinates_taken_from_their_table": from_table,
         # Where the plans' passages came from: a search or a found place.
         "passages_planned_by_origin": dict(planned),
         "requests_and_fills_by_axis_stage": {

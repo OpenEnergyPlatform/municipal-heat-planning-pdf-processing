@@ -16,6 +16,7 @@ You first receive a JSON object with "sources", then the images belonging to tho
 - "sources": the sources from the SAME document, each with an identifier ("id": "Q1", "Q2", …) — the same texts the values were taken from.
 - "rows": <!-- block: rows_carry -->the values, each with an identifier ("id": "R1", "R2", …), its source, its value ("value"), its unit ("unit", if it has one) and the passage it stands in ("quote").<!-- /block --> If the value comes from a table row, "column" is added: which cell of that row it stands in, out of "columns" cells in total. That is counted, not guessed. Where the table shows it unambiguously, "head" gives the header cells of exactly this column, word for word.
 {{rows_more}}
+A row with "table": true stands for its whole table and for no single number: what is asked is what the table as a whole refers to. "head" is then its head line. Your answer holds for every number of the table.
 <!-- block: rows_source -->
 If the row's own source is among those shown, "source" names its identifier.
 <!-- /block -->

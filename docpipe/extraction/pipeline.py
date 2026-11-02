@@ -469,10 +469,53 @@ class Row:
     # another pair of the same document carries it here and keeps it.
     pair: Optional[dict] = None
     pair_index: int = 0
+    # The frame axes, on a view of a row that is asked for its whole table
+    # and not for its number (`Sweeping.for_the_tables`).
+    table: tuple = ()
 
 
 def row_label(index: int) -> str:
     return f"R{index + 1}"
+
+
+def printed_lines(text) -> list:
+    """The table rows of this text, the rule under a head left out."""
+    if not isinstance(text, str):
+        return []
+    return [line for line in text.splitlines()
+            if line.count("|") >= 2 and set(line) - set("|:- \t")]
+
+
+def lines_of_number(quote, value) -> list:
+    """The table rows of this quote that print this number."""
+    wanted = None if isinstance(value, bool) else canonical_number(value)
+    if wanted is None:
+        return []
+    return [line for line in printed_lines(quote)
+            if wanted in numbers_in(line)]
+
+
+def narrow_quote(claim):
+    """The claim under the one table row that prints its number.
+
+    A quote is one row, and 184 of 1,540 table rows of seven plans of
+    corpus_m7_100 quoted several. The other lines are other numbers' words:
+    Erdgas read `Summe` from the sum line its quote ran into. A number one
+    line prints is cut to that line, by machine and at no cost: the quote
+    still stands in the passage and the number in the quote. A number several
+    lines print keeps its quote and is asked again (`in_several_rows`).
+    """
+    if isinstance(claim, dict) and len(printed_lines(claim.get("quote"))) > 1:
+        lines = lines_of_number(claim["quote"], claim.get("value"))
+        if len(lines) == 1:
+            return dict(claim, quote=lines[0].strip())
+    return claim
+
+
+def in_several_rows(claim) -> bool:
+    """Does the quote of this claim print its number on more than one row?"""
+    return isinstance(claim, dict) and len(
+        lines_of_number(claim.get("quote"), claim.get("value"))) > 1
 
 
 def cell_index(quote: str, value) -> Optional[tuple]:
@@ -486,18 +529,15 @@ def cell_index(quote: str, value) -> Optional[tuple]:
     given and leaves the model the part that actually needs reading: which
     year the header's nth cell names.
 
-    None whenever it is not certain: no table row, the value in no cell, or
-    the same number in two of them. A wrong column is worse than none.
+    None whenever it is not certain: no table row, the value in no cell, the
+    same number in two of them, or on two rows of the quote. A wrong column is
+    worse than none.
     """
-    if not isinstance(quote, str) or "|" not in quote:
+    lines = lines_of_number(quote, value)
+    if len(lines) != 1:
         return None
-    line = next((l for l in quote.splitlines() if l.count("|") >= 2), None)
-    if line is None:
-        return None
-    cells = [c.strip() for c in line.strip().strip("|").split("|")]
+    cells = [c.strip() for c in lines[0].strip().strip("|").split("|")]
     wanted = canonical_number(value)
-    if wanted is None:
-        return None
     hits = [i for i, cell in enumerate(cells, start=1)
             if wanted in numbers_in(cell)]
     return (hits[0], len(cells)) if len(hits) == 1 else None
@@ -523,6 +563,21 @@ def column_head(table: str, cell: int, cells: int) -> Optional[str]:
         if len(row) == cells and row[cell - 1] and row[cell - 1] not in words:
             words.append(row[cell - 1])
     return " / ".join(words) or None
+
+
+def with_head(claim: dict, source) -> dict:
+    """The claim with the head of its column, a fact of the table.
+
+    "0 %" in a row of seven classes says nothing without its column, and 28 of
+    90 rows read from corpus tables did not know theirs: the head was shown to
+    the model and left no trace. Kept beside the number, it tells two numbers
+    of one row apart wherever a graph or a reader needs that.
+    """
+    cell = cell_index(claim.get("quote"), claim.get("value"))
+    if cell is None or getattr(source, "owner_kind", None) != "table":
+        return dict(claim)
+    head = column_head(source.text, *cell)
+    return {**claim, "head": head} if head else dict(claim)
 
 
 def _invented_wording(claim: dict, spec=None) -> bool:
@@ -585,6 +640,33 @@ def names_pair(source, pair: Optional[dict], slots: list) -> bool:
                                pair.get(f"{slot.name}_raw"), text):
             return False
     return True
+
+
+# A year as a table prints one: "2.030" and "2030,5" are numbers.
+PRINTED_YEAR = re.compile(r"(?<![\d.,])\d{4}(?![\d.,]*\d)")
+
+
+def prints_no_frame(source, slots: list) -> bool:
+    """Does this table print nothing of its frame in its head or its rows?
+
+    Then every row of it has the one scenario and the one year the table
+    stands for, and they are read off the table, not off a number of it. A
+    table with a column per year or a profile with rows "IST-Zustand" and
+    "Zieljahr (2040)" prints its frame and is read number by number. Its
+    title does not count: that is where the frame of such a table stands.
+
+    In corpus_m7_100 this holds for 678 of 1,140 tables with a read year, and
+    the rows of 65 of the 678 took several years. Of the 43 tables with several
+    years on seven plans it names the 8 that print no year.
+    """
+    text = (source.body if getattr(source, "body", None) is not None
+            else getattr(source, "text", "")) or ""
+    if any(year_in_range(int(year)) for year in PRINTED_YEAR.findall(text)):
+        return False
+    folded = text.casefold()
+    return not any(word and word.casefold() in folded for slot in slots
+                   for option in slot.options
+                   for word in (option.label, *option.synonyms))
 
 
 def pair_of_claim(claim: dict, pairs: tuple, slots: list,
@@ -694,7 +776,8 @@ def rows_from_reply(batch: Batch, reply: Optional[dict],
                     continue
                 pair, pair_index = elsewhere
                 rows.append(Row(label=row_label(len(rows)),
-                                item_index=item_index, claim=dict(claim),
+                                item_index=item_index,
+                                claim=with_head(claim, source),
                                 pair=pair, pair_index=pair_index))
             continue
         for claim in claims:
@@ -710,7 +793,8 @@ def rows_from_reply(batch: Batch, reply: Optional[dict],
                 orphans.append(dict(claim, _why="text value not in its quote"))
                 continue
             rows.append(Row(label=row_label(len(rows)),
-                            item_index=item_index, claim=dict(claim)))
+                            item_index=item_index,
+                            claim=with_head(claim, source)))
     return rows, orphans
 
 def answer_in_quote(slot, given, wording: Optional[str], quote: str) -> bool:

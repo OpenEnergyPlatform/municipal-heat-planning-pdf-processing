@@ -285,3 +285,27 @@ def test_a_wrong_second_quote_is_not_asked_a_third_time(monkeypatch):
         monkeypatch, entries(([999], ROW)), entries(([999], NEXT)))
     assert numbers_of(got) == [(999, NEXT)]
     assert len(asked) == 2
+
+
+TWICE = "| Gewerbe | 120 | 30 |"
+
+
+def test_a_number_on_two_quoted_rows_is_asked_again_for_its_row(monkeypatch):
+    got, asked = reread_harvest(
+        monkeypatch, entries(([120], f"{ROW}\n{TWICE}")),
+        entries(([120], ROW)))
+    assert numbers_of(got) == [(120, ROW)]
+    assert len(asked) == 2
+    assert "120" in asked[1][-1]["content"]
+
+
+def test_a_number_one_quoted_row_prints_costs_no_second_request(monkeypatch):
+    got, asked = reread_harvest(monkeypatch, entries(([80], f"{ROW}\n{NEXT}")))
+    assert numbers_of(got) == [(80, ROW)]
+    assert len(asked) == 1
+
+
+def test_a_number_of_two_rows_stays_when_the_model_does_not_say(monkeypatch):
+    quote = f"{ROW}\n{TWICE}"
+    got, _asked = reread_harvest(monkeypatch, entries(([120], quote)), entries())
+    assert numbers_of(got) == [(120, quote)]

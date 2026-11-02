@@ -263,7 +263,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `carrier`
 
@@ -379,7 +379,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `compute`
 
@@ -392,6 +392,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
@@ -441,7 +445,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -520,7 +524,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `quote`
 
@@ -595,7 +599,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `sector`
 
@@ -671,7 +675,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `spatial_scope`
 
@@ -679,7 +683,7 @@ Axis 'spatial_scope' of Emissionen. A closed list; an entry beginning 'out:' is 
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
+> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Eine Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: Nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
 
 <details><summary>What it may answer (2)</summary>
 
@@ -737,7 +741,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `subject`
 
@@ -745,7 +749,7 @@ Axis 'subject' of Emissionen. null unless subject_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist die Bezeichnung ihrer eigenen Zeile, Spalte oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Quartier, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit dieser Bezeichnung wörtlich. Unterscheidet sie nichts davon, sagt der Plan es nicht.
+> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist der Eintrag ihrer eigenen Zeile oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit diesem Eintrag wörtlich. Der Name einer Spalte oder einer Zeilengruppe, etwa "Energieträger", "Sektor" oder "Name des Quartiers", sagt nur, was dort steht, und ist keine Antwort. Ein Energieträger, ein Sektor oder ein Gebiet gehört in sein eigenes Feld. Unterscheidet sie nichts davon, sagt der Plan es nicht.
 
 ### `subject_link_quote`
 
@@ -785,7 +789,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `technology`
 
@@ -868,7 +872,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `tier`
 
@@ -973,7 +977,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `value`
 
@@ -1040,7 +1044,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -1124,7 +1128,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `carrier`
 
@@ -1240,7 +1244,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `compute`
 
@@ -1253,6 +1257,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
@@ -1302,7 +1310,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -1381,7 +1389,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `quote`
 
@@ -1456,7 +1464,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `sector`
 
@@ -1532,7 +1540,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `spatial_scope`
 
@@ -1540,7 +1548,7 @@ Axis 'spatial_scope' of Energieverbrauch. A closed list; an entry beginning 'out
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
+> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Eine Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: Nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
 
 <details><summary>What it may answer (2)</summary>
 
@@ -1598,7 +1606,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `subject`
 
@@ -1606,7 +1614,7 @@ Axis 'subject' of Energieverbrauch. null unless subject_state is 'read' or 'deri
 
 The prompt's own wording:
 
-> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist die Bezeichnung ihrer eigenen Zeile, Spalte oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Quartier, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit dieser Bezeichnung wörtlich. Unterscheidet sie nichts davon, sagt der Plan es nicht.
+> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist der Eintrag ihrer eigenen Zeile oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit diesem Eintrag wörtlich. Der Name einer Spalte oder einer Zeilengruppe, etwa "Energieträger", "Sektor" oder "Name des Quartiers", sagt nur, was dort steht, und ist keine Antwort. Ein Energieträger, ein Sektor oder ein Gebiet gehört in sein eigenes Feld. Unterscheidet sie nichts davon, sagt der Plan es nicht.
 
 ### `subject_link_quote`
 
@@ -1646,7 +1654,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `technology`
 
@@ -1729,7 +1737,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `tier`
 
@@ -1798,7 +1806,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `value`
 
@@ -1865,7 +1873,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -1947,7 +1955,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `carrier`
 
@@ -2063,7 +2071,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `compute`
 
@@ -2076,6 +2084,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
@@ -2125,7 +2137,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -2198,7 +2210,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `quote`
 
@@ -2273,7 +2285,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `sector`
 
@@ -2349,7 +2361,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `spatial_scope`
 
@@ -2357,7 +2369,7 @@ Axis 'spatial_scope' of Leistung. A closed list; an entry beginning 'out:' is a 
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
+> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Eine Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: Nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
 
 <details><summary>What it may answer (2)</summary>
 
@@ -2415,7 +2427,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `subject`
 
@@ -2423,7 +2435,7 @@ Axis 'subject' of Leistung. null unless subject_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist die Bezeichnung ihrer eigenen Zeile, Spalte oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Quartier, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit dieser Bezeichnung wörtlich. Unterscheidet sie nichts davon, sagt der Plan es nicht.
+> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist der Eintrag ihrer eigenen Zeile oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit diesem Eintrag wörtlich. Der Name einer Spalte oder einer Zeilengruppe, etwa "Energieträger", "Sektor" oder "Name des Quartiers", sagt nur, was dort steht, und ist keine Antwort. Ein Energieträger, ein Sektor oder ein Gebiet gehört in sein eigenes Feld. Unterscheidet sie nichts davon, sagt der Plan es nicht.
 
 ### `subject_link_quote`
 
@@ -2463,7 +2475,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `tier`
 
@@ -2525,7 +2537,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `value`
 
@@ -2592,7 +2604,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -2616,6 +2628,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
@@ -2665,7 +2681,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -2820,7 +2836,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `compute`
 
@@ -2833,6 +2849,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
@@ -2882,7 +2902,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -2949,7 +2969,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `quote`
 
@@ -3024,7 +3044,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `sector`
 
@@ -3100,7 +3120,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `spatial_scope`
 
@@ -3108,7 +3128,7 @@ Axis 'spatial_scope' of Anteil. A closed list; an entry beginning 'out:' is a de
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
+> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Eine Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: Nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
 
 <details><summary>What it may answer (2)</summary>
 
@@ -3166,7 +3186,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `subject`
 
@@ -3174,7 +3194,7 @@ Axis 'subject' of Anteil. null unless subject_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist die Bezeichnung ihrer eigenen Zeile, Spalte oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Quartier, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit dieser Bezeichnung wörtlich. Unterscheidet sie nichts davon, sagt der Plan es nicht.
+> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist der Eintrag ihrer eigenen Zeile oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit diesem Eintrag wörtlich. Der Name einer Spalte oder einer Zeilengruppe, etwa "Energieträger", "Sektor" oder "Name des Quartiers", sagt nur, was dort steht, und ist keine Antwort. Ein Energieträger, ein Sektor oder ein Gebiet gehört in sein eigenes Feld. Unterscheidet sie nichts davon, sagt der Plan es nicht.
 
 ### `subject_link_quote`
 
@@ -3214,7 +3234,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `technology`
 
@@ -3297,7 +3317,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `tier`
 
@@ -3356,7 +3376,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `value`
 
@@ -3412,7 +3432,7 @@ How the coordinate 'whole' ended. Always present: a missing key and a refused re
 
 ### `whole_window`
 
-[stage, index] of the window 'whole' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'whole' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `year`
 
@@ -3471,7 +3491,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -3509,8 +3529,8 @@ One event per line; `t` names it and `doc` the document. Read by scripts/trace_r
 - `frame`: `attempt`, `completion_tokens`, `doc`, `missed`, `ms`, `pairs`, `prompt_tokens`, `rejected`, `scenarios`, `sources`, `status`, `years`
 - `rows`: `attempt`, `completion_tokens`, `doc`, `ms`, `origins`, `prompt`, `prompt_tokens`, `ranks`, `rows`, `sources`, `status`
 - `code`: `attempt`, `code`, `doc`, `error`, `ok`, `stdout`
-- `field`: `anchor`, `attempt`, `batches`, `completion_tokens`, `doc`, `filled`, `filled_by`, `ms`, `open`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `via_base`, `via_target`, `window`
-- `sweep`: `anchor`, `asked`, `batches`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `scope`, `slot`, `unbacked`, `unquoted`, `unstated`, `via_base`, `via_target`, `windows`, `withdrawn`
+- `field`: `anchor`, `attempt`, `batches`, `completion_tokens`, `doc`, `filled`, `filled_by`, `ms`, `open`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `via_base`, `via_table`, `via_target`, `window`
+- `sweep`: `anchor`, `asked`, `batches`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `scope`, `slot`, `unbacked`, `unquoted`, `unstated`, `via_base`, `via_table`, `via_target`, `windows`, `withdrawn`
 - `drop`: `attempt`, `batches`, `doc`, `field`, `given`, `quote`, `raw`, `row`, `slot`, `why`, `window`
 - `error`: `attempt`, `cause`, `detail`, `doc`, `finish`, `head`, `kind`, `ms`, `owner`, `slot`, `sources`, `status`, `tail`, `where`, `why`
 - `coord`: `doc`, `kind`, `owner`, `parameter`, `states`, `tier`, `unit`, `value`

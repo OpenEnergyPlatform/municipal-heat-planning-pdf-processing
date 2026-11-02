@@ -227,6 +227,11 @@ PHRASES = {
         'hast: {values}. Gib nur diese Einträge noch einmal an, jede Zahl '
         'unter dem Zitat der Zeile, die sie druckt, und lass eine Zahl weg, '
         'die keine Zeile druckt.'),
+    "value_in_several_rows": (
+        'Das "quote" dieser Zahlen läuft über mehrere Tabellenzeilen, und '
+        'mehr als eine davon druckt die Zahl: {values}. Gib nur diese '
+        'Einträge noch einmal an, jeden mit genau der einen Zeile, in der '
+        'er steht, als "quote".'),
     "shorter_field": (
         'Fasse Zeilen mit derselben Antwort in "groups" zusammen und '
         'zitiere nur die kurze Stelle, an der die Angabe steht.'),

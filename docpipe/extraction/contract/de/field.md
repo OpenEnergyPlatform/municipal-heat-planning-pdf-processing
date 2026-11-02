@@ -14,6 +14,7 @@ Du bekommst zuerst ein JSON-Objekt mit "sources", danach die Bilder dazu, zuletz
 - "sources": Quellen aus DEMSELBEN Dokument, je mit Kennung ("id": "Q1", "Q2", …): die Texte, aus denen die Werte stammen.
 - "rows": <!-- block: rows_carry -->die Werte, je mit Kennung ("id": "R1", "R2", …), Quelle, Wert, Einheit und Passage.<!-- /block --> Aus einer Tabellenzeile dazu "column": ihre Zelle in der Zeile, von "columns" Zellen, ausgezählt, nicht geraten, und, wo die Tabelle ihn eindeutig zeigt, "head": die Kopfzellen genau dieser Spalte, Wort für Wort.
 {{rows_more}}
+Eine Zeile mit "table": true steht für ihre ganze Tabelle und für keine einzelne Zahl: gefragt ist, worauf sich die Tabelle als Ganzes bezieht. "head" ist dann ihre Kopfzeile. Deine Antwort gilt für jede Zahl der Tabelle.
 <!-- block: rows_source -->
 Steht die eigene Quelle der Zeile unter den gezeigten, nennt "source" ihre Kennung.
 <!-- /block -->

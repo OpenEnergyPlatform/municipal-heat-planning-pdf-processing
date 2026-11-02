@@ -117,6 +117,11 @@ PHRASES = {
         'These numbers are not printed in the "quote" you gave them under: '
         '{values}. Give only these entries again, each under the quote of '
         'the row that prints it, and leave out a number no row prints.'),
+    "value_in_several_rows": (
+        'The "quote" of these numbers runs over several table rows and '
+        'prints the number on more than one of them: {values}. Give only '
+        'these entries again, each with the one row it stands in as its '
+        '"quote".'),
     "shorter_field": (
         'Put rows with the same answer together in "groups" and quote '
         'only the short place where the field stands.'),

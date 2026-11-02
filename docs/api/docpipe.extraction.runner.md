@@ -172,6 +172,62 @@ document's: the union is a pool the row's answer was not shown.
 def __init__(self, entries: list)
 ```
 
+### TableFrames
+
+```python
+class TableFrames
+```
+
+The scenario and the year of each table that has one frame, read once.
+
+Such a table (`prints_no_frame`) says them in its title or around it, and
+its rows were asked in portions of FIELD_ROWS, each portion reading its
+own answer: 65 of 678 such tables of corpus_m7_100 took several years. The
+frame belongs to the table, so it is searched once for the table and not
+for a value, and every row of the table takes the answer with its evidence
+(owner decision 2026-11-02). One store for a run, since a table's rows can
+stand in several batches, and the first reading stands.
+
+#### TableFrames.\_\_init\_\_
+
+```python
+def __init__(self, slots: list)
+```
+
+#### TableFrames.key_of
+
+```python
+def key_of(self, document_id: int, source) -> Optional[tuple]
+```
+
+The key of this passage if it is a table with one frame.
+
+#### TableFrames.keep
+
+```python
+def keep(self, key: tuple, axis: str, claim: dict) -> None
+```
+
+A reading of this table, unless it has one. What the other rows
+take says that it was the table's: `table`, not the window it was
+read in, whose question they were not asked.
+
+#### TableFrames.reading
+
+```python
+def reading(self, key: tuple, axis: str) -> Optional[dict]
+```
+
+#### TableFrames.take
+
+```python
+@staticmethod
+def take(claim: dict, axis: str, reading: dict) -> None
+```
+
+This row reads the table's reading and nothing it held before: a
+link quote of its own must not stay beside another year.
+
 ### Sweeping
 
 ```python
@@ -242,6 +298,35 @@ def fitting(self, todo: list, window: list) -> list
 
 The open rows a window of the map's places is for, all of them on
 any other stage.
+
+#### Sweeping.table_of
+
+```python
+def table_of(self, row) -> Optional[tuple]
+```
+
+#### Sweeping.for_the_tables
+
+```python
+def for_the_tables(self, todo: list) -> list
+```
+
+One row for each table with one frame, sent as the table and
+without its number; the other rows of the table are not asked.
+
+#### Sweeping.share_tables
+
+```python
+def share_tables(self) -> None
+```
+
+What a row of a table with one frame has read goes to the rows of
+that table still open, and what one has said to those not asked: a
+row that stands for its table and comes back `unstated` speaks for
+them too, and the end of the sweep must not take them for unanswered.
+A row the document's frame was written on is left alone, so a table
+read under two pairs of the document keeps both; a row that answered
+beside another of its table takes the reading that came first.
 
 #### Sweeping.portions
 
@@ -430,7 +515,7 @@ def __init__(self, ask: Callable, *, more_sources: Optional[Callable],
              rest_of_document: Optional[Callable],
              parents: Optional[Callable], anchors: dict,
              budget_of: Callable, places: Optional[Callable] = None,
-             found=None)
+             found=None, frame_axes: Optional[list] = None)
 ```
 
 #### Sweeper.own
@@ -1704,6 +1789,15 @@ def own_title(source) -> str
 The title of the table or figure a row comes from, else its
 section's: the heading a plan prints over the number.
 
+### table_head
+
+```python
+def table_head(source) -> Optional[str]
+```
+
+The first line of a table, which says which table a request means
+once a window no longer shows it.
+
 ### question_head
 
 ```python
@@ -1815,7 +1909,7 @@ def make_sweeper(ask: Callable, *,
                  anchors: Optional[dict] = None,
                  search_share: Optional[dict] = None,
                  places: Optional[Callable] = None,
-                 found=None) -> Sweeper
+                 found=None, frame_axes: Optional[list] = None) -> Sweeper
 ```
 
 sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to.
@@ -1831,7 +1925,8 @@ harvester: the asker, and the three ways of finding more passages plus
 the anchor sets that seed them. *search_share* is the profile's
 `SEARCH_SHARE`: {coordinate: fraction of the search budget}. *places* is
 the document's map of where each axis is answered (`places.Places`).
-*found* is what earlier harvests found (`found.Found`).
+*found* is what earlier harvests found (`found.Found`). *frame_axes* are
+the coordinates a table with one frame is asked once for (`TableFrames`).
 
 ### make_fieldwise_harvester
 

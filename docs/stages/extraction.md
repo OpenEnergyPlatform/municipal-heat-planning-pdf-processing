@@ -276,9 +276,10 @@ itself: only where different numbers meet on one identity does it split them
 rounding and trust stays in the full graph as a node of its own, marked as
 contested, and stays out of the strict graph (owner decision 2026-11-02).
 
-A number from a table carries the words over its column (`head`,
-`column_head`), where a head line has as many cells as the row. On the map's
-places a window is asked once per batch with an open row (`Sweeping.portions`):
+A number from a table carries the words over its column, where a head line
+has as many cells as the row (`column_head`): the field request shows them, and
+the tuple keeps them as `head` (`with_head`), where the graph tells two numbers
+of one row apart by them (`wording_key`). On the map's places a window is asked once per batch with an open row (`Sweeping.portions`):
 in one request with rows of other batches the model answered a row with a quote
 that row cannot be checked against. A share carries `whole`, what it is a share
 of, read from its own passage alone.
@@ -289,6 +290,33 @@ again under their own rows. The check does not change. A number not given
 again stays and is refused as before, and a second reply that fails leaves the
 first as it was. On corpus_m7_100 such numbers were 16 percent of all values
 read, and in a sample 97 percent of them stood in their own passage.
+
+A quote is one table row. A quote that runs over several rows is cut by machine
+to the row printing its number (`narrow_quote`, in `_parse_reply`, per value of
+`values`): the other rows are other numbers' words, and a carrier was read from
+the sum line a quote ran into. It costs nothing and the check is untouched. Only
+a number printed on several of the quoted rows goes to the same second turn
+(`in_several_rows`), since the machine cannot tell which one it is, and it stays
+as it is when the model does not say. Of 1,540 table rows of seven plans of
+corpus_m7_100, 184 quoted several.
+
+A table whose head and rows print no year and no spelling of the scenario list
+has one frame (`prints_no_frame`; its title does not count, that is where such
+a table says it). Its scenario and its year are searched once for the table and
+not for a value (owner decision 2026-11-02, `TableFrames`): a sweep of a frame
+axis sends one row per such table, marked `"table": true`, with the table's
+head line and without number, quote or cell (`Sweeping.for_the_tables`), and
+leaves the table's other rows out of the request. Every row of the table takes
+the reading with its evidence, window `["table", <window it was read in>]`,
+counted as `via_table` in the trace's `sweep` event and as
+`coordinates_taken_from_their_table` in the stats (`share_tables`); a later
+batch on the same table takes it without a request. The first reading stands,
+so a row that read something else takes it too, except a row under a frame pair,
+which keeps its pair. A row that stands for its table and comes back `unstated`
+or `unbacked` speaks for the rows that were not asked. A table that prints a
+year or a scenario word is read number by number as before. On corpus_m7_100,
+678 of 1,140 tables with a read year had one frame, and the rows of 65 of them
+had taken several years.
 
 The plan's target works the same way (owner decision 2026-10-06, the same
 rule as the base year). A profile names the frame pairs that are the target
@@ -1287,6 +1315,8 @@ and never fails the run. Each count says what it counts:
 | `answers_outside_the_list` | `not_an_option` drops, per entry given and wording |
 | `places_maps` | maps of places, one per document: `documents` mapped, `complete` of them, `passages` read, `windows` (requests) asked, `places` taken, `dropped` and `unread` requests, and `places_by_axis`, places per axis |
 | `windows_withdrawn_unsent` | search windows asked ahead and withdrawn before they were sent |
+| `coordinates_taken_from_their_table` | coordinates a row took from the reading of its table, without being asked |
+| `passages_planned_by_origin` | passages planned, per origin: a search or a found place |
 
 The same file can be made for any harvest by hand with `python -m
 docpipe.extraction.stats HARVEST_DIR [--trace DIR ...]`, trace directories

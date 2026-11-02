@@ -219,6 +219,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -267,7 +271,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -326,6 +330,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -374,7 +382,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -431,6 +439,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -479,7 +491,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -530,6 +542,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -578,7 +594,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -636,6 +652,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -684,7 +704,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -735,6 +755,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -783,7 +807,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -848,7 +872,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `tier`
 
@@ -903,6 +927,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -951,7 +979,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -1008,6 +1036,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -1056,7 +1088,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -1121,7 +1153,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `tier`
 
@@ -1174,6 +1206,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -1222,7 +1258,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -1287,7 +1323,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `tier`
 
@@ -1374,6 +1410,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -1422,7 +1462,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -1487,7 +1527,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `tier`
 
@@ -1533,6 +1573,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
@@ -1582,7 +1626,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -1639,6 +1683,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -1687,7 +1735,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -1789,6 +1837,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -1837,7 +1889,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -1890,6 +1942,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -1938,7 +1994,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -1996,6 +2052,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -2044,7 +2104,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -2101,6 +2161,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -2149,7 +2213,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -2517,6 +2581,10 @@ The value came out of the sandbox, not off the page; the quote proves the inputs
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
 
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
 ### `kind`
 
 ### `parameter`
@@ -2565,7 +2633,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ### `provenance`
 
@@ -2686,8 +2754,8 @@ One event per line; `t` names it and `doc` the document. Read by scripts/trace_r
 - `frame`: `attempt`, `completion_tokens`, `doc`, `missed`, `ms`, `pairs`, `prompt_tokens`, `rejected`, `scenarios`, `sources`, `status`, `years`
 - `rows`: `attempt`, `completion_tokens`, `doc`, `ms`, `origins`, `prompt`, `prompt_tokens`, `ranks`, `rows`, `sources`, `status`
 - `code`: `attempt`, `code`, `doc`, `error`, `ok`, `stdout`
-- `field`: `anchor`, `attempt`, `batches`, `completion_tokens`, `doc`, `filled`, `filled_by`, `ms`, `open`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `via_base`, `via_target`, `window`
-- `sweep`: `anchor`, `asked`, `batches`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `scope`, `slot`, `unbacked`, `unquoted`, `unstated`, `via_base`, `via_target`, `windows`, `withdrawn`
+- `field`: `anchor`, `attempt`, `batches`, `completion_tokens`, `doc`, `filled`, `filled_by`, `ms`, `open`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `via_base`, `via_table`, `via_target`, `window`
+- `sweep`: `anchor`, `asked`, `batches`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `scope`, `slot`, `unbacked`, `unquoted`, `unstated`, `via_base`, `via_table`, `via_target`, `windows`, `withdrawn`
 - `drop`: `attempt`, `batches`, `doc`, `field`, `given`, `quote`, `raw`, `row`, `slot`, `why`, `window`
 - `error`: `attempt`, `cause`, `detail`, `doc`, `finish`, `head`, `kind`, `ms`, `owner`, `slot`, `sources`, `status`, `tail`, `where`, `why`
 - `coord`: `doc`, `kind`, `owner`, `parameter`, `states`, `tier`, `unit`, `value`
