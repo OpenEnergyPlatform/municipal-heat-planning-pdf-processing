@@ -41,7 +41,7 @@ REQUIRED = frozenset({
     "no_object", "syntax", "outside_text", "not_an_object", "key_missing",
     "key_not_a_list", "wrong_shape",
     "code_failed", "code_error_unknown", "code_silent", "code_output",
-    "image_for", "anchor_parameter", "anchor_unit",
+    "image_for", "anchor_parameter", "anchor_unit", "value_outside_quote",
 })
 
 _checked: dict = {}

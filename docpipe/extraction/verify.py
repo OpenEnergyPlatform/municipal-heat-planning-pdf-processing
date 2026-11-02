@@ -305,6 +305,17 @@ def value_in_quote(raw: dict, parameter: Parameter, quote: str) -> bool:
     return flat(str(wording)).casefold() in flat(quote).casefold()
 
 
+def number_outside_quote(claim: dict) -> bool:
+    """A number the quote it stands under does not print. What
+    `value_in_quote` refuses, asked before the parameter of a row is known."""
+    value, quote = claim.get("value"), claim.get("quote")
+    if (isinstance(value, bool) or not isinstance(quote, str)
+            or claim.get("computed") is True):
+        return False
+    wanted = canonical_number(value)
+    return wanted is not None and wanted not in numbers_in(quote)
+
+
 # A full stop, not a list separator. Figure descriptions separate items with
 # semicolons and colons ("EWS: 41; EWK: 20"), and cutting the passage there
 # leaves a fragment that proves nothing.

@@ -2994,6 +2994,97 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
     # Deferred: docpipe.inference's package __init__ pulls in the whole answer
     # loop, which demands a profile at import time.
     from docpipe.inference import code_exec
+    from .verify import canonical_number, number_outside_quote
+
+    def send(conversation: list, limit: int, temperature_now: float,
+             allowed: Optional[int]):
+        return client.chat.completions.create(
+            model=LLM_MODEL,
+            temperature=temperature_now,
+            max_tokens=limit,
+            messages=[{"role": "system", "content": prompt.text},
+                      *conversation],
+            # Refinement and the vision path have said this for
+            # longer than this stage has existed: a reasoning model
+            # must not spend the token budget on a think block,
+            # because that truncates the JSON answer. Extraction was
+            # the one stage that did not say it, and the pilot lost
+            # 1093 of 16102 harvests to replies with no 'tuples' in
+            # them, HTTP 200 every one.
+            extra_body=request_extras(),
+            **({"timeout": allowed} if allowed else {}),
+            **providers.formatted("llm", "rows_reply", replies.rows(
+                sandbox=CODE_ROUNDS > 0)),
+        )
+
+    def traced(batch, attempt: int, answer: dict, response,
+               started: float) -> None:
+        usage = getattr(response, "usage", None)
+        trace.event("rows", batch.document_id, prompt=ROWS_PROMPT_ID,
+                    attempt=attempt, rows=len(answer["tuples"]),
+                    status=answer.get("status"),
+                    sources=[[it.source.owner_kind, it.source.owner_id]
+                             for it in batch.items],
+                    ranks=[it.rank for it in batch.items],
+                    origins=[it.origin for it in batch.items],
+                    prompt_tokens=getattr(usage, "prompt_tokens", None),
+                    completion_tokens=getattr(usage, "completion_tokens",
+                                              None),
+                    ms=int((time.time() - started) * 1000))
+
+    def reread(batch, answer: dict, said: Optional[str], conversation: list,
+               attempt: int, started: float) -> dict:
+        """One more turn for the numbers the quote above them does not print.
+
+        Of 9,914 such numbers in corpus_m7_100, 97 percent of a sample stood
+        in their own passage, under the quote of another row. Told which, the
+        model names the right rows; the check stays what it is. A number the
+        second reply does not give again stays and is refused as before, and
+        a second reply that fails leaves the first as it was.
+        """
+        wrong = [claim for claim in answer["tuples"] if isinstance(claim, dict)
+                 and number_outside_quote(claim)]
+        if not wrong:
+            return answer
+        asked = [*conversation, {"role": "assistant", "content": said or ""},
+                 {"role": "user", "content": say(
+                     "value_outside_quote", values=json.dumps(
+                         [{"value": claim.get("value"),
+                           "quote": claim.get("quote")} for claim in wrong],
+                         ensure_ascii=False))}]
+        limit = answer_room(prompt.text, asked, max_tokens)
+        if limit < MIN_ANSWER_TOKENS:
+            return answer
+        scheduler.serve_for(batch.document_id)
+        try:
+            response = send(asked, limit, temperature,
+                            request_timeout(max_tokens, max_tokens, False))
+        except Exception as exc:
+            log.warning("   harvest %s: second reading failed: %s",
+                        batch.document_id, exc)
+            trace.event("error", batch.document_id, where=ROWS_PROMPT_ID,
+                        kind="exception", attempt=attempt + 1,
+                        status=getattr(exc, "status_code", None),
+                        detail=str(exc)[:300])
+            return answer
+        reply = response.choices[0]
+        _observe_usage(getattr(response, "usage", None))
+        again = _parse_reply(reply.message.content)
+        if again is None:
+            cause, _correction = _reply_fault(reply, limit, key="tuples",
+                                              shorter=say("shorter_rows"))
+            trace.event("error", batch.document_id, where=ROWS_PROMPT_ID,
+                        kind="unreadable", attempt=attempt + 1, cause=cause,
+                        finish=getattr(reply, "finish_reason", None))
+            return answer
+        traced(batch, attempt + 1, again, response, started)
+        given = {canonical_number(claim.get("value"))
+                 for claim in again["tuples"] if isinstance(claim, dict)}
+        wrong_ids = {id(claim) for claim in wrong}
+        kept = [claim for claim in answer["tuples"]
+                if id(claim) not in wrong_ids
+                or canonical_number(claim.get("value")) not in given]
+        return {**answer, "tuples": kept + again["tuples"]}
 
     def harvest(batch, prior: Optional[list] = None, *,
                 ceiling: Optional[int] = None, depth: int = 0) -> dict:
@@ -3050,24 +3141,9 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
                 break
             scheduler.serve_for(batch.document_id)
             try:
-                response = client.chat.completions.create(
-                    model=LLM_MODEL,
-                    temperature=retry_temperature(temperature, faults),
-                    max_tokens=limit,
-                    messages=[{"role": "system", "content": prompt.text},
-                              *conversation],
-                    # Refinement and the vision path have said this for
-                    # longer than this stage has existed: a reasoning model
-                    # must not spend the token budget on a think block,
-                    # because that truncates the JSON answer. Extraction was
-                    # the one stage that did not say it, and the pilot lost
-                    # 1093 of 16102 harvests to replies with no 'tuples' in
-                    # them, HTTP 200 every one.
-                    extra_body=request_extras(),
-                    **({"timeout": allowed} if allowed else {}),
-                    **providers.formatted("llm", "rows_reply", replies.rows(
-                        sandbox=CODE_ROUNDS > 0)),
-                )
+                response = send(conversation, limit,
+                                retry_temperature(temperature, faults),
+                                allowed)
                 transport = False
                 why[0] = "no_answer"
                 reply = response.choices[0]
@@ -3101,21 +3177,9 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
                         for t in answer["tuples"]:
                             if isinstance(t, dict):
                                 t.setdefault("compute", compute)
-                    usage = getattr(response, "usage", None)
-                    trace.event("rows", batch.document_id, prompt=ROWS_PROMPT_ID,
-                                attempt=attempt, rows=len(answer["tuples"]),
-                                status=answer.get("status"),
-                                sources=[[it.source.owner_kind,
-                                          it.source.owner_id]
-                                         for it in batch.items],
-                                ranks=[it.rank for it in batch.items],
-                                origins=[it.origin for it in batch.items],
-                                prompt_tokens=getattr(usage, "prompt_tokens",
-                                                      None),
-                                completion_tokens=getattr(
-                                    usage, "completion_tokens", None),
-                                ms=int((time.time() - started) * 1000))
-                    return answer
+                    traced(batch, attempt, answer, response, started)
+                    return reread(batch, answer, reply.message.content,
+                                  conversation, attempt, started)
                 faults += 1
                 cause, correction = _reply_fault(
                     reply, limit, key="tuples",

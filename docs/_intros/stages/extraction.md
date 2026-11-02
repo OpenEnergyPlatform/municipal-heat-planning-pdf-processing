@@ -259,6 +259,13 @@ quote until corpus_m7_100, where 110,792 of 125,192 year answers refused as
 `quote_not_in_source` had copied that quote from a passage the request did
 not show; the quote stays on this side and `merge_field` writes it.
 
+A rows reply that gives a number under a quote not printing it gets one more
+turn (`reread`, `runner.py`): the model is told which numbers and answers those
+again under their own rows. The check does not change. A number not given
+again stays and is refused as before, and a second reply that fails leaves the
+first as it was. On corpus_m7_100 such numbers were 16 percent of all values
+read, and in a sample 97 percent of them stood in their own passage.
+
 The plan's target works the same way (owner decision 2026-10-06, the same
 rule as the base year). A profile names the frame pairs that are the target
 with `TARGET_YEAR`, kwp's `{"scenario": "target"}`
@@ -465,7 +472,8 @@ have had no rest stage. A profile's `SEARCH_SHARE` scales a named coordinate's
 retrieval and rest allowance by a fraction, at least one window staying; a key
 may be `<parameter>.<axis>` and is read before the bare axis, and a share of 0
 reads the value's own passage alone, with no retrieval and no rest stage (kwp
-halves `sector` and `aggregation`, and sets 0 for `technology`,
+halves `sector`, and sets 0 for `aggregation`, whose search cost 77 million
+prompt tokens for 730 coordinates on 100 plans, and for `technology`,
 `emission.carrier` and `emission.sector`, which the data schema leaves
 optional; `profiles/kwp/extraction.py`).
 The run's first log line about the sweep states the allowance of one

@@ -53,7 +53,7 @@ Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die P
 {{quote_lines}}
 
 <!-- block: values_row -->
-<!-- rule: values_row --> "values": Trägt eine Tabellenzeile mehrere gesuchte Zahlen mit derselben Einheit, schreibst du sie als EINEN Eintrag: die Zeile einmal in "quote" und die Zahlen als Liste in "values" statt in "value". Jede Tabellenzeile bekommt ihren EIGENEN Eintrag: "quote" ist genau EINE Zeile, nie mehrere Zeilen und nie die ganze Tabelle, und in "values" steht nur, was in dieser einen Zeile steht. Jede Zahl zählt als eigener Wert, wird einzeln geprüft und muss in dieser Zeile stehen. Haben die Spalten verschiedene Einheiten, bekommt jede Einheit einen Eintrag mit derselben "quote".
+<!-- rule: values_row --> "values": Trägt eine Tabellenzeile mehrere gesuchte Zahlen mit derselben Einheit, schreibst du sie als EINEN Eintrag: die Zeile einmal in "quote" und die Zahlen als Liste in "values" statt in "value". Jede Tabellenzeile bekommt ihren EIGENEN Eintrag: "quote" ist genau EINE Zeile, nie mehrere Zeilen und nie die ganze Tabelle, und in "values" steht nur, was in dieser einen Zeile steht. Jede Zahl zählt als eigener Wert, wird einzeln geprüft und muss in dieser Zeile stehen; such jede Zahl vor dem Schreiben in deinem "quote", eine Zahl der nächsten Zeile gehört in deren Eintrag. Haben die Spalten verschiedene Einheiten, bekommt jede Einheit einen Eintrag mit derselben "quote".
 
 <!-- /block -->
 <!-- block: per_value -->

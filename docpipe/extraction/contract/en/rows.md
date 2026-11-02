@@ -53,7 +53,7 @@ Every entry is checked mechanically and literally against the source; whatever f
 {{quote_lines}}
 
 <!-- block: values_row -->
-<!-- rule: values_row --> "values": If a table row carries several values you are looking for with the same unit, write them as ONE entry: the row once in "quote" and the numbers as a list in "values" instead of "value". Each table row gets its OWN entry: "quote" is exactly ONE row, never several rows and never the whole table, and "values" holds only what stands in that one row. Each number counts as a value of its own, is checked on its own and must stand in that row. If the columns have different units, each unit gets an entry with the same "quote".
+<!-- rule: values_row --> "values": If a table row carries several values you are looking for with the same unit, write them as ONE entry: the row once in "quote" and the numbers as a list in "values" instead of "value". Each table row gets its OWN entry: "quote" is exactly ONE row, never several rows and never the whole table, and "values" holds only what stands in that one row. Each number counts as a value of its own, is checked on its own and must stand in that row; look for each number in your "quote" before writing it, a number of the next row belongs in that row's entry. If the columns have different units, each unit gets an entry with the same "quote".
 
 <!-- /block -->
 <!-- block: per_value -->

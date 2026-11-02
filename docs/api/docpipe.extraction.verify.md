@@ -140,6 +140,15 @@ def value_in_quote(raw: dict, parameter: Parameter, quote: str) -> bool
 
 Is the claimed value actually in the passage it cites?
 
+### number_outside_quote
+
+```python
+def number_outside_quote(claim: dict) -> bool
+```
+
+A number the quote it stands under does not print. What
+`value_in_quote` refuses, asked before the parameter of a row is known.
+
 ### verify_tuple
 
 ```python

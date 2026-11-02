@@ -216,3 +216,72 @@ def test_a_sandbox_round_is_on_the_trace_and_on_the_values(monkeypatch, ran,
     got = runner.make_harvester(spec=SPEC)(batch, [])
     assert [f["ok"] for kind, f in events if kind == "code"] == [ran["ok"]]
     assert got["tuples"][0]["compute"][0]["stdout"] == kept
+
+
+ROW = "| Wohnen | 120 | 80 |"
+NEXT = "| Gewerbe | 40 | 30 |"
+
+
+def reread_harvest(monkeypatch, *said):
+    """A rows request over two table rows, answered by *said* in turn. The
+    replies it got, and the conversation of each, for the assertions."""
+    told = iter(said)
+    asked = []
+
+    def create(**request):
+        asked.append(request["messages"])
+        return SimpleNamespace(usage=None, choices=[SimpleNamespace(
+            finish_reason="stop", message=SimpleNamespace(content=next(told)))])
+
+    client = SimpleNamespace(chat=SimpleNamespace(
+        completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(runner, "_client", lambda *a, **k: client)
+    monkeypatch.setattr(runner.trace, "event", lambda *a, **k: None)
+    source = pipeline.Source(owner_kind="table", owner_id=1, provenance={},
+                             text=f"{ROW}\n{NEXT}")
+    batch = pipeline.Batch(1, None, [pipeline.WorkItem(1, None, source)])
+    return runner.make_harvester(spec=SPEC)(batch, []), asked
+
+
+def entries(*pairs):
+    return json.dumps({"tuples": [
+        {"source": "Q1", "values": values, "quote": quote}
+        for values, quote in pairs], "status": "complete"})
+
+
+def numbers_of(got):
+    return sorted((t["value"], t["quote"]) for t in got["tuples"])
+
+
+def test_a_number_under_the_wrong_row_is_asked_again_and_named(monkeypatch):
+    got, asked = reread_harvest(
+        monkeypatch, entries(([120, 40], ROW)), entries(([40], NEXT)))
+    assert numbers_of(got) == [(40, NEXT), (120, ROW)]
+    assert len(asked) == 2
+    assert "40" in asked[1][-1]["content"]
+
+
+def test_numbers_their_quote_prints_cost_no_second_request(monkeypatch):
+    got, asked = reread_harvest(monkeypatch, entries(([120, 80], ROW)))
+    assert numbers_of(got) == [(80, ROW), (120, ROW)]
+    assert len(asked) == 1
+
+
+def test_a_number_not_given_again_stays_to_be_refused(monkeypatch):
+    got, _asked = reread_harvest(
+        monkeypatch, entries(([120, 999], ROW)), entries())
+    assert numbers_of(got) == [(120, ROW), (999, ROW)]
+
+
+def test_an_unreadable_second_reply_leaves_the_first(monkeypatch):
+    got, asked = reread_harvest(
+        monkeypatch, entries(([120, 999], ROW)), "no object")
+    assert numbers_of(got) == [(120, ROW), (999, ROW)]
+    assert len(asked) == 2
+
+
+def test_a_wrong_second_quote_is_not_asked_a_third_time(monkeypatch):
+    got, asked = reread_harvest(
+        monkeypatch, entries(([999], ROW)), entries(([999], NEXT)))
+    assert numbers_of(got) == [(999, NEXT)]
+    assert len(asked) == 2

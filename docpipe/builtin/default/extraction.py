@@ -113,6 +113,10 @@ PHRASES = {
     "shorter_rows": (
         'Answer with fewer tuples and quote only the short place where '
         'the value stands.'),
+    "value_outside_quote": (
+        'These numbers are not printed in the "quote" you gave them under: '
+        '{values}. Give only these entries again, each under the quote of '
+        'the row that prints it, and leave out a number no row prints.'),
     "shorter_field": (
         'Put rows with the same answer together in "groups" and quote '
         'only the short place where the field stands.'),
