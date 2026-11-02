@@ -2352,7 +2352,8 @@
               "spellings": [
                 "Anteil",
                 "Prozentanteil",
-                "davon"
+                "davon",
+                "%"
               ],
               "definition": "A fraction value is a relational quantity value that has a fraction as it's unit."
             },

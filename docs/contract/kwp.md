@@ -2753,7 +2753,7 @@ The prompt's own wording:
 <details><summary>What it may answer (2)</summary>
 
 - **fraction value** → `OEO_00140127` — A fraction value is a relational quantity value that has a fraction as it's unit.
-  - also written: Anteil, Prozentanteil, davon
+  - also written: Anteil, Prozentanteil, davon, %
 - **keine Anteilsangabe** → `out:other` — Ein Prozentwert, der keinen Teil eines Ganzen nennt: eine Rate pro Jahr, ein Wirkungsgrad, eine Anschlussquote an Gebäuden, eine Veränderung gegenüber einem Basisjahr.
   - also written: Quote, Rate, Wirkungsgrad, Veränderung
 

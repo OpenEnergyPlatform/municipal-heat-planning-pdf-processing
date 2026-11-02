@@ -25,4 +25,4 @@ Welche Jahreszahl ein Bezugsjahr ist:
 2. Ein Zieljahr im Text: "bis 2045 klimaneutral", "im Zieljahr 2040".
 3. Ein Bilanzjahr der Bestandsaufnahme: "Bilanzjahr 2022", "Stand 2021".
 
-Was KEIN Bezugsjahr ist: das Datum eines Gesetzes ("WPG 2023"), eine Fördermittelfrist, eine Jahreszahl in einer Literaturangabe, das Erscheinungsjahr des Plans selbst, wenn keine Werte dazu stehen, und eine Zahl in einer Werteinheit ("2045 MWh").
+Was KEIN Bezugsjahr ist: das Datum eines Gesetzes ("WPG 2023"), eine Fördermittelfrist, eine Jahreszahl in einer Literaturangabe, das Erscheinungs-, Ausgabe- oder Bearbeitungsdatum des Plans selbst, wenn keine Werte dazu stehen, eine Zahl in einem Namen oder einer Kennung (Projekt, Gebiet, Aktenzeichen), und eine Zahl in einer Werteinheit ("2045 MWh").

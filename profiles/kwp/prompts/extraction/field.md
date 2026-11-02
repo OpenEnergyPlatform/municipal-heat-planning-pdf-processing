@@ -23,6 +23,7 @@ das Wort des Plans, aus dem du die Antwort hast: Zeilenbeschriftung, Spaltenkopf
    Es ist NIE der Name aus "options": die Klassennamen sind oft englisch und stehen in keinem Wärmeplan.
    RICHTIG: "value": "final energy consumption value", "value_raw": "Wärmebedarf", "quote": "<<Titel der eigenen Tabelle, wörtlich, mit „Wärmebedarf“ darin>>"
    FALSCH: "value_raw": "final energy consumption value". Das steht in keiner Quelle, und die Antwort fällt durch.
+   Druckt dein Zitat das Wort nicht, aber eine der Schreibweisen des gewählten Eintrags, etwa "%", dann lass "value_raw" weg; schreib kein Wort hin, das nicht dasteht.
    "value_raw" steht Zeichen für Zeichen in deinem "quote": dieselbe Beugung, dieselbe Reihenfolge, kein Wort und kein Satzzeichen dazu oder weg. Steht im Zitat "technischem Wärmepotenzial", dann nicht "technisches Wärmepotenzial"; steht dort "Strom- und Wärmeerzeugung", dann nicht "Wärme- und Stromerzeugung"; steht dort "(kt/a)", dann "kt/a" und nicht "in kt/a"; steht dort "Erdgas-Bestand", dann nicht "Erdgas Bestand".
 
 <!-- part: quote_more -->
@@ -45,11 +46,11 @@ Enthält "options" Einträge, die ausdrücklich das Gegenteil einer Klasse sind 
 RICHTIG: ein ganzer Satz mit dem Wort des Plans für die gesuchte Angabe, wie er im Plan stehen würde. FALSCH: "Bezugsjahr", zu kurz, findet alles und nichts.
 
 <!-- part: base_years_rule -->
-   Trägt Spalte, Zeile oder Überschrift einer Zahl statt einer Jahreszahl nur das Wort des Plans für seinen eigenen Stand ("Basisjahr", "Bilanzjahr", "Ist-Zustand", "Status quo", "IST", "Bestand", "aktuell"), steht ihr Jahr meist EINMAL an anderer Stelle im Plan. Steht "base_years" im Eingabe-Objekt, wähl daraus das Jahr, auf das dieses Wort verweist: "value" ist die Jahreszahl, "value_raw" das Wort des Plans, Zeichen für Zeichen, und "quote" die Stelle, an der das Wort für deine Zahl steht. Das Wort belegt dein Zitat, die Jahreszahl belegt das Zitat aus "base_years".
-   RICHTIG, mit "base_years": [{"year": 2022, "quote": "<<Satz des Plans, der das Jahr seines Bestands druckt>>"}]: "value": 2022, "value_raw": "Basisjahr", "quote": "<<Stelle einer gezeigten Quelle, wörtlich, an der „Basisjahr“ bei deiner Zahl steht>>"
+   Trägt Spalte, Zeile oder Überschrift einer Zahl statt einer Jahreszahl nur das Wort des Plans für seinen eigenen Stand ("Basisjahr", "Bilanzjahr", "Ist-Zustand", "Status quo", "IST", "Bestand", "aktuell"), steht ihr Jahr meist EINMAL an anderer Stelle im Plan. Steht "base_years" im Eingabe-Objekt, wähl daraus das Jahr, auf das dieses Wort verweist: "value" ist die Jahreszahl, "value_raw" das Wort des Plans, Zeichen für Zeichen, und "quote" die Stelle, an der das Wort für deine Zahl steht. Dein Zitat belegt das Wort; die Jahreszahl ist anderswo belegt und braucht kein Zitat von dir.
+   RICHTIG, mit "base_years": [2022]: "value": 2022, "value_raw": "Basisjahr", "quote": "<<Stelle einer gezeigten Quelle, wörtlich, an der „Basisjahr“ bei deiner Zahl steht>>"
    Fehlt "base_years" oder passt keins seiner Jahre, und steht das Jahr auch nicht in den Passagen, antworte "{{unstated}}" und such mit "need_more" nach dem Satz, der das Jahr des Bestands nennt. Rate das Jahr nicht aus dem Erscheinungsjahr des Plans.
 
 <!-- part: target_years_rule -->
    Dasselbe gilt für das Wort des Plans für sein Ziel ("Zieljahr", "Zielzustand", "Zielszenario", "Ziel"), wenn es statt einer Jahreszahl dasteht. Steht "target_years" im Eingabe-Objekt, wähl daraus das Jahr, auf das dieses Wort verweist: "value" ist die Jahreszahl, "value_raw" das Wort des Plans, Zeichen für Zeichen, und "quote" die Stelle, an der das Wort für deine Zahl steht. Nennt "target_years" mehrere Jahre, ist das Zieljahr das, das der Plan selbst so nennt oder in dem sein Ziel erreicht ist, kein Zwischenziel und kein Stützjahr. Lässt sich das nicht entscheiden, antworte "{{unstated}}".
-   RICHTIG, mit "target_years": [{"year": 2045, "quote": "<<Satz des Plans, der sein Zieljahr druckt>>"}]: "value": 2045, "value_raw": "Zieljahr", "quote": "<<Stelle einer gezeigten Quelle, wörtlich, an der „Zieljahr“ bei deiner Zahl steht>>"
+   RICHTIG, mit "target_years": [2045]: "value": 2045, "value_raw": "Zieljahr", "quote": "<<Stelle einer gezeigten Quelle, wörtlich, an der „Zieljahr“ bei deiner Zahl steht>>"
    Fehlt "target_years" oder passt keins seiner Jahre, und steht das Jahr auch nicht in den Passagen, antworte "{{unstated}}" und such mit "need_more" nach dem Satz, der das Zieljahr nennt.

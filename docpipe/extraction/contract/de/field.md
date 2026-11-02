@@ -19,10 +19,10 @@ Steht die eigene Quelle der Zeile unter den gezeigten, nennt "source" ihre Kennu
 <!-- /block -->
 - "fields": das gesuchte Feld, eine Liste mit genau einem Eintrag: "name", "question" und, bei einer geschlossenen Liste, "options" (je Eintrag ein Name und die Schreibweisen, unter denen er im Korpus schon vorkam).
 <!-- block: base_years -->
-- "base_years" (nur bei der Frage nach dem Jahr, und nur wenn das Dokument sie nennt): die Jahre, für die das Dokument seinen eigenen Stand erhoben oder bilanziert hat, je mit dem Zitat, das die Jahreszahl druckt. Regel {{rule:need_more}} sagt, wie du sie benutzt.
+- "base_years" (nur bei der Frage nach dem Jahr, und nur wenn das Dokument sie nennt): die Jahre, für die das Dokument seinen eigenen Stand erhoben oder bilanziert hat, als Jahreszahlen. Regel {{rule:need_more}} sagt, wie du sie benutzt.
 <!-- /block -->
 <!-- block: target_years -->
-- "target_years" (nur bei der Frage nach dem Jahr, und nur wenn das Dokument sie nennt): die Jahre, die das Dokument für sein Ziel nennt, je mit dem Zitat, das die Jahreszahl druckt. Regel {{rule:need_more}} sagt, wie du sie benutzt.
+- "target_years" (nur bei der Frage nach dem Jahr, und nur wenn das Dokument sie nennt): die Jahre, die das Dokument für sein Ziel nennt, als Jahreszahlen. Regel {{rule:need_more}} sagt, wie du sie benutzt.
 <!-- /block -->
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, OHNE Einrückung:

@@ -21,10 +21,10 @@ If the row's own source is among those shown, "source" names its identifier.
 <!-- /block -->
 - "fields": the field asked for, as a list with exactly one entry: "name", the question ("question") and, if there is a closed list, the permitted entries ("options").<!-- block: options_explained --> Each entry is named by its key and carries "{{option_spellings}}", the other ways it is written, and, where the ontology defines it, "{{option_means}}", its definition; if no entry has a definition, an entry is just the list of its spellings. The entry "{{unstated}}" is always among them: it means that {{unstated_means}}.<!-- /block -->
 <!-- block: base_years -->
-- "base_years" (only when the question asks for the year, and only if the document names them): the years for which the document recorded or reported its own state, each with the quote that prints the year. Rule {{rule:need_more}} says how you use them.
+- "base_years" (only when the question asks for the year, and only if the document names them): the years for which the document recorded or reported its own state, as year numbers. Rule {{rule:need_more}} says how you use them.
 <!-- /block -->
 <!-- block: target_years -->
-- "target_years" (only when the question asks for the year, and only if the document names them): the years the document names for its target, each with the quote that prints the year. Rule {{rule:need_more}} says how you use them.
+- "target_years" (only when the question asks for the year, and only if the document names them): the years the document names for its target, as year numbers. Rule {{rule:need_more}} says how you use them.
 <!-- /block -->
 
 Return only a JSON object in this form, on ONE line, without indentation:

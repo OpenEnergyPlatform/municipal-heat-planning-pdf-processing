@@ -256,7 +256,10 @@ the most common (`profiles/kwp/extraction.py`). The year field's
 own request is shown the plan's base years alongside the question,
 `"base_years"` (`runner.py`), and the trace's `field` event
 counts how many of a window's answers came this way, `via_base`
-(`Sweeping.run`).
+(`Sweeping.run`). The list holds the year numbers alone. It held each year's
+quote until corpus_m7_100, where 110,792 of 125,192 year answers refused as
+`quote_not_in_source` had copied that quote from a passage the request did
+not show; the quote stays on this side and `merge_field` writes it.
 
 The plan's target works the same way (owner decision 2026-10-06, the same
 rule as the base year). A profile names the frame pairs that are the target

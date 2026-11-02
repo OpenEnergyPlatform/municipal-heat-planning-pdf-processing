@@ -954,7 +954,7 @@ def named_year(slot, given, wording: Optional[str], quote: str,
 
     A row whose table says "Basisjahr" or "Zieljahr" and prints no year states
     its year elsewhere in the plan, once: where the frame read that state. The
-    model is shown those years with their quotes (`named_years`) and answers
+    model is shown those years (`named_years`) and answers
     one of them, citing the passage that names the state. That answer is
     backed by two passages, each for its own half: the row's quote carries the
     wording, the frame's quote carries the number. Anything else is None, and

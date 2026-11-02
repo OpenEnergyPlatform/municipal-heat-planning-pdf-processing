@@ -3341,10 +3341,12 @@ def _field_payload(shown: list, rows: list, slots,
     # prints no year answers one of these and cites the passage that names
     # the state (`merge_field`). Each state under its own key, so the prompt
     # can say which word points at which list.
+    # Numbers alone: the frame's quote stays here (`merge_field` writes it).
+    # Shown, it was copied as the row's own quote, 110,792 refusals of
+    # corpus_m7_100, from a passage the request did not show.
     for state, key in YEAR_STATES.items():
-        dated = [{"year": b["year"], "quote": b["quote"]}
-                 for b in bases or ()
-                 if b.get("axis") in names and b["state"] == state]
+        dated = sorted({b["year"] for b in bases or ()
+                        if b.get("axis") in names and b["state"] == state})
         if dated:
             out[key] = dated
     out["fields"] = asked
