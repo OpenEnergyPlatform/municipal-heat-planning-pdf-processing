@@ -44,17 +44,20 @@ OEO = "https://openenergyplatform.org/ontology/oeo/"
 OBO = "http://purl.obolibrary.org/obo/"
 
 # What this profile is written against, always at upstream's current version.
-# MHPO attaches nothing to its releases: its mhpo.owl is in the repository,
-# and is read at the tag of the latest release. The MHPKG schema is read at
-# its branch's head and kept as mhpkg_schema.yaml (mhpkg.py), which kg.py
-# takes its terms from; `reviewed` only names the commit the report of
-# changed files starts from.
+# OEO at its latest release: the closure is reasoned, and its development
+# state is Manchester sources whose class hierarchy only a reasoner completes
+# (read without one, 5 of the release's 126 energy carriers stay carriers).
+# MHPO at the head of develop, where the team builds mhpo.owl from its edit
+# file (owner decision 2026-11-03). The MHPKG schema is read at its branch's
+# head and kept as mhpkg_schema.yaml (mhpkg.py), which kg.py takes its terms
+# from; `reviewed` only names the commit the report of changed files starts
+# from.
 SOURCES = {
     "oeo": {"kind": "release_asset", "repo": "OpenEnergyPlatform/ontology",
             "asset": "oeo-closure.owl"},
-    "mhpo": {"kind": "release_file",
+    "mhpo": {"kind": "repo_files",
              "repo": "OpenEnergyPlatform/municipal-heat-planning-ontology",
-             "file": "mhpo.owl"},
+             "ref": "develop", "files": ["mhpo.owl"]},
     "mhpkg": {"kind": "repo_files", "repo": "OpenEnergyPlatform/oekg",
               "ref": "production",
               "reviewed": "c18860c373eefc0ff38fb7f01a6ff0a230ef1e0d",

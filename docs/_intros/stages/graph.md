@@ -348,7 +348,11 @@ names a `reviewed` commit, compared against it so a schema `kg.py`
 mirrors by hand is named the moment it moves; a `sparql` source
 queries the OEKG endpoint with a token read from the environment
 variable it names and written nowhere. `kwp` reads MHPO's `mhpo.owl`
-as a `release_file`, because MHPO's releases carry no attachment.
+as `repo_files` at the head of `develop`, where the team builds it from
+its edit file, and OEO at its latest release, whose closure is reasoned:
+OEO's development state is Manchester sources whose class hierarchy only a
+reasoner completes, and read without one 5 of the release's 126 energy
+carriers stay carriers (owner decision 2026-11-03).
 `write_lock` records every
 source's result in `data/upstream/<profile>.lock.json`.
 

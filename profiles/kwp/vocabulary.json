@@ -61,7 +61,7 @@
   "oeo_version_iri": "https://openenergyplatform.org/ontology/oeo/releases/2.14.0/oeo.owl",
   "sources": {
    "mhpkg": "3d3e131ec1b5",
-   "mhpo": "v0.1.0",
+   "mhpo": "32d694a86b04",
    "oeo": "v2.14.0"
   }
  },
