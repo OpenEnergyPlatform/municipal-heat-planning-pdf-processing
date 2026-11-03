@@ -19,6 +19,11 @@ A number in a passage no harvest found anything in stays unread. The stamp
 says so (`PASS`): a run without `--start-at` harvests such a document again,
 and `--top-up-open` reads the passages its trace did not ask.
 
+A found place stands only for the questions that were asked when it was
+found. A parameter no stored harvest of the document was asked (its stamp has
+no `parameter/<uri>` key) has no places, and is searched over the whole plan
+as in any run (owner decision 2026-11-03).
+
 A document has no found places when no stamped harvest holds it, when nothing
 was found in it, or when it no longer holds every place: then it is planned
 as in any run.
@@ -35,6 +40,7 @@ from typing import Callable
 from . import fields
 from .remap import stamp_path_of
 from .topup import read_harvest
+from .topup_parameter import gained as never_asked
 
 log = logging.getLogger(__name__)
 
@@ -116,6 +122,19 @@ class Found:
                      "in full", name, len(gone), len(kept.passages))
             return Kept()
         return kept
+
+    def gained(self, document_id: int, spec) -> list:
+        """The uris of the parameters of *spec* that no stamped harvest of
+        the document was asked. A stamp without per-parameter keys says
+        nothing and yields none, as for `--top-up-parameters`."""
+        name = self.name_of(document_id)
+        new = None
+        for harvest in self.harvests:
+            stamp = stamp_path_of(harvest / f"{name}.jsonl")
+            if stamp.is_file():
+                got = set(never_asked(stamp, spec))
+                new = got if new is None else new & got
+        return [p.uri for p in spec.parameters if p.uri in (new or ())]
 
     def _keys(self, document_id: int) -> set:
         return {(s.owner_kind, s.owner_id)

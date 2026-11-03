@@ -2507,7 +2507,8 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
                  already_read: frozenset = frozenset(),
                  front_page: Optional[Callable] = None,
                  front_parameters=(),
-                 plan_known: Optional[Callable] = None
+                 plan_known: Optional[Callable] = None,
+                 gained: Optional[Callable] = None
                  ) -> PlannedDocument
 ```
 
@@ -2544,6 +2545,24 @@ harvest's unread passages asks none.
 passages earlier harvests found something in, or None when there are
 none (`found.py`). Then nothing is searched: no plan, no plan per pair and
 no rest of the document, and the frame is read over those passages.
+
+*gained* is (document_id, doc_spec) -> the parameters no earlier harvest
+of the document was asked (`found.Found.gained`). A found place stands
+for the questions asked when it was found, so with *plan_known* these
+are also searched over the whole plan, as in any run, with the frame
+seeded by the pairs of the found places and none of those passages read
+twice (owner decision 2026-11-03).
+
+### joined
+
+```python
+def joined(found: PlannedDocument, whole: PlannedDocument) -> PlannedDocument
+```
+
+One document planned at its found places and, for the parameters no
+earlier harvest asked, over the whole plan. The second frame was seeded
+with the first's pairs, which keep their indices, so its pairs are the
+document's.
 
 ### accepted_rows
 

@@ -1354,6 +1354,16 @@ when nothing was found in it, or when it no longer holds every place. HARVEST
 has to be another directory than OUT, and the flag does not combine with a
 top-up.
 
+A found place stands only for the questions asked when it was found. A
+parameter no stamped harvest of the document was asked, because its stamp
+has no `parameter/<uri>` key for it (`Found.gained`, the same test as
+`--top-up-parameters`), is searched over the whole plan as in any run:
+`plan_batches` plans the document a second time with `only` set to those
+parameters, the frame seeded with the pairs of the found places, which keep
+their indices, and the found passages left out, since their batches already
+ask every parameter (`joined`; owner decision 2026-11-03). A stamp without
+per-parameter keys says nothing and gains no parameter.
+
 ### Archive and stats
 
 **Nothing is replaced unkept.** Before a run replaces a harvest `.jsonl`, a

@@ -22,6 +22,11 @@ A number in a passage no harvest found anything in stays unread. The stamp
 says so (`PASS`): a run without `--start-at` harvests such a document again,
 and `--top-up-open` reads the passages its trace did not ask.
 
+A found place stands only for the questions that were asked when it was
+found. A parameter no stored harvest of the document was asked (its stamp has
+no `parameter/<uri>` key) has no places, and is searched over the whole plan
+as in any run (owner decision 2026-11-03).
+
 A document has no found places when no stamped harvest holds it, when nothing
 was found in it, or when it no longer holds every place: then it is planned
 as in any run.
@@ -68,6 +73,16 @@ def __init__(self, harvests, name_of: Callable, passages_of: Callable)
 ```python
 def kept(self, document_id: int) -> Kept
 ```
+
+#### Found.gained
+
+```python
+def gained(self, document_id: int, spec) -> list
+```
+
+The uris of the parameters of *spec* that no stamped harvest of
+the document was asked. A stamp without per-parameter keys says
+nothing and yields none, as for `--top-up-parameters`.
 
 #### Found.passages
 

@@ -6912,7 +6912,8 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
                  already_read: frozenset = frozenset(),
                  front_page: Optional[Callable] = None,
                  front_parameters=(),
-                 plan_known: Optional[Callable] = None
+                 plan_known: Optional[Callable] = None,
+                 gained: Optional[Callable] = None
                  ) -> PlannedDocument:
     """One document from its first search to its batches: the plan, the frame,
     one plan per pair, the rest of the document and the batches that read them.
@@ -6947,6 +6948,13 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
     passages earlier harvests found something in, or None when there are
     none (`found.py`). Then nothing is searched: no plan, no plan per pair and
     no rest of the document, and the frame is read over those passages.
+
+    *gained* is (document_id, doc_spec) -> the parameters no earlier harvest
+    of the document was asked (`found.Found.gained`). A found place stands
+    for the questions asked when it was found, so with *plan_known* these
+    are also searched over the whole plan, as in any run, with the frame
+    seeded by the pairs of the found places and none of those passages read
+    twice (owner decision 2026-11-03).
     """
     failed = 0
     known = plan_known(document_id, filename) if plan_known else None
@@ -7110,9 +7118,52 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
             report.owners_harvested += len(batch.items)
     log.info("extraction: %s planned — %d batch(es) over %d source(s)",
              name, len(batches), sum(len(b.items) for b in batches))
-    return PlannedDocument(name=name, report=report, batches=batches,
-                           doc_spec=doc_spec, pairs=pairs, indices=indices,
-                           failed=failed)
+    planned = PlannedDocument(name=name, report=report, batches=batches,
+                              doc_spec=doc_spec, pairs=pairs, indices=indices,
+                              failed=failed)
+    new = list(gained(document_id, doc_spec)) if known and gained else []
+    if not new:
+        return planned
+    log.info("extract: %s: %s asked by no earlier harvest, searched over the "
+             "whole plan", name, ", ".join(new))
+    whole = plan_batches(
+        document_id, filename, plan=plan, plan_pool=plan_pool,
+        ask_frame=ask_frame, frame_axes=frame_axes, more_sources=more_sources,
+        year_states=year_states, anchor_texts=anchor_texts, only=tuple(new),
+        stored_pairs=dict(zip(indices, pairs)),
+        rest_of_document=rest_of_document,
+        already_read=frozenset((item.source.owner_kind, item.source.owner_id)
+                               for item in items),
+        front_page=front_page, front_parameters=front_parameters)
+    return joined(planned, whole)
+
+
+def joined(found: PlannedDocument, whole: PlannedDocument) -> PlannedDocument:
+    """One document planned at its found places and, for the parameters no
+    earlier harvest asked, over the whole plan. The second frame was seeded
+    with the first's pairs, which keep their indices, so its pairs are the
+    document's."""
+    report = found.report
+    report.owners_harvested += whole.report.owners_harvested
+    for stage, count in whole.report.planned.items():
+        report.planned[stage] = report.planned.get(stage, 0) + count
+    for uri, keys in whole.report.sources_of.items():
+        report.sources_of.setdefault(uri, set()).update(keys)
+    pairs, indices = ((whole.pairs, whole.indices) if whole.pairs
+                      else (found.pairs, found.indices))
+    if whole.pairs and whole.batches:
+        ordered: list = [None] * (max(indices) + 1)
+        for pair, index in zip(pairs, indices):
+            ordered[index] = pair
+        for batch in found.batches:
+            batch.bases = whole.batches[0].bases
+            if batch.pairs:
+                batch.pairs = tuple(ordered)
+    return PlannedDocument(name=found.name, report=report,
+                           batches=list(found.batches) + list(whole.batches),
+                           doc_spec=found.doc_spec, pairs=pairs,
+                           indices=indices,
+                           failed=found.failed + whole.failed)
 
 
 def accepted_rows(batch, reply, spec) -> list:
@@ -8016,7 +8067,8 @@ def main(argv: Optional[list] = None) -> int:
         front_page=make_front_page(args.db, content=content),
         front_parameters=tuple(profile.component(
             "extraction", "FRONT_PAGE_PARAMETERS") or ()),
-        plan_known=plan_known if found is not None else None)
+        plan_known=plan_known if found is not None else None,
+        gained=found.gained if found is not None else None)
     harvest_all = functools.partial(
         harvest_batches, harvest=harvest, more_sources=more_sources,
         verify=prior_rows, workers=LLM_PARALLEL, on_give_up=give_up,

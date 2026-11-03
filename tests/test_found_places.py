@@ -63,12 +63,39 @@ def test_a_coordinate_is_filed_under_the_passage_of_its_row():
 
 # -- which harvests count ----------------------------------------------------
 
-def harvest(directory, *rows, stamped=True):
+def harvest(directory, *rows, stamped=True, stamp=None):
     directory.mkdir(exist_ok=True)
     (directory / "plan.jsonl").write_text(
         "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
     if stamped:
-        (directory / "plan.stamp.json").write_text("{}", encoding="utf-8")
+        (directory / "plan.stamp.json").write_text(json.dumps(stamp or {}),
+                                                   encoding="utf-8")
+
+
+def asked(*uris):
+    """A stamp with the per-parameter keys of these parameters."""
+    return {"slot/parameter": "x", **{f"parameter/{uri}": "x" for uri in uris}}
+
+
+EVERY_BUT_BUILDINGS = [p.uri for p in SPEC.parameters
+                       if p.uri != "building_count"]
+
+
+def test_a_parameter_no_harvest_asked_is_gained(tmp_path):
+    harvest(tmp_path / "a", stored_tuple(), stamp=asked(*EVERY_BUT_BUILDINGS))
+    assert found_in(tmp_path / "a").gained(7, SPEC) == ["building_count"]
+
+
+def test_a_parameter_one_harvest_asked_is_not_gained(tmp_path):
+    harvest(tmp_path / "a", stored_tuple(), stamp=asked(*EVERY_BUT_BUILDINGS))
+    harvest(tmp_path / "b", stored_tuple(own=OTHER),
+            stamp=asked("building_count"))
+    assert found_in(tmp_path / "a", tmp_path / "b").gained(7, SPEC) == []
+
+
+def test_a_stamp_without_parameter_keys_gains_nothing(tmp_path):
+    harvest(tmp_path / "a", stored_tuple())
+    assert found_in(tmp_path / "a").gained(7, SPEC) == []
 
 
 def found_in(*directories, holds=(TABLE, HEADING, OTHER)):
@@ -109,17 +136,19 @@ class Now:
         return SimpleNamespace(result=lambda: done)
 
 
-def plan_of(known):
-    searched, rest = [], []
+def plan_of(known, gained=None):
+    searched, rest, excluded = [], [], []
 
     def plan(document_id, filename, frame=None, frame_index=0, only=()):
         searched.append(frame)
         report = runner.DocumentReport(document_id=document_id)
-        item = WorkItem(document_id, None, passage(OTHER, "Text 2045"))
-        return "plan", [item], report, SPEC
+        items = [WorkItem(document_id, None, passage(key, "Text 2045"))
+                 for key in (TABLE, OTHER)]
+        return "plan", items, report, SPEC
 
     def rest_of_document(document_id, exclude):
         rest.append(document_id)
+        excluded.append(set(exclude))
         return []
 
     def plan_known(document_id, filename):
@@ -141,11 +170,16 @@ def plan_of(known):
         7, "plan.pdf", plan=plan, plan_pool=Now(), ask_frame=ask_frame,
         frame_axes=[SPEC_SLOT], more_sources=None, year_states={},
         anchor_texts={}, rest_of_document=rest_of_document,
-        plan_known=plan_known)
+        plan_known=plan_known, gained=gained)
+    planned.excluded = excluded
     return planned, searched, rest, framed
 
 
 SPEC_SLOT = SimpleNamespace(name="year", kind=fields.NUMBER, question="Jahr?")
+
+
+def asked_in(batch):
+    return sorted(p.uri for p in batch.spec.parameters)
 
 
 def test_found_places_replace_every_search_of_the_plan():
@@ -158,7 +192,24 @@ def test_found_places_replace_every_search_of_the_plan():
 def test_a_document_without_places_is_planned_as_in_any_run():
     planned, searched, rest, framed = plan_of(known=False)
     assert searched == [None] and rest == [7]
-    assert set(framed) == {OTHER}
+    assert set(framed) == {TABLE, OTHER}
+
+
+def test_a_gained_parameter_is_searched_over_the_whole_plan():
+    planned, searched, rest, _framed = plan_of(
+        known=True, gained=lambda _d, _spec: ["building_count"])
+    assert searched == [None] and rest == [7]
+    assert [(keys(b.sources), asked_in(b)) for b in planned.batches] == [
+        ([TABLE], sorted(p.uri for p in SPEC.parameters)),
+        ([OTHER], ["building_count"])]
+    assert TABLE in planned.excluded[0]
+
+
+def test_no_gained_parameter_searches_nothing():
+    planned, searched, rest, _framed = plan_of(
+        known=True, gained=lambda _d, _spec: [])
+    assert searched == [] and rest == []
+    assert [keys(b.sources) for b in planned.batches] == [[TABLE]]
 
 
 # -- the search --------------------------------------------------------------
