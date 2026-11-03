@@ -392,6 +392,14 @@ def _tuple_schema(spec, parameter) -> dict:
                            "organisation's legal form, a title's line "
                            "break)."}
         props["value_uri"] = _value_uri(parameter)
+        if parameter.value_type == "category":
+            # Where the rows request wrote a wording the list does not hold,
+            # the value was asked again as one of its entries, a coordinate
+            # with its own passage (`fields.value_choice`).
+            props.update({key: rule for key, rule in _slot_properties(
+                "value", fields.value_choice(parameter),
+                "The entry the value was read as.").items()
+                if key not in ("value", "value_raw")})
         props["unit"] = {"type": "string", "maxLength": 0,
                          "description": "Empty: a wording has no unit. The "
                                         "key is present so every row has the "

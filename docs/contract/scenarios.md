@@ -1003,13 +1003,49 @@ Empty, as unit.
 
 The wording as the document writes it.
 
+### `value_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.
+
+### `value_link_source`
+
+Which source 'value_link_quote' was found in.
+
+### `value_producer`
+
+Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `value_quote`
+
+The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.
+
 ### `value_raw`
 
 The wording before any tidying (an organisation's legal form, a title's line break).
 
+### `value_raw_foreign`
+
+The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `value_seen`
+
+A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `value_source`
+
+Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `value_state`
+
+How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike.
+
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is per document. The profile supplies it before the harvest, so it is not in this schema.
+
+### `value_window`
+
+[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ## `scenario_region`
 
@@ -1171,13 +1207,49 @@ Empty, as unit.
 
 The wording as the document writes it.
 
+### `value_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.
+
+### `value_link_source`
+
+Which source 'value_link_quote' was found in.
+
+### `value_producer`
+
+Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `value_quote`
+
+The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.
+
 ### `value_raw`
 
 The wording before any tidying (an organisation's legal form, a title's line break).
 
+### `value_raw_foreign`
+
+The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `value_seen`
+
+A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `value_source`
+
+Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `value_state`
+
+How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike.
+
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is per document. The profile supplies it before the harvest, so it is not in this schema.
+
+### `value_window`
+
+[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -1341,9 +1413,41 @@ Empty, as unit.
 
 The wording as the document writes it.
 
+### `value_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.
+
+### `value_link_source`
+
+Which source 'value_link_quote' was found in.
+
+### `value_producer`
+
+Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `value_quote`
+
+The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.
+
 ### `value_raw`
 
 The wording before any tidying (an organisation's legal form, a title's line break).
+
+### `value_raw_foreign`
+
+The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `value_seen`
+
+A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `value_source`
+
+Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `value_state`
+
+How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike.
 
 ### `value_uri`
 
@@ -1382,6 +1486,10 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
   - also written: WOM, without measures, WOM scenario
 
 </details>
+
+### `value_window`
+
+[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -1759,9 +1867,41 @@ Empty, as unit.
 
 The wording as the document writes it.
 
+### `value_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.
+
+### `value_link_source`
+
+Which source 'value_link_quote' was found in.
+
+### `value_producer`
+
+Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `value_quote`
+
+The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.
+
 ### `value_raw`
 
 The wording before any tidying (an organisation's legal form, a title's line break).
+
+### `value_raw_foreign`
+
+The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `value_seen`
+
+A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `value_source`
+
+Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `value_state`
+
+How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike.
 
 ### `value_uri`
 
@@ -1815,6 +1955,10 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 - **sufficiency** → `https://openenergyplatform.org/ontology/oeo/OEO_00010444` — Sufficiency is a plan specification for reducing, in absolute terms, the consumption and production of end-use products and services through changes in social practices in order to comply with environmental sustainability while ensuring an adequate social foundation for all people.
 
 </details>
+
+### `value_window`
+
+[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ## `study_funder`
 
@@ -2237,9 +2381,41 @@ Empty, as unit.
 
 The wording as the document writes it.
 
+### `value_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.
+
+### `value_link_source`
+
+Which source 'value_link_quote' was found in.
+
+### `value_producer`
+
+Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `value_quote`
+
+The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.
+
 ### `value_raw`
 
 The wording before any tidying (an organisation's legal form, a title's line break).
+
+### `value_raw_foreign`
+
+The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `value_seen`
+
+A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `value_source`
+
+Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `value_state`
+
+How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike.
 
 ### `value_uri`
 
@@ -2556,6 +2732,10 @@ It is equivalent to the CRF sector (IPCC 2006): land use, land-use change and fo
 
 </details>
 
+### `value_window`
+
+[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
+
 ## `study_technology`
 
 How the row becomes a node:
@@ -2657,9 +2837,41 @@ Empty, as unit.
 
 The wording as the document writes it.
 
+### `value_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.
+
+### `value_link_source`
+
+Which source 'value_link_quote' was found in.
+
+### `value_producer`
+
+Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `value_quote`
+
+The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.
+
 ### `value_raw`
 
 The wording before any tidying (an organisation's legal form, a title's line break).
+
+### `value_raw_foreign`
+
+The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `value_seen`
+
+A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `value_source`
+
+Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `value_state`
+
+How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike.
 
 ### `value_uri`
 
@@ -2719,6 +2931,10 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 - **wind power technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010424` — A wind power technology is a power generation technology that describes how to combine wind energy converting units and a wind energy transformation.
 
 </details>
+
+### `value_window`
+
+[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
 
 ## The stamp
 

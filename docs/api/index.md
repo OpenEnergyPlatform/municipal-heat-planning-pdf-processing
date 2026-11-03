@@ -98,7 +98,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.compute](docpipe.extraction.compute.md): The numbers a plan does not print and its printed numbers yield. (2 classes, 11 functions)
 - [docpipe.extraction.contract](docpipe.extraction.contract.md): The core's half of the extraction prompts: where its templates are, which languages they come in and the facts the code fills into them. (8 functions)
 - [docpipe.extraction.evaluate](docpipe.extraction.evaluate.md): Holds a harvest against what people decided about it. (1 class, 11 functions)
-- [docpipe.extraction.fields](docpipe.extraction.fields.md): Computes the deterministic skeleton of a tuple from the spec. (2 classes, 14 functions)
+- [docpipe.extraction.fields](docpipe.extraction.fields.md): Computes the deterministic skeleton of a tuple from the spec. (2 classes, 15 functions)
 - [docpipe.extraction.found](docpipe.extraction.found.md): Where the harvests before this run found something. (2 classes, 2 functions)
 - [docpipe.extraction.gate](docpipe.extraction.gate.md): Whether the graph of a run can still be written, before the run. (3 functions)
 - [docpipe.extraction.gold](docpipe.extraction.gold.md): What a person decided about harvested values, kept beside the harvest and never in it. (1 class, 16 functions)

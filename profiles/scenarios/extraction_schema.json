@@ -1781,9 +1781,72 @@
       "minLength": 1,
       "type": "string"
      },
+     "value_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "value_link_source": {
+      "description": "Which source 'value_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "value_producer": {
+      "description": "Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "value_quote": {
+      "description": "The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
      "value_raw": {
       "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
       "type": "string"
+     },
+     "value_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "value_seen": {
+      "description": "A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "value_source": {
+      "description": "Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "value_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "value_uri": {
       "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is per document. The profile supplies it before the harvest, so it is not in this schema.",
@@ -1791,6 +1854,30 @@
        "string",
        "null"
       ]
+     },
+     "value_window": {
+      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -2119,9 +2206,72 @@
       "minLength": 1,
       "type": "string"
      },
+     "value_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "value_link_source": {
+      "description": "Which source 'value_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "value_producer": {
+      "description": "Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "value_quote": {
+      "description": "The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
      "value_raw": {
       "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
       "type": "string"
+     },
+     "value_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "value_seen": {
+      "description": "A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "value_source": {
+      "description": "Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "value_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "value_uri": {
       "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is per document. The profile supplies it before the harvest, so it is not in this schema.",
@@ -2129,6 +2279,30 @@
        "string",
        "null"
       ]
+     },
+     "value_window": {
+      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -2455,9 +2629,72 @@
       "minLength": 1,
       "type": "string"
      },
+     "value_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "value_link_source": {
+      "description": "Which source 'value_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "value_producer": {
+      "description": "Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "value_quote": {
+      "description": "The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
      "value_raw": {
       "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
       "type": "string"
+     },
+     "value_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "value_seen": {
+      "description": "A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "value_source": {
+      "description": "Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "value_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "value_uri": {
       "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is closed. An entry beginning 'out:' is a deliberate non-class answer and mints no node.",
@@ -2602,6 +2839,30 @@
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020310"
        }
       }
+     },
+     "value_window": {
+      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -3304,9 +3565,72 @@
       "minLength": 1,
       "type": "string"
      },
+     "value_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "value_link_source": {
+      "description": "Which source 'value_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "value_producer": {
+      "description": "Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "value_quote": {
+      "description": "The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
      "value_raw": {
       "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
       "type": "string"
+     },
+     "value_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "value_seen": {
+      "description": "A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "value_source": {
+      "description": "Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "value_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "value_uri": {
       "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is closed. An entry beginning 'out:' is a deliberate non-class answer and mints no node.",
@@ -3517,6 +3841,30 @@
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010444"
        }
       }
+     },
+     "value_window": {
+      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -4272,9 +4620,72 @@
       "minLength": 1,
       "type": "string"
      },
+     "value_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "value_link_source": {
+      "description": "Which source 'value_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "value_producer": {
+      "description": "Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "value_quote": {
+      "description": "The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
      "value_raw": {
       "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
       "type": "string"
+     },
+     "value_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "value_seen": {
+      "description": "A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "value_source": {
+      "description": "Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "value_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "value_uri": {
       "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is closed. An entry beginning 'out:' is a deliberate non-class answer and mints no node.",
@@ -5110,6 +5521,30 @@
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010036"
        }
       }
+     },
+     "value_window": {
+      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -5288,9 +5723,72 @@
       "minLength": 1,
       "type": "string"
      },
+     "value_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "value_link_source": {
+      "description": "Which source 'value_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "value_producer": {
+      "description": "Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "value_quote": {
+      "description": "The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
      "value_raw": {
       "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
       "type": "string"
+     },
+     "value_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "value_seen": {
+      "description": "A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "value_source": {
+      "description": "Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "value_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "value_uri": {
       "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is closed. An entry beginning 'out:' is a deliberate non-class answer and mints no node.",
@@ -5543,6 +6041,30 @@
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010424"
        }
       }
+     },
+     "value_window": {
+      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [

@@ -1209,20 +1209,6 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                                "not_an_option", given=given)})
             unbacked += 1
             continue
-        if option is not None and slot.admits is not None \
-                and not slot.admits(row.claim, option.uri):
-            # An entry of the list that this row cannot take: a parameter
-            # whose own closed list does not hold the row's value
-            # (`fields.holds`). The same rule one list further, so the same
-            # outcome: asked again, told which value, and never read.
-            value = row.claim.get("value")
-            row.claim[f"{slot.name}_state"] = UNBACKED
-            failed.append({"row": row.label, "why": "not_an_option",
-                           "given": given, "raw": value, "reason": say(
-                               "value_not_an_option", given=given,
-                               value=value)})
-            unbacked += 1
-            continue
         wrong = _wrong_type(slot, given)
         if wrong is not None:
             # The right kind of answer in the wrong shape: a year as

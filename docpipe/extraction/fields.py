@@ -22,8 +22,8 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Callable, Optional
+from dataclasses import dataclass
+from typing import Optional
 
 from . import wording
 from .spec import Parameter, fold_label
@@ -129,10 +129,6 @@ class Slot:
     options: tuple = ()
     # {"from": "unit", "value": uri} when the spec decides this coordinate.
     derive: Optional[dict] = None
-    # (claim, option uri) -> bool: may this row take that entry? None where
-    # every entry fits every row.
-    admits: Optional[Callable] = field(default=None, compare=False,
-                                       repr=False)
 
     @property
     def is_closed(self) -> bool:
@@ -209,21 +205,17 @@ def parameter_slot(spec) -> Slot:
     return Slot(name="parameter", kind=CHOICE, required=True,
                 question=spec.parameter_question,
                 options=tuple(Option(label=p.label, uri=p.uri)
-                              for p in spec.parameters),
-                admits=lambda claim, uri: (uri not in spec.by_uri
-                                           or holds(spec.by_uri[uri], claim)))
+                              for p in spec.parameters))
 
 
 def holds(parameter: Parameter, claim: dict) -> bool:
-    """Can this parameter hold the row's value?
+    """Is the row's value one of this parameter's entries?
 
-    A category parameter's value is an answer to its closed list, so only a
-    row whose value is one of its entries can be of it -- the owner's rule
-    for a closed list (2026-09-11), applied where the value meets its list.
-    The value is read before the parameter, and on the AR6 run 2,234 rows
-    took a parameter whose list did not hold their value: "transport sector"
-    as a sector division, "2050" as a sector. The lookup is the one
-    `verify._check_value` resolves the value with.
+    A category parameter's value is an answer to its closed list (owner,
+    2026-09-11). The value is read before the parameter, as the wording the
+    passage prints, so a row whose parameter is read with a value its list
+    does not hold has the value asked again, to that list (`value_choice`).
+    The lookup is the one `verify._check_value` resolves the value with.
 
     A value left out with the wording beside it is the answer that no entry
     fits, and fits every category parameter. A text or numeric parameter
@@ -454,6 +446,24 @@ def value_slot(parameter: Parameter) -> Slot:
         return Slot(name="value", kind=VALUE, required=True,
                     question=parameter.description)
     return Slot(name="value", kind=VALUE, required=True,
+                question=parameter.description,
+                options=_options(parameter.vocabulary,
+                                 getattr(parameter, "definitions", None)))
+
+
+def value_choice(parameter: Parameter) -> Slot:
+    """The value of a category parameter, asked again as one of its entries.
+
+    The rows request reads a value before its parameter, so what it writes is
+    the wording the passage prints: "New Policies Scenario" where the list
+    holds the AR6 runs and `out:not_documented`. Once the parameter is read,
+    which entry that wording is becomes a question of its own, with a quote
+    like every coordinate, and the wording stays in value_raw. Asking the
+    parameter again instead left the model no answer that could pass: on the
+    AR6 run 8,810 rows were asked it in every window to the end of their
+    document, and 5,636,615 answers were refused.
+    """
+    return Slot(name="value", kind=CHOICE, required=True,
                 question=parameter.description,
                 options=_options(parameter.vocabulary,
                                  getattr(parameter, "definitions", None)))

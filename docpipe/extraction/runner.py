@@ -4868,6 +4868,10 @@ def make_sweeper(ask: Callable, *,
         """The allowance of one coordinate's sweep, per stage: the share
         named for `<parameter>.<axis>`, else for the axis, else all."""
         def share(slot) -> float:
+            if slot.name == VALUE_AGAIN:
+                # Its wording stands in the row's own passage, and the quote
+                # has to carry it (owner, 2026-11-03).
+                return 0.0
             for key in (f"{parameter}.{slot.name}", slot.name):
                 if key in search_share:
                     return search_share[key]
@@ -4881,10 +4885,12 @@ def make_sweeper(ask: Callable, *,
 
 
 # The keys of the coordinates a batch's rows can be held at, for the search
-# that settles them: the unit, the parameter, and (parameter, axis) for the
-# gate axes and for the others.
+# that settles them: the unit, the parameter, and (parameter, axis) for a value
+# asked again, the gate axes and the others.
 UNIT_KEY = ("unit",)
 PARAMETER_KEY = ("parameter",)
+# The coordinate a category value is asked again on, keyed (parameter, this).
+VALUE_AGAIN = "value"
 
 
 class Turn:
@@ -5164,9 +5170,17 @@ class Turn:
             row.claim["parameter"] = uri
             grouped.setdefault(uri, []).append(row)
         for uri, group in grouped.items():
-            axes = fields.axis_slots(self.doc_spec.by_uri[uri])
+            parameter = self.doc_spec.by_uri[uri]
+            axes = fields.axis_slots(parameter)
+            # A value its parameter's list does not hold: the parameter is
+            # read, and which entry the value is gets asked next.
+            again = {row.label for row in group
+                     if not fields.holds(parameter, row.claim)}
+            choice = fields.value_choice(parameter) if again else None
             for row in group:
-                self.slots_of[row.label] = [slot] + axes
+                self.slots_of[row.label] = ([slot] + ([choice] if row.label
+                                                      in again else [])
+                                            + axes)
             self.project(group, axes)
             # What the spec decides is written before anything is asked,
             # and before the gate: a row that leaves at the gate still
@@ -5180,7 +5194,38 @@ class Turn:
             gate = [by_name[name] for name in (self.slice_gate or {})
                     if name in by_name]
             self.plan[uri] = (axes, gate, {axis.name for axis in gate})
-            self.walk(uri, group, 0)
+            self.walk(uri, [row for row in group if row.label not in again],
+                      0)
+            if again:
+                self.ask_value(uri, choice,
+                               [row for row in group if row.label in again])
+
+    def ask_value(self, uri: str, choice, rows: list) -> None:
+        """The value asked again as one of its parameter's entries, before
+        the axes, in the row's own passage (`value_choice`). The wording stays
+        in value_raw; the value stays what the passage printed until an entry
+        is read, so a row that reads none is refused for it by `verify`."""
+        for row in rows:
+            wording = row.claim.get("value_raw")
+            if not (isinstance(wording, str) and wording.strip()):
+                row.claim["value_raw"] = row.claim.get("value")
+        held = {row.label for row in self.ask(
+            rows, choice, anchor_key(uri), (uri, VALUE_AGAIN), True)}
+        self.after_value(uri, [row for row in rows if row.label not in held])
+
+    def after_value(self, uri: str, rows: list) -> None:
+        """Rows whose value has an entry go on to their axes. The others are
+        refused for their value, and their axes are never asked."""
+        axes, _gate, _gated = self.plan[uri]
+        read = [row for row in rows
+                if row.claim.get(f"{VALUE_AGAIN}_state") == fields.READ]
+        going = {row.label for row in read}
+        for row in rows:
+            if row.label not in going:
+                for axis in axes:
+                    row.claim.setdefault(f"{axis.name}_state",
+                                         fields.OUT_OF_SLICE)
+        self.walk(uri, read, 0)
 
     def keep(self, rows: list, axis, axes: list) -> list:
         """The rows this gate answer keeps; the others are closed. A closed
@@ -5237,6 +5282,8 @@ class Turn:
                     self.settle_parameter(rows)
             elif key == PARAMETER_KEY:
                 self.enter(rows)
+            elif waited and key[1:] == (VALUE_AGAIN,):
+                self.after_value(key[0], rows)
             elif waited:
                 uri, name = key
                 axes, gate, _gated = self.plan[uri]
@@ -5345,12 +5392,15 @@ class DocumentSearch:
 
     def phase(self, key: tuple) -> int:
         """Where a coordinate stands in the order: the unit, the parameter,
-        the gate axes in the gate's order, and the rest."""
+        a value asked again, the gate axes in the gate's order, and the
+        rest."""
         if key == UNIT_KEY:
             return 0
         if key == PARAMETER_KEY:
             return 1
-        return 2 + (self.order.index(key[1]) if key[1] in self.order
+        if key[1:] == (VALUE_AGAIN,):
+            return 2
+        return 3 + (self.order.index(key[1]) if key[1] in self.order
                     else len(self.order))
 
     def fan_out(self, tasks: dict) -> None:

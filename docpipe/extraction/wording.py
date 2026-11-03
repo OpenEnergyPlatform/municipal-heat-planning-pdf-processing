@@ -30,7 +30,7 @@ from ..profile import ENV_VAR, Profile, active_profile
 REQUIRED = frozenset({
     "option_means", "option_spellings", "unstated_means",
     "unstated_spelling",
-    "kind_whole_number", "kind_year", "kind_text", "not_an_option", "value_not_an_option",
+    "kind_whole_number", "kind_year", "kind_text", "not_an_option",
     "wrong_type",
     "quote_not_in_source", "quote_too_short", "answer_not_in_quote",
     "frame_missing", "frame_no_quote", "frame_quote_not_in_source",

@@ -803,11 +803,14 @@ decision 2026-09-23). A closed-list coordinate answers a third clause
 too: naming one of
 the list's own entries, by label, spelling or URI, or it is never marked
 read (`option_named`, `not_an_option`, `pipeline.py`, the owner's
-rule of 2026-09-11). The same rule holds one list further: a row takes a
-parameter only if that parameter's own list holds the row's value
-(`fields.holds`, the parameter slot's `admits`), since the value is read
-before the parameter; a parameter whose list lacks it is never read and is
-asked again with the value named (`value_not_an_option`). Which table the
+rule of 2026-09-11). The same rule holds for the value of a category
+parameter, which is read before the parameter as the wording the passage
+prints: where the parameter is read and its list does not hold that
+wording, the value is asked again as one of the list's entries, in the
+row's own passage alone, and the wording stays in `value_raw`
+(`fields.holds`, `fields.value_choice`, `Turn.ask_value` in `runner.py`,
+owner's decision 2026-11-03). A row that reads no entry is refused for its
+value (`value … not in vocabulary`), and its axes are never asked. Which table the
 passage belongs to, how far from the row it stands and which column of a
 table it heads are the model's reading, not a rule. Failures are recorded
 separately, `unquoted` against `unbacked`, so a retry can name what to fix. A

@@ -706,6 +706,26 @@ def enter(self, rows: list) -> None
 
 Rows whose parameter is settled: their axes, the gate first.
 
+#### Turn.ask_value
+
+```python
+def ask_value(self, uri: str, choice, rows: list) -> None
+```
+
+The value asked again as one of its parameter's entries, before
+the axes, in the row's own passage (`value_choice`). The wording stays
+in value_raw; the value stays what the passage printed until an entry
+is read, so a row that reads none is refused for it by `verify`.
+
+#### Turn.after_value
+
+```python
+def after_value(self, uri: str, rows: list) -> None
+```
+
+Rows whose value has an entry go on to their axes. The others are
+refused for their value, and their axes are never asked.
+
 #### Turn.keep
 
 ```python
@@ -801,7 +821,8 @@ def phase(self, key: tuple) -> int
 ```
 
 Where a coordinate stands in the order: the unit, the parameter,
-the gate axes in the gate's order, and the rest.
+a value asked again, the gate axes in the gate's order, and the
+rest.
 
 #### DocumentSearch.fan_out
 

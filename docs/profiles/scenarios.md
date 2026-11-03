@@ -615,16 +615,16 @@ Read from `profiles/scenarios/extraction_schema.json` by `scripts/build_docs.py`
 | `publication_doi` | string | `parameter` (one of the spec's parameters) | `studyreport` |
 | `publication_title` | string | `parameter` (one of the spec's parameters) | `studyreport` |
 | `scenario_abstract` | string | `parameter` (one of the spec's parameters), `scenario` (string) | `scenariofactsheet` |
-| `scenario_label` | string | `parameter` (one of the spec's parameters) | `scenariofactsheet` |
-| `scenario_region` | string | `parameter` (one of the spec's parameters), `scenario` (string) | `scenariofactsheet` |
-| `scenario_type` | string | `parameter` (one of the spec's parameters), `scenario` (string) | `scenariofactsheet` |
+| `scenario_label` | string | `parameter` (one of the spec's parameters), `value` (string) | `scenariofactsheet` |
+| `scenario_region` | string | `parameter` (one of the spec's parameters), `scenario` (string), `value` (string) | `scenariofactsheet` |
+| `scenario_type` | string | `parameter` (one of the spec's parameters), `scenario` (string), `value` (string) | `scenariofactsheet` |
 | `scenario_year` | string | `parameter` (one of the spec's parameters), `scenario` (string) | `scenariofactsheet` |
 | `study_acronym` | string | `parameter` (one of the spec's parameters) | `scenariobundle` |
-| `study_descriptor` | string | `parameter` (one of the spec's parameters) | `scenariobundle` |
+| `study_descriptor` | string | `parameter` (one of the spec's parameters), `value` (string) | `scenariobundle` |
 | `study_funder` | string | `parameter` (one of the spec's parameters) | `funder` |
 | `study_organisation` | string | `parameter` (one of the spec's parameters) | `organisation` |
 | `study_project_name` | string | `parameter` (one of the spec's parameters) | `scenariobundle` |
-| `study_sector` | string | `parameter` (one of the spec's parameters) | `scenariobundle` |
-| `study_technology` | string | `parameter` (one of the spec's parameters) | `scenariobundle` |
+| `study_sector` | string | `parameter` (one of the spec's parameters), `value` (string) | `scenariobundle` |
+| `study_technology` | string | `parameter` (one of the spec's parameters), `value` (string) | `scenariobundle` |
 
 [Back to the index](../README.md)
