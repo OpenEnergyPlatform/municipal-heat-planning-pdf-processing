@@ -208,6 +208,9 @@
         "pattern": "^value .* does not occur in the quote$"
        },
        {
+        "pattern": "^value .* does not follow from its inputs$"
+       },
+       {
         "pattern": "^value .* not in vocabulary$"
        },
        {
@@ -1187,7 +1190,7 @@
       "type": "array"
      },
      "compute": {
-      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
        "type": "object"
       },
@@ -3360,7 +3363,7 @@
       "type": "array"
      },
      "compute": {
-      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
        "type": "object"
       },
@@ -5843,7 +5846,7 @@
       "type": "array"
      },
      "compute": {
-      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
        "type": "object"
       },
@@ -8182,7 +8185,7 @@
       "type": "array"
      },
      "compute": {
-      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
        "type": "object"
       },
@@ -9455,7 +9458,7 @@
     "additionalProperties": false,
     "properties": {
      "compute": {
-      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
        "type": "object"
       },
@@ -10325,7 +10328,7 @@
       "type": "array"
      },
      "compute": {
-      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
        "type": "object"
       },
@@ -12261,6 +12264,7 @@
       "enum": [
        "read",
        "refused",
+       "same",
        "none",
        "too_long",
        "unanswered",

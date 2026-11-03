@@ -14,7 +14,8 @@ Which questions stand open is the profile's (`compute.py` of the profile,
 every such question has: what the request shows, what the sandbox is handed,
 and the row that comes of the answer. That row is a claim like any other: it
 goes through `verify_tuple` under the quote of one of its numbers, and a number
-that is not in the code's output is refused (`computed_in_output`).
+that is not in the code's output is refused (`computed_in_output`), as is one
+its inputs do not make (`computed_from_inputs`, owner decision 2026-11-03).
 """
 from __future__ import annotations
 
@@ -47,13 +48,15 @@ class Question:
     worked out from, named N1, N2, ... in this order. *anchor* is the number
     whose quote and passage the new row stands under. *row* makes the new
     row's coordinates from the rows the answer used, None where they do not
-    yield one.
+    yield one. *makes* is what the numbers the answer used make, in the new
+    row's unit: the number the answer has to be, None where they make none.
     """
     kind: str
     wanted: dict
     numbers: list
     anchor: dict
     row: Callable
+    makes: Callable
 
 
 def label(index: int) -> str:
@@ -136,8 +139,8 @@ def used_numbers(question: Question, answer: dict) -> list:
 def claim_of(question: Question, value, used: list,
              runs: list) -> Optional[dict]:
     """The new row: coordinates from its numbers, the code and its output as
-    evidence, and the numbers it was worked out from with their passages.
-    The last run is the one the answer stands on."""
+    evidence, and the numbers it was worked out from with their passages and
+    what they make. The last run is the one the answer stands on."""
     coordinates = question.row([number.row for number in used])
     if coordinates is None:
         return None
@@ -147,7 +150,8 @@ def claim_of(question: Question, value, used: list,
     return {**coordinates, "value": value,
             "quote": question.anchor.get("quote"),
             "source": question.anchor.get("source"), "computed": True,
-            "compute": [*runs[:-1], {**runs[-1], "inputs": inputs}]}
+            "compute": [*runs[:-1], {**runs[-1], "inputs": inputs,
+                                     "expected": question.makes(used)}]}
 
 
 def keys_of(row: dict, *axes: str) -> dict:

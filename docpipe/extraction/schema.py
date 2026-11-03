@@ -117,7 +117,7 @@ FLAG_PATTERN = (
     r"|review:(agree|disagree|unbacked)"
     r"|quote_repaired|computed|not_located)$")
 
-# The fourteen families a refusal reason belongs to. Every one is raised in
+# The fifteen families a refusal reason belongs to. Every one is raised in
 # verify.py or pipeline.py and none is composed at runtime from user text.
 REFUSAL_REASONS = [
     r"^claim names no parameter of the spec$",
@@ -132,6 +132,7 @@ REFUSAL_REASONS = [
     r"^quote missing or too short to identify anything$",
     r"^quote not found in the source it cites$",
     r"^value .* does not occur in the quote$",
+    r"^value .* does not follow from its inputs$",
     r"^value .* not in vocabulary$",
     r"^text value not in its quote$",
     r"^passage is not of this pair$",
@@ -354,7 +355,10 @@ def _tuple_schema(spec, parameter) -> dict:
                                     "inputs it was computed from."},
         "compute": {"type": "array", "items": {"type": "object"},
                     "description": "The sandbox runs behind a computed "
-                                   "value: {code, stdout, ok, error}."},
+                                   "value: {code, stdout, ok, error}, the "
+                                   "last with the numbers it was worked out "
+                                   "from (inputs) and what they make "
+                                   "(expected)."},
     }
     required = ["kind", "parameter", "parameter_state", "quote", "tier",
                 "provenance", "value"]
@@ -838,12 +842,14 @@ def trace_schema() -> dict:
                  "stdout": {"type": "string"}, "ok": {"type": "boolean"},
                  "error": {"type": ["string", "null"]}},
         # One open question of the compute step and how it ended: `read` is a
-        # new row, `refused` a number the check did not take, `none` the model
-        # saying there is nothing to compute. `runs` counts its sandbox rounds.
+        # new row, `refused` a number the check did not take, `same` a number
+        # another question already came to with the same coordinates, `none`
+        # the model saying there is nothing to compute. `runs` counts its
+        # sandbox rounds.
         "compute": {"kind": {"type": "string"},
                     "numbers": {"type": "integer"},
-                    "outcome": {"enum": ["read", "refused", "none", "too_long",
-                                         "unanswered", "stopped"]},
+                    "outcome": {"enum": ["read", "refused", "same", "none",
+                                         "too_long", "unanswered", "stopped"]},
                     "runs": {"type": "integer"}},
         "field": {"slot": {"type": "string"}, "anchor": {"type": "string"},
                   "window": {"type": "integer"},

@@ -899,7 +899,8 @@ most precisely printed of them stays. Two rows of one passage under two quotes
 are two rows. A set whose largest number is the sum of the others has printed
 its sum under another word and is not asked. What cannot be told by machine stays
 with the model and its prompt: a part contained in another, alternatives of one
-plant, a list of only the largest parts.
+plant, a list of only the largest parts. A part missing from the numbers is not
+taken from a table instead: the sum would not follow from the numbers it names.
 
 Each question is a conversation of its own. The request names the number wanted,
 the numbers with their quotes and what was read about them, and their passages;
@@ -918,12 +919,26 @@ share's row takes parameter, quantity, unit, year, scenario and area from the
 total, and carrier, sector, technology and `subject` from the share. A sum's row
 keeps what its parts share, its closed axis is the total with state `derived`, and
 its `subject` is `unstated`. `compute` holds the runs, and the last one the numbers
-it was worked out from, each with quote and source. The row is flagged `computed`,
-so it never stands above a printed number in `settle`, and it is refused like any
-other when its value is not in the code's output (`computed_in_output`).
+it was worked out from, each with quote and source, and what they make
+(`expected`, the question's `makes`: the share of its one total, or the parts named
+added up). The row is flagged `computed`, so it never stands above a printed number
+in `settle`, and it is refused like any other when its value is not in the code's
+output (`computed_in_output`). It is refused as well when it is not what its inputs
+make, to the rounding it is written with: 116.1 stands for 116.05 to 116.15
+(`computed_from_inputs`, owner decision 2026-11-03). Code that summed a column of
+its table printed 1,948 t/a beside inputs of 20,345 and 1,399 t/a. A number the rows
+request worked out in its own sandbox rounds names no inputs and is held to its
+output alone.
+
+Two questions of one document that come to the same number with the same
+coordinates are one statement, and the second row goes (profile `same`, owner
+decision 2026-11-03). kwp compares every axis but `subject`, whose wording tells
+only different numbers apart, as in the graph, and the number in its target unit
+within `ROUNDING_TOLERANCE`. One plan printed 27 % twice in one table row, and
+both shares came to 116.1 GWh.
 
 The trace has a `code` event per run and a `compute` event per question with how
-it ended: `read`, `refused`, `none`, `too_long`, `unanswered` or `stopped`. The
+it ended: `read`, `refused`, `same`, `none`, `too_long`, `unanswered` or `stopped`. The
 stats count them as `computed_questions_by_kind_outcome`. The sandbox takes one
 container at a time by default; `KWP_SANDBOX_PARALLEL` on the service and
 `CODE_EXEC_PARALLEL` in the run widen that for a machine that has the cores.

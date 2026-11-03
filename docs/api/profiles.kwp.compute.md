@@ -24,6 +24,11 @@ printed its sum under another word. The rest is reading and stays with the
 model: a part contained in another, alternatives of one plant, a list of only
 the largest parts.
 
+What a question's numbers make is its own arithmetic, a share times its total
+or the sum of the parts, and an answer has to be it (`makes`). Two questions
+that come to the same number with the same coordinates are one statement, and
+one row of it stays (`same`, owner decision 2026-11-03).
+
 ## Functions
 
 ### entry
@@ -152,5 +157,16 @@ def questions(rows: list, spec) -> list
 ```
 
 Every number this document's verified rows leave open.
+
+### same
+
+```python
+def same(a: dict, b: dict, spec) -> bool
+```
+
+Two worked-out rows that are one statement: the same number with the
+same coordinates, whichever questions came to it. The subject is the
+plan's wording and tells only different numbers apart, as in the graph;
+the number is compared in its target unit, within the graph's rounding.
 
 [Back to the index](../README.md)

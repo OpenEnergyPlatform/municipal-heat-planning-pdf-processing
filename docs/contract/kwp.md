@@ -383,7 +383,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -1183,7 +1183,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -2048,7 +2048,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -2892,7 +2892,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -3453,7 +3453,7 @@ How the row becomes a node:
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -3674,7 +3674,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 

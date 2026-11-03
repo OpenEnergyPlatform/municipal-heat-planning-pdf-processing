@@ -1994,6 +1994,9 @@ None where it cannot run: the profile names no open question or writes no
 prompt, or the run has no sandbox, since a number the model works out
 itself has no evidence.
 
+Two questions that come to one statement leave one row: the profile's
+`same` says when two worked-out rows are (owner decision 2026-11-03).
+
 ### split_long_sources
 
 ```python

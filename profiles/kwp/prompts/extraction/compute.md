@@ -15,7 +15,7 @@ Bei "kind": "sum" ist gesucht die Summe der Zahlen über die Achse "over", denn 
 - Dieselbe Angabe zählt einmal, auch wenn sie in zwei Passagen oder in anderen Worten steht.
 - Eine Zahl, die eine andere der Liste schon enthält, zählt nicht neben ihr, etwa "Biomasse" neben "Holz".
 - Schließen sich Zahlen aus, etwa Varianten oder Alternativen derselben Anlage, gibt es keine Summe.
-- Nennt eine Passage nur die größten Teile, ergibt die Liste nicht das Ganze. Fehlt ein Teil, der in einer Tabelle steht, nimm ihn aus `tables` dazu; sonst gibt es nichts zu rechnen.
+- Nennt eine Passage nur die größten Teile, ergibt die Liste nicht das Ganze. Fehlt ein Teil in "numbers", gibt es nichts zu rechnen, auch wenn er in einer Tabelle steht.
 
 Antworte immer mit genau einem JSON-Objekt, ohne Text davor oder danach.
 
@@ -27,7 +27,7 @@ Im Code stehen bereit: `numbers` (Dictionary von "N1", "N2", … auf {"value", "
 Du bekommst die Ausgabe zurück und antwortest dann:
 {"value": <die ausgegebene Zahl, Zeichen für Zeichen>, "used": ["N1", "N3"]}
 
-"used" nennt die Zahlen, mit denen du gerechnet hast. Die Einheit ist die der Gesamtzahl oder der Zahlen in "numbers".
+"used" nennt die Zahlen, mit denen du gerechnet hast. Das Ergebnis wird aus ihnen maschinell nachgerechnet, als Anteil mal Gesamtzahl durch 100 oder als ihre Summe; eine Zahl, die nicht aus ihnen folgt, wird verworfen. Die Einheit ist die der Gesamtzahl oder der Zahlen in "numbers".
 
 Gibt es nichts zu rechnen, antworte ohne Code:
 {"value": null, "used": []}

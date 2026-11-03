@@ -128,7 +128,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.topup_rest](docpipe.extraction.topup_rest.md): Reads the passages of a stored harvest that were never asked for values, and appends what they hold. (1 class, 4 functions)
 - [docpipe.extraction.trace](docpipe.extraction.trace.md): Records what the harvest did as one JSON event per line, so it can be counted after the run. (4 functions)
 - [docpipe.extraction.trust](docpipe.extraction.trust.md): Grades every harvested value by how far the run can stand behind it. (8 functions)
-- [docpipe.extraction.verify](docpipe.extraction.verify.md): Checks a claimed tuple against the spec and the source text before it is written to the harvest. (2 classes, 9 functions)
+- [docpipe.extraction.verify](docpipe.extraction.verify.md): Checks a claimed tuple against the spec and the source text before it is written to the harvest. (2 classes, 11 functions)
 - [docpipe.extraction.wording](docpipe.extraction.wording.md): What the extraction stage says to the model outside its prompts. (2 functions)
 
 ## docpipe.inference
@@ -238,7 +238,7 @@ is for and what it hands to what; this is the reference.
 ## profiles.kwp
 
 - [profiles.kwp.catalog](profiles.kwp.catalog.md): How heat plans present themselves in the picker. (1 class, 2 functions)
-- [profiles.kwp.compute](profiles.kwp.compute.md): What a heat plan leaves to be worked out from its printed numbers. (17 functions)
+- [profiles.kwp.compute](profiles.kwp.compute.md): What a heat plan leaves to be worked out from its printed numbers. (18 functions)
 - [profiles.kwp.config](profiles.kwp.config.md): Constants for the fileprocessing module. (1 function)
 - [profiles.kwp.extraction](profiles.kwp.extraction.md): Extraction stage wiring: the kwp spec, the slice gate, the frame, and what a plan says about itself. (2 functions)
 - [profiles.kwp.inference](profiles.kwp.inference.md): What the answer loop says around the kwp prompts.

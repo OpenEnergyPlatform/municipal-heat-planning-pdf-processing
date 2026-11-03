@@ -17,7 +17,8 @@ Which questions stand open is the profile's (`compute.py` of the profile,
 every such question has: what the request shows, what the sandbox is handed,
 and the row that comes of the answer. That row is a claim like any other: it
 goes through `verify_tuple` under the quote of one of its numbers, and a number
-that is not in the code's output is refused (`computed_in_output`).
+that is not in the code's output is refused (`computed_in_output`), as is one
+its inputs do not make (`computed_from_inputs`, owner decision 2026-11-03).
 
 ## Classes
 
@@ -51,7 +52,8 @@ One number a document leaves open.
 worked out from, named N1, N2, ... in this order. *anchor* is the number
 whose quote and passage the new row stands under. *row* makes the new
 row's coordinates from the rows the answer used, None where they do not
-yield one.
+yield one. *makes* is what the numbers the answer used make, in the new
+row's unit: the number the answer has to be, None where they make none.
 
 Fields:
 
@@ -60,6 +62,7 @@ Fields:
 - `numbers: list`
 - `anchor: dict`
 - `row: Callable`
+- `makes: Callable`
 
 ## Functions
 
@@ -131,8 +134,8 @@ def claim_of(question: Question, value, used: list,
 ```
 
 The new row: coordinates from its numbers, the code and its output as
-evidence, and the numbers it was worked out from with their passages.
-The last run is the one the answer stands on.
+evidence, and the numbers it was worked out from with their passages and
+what they make. The last run is the one the answer stands on.
 
 ### keys_of
 

@@ -5596,12 +5596,16 @@ def make_computer(profile) -> Optional[Callable]:
     None where it cannot run: the profile names no open question or writes no
     prompt, or the run has no sandbox, since a number the model works out
     itself has no evidence.
+
+    Two questions that come to one statement leave one row: the profile's
+    `same` says when two worked-out rows are (owner decision 2026-11-03).
     """
     from docpipe.inference import code_exec
 
     open_questions = profile.component("compute", "questions")
     if open_questions is None or CODE_ROUNDS < 1 or not code_exec.is_enabled():
         return None
+    same = profile.component("compute", "same")
     try:
         prompt = prompts.load(computing.COMPUTE_PROMPT_ID)
     except (FileNotFoundError, LookupError):
@@ -5704,6 +5708,7 @@ def make_computer(profile) -> Optional[Callable]:
         asked = [(question, pool.submit(ask, question, items,
                                         report.document_id, stop))
                  for question in questions]
+        made: list = []
         for question, future in asked:
             outcome, claim, runs = future.result()
             if claim is not None:
@@ -5715,6 +5720,12 @@ def make_computer(profile) -> Optional[Callable]:
                             spec=doc_spec)
                 if len(report.tuples) == before:
                     outcome = "refused"
+                elif same is not None and any(
+                        same(report.tuples[-1], row, doc_spec) for row in made):
+                    report.tuples.pop()
+                    outcome = "same"
+                else:
+                    made.append(report.tuples[-1])
             trace.event("compute", report.document_id, kind=question.kind,
                         numbers=len(question.numbers), outcome=outcome,
                         runs=len(runs))

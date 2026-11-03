@@ -4,6 +4,7 @@ model writes the code, and the new row carries code, output and inputs. Each
 promise has a case that breaks it by construction beside the one that keeps
 it."""
 import json
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,7 +13,7 @@ import pytest
 
 from docpipe.app import sandbox_service
 from docpipe.extraction import compute, fields, pipeline, replies, runner
-from docpipe.extraction import schema, stats
+from docpipe.extraction import schema, stats, verify
 from docpipe.extraction.pipeline import Source, WorkItem
 from docpipe.extraction.spec import load as load_spec
 from docpipe.inference import code_exec
@@ -374,12 +375,18 @@ def batch_of(*rows):
     return pipeline.Batch(7, None, items)
 
 
-PROFILE = SimpleNamespace(component=lambda module, attr: rules.questions)
+PROFILE = SimpleNamespace(component=lambda module, attr: getattr(rules, attr,
+                                                                  None))
+
+
+def printed(number):
+    return {"ok": True, "stdout": f"{number}\n", "error": None}
 
 
 def computing(monkeypatch, *said, ran=None):
     """A compute step whose model says *said* in turn. Its requests, the code
-    runs with what they were handed, and the trace."""
+    runs with what they were handed, and the trace. *ran* is what every run
+    prints, or a list of what each prints in turn."""
     told = iter(said)
     asked, runs, events = [], [], []
 
@@ -390,7 +397,9 @@ def computing(monkeypatch, *said, ran=None):
 
     def run_code(code, context=None, timeout=None):
         runs.append((code, context))
-        return ran or {"ok": True, "stdout": "38892.0\n", "error": None}
+        if isinstance(ran, list):
+            return ran.pop(0)
+        return ran or printed(38892.0)
 
     client = SimpleNamespace(chat=SimpleNamespace(
         completions=SimpleNamespace(create=create)))
@@ -500,12 +509,12 @@ def test_a_document_with_nothing_open_asks_nothing(monkeypatch):
 
 
 def test_the_inputs_are_the_numbers_the_answer_names(monkeypatch):
-    named = json.dumps({"value": 38892.0, "used": ["N1", "N3"]})
+    named = json.dumps({"value": 38892.0, "used": ["N1", "N2"]})
     step, _asked, _runs, _events = computing(monkeypatch, CODE, named)
     report, _done = run_step(step, amount(30000, GAS), amount(8892, OIL),
                              amount(500, HEAT))
     inputs = report.tuples[-1]["compute"][-1]["inputs"]
-    assert len(inputs) == 2
+    assert sorted(i["value"] for i in inputs) == [8892, 30000]
 
 
 def test_an_answer_naming_no_number_used_them_all(monkeypatch):
@@ -569,3 +578,108 @@ def test_a_row_is_checked_against_its_own_parameter(monkeypatch):
     step([(batch, {})], report, spec=SPEC)
     assert len(report.tuples) == 3
     assert report.tuples[-1]["parameter"] == "energy_consumption"
+
+
+# -- what its inputs make ----------------------------------------------------
+
+def test_a_share_makes_its_part_of_the_one_total_named():
+    question = only(share(21), amount(185200))
+    assert question.makes(question.numbers) == pytest.approx(38892)
+    assert question.makes(question.numbers[:1]) is None
+
+
+def test_a_sum_makes_the_parts_it_names():
+    question = only(amount(120, GAS), amount(80, OIL), amount(50, HEAT))
+    assert question.makes(question.numbers) == 250
+    assert question.makes(question.numbers[:2]) == 200
+
+
+def test_the_row_carries_what_its_inputs_make(monkeypatch):
+    step, _asked, _runs, _events = computing(monkeypatch, CODE, ANSWER)
+    report, _done = run_step(step, share(21), amount(185200))
+    assert report.tuples[-1]["compute"][-1]["expected"] == pytest.approx(38892)
+
+
+def test_a_printed_number_its_inputs_do_not_make_is_refused(monkeypatch):
+    other = json.dumps({"value": 40000.0, "used": ["N1", "N2"]})
+    step, _asked, _runs, events = computing(monkeypatch, CODE, other,
+                                            ran=printed(40000.0))
+    report, _done = run_step(step, share(21), amount(185200))
+    assert len(report.tuples) == 2
+    reason = report.refusals[-1]["reason"]
+    assert reason == "value 40000.0 does not follow from its inputs"
+    assert any(re.match(p, reason) for p in schema.REFUSAL_REASONS)
+    assert events[-1]["outcome"] == "refused"
+
+
+def test_a_sum_of_other_numbers_than_it_names_is_refused(monkeypatch):
+    for total, kept in ((200.0, 3), (210.0, 2)):
+        said = json.dumps({"value": total, "used": ["N1", "N2"]})
+        step, _asked, _runs, _events = computing(monkeypatch, CODE, said,
+                                                 ran=printed(total))
+        report, _done = run_step(step, amount(120, GAS), amount(80, OIL))
+        assert len(report.tuples) == kept, total
+
+
+def test_a_number_follows_to_the_rounding_it_is_written_with(monkeypatch):
+    # 21 % of 185,201 is 38,892.21.
+    for written, kept in ((38892.2, 3), (38892.21, 3), (38893.0, 2)):
+        said = json.dumps({"value": written, "used": ["N1", "N2"]})
+        step, _asked, _runs, _events = computing(monkeypatch, CODE, said,
+                                                 ran=printed(written))
+        report, _done = run_step(step, share(21), amount(185201))
+        assert len(report.tuples) == kept, written
+
+
+# -- one statement, worked out twice -----------------------------------------
+
+def worked_twice(monkeypatch, first, second, values=(38892.0, 38892.0)):
+    """Two questions answered in turn, each with its own code."""
+    monkeypatch.setattr(runner, "FIELD_PARALLEL", 1)
+    said = []
+    for index, value in enumerate(values):
+        said += [json.dumps({"action": "python",
+                             "code": f"print({value})  # {index}"}),
+                 json.dumps({"value": value, "used": ["N1", "N2"]})]
+    step, _asked, _runs, events = computing(
+        monkeypatch, *said, ran=[printed(value) for value in values])
+    report, _done = run_step(step, first, second, amount(185200))
+    made = [row for row in report.tuples if row.get("computed")]
+    return made, [e for e in events if e["t"] == "compute"], events
+
+
+def test_two_questions_coming_to_one_statement_leave_one_row(monkeypatch):
+    made, asked, events = worked_twice(monkeypatch, share(21, owner=9),
+                                       share(21, owner=10))
+    assert len(made) == 1
+    assert [e["outcome"] for e in asked] == ["read", "same"]
+    for event in events:
+        jsonschema.validate(event, schema.trace_schema())
+
+
+def test_the_same_number_on_other_coordinates_is_two_rows(monkeypatch):
+    made, _asked, _events = worked_twice(monkeypatch, share(21, OIL, owner=9),
+                                         share(21, GAS, owner=10))
+    assert sorted(row["carrier"] for row in made) == sorted([OIL, GAS])
+
+
+def test_another_number_on_the_same_coordinates_is_two_rows(monkeypatch):
+    made, _asked, _events = worked_twice(monkeypatch, share(21, owner=9),
+                                         share(22, owner=10),
+                                         values=(38892.0, 40744.0))
+    assert sorted(row["value"] for row in made) == [38892.0, 40744.0]
+
+
+def test_a_number_the_rows_request_worked_out_names_no_inputs_and_stands():
+    text = "| Gas | 300 MWh/a | Öl | 200 MWh/a |"
+    claim = {**amount(500), "quote": text, "computed": True,
+             "compute": [{"code": "print(300 + 200)", "stdout": "500\n",
+                          "ok": True, "error": None}]}
+    outcome = verify.verify_tuple(claim, SPEC.by_uri["energy_consumption"],
+                                  text, owner_kind="table")
+    assert not isinstance(outcome, verify.Refusal)
+    named = {**claim, "compute": [{**claim["compute"][0], "inputs": [],
+                                   "expected": 450}]}
+    assert isinstance(verify.verify_tuple(
+        named, SPEC.by_uri["energy_consumption"], text, owner_kind="table"),
+        verify.Refusal)

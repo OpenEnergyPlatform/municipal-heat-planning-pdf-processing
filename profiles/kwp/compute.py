@@ -20,6 +20,11 @@ number are two rows. A set whose largest number is the sum of the others has
 printed its sum under another word. The rest is reading and stays with the
 model: a part contained in another, alternatives of one plant, a list of only
 the largest parts.
+
+What a question's numbers make is its own arithmetic, a share times its total
+or the sum of the parts, and an answer has to be it (`makes`). Two questions
+that come to the same number with the same coordinates are one statement, and
+one row of it stays (`same`, owner decision 2026-11-03).
 """
 from __future__ import annotations
 
@@ -143,13 +148,20 @@ def share_question(share: dict, bases: list, spec) -> Question:
         return {**inherited(totals[0], *SPLIT, SUBJECT), **keys_of(
             share, *SPLIT, SUBJECT)}
 
+    def makes(used: list) -> Optional[float]:
+        """The share of its one total, in the total's unit."""
+        totals = [other for other in used if other.row is not share]
+        if len(totals) != 1:
+            return None
+        return share["value_target"] / 100 * totals[0].value
+
     return Question(
         kind="share",
         wanted={"kind": "share", "share": "N1", "whole": share.get("whole"),
                 "year": share.get("year"),
                 "scenario": label_of(share, "scenario", spec)},
         numbers=[number(share, spec), *(number(base, spec) for base in bases)],
-        anchor=share, row=row)
+        anchor=share, row=row, makes=makes)
 
 
 def split_of(row: dict) -> tuple:
@@ -188,6 +200,10 @@ def sum_question(parts: list, axis: str, spec) -> Question:
                 f"{axis}_state": fields.DERIVED,
                 f"{SUBJECT}_state": fields.SAID_UNSTATED}
 
+    def makes(used: list) -> float:
+        """The parts it names added up, in the unit of the first."""
+        return sum(part.value for part in used)
+
     unit = first.get("unit")
     return Question(
         kind="sum",
@@ -195,7 +211,7 @@ def sum_question(parts: list, axis: str, spec) -> Question:
                 "scenario": label_of(first, "scenario", spec),
                 "quantity": label_of(first, "quantity", spec), "unit": unit},
         numbers=[number(part, spec, unit) for part in parts],
-        anchor=first, row=row)
+        anchor=first, row=row, makes=makes)
 
 
 def open_sums(rows: list, spec) -> list:
@@ -222,3 +238,16 @@ def open_sums(rows: list, spec) -> list:
 def questions(rows: list, spec) -> list:
     """Every number this document's verified rows leave open."""
     return [*open_shares(rows, spec), *open_sums(rows, spec)]
+
+
+def same(a: dict, b: dict, spec) -> bool:
+    """Two worked-out rows that are one statement: the same number with the
+    same coordinates, whichever questions came to it. The subject is the
+    plan's wording and tells only different numbers apart, as in the graph;
+    the number is compared in its target unit, within the graph's rounding."""
+    parameter = spec.by_uri.get(str(a.get("parameter") or ""))
+    return (parameter is not None and a.get("parameter") == b.get("parameter")
+            and all(entry(a, slot.name) == entry(b, slot.name)
+                    for slot in fields.axis_slots(parameter)
+                    if slot.name != SUBJECT)
+            and same_number(a, b))

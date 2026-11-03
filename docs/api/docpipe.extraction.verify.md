@@ -132,6 +132,31 @@ which is exactly why the arithmetic goes to the sandbox at all. The quote
 is still required and still checked: it proves the inputs are in the
 document.
 
+### printed_rounding
+
+```python
+def printed_rounding(value: float) -> float
+```
+
+Half a unit of the last digit a number is written with: 116.1 stands
+for anything from 116.05 to 116.15, and 38892.0 for 38891.5 to 38892.5.
+
+### computed_from_inputs
+
+```python
+def computed_from_inputs(raw: dict) -> bool
+```
+
+Is the number what the numbers it was worked out from make?
+
+The output proves the code printed the number, not that the code worked
+with the numbers the answer names: one summed a column of its table and
+printed 1,948 t/a beside inputs of 20,345 and 1,399. What the inputs make
+stands on the last run (`expected`, from the question: a share times its
+whole, the sum of the parts), and the number has to be it, to the rounding
+it is written with (owner decision 2026-11-03). A number the rows request
+worked out names no inputs and is held to its output alone.
+
 ### value_in_quote
 
 ```python
