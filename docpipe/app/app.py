@@ -453,8 +453,10 @@ def main() -> None:
     if config.PROFILE is None:
         st.warning(T["no_profile"])
 
-    # The review page is offered where there is something to review.
-    if config.HARVEST_DIR is not None and config.GOLD_PATH is not None:
+    # The review page is offered where there is something to review and it
+    # is not switched off.
+    if (config.REVIEW and config.HARVEST_DIR is not None
+            and config.GOLD_PATH is not None):
         with st.sidebar:
             page = st.radio("page", [T["page_chat"], T["page_review"]],
                             horizontal=True, label_visibility="collapsed")

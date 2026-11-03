@@ -83,6 +83,8 @@ HARVEST_DIR = (Path(os.environ["INFERENCE_HARVEST_DIR"])
 GOLD_PATH = (Path(os.environ["INFERENCE_GOLD_PATH"])
              if os.environ.get("INFERENCE_GOLD_PATH")
              else (path_beside(HARVEST_DIR) if HARVEST_DIR else None))
+# 0 does not offer the review page, also where a harvest is set.
+REVIEW = os.environ.get("INFERENCE_REVIEW", "1") != "0"
 # The worst trust level of a harvested value the chat still shows: A to D.
 # Unset shows every value, each with its level.
 VALUES_LEVEL = (os.environ.get("INFERENCE_VALUES_LEVEL") or "").strip() or None

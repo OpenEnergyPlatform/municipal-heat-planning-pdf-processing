@@ -117,6 +117,10 @@ SETTINGS = (
       "Harvest directory the chat takes verified values from and the review "
       "page reads; unset: neither.",
       stages=("chat",)),
+    S("INFERENCE_REVIEW", "chat.review", "flag", "1",
+      "Offer the review page where a harvest is set; 0 offers the chat "
+      "alone.",
+      stages=("chat",)),
     S("INFERENCE_IMAGE_ROOT", "chat.image_root", "path", None,
       "Folder that stored table and figure image paths are relative to; "
       "default: the profile's.",
