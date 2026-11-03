@@ -180,6 +180,33 @@ def test_a_container_left_uncleared_fails_its_run(monkeypatch):
     assert not reply["ok"] and reply["error"]
 
 
+class Warming:
+    """A pool whose containers stand one after the other."""
+    def __init__(self, idle):
+        self.idle = list(idle)
+
+    def get_stats(self):
+        return {"state_counts": {"idle": self.idle.pop(0) if len(self.idle) > 1
+                                 else self.idle[0]}}
+
+
+def test_the_service_waits_until_every_container_stands(monkeypatch):
+    monkeypatch.setattr(sandbox_service, "PARALLEL", 3)
+    pool, slept = Warming([0, 1, 2, 3]), []
+    sandbox_service.wait_until_ready(pool, 60, clock=lambda: 0,
+                                     sleep=slept.append)
+    assert len(slept) == 3
+
+
+def test_a_pool_that_never_stands_stops_the_service(monkeypatch):
+    monkeypatch.setattr(sandbox_service, "PARALLEL", 3)
+    ticks = iter(range(0, 1000, 10))
+    with pytest.raises(SystemExit):
+        sandbox_service.wait_until_ready(Warming([1]), 60,
+                                         clock=lambda: next(ticks),
+                                         sleep=lambda _: None)
+
+
 def test_the_containers_are_kept_while_the_service_runs(monkeypatch):
     made = {}
     monkeypatch.setattr(sandbox_service, "create_pool_manager",

@@ -47,7 +47,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.app.app](docpipe.app.app.md): The chat over a docpipe corpus and the page on which harvested values are reviewed. (33 functions)
 - [docpipe.app.config](docpipe.app.config.md): Central configuration for the chat app.
 - [docpipe.app.pdf_link](docpipe.app.pdf_link.md): Where a citation stands in the source PDF: the deep link into an external viewer, and the page drawn here with the quote marked. (1 class, 8 functions)
-- [docpipe.app.sandbox_service](docpipe.app.sandbox_service.md): Localhost HTTP wrapper around llm-sandbox. (1 class, 3 functions)
+- [docpipe.app.sandbox_service](docpipe.app.sandbox_service.md): Localhost HTTP wrapper around llm-sandbox. (1 class, 4 functions)
 
 ## docpipe.builtin.default
 

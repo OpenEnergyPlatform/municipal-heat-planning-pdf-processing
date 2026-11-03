@@ -930,7 +930,10 @@ The service keeps its containers for as long as it runs, one per
 `KWP_SANDBOX_PARALLEL` (owner decision 2026-11-03), and clears each after a run:
 every process but the container's own and every file in the work dir and the
 temp dirs but the venv. A run then costs about half a second. A fresh container
-per run cost two to twelve seconds from an image store on a network disk.
+per run cost two to twelve seconds from an image store on a network disk. The
+service answers only once every container stands, which takes about half a
+minute each, one after the other (`KWP_SANDBOX_READY_TIMEOUT`): a run that came
+earlier made a container of its own while podman was still starting, and failed.
 
 ### Trust levels
 

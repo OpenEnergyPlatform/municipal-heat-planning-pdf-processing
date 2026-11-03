@@ -67,6 +67,17 @@ def open_pool()
 
 The containers of this service, made when it starts.
 
+### wait_until_ready
+
+```python
+def wait_until_ready(pool, timeout: float, clock=time.monotonic,
+                     sleep=time.sleep) -> None
+```
+
+Back once every container of the pool stands idle. A run that came
+before would make a container of its own while podman is still starting,
+and failed so in a job.
+
 ### main
 
 ```python

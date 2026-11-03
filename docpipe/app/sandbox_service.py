@@ -29,6 +29,7 @@ import json
 import os
 import signal
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 try:
@@ -73,6 +74,8 @@ POOL_CONFIG = {"max_pool_size": PARALLEL, "min_pool_size": PARALLEL,
                "idle_timeout": None, "max_container_lifetime": None,
                "acquisition_timeout": 600}
 POOL = None                         # the containers, opened by `main`
+# Seconds the containers may take to stand, one after the other.
+READY_TIMEOUT = int(os.environ.get("KWP_SANDBOX_READY_TIMEOUT", "900"))
 
 # What a run left goes before its container serves the next one: every
 # process but the container's own, every file in the work dir and the temp
@@ -181,6 +184,19 @@ def open_pool():
                                config=PoolConfig(**POOL_CONFIG))
 
 
+def wait_until_ready(pool, timeout: float, clock=time.monotonic,
+                     sleep=time.sleep) -> None:
+    """Back once every container of the pool stands idle. A run that came
+    before would make a container of its own while podman is still starting,
+    and failed so in a job."""
+    deadline = clock() + timeout
+    while pool.get_stats()["state_counts"]["idle"] < PARALLEL:
+        if clock() > deadline:
+            raise SystemExit(f"the sandbox did not make its {PARALLEL} "
+                             f"container(s) in {timeout:.0f} s")
+        sleep(1)
+
+
 def main(argv=None) -> None:
     import argparse
     argparse.ArgumentParser(
@@ -203,6 +219,7 @@ def main(argv=None) -> None:
     # A job ends the service with SIGTERM; the containers go with it.
     signal.signal(signal.SIGTERM, stop)
     POOL = open_pool()
+    wait_until_ready(POOL, READY_TIMEOUT)
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"kwp sandbox service listening on {HOST}:{PORT}, "
           f"{PARALLEL} container(s)", flush=True)
