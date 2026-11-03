@@ -4929,6 +4929,7 @@ class Turn:
         self.deciding: set = set()   # the keys whose rows wait for the search
         self.asked: dict = {}        # key -> (slots, anchor id)
         self.heard: dict = {}        # anchor id -> what the model still needs
+        self.worded: dict = {}       # row label -> its wording, value asked again
         self.unit_slot = fields.unit_slot(doc_spec)
         self.with_unit = ([row for row in rows
                            if fields.has_number(row.claim)]
@@ -5202,29 +5203,41 @@ class Turn:
 
     def ask_value(self, uri: str, choice, rows: list) -> None:
         """The value asked again as one of its parameter's entries, before
-        the axes, in the row's own passage (`value_choice`). The wording stays
-        in value_raw; the value stays what the passage printed until an entry
-        is read, so a row that reads none is refused for it by `verify`."""
+        the axes, in the row's own passage (`value_choice`). The value stays
+        what the passage printed until an entry is read, so a row that reads
+        none is refused for it by `verify`. The wording it was read with is
+        put aside meanwhile: an answer brings its own or none
+        (`after_value`)."""
         for row in rows:
-            wording = row.claim.get("value_raw")
-            if not (isinstance(wording, str) and wording.strip()):
-                row.claim["value_raw"] = row.claim.get("value")
+            wording = row.claim.pop("value_raw", None)
+            self.worded[row.label] = (
+                wording if isinstance(wording, str) and wording.strip()
+                else row.claim.get("value"))
         held = {row.label for row in self.ask(
             rows, choice, anchor_key(uri), (uri, VALUE_AGAIN), True)}
         self.after_value(uri, [row for row in rows if row.label not in held])
 
     def after_value(self, uri: str, rows: list) -> None:
-        """Rows whose value has an entry go on to their axes. The others are
+        """A row whose value has an entry stands on the reading that found
+        it, the entry, the wording that answer gave and its quote, and goes on
+        to its axes. The others keep the wording they were read with, are
         refused for their value, and their axes are never asked."""
         axes, _gate, _gated = self.plan[uri]
         read = [row for row in rows
                 if row.claim.get(f"{VALUE_AGAIN}_state") == fields.READ]
         going = {row.label for row in read}
         for row in rows:
-            if row.label not in going:
-                for axis in axes:
-                    row.claim.setdefault(f"{axis.name}_state",
-                                         fields.OUT_OF_SLICE)
+            if row.label in going:
+                # `verify` checks a value against `quote`. Left on the
+                # passage the rows request cited, "BECCS (bioenergy with
+                # Carbon Capture and Storage)" was checked against a quote
+                # that ends at "BECCS" and refused.
+                row.claim["quote"] = row.claim[f"{VALUE_AGAIN}_quote"]
+                continue
+            row.claim.setdefault("value_raw", self.worded.get(row.label))
+            for axis in axes:
+                row.claim.setdefault(f"{axis.name}_state",
+                                     fields.OUT_OF_SLICE)
         self.walk(uri, read, 0)
 
     def keep(self, rows: list, axis, axes: list) -> list:
@@ -6725,6 +6738,18 @@ def resolve_image_root(pdf_root: Optional[Path],
 DYNAMIC_LIST_TOKENS = 4000
 
 
+def field_slots(spec) -> list:
+    """Every slot a field request can ask, one per request: the parameter,
+    the unit, each parameter's coordinates and the value of a category
+    parameter asked again (`Turn.enter`)."""
+    out = [fields.parameter_slot(spec), fields.unit_slot(spec)]
+    for parameter in spec.parameters:
+        out += fields.axis_slots(parameter)
+        if parameter.value_type == "category":
+            out.append(fields.value_choice(parameter))
+    return [slot for slot in out if slot is not None]
+
+
 def context_budget(prompt, spec=None) -> int:
     """Tokens one harvest request needs at worst — a floor for the server.
 
@@ -6742,7 +6767,11 @@ def context_budget(prompt, spec=None) -> int:
     no parameter carries every parameter's class lists at once. The second
     was not counted until a profile had four lists, one of 153 classes, and
     its reading requests outgrew a budget that still measured the widest
-    single parameter.
+    single parameter. A field request carries one slot's options as the
+    model reads them, definitions and all, and the value of a category
+    parameter asked again carries its whole list: 63,230 characters for 154
+    sectors whose parameter payload counts 9,627. Unmeasured, that request
+    did not fit the window and was never sent.
 
     A request carries several sources now, so the text term is the batch's
     ceiling rather than one window's — and one source too long to share a
@@ -6756,10 +6785,13 @@ def context_budget(prompt, spec=None) -> int:
                       for p in spec.parameters), default=0)
         together = len(json.dumps(_quantities_payload(spec),
                                   ensure_ascii=False))
+        asked = max((len(json.dumps(slot.answerable(), ensure_ascii=False))
+                     for slot in field_slots(spec) if slot.options),
+                    default=0)
         dynamic = any(p.vocabulary_dynamic or
                       any(a.dynamic for a in p.axes.values())
                       for p in spec.parameters)
-        payload = max(payload, max(widest, together) // 3 + 600
+        payload = max(payload, max(widest, together, asked) // 3 + 600
                       + (DYNAMIC_LIST_TOKENS if dynamic else 0))
     return int(len(prompt.text.split()) * 3
                + max(BATCH_CHARS, MAX_SOURCE_CHARS) // 3    # the batch's text

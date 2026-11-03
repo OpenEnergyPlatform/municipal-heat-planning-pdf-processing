@@ -713,9 +713,11 @@ def ask_value(self, uri: str, choice, rows: list) -> None
 ```
 
 The value asked again as one of its parameter's entries, before
-the axes, in the row's own passage (`value_choice`). The wording stays
-in value_raw; the value stays what the passage printed until an entry
-is read, so a row that reads none is refused for it by `verify`.
+the axes, in the row's own passage (`value_choice`). The value stays
+what the passage printed until an entry is read, so a row that reads
+none is refused for it by `verify`. The wording it was read with is
+put aside meanwhile: an answer brings its own or none
+(`after_value`).
 
 #### Turn.after_value
 
@@ -723,7 +725,9 @@ is read, so a row that reads none is refused for it by `verify`.
 def after_value(self, uri: str, rows: list) -> None
 ```
 
-Rows whose value has an entry go on to their axes. The others are
+A row whose value has an entry stands on the reading that found
+it, the entry, the wording that answer gave and its quote, and goes on
+to its axes. The others keep the wording they were read with, are
 refused for their value, and their axes are never asked.
 
 #### Turn.keep
@@ -2373,6 +2377,16 @@ entirely, and the profile default pointed every crop at a directory that
 does not exist — one warning per table, and a harvest that read every
 picture's transcription without the picture.
 
+### field_slots
+
+```python
+def field_slots(spec) -> list
+```
+
+Every slot a field request can ask, one per request: the parameter,
+the unit, each parameter's coordinates and the value of a category
+parameter asked again (`Turn.enter`).
+
 ### context_budget
 
 ```python
@@ -2395,7 +2409,11 @@ for a single parameter carries that parameter whole, and one planned for
 no parameter carries every parameter's class lists at once. The second
 was not counted until a profile had four lists, one of 153 classes, and
 its reading requests outgrew a budget that still measured the widest
-single parameter.
+single parameter. A field request carries one slot's options as the
+model reads them, definitions and all, and the value of a category
+parameter asked again carries its whole list: 63,230 characters for 154
+sectors whose parameter payload counts 9,627. Unmeasured, that request
+did not fit the window and was never sent.
 
 A request carries several sources now, so the text term is the batch's
 ceiling rather than one window's — and one source too long to share a

@@ -1,12 +1,16 @@
 """A closed list's answer is one of its entries, the value of a category
 parameter too: a row whose value its parameter's list does not hold has that
 parameter read AND its value asked again, in its own passage only, as one of
-that list's entries, with the wording kept AND a row that reads no entry is
-refused for its value without its axes ever being asked; a value off its list
-is refused, never kept, AND a grown list reopens its answer space. A value
-left out with its wording beside it fits any list."""
+that list's entries, AND a value read so stands on that reading, its entry,
+the wording it gave and its quote, AND a row that reads no entry keeps the
+wording it was read with and is refused for its value without its axes ever
+being asked; a value off its list is refused, never kept, AND a grown list
+reopens its answer space, AND the window a run is served holds the widest
+list a field request offers. A value left out with its wording beside it fits
+any list."""
 import json
 import re
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -78,8 +82,10 @@ def test_the_value_is_asked_in_its_own_passage_alone():
 
 def turned(reads):
     """A turn over three rows of one parameter, and what it asked: R1's value
-    is on the list, R2 and R3 print wordings it does not hold. *reads* is the
-    entry the value question reads per row, or None for none."""
+    is on the list, R2 and R3 print wordings it does not hold, and R2 cites
+    the half of the sentence that is not the wording its entry is read from.
+    *reads* is what the value question reads per row, written as
+    `merge_field` writes it: (entry, wording or None, quote)."""
     asked = []
 
     def sweeper(batch, rows, slots, anchor=""):
@@ -87,18 +93,25 @@ def turned(reads):
         asked.append((names, [row.label for row in rows], slots))
         if names == ["value"]:
             for row in rows:
-                entry = reads.get(row.label)
-                row.claim["value_state"] = (fields.READ if entry
-                                            else fields.UNBACKED)
-                if entry:
-                    row.claim["value"] = entry
+                got = reads.get(row.label)
+                if got is None:
+                    row.claim["value_state"] = fields.UNBACKED
+                    continue
+                entry, wording, quote = got
+                row.claim.update({"value_state": fields.READ, "value": entry,
+                                  "value_quote": quote,
+                                  "value_source": ["section", 2]})
+                if wording:
+                    row.claim["value_raw"] = wording
         return {}
 
     rows = [Row(label=label, item_index=0, claim={
-        "value": value, "parameter": TYPE.label,
+        "value": value, "quote": quote, "parameter": TYPE.label,
         "parameter_state": fields.READ})
-        for label, value in (("R1", "policy scenario"), ("R2", "WEM case"),
-                             ("R3", "a wording no list holds"))]
+        for label, value, quote in (
+            ("R1", "policy scenario", POLICY),
+            ("R2", "WEM case", "the WEM case keeps today's policies"),
+            ("R3", "a wording no list holds", POLICY))]
     batch = SimpleNamespace(document_id=7, parameter=None, sources=[],
                             frame=None, bases=())
     turn = runner.Turn(batch, rows, doc_spec=SPEC, sweeper=sweeper)
@@ -107,26 +120,56 @@ def turned(reads):
     return turn, {row.label: row.claim for row in rows}, asked
 
 
+READ_AGAIN = {"R2": ("with existing measures scenario",
+                     "With existing measures", POLICY)}
+
+
 def test_only_a_value_off_its_list_is_asked_again_and_before_any_axis():
-    _turn, claims, asked = turned({"R2": "with existing measures scenario"})
+    _turn, claims, asked = turned(READ_AGAIN)
     names = [entry[0] for entry in asked]
     assert names[0] == ["value"] and asked[0][1] == ["R2", "R3"]
     offered = {opt.label for opt in asked[0][2][0].options}
     assert "with existing measures scenario" in offered
-    assert claims["R2"]["value_raw"] == "WEM case"
     assert "value_state" not in claims["R1"]
 
 
+def test_a_value_read_again_stands_on_the_quote_that_read_it():
+    _turn, claims, _asked = turned(READ_AGAIN)
+    assert claims["R2"]["quote"] == POLICY
+    assert claims["R2"]["value_raw"] == "With existing measures"
+    tuple_ = verify_tuple(claims["R2"], TYPE, POLICY, owner_kind="section")
+    assert isinstance(tuple_, Verified) and tuple_.tuple["value_uri"]
+
+
+def test_a_value_read_again_without_a_wording_carries_none():
+    _turn, claims, _asked = turned(
+        {"R2": ("with existing measures scenario", None, POLICY)})
+    assert "value_raw" not in claims["R2"]
+
+
 def test_a_value_with_an_entry_goes_on_and_one_without_is_refused_unasked():
-    _turn, claims, asked = turned({"R2": "with existing measures scenario"})
+    _turn, claims, asked = turned(READ_AGAIN)
     axis_rows = {label for names, labels, _ in asked if names != ["value"]
                  for label in labels}
     assert axis_rows == {"R1", "R2"}
     assert claims["R3"]["scenario_state"] == fields.OUT_OF_SLICE
-    refused = verify_tuple({**claims["R3"], "quote": POLICY}, TYPE, POLICY,
-                           owner_kind="section")
+    assert claims["R3"]["value_raw"] == "a wording no list holds"
+    refused = verify_tuple(claims["R3"], TYPE, POLICY, owner_kind="section")
     assert isinstance(refused, Refusal)
     assert any(re.match(p, refused.reason) for p in schema.REFUSAL_REASONS)
+
+
+def test_the_window_holds_the_widest_list_a_field_request_offers():
+    # Per construction: definitions that alone outgrow the window a run is
+    # served when only the entries' names are counted.
+    long = replace(SECTOR, definitions={
+        uri: "a sector the plan names " * 80 for uri in SECTOR.vocabulary})
+    spec = replace(SPEC, parameters=[long if p is SECTOR else p
+                                     for p in SPEC.parameters])
+    offered = len(json.dumps(fields.value_choice(long).answerable(),
+                             ensure_ascii=False))
+    # Four characters to a token is generous to the window.
+    assert runner.request_budget(spec, False) > offered / 4
 
 
 def claim(value):

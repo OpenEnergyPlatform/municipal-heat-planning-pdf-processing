@@ -209,7 +209,7 @@ On the bundle, not on the report: the shapes carry the study's abstract there.
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -320,7 +320,7 @@ One node per distinct name. Two spellings of one person are one node and keep bo
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -429,7 +429,7 @@ A PDF states a year; the serializer pads it to YYYY-01-01T00:00:00, which the do
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -532,7 +532,7 @@ How the row becomes a node:
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -642,7 +642,7 @@ Mints the study report. The title is also the bundle's label when no project nam
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -745,7 +745,7 @@ How the row becomes a node:
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -917,7 +917,7 @@ The AR6 run name labels the factsheet; the document's own wording is the acronym
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -1062,7 +1062,7 @@ The object is an OEKG region individual that already exists over there and is on
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -1268,7 +1268,7 @@ The object is one of the classes the shapes accept, chosen from the list, never 
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -1508,7 +1508,7 @@ One triple per distinct four-digit year on the factsheet, padded to the first of
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -1672,7 +1672,7 @@ How the row becomes a node:
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -1781,7 +1781,7 @@ The object is one of the entries the shapes accept on this path, chosen from the
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -1971,7 +1971,7 @@ How the row becomes a node:
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -2076,7 +2076,7 @@ How the row becomes a node:
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -2186,7 +2186,7 @@ Mints the bundle and labels it. Falls back to the publication title where the do
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -2295,7 +2295,7 @@ The object is one of the entries the shapes accept on this path, chosen from the
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
@@ -2751,7 +2751,7 @@ The object is one of the entries the shapes accept on this path, chosen from the
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 

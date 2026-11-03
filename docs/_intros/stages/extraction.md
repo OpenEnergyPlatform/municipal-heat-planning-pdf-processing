@@ -805,10 +805,13 @@ rule of 2026-09-11). The same rule holds for the value of a category
 parameter, which is read before the parameter as the wording the passage
 prints: where the parameter is read and its list does not hold that
 wording, the value is asked again as one of the list's entries, in the
-row's own passage alone, and the wording stays in `value_raw`
-(`fields.holds`, `fields.value_choice`, `Turn.ask_value` in `runner.py`,
-owner's decision 2026-11-03). A row that reads no entry is refused for its
-value (`value … not in vocabulary`), and its axes are never asked. Which table the
+row's own passage alone (`fields.holds`, `fields.value_choice`,
+`Turn.ask_value` in `runner.py`, owner's decision 2026-11-03). A value read
+so stands on that reading: the entry, the wording its answer gave in
+`value_raw` or none, and the answer's quote, which becomes the row's
+`quote`, the one `verify` checks a value against (`Turn.after_value`). A
+row that reads no entry keeps the wording it was read with, is refused for
+its value (`value … not in vocabulary`), and its axes are never asked. Which table the
 passage belongs to, how far from the row it stands and which column of a
 table it heads are the model's reading, not a rule. Failures are recorded
 separately, `unquoted` against `unbacked`, so a retry can name what to fix. A
@@ -1817,10 +1820,13 @@ a `*.jsonl` or `*.stamp.json` that a reader of the harvest would list.
 | `document_context` | profile hook | none | A callable `(connection, document_id)` that returns `{"name": ...}`, what the document itself contributes to its own search anchor (the municipality); the caption of the first passage found is added to it | `runner.document_anchor` |
 
 The context budget (`runner.context_budget`) is the tokens one request of
-one prompt needs at worst. Its payload term is the larger of the widest
+one prompt needs at worst. Its payload term is the largest of the widest
 single parameter, which a request planned for one parameter carries whole,
-and all parameters' class lists together, which a request planned for no
-parameter carries at once. A run needs the largest of these budgets over
+all parameters' class lists together, which a request planned for no
+parameter carries at once, and the widest slot a field request offers, its
+options with their definitions as the model reads them (`runner.field_slots`).
+For scenarios that slot is the value of `study_sector` asked again, 154
+entries in 63,230 characters. A run needs the largest of these budgets over
 the prompts it sends (`runner.request_budget`): the rows, field, phrase
 and anchors prompts, and the frame prompt only where the profile names
 frame axes (`runner.sent_prompt_ids`). The queries prompt is a list of
@@ -1829,8 +1835,8 @@ its own in the doctor, so neither counts. That number, in tokens per
 request, is what `--print-context-budget` prints, what the doctor's extract
 line shows and what the check of the served window before the first
 document holds the server to: it is what the model server's
-`--max-model-len` has to cover. For kwp it is 28,511 tokens per request,
-set by the field prompt; for scenarios 37,426 tokens per request, set by the
+`--max-model-len` has to cover. For kwp it is 30,347 tokens per request,
+set by the field prompt; for scenarios 51,343 tokens per request, set by the
 rows prompt. Both numbers are those of the composed prompts. A
 profile with several long lists, as scenarios has, can therefore need a
 window above the 32768 that `EXTRACT_MAX_MODEL_LEN` falls back to.
