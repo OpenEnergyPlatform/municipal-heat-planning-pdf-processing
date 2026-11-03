@@ -926,10 +926,11 @@ it ended: `read`, `refused`, `none`, `too_long`, `unanswered` or `stopped`. The
 stats count them as `computed_questions_by_kind_outcome`. The sandbox takes one
 container at a time by default; `KWP_SANDBOX_PARALLEL` on the service and
 `CODE_EXEC_PARALLEL` in the run widen that for a machine that has the cores.
-Every run stays a fresh container, so none sees what an earlier one left. With
-the image store in memory that costs about a second per run, on a network disk a
-few seconds: the container builds nothing, the image holds what a run imports,
-and stopping it kills it.
+The service keeps its containers for as long as it runs, one per
+`KWP_SANDBOX_PARALLEL` (owner decision 2026-11-03), and clears each after a run:
+every process but the container's own and every file in the work dir and the
+temp dirs but the venv. A run then costs about half a second. A fresh container
+per run cost two to twelve seconds from an image store on a network disk.
 
 ### Trust levels
 

@@ -2,11 +2,13 @@
 """
 sandbox_service.py: Localhost HTTP wrapper around llm-sandbox.
 
-Each request runs the submitted code in a fresh, ephemeral container with
-no network, resource limits, every capability dropped and an execution
+The service keeps KWP_SANDBOX_PARALLEL containers for as long as it runs,
+with no network, resource limits, every capability dropped and an execution
 timeout, so untrusted, possibly prompt-injected LLM code cannot reach the
-host or the network. The server binds loopback only and is guarded by a
-bearer token; it must not be exposed directly.
+host or the network. Each request runs in one of them, and what the run left
+behind, its processes and its files, is cleared before that container serves
+the next one. The server binds loopback only and is guarded by a bearer
+token; it must not be exposed directly.
 
     POST /run   Authorization: Bearer <KWP_SANDBOX_TOKEN>
        body: {"code": "<python>", "context": {"var": <json-value>, ...},
@@ -25,16 +27,19 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 try:
-    from llm_sandbox import SandboxSession
     from llm_sandbox.const import SandboxBackend
+    from llm_sandbox.pool import (PoolConfig, PooledSandboxSession,
+                                  create_pool_manager)
 except ImportError:                 # the one package only this service needs
     # Said when the service is started (`main`), not here: `--help` has
     # to answer on a machine that does not have it.
-    SandboxSession = SandboxBackend = None
+    SandboxBackend = PoolConfig = PooledSandboxSession = None
+    create_pool_manager = None
 
 TOKEN = os.environ.get("KWP_SANDBOX_TOKEN", "")
 IMAGE = os.environ.get("KWP_SANDBOX_IMAGE", "localhost/kwp-sandbox:latest")
@@ -47,8 +52,8 @@ PARALLEL = int(os.environ.get("KWP_SANDBOX_PARALLEL", "1"))
 
 # Container hardening. `network_mode: none` is the key guard. Resource limits are
 # best-effort under rootless cgroupfs but do not break container creation.
-# `stop_signal`: the idle process of the image ignores SIGTERM, and every run
-# would wait ten seconds for its container to go. Podman takes the number only.
+# `stop_signal`: the idle process of the image ignores SIGTERM, and every stop
+# would wait ten seconds for it. Podman takes the number only.
 HARDENING = {
     "network_mode": "none",
     "mem_limit": MEM,
@@ -58,9 +63,42 @@ HARDENING = {
     "stop_signal": 9,
 }
 
-# Containers at a time, one by default; keeps resource use bounded. A
-# harvest has a machine to itself and many short runs.
+# Runs at a time, one container each, one by default; keeps resource use
+# bounded. A harvest has a machine to itself and many short runs.
 _LOCK = threading.BoundedSemaphore(PARALLEL)
+
+# Kept for as long as the service runs: a pool's defaults retire a container
+# after five idle minutes and after an hour.
+POOL_CONFIG = {"max_pool_size": PARALLEL, "min_pool_size": PARALLEL,
+               "idle_timeout": None, "max_container_lifetime": None,
+               "acquisition_timeout": 600}
+POOL = None                         # the containers, opened by `main`
+
+# What a run left goes before its container serves the next one: every
+# process but the container's own, every file in the work dir and the temp
+# dirs but the venv the pool built there.
+CLEAR = """
+import os, shutil, signal
+mine = os.path.abspath(__file__)
+for pid in os.listdir("/proc"):
+    if pid.isdigit() and int(pid) not in (1, os.getpid()):
+        try:
+            os.kill(int(pid), signal.SIGKILL)
+        except OSError:
+            pass
+for top in ("/sandbox", "/tmp", "/var/tmp", "/dev/shm"):
+    if not os.path.isdir(top):
+        continue
+    for name in os.listdir(top):
+        path = os.path.join(top, name)
+        if name in (".sandbox-venv", ".sandbox-pip-cache") or path == mine:
+            continue
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path)
+        else:
+            os.remove(path)
+"""
+CLEAR_TIMEOUT = 20
 
 
 def _preamble(context: dict) -> str:
@@ -79,13 +117,17 @@ def run_code(code: str, context: dict | None, timeout: int) -> dict:
     timeout = max(1, min(int(timeout or DEFAULT_TIMEOUT), MAX_TIMEOUT))
     with _LOCK:
         try:
-            # No venv in the container: without a network nothing can be
-            # installed into it, and the image holds what a run imports.
-            with SandboxSession(backend=SandboxBackend.PODMAN, lang="python",
-                                image=IMAGE, keep_template=True,
-                                skip_environment_setup=True,
-                                runtime_configs=HARDENING) as session:
-                result = session.run(full, timeout=timeout)
+            with PooledSandboxSession(pool_manager=POOL) as session:
+                try:
+                    result = session.run(full, timeout=timeout)
+                finally:
+                    cleared = session.run(CLEAR, timeout=CLEAR_TIMEOUT)
+                # A container that kept what a run left is not handed on
+                # as if it were clean.
+                if getattr(cleared, "exit_code", 1) != 0:
+                    raise RuntimeError("the container was not cleared: "
+                                       + (getattr(cleared, "stderr", "")
+                                          or "")[-300:])
                 return {
                     "ok": getattr(result, "exit_code", 1) == 0,
                     "stdout": (result.stdout or ""),
@@ -131,6 +173,14 @@ class Handler(BaseHTTPRequestHandler):
         pass  # quiet
 
 
+def open_pool():
+    """The containers of this service, made when it starts."""
+    return create_pool_manager(backend=SandboxBackend.PODMAN, lang="python",
+                               image=IMAGE, keep_template=True,
+                               runtime_configs=HARDENING,
+                               config=PoolConfig(**POOL_CONFIG))
+
+
 def main(argv=None) -> None:
     import argparse
     argparse.ArgumentParser(
@@ -140,14 +190,26 @@ def main(argv=None) -> None:
                     "where it listens and what a run may use are settings "
                     "(`docpipe config --stage sandbox`), and "
                     "KWP_SANDBOX_TOKEN has to be set.").parse_args(argv)
-    if SandboxSession is None:
+    if create_pool_manager is None:
         raise SystemExit("the sandbox service needs llm-sandbox: "
                          "pip install 'docpipe[sandbox]'")
     if not TOKEN:
         raise SystemExit("KWP_SANDBOX_TOKEN must be set")
+    global POOL
+
+    def stop(*_):
+        raise SystemExit(0)
+
+    # A job ends the service with SIGTERM; the containers go with it.
+    signal.signal(signal.SIGTERM, stop)
+    POOL = open_pool()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"kwp sandbox service listening on {HOST}:{PORT}", flush=True)
-    server.serve_forever()
+    print(f"kwp sandbox service listening on {HOST}:{PORT}, "
+          f"{PARALLEL} container(s)", flush=True)
+    try:
+        server.serve_forever()
+    finally:
+        POOL.close()
 
 
 if __name__ == "__main__":

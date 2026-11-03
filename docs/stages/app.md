@@ -347,8 +347,9 @@ the turn's own result.
 - `sandbox_service.py` refuses to start without `KWP_SANDBOX_TOKEN` and
   answers a wrong bearer token with 401. A container or backend error comes
   back as a structured error, so an outage costs a turn its calculation and
-  not its answer. Each run is a fresh container that builds nothing in it, so
-  everything a run imports has to be in the image (`Containerfile`).
+  not its answer. The service keeps its containers and clears each after a
+  run; nothing is installed into them, so everything a run imports has to be
+  in the image (`Containerfile`).
 - The `.env` is loaded in `docpipe/__init__.py`, before any module captures
   its settings. Loaded later, in the app's config, the model key stayed at its
   placeholder and every call failed with 401.
@@ -450,11 +451,13 @@ reads live in `db.py`.
 
 sandbox_service.py: Localhost HTTP wrapper around llm-sandbox.
 
-Each request runs the submitted code in a fresh, ephemeral container with
-no network, resource limits, every capability dropped and an execution
+The service keeps KWP_SANDBOX_PARALLEL containers for as long as it runs,
+with no network, resource limits, every capability dropped and an execution
 timeout, so untrusted, possibly prompt-injected LLM code cannot reach the
-host or the network. The server binds loopback only and is guarded by a
-bearer token; it must not be exposed directly.
+host or the network. Each request runs in one of them, and what the run left
+behind, its processes and its files, is cleared before that container serves
+the next one. The server binds loopback only and is guarded by a bearer
+token; it must not be exposed directly.
 
     POST /run   Authorization: Bearer <KWP_SANDBOX_TOKEN>
        body: {"code": "<python>", "context": {"var": <json-value>, ...},

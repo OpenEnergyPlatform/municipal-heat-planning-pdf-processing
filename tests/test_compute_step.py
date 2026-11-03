@@ -137,12 +137,11 @@ def test_a_number_the_gate_closed_is_no_part():
     assert kinds(*closed) == []
 
 
-def test_a_run_builds_nothing_in_its_container_and_kills_it(monkeypatch):
-    opened = []
-
+def pooled(done, clears=0):
+    """A pool session that notes what it is asked to do."""
     class Session:
-        def __init__(self, **options):
-            opened.append(options)
+        def __init__(self, pool_manager):
+            done.append(pool_manager)
 
         def __enter__(self):
             return self
@@ -151,14 +150,50 @@ def test_a_run_builds_nothing_in_its_container_and_kills_it(monkeypatch):
             return False
 
         def run(self, code, timeout):
+            if code == sandbox_service.CLEAR:
+                done.append("cleared")
+                return SimpleNamespace(exit_code=clears, stdout="", stderr="")
+            done.append("ran")
+            if "broken" in code:
+                raise RuntimeError("the run broke")
             return SimpleNamespace(exit_code=0, stdout="1\n", stderr="")
+    return Session
 
-    monkeypatch.setattr(sandbox_service, "SandboxSession", Session)
+
+def test_a_run_takes_a_kept_container_and_clears_it_after(monkeypatch):
+    done = []
+    monkeypatch.setattr(sandbox_service, "POOL", "the pool")
+    monkeypatch.setattr(sandbox_service, "PooledSandboxSession", pooled(done))
+    assert sandbox_service.run_code("print(1)", None, 5)["ok"]
+    assert done == ["the pool", "ran", "cleared"]
+    done.clear()
+    assert not sandbox_service.run_code("broken()", None, 5)["ok"]
+    assert done == ["the pool", "ran", "cleared"]
+
+
+def test_a_container_left_uncleared_fails_its_run(monkeypatch):
+    done = []
+    monkeypatch.setattr(sandbox_service, "POOL", "the pool")
+    monkeypatch.setattr(sandbox_service, "PooledSandboxSession",
+                        pooled(done, clears=1))
+    reply = sandbox_service.run_code("print(1)", None, 5)
+    assert not reply["ok"] and reply["error"]
+
+
+def test_the_containers_are_kept_while_the_service_runs(monkeypatch):
+    made = {}
+    monkeypatch.setattr(sandbox_service, "create_pool_manager",
+                        lambda **options: made.update(options) or "pool")
+    monkeypatch.setattr(sandbox_service, "PoolConfig", lambda **config: config)
     monkeypatch.setattr(sandbox_service, "SandboxBackend",
                         SimpleNamespace(PODMAN="podman"))
-    assert sandbox_service.run_code("print(1)", None, 5)["ok"]
-    assert opened[0]["skip_environment_setup"] is True
-    assert opened[0]["runtime_configs"]["stop_signal"] == 9
+    assert sandbox_service.open_pool() == "pool"
+    config = made["config"]
+    assert config["min_pool_size"] == config["max_pool_size"] \
+        == sandbox_service.PARALLEL
+    assert config["idle_timeout"] is None
+    assert config["max_container_lifetime"] is None
+    assert made["runtime_configs"]["stop_signal"] == 9
 
 
 def test_zero_is_no_part():
