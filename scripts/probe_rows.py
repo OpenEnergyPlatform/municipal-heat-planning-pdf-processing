@@ -12,6 +12,7 @@ the run, and needs neither a GPU job nor retrieval:
     python scripts/probe_rows.py --hits passages.json --out probe
     python scripts/probe_rows.py --hits passages.json --out probe --whole
     python scripts/probe_rows.py --hits passages.json --out new --compute probe
+    python scripts/probe_rows.py data/ar6/ar6.db --out probe --whole --documents 4,23
 
 `--hits` takes the passages from a file, as `fetch_owner_content` returns them,
 so a machine without the database can run the probe.
@@ -30,6 +31,10 @@ document's report when it is done, and reports the pairs and each coordinate's
 states. Several agents share the work through LLM_MODELS and
 LLM_SLOTS_PER_MODEL, as in the chat.
 
+`--documents` takes every passage of these documents from the database, in
+the order the run reads the rest of a document, and closes each document's
+own lists from it as the run does (the profile's `document_axes`).
+
 `--compute` takes the verified rows of such a stored probe and asks only what
 the compute step leaves open, so its prompt can be tried without reading the
 plans again.
@@ -41,6 +46,7 @@ import json
 import sqlite3
 import sys
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
@@ -80,15 +86,15 @@ def tally(tuples: list, text: str) -> dict:
                        if isinstance(t, dict) and t.get("_harvest_failed")]}
 
 
-def states_of(tuples: list, slots: list) -> dict:
+def states_of(tuples: list, names) -> dict:
     """{coordinate: {state: tuples}} over the rows that came back."""
     states: dict = {}
     for claim in tuples:
         if not isinstance(claim, dict) or claim.get("_harvest_failed"):
             continue
-        for slot in slots:
-            state = claim.get(f"{slot.name}_state") or "none"
-            counts = states.setdefault(slot.name, {})
+        for name in names:
+            state = claim.get(f"{name}_state") or "none"
+            counts = states.setdefault(name, {})
             counts[state] = counts.get(state, 0) + 1
     return states
 
@@ -106,8 +112,11 @@ def source_of(hit: dict, args):
             if args.image_root is None else source)
 
 
-def whole(hits: list, spec, args) -> list:
-    """The frame, the rows and the coordinates of each document's passages."""
+def whole(hits: list, spec, args, passages=None, document_spec=None) -> list:
+    """The frame, the rows and the coordinates of each document's passages.
+
+    *passages* are {document: sources} in place of *hits*, and
+    *document_spec* gives each document the spec its own lists close."""
     from docpipe.extraction import fields, runner
     from docpipe.extraction.pipeline import (DocumentReport, WorkItem,
                                              group_items)
@@ -117,7 +126,7 @@ def whole(hits: list, spec, args) -> list:
     frame_axes = fields.frame_slots(spec, profile.component("extraction", "FRAME") or ())
     gate = profile.component("extraction", "SLICE") or {}
     ask_frame = runner.make_frame_asker(args.image_root)
-    documents: dict = {}
+    documents: dict = dict(passages or {})
     for hit in hits:
         documents.setdefault(hit.get("document_id") or 0, []).append(
             source_of(hit, args))
@@ -138,11 +147,13 @@ def whole(hits: list, spec, args) -> list:
         args.image_root, rest_of_document=rest_of_document, spec=spec,
         slice_gate=gate, frame_axes=frame_axes, places=places)
     computer = runner.make_computer(profile)
-    slots = {slot.name: slot for parameter in spec.parameters
-             for slot in fields.axis_slots(parameter)}
+    names = sorted({slot.name for parameter in spec.parameters
+                    for slot in fields.axis_slots(parameter)}
+                   | {"parameter", "value"})
 
     def one(document: int) -> dict:
         sources = documents[document]
+        own = (document_spec(document) if document_spec else None) or spec
         items = [WorkItem(document, None, source) for source in sources]
         started = time.time()
         pairs, status, missed = runner.find_frame(
@@ -155,12 +166,13 @@ def whole(hits: list, spec, args) -> list:
         for batch in batches:
             batch.bases = bases
             batch.pairs = tuple(pairs)
+            batch.spec = own
         with ThreadPoolExecutor(args.parallel) as pool:
             replies = list(pool.map(lambda batch: harvest(batch, []), batches))
         tuples = [claim for got in replies for claim in got.get("tuples") or ()]
         answered = list(zip(batches, replies))
         report = DocumentReport(document_id=document)
-        runner.fold_answers(answered, report, locate=None, spec=spec)
+        runner.fold_answers(answered, report, locate=None, spec=own)
         if computer is not None:
             computer(answered, report, spec=spec)
         row = {
@@ -171,7 +183,9 @@ def whole(hits: list, spec, args) -> list:
             "frame_status": status, "years_not_named": missed,
             "batches": len(batches), "tuples": tuples,
             "verified": report.tuples, "refusals": len(report.refusals),
-            "states": states_of(tuples, slots.values())}
+            "refused_for": dict(Counter(refusal.get("reason")
+                                        for refusal in report.refusals)),
+            "states": states_of(tuples, names)}
         (args.out / f"doc{document}.json").write_text(
             json.dumps(row, ensure_ascii=False, default=str), encoding="utf-8")
         return row
@@ -228,6 +242,9 @@ def main() -> int:
     parser.add_argument("--document", type=int,
                         help="take the widest tables of this document")
     parser.add_argument("--largest", type=int, default=5)
+    parser.add_argument("--documents",
+                        help="with --whole: every passage of these "
+                             "documents, comma-separated ids")
     parser.add_argument("--parallel", type=int, default=2)
     parser.add_argument("--image-root", type=Path, default=None)
     parser.add_argument("--whole", action="store_true",
@@ -247,8 +264,22 @@ def main() -> int:
 
     spec = runner.load_spec(json.loads(Path(active_profile().component(
         "extraction", "SPEC_PATH")).read_text(encoding="utf-8")))
+    passages, document_spec = None, None
     if args.hits:
         hits = json.loads(args.hits.read_text(encoding="utf-8"))
+    elif args.documents:
+        hits = []
+        every = runner.make_rest_of_document(args.db)
+        passages = {}
+        for number in args.documents.split(","):
+            document = int(number)
+            passages[document] = [
+                replace(source, image_path=None)
+                if args.image_root is None else source
+                for source in every(document, set())]
+        document_spec = runner.document_spec_per_call(
+            args.db, spec, active_profile().component("extraction",
+                                                      "document_axes"))
     else:
         conn = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
         conn.row_factory = sqlite3.Row
@@ -265,7 +296,7 @@ def main() -> int:
             print(json.dumps({k: v for k, v in row.items() if k != "tuples"}))
         return write_report(args.out, report)
     if args.whole:
-        report = whole(hits, spec, args)
+        report = whole(hits, spec, args, passages, document_spec)
         trace.close()
         for row in report:
             print(json.dumps({k: v for k, v in row.items()

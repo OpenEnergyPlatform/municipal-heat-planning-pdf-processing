@@ -14,6 +14,7 @@ the run, and needs neither a GPU job nor retrieval:
     python scripts/probe_rows.py --hits passages.json --out probe
     python scripts/probe_rows.py --hits passages.json --out probe --whole
     python scripts/probe_rows.py --hits passages.json --out new --compute probe
+    python scripts/probe_rows.py data/ar6/ar6.db --out probe --whole --documents 4,23
 
 `--hits` takes the passages from a file, as `fetch_owner_content` returns them,
 so a machine without the database can run the probe.
@@ -31,6 +32,10 @@ and `--every-row` asks each of its windows for every open row. It writes each
 document's report when it is done, and reports the pairs and each coordinate's
 states. Several agents share the work through LLM_MODELS and
 LLM_SLOTS_PER_MODEL, as in the chat.
+
+`--documents` takes every passage of these documents from the database, in
+the order the run reads the rest of a document, and closes each document's
+own lists from it as the run does (the profile's `document_axes`).
 
 `--compute` takes the verified rows of such a stored probe and asks only what
 the compute step leaves open, so its prompt can be tried without reading the
@@ -57,7 +62,7 @@ What came back for one passage, by the harvest's two checks.
 ### states_of
 
 ```python
-def states_of(tuples: list, slots: list) -> dict
+def states_of(tuples: list, names) -> dict
 ```
 
 {coordinate: {state: tuples}} over the rows that came back.
@@ -77,10 +82,13 @@ def source_of(hit: dict, args)
 ### whole
 
 ```python
-def whole(hits: list, spec, args) -> list
+def whole(hits: list, spec, args, passages=None, document_spec=None) -> list
 ```
 
 The frame, the rows and the coordinates of each document's passages.
+
+*passages* are {document: sources} in place of *hits*, and
+*document_spec* gives each document the spec its own lists close.
 
 ### compute_over
 
