@@ -131,10 +131,11 @@ def test_a_power_is_no_amount():
                  amount(80, OIL, parameter="heat_load", unit="kW")) == []
 
 
-def test_a_number_the_gate_closed_is_no_part():
-    closed = [{**amount(value, carrier), "quantity": "out:potential"}
-              for value, carrier in ((120, GAS), (80, OIL))]
-    assert kinds(*closed) == []
+def test_a_number_without_a_class_is_no_part():
+    for quantity in ("out:specific", "out:useful_energy"):
+        closed = [{**amount(value, carrier), "quantity": quantity}
+                  for value, carrier in ((120, GAS), (80, OIL))]
+        assert kinds(*closed) == [], quantity
 
 
 def pooled(done, clears=0):

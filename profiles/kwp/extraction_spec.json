@@ -21,7 +21,7 @@
     {
       "uri": "energy_consumption",
       "label": "Energieverbrauch",
-      "description": "Eine im Wärmeplan bilanzierte Energiemenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: final energy consumption value ist \"the energy delivered to and consumed by end users\". Darunter fällt BEIDES, was ein deutscher Wärmeplan Verbrauch nennt und was er Bedarf nennt: für ein Zielszenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Ein Wärmebedarf, ein Endenergiebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. primary energy consumption value ist \"the total consumption of energy in a spatial region excluding the non-energetic use of fuels\", also die Bilanz vor der Umwandlung. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "description": "Eine im Wärmeplan bilanzierte Energiemenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: final energy consumption value ist \"the energy delivered to and consumed by end users\". Darunter fällt BEIDES, was ein deutscher Wärmeplan Verbrauch nennt und was er Bedarf nennt: für ein Zielszenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Ein Wärmebedarf, ein Endenergiebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. primary energy consumption value ist \"the total consumption of energy in a spatial region excluding the non-energetic use of fuels\", also die Bilanz vor der Umwandlung. Ein Potenzial ist \"a maximum value that describes some upper limit in a spatial region of reference\", also ein erschließbares Maximum und keine verbrauchte Menge. Die Ontologie unterscheidet theoretisches, technisches (technological), wirtschaftliches (economic), erschließbares (developable) und nachhaltiges (sustainable) Potenzial, jeweils als flow potential (eine Menge je Zeit) oder als stock potential (ein Bestand, etwa eine Speichermenge). Wähle die Art, die die Quelle druckt; nennt sie keine Art, wähle flow potential für eine Menge je Zeit (etwa MWh/a), stock potential für einen Bestand und potential nur, wenn auch das offen ist. Die übrigen Einträge der Liste beginnen mit \"out:\": Größen, für die die Ontologie keine Klasse hat (Nutzenergie, Erzeugung, Einsparung), und Zahlen, die keine Energiemenge sind (ein Anteil, ein spezifischer Wert). Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
       "value_type": "float",
       "unit_target": "OEO_00050008",
       "units_accepted": {
@@ -102,14 +102,84 @@
               ],
               "definition": "A primary energy consumption value is an energy consumption value expressing the magnitude of the total consumption of energy in a spatial region excluding the non-energetic use of fuels."
             },
-            "out:potential": {
-              "label": "Potenzial",
+            "OEO_00290000": {
+              "label": "potential",
               "spellings": [
+                "Potenzial",
                 "Ausbaupotenzial",
-                "technisches Potenzial",
+                "Gesamtpotenzial"
+              ],
+              "definition": "A potential is a maximum value that describes some upper limit in a spatial region of reference."
+            },
+            "OEO_00140056": {
+              "label": "flow potential",
+              "spellings": [],
+              "definition": "A flow potential is a potential of an input or output of a process, per time unit."
+            },
+            "OEO_00140057": {
+              "label": "theoretical flow potential",
+              "spellings": [
+                "theoretisches Potenzial"
+              ],
+              "definition": "A theoretical flow potential is a type of flow potential that identifies the physical upper limit of an input or output of a process in a spatial region of reference per unit time."
+            },
+            "OEO_00140058": {
+              "label": "technological flow potential",
+              "spellings": [
+                "technisches Potenzial"
+              ],
+              "definition": "A technological flow potential is a type of a flow potential derived from a theoretical flow potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation."
+            },
+            "OEO_00140059": {
+              "label": "economic flow potential",
+              "spellings": [
+                "wirtschaftliches Potenzial"
+              ],
+              "definition": "An economic flow potential is a type of flow potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions)."
+            },
+            "OEO_00140060": {
+              "label": "developable flow potential",
+              "spellings": [
                 "erschließbares Potenzial"
               ],
-              "definition": "Ein erschließbares Maximum, keine im Bilanzjahr verbrauchte oder ausgestoßene Menge."
+              "definition": "A developable flow potential is a type of flow potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions)."
+            },
+            "OEO_00140061": {
+              "label": "sustainable flow potential",
+              "spellings": [
+                "nachhaltiges Potenzial"
+              ],
+              "definition": "A sustainable flow potential is a type of flow potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author."
+            },
+            "OEO_00140062": {
+              "label": "stock potential",
+              "spellings": [],
+              "definition": "A stock potential is a potential of the stock of a source or sink."
+            },
+            "OEO_00140063": {
+              "label": "theoretical stock potential",
+              "spellings": [],
+              "definition": "A theoretical stock potential is a type of stock potential that identifies the physical upper limit of a stock of a source or sink in a spatial region of reference."
+            },
+            "OEO_00140064": {
+              "label": "technological stock potential",
+              "spellings": [],
+              "definition": "A technological stock potential is a type of a stock potential derived from a theoretical stock potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation."
+            },
+            "OEO_00140065": {
+              "label": "economic stock potential",
+              "spellings": [],
+              "definition": "An economic stock potential is a type of stock potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions)."
+            },
+            "OEO_00140066": {
+              "label": "developable stock potential",
+              "spellings": [],
+              "definition": "A developable stock potential is a type of stock potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions)."
+            },
+            "OEO_00140067": {
+              "label": "sustainable stock potential",
+              "spellings": [],
+              "definition": "A sustainable stock potential is a type of stock potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author."
             },
             "out:generation": {
               "label": "Erzeugung oder Bereitstellung",
@@ -1839,7 +1909,7 @@
     {
       "uri": "heat_load",
       "label": "Leistung",
-      "description": "Eine im Wärmeplan angegebene Leistung, also Energie je Zeit: eine Heizlast, eine Anschlussleistung, eine Netz- oder Erzeugerleistung, die Nennwärmeleistung eines Kessels oder BHKW. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die Klasse über ihre Einheit: power value ist \"a quantity value that has a power unit as unit\", also jede Angabe in kW, MW oder GW. Die Einheit trennt diesen Parameter von den anderen: kW gegen kWh. Eine Angabe in kWh, MWh oder GWh ist KEINE Leistung, sondern eine Energiemenge, auch wenn die Zeile das Wort Leistung enthält. Eine ANZAHL (Gebäude, Anlagen, Anschlüsse) ist keine Leistung, hat keine Einheit dieser Liste und bekommt kein Tupel, auch wenn sie in derselben Zeile steht. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "description": "Eine im Wärmeplan angegebene Leistung, also Energie je Zeit: eine Heizlast, eine Anschlussleistung, eine Netz- oder Erzeugerleistung, die Nennwärmeleistung eines Kessels oder BHKW. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die Klasse über ihre Einheit: power value ist \"a quantity value that has a power unit as unit\", also jede Angabe in kW, MW oder GW. Die Einheit trennt diesen Parameter von den anderen: kW gegen kWh. Eine Angabe in kWh, MWh oder GWh ist KEINE Leistung, sondern eine Energiemenge, auch wenn die Zeile das Wort Leistung enthält. Eine ANZAHL (Gebäude, Anlagen, Anschlüsse) ist keine Leistung, hat keine Einheit dieser Liste und bekommt kein Tupel, auch wenn sie in derselben Zeile steht. Ein Leistungspotenzial ist ein Potenzial, \"a maximum value that describes some upper limit in a spatial region of reference\", also eine erschließbare und keine bereitgestellte Leistung. Die Ontologie unterscheidet theoretisches, technisches (technological), wirtschaftliches (economic), erschließbares (developable) und nachhaltiges (sustainable) Potenzial, jeweils als flow potential (eine Menge je Zeit) oder als stock potential (ein Bestand, etwa eine Speichermenge). Eine Leistung ist Energie je Zeit: wähle die Art, die die Quelle druckt, und nennt sie keine Art, flow potential. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
       "value_type": "float",
       "unit_target": "OEO_00390001",
       "integrated": false,
@@ -1893,14 +1963,83 @@
               ],
               "definition": "Eine Leistung, die die Quelle getrennt für Winter und Sommer angibt. Der Graph hat keine Koordinate für die Jahreszeit, also nimmt er beide Werte nicht auf."
             },
-            "out:potential": {
-              "label": "Leistungspotenzial",
+            "OEO_00290000": {
+              "label": "potential",
               "spellings": [
-                "Ausbaupotenzial",
-                "technisches Potenzial",
+                "Leistungspotenzial",
+                "Ausbaupotenzial"
+              ],
+              "definition": "A potential is a maximum value that describes some upper limit in a spatial region of reference."
+            },
+            "OEO_00140056": {
+              "label": "flow potential",
+              "spellings": [],
+              "definition": "A flow potential is a potential of an input or output of a process, per time unit."
+            },
+            "OEO_00140057": {
+              "label": "theoretical flow potential",
+              "spellings": [
+                "theoretisches Potenzial"
+              ],
+              "definition": "A theoretical flow potential is a type of flow potential that identifies the physical upper limit of an input or output of a process in a spatial region of reference per unit time."
+            },
+            "OEO_00140058": {
+              "label": "technological flow potential",
+              "spellings": [
+                "technisches Potenzial"
+              ],
+              "definition": "A technological flow potential is a type of a flow potential derived from a theoretical flow potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation."
+            },
+            "OEO_00140059": {
+              "label": "economic flow potential",
+              "spellings": [
+                "wirtschaftliches Potenzial"
+              ],
+              "definition": "An economic flow potential is a type of flow potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions)."
+            },
+            "OEO_00140060": {
+              "label": "developable flow potential",
+              "spellings": [
                 "erschließbares Potenzial"
               ],
-              "definition": "Ein erschließbares Maximum, keine im Bilanzjahr bereitgestellte oder nachgefragte Leistung."
+              "definition": "A developable flow potential is a type of flow potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions)."
+            },
+            "OEO_00140061": {
+              "label": "sustainable flow potential",
+              "spellings": [
+                "nachhaltiges Potenzial"
+              ],
+              "definition": "A sustainable flow potential is a type of flow potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author."
+            },
+            "OEO_00140062": {
+              "label": "stock potential",
+              "spellings": [],
+              "definition": "A stock potential is a potential of the stock of a source or sink."
+            },
+            "OEO_00140063": {
+              "label": "theoretical stock potential",
+              "spellings": [],
+              "definition": "A theoretical stock potential is a type of stock potential that identifies the physical upper limit of a stock of a source or sink in a spatial region of reference."
+            },
+            "OEO_00140064": {
+              "label": "technological stock potential",
+              "spellings": [],
+              "definition": "A technological stock potential is a type of a stock potential derived from a theoretical stock potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation."
+            },
+            "OEO_00140065": {
+              "label": "economic stock potential",
+              "spellings": [],
+              "definition": "An economic stock potential is a type of stock potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions)."
+            },
+            "OEO_00140066": {
+              "label": "developable stock potential",
+              "spellings": [],
+              "definition": "A developable stock potential is a type of stock potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions)."
+            },
+            "OEO_00140067": {
+              "label": "sustainable stock potential",
+              "spellings": [],
+              "definition": "A sustainable stock potential is a type of stock potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author."
             },
             "out:specific": {
               "label": "spezifischer Wert je Fläche, Kopf oder Gebäude",

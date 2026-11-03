@@ -3698,7 +3698,7 @@
      "parameter": {
       "const": "energy_consumption",
       "description": "Spec parameter: Energieverbrauch.",
-      "x-description-source": "Eine im Wärmeplan bilanzierte Energiemenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: final energy consumption value ist \"the energy delivered to and consumed by end users\". Darunter fällt BEIDES, was ein deutscher Wärmeplan Verbrauch nennt und was er Bedarf nennt: für ein Zielszenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Ein Wärmebedarf, ein Endenergiebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. primary energy consumption value ist \"the total consumption of energy in a spatial region excluding the non-energetic use of fuels\", also die Bilanz vor der Umwandlung. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "x-description-source": "Eine im Wärmeplan bilanzierte Energiemenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: final energy consumption value ist \"the energy delivered to and consumed by end users\". Darunter fällt BEIDES, was ein deutscher Wärmeplan Verbrauch nennt und was er Bedarf nennt: für ein Zielszenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Ein Wärmebedarf, ein Endenergiebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. primary energy consumption value ist \"the total consumption of energy in a spatial region excluding the non-energetic use of fuels\", also die Bilanz vor der Umwandlung. Ein Potenzial ist \"a maximum value that describes some upper limit in a spatial region of reference\", also ein erschließbares Maximum und keine verbrauchte Menge. Die Ontologie unterscheidet theoretisches, technisches (technological), wirtschaftliches (economic), erschließbares (developable) und nachhaltiges (sustainable) Potenzial, jeweils als flow potential (eine Menge je Zeit) oder als stock potential (ein Bestand, etwa eine Speichermenge). Wähle die Art, die die Quelle druckt; nennt sie keine Art, wähle flow potential für eine Menge je Zeit (etwa MWh/a), stock potential für einen Bestand und potential nur, wenn auch das offen ist. Die übrigen Einträge der Liste beginnen mit \"out:\": Größen, für die die Ontologie keine Klasse hat (Nutzenergie, Erzeugung, Einsparung), und Zahlen, die keine Energiemenge sind (ein Anteil, ein spezifischer Wert). Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
       "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil."
      },
      "parameter_link_quote": {
@@ -3800,7 +3800,19 @@
       "enum": [
        "OEO_00050016",
        "OEO_00050018",
-       "out:potential",
+       "OEO_00290000",
+       "OEO_00140056",
+       "OEO_00140057",
+       "OEO_00140058",
+       "OEO_00140059",
+       "OEO_00140060",
+       "OEO_00140061",
+       "OEO_00140062",
+       "OEO_00140063",
+       "OEO_00140064",
+       "OEO_00140065",
+       "OEO_00140066",
+       "OEO_00140067",
        "out:generation",
        "out:useful_energy",
        "out:saving",
@@ -3852,14 +3864,27 @@
         ],
         "uri": "out:useful_energy"
        },
-       "Potenzial": {
-        "meaning": "Ein erschließbares Maximum, keine im Bilanzjahr verbrauchte oder ausgestoßene Menge.",
+       "developable flow potential": {
+        "meaning": "A developable flow potential is a type of flow potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).",
         "spellings": [
-         "Ausbaupotenzial",
-         "technisches Potenzial",
          "erschließbares Potenzial"
         ],
-        "uri": "out:potential"
+        "uri": "OEO_00140060"
+       },
+       "developable stock potential": {
+        "meaning": "A developable stock potential is a type of stock potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).",
+        "uri": "OEO_00140066"
+       },
+       "economic flow potential": {
+        "meaning": "An economic flow potential is a type of flow potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).",
+        "spellings": [
+         "wirtschaftliches Potenzial"
+        ],
+        "uri": "OEO_00140059"
+       },
+       "economic stock potential": {
+        "meaning": "An economic stock potential is a type of stock potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).",
+        "uri": "OEO_00140065"
        },
        "etwas anderes": {
         "meaning": "Etwas, das keiner der übrigen Einträge dieser Liste ist.",
@@ -3882,6 +3907,19 @@
         ],
         "uri": "OEO_00050016"
        },
+       "flow potential": {
+        "meaning": "A flow potential is a potential of an input or output of a process, per time unit.",
+        "uri": "OEO_00140056"
+       },
+       "potential": {
+        "meaning": "A potential is a maximum value that describes some upper limit in a spatial region of reference.",
+        "spellings": [
+         "Potenzial",
+         "Ausbaupotenzial",
+         "Gesamtpotenzial"
+        ],
+        "uri": "OEO_00290000"
+       },
        "primary energy consumption value": {
         "meaning": "A primary energy consumption value is an energy consumption value expressing the magnitude of the total consumption of energy in a spatial region excluding the non-energetic use of fuels.",
         "spellings": [
@@ -3893,6 +3931,43 @@
        "spezifischer Wert je Fläche, Kopf oder Einwohner": {
         "meaning": "Ein Wert je Fläche, Kopf, Gebäude oder Kilowattstunde, keine Gesamtmenge.",
         "uri": "out:specific"
+       },
+       "stock potential": {
+        "meaning": "A stock potential is a potential of the stock of a source or sink.",
+        "uri": "OEO_00140062"
+       },
+       "sustainable flow potential": {
+        "meaning": "A sustainable flow potential is a type of flow potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.",
+        "spellings": [
+         "nachhaltiges Potenzial"
+        ],
+        "uri": "OEO_00140061"
+       },
+       "sustainable stock potential": {
+        "meaning": "A sustainable stock potential is a type of stock potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.",
+        "uri": "OEO_00140067"
+       },
+       "technological flow potential": {
+        "meaning": "A technological flow potential is a type of a flow potential derived from a theoretical flow potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.",
+        "spellings": [
+         "technisches Potenzial"
+        ],
+        "uri": "OEO_00140058"
+       },
+       "technological stock potential": {
+        "meaning": "A technological stock potential is a type of a stock potential derived from a theoretical stock potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.",
+        "uri": "OEO_00140064"
+       },
+       "theoretical flow potential": {
+        "meaning": "A theoretical flow potential is a type of flow potential that identifies the physical upper limit of an input or output of a process in a spatial region of reference per unit time.",
+        "spellings": [
+         "theoretisches Potenzial"
+        ],
+        "uri": "OEO_00140057"
+       },
+       "theoretical stock potential": {
+        "meaning": "A theoretical stock potential is a type of stock potential that identifies the physical upper limit of a stock of a source or sink in a spatial region of reference.",
+        "uri": "OEO_00140063"
        }
       },
       "x-question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder im Titel der eigenen Tabelle. \"final energy consumption value\" ist definiert als die an Endverbraucher gelieferte und dort verbrauchte Energie. Darunter fällt BEIDES, was ein Plan Verbrauch nennt und was er Bedarf nennt: in einem Szenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Endenergieverbrauch, Endenergiebedarf, Wärmebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. \"primary energy consumption value\" ist die Bilanz vor der Umwandlung. Nutzwärme, Heizwärme, Raumwärme und Nutzenergie sind dagegen NICHT Endenergie, sondern die Wärme hinter dem Erzeuger: \"out:useful_energy\", auch im Zielszenario. Ein Anteil in Prozent und ein Wert je Fläche oder Kopf sind eigene Einträge und keine Verbrauchsmenge."
@@ -5962,7 +6037,7 @@
      "parameter": {
       "const": "heat_load",
       "description": "Spec parameter: Leistung.",
-      "x-description-source": "Eine im Wärmeplan angegebene Leistung, also Energie je Zeit: eine Heizlast, eine Anschlussleistung, eine Netz- oder Erzeugerleistung, die Nennwärmeleistung eines Kessels oder BHKW. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die Klasse über ihre Einheit: power value ist \"a quantity value that has a power unit as unit\", also jede Angabe in kW, MW oder GW. Die Einheit trennt diesen Parameter von den anderen: kW gegen kWh. Eine Angabe in kWh, MWh oder GWh ist KEINE Leistung, sondern eine Energiemenge, auch wenn die Zeile das Wort Leistung enthält. Eine ANZAHL (Gebäude, Anlagen, Anschlüsse) ist keine Leistung, hat keine Einheit dieser Liste und bekommt kein Tupel, auch wenn sie in derselben Zeile steht. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "x-description-source": "Eine im Wärmeplan angegebene Leistung, also Energie je Zeit: eine Heizlast, eine Anschlussleistung, eine Netz- oder Erzeugerleistung, die Nennwärmeleistung eines Kessels oder BHKW. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die Klasse über ihre Einheit: power value ist \"a quantity value that has a power unit as unit\", also jede Angabe in kW, MW oder GW. Die Einheit trennt diesen Parameter von den anderen: kW gegen kWh. Eine Angabe in kWh, MWh oder GWh ist KEINE Leistung, sondern eine Energiemenge, auch wenn die Zeile das Wort Leistung enthält. Eine ANZAHL (Gebäude, Anlagen, Anschlüsse) ist keine Leistung, hat keine Einheit dieser Liste und bekommt kein Tupel, auch wenn sie in derselben Zeile steht. Ein Leistungspotenzial ist ein Potenzial, \"a maximum value that describes some upper limit in a spatial region of reference\", also eine erschließbare und keine bereitgestellte Leistung. Die Ontologie unterscheidet theoretisches, technisches (technological), wirtschaftliches (economic), erschließbares (developable) und nachhaltiges (sustainable) Potenzial, jeweils als flow potential (eine Menge je Zeit) oder als stock potential (ein Bestand, etwa eine Speichermenge). Eine Leistung ist Energie je Zeit: wähle die Art, die die Quelle druckt, und nennt sie keine Art, flow potential. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
       "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil."
      },
      "parameter_link_quote": {
@@ -6065,7 +6140,19 @@
        "OEO_00010157",
        "out:electric",
        "out:seasonal",
-       "out:potential",
+       "OEO_00290000",
+       "OEO_00140056",
+       "OEO_00140057",
+       "OEO_00140058",
+       "OEO_00140059",
+       "OEO_00140060",
+       "OEO_00140061",
+       "OEO_00140062",
+       "OEO_00140063",
+       "OEO_00140064",
+       "OEO_00140065",
+       "OEO_00140066",
+       "OEO_00140067",
        "out:specific",
        "out:other",
        null
@@ -6079,14 +6166,27 @@
        "role": "type"
       },
       "x-options": {
-       "Leistungspotenzial": {
-        "meaning": "Ein erschließbares Maximum, keine im Bilanzjahr bereitgestellte oder nachgefragte Leistung.",
+       "developable flow potential": {
+        "meaning": "A developable flow potential is a type of flow potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).",
         "spellings": [
-         "Ausbaupotenzial",
-         "technisches Potenzial",
          "erschließbares Potenzial"
         ],
-        "uri": "out:potential"
+        "uri": "OEO_00140060"
+       },
+       "developable stock potential": {
+        "meaning": "A developable stock potential is a type of stock potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).",
+        "uri": "OEO_00140066"
+       },
+       "economic flow potential": {
+        "meaning": "An economic flow potential is a type of flow potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).",
+        "spellings": [
+         "wirtschaftliches Potenzial"
+        ],
+        "uri": "OEO_00140059"
+       },
+       "economic stock potential": {
+        "meaning": "An economic stock potential is a type of stock potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).",
+        "uri": "OEO_00140065"
        },
        "elektrische Leistung": {
         "meaning": "Die abgegebene ELEKTRISCHE Leistung einer Anlage, nicht ihre Wärmeleistung. Der Graph nimmt sie nicht auf: sie trägt denselben Energieträger wie die Wärmeleistung derselben Zeile und wäre von ihr nicht zu unterscheiden.",
@@ -6104,6 +6204,10 @@
         "meaning": "Etwas, das keiner der übrigen Einträge dieser Liste ist.",
         "uri": "out:other"
        },
+       "flow potential": {
+        "meaning": "A flow potential is a potential of an input or output of a process, per time unit.",
+        "uri": "OEO_00140056"
+       },
        "getrennt für Winter und Sommer angegebene Leistung": {
         "meaning": "Eine Leistung, die die Quelle getrennt für Winter und Sommer angibt. Der Graph hat keine Koordinate für die Jahreszeit, also nimmt er beide Werte nicht auf.",
         "spellings": [
@@ -6113,6 +6217,14 @@
          "Sommerfall"
         ],
         "uri": "out:seasonal"
+       },
+       "potential": {
+        "meaning": "A potential is a maximum value that describes some upper limit in a spatial region of reference.",
+        "spellings": [
+         "Leistungspotenzial",
+         "Ausbaupotenzial"
+        ],
+        "uri": "OEO_00290000"
        },
        "power value": {
         "meaning": "A power value is a quantity value that has a power unit as unit.",
@@ -6135,6 +6247,43 @@
        "spezifischer Wert je Fläche, Kopf oder Gebäude": {
         "meaning": "Ein Wert je Fläche, Kopf, Gebäude oder Meter, keine Gesamtleistung.",
         "uri": "out:specific"
+       },
+       "stock potential": {
+        "meaning": "A stock potential is a potential of the stock of a source or sink.",
+        "uri": "OEO_00140062"
+       },
+       "sustainable flow potential": {
+        "meaning": "A sustainable flow potential is a type of flow potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.",
+        "spellings": [
+         "nachhaltiges Potenzial"
+        ],
+        "uri": "OEO_00140061"
+       },
+       "sustainable stock potential": {
+        "meaning": "A sustainable stock potential is a type of stock potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.",
+        "uri": "OEO_00140067"
+       },
+       "technological flow potential": {
+        "meaning": "A technological flow potential is a type of a flow potential derived from a theoretical flow potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.",
+        "spellings": [
+         "technisches Potenzial"
+        ],
+        "uri": "OEO_00140058"
+       },
+       "technological stock potential": {
+        "meaning": "A technological stock potential is a type of a stock potential derived from a theoretical stock potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.",
+        "uri": "OEO_00140064"
+       },
+       "theoretical flow potential": {
+        "meaning": "A theoretical flow potential is a type of flow potential that identifies the physical upper limit of an input or output of a process in a spatial region of reference per unit time.",
+        "spellings": [
+         "theoretisches Potenzial"
+        ],
+        "uri": "OEO_00140057"
+       },
+       "theoretical stock potential": {
+        "meaning": "A theoretical stock potential is a type of stock potential that identifies the physical upper limit of a stock of a source or sink in a spatial region of reference.",
+        "uri": "OEO_00140063"
        }
       },
       "x-question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. \"power value\" ist definiert als quantity value mit einer Leistungseinheit: eine Heizlast, eine Anschlussleistung, eine Nennwärmeleistung, eine Netz- oder Erzeugerleistung. Die ABGEGEBENE ELEKTRISCHE Leistung derselben Anlage ist \"out:electric\" und nicht dieselbe Klasse: sie steht in einer eigenen Spalte, trägt denselben Energieträger und wäre im Graphen von der Wärmeleistung nicht zu unterscheiden. Gibt die Quelle die Leistung getrennt für Winter und Sommer an, dann ist das \"out:seasonal\" für BEIDE Werte."

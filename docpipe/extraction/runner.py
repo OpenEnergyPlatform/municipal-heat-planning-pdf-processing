@@ -3490,8 +3490,9 @@ def keeps_row(slot, answer, allowed) -> bool:
     """Does this gate answer keep the row in the slice this run serializes?
 
     The answer is the option's LABEL, because that is what a field reply
-    carries and what merge_field writes: "Potenzial", not "out:potential". The
-    profile names classes, so the label is resolved here — reading the profile
+    carries and what merge_field writes: "Nutzenergie", not
+    "out:useful_energy". The profile names classes, so the label is resolved
+    here — reading the profile
     as if it held German spellings would have kept every potential and thrown
     away every target scenario, which is exactly what it did.
 

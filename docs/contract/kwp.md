@@ -1322,7 +1322,7 @@ The prompt's own wording:
 
 > Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder im Titel der eigenen Tabelle. "final energy consumption value" ist definiert als die an Endverbraucher gelieferte und dort verbrauchte Energie. Darunter fällt BEIDES, was ein Plan Verbrauch nennt und was er Bedarf nennt: in einem Szenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Endenergieverbrauch, Endenergiebedarf, Wärmebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. "primary energy consumption value" ist die Bilanz vor der Umwandlung. Nutzwärme, Heizwärme, Raumwärme und Nutzenergie sind dagegen NICHT Endenergie, sondern die Wärme hinter dem Erzeuger: "out:useful_energy", auch im Zielszenario. Ein Anteil in Prozent und ein Wert je Fläche oder Kopf sind eigene Einträge und keine Verbrauchsmenge.
 
-<details><summary>What it may answer (9)</summary>
+<details><summary>What it may answer (21)</summary>
 
 - **Anteil in Prozent** → `out:share` — Ein Anteil in Prozent, keine Menge.
   - also written: Anteil am Gesamtverbrauch, EE-Anteil, Anteil erneuerbarer Energien
@@ -1332,14 +1332,31 @@ The prompt's own wording:
   - also written: Wärmeerzeugung, Einspeisung, Wärmebereitstellung, Absatz
 - **Nutzenergie** → `out:useful_energy` — Die Wärme hinter dem Erzeuger, nach der Umwandlung: Nutzwärme, Heizwärme, Raumwärme. Nicht die an den Endverbraucher gelieferte Endenergie.
   - also written: Nutzwärme, Heizwärme
-- **Potenzial** → `out:potential` — Ein erschließbares Maximum, keine im Bilanzjahr verbrauchte oder ausgestoßene Menge.
-  - also written: Ausbaupotenzial, technisches Potenzial, erschließbares Potenzial
+- **developable flow potential** → `OEO_00140060` — A developable flow potential is a type of flow potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).
+  - also written: erschließbares Potenzial
+- **developable stock potential** → `OEO_00140066` — A developable stock potential is a type of stock potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).
+- **economic flow potential** → `OEO_00140059` — An economic flow potential is a type of flow potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).
+  - also written: wirtschaftliches Potenzial
+- **economic stock potential** → `OEO_00140065` — An economic stock potential is a type of stock potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).
 - **etwas anderes** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
 - **final energy consumption value** → `OEO_00050016` — A final energy consumption value is an energy consumption value expressing the magnitude of the energy delivered to and consumed by end users.
   - also written: Endenergieverbrauch, Endenergie, Endenergiebedarf, Wärmeverbrauch, Wärmebedarf, Fernwärmeverbrauch, Stromverbrauch, Erdgasverbrauch, zu deckender Wärmebedarf, Jahresendenergiebedarf, Endenergiebedarf für Wärme
+- **flow potential** → `OEO_00140056` — A flow potential is a potential of an input or output of a process, per time unit.
+- **potential** → `OEO_00290000` — A potential is a maximum value that describes some upper limit in a spatial region of reference.
+  - also written: Potenzial, Ausbaupotenzial, Gesamtpotenzial
 - **primary energy consumption value** → `OEO_00050018` — A primary energy consumption value is an energy consumption value expressing the magnitude of the total consumption of energy in a spatial region excluding the non-energetic use of fuels.
   - also written: Primärenergieverbrauch, Primärenergie
 - **spezifischer Wert je Fläche, Kopf oder Einwohner** → `out:specific` — Ein Wert je Fläche, Kopf, Gebäude oder Kilowattstunde, keine Gesamtmenge.
+- **stock potential** → `OEO_00140062` — A stock potential is a potential of the stock of a source or sink.
+- **sustainable flow potential** → `OEO_00140061` — A sustainable flow potential is a type of flow potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.
+  - also written: nachhaltiges Potenzial
+- **sustainable stock potential** → `OEO_00140067` — A sustainable stock potential is a type of stock potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.
+- **technological flow potential** → `OEO_00140058` — A technological flow potential is a type of a flow potential derived from a theoretical flow potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.
+  - also written: technisches Potenzial
+- **technological stock potential** → `OEO_00140064` — A technological stock potential is a type of a stock potential derived from a theoretical stock potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.
+- **theoretical flow potential** → `OEO_00140057` — A theoretical flow potential is a type of flow potential that identifies the physical upper limit of an input or output of a process in a spatial region of reference per unit time.
+  - also written: theoretisches Potenzial
+- **theoretical stock potential** → `OEO_00140063` — A theoretical stock potential is a type of stock potential that identifies the physical upper limit of a stock of a source or sink in a spatial region of reference.
 
 </details>
 
@@ -2149,18 +2166,35 @@ The prompt's own wording:
 
 > Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. "power value" ist definiert als quantity value mit einer Leistungseinheit: eine Heizlast, eine Anschlussleistung, eine Nennwärmeleistung, eine Netz- oder Erzeugerleistung. Die ABGEGEBENE ELEKTRISCHE Leistung derselben Anlage ist "out:electric" und nicht dieselbe Klasse: sie steht in einer eigenen Spalte, trägt denselben Energieträger und wäre im Graphen von der Wärmeleistung nicht zu unterscheiden. Gibt die Quelle die Leistung getrennt für Winter und Sommer an, dann ist das "out:seasonal" für BEIDE Werte.
 
-<details><summary>What it may answer (6)</summary>
+<details><summary>What it may answer (18)</summary>
 
-- **Leistungspotenzial** → `out:potential` — Ein erschließbares Maximum, keine im Bilanzjahr bereitgestellte oder nachgefragte Leistung.
-  - also written: Ausbaupotenzial, technisches Potenzial, erschließbares Potenzial
+- **developable flow potential** → `OEO_00140060` — A developable flow potential is a type of flow potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).
+  - also written: erschließbares Potenzial
+- **developable stock potential** → `OEO_00140066` — A developable stock potential is a type of stock potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).
+- **economic flow potential** → `OEO_00140059` — An economic flow potential is a type of flow potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).
+  - also written: wirtschaftliches Potenzial
+- **economic stock potential** → `OEO_00140065` — An economic stock potential is a type of stock potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).
 - **elektrische Leistung** → `out:electric` — Die abgegebene ELEKTRISCHE Leistung einer Anlage, nicht ihre Wärmeleistung. Der Graph nimmt sie nicht auf: sie trägt denselben Energieträger wie die Wärmeleistung derselben Zeile und wäre von ihr nicht zu unterscheiden.
   - also written: Elektrische Leistung, el. Leistung, Elektrische Nennleistung, kW elektrisch, Stromlastspitze, Modulleistung
 - **etwas anderes** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
+- **flow potential** → `OEO_00140056` — A flow potential is a potential of an input or output of a process, per time unit.
 - **getrennt für Winter und Sommer angegebene Leistung** → `out:seasonal` — Eine Leistung, die die Quelle getrennt für Winter und Sommer angibt. Der Graph hat keine Koordinate für die Jahreszeit, also nimmt er beide Werte nicht auf.
   - also written: Ø Winter, Ø Sommer, Winterfall, Sommerfall
+- **potential** → `OEO_00290000` — A potential is a maximum value that describes some upper limit in a spatial region of reference.
+  - also written: Leistungspotenzial, Ausbaupotenzial
 - **power value** → `OEO_00010157` — A power value is a quantity value that has a power unit as unit.
   - also written: Wärmeleistung, Heizlast, Anschlussleistung, Leistungsbedarf, Netzleistung, thermische Leistung, Thermische Nutzleistung, Nennwärmeleistung, installierte Leistung, Entzugsleistung, Nennleistung, Feuerungswärmeleistung
 - **spezifischer Wert je Fläche, Kopf oder Gebäude** → `out:specific` — Ein Wert je Fläche, Kopf, Gebäude oder Meter, keine Gesamtleistung.
+- **stock potential** → `OEO_00140062` — A stock potential is a potential of the stock of a source or sink.
+- **sustainable flow potential** → `OEO_00140061` — A sustainable flow potential is a type of flow potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.
+  - also written: nachhaltiges Potenzial
+- **sustainable stock potential** → `OEO_00140067` — A sustainable stock potential is a type of stock potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.
+- **technological flow potential** → `OEO_00140058` — A technological flow potential is a type of a flow potential derived from a theoretical flow potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.
+  - also written: technisches Potenzial
+- **technological stock potential** → `OEO_00140064` — A technological stock potential is a type of a stock potential derived from a theoretical stock potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.
+- **theoretical flow potential** → `OEO_00140057` — A theoretical flow potential is a type of flow potential that identifies the physical upper limit of an input or output of a process in a spatial region of reference per unit time.
+  - also written: theoretisches Potenzial
+- **theoretical stock potential** → `OEO_00140063` — A theoretical stock potential is a type of stock potential that identifies the physical upper limit of a stock of a source or sink in a spatial region of reference.
 
 </details>
 

@@ -43,6 +43,14 @@ classes, and writing one as `oeo:out:total` mints an IRI that does not
 exist. Checked by shape rather than by prefix so a new entry cannot slip
 past by being spelled differently.
 
+### unit_of
+
+```python
+def unit_of(row: dict) -> Optional[str]
+```
+
+The unit the graph writes this value in, None outside the graph.
+
 ### qualified
 
 ```python
@@ -226,7 +234,7 @@ An unbound axis adds no line, which is why the constraints are text and
 not initBindings alone. The kinds are plain strings ("iri", "literal") so
 this module stays rdflib-free; the core wraps them. Gates: a quantity the
 graph does not hold and any `out:` entry are dropped here, because
-`oeo:out:potential` is an IRI that does not exist.
+`oeo:out:share` is an IRI that does not exist.
 
 ### label_of
 

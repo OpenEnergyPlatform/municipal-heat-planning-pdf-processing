@@ -1,5 +1,6 @@
 """Extraction stage wiring: the kwp spec, the slice gate, the frame, and what
 a plan says about itself."""
+import json
 from pathlib import Path
 
 SPEC_PATH = Path(__file__).with_name("extraction_spec.json")
@@ -20,8 +21,8 @@ SPEC_PATH = Path(__file__).with_name("extraction_spec.json")
 # to be asked its coordinates to get there.
 #
 # What still gates is the quantity, and only through its out: entries: those
-# are deliberate non-classes the model chose (a share, a specific figure, a
-# generation amount), and no ontology term is waiting for them.
+# are deliberate non-classes the model chose (a share, a specific figure), and
+# no ontology term is waiting for them.
 #
 # None means "any class the graph takes", which is every entry that does not
 # start with out:. A tuple names the answers that keep the row.
@@ -30,7 +31,25 @@ SPEC_PATH = Path(__file__).with_name("extraction_spec.json")
 # it reads with the year known. Asked side by side, up to 1,368 tuples of
 # corpus_m7_100 took the scenario of a chart's title for a year it does not
 # hold (owner decision 2026-11-02).
-SLICE = {"quantity": None, "year": None}
+#
+# Quantities of their own the ontology has no class for yet are read on every
+# axis into the harvest, and reach the graph once a class does (owner decision
+# 2026-11-03). Every other out: entry still closes its row.
+READ_IN_FULL = ("out:useful_energy", "out:generation", "out:saving",
+                "out:avoided")
+
+
+def kept_quantities() -> tuple:
+    """Every class of the spec's quantity lists, and READ_IN_FULL."""
+    spec = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
+    entries = {uri for parameter in spec["parameters"]
+               for uri in ((parameter.get("axes") or {}).get("quantity")
+                           or {}).get("vocabulary", {})}
+    return tuple(sorted(uri for uri in entries
+                        if not uri.startswith("out:") or uri in READ_IN_FULL))
+
+
+SLICE = {"quantity": kept_quantities(), "year": None}
 
 
 def document_context(conn, document_id: int) -> dict:

@@ -7,6 +7,14 @@ a plan says about itself.
 
 ## Functions
 
+### kept_quantities
+
+```python
+def kept_quantities() -> tuple
+```
+
+Every class of the spec's quantity lists, and READ_IN_FULL.
+
 ### document_context
 
 ```python

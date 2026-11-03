@@ -64,8 +64,8 @@ def framed(row: dict) -> bool:
 
 def additive(row: dict, spec) -> bool:
     """An amount over a span in the slice, with its year and scenario. A power
-    is no amount: two peaks do not add up. An `out:` quantity is a number the
-    gate closed: a specific value, a saving, a potential. Zero is a part of
+    is no amount: two peaks do not add up. An `out:` quantity has no class the
+    graph takes: a specific value, a saving, a useful energy. Zero is a part of
     nothing and the whole of nothing, and rows of it fill plans' tables."""
     parameter = spec.by_uri.get(str(row.get("parameter") or ""))
     return (parameter is not None and parameter.is_numeric

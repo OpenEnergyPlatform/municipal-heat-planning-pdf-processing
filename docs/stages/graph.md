@@ -242,7 +242,7 @@ unit, year, aggregation and plan part, gathering every carrier, sector
 and technology object into one `abouts` string. `value_bindings` turns a
 coordinate dict into `##CONSTRAINTS##` lines and a `{variable: (kind,
 value)}` binding map, one line per bound axis, dropping an `out:`
-quantity, since `oeo:out:potential` names no graph IRI. `label_of`
+quantity, since `oeo:out:share` names no graph IRI. `label_of`
 picks the label a reader sees: the spec's first spelling where named,
 else the pinned vocabulary's label, else the identifier itself.
 

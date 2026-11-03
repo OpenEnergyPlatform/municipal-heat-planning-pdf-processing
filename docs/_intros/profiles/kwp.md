@@ -141,12 +141,17 @@ carries when a passage genuinely does not state it is `out:unstated`
 (`docpipe/extraction/fields.py:38` to `48`), and a profile's own vocabulary
 rides the same prefix so a serializer can refuse every one of them by
 shape rather than by a second, hand-kept list
-(`profiles/kwp/kg.py:95` to `104`, `is_class`). Most of `quantity`'s own
-list is such an entry: a potential rather than a delivered amount, a
-share expressed as a percentage, a per-person or per-area figure, and a
-residual catch-all, so the model can name what a number really is
-instead of forcing it onto the nearest real class; `carrier`, `sector`
-and `scenario` offer one or two of the same kind each.
+(`profiles/kwp/kg.py:95` to `104`, `is_class`). Much of `quantity`'s own
+list is such an entry: a share expressed as a percentage, a per-person or
+per-area figure, a useful energy, a generation or a saving the ontology has
+no class for yet, and a residual catch-all, so the model can name what a
+number really is instead of forcing it onto the nearest real class;
+`carrier`, `sector` and `scenario` offer one or two of the same kind each.
+A potential is a class: the energy and the power list offer OEO's thirteen,
+potential, flow and stock potential, and the theoretical, technological,
+economic, developable and sustainable kind of each, and the model takes the
+kind the plan prints. Because one of them can be an energy or a power, the
+graph writes a value in its parameter's unit (`kg.unit_of`).
 
 `out:total` of `carrier` and `sector` is a number that holds for all entries
 together: explicitly summed, or not split by that list in its own table or
@@ -200,11 +205,15 @@ to. Where it says so is the section around the table, which is the first
 window the field sweep reads.
 
 The slice gate decides, before any other coordinate is asked, whether a
-row belongs in this run's graph at all: `SLICE = {"quantity": None, "year":
-None}` (`profiles/kwp/extraction.py`). The year closes no row and stands there
-for its order: every axis behind it reads with the year in `known`. `None` means
-any real class the graph
-takes, every entry that does not begin `out:`. Asking this axis first and
+row belongs in this run's graph at all: `SLICE = {"quantity":
+kept_quantities(), "year": None}` (`profiles/kwp/extraction.py`). The year
+closes no row and stands there for its order: every axis behind it reads with
+the year in `known`. The quantity keeps every real class of the spec's
+quantity lists, and the four entries the ontology has no class for yet
+(`READ_IN_FULL`: useful energy, generation, saving, avoided emission), which
+are read on every axis into the harvest and reach the graph once a class
+exists (owner decision 2026-11-03). Every other entry beginning `out:`
+closes its row. Asking this axis first and
 alone is cheaper when a row fails it, three requests spent rather than
 eight, and on a 20-plan draft it dropped 1,554 of 6,763 harvested tuples
 for a quantity the graph does not hold. Scenario used to gate too, the
@@ -263,7 +272,7 @@ and `title`, that of its own table or section; the question is about exactly
 this number) and `closed_out_text` of the field prompt
 (the entries of a closed list that are expressly the opposite of a class, with
 kwp's own examples: a sum row or a number the list does not split, a remainder, an expressly unknown value, a
-percentage share, a potential). It leaves out the blocks of the templates it
+percentage share, a useful energy). It leaves out the blocks of the templates it
 never had a sentence for: 14 blocks of the rows prompt, `rows_source`,
 `same_forms`, `by_similarity` and `domain_slot_2` of the field prompt, and
 `corpus_language` of the review prompt. The frame and the example prompt leave

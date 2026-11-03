@@ -114,14 +114,24 @@ _OEO_CLASS = re.compile(r"OEO_\d+")
 # hangs off the class.
 # The classes the graph takes. The remaining entries of the list start with
 # `out:` (NOT_IN_GRAPH) and are deliberately choosable non-classes: a
-# cumulative sum, an avoided or captured amount, a potential. They stand in
-# the selection so the model can CHOOSE them, instead of reaching for the
+# cumulative sum, an avoided or captured amount, a useful energy. They stand
+# in the selection so the model can CHOOSE them, instead of reaching for the
 # nearest real class.
-UNIT_TARGET = {uri: par["unit_target"]
-               for par in _SPEC["parameters"]
-               if par.get("unit_target")
-               for uri in par["axes"]["quantity"]["vocabulary"]
-               if not uri.startswith(NOT_IN_GRAPH)}
+QUANTITIES = frozenset(uri for par in _SPEC["parameters"]
+                       if par.get("unit_target")
+                       for uri in par["axes"]["quantity"]["vocabulary"]
+                       if not uri.startswith(NOT_IN_GRAPH))
+# The unit a value is written in is its parameter's, not its class's: a
+# technological flow potential is an energy in MWh/a and a power in MW.
+UNIT_TARGET = {par["uri"]: par["unit_target"] for par in _SPEC["parameters"]
+               if par.get("unit_target")}
+
+
+def unit_of(row: dict) -> Optional[str]:
+    """The unit the graph writes this value in, None outside the graph."""
+    if row.get("quantity") not in QUANTITIES:
+        return None
+    return UNIT_TARGET.get(row.get("parameter"))
 # How a value is aggregated over time or space is chosen by the model from
 # the five classes OEO carries under `aggregation type`. It used to always
 # say `integral` here, so a peak load was asserted as a year's sum.
@@ -360,7 +370,7 @@ def strict_refusal(row: dict) -> Optional[str]:
         return "class"
     if row.get("spatial_scope") != "municipality":
         return "area"           # the schema relates no value to an area
-    unit = UNIT_TARGET.get(row.get("quantity"))
+    unit = unit_of(row)
     given = {"has_unit": unit,
              "refers_to_energy_carrier": written(row, "carrier"),
              "refers_to_sector": written(row, "sector"),
@@ -412,7 +422,7 @@ EDGES = tuple(
     + [{"where": "kg.py part", "subject": _bare(cls),
         "predicate": _bare(P_HAS_QUANTITY_VALUE), "object": quantity}
        for cls, _segment, _label in PARTS.values()
-       for quantity in sorted(UNIT_TARGET)]
+       for quantity in sorted(QUANTITIES)]
 )
 
 
@@ -710,7 +720,7 @@ TRUST_JOIN = " · "
 SCENARIO_LABEL_EN = {"status_quo": "baseline inventory",
                      "trend": "trend scenario", "target": "target scenario"}
 OUT_LABEL_EN = {
-    "out:potential": "potential", "out:generation": "generation/supply",
+    "out:generation": "generation/supply",
     "out:useful_energy": "useful energy", "out:saving": "saving",
     "out:share": "share",
     "out:specific": "specific value (per area, head or building)",
@@ -880,7 +890,7 @@ def make_serializer(db_path: Path, strict: bool = False):
             quantity = row.get("quantity")
             scope = row.get("spatial_scope")
             area = (row.get("spatial_scope_raw") or "").strip()
-            if quantity not in UNIT_TARGET:
+            if quantity not in QUANTITIES:
                 # The model chose one of the classes the graph does not take
                 # -- a potential, a cumulative sum, a captured amount.
                 # Counted by what it chose, which is the useful thing to
@@ -1041,7 +1051,7 @@ def make_serializer(db_path: Path, strict: bool = False):
             lines += [f"<{iri}>",
                       f"    a {typed} ;",
                      f"    {P_NUMBER} \"{float(row['value_target'])!r}\"^^xsd:float ;",
-                     f"    {P_UNIT} {qualified(UNIT_TARGET[row['quantity']])} ;"]
+                     f"    {P_UNIT} {qualified(unit_of(row))} ;"]
             carrier = written(row, "carrier")
             if carrier and is_class(carrier):
                 if carrier in CARRIER_OUTSIDE_ROOT:
@@ -1159,7 +1169,7 @@ def value_bindings(coordinates: dict) -> tuple:
     not initBindings alone. The kinds are plain strings ("iri", "literal") so
     this module stays rdflib-free; the core wraps them. Gates: a quantity the
     graph does not hold and any `out:` entry are dropped here, because
-    `oeo:out:potential` is an IRI that does not exist.
+    `oeo:out:share` is an IRI that does not exist.
     """
     lines, bindings = [], {}
     scenario = coordinates.get("scenario")
@@ -1167,7 +1177,7 @@ def value_bindings(coordinates: dict) -> tuple:
         lines.append("  FILTER (?partClass = ?PART)")
         bindings["PART"] = ("iri", expand(PARTS[scenario][0]))
     quantity = coordinates.get("quantity")
-    if quantity in UNIT_TARGET:
+    if quantity in QUANTITIES:
         lines.append("  FILTER (?quantity = ?QUANTITY)")
         bindings["QUANTITY"] = ("iri", OEO + quantity)
     year = coordinates.get("year")

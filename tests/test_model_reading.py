@@ -1,7 +1,9 @@
 """What a field request hands the model about the number it asks for."""
+import json
 from types import SimpleNamespace
 
 from docpipe.extraction import fields, pipeline, runner
+from docpipe.extraction.spec import load as load_spec
 from profiles.kwp import extraction as kwp, kg
 
 TABLE = ("| Sektor | Erdgas | Wärmenetze |\n| --- | --- | --- |\n"
@@ -60,8 +62,62 @@ def test_the_year_is_asked_before_the_scenario_and_closes_no_row():
 
 def test_the_gate_still_closes_a_quantity_outside_the_graph():
     quantity = SimpleNamespace(options=None)
-    assert not runner.keeps_row(quantity, "out:potential",
+    assert not runner.keeps_row(quantity, "out:share",
                                 kwp.SLICE["quantity"])
+
+
+SPEC = load_spec(json.loads(kwp.SPEC_PATH.read_text(encoding="utf-8")))
+
+
+def quantity_slots():
+    """{parameter uri: its quantity slot, with the spec's options}."""
+    return {parameter.uri: slot for parameter in SPEC.parameters
+            for slot in fields.axis_slots(parameter) if slot.name == "quantity"}
+
+
+def label_in(slot, uri):
+    return next(option.label for option in slot.options if option.uri == uri)
+
+
+def test_a_potential_is_read_on_every_axis():
+    for uri in ("energy_consumption", "heat_load"):
+        slot = quantity_slots()[uri]
+        assert runner.keeps_row(slot, label_in(slot, "OEO_00140058"),
+                                kwp.SLICE["quantity"])
+
+
+def test_a_quantity_without_a_class_is_read_on_every_axis():
+    slots = quantity_slots()
+    for entry in kwp.READ_IN_FULL:
+        holding = [slot for slot in slots.values()
+                   if entry in {option.uri for option in slot.options}]
+        assert holding, entry
+        for slot in holding:
+            assert runner.keeps_row(slot, label_in(slot, entry),
+                                    kwp.SLICE["quantity"])
+
+
+def test_every_other_out_entry_still_closes_its_row():
+    for slot in quantity_slots().values():
+        for option in slot.options:
+            if option.uri.startswith("out:") \
+                    and option.uri not in kwp.READ_IN_FULL:
+                assert not runner.keeps_row(slot, option.label,
+                                            kwp.SLICE["quantity"]), option.uri
+
+
+def test_a_value_is_written_in_its_parameters_unit():
+    targets = {parameter["uri"]: parameter.get("unit_target")
+               for parameter in json.loads(kwp.SPEC_PATH.read_text(
+                   encoding="utf-8"))["parameters"]}
+    energy = kg.unit_of({"parameter": "energy_consumption",
+                         "quantity": "OEO_00140058"})
+    power = kg.unit_of({"parameter": "heat_load", "quantity": "OEO_00140058"})
+    assert (energy, power) == (targets["energy_consumption"],
+                               targets["heat_load"])
+    assert energy != power
+    assert kg.unit_of({"parameter": "energy_consumption",
+                       "quantity": "out:useful_energy"}) is None
 
 
 def share_row(value, whole):

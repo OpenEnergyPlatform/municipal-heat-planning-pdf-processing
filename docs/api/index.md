@@ -240,9 +240,9 @@ is for and what it hands to what; this is the reference.
 - [profiles.kwp.catalog](profiles.kwp.catalog.md): How heat plans present themselves in the picker. (1 class, 2 functions)
 - [profiles.kwp.compute](profiles.kwp.compute.md): What a heat plan leaves to be worked out from its printed numbers. (17 functions)
 - [profiles.kwp.config](profiles.kwp.config.md): Constants for the fileprocessing module. (1 function)
-- [profiles.kwp.extraction](profiles.kwp.extraction.md): Extraction stage wiring: the kwp spec, the slice gate, the frame, and what a plan says about itself. (1 function)
+- [profiles.kwp.extraction](profiles.kwp.extraction.md): Extraction stage wiring: the kwp spec, the slice gate, the frame, and what a plan says about itself. (2 functions)
 - [profiles.kwp.inference](profiles.kwp.inference.md): What the answer loop says around the kwp prompts.
-- [profiles.kwp.kg](profiles.kwp.kg.md): Serializes harvested tuples into MHPKG Turtle. (18 functions)
+- [profiles.kwp.kg](profiles.kwp.kg.md): Serializes harvested tuples into MHPKG Turtle. (19 functions)
 - [profiles.kwp.mhpkg](profiles.kwp.mhpkg.md): The MHPKG data shape this profile's graph is written in. (1 class, 3 functions)
 - [profiles.kwp.migrate_convoy_group_keys](profiles.kwp.migrate_convoy_group_keys.md): Regroup convoy documents by their smallest ags. (4 functions)
 - [profiles.kwp.migrate_profile_split](profiles.kwp.migrate_profile_split.md): Bring a pre-refactoring KWP.db up to the core schema. (5 functions)
