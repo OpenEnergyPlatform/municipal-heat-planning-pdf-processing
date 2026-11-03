@@ -821,11 +821,12 @@ prints: where the parameter is read and its list does not hold that
 wording, the value is asked again as one of the list's entries, in the
 row's own passage alone (`fields.holds`, `fields.value_choice`,
 `Turn.ask_value` in `runner.py`, owner's decision 2026-11-03). A value read
-so stands on that reading: the entry, the wording its answer gave in
-`value_raw` or none, and the answer's quote, which becomes the row's
-`quote`, the one `verify` checks a value against (`Turn.after_value`). A
-row that reads no entry keeps the wording it was read with, is refused for
-its value (`value … not in vocabulary`), and its axes are never asked. Which table the
+so takes the entry from that answer, and what the row printed stays its
+wording in `value_raw` and its `quote`, with the answer's quote beside them
+in `value_quote` (`Turn.after_value`): one field answer covers several
+rows, and six scenarios one sentence names came back with that sentence as
+each one's wording. A row that reads no entry keeps its wording too, is
+refused for its value (`value … not in vocabulary`), and its axes are never asked. Which table the
 passage belongs to, how far from the row it stands and which column of a
 table it heads are the model's reading, not a rule. Failures are recorded
 separately, `unquoted` against `unbacked`, so a retry can name what to fix. A

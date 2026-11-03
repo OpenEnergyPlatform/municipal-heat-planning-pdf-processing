@@ -715,8 +715,8 @@ def ask_value(self, uri: str, choice, rows: list) -> None
 The value asked again as one of its parameter's entries, before
 the axes, in the row's own passage (`value_choice`). The value stays
 what the passage printed until an entry is read, so a row that reads
-none is refused for it by `verify`. The wording it was read with is
-put aside meanwhile: an answer brings its own or none
+none is refused for it by `verify`. The wording the row printed is
+put aside meanwhile, since an answer writes its own over it
 (`after_value`).
 
 #### Turn.after_value
@@ -725,10 +725,11 @@ put aside meanwhile: an answer brings its own or none
 def after_value(self, uri: str, rows: list) -> None
 ```
 
-A row whose value has an entry stands on the reading that found
-it, the entry, the wording that answer gave and its quote, and goes on
-to its axes. The others keep the wording they were read with, are
-refused for their value, and their axes are never asked.
+A row whose value has an entry takes the entry and goes on to its
+axes. What the row printed stays its wording and its quote, and the
+answer's quote stands beside them in value_quote as the entry's
+evidence. The others keep their wording too, are refused for their
+value, and their axes are never asked.
 
 #### Turn.keep
 

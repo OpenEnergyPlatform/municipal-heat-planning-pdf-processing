@@ -1,10 +1,11 @@
 """A closed list's answer is one of its entries, the value of a category
 parameter too: a row whose value its parameter's list does not hold has that
 parameter read AND its value asked again, in its own passage only, as one of
-that list's entries, AND a value read so stands on that reading, its entry,
-the wording it gave and its quote, AND a row that reads no entry keeps the
-wording it was read with and is refused for its value without its axes ever
-being asked; a value off its list is refused, never kept, AND a grown list
+that list's entries, AND a value read so takes its entry from that answer
+and keeps the wording and the quote its own row printed, also where one
+answer covers several rows, AND a row that reads no entry keeps them too and
+is refused for its value without its axes ever being asked; a value off its
+list is refused, never kept, AND a grown list
 reopens its answer space, AND the window a run is served holds the widest
 list a field request offers. A value left out with its wording beside it fits
 any list."""
@@ -133,18 +134,24 @@ def test_only_a_value_off_its_list_is_asked_again_and_before_any_axis():
     assert "value_state" not in claims["R1"]
 
 
-def test_a_value_read_again_stands_on_the_quote_that_read_it():
+def test_a_value_read_again_keeps_the_wording_and_quote_its_row_printed():
     _turn, claims, _asked = turned(READ_AGAIN)
-    assert claims["R2"]["quote"] == POLICY
-    assert claims["R2"]["value_raw"] == "With existing measures"
+    assert claims["R2"]["value"] == "with existing measures scenario"
+    assert claims["R2"]["value_raw"] == "WEM case"
+    assert claims["R2"]["quote"] == "the WEM case keeps today's policies"
+    assert claims["R2"]["value_quote"] == POLICY
     tuple_ = verify_tuple(claims["R2"], TYPE, POLICY, owner_kind="section")
     assert isinstance(tuple_, Verified) and tuple_.tuple["value_uri"]
 
 
-def test_a_value_read_again_without_a_wording_carries_none():
-    _turn, claims, _asked = turned(
-        {"R2": ("with existing measures scenario", None, POLICY)})
-    assert "value_raw" not in claims["R2"]
+def test_rows_read_again_in_one_answer_keep_their_own_wordings():
+    # Per construction: one answer, one wording for two rows printing two
+    # names, the way a field reply groups the rows it answers alike.
+    both = ("with existing measures scenario", "the WEM case and the other",
+            POLICY)
+    _turn, claims, _asked = turned({"R2": both, "R3": both})
+    assert claims["R2"]["value_raw"] == "WEM case"
+    assert claims["R3"]["value_raw"] == "a wording no list holds"
 
 
 def test_a_value_with_an_entry_goes_on_and_one_without_is_refused_unasked():
