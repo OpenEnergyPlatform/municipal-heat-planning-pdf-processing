@@ -183,6 +183,806 @@ Why values are not an A, counted. A closed list: a reason nobody can enumerate i
 
 ### `tuples`
 
+## `building_count`
+
+How the row becomes a node:
+
+- `class_from`: `quantity`
+- `node`: `value`
+- `number`: `{'datatype': 'xsd:float', 'from': 'value_target', 'label': 'has number', 'schema_slot': 'has_number'}`
+- `unit`: `{'from': 'unit_target', 'label': 'has unit', 'schema_slot': 'has_unit'}`
+
+### `aggregation`
+
+Axis 'aggregation' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless aggregation_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist "integral", also eine Jahressumme. "maximum" bei einer Spitzenlast oder einem Höchstwert, "arithmetic mean" bei einem Durchschnitt je Gebäude oder je Jahr, "instantaneous" bei einem Momentanwert.
+
+<details><summary>What it may answer (5)</summary>
+
+- **arithmetic mean** → `OEO_00140071` — average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region
+  - also written: Mittelwert, Durchschnitt
+- **instantaneous** → `OEO_00140069` — value measured at or modelled for exactly one 0-dim temporal region, referenced by a time stamp, e.g. to represent a time step in a time series
+  - also written: Momentanwert zu einem Zeitpunkt
+- **integral** → `OEO_00140070` — sum or integral of values, e.g. within a time step or a spatial region
+  - also written: Summe oder Integral über einen Zeitraum oder ein Gebiet, Jahreswert, Jahressumme
+- **maximum** → `OEO_00140073` — maximum value within a set of data values, e.g. in a time step or spatial region
+  - also written: Maximum, Spitzenwert, Spitzenlast
+- **minimum** → `OEO_00140072` — minimum value within a set of data values, e.g. in a time step or spatial region
+  - also written: Minimum, Tiefstwert
+
+</details>
+
+- `label`: `has aggregation type`
+- `role`: `edge`
+- `schema_slot`: `has_aggregation_type`
+
+<details><summary>Why</summary>
+
+Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: a number of buildings is a stock at one point in time.
+
+</details>
+
+### `aggregation_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.
+
+### `aggregation_link_source`
+
+Which source 'aggregation_link_quote' was found in.
+
+### `aggregation_producer`
+
+Who re-read 'aggregation': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `aggregation_quote`
+
+The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.
+
+### `aggregation_raw`
+
+The document's own wording 'aggregation' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `aggregation_raw_foreign`
+
+The wording does not name the option chosen for 'aggregation': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `aggregation_seen`
+
+A wording the model noticed for 'aggregation' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `aggregation_source`
+
+Which source the passage for 'aggregation' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `aggregation_state`
+
+How the coordinate 'aggregation' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `aggregation_window`
+
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
+
+### `carrier`
+
+Axis 'carrier' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless carrier_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H" und "Erdgas (netzgebunden)" meinen die Klasse Erdgas, "Nahwärme" und "Wärmenetz" die Klasse Fernwärme. Eine Summenzeile ("Summe", "Gesamt", "alle Energieträger") ist "out:total", eine Restposition ("Sonstige", "Andere") ist "out:other". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Gebäudetyp". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+
+<details><summary>What it may answer (29)</summary>
+
+- **Abfallbrennstoff** → `OEO_00000439` — A waste fuel is a fuel in which the material entity is waste.
+  - also written: Klärschlamm, EBS
+- **Abwärme** → `OEO_00010114`
+  - also written: unvermeidbare Abwärme
+- **Biogas** → `OEO_00000074`
+  - also written: aufbereitetes Biogas, Klärgas, Faulgas, Klärschlammgas
+- **Biomasse** → `OEO_00010214`
+  - also written: pflanzliche Biomasse, landwirtschaftliche Biomasse
+- **Biomethan** → `OEO_00010215`
+- **Braunkohle** → `OEO_00000251`
+- **Erdgas** → `OEO_00000292`
+  - also written: Gas
+- **Fernwärme** → `OEO_00000132`
+  - also written: Wärmenetze, Wärmenetz, Nahwärme
+- **Flüssiggas** → `OEO_00320011` — Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.
+- **Geothermie** → `OEO_00000191`
+  - also written: Erdwärme, oberflächennahe Geothermie, Tiefengeothermie, Erdwärmesonde, Erdwärmekollektor, Oberflächengeothermie
+- **Heizöl** → `OEO_00000211`
+  - also written: Öl
+- **Holz** → `OEO_00000449`
+  - also written: Holzpellets, Pellets, Hackschnitzel, Brennholz, Holzenergie
+- **Kohle** → `OEO_00000088`
+- **Siedlungsabfälle** → `OEO_00000290` — A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.
+  - also written: Abfall, thermische Abfallverwertung
+- **Solarthermie** → `OEO_00000388`
+  - also written: solare Wärme
+- **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
+  - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
+- **Steinkohle** → `OEO_00000204`
+- **Strom** → `OEO_00000139` — Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.
+  - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
+- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+  - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
+- **Umweltwärme** → `OEO_00000056` — Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.
+  - also written: Umgebungswärme, Umgebungsluft
+- **Wasserstoff** → `OEO_00000220`
+  - also written: H2
+- **anthropogene Umweltwärme** → `OEO_00140105` — Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.
+  - also written: Abwasserwärme, Abwasser, Abwasserwärmenutzung
+- **biogener Abfallbrennstoff** → `OEO_00010223` — A biogenic waste fuel is a waste fuel that has a biogenic origin.
+  - also written: Altholz, Altholzheizung, biogene Abfälle
+- **biogener Festbrennstoff** → `OEO_00000332`
+  - also written: biogene Festbrennstoffe, sonstige biogene Festbrennstoffe
+- **biogener Siedlungsabfall** → `OEO_00000356` — A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.
+  - also written: Biogut, Gartenabfälle, Grünschnitt
+- **industrielle Abwärme** → `OEO_00310004`
+- **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — An angricultural waste fuel is waste fuel produced by agriculture.
+  - also written: tierische Exkremente, Gülle, Mist
+- **natürliche Umweltwärme** → `OEO_00140104` — Natural ambient thermal energy is ambient thermal energy that has a renewable origin.
+  - also written: Oberflächengewässer, Seethermie, Flusswärme
+- **synthetische Gase** → `OEO_00010155`
+  - also written: grüne Gase, E-Gas, SNG
+
+</details>
+
+- `label`: `refers to energy carrier`
+- `outside_root`: `{'OEO_00000056': 'ambient heat', 'OEO_00000132': 'district heating', 'OEO_00000139': 'electrical energy', 'OEO_00000191': 'geothermal energy', 'OEO_00000388': 'solar thermal energy', 'OEO_00010114': 'waste heat', 'OEO_00140104': 'surface water heat', 'OEO_00140105': 'waste water heat', 'OEO_00310004': 'industrial waste heat'}`
+- `role`: `edge`
+- `schema_slot`: `refers_to_energy_carrier`
+
+<details><summary>Why</summary>
+
+Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding.
+
+</details>
+
+### `carrier_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.
+
+### `carrier_link_source`
+
+Which source 'carrier_link_quote' was found in.
+
+### `carrier_producer`
+
+Who re-read 'carrier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `carrier_quote`
+
+The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.
+
+### `carrier_raw`
+
+The document's own wording 'carrier' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `carrier_raw_foreign`
+
+The wording does not name the option chosen for 'carrier': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `carrier_seen`
+
+A wording the model noticed for 'carrier' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `carrier_source`
+
+Which source the passage for 'carrier' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `carrier_state`
+
+How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `carrier_window`
+
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
+
+### `compute`
+
+The sandbox runs behind a computed value: {code, stdout, ok, error}.
+
+### `computed`
+
+The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `flags`
+
+Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
+
+### `kind`
+
+### `parameter`
+
+Spec parameter: Gebäudeanzahl.
+
+The prompt's own wording:
+
+> Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil. Eine Zahl von Gebäuden ist eine Gebäudeanzahl.
+
+### `parameter_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.
+
+### `parameter_link_source`
+
+Which source 'parameter_link_quote' was found in.
+
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `parameter_quote`
+
+The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
+
+### `parameter_raw`
+
+The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `parameter_raw_foreign`
+
+The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `parameter_seen`
+
+A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `parameter_source`
+
+Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `parameter_state`
+
+How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `parameter_window`
+
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
+
+### `provenance`
+
+### `quantity`
+
+Axis 'quantity' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless quantity_state is 'read' or 'derived'.
+
+<details><summary>What it may answer (1)</summary>
+
+- **building count** → `MHPO_00030021` — A building count is a quantity value that measures the number of buildings in a building stock.
+  - also written: Gebäudeanzahl, Anzahl Gebäude, Anzahl der Gebäude
+
+</details>
+
+- `role`: `type`
+
+<details><summary>Why</summary>
+
+The class of the value node itself (rdf:type), derived from the unit: a number of buildings is a building count and nothing else. The MHPKG schema holds no building count yet, so the strict graph leaves it out.
+
+</details>
+
+### `quantity_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.
+
+### `quantity_link_source`
+
+Which source 'quantity_link_quote' was found in.
+
+### `quantity_producer`
+
+Who re-read 'quantity': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `quantity_quote`
+
+The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.
+
+### `quantity_raw`
+
+The document's own wording 'quantity' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `quantity_raw_foreign`
+
+The wording does not name the option chosen for 'quantity': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `quantity_seen`
+
+A wording the model noticed for 'quantity' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `quantity_source`
+
+Which source the passage for 'quantity' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `quantity_state`
+
+How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `quantity_window`
+
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
+
+### `quote`
+
+The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+
+### `scenario`
+
+Axis 'scenario' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, "bislang", "derzeit", "wird verbraucht", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie "wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt ("bei erhöhter Energieeinsparung", "Umsetzungsszenario 2", "Transformationspfad"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das "out:unstated" und keine Schätzung.
+
+<details><summary>What it may answer (4)</summary>
+
+- **Bestand** → `status_quo` — Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr.
+  - also written: Ist-Zustand, Bilanzjahr, Status quo, Bestandsanalyse, Basisjahr, Ist-Zustandsanalyse, Ist-Analyse, Erstellungsjahr
+- **Trendszenario** → `trend` — Die Fortschreibung ohne zusätzliche Maßnahmen.
+  - also written: Referenzszenario, Weiter-wie-bisher, Business as usual
+- **Variante oder Sensitivität neben dem Szenario** → `out:variant` — Eine Rechenvariante, die der Plan neben sein Szenario stellt, um eine Bandbreite zu zeigen.
+  - also written: Variante, Sensitivität, Bandbreite
+- **Zielszenario** → `target` — Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will.
+  - also written: Zielbild, Zielwert, Zielpfad, Umsetzungsszenario, Transformationspfad
+
+</details>
+
+- `linked_by`: `{'label': 'has part', 'node': 'heatplan', 'schema_slot': 'has_part'}`
+- `map`: `{'out:variant': {'note': 'not serialized'}, 'status_quo': {'schema_class': 'AggregatedInventoryAnalysis'}, 'target': {'schema_class': 'TargetScenario'}, 'trend': {'class': 'OEO_00020311', 'note': 'with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means.'}}`
+- `role`: `parent`
+
+<details><summary>Why</summary>
+
+Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).
+
+</details>
+
+### `scenario_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.
+
+### `scenario_link_source`
+
+Which source 'scenario_link_quote' was found in.
+
+### `scenario_producer`
+
+Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `scenario_quote`
+
+The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.
+
+### `scenario_raw`
+
+The document's own wording 'scenario' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `scenario_raw_foreign`
+
+The wording does not name the option chosen for 'scenario': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `scenario_seen`
+
+A wording the model noticed for 'scenario' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `scenario_source`
+
+Which source the passage for 'scenario' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `scenario_state`
+
+How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `scenario_window`
+
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
+
+### `sector`
+
+Axis 'sector' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless sector_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"). Eine Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist dagegen keine Summe über Sektoren. "Einfamilienhaus" und "Mehrfamilienhaus" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Energieträger". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+
+<details><summary>What it may answer (6)</summary>
+
+- **GHD** → `OEO_00000405` — A commercial sector is a sector that covers non-industrial commercial activities.
+  - also written: Gewerbe, Handel, Dienstleistungen, Gewerbe/Handel/Dienstleistungen, öffentliche Gebäude, öffentliche Liegenschaften, kommunale Einrichtungen, GHD/Kommune, Gewerbe, wirtschaftlich genutzte Gebäude, kommerzieller Sektor
+- **Industrie** → `OEO_00000227` — An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.
+  - also written: Industriesektor, verarbeitendes Gewerbe
+- **Landwirtschaft** → `OEO_00010035` — A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.
+  - also written: Land- und Forstwirtschaft
+- **Private Haushalte** → `OEO_00000214` — A household sector is a sector that covers households.
+  - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor, Einfamilienhaus, Mehrfamilienhaus
+- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+  - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
+- **Verkehr** → `OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
+  - also written: Verkehrssektor
+
+</details>
+
+- `label`: `refers to sector`
+- `role`: `edge`
+- `schema_slot`: `refers_to_sector`
+- `total_class`: `OEO_00000128`
+
+<details><summary>Why</summary>
+
+Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.
+
+</details>
+
+### `sector_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.
+
+### `sector_link_source`
+
+Which source 'sector_link_quote' was found in.
+
+### `sector_producer`
+
+Who re-read 'sector': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `sector_quote`
+
+The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.
+
+### `sector_raw`
+
+The document's own wording 'sector' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `sector_raw_foreign`
+
+The wording does not name the option chosen for 'sector': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `sector_seen`
+
+A wording the model noticed for 'sector' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `sector_source`
+
+Which source the passage for 'sector' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `sector_state`
+
+How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `sector_window`
+
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
+
+### `spatial_scope`
+
+Axis 'spatial_scope' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless spatial_scope_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Eine Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: Nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
+
+<details><summary>What it may answer (2)</summary>
+
+- **Gemeindegebiet** → `municipality` — Das ganze Gemeinde- oder Stadtgebiet des Plans.
+  - also written: Gesamtstadt, Stadtgebiet, gesamtes Plangebiet, Gemeinde insgesamt
+- **Teilgebiet** → `sub_area` — Ein benannter Teil davon: ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet.
+  - also written: Fokusgebiet, Quartier, Stadtteil, Baublock, Wärmenetzgebiet, Ortsteil
+
+</details>
+
+- `map`: `{'municipality': {'note': "the plan's own area, minted from the AGS"}, 'sub_area': {'class': 'MHPO_00020019', 'linked_by': {'label': 'part of', 'node': 'municipality', 'predicate': 'BFO_0000050', 'prefix': 'obo'}}}`
+- `role`: `parent`
+
+<details><summary>Why</summary>
+
+The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area.
+
+</details>
+
+### `spatial_scope_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.
+
+### `spatial_scope_link_source`
+
+Which source 'spatial_scope_link_quote' was found in.
+
+### `spatial_scope_producer`
+
+Who re-read 'spatial_scope': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `spatial_scope_quote`
+
+The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.
+
+### `spatial_scope_raw`
+
+The document's own wording 'spatial_scope' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `spatial_scope_raw_foreign`
+
+The wording does not name the option chosen for 'spatial_scope': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `spatial_scope_seen`
+
+A wording the model noticed for 'spatial_scope' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `spatial_scope_source`
+
+Which source the passage for 'spatial_scope' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `spatial_scope_state`
+
+How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `spatial_scope_window`
+
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
+
+### `subject`
+
+Axis 'subject' of Gebäudeanzahl. null unless subject_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist der Eintrag ihrer eigenen Zeile oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit diesem Eintrag wörtlich. Der Name einer Spalte oder einer Zeilengruppe, etwa "Energieträger", "Sektor" oder "Name des Quartiers", sagt nur, was dort steht, und ist keine Antwort. Ein Energieträger, ein Sektor oder ein Gebiet gehört in sein eigenes Feld. Unterscheidet sie nichts davon, sagt der Plan es nicht.
+
+### `subject_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('subject_raw'). 'subject_quote' is then the frame's passage that prints the number.
+
+### `subject_link_source`
+
+Which source 'subject_link_quote' was found in.
+
+### `subject_producer`
+
+Who re-read 'subject': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `subject_quote`
+
+The verbatim passage carrying 'subject'. Present exactly when subject_state is 'read'.
+
+### `subject_raw`
+
+The document's own wording 'subject' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `subject_raw_foreign`
+
+The wording does not name the option chosen for 'subject': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `subject_seen`
+
+A wording the model noticed for 'subject' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `subject_source`
+
+Which source the passage for 'subject' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `subject_state`
+
+How the coordinate 'subject' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `subject_window`
+
+[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
+
+### `technology`
+
+Axis 'technology' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless technology_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Welche Wärmeerzeugungstechnologie? Nur wenn die Zahl ausdrücklich einer Heiztechnik zugeordnet ist, in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, etwa "Wärmepumpen", "Gaskessel" oder "Ölheizungen". Ein Energieträger ist keine Technologie: "Erdgas" allein ist der Träger, "Gasheizung" die Technologie. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz nicht nach Technologien aufgeteilt, antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt. Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+
+<details><summary>What it may answer (10)</summary>
+
+- **Biomasseheizung** → `OEO_00020493` — A biomass powered heating technology is a combustion-based heat generation technology that describes how to combine biomass boilers, heat gain processes, biomass and energy in a specific way.
+  - also written: Holzheizung, Pelletheizung, Hackschnitzelheizung, Biomassekessel
+- **Direktelektrische Heizung** → `OEO_00020487` — An electrical heating technology is a technology that describes how to combine electrical heaters in a heat gain process with electrical energy as input in a specific way.
+  - also written: Stromdirektheizung, Elektroheizung, Nachtspeicherheizung
+- **Gasheizung** → `OEO_00020491` — An gas powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, natural gas and energy in a specific way.
+  - also written: Gaskessel, Gasbrennwertkessel, Gastherme
+- **Geothermie** → `OEO_00020306` — A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way.
+  - also written: Geothermieanlage, Tiefengeothermie, oberflächennahe Geothermie
+- **Solarthermie** → `OEO_00020307` — A solar thermal heat technology is a heat generation technology that describes how to combine solar heat units, solar thermal energy transformation processes, energy carriers and energy in a specific way.
+  - also written: Solarthermieanlage, solarthermische Anlage
+- **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
+  - also written: Andere, sonstige Wärmeerzeuger
+- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+  - also written: Gesamt, insgesamt, alle Technologien
+- **Wasserstoffheizung** → `OEO_00020492` — An hydrogen powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, hydrogen and energy in a specific way.
+  - also written: Wasserstoffkessel, H2-Kessel
+- **Wärmepumpe** → `OEO_00020486` — A heat pump technology is a heat generation technology that describes how to combine heat pumps, heat gain processes, energy carriers and energy in a specific way.
+  - also written: Wärmepumpen, Luft-Wasser-Wärmepumpe, Sole-Wasser-Wärmepumpe, Großwärmepumpe
+- **Ölheizung** → `OEO_00020490` — An oil powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, heating oil and energy in a specific way.
+  - also written: Ölkessel, Heizölkessel
+
+</details>
+
+- `label`: `refers to technology`
+- `role`: `edge`
+- `schema_slot`: `refers_to_technology`
+
+<details><summary>Why</summary>
+
+Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional.
+
+</details>
+
+### `technology_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('technology_raw'). 'technology_quote' is then the frame's passage that prints the number.
+
+### `technology_link_source`
+
+Which source 'technology_link_quote' was found in.
+
+### `technology_producer`
+
+Who re-read 'technology': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `technology_quote`
+
+The verbatim passage carrying 'technology'. Present exactly when technology_state is 'read'.
+
+### `technology_raw`
+
+The document's own wording 'technology' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `technology_raw_foreign`
+
+The wording does not name the option chosen for 'technology': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `technology_seen`
+
+A wording the model noticed for 'technology' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `technology_source`
+
+Which source the passage for 'technology' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `technology_state`
+
+How the coordinate 'technology' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `technology_window`
+
+[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
+
+### `tier`
+
+text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
+
+### `unit`
+
+The unit: one entry of units_accepted (Gebäude), read as a coordinate with its own passage. Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
+
+The prompt's own wording:
+
+> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
+
+<details><summary>What it may answer (1)</summary>
+
+- **Gebäude** → `Gebäude` — Gebäudeanzahl
+
+</details>
+
+### `unit_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.
+
+### `unit_link_source`
+
+Which source 'unit_link_quote' was found in.
+
+### `unit_producer`
+
+Who re-read 'unit': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `unit_quote`
+
+The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.
+
+### `unit_raw`
+
+The document's own wording 'unit' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `unit_raw_foreign`
+
+The wording does not name the option chosen for 'unit': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `unit_seen`
+
+A wording the model noticed for 'unit' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `unit_source`
+
+Which source the passage for 'unit' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `unit_state`
+
+How the coordinate 'unit' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `unit_window`
+
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
+
+### `value`
+
+The number as the document prints it, with the grouping removed and a decimal point.
+
+### `value_target`
+
+value x factor(unit), in the spec's unit_target UO_0000189. This is the number the graph carries.
+
+### `year`
+
+Axis 'year' of Gebäudeanzahl. null unless year_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt ("Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres ("Durchschnittswert der Jahre 2022-2024"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.
+
+- `datatype`: `xsd:integer`
+- `label`: `has scenario year value`
+- `role`: `edge`
+- `schema_slot`: `has_scenario_year_value`
+
+<details><summary>Why</summary>
+
+The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.
+
+</details>
+
+### `year_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.
+
+### `year_link_source`
+
+Which source 'year_link_quote' was found in.
+
+### `year_producer`
+
+Who re-read 'year': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `year_quote`
+
+The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.
+
+### `year_raw`
+
+The document's own wording 'year' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `year_raw_foreign`
+
+The wording does not name the option chosen for 'year': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `year_seen`
+
+A wording the model noticed for 'year' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `year_source`
+
+Which source the passage for 'year' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `year_state`
+
+How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `year_window`
+
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
 ## `emission`
 
 How the row becomes a node:
@@ -405,7 +1205,7 @@ Spec parameter: Emissionen.
 
 The prompt's own wording:
 
-> Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil.
+> Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil. Eine Zahl von Gebäuden ist eine Gebäudeanzahl.
 
 ### `parameter_link_quote`
 
@@ -884,7 +1684,7 @@ The unit: one entry of units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/
 
 The prompt's own wording:
 
-> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht.
+> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
 
 <details><summary>What it may answer (48)</summary>
 
@@ -1270,7 +2070,7 @@ Spec parameter: Energieverbrauch.
 
 The prompt's own wording:
 
-> Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil.
+> Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil. Eine Zahl von Gebäuden ist eine Gebäudeanzahl.
 
 ### `parameter_link_quote`
 
@@ -1766,7 +2566,7 @@ The unit: one entry of units_accepted (GWh, GWh/a, MWh, MWh/a, Millionen kWh, Mi
 
 The prompt's own wording:
 
-> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht.
+> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
 
 <details><summary>What it may answer (12)</summary>
 
@@ -2114,7 +2914,7 @@ Spec parameter: Leistung.
 
 The prompt's own wording:
 
-> Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil.
+> Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil. Eine Zahl von Gebäuden ist eine Gebäudeanzahl.
 
 ### `parameter_link_quote`
 
@@ -2521,7 +3321,7 @@ The unit: one entry of units_accepted (GW, MW, MWth, kW, kWth), read as a coordi
 
 The prompt's own wording:
 
-> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht.
+> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
 
 <details><summary>What it may answer (5)</summary>
 
@@ -2675,7 +3475,7 @@ Spec parameter: Beauftragtes Planungsbüro.
 
 The prompt's own wording:
 
-> Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil.
+> Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil. Eine Zahl von Gebäuden ist eine Gebäudeanzahl.
 
 ### `parameter_link_quote`
 
@@ -2896,7 +3696,7 @@ Spec parameter: Anteil.
 
 The prompt's own wording:
 
-> Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil.
+> Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil. Eine Zahl von Gebäuden ist eine Gebäudeanzahl.
 
 ### `parameter_link_quote`
 
@@ -3363,7 +4163,7 @@ The unit: one entry of units_accepted (%, Prozent), read as a coordinate with it
 
 The prompt's own wording:
 
-> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht.
+> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
 
 <details><summary>What it may answer (2)</summary>
 

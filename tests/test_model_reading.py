@@ -106,6 +106,36 @@ def test_every_other_out_entry_still_closes_its_row():
                                             kwp.SLICE["quantity"]), option.uri
 
 
+def building_row():
+    """A row the unit question read as a number of buildings."""
+    return SimpleNamespace(label="R1", claim={
+        "value": 68, "unit": "Gebäude", "unit_raw": "Anzahl Gebäude",
+        "unit_quote": "| | Anzahl Gebäude: | 68 |",
+        "quote": "| | Anzahl Gebäude: | 68 |"})
+
+
+def test_a_number_of_buildings_is_a_building_count():
+    row = building_row()
+    assert fields.derive_parameter(SPEC, row.claim).uri == "building_count"
+    slots = {slot.name: slot
+             for slot in fields.axis_slots(SPEC.by_uri["building_count"])}
+    for name in ("quantity", "aggregation"):
+        fields.apply_derived([row], slots[name])
+    assert (row.claim["quantity"], row.claim["aggregation"]) == (
+        "MHPO_00030021", "OEO_00140069")
+    assert runner.keeps_row(slots["quantity"], row.claim["quantity"],
+                            kwp.SLICE["quantity"])
+
+
+def test_a_building_count_is_written_as_mhpos_class_in_the_count_unit():
+    row = {"parameter": "building_count", "quantity": "MHPO_00030021"}
+    assert kg.typed_as(row) == "mhpo:MHPO_00030021"
+    assert kg.unit_of(row) == "UO_0000189"
+    _lines, bindings = kg.value_bindings({"quantity": "MHPO_00030021"})
+    assert bindings["QUANTITY"] == ("iri", kg.PREFIX_IRI["mhpo"]
+                                    + "MHPO_00030021")
+
+
 def test_a_value_is_written_in_its_parameters_unit():
     targets = {parameter["uri"]: parameter.get("unit_target")
                for parameter in json.loads(kwp.SPEC_PATH.read_text(

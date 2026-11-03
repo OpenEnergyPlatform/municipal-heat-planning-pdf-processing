@@ -82,11 +82,12 @@ table gives kwp's own answer.
 
 ## The extraction spec
 
-`profiles/kwp/extraction_spec.json` names five parameters. Four are
-numeric and share one shape: `energy_consumption`, `emission`, `heat_load`
-and `share`, each a `float` value carrying its own unit family and landing
-on a `value` node in the graph. The fourth, `planning_organisation`, is a
-`text` value with no unit at all, landing on an `organisation` node.
+`profiles/kwp/extraction_spec.json` names six parameters. Five are
+numeric and share one shape: `energy_consumption`, `emission`, `heat_load`,
+`share` and `building_count`, each a `float` value carrying its own unit
+family and landing on a `value` node in the graph. The last,
+`planning_organisation`, is a `text` value with no unit at all, landing on an
+`organisation` node.
 
 | parameter | value type | unit family | unit target | accepted spellings |
 |---|---|---|---|---|
@@ -94,22 +95,28 @@ on a `value` node in the graph. The fourth, `planning_organisation`, is a
 | `emission` | `float` | mass, CO2 equivalent | `OEO_00010137` | 48 |
 | `heat_load` | `float` | power (kW to GW) | `OEO_00390001` | 5 |
 | `share` | `float` | percent | `UO_0000187` | 2 |
+| `building_count` | `float` | a count of buildings | `UO_0000189` | 1 |
 | `planning_organisation` | `text` | none | none | none |
 
-`heat_load` is split from the two amounts purely by unit family, and `share`
+`heat_load` is split from the two amounts purely by unit family, `share`
 (Anteil, a part of a whole in percent, `fraction value` as its one class) by
-the percent sign; the spec marks both `integrated=False` (`docpipe/extraction/spec.py:131` to
-`137`), the flag that tells a rate apart from an amount stated over
-a span; the other two numeric parameters leave `integrated` at its
-default of true. An integrated parameter's units each say whether they name a
+the percent sign, and `building_count` (MHPO's `building count`, owner
+decision 2026-11-03) by its one unit, `Gebäude`; the spec marks all three
+`integrated=False` (`docpipe/extraction/spec.py:131` to `137`), the flag that
+tells a rate or a stock apart from an amount stated over a span; the other two
+numeric parameters leave `integrated` at its default of true. The MHPKG schema
+holds no building count yet, so the strict graph leaves it out, and the
+compute step, which adds only amounts over a span, does not sum it. An
+integrated parameter's units each say whether they name a
 period, `names_period`, and the loader refuses an entry that does not say
 (`spec._validate_unit_entry`): of the 12 entries of `energy_consumption` and the
-48 of `emission`, 34 say true ("kWh/a") and 26 say false ("kWh"), and the five
-of `heat_load` stay bare factors. The verifier flags `period:unstated` from that
+48 of `emission`, 34 say true ("kWh/a") and 26 say false ("kWh"), and the
+entries of `heat_load` and `building_count` stay bare factors. The verifier
+flags `period:unstated` from that
 statement alone, and it reaches no request and no stamp key, so changing one
 costs no re-read.
 
-All four numeric parameters share these five non-quantity axes, each
+All five numeric parameters share these five non-quantity axes, each
 a closed vocabulary except `year`, a plain integer:
 
 | axis | kind | vocabulary size | of which `out:` |
@@ -120,7 +127,8 @@ a closed vocabulary except `year`, a plain integer:
 | `spatial_scope` | vocabulary | 2 | 0 |
 | `year` | integer | (not applicable) | (not applicable) |
 
-`energy_consumption`, `emission` and `share` have a sixth, `technology`, a
+`energy_consumption`, `emission`, `share` and `building_count` have a sixth,
+`technology`, a
 heat generation technology class (10 entries, 2 of them `out:`); the data
 schema leaves it optional, so it is read from the value's own passage alone
 and a number the plan does not split by technology is `out:total` and writes
@@ -132,10 +140,11 @@ amounts in how its aggregation is decided:
 
 | parameter | `quantity` size (`out:`) | `aggregation` size (`out:`) | `aggregation` derived |
 |---|---|---|---|
-| `energy_consumption` | 9 (7) | 5 (0) | yes, from the unit |
+| `energy_consumption` | 21 (6) | 5 (0) | yes, from the unit |
 | `emission` | 9 (7) | 5 (0) | yes, from the unit |
-| `heat_load` | 6 (5) | 4 (0) | no, asked |
+| `heat_load` | 18 (4) | 4 (0) | no, asked |
 | `share` | 2 (1) | none | no axis |
+| `building_count` | 1 (0), derived from the unit | 5 (0) | yes, from the unit (instantaneous) |
 
 An axis or a parameter answer beginning `out:` is a deliberate non-class,
 not a gap. The convention is the core's: the sentinel a coordinate
@@ -482,6 +491,7 @@ Read from `profiles/kwp/extraction_schema.json` by `scripts/build_docs.py`. Each
 
 | parameter | value | axes | graph node |
 |---|---|---|---|
+| `building_count` | number | `aggregation` (5 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (1 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `technology` (10 options), `unit` (1 options), `year` (integer) | `value` |
 | `emission` | number | `aggregation` (5 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (9 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `technology` (10 options), `unit` (48 options), `year` (integer) | `value` |
 | `energy_consumption` | number | `aggregation` (5 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (21 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `technology` (10 options), `unit` (12 options), `year` (integer) | `value` |
 | `heat_load` | number | `aggregation` (4 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `quantity` (18 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `unit` (5 options), `year` (integer) | `value` |

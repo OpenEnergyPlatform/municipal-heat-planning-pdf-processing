@@ -4823,6 +4823,16 @@
     "UO_0000190"
    ]
   },
+  "UO_0000189": {
+   "alt_labels": [],
+   "definition": "\"A dimensionless unit which denotes a simple count of things.\" [MGED:MGED]",
+   "deprecated": false,
+   "kind": "class",
+   "label": "count unit",
+   "parents": [
+    "UO_0000186"
+   ]
+  },
   "UO_0000190": {
    "alt_labels": [],
    "definition": "\"A dimensionless unit which denotes an amount or magnitude of one quantity relative to another.\" [Wikipedia:Wikipedia]",

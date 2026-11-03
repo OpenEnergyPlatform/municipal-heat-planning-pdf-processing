@@ -51,6 +51,16 @@ def unit_of(row: dict) -> Optional[str]
 
 The unit the graph writes this value in, None outside the graph.
 
+### typed_as
+
+```python
+def typed_as(row: dict, schema_class: Optional[str] = None) -> str
+```
+
+The classes a value node is written as: its own, in the prefix of its
+ontology (a building count is MHPO's), and in the strict graph the
+schema's class above it.
+
 ### qualified
 
 ```python

@@ -132,6 +132,18 @@ def unit_of(row: dict) -> Optional[str]:
     if row.get("quantity") not in QUANTITIES:
         return None
     return UNIT_TARGET.get(row.get("parameter"))
+
+
+def typed_as(row: dict, schema_class: Optional[str] = None) -> str:
+    """The classes a value node is written as: its own, in the prefix of its
+    ontology (a building count is MHPO's), and in the strict graph the
+    schema's class above it."""
+    typed = qualified(row["quantity"])
+    if schema_class and SHAPE.cls(schema_class) != typed:
+        # A CO2-equivalent value IS a greenhouse gas emission value; a shape
+        # without a reasoner only sees the class written.
+        typed += f", {SHAPE.cls(schema_class)}"
+    return typed
 # How a value is aggregated over time or space is chosen by the model from
 # the five classes OEO carries under `aggregation type`. It used to always
 # say `integral` here, so a peak load was asserted as a year's sum.
@@ -1042,12 +1054,7 @@ def make_serializer(db_path: Path, strict: bool = False):
         for iri, row in values.items():
             lines = evidence_comment(row, name, transcribed=bool(transcribed),
                                      **marks.get(iri, {}))
-            typed = f"oeo:{row['quantity']}"
-            schema_class = schema_class_of(row) if strict else None
-            if schema_class and SHAPE.cls(schema_class) != typed:
-                # A CO2-equivalent value IS a greenhouse gas emission value;
-                # a shape without a reasoner only sees the class written.
-                typed += f", {SHAPE.cls(schema_class)}"
+            typed = typed_as(row, schema_class_of(row) if strict else None)
             lines += [f"<{iri}>",
                       f"    a {typed} ;",
                      f"    {P_NUMBER} \"{float(row['value_target'])!r}\"^^xsd:float ;",
@@ -1179,7 +1186,7 @@ def value_bindings(coordinates: dict) -> tuple:
     quantity = coordinates.get("quantity")
     if quantity in QUANTITIES:
         lines.append("  FILTER (?quantity = ?QUANTITY)")
-        bindings["QUANTITY"] = ("iri", OEO + quantity)
+        bindings["QUANTITY"] = ("iri", expand(qualified(quantity)))
     year = coordinates.get("year")
     if isinstance(year, int):
         lines.append("  FILTER (STR(?year) = ?YEAR)")
