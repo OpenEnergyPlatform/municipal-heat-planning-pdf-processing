@@ -133,8 +133,9 @@ The names of the coordinates a row carries, in a fixed order.
 def fields_of(row: dict) -> list
 ```
 
-Every field of a row a person can decide: the value, its unit where
-it has one, and each coordinate.
+Every field of a row a person can decide, each once: the value, its
+unit where it has one, and each coordinate. The unit is read with a
+quote like a coordinate, so it is one of those too.
 
 ### row_key
 
