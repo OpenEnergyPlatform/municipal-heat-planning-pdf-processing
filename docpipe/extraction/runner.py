@@ -84,10 +84,10 @@ from . import scheduler
 from . import scratch
 from . import trace
 from .wording import say
-from .pipeline import (YEAR_STATES, DocumentReport, Source, WorkItem,
+from .pipeline import (CELL, YEAR_STATES, DocumentReport, Source, WorkItem,
                        apply_frame, batch_uri,
                        build_sweeps, cell_index as pipeline_cell_index,
-                       column_head,
+                       cells_in_order, column_head,
                        drop_repeats, fold_batch, fold_claims, follow_up,
                        group_items,
                        harvest_document, in_several_rows, merge_field,
@@ -2493,6 +2493,10 @@ def expand_values(tuples: list) -> list:
     8 columns does not fit. Each value leaves here as a tuple of its own, so
     the check that its number stands in the quote runs per value, and one that
     does not is refused alone.
+
+    A number keeps its place in its row where the list is the row's numbers
+    cell by cell (`cells_in_order`): one printed in two cells is told apart
+    by it alone.
     """
     out = []
     for claim in tuples:
@@ -2500,9 +2504,10 @@ def expand_values(tuples: list) -> list:
             out.append(claim)
             continue
         own = {k: v for k, v in claim.items() if k not in ("value", "values")}
-        values = claim["values"]
-        out.extend({**own, "value": value}
-                   for value in (values if isinstance(values, list) else ()))
+        values = claim["values"] if isinstance(claim["values"], list) else []
+        cells = cells_in_order(claim.get("quote"), values) or [None] * len(values)
+        out.extend({**own, "value": value, **({CELL: cell} if cell else {})}
+                   for value, cell in zip(values, cells))
     return out
 
 
@@ -2890,7 +2895,8 @@ def _prior_payload(prior: list) -> list:
         item = {k: v for k, v in row.items()
                 if k not in ("provenance", "flags", "tier", "compute", "quote",
                              "head")
-                and not k.endswith(_EVIDENCE) and v is not None}
+                and not k.endswith(_EVIDENCE) and not k.startswith("_")
+                and v is not None}
         quote = row.get("quote")
         if isinstance(quote, str):
             item["quote"] = quote[:80]
@@ -3314,14 +3320,15 @@ def row_context(claim: dict, asked=()) -> dict:
     return out
 
 
-def cell_facts(value, quote, own=None) -> dict:
+def cell_facts(value, quote, own=None, head=None) -> dict:
     """Which cell of the quoted table row a number sits in and the head of
     that column. Three numbers under three year columns share one quote, and
     the column is what tells them apart: a fact already in hand here, so it
-    is handed over rather than left to be counted."""
+    is handed over rather than left to be counted. A number printed in two
+    cells has its *head* from its place in its row's list (`with_head`)."""
     cell = pipeline_cell_index(quote, value)
     if cell is None:
-        return {}
+        return {"head": head} if head else {}
     facts = {"column": cell[0], "columns": cell[1]}
     if own is not None and own.owner_kind == "table":
         head = column_head(own.text, *cell)
@@ -3434,7 +3441,8 @@ def _field_payload(shown: list, rows: list, slots,
         unit = row.claim.get("unit_raw") or row.claim.get("unit")
         if unit:
             entry["unit"] = unit
-        entry.update(cell_facts(entry["value"], entry["quote"], own))
+        entry.update(cell_facts(entry["value"], entry["quote"], own,
+                                row.claim.get("head")))
         listed.append(entry)
     asked_names = {slot.name for slot in
                    ([slots] if not isinstance(slots, (list, tuple)) else slots)}
@@ -3807,7 +3815,8 @@ def _review_payload(row: dict, shown: list, parameter, slots) -> dict:
                   if (s.owner_kind, s.owner_id) == (
                       provenance.get("owner_kind"),
                       provenance.get("owner_id"))), None)
-    listed.update(cell_facts(listed.get("value"), listed.get("quote"), owner))
+    listed.update(cell_facts(listed.get("value"), listed.get("quote"), owner,
+                             row.get("head")))
     asked = []
     for slot in slots:
         field = {"name": slot.name, "question": slot.question}

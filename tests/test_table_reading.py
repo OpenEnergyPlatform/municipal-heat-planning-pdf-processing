@@ -106,6 +106,93 @@ def test_the_harvest_file_may_carry_a_head():
     assert "head" in schema._tuple_schema(SPEC, PARAMETER)["properties"]
 
 
+# -- a number printed twice takes its column from its place ------------------
+
+YEARS = ("| Energieträger | 2022 | 2030 | 2045 |\n| --- | --- | --- | --- |\n"
+         "| Abfall | 27% | 28% | 27% |\n")
+ABFALL = "| Abfall | 27% | 28% | 27% |"
+EVERY_YEAR = ({"year": 2022}, {"year": 2030}, {"year": 2045})
+
+
+def listed(values, quote=ABFALL, text=YEARS, pairs=(), frame=None,
+           label="Q1"):
+    """The rows a reply listing one table row makes, and its orphans."""
+    reply = runner._parse_reply(json.dumps({"status": "complete", "tuples": [
+        {"source": label, "values": values, "quote": quote}]}))
+    batch = pipeline.Batch(1, None, [pipeline.WorkItem(
+        1, None, Source("table", 1, text, {}))])
+    batch.pairs, batch.frame = tuple(pairs), frame
+    return pipeline.rows_from_reply(batch, reply, FRAME, SPEC)
+
+
+def test_a_number_printed_twice_takes_the_head_of_its_place_in_the_row():
+    rows, _orphans = listed([27, 28, 27])
+    assert [row.claim.get("head") for row in rows] == ["2022", "2030", "2045"]
+
+
+def test_a_list_that_is_not_its_row_cell_by_cell_places_no_repeat():
+    rows, _orphans = listed([27, 27])
+    assert [row.claim.get("head") for row in rows] == [None, None]
+    rows, _orphans = listed([28, 27, 27])
+    assert [row.claim.get("head") for row in rows] == ["2030", None, None]
+
+
+def test_the_place_of_a_number_reaches_no_row_no_orphan_and_no_prompt():
+    rows, _orphans = listed([27, 28, 27])
+    assert not any(pipeline.CELL in row.claim for row in rows)
+    _rows, orphans = listed([27, 28, 27], label="Q9",
+                            quote="| Gewerbe | 27% | 28% | 27% |")
+    assert orphans and not any(pipeline.CELL in o for o in orphans)
+    prior = runner._prior_payload([{"value": 27, pipeline.CELL: (2, 4)}])
+    assert prior == [{"value": 27}]
+
+
+def test_a_field_request_shows_a_repeated_number_the_head_of_its_place():
+    source = SimpleNamespace(owner_kind="table", owner_id=1, text=YEARS)
+    assert runner.cell_facts(27, ABFALL, source, "2045") == {"head": "2045"}
+    assert runner.cell_facts(27, ABFALL, source) == {}
+
+
+# -- a head that prints a year of the plan is the year of its column ---------
+
+def test_a_head_printing_a_year_of_the_pairs_is_the_year_of_its_numbers():
+    rows, _orphans = listed([27, 28, 27], pairs=EVERY_YEAR)
+    assert [row.claim["year"] for row in rows] == [2022, 2030, 2045]
+    claim = rows[1].claim
+    assert claim["year_state"] == fields.READ
+    assert claim["year_quote"] == "| Energieträger | 2022 | 2030 | 2045 |"
+    assert (claim["year_source"], claim["year_window"]) == (["table", 1],
+                                                            ["head", 3])
+    assert pipeline.open_rows(rows, YEAR) == []
+
+
+def test_a_year_no_pair_has_or_two_years_in_a_head_are_not_taken():
+    rows, _orphans = listed([27, 28, 27], pairs=({"year": 2022},
+                                                 {"year": 2045}))
+    assert [row.claim.get("year") for row in rows] == [2022, None, 2045]
+    two = ("| Sektor | 2022 bis 2030 |\n| --- | --- |\n| Wohnen | 120 |\n")
+    rows, _orphans = listed([120], quote="| Wohnen | 120 |", text=two,
+                            pairs=EVERY_YEAR)
+    assert "year" not in rows[0].claim
+
+
+def test_a_year_read_off_its_head_fits_the_harvest_file():
+    window = schema._tuple_schema(SPEC, PARAMETER)["properties"]["year_window"]
+    jsonschema.validate(["head", 3], window)
+
+
+def test_a_number_of_another_column_keeps_the_pair_of_its_year():
+    rows, _orphans = listed([27, 28, 27], pairs=({"year": 2045},
+                                                 {"year": 2022}),
+                            frame={"year": 2045})
+    assert (rows[0].pair, rows[0].pair_index) == ({"year": 2022}, 1)
+    assert rows[2].pair is None
+    two = ({"year": 2045}, {"year": 2022, "scenario": "status_quo"},
+           {"year": 2022, "scenario": "target"})
+    rows, _orphans = listed([27, 28, 27], pairs=two, frame={"year": 2045})
+    assert rows[0].pair is None and rows[0].claim["year"] == 2022
+
+
 def graph_row(value, **more):
     return {"quantity": "OEO_00050016", "year": 2045, "value": value,
             "value_target": float(value), "subject": "Wohnen",

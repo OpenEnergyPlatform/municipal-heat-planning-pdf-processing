@@ -277,7 +277,19 @@ contested, and stays out of the strict graph (owner decision 2026-11-02).
 A number from a table carries the words over its column, where a head line
 has as many cells as the row (`column_head`): the field request shows them, and
 the tuple keeps them as `head` (`with_head`), where the graph tells two numbers
-of one row apart by them (`wording_key`). On the map's places a window is asked once per batch with an open row (`Sweeping.portions`):
+of one row apart by them (`wording_key`). Its column is the one cell that prints
+its number, or, for a number printed in two cells, its place in the row's
+`values` where that list is the row's numbers cell by cell (`cells_in_order`,
+owner decision 2026-11-03): one plan's row "27 % | 28 % | 27 % | 23 %" gave both
+27 % one year. The place travels as `_cell` from `expand_values` to the row and
+no further. A head that prints one year, and that year one of the document's
+pairs, is the year of the numbers under it (`head_year`, owner decision
+2026-11-03): `read`, cited on the head line, the window `head` with the column as
+index, and not asked. Asked, the model gave 28 % under the head 2035 the year
+2045. A year of the pairs only, since "bis 1918" heads an age class. A number of
+another column than its request's pair is filed under the pair of its head's
+year where one pair has it, so the scenario is that pair's too (`head_pair`).
+On the map's places a window is asked once per batch with an open row (`Sweeping.portions`):
 in one request with rows of other batches the model answered a row with a quote
 that row cannot be checked against. A share carries `whole`, what it is a share
 of, read from its own passage alone.

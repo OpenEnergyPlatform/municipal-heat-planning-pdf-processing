@@ -543,6 +543,60 @@ def cell_index(quote: str, value) -> Optional[tuple]:
     return (hits[0], len(cells)) if len(hits) == 1 else None
 
 
+# The cell of a number by its place in its row's list (`cells_in_order`),
+# from the reply to the row it becomes, and never further.
+CELL = "_cell"
+
+
+def cells_in_order(quote, values) -> Optional[list]:
+    """(cell, cells) of each number of an entry that lists one table row, in
+    its order, or None.
+
+    The rows request writes a row's numbers in the order of its cells, so a
+    number printed in two cells is told apart by its place in the list, where
+    `cell_index` cannot tell it by its value (owner decision 2026-11-03): one
+    plan's row "27 % | 28 % | 27 % | 23 %" gave both 27 % one year. Only where
+    the list is the row's numbers cell by cell: one table row, each cell that
+    prints a number printing one, the n-th of them the n-th of the list. A
+    wrong column is worse than none.
+    """
+    if not isinstance(quote, str) or not isinstance(values, list):
+        return None
+    rows = [line for line in quote.splitlines() if line.count("|") >= 2]
+    if len(rows) != 1:
+        return None
+    cells = [c.strip() for c in rows[0].strip().strip("|").split("|")]
+    numbered = [(index, numbers_in(cell))
+                for index, cell in enumerate(cells, start=1)]
+    numbered = [(index, found) for index, found in numbered if found]
+    if len(numbered) != len(values):
+        return None
+    out = []
+    for (index, found), value in zip(numbered, values):
+        if len(found) != 1 or canonical_number(value) not in found:
+            return None
+        out.append((index, len(cells)))
+    return out
+
+
+def head_cells(table: str, cell: int, cells: int) -> list:
+    """(line, words) of each head line over this cell of a table, top first,
+    each wording once. Only head lines with as many cells as the row."""
+    lines = [line for line in (table or "").splitlines()
+             if line.count("|") >= 2]
+    rule = next((index for index, line in enumerate(lines)
+                 if "-" in line and set(line) <= set("|:- \t")), None)
+    if not rule:
+        return []
+    out: list = []
+    for line in lines[:rule]:
+        row = [c.strip() for c in line.strip().strip("|").split("|")]
+        if (len(row) == cells and row[cell - 1]
+                and row[cell - 1] not in (words for _line, words in out)):
+            out.append((line.strip(), row[cell - 1]))
+    return out
+
+
 def column_head(table: str, cell: int, cells: int) -> Optional[str]:
     """The words over this cell of a table, or None.
 
@@ -551,33 +605,88 @@ def column_head(table: str, cell: int, cells: int) -> Optional[str]:
     "Wärmenetze". The head is in hand here, so it goes over as words. Only from
     head lines with as many cells as the row: a wrong head is worse than none.
     """
-    lines = [line for line in (table or "").splitlines()
-             if line.count("|") >= 2]
-    rule = next((index for index, line in enumerate(lines)
-                 if "-" in line and set(line) <= set("|:- \t")), None)
-    if not rule:
+    return " / ".join(words for _line, words
+                      in head_cells(table, cell, cells)) or None
+
+
+def year_axis(frame_axes: Optional[list]) -> Optional[str]:
+    """The frame coordinate that dates a pair: its one number coordinate."""
+    dated = [slot.name for slot in frame_axes or () if slot.kind == NUMBER]
+    return dated[0] if len(dated) == 1 else None
+
+
+def head_year(source, cell: tuple, pairs: tuple,
+              frame_axes: Optional[list]) -> Optional[dict]:
+    """The year the head of this column names, as the row's reading, or None.
+
+    A column head that prints one year, and that year one of the document's
+    pairs, is the year of the numbers under it: read off the table, not asked
+    (owner decision 2026-11-03). Asked, the model gave 28 % under the head
+    2035 the year 2045. A year of the pairs only: "bis 1918" heads an age
+    class and no year of the plan's numbers. Cited on the head line that
+    prints it, the window `head` with the column as its index.
+    """
+    axis = year_axis(frame_axes)
+    if axis is None:
         return None
-    words: list = []
-    for line in lines[:rule]:
-        row = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(row) == cells and row[cell - 1] and row[cell - 1] not in words:
-            words.append(row[cell - 1])
-    return " / ".join(words) or None
+    years = {pair.get(axis) for pair in pairs or () if pair}
+    printed = [(int(year), line, words)
+               for line, words in head_cells(source.text, *cell)
+               for year in PRINTED_YEAR.findall(words)
+               if year_in_range(int(year))]
+    if len({year for year, _line, _words in printed}) != 1:
+        return None
+    year, line, words = printed[0]
+    if year not in years or len(line) < 8:
+        return None
+    return {axis: year, f"{axis}_state": READ, f"{axis}_raw": words,
+            f"{axis}_quote": line,
+            f"{axis}_source": [source.owner_kind, source.owner_id],
+            f"{axis}_window": ["head", cell[0]]}
 
 
-def with_head(claim: dict, source) -> dict:
-    """The claim with the head of its column, a fact of the table.
+def with_head(claim: dict, source, pairs: tuple = (),
+              frame_axes: Optional[list] = None) -> dict:
+    """The claim with the head of its column, a fact of the table, and the
+    year that head names (`head_year`).
 
     "0 %" in a row of seven classes says nothing without its column, and 28 of
     90 rows read from corpus tables did not know theirs: the head was shown to
     the model and left no trace. Kept beside the number, it tells two numbers
-    of one row apart wherever a graph or a reader needs that.
+    of one row apart wherever a graph or a reader needs that. The cell is the
+    number's place in its row's list where the reply listed the row cell by
+    cell (`cells_in_order`), else the one cell that prints the number.
     """
-    cell = cell_index(claim.get("quote"), claim.get("value"))
+    own = {key: value for key, value in claim.items() if key != CELL}
+    cell = (claim.get(CELL)
+            or cell_index(claim.get("quote"), claim.get("value")))
     if cell is None or getattr(source, "owner_kind", None) != "table":
-        return dict(claim)
+        return own
     head = column_head(source.text, *cell)
-    return {**claim, "head": head} if head else dict(claim)
+    if head:
+        own["head"] = head
+    year = head_year(source, cell, pairs, frame_axes)
+    if year is not None and own.get(
+            f"{year_axis(frame_axes)}_state") != READ:
+        own.update(year)
+    return own
+
+
+def head_pair(claim: dict, pairs: tuple, current: Optional[dict],
+              frame_axes: Optional[list]) -> Optional[tuple]:
+    """(pair, index) of the year a row took from its column head, where that
+    is not the year of *current* and exactly one pair of the document has it:
+    the row's scenario is then that pair's too, not the request's."""
+    axis = year_axis(frame_axes)
+    if axis is None:
+        return None
+    window = claim.get(f"{axis}_window") or (None,)
+    year = claim.get(axis)
+    if window[0] != "head" or (current or {}).get(axis) == year:
+        return None
+    found = [(pair, index) for index, pair in enumerate(pairs or ())
+             if pair and pair.get(axis) == year]
+    return found[0] if len(found) == 1 else None
 
 
 def _invented_wording(claim: dict, spec=None) -> bool:
@@ -767,17 +876,22 @@ def rows_from_reply(batch: Batch, reply: Optional[dict],
                 if _invented_wording(claim, spec):
                     orphans.append(dict(claim, _why="text value not in its quote"))
                     continue
+                claim = with_head(claim, source, batch.pairs, frame_axes)
                 elsewhere = pair_of_claim(claim, batch.pairs,
                                           frame_axes or [], batch.frame)
                 if elsewhere is None:
                     elsewhere = theirs
+                # The year its column head names files a row under that
+                # year's pair, where one pair has it.
+                elsewhere = head_pair(claim, batch.pairs,
+                                      elsewhere[0] if elsewhere else None,
+                                      frame_axes) or elsewhere
                 if elsewhere is None:
                     orphans.append(dict(claim, _why="passage is not of this pair"))
                     continue
                 pair, pair_index = elsewhere
                 rows.append(Row(label=row_label(len(rows)),
-                                item_index=item_index,
-                                claim=with_head(claim, source),
+                                item_index=item_index, claim=claim,
                                 pair=pair, pair_index=pair_index))
             continue
         for claim in claims:
@@ -792,10 +906,18 @@ def rows_from_reply(batch: Batch, reply: Optional[dict],
                 # still refused with its own reason, it just costs nothing.
                 orphans.append(dict(claim, _why="text value not in its quote"))
                 continue
+            claim = with_head(claim, source, batch.pairs, frame_axes)
+            # A number of another column than the request's pair, its year
+            # read off its head, keeps the pair of that year, scenario and all.
+            moved = (head_pair(claim, batch.pairs, batch.frame, frame_axes)
+                     if batch.frame else None)
             rows.append(Row(label=row_label(len(rows)),
-                            item_index=item_index,
-                            claim=with_head(claim, source)))
-    return rows, orphans
+                            item_index=item_index, claim=claim,
+                            **({"pair": moved[0], "pair_index": moved[1]}
+                               if moved else {})))
+    return rows, [claim if CELL not in claim
+                  else {key: value for key, value in claim.items()
+                        if key != CELL} for claim in orphans]
 
 def answer_in_quote(slot, given, wording: Optional[str], quote: str) -> bool:
     """Does the coordinate actually stand in the passage cited for it?

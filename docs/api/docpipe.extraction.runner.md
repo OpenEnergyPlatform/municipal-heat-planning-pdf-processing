@@ -1740,6 +1740,10 @@ per value was most of a long answer: 59 tokens a value at the median, so
 the check that its number stands in the quote runs per value, and one that
 does not is refused alone.
 
+A number keeps its place in its row where the list is the row's numbers
+cell by cell (`cells_in_order`): one printed in two cells is told apart
+by it alone.
+
 ### split_table
 
 ```python
@@ -1797,13 +1801,14 @@ and its wording is the unit, so it says nothing about the number.
 ### cell_facts
 
 ```python
-def cell_facts(value, quote, own=None) -> dict
+def cell_facts(value, quote, own=None, head=None) -> dict
 ```
 
 Which cell of the quoted table row a number sits in and the head of
 that column. Three numbers under three year columns share one quote, and
 the column is what tells them apart: a fact already in hand here, so it
-is handed over rather than left to be counted.
+is handed over rather than left to be counted. A number printed in two
+cells has its *head* from its place in its row's list (`with_head`).
 
 ### own_title
 

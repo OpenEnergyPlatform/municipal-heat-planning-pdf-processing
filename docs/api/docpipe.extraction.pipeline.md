@@ -404,6 +404,32 @@ None whenever it is not certain: no table row, the value in no cell, the
 same number in two of them, or on two rows of the quote. A wrong column is
 worse than none.
 
+### cells_in_order
+
+```python
+def cells_in_order(quote, values) -> Optional[list]
+```
+
+(cell, cells) of each number of an entry that lists one table row, in
+its order, or None.
+
+The rows request writes a row's numbers in the order of its cells, so a
+number printed in two cells is told apart by its place in the list, where
+`cell_index` cannot tell it by its value (owner decision 2026-11-03): one
+plan's row "27 % | 28 % | 27 % | 23 %" gave both 27 % one year. Only where
+the list is the row's numbers cell by cell: one table row, each cell that
+prints a number printing one, the n-th of them the n-th of the list. A
+wrong column is worse than none.
+
+### head_cells
+
+```python
+def head_cells(table: str, cell: int, cells: int) -> list
+```
+
+(line, words) of each head line over this cell of a table, top first,
+each wording once. Only head lines with as many cells as the row.
+
 ### column_head
 
 ```python
@@ -417,18 +443,57 @@ and over a wide row it often read none: "no carrier" under a column headed
 "Wärmenetze". The head is in hand here, so it goes over as words. Only from
 head lines with as many cells as the row: a wrong head is worse than none.
 
+### year_axis
+
+```python
+def year_axis(frame_axes: Optional[list]) -> Optional[str]
+```
+
+The frame coordinate that dates a pair: its one number coordinate.
+
+### head_year
+
+```python
+def head_year(source, cell: tuple, pairs: tuple,
+              frame_axes: Optional[list]) -> Optional[dict]
+```
+
+The year the head of this column names, as the row's reading, or None.
+
+A column head that prints one year, and that year one of the document's
+pairs, is the year of the numbers under it: read off the table, not asked
+(owner decision 2026-11-03). Asked, the model gave 28 % under the head
+2035 the year 2045. A year of the pairs only: "bis 1918" heads an age
+class and no year of the plan's numbers. Cited on the head line that
+prints it, the window `head` with the column as its index.
+
 ### with_head
 
 ```python
-def with_head(claim: dict, source) -> dict
+def with_head(claim: dict, source, pairs: tuple = (),
+              frame_axes: Optional[list] = None) -> dict
 ```
 
-The claim with the head of its column, a fact of the table.
+The claim with the head of its column, a fact of the table, and the
+year that head names (`head_year`).
 
 "0 %" in a row of seven classes says nothing without its column, and 28 of
 90 rows read from corpus tables did not know theirs: the head was shown to
 the model and left no trace. Kept beside the number, it tells two numbers
-of one row apart wherever a graph or a reader needs that.
+of one row apart wherever a graph or a reader needs that. The cell is the
+number's place in its row's list where the reply listed the row cell by
+cell (`cells_in_order`), else the one cell that prints the number.
+
+### head_pair
+
+```python
+def head_pair(claim: dict, pairs: tuple, current: Optional[dict],
+              frame_axes: Optional[list]) -> Optional[tuple]
+```
+
+(pair, index) of the year a row took from its column head, where that
+is not the year of *current* and exactly one pair of the document has it:
+the row's scenario is then that pair's too, not the request's.
 
 ### pair_in_text
 

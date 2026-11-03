@@ -253,7 +253,7 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
             "type": "array",
             "prefixItems": [{"enum": ["own", "found", "retrieval", "rest",
                                       "places", "frame", "table", "base_year",
-                                      "target_year"]},
+                                      "target_year", "head"]},
                             {"type": "integer"}],
             "minItems": 2, "maxItems": 2,
             "description": f"[stage, index] of the window '{name}' was read "
@@ -268,7 +268,10 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"prints the number. `target_year`: the same for "
                            f"the document's target. `table`: read once for "
                            f"the row's table and taken by this row, and the "
-                           f"index is the window it was read in."},
+                           f"index is the window it was read in. `head`: the "
+                           f"year the head of the row's column prints, one "
+                           f"of the document's pairs, taken off the table "
+                           f"and not asked; the index is the column."},
         f"{name}_link_quote": {
             "type": "string", "minLength": MIN_QUOTE_CHARS,
             "description": f"Only with window `base_year` or `target_year`: "
