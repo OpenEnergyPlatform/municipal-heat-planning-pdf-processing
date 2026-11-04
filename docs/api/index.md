@@ -112,7 +112,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.preflight](docpipe.extraction.preflight.md): A profile, everything a corpus run rests on. (11 functions)
 - [docpipe.extraction.provenance](docpipe.extraction.provenance.md): Where every value of a graph comes from, as a graph. (1 class, 3 functions)
 - [docpipe.extraction.queries](docpipe.extraction.queries.md): Expands a profile's query templates into retrieval probes drawn from the spec. (1 function)
-- [docpipe.extraction.reading](docpipe.extraction.reading.md): The values of one parameter in the passages the survey named for it, every coordinate of a value in the same request. (4 classes, 34 functions)
+- [docpipe.extraction.reading](docpipe.extraction.reading.md): The values of one parameter in the passages the survey named for it: one request names the values, then one request per group of the spec names where that group's coordinates stand. (4 classes, 48 functions)
 - [docpipe.extraction.recheck](docpipe.extraction.recheck.md): Reapplies the answer-in-quote rule to a harvest written before the rule existed. (3 functions)
 - [docpipe.extraction.remap](docpipe.extraction.remap.md): Re-resolves a moved or grown vocabulary against a harvest already on disk. (10 functions)
 - [docpipe.extraction.replies](docpipe.extraction.replies.md): The reply each extraction request asks for, as a JSON schema. (6 functions)

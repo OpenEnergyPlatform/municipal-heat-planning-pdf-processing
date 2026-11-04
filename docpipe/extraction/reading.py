@@ -1,34 +1,37 @@
 """
 reading.py: The values of one parameter in the passages the survey named for
-it, every coordinate of a value in the same request.
+it: one request names the values, then one request per group of the spec
+names where that group's coordinates stand.
 
-Step 3 of the rebuilt harvest (owner decision 2026-11-04). Numbers are read
-by their cell, everything else is named with a quote. A table is read for a
-parameter whose values are numbers, in parts where it is longer than the
-survey's two pages (owner decision 2026-11-04): every part shows the table's
-title and head lines, the text around the table and the plan's pairs; the
+Step 3 of the rebuilt harvest (owner decision 2026-11-04). Every request has
+one task (owner decision 2026-11-04): a prompt that needs a long explanation
+does several things at once. Numbers are read by their cell, everything else
+is named with a quote. A table is read for a parameter whose values are
+numbers, in parts where it is longer than the survey's two pages: every part
+shows the table's title and head lines and the text around the table; the
 first part is asked first, and the rows under the rule it names as head go
-with every later one. A request names each value of its part by its cell,
-row and column, and where the cell prints several numbers, a value with its
-share in brackets or values stacked in one cell, how many and which of them;
-each coordinate stands at the value itself, at a row label, at a column head
+with every later one. The cells request of a part names each value by its
+cell, row and column, and where the cell prints several numbers, a value
+with its share in brackets or values stacked in one cell, how many and which
+of them. Code reads the number from the cell by its place, never by its
+value: a table row "27 % | 28 % | 27 % | 23 %" gives each 27 % its own
+column. A part whose cells reply was cut off is asked again as two halves,
+and a single row still cut off is a hole of its own. Then each group of the
+spec (`Spec.groups`, `groups_of`) is asked in a request of its own where its
+coordinates stand: at the value itself, at a row label, at a column head
 (for one place in its cells or for the whole column) or for the whole table,
-each with its quote; the reply gives the coordinates first and the cells
-last (`table_response_format`). Code reads the number from the cell by its
-place, never by its value: a table row "27 % | 28 % | 27 % | 23 %" gives
-each 27 % its own column. A part whose reply was cut off is asked again as
-two halves, and a single row still cut off is a hole of its own. A section,
-a figure, and a table for any other parameter, is read in one request that
-names its values with every coordinate at once, each with its own quote. A
-category parameter's request shows its entries, and its grammar takes one of
-them for a value, or "" where the model is unsure and writes the wording into
-value_raw; the fold checks that value as it checks every one.
+each with its quote and with the spec's words for where a plan prints the
+group. A section, a figure, and a table for any other parameter, is asked
+for its values first, each with its wording and its quote, and then per
+group for the coordinates of those values. A category parameter's values
+request shows its entries, and its grammar takes one of them for a value,
+or "" where the model is unsure and writes the wording into value_raw; the
+fold checks that value as it checks every one.
 
-Every coordinate is answered: the grammar requires each of them, a value's
-entry in text and a table's entry for the whole table, and "the passage does
-not say" is one of the answers (`fields.UNSTATED`). One request for all
-coordinates is otherwise the request that lets a model drop the one it is
-unsure of (fields.py).
+Every coordinate is answered: the grammar of a group request requires each
+of its coordinates, a value's entry in text and a table's entry for the
+whole table, and "the passage does not say" is one of the answers
+(`fields.UNSTATED`).
 
 Nothing is checked here. Every coordinate goes through `pipeline.merge_field`,
 the check every field answer of the harvest goes through, and every value
@@ -44,7 +47,6 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import collections
-import functools
 import json
 import re
 import sys
@@ -59,8 +61,15 @@ from .verify import (number_outside_quote, numbers_in, numbers_in_order,
                      quote_in)
 from .wording import say
 
+# Which cells of a table hold the parameter's values, and where one group's
+# coordinates stand in it; the values of a passage, and one group's
+# coordinates of them.
+READ_CELLS_PROMPT_ID = "extraction/read_cells"
 READ_TABLE_PROMPT_ID = "extraction/read_table"
+READ_VALUES_PROMPT_ID = "extraction/read_values"
 READ_TEXT_PROMPT_ID = "extraction/read_text"
+PROMPT_IDS = (READ_CELLS_PROMPT_ID, READ_TABLE_PROMPT_ID,
+              READ_VALUES_PROMPT_ID, READ_TEXT_PROMPT_ID)
 
 # What a request came to besides a reply: too long to be sent, or an answer
 # that did not fit its token limit.
@@ -149,6 +158,29 @@ def slots_of(spec, parameter) -> list:
     return out + fields.asked_slots(parameter)
 
 
+def groups_of(spec, slots: list) -> list:
+    """[(group, its slots)] of *slots*, in the order of the spec's groups:
+    one request each (owner decision 2026-11-04). The spec puts every
+    coordinate in exactly one group (`spec._validate_groups`)."""
+    return [(group, [slot for slot in slots
+                     if slot.name in group.coordinates])
+            for group in spec.groups.values()
+            if any(slot.name in group.coordinates for slot in slots)]
+
+
+def group_context(context: dict, group_slots: list, frame_slots: list,
+                  bases: list) -> dict:
+    """What a group's request shows beside the passage: the text around it,
+    and the survey's pairs and the plan's years only where the group asks a
+    frame coordinate."""
+    names = {slot.name for slot in group_slots}
+    shown = {"around": context["around"]} if context.get("around") else {}
+    if names & {slot.name for slot in frame_slots}:
+        shown["known"] = context.get("known") or []
+    shown.update(years_of(bases, group_slots))
+    return shown
+
+
 def coordinate_shown(slot) -> dict:
     shown: dict = {"question": slot.question}
     if slot.is_closed:
@@ -159,13 +191,18 @@ def coordinate_shown(slot) -> dict:
 
 
 def answer_schema(slot, where: Optional[str] = None) -> dict:
-    """One coordinate's answer as the grammar takes it, at a row or a column
-    when *where* names it."""
+    """One coordinate's answer as the grammar takes it, at a row, a column
+    or a single value's cell when *where* names it."""
     properties = {"value": fields.value_schema(slot),
                   "value_raw": {"type": "string"},
                   "quote": {"type": "string"}}
     required = ["value"]
-    if where:
+    if where == "cell":
+        place = {"row": {"type": "integer"}, "column": {"type": "integer"},
+                 "part": {"type": "integer"}}
+        properties = {**place, **properties}
+        required = ["row", "column", "value"]
+    elif where:
         place = {where: {"type": "integer"}}
         if where == "column":
             # A place in the cells of the column, where they print several
@@ -431,14 +468,17 @@ def part_of(grid: Grid, block: list, head: list = ()) -> Grid:
                 [grid.body[n - 1] for n in block], grid.columns, list(block))
 
 
-def table_payload(source: Source, grid: Grid, parameter, slots: list,
-                  context: dict, corrections: Optional[list] = None) -> dict:
-    """The table request: the table or the part of it *grid* holds, the text
-    around it and *context* (`Reader.context_of`, and which part this is);
-    with *corrections* the same request asked once more, what was wrong with
-    the first reply beside it."""
+def parameter_shown(parameter) -> dict:
+    return {"key": parameter.uri, "label": parameter.label,
+            "definition": parameter.description}
+
+
+def table_view(source: Source, grid: Grid, context: dict) -> dict:
+    """What every request of a table shows: the table or the part of it
+    *grid* holds, the text around it, its columns by head and its rows by
+    label, and which part this is."""
     provenance = source.provenance or {}
-    payload = {
+    return {
         "table": {"section": provenance.get("section_title"),
                   "text": source.text},
         **({"around": context["around"]} if context.get("around") else {}),
@@ -448,53 +488,95 @@ def table_payload(source: Source, grid: Grid, parameter, slots: list,
         "rows": [{"row": r, "label": next((cell for cell in cells if cell),
                                           "")}
                  for r, (_line, cells) in zip(grid.row_numbers(), grid.body)],
-        "parameter": {"key": parameter.uri, "label": parameter.label,
-                      "definition": parameter.description},
-        "coordinates": {slot.name: coordinate_shown(slot) for slot in slots},
-        **{key: value for key, value in context.items() if key != "around"}}
+        **({"part": context["part"]} if context.get("part") else {})}
+
+
+def cells_payload(source: Source, grid: Grid, parameter,
+                  context: dict) -> dict:
+    """The cells request of a table: the table, the text around it and the
+    parameter, nothing of its coordinates."""
+    return {**table_view(source, grid, context),
+            "parameter": parameter_shown(parameter)}
+
+
+def cells_response_format() -> dict:
+    """The cells that hold the parameter's values, each by its row and
+    column and, where the cell prints several numbers, how many (`parts`)
+    and which of them (`part`, from 1); the rows under the rule that belong
+    to the head, named by the first part of a table read in parts; what is
+    wrong with the Markdown.
+
+    The cells come last (owner decision 2026-11-04): on a server that does
+    not hold a reply to its schema, a reply that ended deep in its objects
+    closed one object short on large tables. Every object lists its keys in
+    the order the prompt names them (owner decision 2026-11-04): a server
+    that holds a reply to its schema has the model write them in the
+    schema's order, so a key listed before one already written can no
+    longer come. With `part` before `parts`, every cell that prints several
+    numbers came without its place."""
+    value = {"type": "object", "properties": {
+        "row": {"type": "integer"}, "column": {"type": "integer"},
+        "parts": {"type": "integer"}, "part": {"type": "integer"}},
+        "required": ["row", "column"], "additionalProperties": False}
+    schema = {"type": "object", "properties": {
+        "head_rows": {"type": "array", "items": {"type": "integer"}},
+        "faulty": {"type": "string"},
+        "values": {"type": "array", "items": value}},
+        "required": ["values"], "additionalProperties": False}
+    return {"type": "json_schema",
+            "json_schema": {"name": "cells_reply", "schema": schema}}
+
+
+def cell_shown(key: tuple) -> dict:
+    """A value's cell as a group request shows it: its row and column, and
+    its place where the cell prints several numbers."""
+    r, c, part = key
+    return {"row": r, "column": c, **({"part": part} if part else {})}
+
+
+def table_payload(source: Source, grid: Grid, parameter, slots: list,
+                  cells: list, where: str, context: dict,
+                  corrections: Optional[list] = None) -> dict:
+    """One group's request of a table: the table and the text around it, the
+    cells of the parameter's values (*cells*, `cell_shown`), the group's
+    coordinates with the spec's words for where a plan prints them
+    (*where*), and *context* (`group_context`, which part this is, what the
+    request fetched with its tools); with *corrections* the same request
+    asked once more, what was wrong with the first reply beside it."""
+    payload = {**table_view(source, grid, context),
+               "parameter": parameter_shown(parameter),
+               "values": list(cells),
+               "coordinates": {slot.name: coordinate_shown(slot)
+                               for slot in slots},
+               "where": where,
+               **{key: value for key, value in context.items()
+                  if key not in ("around", "part")}}
     if corrections:
         payload["corrections"] = corrections
     return payload
 
 
 def table_response_format(slots: list) -> dict:
-    """Every value the request shows named by its cell, and every coordinate
-    answered, at least for the whole table: its entry there is the answer of
-    every value no value, row or column entry answers, and UNSTATED when the
-    table does not print it.
-
-    The cells come last (owner decision 2026-11-04): a reply that named them
-    first ended four objects deep, and on a server that does not hold a
-    reply to its schema the model closed one object short on large tables,
-    the same way on every attempt. A list of cells at the end closes in
-    three."""
+    """Where each of a group's coordinates stands in a table, each answered
+    at least for the whole table: its entry there is the answer of every
+    value no cell, row or column entry answers, and UNSTATED when the table
+    does not print it. The keys in the order the prompt names them
+    (`cells_response_format`): rows, columns, single cells, the table."""
     coordinates = {
         slot.name: {"type": "object", "properties": {
-            "table": answer_schema(slot),
+            "rows": {"type": "array", "items": answer_schema(slot, "row")},
             "columns": {"type": "array",
                         "items": answer_schema(slot, "column")},
-            "rows": {"type": "array", "items": answer_schema(slot, "row")}},
+            "cells": {"type": "array", "items": answer_schema(slot, "cell")},
+            "table": answer_schema(slot)},
             "required": ["table"], "additionalProperties": False}
         for slot in slots}
-    # A value by its cell: its row and column, and where the cell prints
-    # several numbers how many (`parts`) and which of them (`part`, from 1);
-    # a coordinate only this value has rides on its own entry.
-    value = {"type": "object", "properties": {
-        "row": {"type": "integer"}, "column": {"type": "integer"},
-        "part": {"type": "integer"}, "parts": {"type": "integer"},
-        **{slot.name: answer_schema(slot) for slot in slots}},
-        "required": ["row", "column"], "additionalProperties": False}
     schema = {"type": "object", "properties": {
         "coordinates": {"type": "object", "properties": coordinates,
                         "required": [slot.name for slot in slots],
                         "additionalProperties": False},
-        # The rows under the rule that belong to the head, named by the
-        # first part of a table read in parts and shown with every later one.
-        "head_rows": {"type": "array", "items": {"type": "integer"}},
-        "more": more_schema(), "faulty": {"type": "string"},
-        "values": {"type": "array", "items": value}},
-        "required": ["coordinates", "values"],
-        "additionalProperties": False}
+        "more": more_schema()},
+        "required": ["coordinates"], "additionalProperties": False}
     return {"type": "json_schema",
             "json_schema": {"name": "table_reply", "schema": schema}}
 
@@ -564,26 +646,44 @@ def answer_of(entry: dict) -> dict:
 
 
 VALUES, ROWS, COLUMNS, TABLE = "values", "rows", "columns", "table"
+CELLS = "cells"
+
+
+def labels_at(at: dict, row, column, part) -> list:
+    """The values a group reply's entry for one cell answers for: the value
+    at that row, column and place, where the cell prints several numbers,
+    or every value of the cell where the entry names no place; a place 1 of
+    a cell that prints one number is that number."""
+    if not (isinstance(row, int) and isinstance(column, int)):
+        return []
+    out = []
+    for label, (r, c, p) in at.items():
+        if (r, c) != (row, column):
+            continue
+        if part is None or p == part or (p is None and part == 1):
+            out.append(label)
+    return out
 
 
 def table_replies(reply: dict, slot, at: dict) -> list:
-    """[(level, window, field reply)] of one coordinate of a table reply,
-    the most particular first: the value's own entry, a row label, a column
-    head, for one place in the column's cells before the whole column, then
-    the table."""
+    """[(level, window, field reply)] of one coordinate of a group's reply
+    over a table, the most particular first: a single value's cell, a row
+    label, a column head, for one place in the column's cells before the
+    whole column, then the table."""
     entry = ((reply.get("coordinates") or {}).get(slot.name)
              if isinstance(reply.get("coordinates"), dict) else None) or {}
-    own: dict = {}
-    for value in reply.get("values") or ():
-        key = value_key(value)
-        if key is not None and key not in own:
-            own[key] = value
     by_row, by_column, by_part = (collections.defaultdict(list)
                                   for _ in range(3))
     for label, (r, c, part) in at.items():
         by_row[r].append(label)
         by_column[c].append(label)
         by_part[(c, part or 1)].append(label)
+    mine: dict = {}
+    for answer in entry.get(CELLS) or ():
+        if isinstance(answer, dict):
+            for label in labels_at(at, answer.get("row"), answer.get("column"),
+                                   answer.get("part")):
+                mine.setdefault(label, answer_of(answer))
     answers = [answer for answer in entry.get(COLUMNS) or ()
                if isinstance(answer, dict)]
     at_part = [dict(answer_of(answer),
@@ -596,9 +696,6 @@ def table_replies(reply: dict, slot, at: dict) -> list:
              if answer.get("part") is None
              and answer.get("column") in by_column]
     out = []
-    mine = {label: answer_of(own[key][slot.name])
-            for label, key in at.items()
-            if key in own and isinstance(own[key].get(slot.name), dict)}
     if mine:
         out.append((VALUES, ("own", 1), {"answers": mine}))
     for key, groups in ((ROWS, [dict(answer_of(answer),
@@ -661,38 +758,36 @@ def value_classes(parameter) -> dict:
             if label != fields.UNSTATED}
 
 
-def text_payload(source: Source, parameter, slots: list,
-                 context: dict, corrections: Optional[list] = None) -> dict:
-    """The request of a section, a figure or a table read for a parameter
-    whose values are no numbers, the text around a table or figure and
-    *context* (`Reader.context_of`) beside it; with *corrections* the same
-    request asked once more for the values the check refused something of.
-    A category parameter shows its entries (`value_classes`)."""
+def source_shown(source: Source) -> dict:
     provenance = source.provenance or {}
+    return {"kind": source.owner_kind,
+            "section": provenance.get("section_title"), "text": source.text}
+
+
+def values_payload(source: Source, parameter, context: dict,
+                   corrections: Optional[list] = None) -> dict:
+    """The values request of a section, a figure or a table read for a
+    parameter whose values are no numbers: the passage, the text around a
+    table or figure and the parameter, a category parameter with its
+    entries (`value_classes`), nothing of its coordinates; with
+    *corrections* the values the check refused, asked once more."""
     classes = value_classes(parameter)
-    payload = {"source": {"kind": source.owner_kind,
-                          "section": provenance.get("section_title"),
-                          "text": source.text},
+    payload = {"source": source_shown(source),
                **({"around": context["around"]} if context.get("around")
                   else {}),
-               "parameter": {"key": parameter.uri, "label": parameter.label,
-                             "definition": parameter.description,
+               "parameter": {**parameter_shown(parameter),
                              **({"value_classes": classes} if classes
-                                else {})},
-               "coordinates": {slot.name: coordinate_shown(slot)
-                               for slot in slots},
-               **{key: value for key, value in context.items()
-                  if key != "around"}}
+                                else {})}}
     if corrections:
         payload["corrections"] = corrections
     return payload
 
 
-def text_response_format(parameter, slots: list,
-                         labels: Optional[list] = None) -> dict:
-    """Every value with every coordinate. Asked again, each entry names the
-    value of the first reply it answers for, one of *labels*. A category
-    value is one of its entries, or "" where the model is unsure of them."""
+def values_response_format(parameter, labels: Optional[list] = None) -> dict:
+    """Every value of the passage with its wording and its quote. Asked
+    again, each entry names the value of the first reply it replaces, one of
+    *labels*. A category value is one of its entries, or "" where the model
+    is unsure of them."""
     classes = value_classes(parameter)
     if parameter.is_numeric:
         value = {"type": "number"}
@@ -702,13 +797,51 @@ def text_response_format(parameter, slots: list,
         value = {"type": "string"}
     properties = {"value": value, "value_raw": {"type": "string"},
                   "quote": {"type": "string"}}
-    properties.update({slot.name: answer_schema(slot) for slot in slots})
-    required = ["value", "quote", *(slot.name for slot in slots)]
+    required = ["value", "quote"]
     if labels:
         properties = {"row": {"enum": list(labels)}, **properties}
         required = ["row", *required]
     entry = {"type": "object", "properties": properties,
              "required": required, "additionalProperties": False}
+    schema = {"type": "object",
+              "properties": {"values": {"type": "array", "items": entry}},
+              "required": ["values"], "additionalProperties": False}
+    return {"type": "json_schema",
+            "json_schema": {"name": "values_reply", "schema": schema}}
+
+
+def text_payload(source: Source, parameter, slots: list, rows: list,
+                 where: str, context: dict,
+                 corrections: Optional[list] = None) -> dict:
+    """One group's request of a passage: the passage, the text around a
+    table or figure, its values (each "row" with its value and quote), the
+    group's coordinates with the spec's words for where a plan prints them
+    (*where*), and *context* (`group_context`, what the request fetched with
+    its tools); with *corrections* the same request asked once more."""
+    payload = {"source": source_shown(source),
+               **({"around": context["around"]} if context.get("around")
+                  else {}),
+               "parameter": parameter_shown(parameter),
+               "values": [{"row": row.label, "value": row.claim.get("value"),
+                           "quote": row.claim.get("quote")} for row in rows],
+               "coordinates": {slot.name: coordinate_shown(slot)
+                               for slot in slots},
+               "where": where,
+               **{key: value for key, value in context.items()
+                  if key != "around"}}
+    if corrections:
+        payload["corrections"] = corrections
+    return payload
+
+
+def text_response_format(slots: list, labels: list) -> dict:
+    """Every value the request shows, by its "row", one of *labels*, with
+    every coordinate of the group."""
+    properties = {"row": {"enum": list(labels)}}
+    properties.update({slot.name: answer_schema(slot) for slot in slots})
+    entry = {"type": "object", "properties": properties,
+             "required": ["row", *(slot.name for slot in slots)],
+             "additionalProperties": False}
     schema = {"type": "object",
               "properties": {"values": {"type": "array", "items": entry},
                              "more": more_schema()},
@@ -754,32 +887,70 @@ def value_failure(claim: dict, source: Source) -> Optional[str]:
     return None
 
 
-def refused_of(failed: list, corrections: list) -> collections.Counter:
-    """What the check refused of a reply, by reason, and the values it
-    refused as "value"."""
-    return collections.Counter(
-        [failure.get("why") for _name, _level, failure in failed]
-        + ["value" for c in corrections if "value" in c.get("what", ())])
+def refused_of(failed: list) -> collections.Counter:
+    """What the check refused of a reply, by reason."""
+    return collections.Counter(failure.get("why")
+                               for _name, _level, failure in failed)
 
 
-def text_corrections(rows: list, failed: list, source: Source,
-                     slots: list) -> list:
-    """What the check refused of a text reply, one entry per value it
-    refused something of: [{row, value, quote, what: {value | coordinate:
-    reason}}]. A coordinate the reply left out is named as missing."""
-    what: dict = collections.defaultdict(dict)
+def value_corrections(rows: list, source: Source) -> list:
+    """The values of a values reply the check refuses, each with its row,
+    value and quote and why: [{row, value, quote, what}]."""
+    out = []
     for row in rows:
         reason = value_failure(row.claim, source)
         if reason:
-            what[row.label]["value"] = reason
+            out.append({"row": row.label, "value": row.claim.get("value"),
+                        "quote": row.claim.get("quote"), "what": reason})
+    return out
+
+
+def values_again(rows: list, reply: dict, corrections: list) -> int:
+    """The second values reply onto the values it was asked about: an entry
+    answers for the value its "row" names and gives it its value, wording
+    and quote anew. Returns the values given anew."""
+    asked = {c["row"] for c in corrections}
+    by_label = {row.label: row for row in rows}
+    done: set = set()
+    for entry in reply.get("values") or ():
+        label = entry.get("row") if isinstance(entry, dict) else None
+        if label not in asked or label in done:
+            continue
+        done.add(label)
+        claim = by_label[label].claim
+        claim["value"] = entry.get("value")
+        claim["quote"] = entry.get("quote")
+        claim.pop("value_raw", None)
+        if entry.get("value_raw"):
+            claim["value_raw"] = entry["value_raw"]
+    return len(done)
+
+
+def entries_of(reply: dict, labels) -> dict:
+    """{label: entry} of a group's reply over a passage's values, the first
+    entry for each of *labels*."""
+    entries: dict = {}
+    for entry in reply.get("values") or ():
+        label = entry.get("row") if isinstance(entry, dict) else None
+        if label in labels and label not in entries:
+            entries[label] = entry
+    return entries
+
+
+def group_corrections(rows: list, failed: list, slots: list) -> list:
+    """What the check refused of a group's reply over a passage's values,
+    one entry per value it refused something of: [{row, what: {coordinate:
+    reason}}]. A coordinate the reply left out is named as missing."""
+    what: dict = collections.defaultdict(dict)
+    labels = {row.label for row in rows}
+    for row in rows:
         for slot in slots:
             if not row.claim.get(f"{slot.name}_state"):
                 what[row.label][slot.name] = say("key_missing", key=slot.name)
     for name, _level, failure in failed:
-        if failure.get("row") in {row.label for row in rows}:
+        if failure.get("row") in labels:
             what[failure["row"]].setdefault(name, failure.get("reason"))
-    return [{"row": row.label, "value": row.claim.get("value"),
-             "quote": row.claim.get("quote"), "what": what[row.label]}
+    return [{"row": row.label, "what": what[row.label]}
             for row in rows if what.get(row.label)]
 
 
@@ -847,24 +1018,57 @@ class Read:
     missed: int = 0               # asks that found nothing
 
 
+@dataclass
+class _Job:
+    """One parameter in one passage, as its requests share it."""
+    document_id: int
+    parameter: object
+    source: Source
+    shown: Source
+    slots: list
+    context: dict
+    bases: list
+    origin: tuple
+    parent: tuple
+    fixed: list
+    frames: list
+    merged: Callable
+    passages: dict
+    budget: Optional[int]
+    result: Read
+    fetched: list = field(default_factory=list)
+
+    def gathered(self) -> Gathered:
+        return Gathered(seen={self.origin, self.parent},
+                        cursor={"next": self.origin, "previous": self.parent})
+
+
 class Reader:
     """(document_id, survey, passages) -> [Read], one per parameter and
     passage the survey named for it.
 
-    *ask_table(source, grid, parameter, slots, context, corrections)* and
-    *ask_text(source, parameter, slots, context, corrections)* are one
-    request each: the reply as a dict, CUT, or None; *context* is what the
-    request shows beside its passage (`context_of`), *corrections* None the
-    first time and what was wrong the second. *shown_with(source)* is what a
+    Four requests, each with one task (owner decision 2026-11-04), each the
+    reply as a dict, CUT, or None: *ask_cells(source, grid, parameter,
+    context)* the cells of a table that hold the parameter's values;
+    *ask_table(source, grid, parameter, group, slots, cells, context,
+    corrections)* where one group's coordinates stand in that table;
+    *ask_values(source, parameter, context, corrections)* the values of a
+    passage; *ask_text(source, parameter, group, slots, rows, context,
+    corrections)* one group's coordinates of those values. *context* is what
+    the request shows beside its passage, *corrections* None the first time
+    and what was wrong the second. *shown_with(source)* is what a
     coordinate's quote may stand in besides the passage: its section's
     heading. *pool* reads passages side by side.
     """
 
-    def __init__(self, spec, ask_table: Callable, ask_text: Callable,
-                 frame_slots: list, *, shown_with: Optional[Callable] = None,
+    def __init__(self, spec, ask_cells: Callable, ask_table: Callable,
+                 ask_values: Callable, ask_text: Callable, frame_slots: list,
+                 *, shown_with: Optional[Callable] = None,
                  bases: Optional[Callable] = None, pool=None, trace=None):
         self.spec = spec
+        self.ask_cells = ask_cells
         self.ask_table = ask_table
+        self.ask_values = ask_values
         self.ask_text = ask_text
         self.frame_slots = frame_slots
         self.shown_with = shown_with or (lambda source: [])
@@ -909,16 +1113,15 @@ class Reader:
             return [one(job) for job in jobs]
         return list(self.pool.map(one, jobs))
 
-    def context_of(self, source: Source, slots: list, tuples: list,
-                   bases: list, passages: dict,
+    def context_of(self, source: Source, tuples: list, passages: dict,
                    budget: Optional[int]) -> tuple:
-        """(what a request shows beside its passage, the section it was
-        cut from): the text around a table or figure (`around_of`), the
-        survey's pairs of the passage and the plan's years (`years_of`)."""
+        """(what the requests of a passage show beside it, the section it
+        was cut from): the text around a table or figure (`around_of`) and
+        the survey's pairs of the passage, which only a group that asks a
+        frame coordinate shows (`group_context`)."""
         around = around_of(source, passages, budget)
         context = {"around": around.text} if around is not None else {}
         context["known"] = known_of(tuples, self.frame_slots)
-        context.update(years_of(bases, slots))
         return context, around
 
     def read(self, document_id: int, parameter, source: Source,
@@ -926,8 +1129,10 @@ class Reader:
              shown: Optional[Source] = None,
              budget: Optional[int] = None) -> Read:
         """*source* is the passage a value is verified against, *shown* the
-        piece of it the request shows, *budget* the survey's two pages. A
-        table is read in parts (`_read_table`)."""
+        piece of it the requests show, *budget* the survey's two pages. A
+        table is read in parts by its cells (`_read_table`), anything else
+        by its values (`_read_text`); then each group of the spec in a
+        request of its own (`groups_of`)."""
         shown = shown or source
         slots = slots_of(self.spec, parameter)
         # The reading's spec rides on the batch, so the fold checks a value
@@ -940,13 +1145,10 @@ class Reader:
         grid = grid_of(source.text) \
             if source.owner_kind == "table" and parameter.is_numeric else None
         bases = self.bases(pairs)
-        context, around = self.context_of(source, slots, tuples, bases,
-                                          passages, budget)
+        context, around = self.context_of(source, tuples, passages, budget)
         origin = (source.owner_kind, source.owner_id)
         parent = (around.owner_kind, around.owner_id) \
             if around is not None else origin
-        gathered = Gathered(seen={origin, parent},
-                            cursor={"next": origin, "previous": parent})
         result = Read(batch, [])
         # What a coordinate's quote may stand in besides what a request
         # shows of the passage: its heading, the text around it, the frame.
@@ -968,11 +1170,11 @@ class Reader:
                                   for failure in got["failed"])
             return failed
 
-        read_by = self._read_table if grid is not None else self._read_text
-        rows, views = read_by(document_id, parameter, source,
-                              grid if grid is not None else shown, slots,
-                              context, gathered, fixed, frames, merged,
-                              passages, budget, result)
+        job = _Job(document_id, parameter, source, shown, slots, context,
+                   bases, origin, parent, fixed, frames, merged, passages,
+                   budget, result)
+        rows, views = (self._read_table(job, grid) if grid is not None
+                       else self._read_text(job))
         if not views:
             result.unread = True
             result.why = result.lost[0] if result.lost else NO_ANSWER
@@ -983,10 +1185,7 @@ class Reader:
                            table=grid is not None, values=0, unread=True,
                            why=result.why, asked=result.asked)
             return result
-        evidence = list(views) + fixed + gathered.sources + frames
-        result.fetched = len(gathered.sources)
-        result.searched = len(gathered.hits)
-        result.missed = len(gathered.missed)
+        evidence = list(views) + fixed + job.fetched + frames
         for axis in fields.axis_slots(parameter):
             fields.apply_derived(rows, axis)
         inherit(rows, [s for s in self.frame_slots
@@ -1005,73 +1204,110 @@ class Reader:
                        missed=result.missed)
         return result
 
-    def _ask_text(self, shown, parameter, slots, context, gathered,
-                  corrections=None):
-        return self.ask_text(shown, parameter, slots,
-                             {**context, **gathered.context()}, corrections)
+    @staticmethod
+    def _noted(job: _Job, gathered: Gathered) -> None:
+        """What one group's tools fetched, onto the reading of the passage."""
+        job.fetched.extend(gathered.sources)
+        job.result.fetched += len(gathered.sources)
+        job.result.searched += len(gathered.hits)
+        job.result.missed += len(gathered.missed)
 
-    def _ask_table(self, view, part, parameter, slots, context, gathered,
-                   corrections=None):
-        return self.ask_table(view, part, parameter, slots,
-                              {**context, **gathered.context()}, corrections)
-
-    def _read_text(self, document_id, parameter, source, shown, slots,
-                   context, gathered, fixed, frames, merged, passages,
-                   budget, result) -> tuple:
+    def _read_text(self, job: _Job) -> tuple:
         """(rows, [the piece shown]) of a section, a figure or a table read
-        by name; ([], []) where no reply was readable, why in `result.lost`.
-        What the check refuses is asked once more with its reason."""
-        ask = functools.partial(self._ask_text, shown, parameter, slots,
-                                context, gathered)
-        reply = ask()
+        by name: its values first, a value the check refuses asked once more
+        with its reason, then each group's coordinates of them
+        (`_text_group`); ([], []) where no values reply was readable, why in
+        `result.lost`."""
+        result = job.result
+        shows = ({"around": job.context["around"]}
+                 if job.context.get("around") else {})
+        reply = self.ask_values(job.shown, job.parameter, shows, None)
         result.asked += 1
         if not isinstance(reply, dict):
             result.lost.append(CUT if reply == CUT else NO_ANSWER)
             return [], []
-        reply, more = gather(ask, reply, gathered, list(passages.values()),
-                             passages, budget)
+        rows, _entries = text_rows(reply)
+        corrections = value_corrections(rows, job.source)
+        if corrections:
+            result.failed = dict(collections.Counter(result.failed)
+                                 + collections.Counter(
+                                     {"value": len(corrections)}))
+            result.corrected += len(corrections)
+            result.asked += 1
+            again = self.ask_values(job.shown, job.parameter, shows,
+                                    corrections)
+            if isinstance(again, dict):
+                values_again(rows, again, corrections)
+        if rows:
+            for group, group_slots in groups_of(self.spec, job.slots):
+                self._text_group(job, rows, group, group_slots)
+        return rows, [job.shown]
+
+    def _text_group(self, job: _Job, rows: list, group,
+                    group_slots: list) -> None:
+        """One group's coordinates of a passage's values, in a request with
+        the group's own tools; what the check refuses asked once more."""
+        result = job.result
+        gathered = job.gathered()
+        base = group_context(job.context, group_slots, self.frame_slots,
+                             job.bases)
+        labels = [row.label for row in rows]
+
+        def ask(corrections: Optional[list] = None):
+            return self.ask_text(job.shown, job.parameter, group, group_slots,
+                                 rows, {**base, **gathered.context()},
+                                 corrections)
+        reply = ask()
+        result.asked += 1
+        if not isinstance(reply, dict):
+            return
+        reply, more = gather(ask, reply, gathered,
+                             list(job.passages.values()), job.passages,
+                             job.budget)
         result.asked += more
-        evidence = [shown] + fixed + gathered.sources + frames
-        rows, entries = text_rows(reply)
-        failed = merged(rows, {slot.name: text_replies(entries, slot)
-                               for slot in slots}, evidence)
-        corrections = text_corrections(rows, failed, source, slots)
-        result.failed = dict(refused_of(failed, corrections))
-        if corrections and rows:
-            result.corrected = len(corrections)
+        self._noted(job, gathered)
+        evidence = [job.shown] + job.fixed + gathered.sources + job.frames
+        entries = entries_of(reply, labels)
+        failed = job.merged(rows, {slot.name: text_replies(entries, slot)
+                                   for slot in group_slots}, evidence)
+        corrections = group_corrections(rows, failed, group_slots)
+        result.failed = dict(collections.Counter(result.failed)
+                             + refused_of(failed))
+        if corrections:
+            result.corrected += len(corrections)
             result.asked += 1
             again = ask(corrections)
             if isinstance(again, dict):
-                merged(rows, self._again(rows, again, corrections, slots),
-                       evidence)
-        return rows, [shown]
+                entries = entries_of(again, {c["row"] for c in corrections})
+                job.merged(rows, {slot.name: text_replies(entries, slot)
+                                  for slot in group_slots}, evidence)
 
-    def _read_table(self, document_id, parameter, source, grid, slots,
-                    context, gathered, fixed, frames, merged, passages,
-                    budget, result) -> tuple:
+    def _read_table(self, job: _Job, grid: Grid) -> tuple:
         """(rows, [each part shown]) of a table read by its cells, in parts
         (owner decision 2026-11-04): the blocks of `table_blocks` in their
-        order, the first part first, and the head rows its reply names shown
-        with every later part. A part whose reply was cut off is asked again
-        as two halves; a single row cut off, or a part no reply answered, is
-        noted in `result.lost` and the other parts are read. What the check
-        refuses of a part is asked once more with its reason."""
-        blocks = table_blocks(grid, budget)
+        order, the first part first, and the head rows its cells reply
+        names shown with every later part. A part whose cells reply was cut
+        off is asked again as two halves; a single row cut off, or a part no
+        reply answered, is noted in `result.lost` and the other parts are
+        read. Each group's coordinates of a part's values are asked in a
+        request of their own (`_table_group`)."""
+        result = job.result
+        blocks = table_blocks(grid, job.budget)
         head: list = []
         first = True
         rows: list = []
         views: list = []
+        groups = groups_of(self.spec, job.slots)
         while blocks:
             block = blocks.pop(0)
             part = part_of(grid, block, head)
-            view = replace(source, text=part.text)
-            shows = dict(context)
+            view = replace(job.source, text=part.text)
+            shows = ({"around": job.context["around"]}
+                     if job.context.get("around") else {})
             if len(block) < len(grid.body):
                 shows["part"] = {"rows": [block[0], block[-1]],
                                  "of": len(grid.body), "first": first}
-            ask = functools.partial(self._ask_table, view, part, parameter,
-                                    slots, shows, gathered)
-            reply = ask()
+            reply = self.ask_cells(view, part, job.parameter, shows)
             result.asked += 1
             if reply == CUT and len(block) > 1:
                 half = len(block) // 2
@@ -1080,9 +1316,6 @@ class Reader:
             if not isinstance(reply, dict):
                 result.lost.append(CUT if reply == CUT else NO_ANSWER)
                 continue
-            reply, more = gather(ask, reply, gathered,
-                                 list(passages.values()), passages, budget)
-            result.asked += more
             if first:
                 head = sorted({r for r in reply.get("head_rows") or ()
                                if isinstance(r, int) and r in block})
@@ -1090,49 +1323,53 @@ class Reader:
             got, at, skipped = table_rows(reply, part, start=len(rows))
             result.skipped += skipped
             result.faulty = result.faulty or reply.get("faulty") or None
-            evidence = [view] + fixed + gathered.sources + frames
-            failed = merged(got, {slot.name: table_replies(reply, slot, at)
-                                  for slot in slots}, evidence)
-            corrections = table_corrections(failed, at) + [
-                {"coordinate": slot.name,
-                 "what": say("key_missing", key=slot.name)}
-                for slot in slots
-                if any(not row.claim.get(f"{slot.name}_state")
-                       for row in got)]
-            result.failed = dict(collections.Counter(result.failed)
-                                 + refused_of(failed, corrections))
-            if corrections and got:
-                result.corrected += len(corrections)
-                result.asked += 1
-                again = ask(corrections)
-                if isinstance(again, dict):
-                    merged(got, {slot.name: table_replies(again, slot, at)
-                                 for slot in slots}, evidence)
+            if got:
+                cells = [cell_shown(key) for key in at.values()]
+                for group, group_slots in groups:
+                    self._table_group(job, view, part, shows, cells, got, at,
+                                      group, group_slots)
             rows.extend(got)
             views.append(view)
         return rows, views
 
-    @staticmethod
-    def _again(rows: list, reply: dict, corrections: list,
-               slots: list) -> dict:
-        """The second text reply onto the values it was asked about: an
-        entry answers for the value its "row" names. A value the check
-        refused takes the entry's value and quote; its coordinates are
-        merged as the first reply's were, and one read the first time
-        stays as it was read."""
-        asked = {c["row"]: c for c in corrections}
-        by_label = {row.label: row for row in rows}
-        entries: dict = {}
-        for entry in reply.get("values") or ():
-            label = entry.get("row") if isinstance(entry, dict) else None
-            if label not in asked or label in entries:
-                continue
-            entries[label] = entry
-            if "value" in asked[label]["what"]:
-                claim = by_label[label].claim
-                claim["value"] = entry.get("value")
-                claim["quote"] = entry.get("quote")
-                claim.pop("value_raw", None)
-                if entry.get("value_raw"):
-                    claim["value_raw"] = entry["value_raw"]
-        return {slot.name: text_replies(entries, slot) for slot in slots}
+    def _table_group(self, job: _Job, view: Source, part: Grid, shows: dict,
+                     cells: list, got: list, at: dict, group,
+                     group_slots: list) -> None:
+        """One group's coordinates of a table part's values, in a request
+        with the group's own tools; what the check refuses asked once more,
+        by its place."""
+        result = job.result
+        gathered = job.gathered()
+        base = {**shows, **group_context(job.context, group_slots,
+                                         self.frame_slots, job.bases)}
+
+        def ask(corrections: Optional[list] = None):
+            return self.ask_table(view, part, job.parameter, group,
+                                  group_slots, cells,
+                                  {**base, **gathered.context()}, corrections)
+        reply = ask()
+        result.asked += 1
+        if not isinstance(reply, dict):
+            return
+        reply, more = gather(ask, reply, gathered,
+                             list(job.passages.values()), job.passages,
+                             job.budget)
+        result.asked += more
+        self._noted(job, gathered)
+        evidence = [view] + job.fixed + gathered.sources + job.frames
+        failed = job.merged(got, {slot.name: table_replies(reply, slot, at)
+                                  for slot in group_slots}, evidence)
+        corrections = table_corrections(failed, at) + [
+            {"coordinate": slot.name,
+             "what": say("key_missing", key=slot.name)}
+            for slot in group_slots
+            if any(not row.claim.get(f"{slot.name}_state") for row in got)]
+        result.failed = dict(collections.Counter(result.failed)
+                             + refused_of(failed))
+        if corrections:
+            result.corrected += len(corrections)
+            result.asked += 1
+            again = ask(corrections)
+            if isinstance(again, dict):
+                job.merged(got, {slot.name: table_replies(again, slot, at)
+                                 for slot in group_slots}, evidence)

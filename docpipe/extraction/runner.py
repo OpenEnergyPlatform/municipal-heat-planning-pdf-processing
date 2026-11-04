@@ -334,9 +334,7 @@ PROMPT_IDS = (QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID, ROWS_PROMPT_ID,
 # The prompts of a harvest from the survey (survey.py, reading.py,
 # combing.py), the run's own wherever the profile writes them and its spec
 # names groups (`surveyed_flow`).
-SURVEY_PROMPT_IDS = (survey_map.SURVEY_PROMPT_ID,
-                     reading_map.READ_TABLE_PROMPT_ID,
-                     reading_map.READ_TEXT_PROMPT_ID,
+SURVEY_PROMPT_IDS = (survey_map.SURVEY_PROMPT_ID, *reading_map.PROMPT_IDS,
                      combing_map.COMB_PROMPT_ID)
 # Which of the two flows this run harvests with: "survey" or "fieldwise".
 # `main` sets it; stamps and producers record it and the prompts it sends,
@@ -1885,11 +1883,16 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
 def make_reader(spec: Spec, image_root: Optional[Path] = None):
     """The reading of one parameter's passages (`reading.Reader`), or None
     when the profile writes no prompts for it or its spec names no groups.
-    A figure goes with its crop."""
+    Four requests, each with one task (owner decision 2026-11-04): the
+    cells of a table, one group's coordinates in it, the values of a
+    passage, one group's coordinates of them. A figure goes with its
+    crop."""
     if not spec.groups:
         return None
     try:
+        cells_prompt = prompts.load(reading_map.READ_CELLS_PROMPT_ID)
         table_prompt = prompts.load(reading_map.READ_TABLE_PROMPT_ID)
+        values_prompt = prompts.load(reading_map.READ_VALUES_PROMPT_ID)
         text_prompt = prompts.load(reading_map.READ_TEXT_PROMPT_ID)
     except (FileNotFoundError, LookupError):
         return None
@@ -1902,36 +1905,65 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
     def document_of(source) -> int:
         return int((source.provenance or {}).get("document_id") or 0)
 
-    def ask_table(source, grid, parameter, slots, context, corrections=None):
-        text = json.dumps(reading_map.table_payload(
-            source, grid, parameter, slots, context, corrections),
-            ensure_ascii=False, indent=2)
-        return ask_in_grammar(
-            client, table_prompt, [{"role": "user", "content": text}],
-            reading_map.table_response_format(slots), document_of(source),
-            "read_table", "coordinates", parameter=parameter.uri,
-            owner=source.owner_id, rows=len(grid.body),
-            corrections=len(corrections or ()))
-
-    def ask_text(source, parameter, slots, context, corrections=None):
-        text = json.dumps(reading_map.text_payload(
-            source, parameter, slots, context, corrections),
-            ensure_ascii=False, indent=2)
-        content: object = text
+    def content_of(source, text: str):
+        """The user message of a request about *source*: its payload, and a
+        figure's crop beside it."""
         if source.owner_kind == "figure" and source.image_path \
                 and ATTACH_IMAGES:
             part = _image_part(str(image_root / source.image_path)
                                if image_root else source.image_path)
             if part is not None:
-                content = [{"type": "text", "text": text}, part]
+                return [{"type": "text", "text": text}, part]
+        return text
+
+    def ask_cells(source, grid, parameter, context):
+        text = json.dumps(reading_map.cells_payload(
+            source, grid, parameter, context), ensure_ascii=False, indent=2)
         return ask_in_grammar(
-            client, text_prompt, [{"role": "user", "content": content}],
-            reading_map.text_response_format(
-                parameter, slots,
-                [c["row"] for c in corrections or ()] or None),
-            document_of(source), "read_text", "values",
+            client, cells_prompt, [{"role": "user", "content": text}],
+            reading_map.cells_response_format(), document_of(source),
+            "read_cells", "values", parameter=parameter.uri,
+            owner=source.owner_id, rows=len(grid.body))
+
+    def ask_table(source, grid, parameter, group, slots, cells, context,
+                  corrections=None):
+        text = json.dumps(reading_map.table_payload(
+            source, grid, parameter, slots, cells, group.where, context,
+            corrections), ensure_ascii=False, indent=2)
+        return ask_in_grammar(
+            client, table_prompt, [{"role": "user", "content": text}],
+            reading_map.table_response_format(slots), document_of(source),
+            "read_table", "coordinates", parameter=parameter.uri,
+            owner=source.owner_id, group=group.name, rows=len(grid.body),
+            corrections=len(corrections or ()))
+
+    def ask_values(source, parameter, context, corrections=None):
+        text = json.dumps(reading_map.values_payload(
+            source, parameter, context, corrections),
+            ensure_ascii=False, indent=2)
+        return ask_in_grammar(
+            client, values_prompt,
+            [{"role": "user", "content": content_of(source, text)}],
+            reading_map.values_response_format(
+                parameter, [c["row"] for c in corrections or ()] or None),
+            document_of(source), "read_values", "values",
             parameter=parameter.uri, kind=source.owner_kind,
             owner=source.owner_id, corrections=len(corrections or ()))
+
+    def ask_text(source, parameter, group, slots, rows, context,
+                 corrections=None):
+        text = json.dumps(reading_map.text_payload(
+            source, parameter, slots, rows, group.where, context,
+            corrections), ensure_ascii=False, indent=2)
+        return ask_in_grammar(
+            client, text_prompt,
+            [{"role": "user", "content": content_of(source, text)}],
+            reading_map.text_response_format(slots,
+                                             [row.label for row in rows]),
+            document_of(source), "read_text", "values",
+            parameter=parameter.uri, kind=source.owner_kind,
+            owner=source.owner_id, group=group.name,
+            corrections=len(corrections or ()))
 
     def shown_with(source) -> list:
         provenance = source.provenance or {}
@@ -1944,7 +1976,8 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
                        {**provenance, "owner_kind": "section"})]
 
     return reading_map.Reader(
-        spec, ask_table, ask_text, frame_slots, shown_with=shown_with,
+        spec, ask_cells, ask_table, ask_values, ask_text, frame_slots,
+        shown_with=shown_with,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
         pool=AHEAD, trace=trace.event)
 
@@ -1966,13 +1999,13 @@ def make_comber(spec: Spec, rank: Callable):
     from docpipe.profile import active_profile
     states = year_states_of(active_profile())
 
-    def ask(payload, shape, document_id, source):
+    def ask(payload, shape, document_id, source, group=None):
         text = json.dumps(payload, ensure_ascii=False, indent=2)
         return ask_in_grammar(
             client, prompt, [{"role": "user", "content": text}], shape,
             document_id, "comb", "rows",
             parameter=payload["parameter"]["key"], kind=source.owner_kind,
-            owner=source.owner_id,
+            owner=source.owner_id, group=group,
             corrections=len(payload.get("corrections") or ()))
 
     return combing_map.Comber(

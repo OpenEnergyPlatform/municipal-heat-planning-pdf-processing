@@ -1,5 +1,7 @@
 """Only values with a coordinate still open are combed, one request per
-passage and parameter; the search is asked with the passage's sentence and
+passage, parameter and group of the spec with an open coordinate, which
+shows the group's words for where a plan prints it and asks only the
+group's open coordinates; the search is asked with the passage's sentence and
 shows the best 15 sections, 20 tables and 20 figures of its ranking as a list
 of hits, the passage itself and its section left out. A coordinate answered
 from a fetched hit is read and cites that passage in window `retrieval`; one
@@ -23,6 +25,9 @@ SPEC = load_spec(json.loads((Path(__file__).resolve().parent.parent
                             .read_text(encoding="utf-8")))
 EMISSION = SPEC.by_uri["emission"]
 SLOTS = [slot.name for slot in reading.slots_of(SPEC, EMISSION)]
+GROUPS = reading.groups_of(SPEC, reading.slots_of(SPEC, EMISSION))
+YEAR_GROUP = next(group for group, slots in GROUPS
+                  if "year" in {slot.name for slot in slots})
 UNSTATED = fields.UNSTATED
 
 OWN = Source("section", 6, "Bilanz\nEs fielen rund 300 t CO2 an.",
@@ -51,7 +56,7 @@ def reads(*claims):
 def comber(*replies, ranked=(HIT,)):
     asked, searched = [], []
 
-    def ask(payload, shape, document_id, source):
+    def ask(payload, shape, document_id, source, group=None):
         asked.append(payload)
         return replies[min(len(asked), len(replies)) - 1]
 
@@ -75,13 +80,21 @@ def everything(**given):
 YEAR = {"value": 2030, "quote": "gelten für das Jahr 2030"}
 
 
-def test_only_values_with_an_open_coordinate_are_combed_once_per_passage():
+def test_only_values_with_an_open_coordinate_are_combed_once_per_group():
     made, asked, _ = comber({"rows": []})
     read = reads(claim(), claim(**{name: fields.READ for name in SLOTS}))
     done = made(7, read, PASSAGES, [])
-    assert len(done) == 1 and done[0].rows == 1
-    assert len(asked) >= 1
-    assert [row["row"] for row in asked[0]["rows"]] == ["R1"]
+    assert [d.group for d in done] == [group.name for group, _ in GROUPS]
+    assert all(d.rows == 1 for d in done)
+    assert all([row["row"] for row in payload["rows"]] == ["R1"]
+               for payload in asked)
+    # A value open in one group only is combed in that group alone.
+    made, asked, _ = comber({"rows": []})
+    done = made(7, reads(claim(**{name: fields.READ for name in SLOTS
+                                  if name != "year"})), PASSAGES, [])
+    assert [d.group for d in done] == [YEAR_GROUP.name]
+    assert set(asked[0]["coordinates"]) == {"year"}
+    assert asked[0]["where"] == YEAR_GROUP.where
 
 
 def test_the_search_shows_the_best_of_each_kind_as_a_list_without_its_own():
@@ -134,7 +147,7 @@ def test_not_stated_stays_and_no_answer_is_asked_by_name_then_unanswered():
     assert value["year_state"] == fields.UNANSWERED
     assert asked[1]["corrections"] == [
         {"row": "R1", "what": {"year": say("key_missing", key="year")}}]
-    assert done.asked == 2 and len(asked) == 2
+    assert done.asked == 2 and len(asked) == 2 + len(GROUPS) - 1
 
 
 def test_a_coordinate_read_before_is_never_touched():

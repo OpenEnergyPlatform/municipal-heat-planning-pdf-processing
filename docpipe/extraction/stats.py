@@ -42,7 +42,9 @@ log = logging.getLogger(__name__)
 STATS = "stats"
 OPEN = ("exhausted", "unanswered", "unbacked")
 # Trace event kind -> the stage of the survey flow that asked.
-ASK_STAGES = {"survey_ask": "survey", "read_table_ask": "read_table",
+ASK_STAGES = {"survey_ask": "survey", "read_cells_ask": "read_cells",
+              "read_table_ask": "read_table",
+              "read_values_ask": "read_values",
               "read_text_ask": "read_text", "comb_ask": "comb"}
 
 

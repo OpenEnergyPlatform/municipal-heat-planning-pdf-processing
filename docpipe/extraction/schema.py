@@ -751,12 +751,13 @@ def stamp_schema() -> dict:
         },
         "patternProperties": {
             "^extraction/(harvest|queries|anchors|rows|field|phrase|frame"
-            "|survey|read_table|read_text|comb)$":
+            "|survey|read_cells|read_table|read_values|read_text|comb)$":
                 {**sha, "description": "sha256 of the prompt file; `harvest` "
                                        "is in stamps of an older release; "
-                                       "`survey`, `read_table`, `read_text` "
-                                       "and `comb` are the prompts of the "
-                                       "survey flow"},
+                                       "`survey`, `read_cells`, "
+                                       "`read_table`, `read_values`, "
+                                       "`read_text` and `comb` are the "
+                                       "prompts of the survey flow"},
             "^question_text/[^/]+$": {
                 "type": "array", "items": {"type": "string"},
                 "description": "The sentence THIS document was searched "
@@ -994,10 +995,12 @@ def trace_schema() -> dict:
                             "parameter": {"type": ["string", "null"]},
                             "owner": {}, "kind": {}, "rows": {},
                             "passages": {}, "figure": {},
+                            "group": {"type": ["string", "null"]},
                             "prompt_tokens": {"type": ["integer", "null"]},
                             "completion_tokens": {"type": ["integer", "null"]},
                             "ms": {"type": "integer"}}
-           for stage in ("survey", "read_table", "read_text", "comb")},
+           for stage in ("survey", "read_cells", "read_table",
+                         "read_values", "read_text", "comb")},
         # One passage read for one parameter (reading.py). A passage that
         # came to no readable reply is `unread` with `why` and no values.
         "read": {"parameter": {"type": "string"},
@@ -1013,9 +1016,11 @@ def trace_schema() -> dict:
                  "missed": {"type": "integer"},
                  "unread": {"type": "boolean"},
                  "why": {"enum": ["cut_off", "no_answer"]}},
-        # The comb of what a reading left open (combing.py): per passage and
-        # parameter, the coordinates open and how many the request filled.
+        # The comb of what a reading left open (combing.py): per passage,
+        # parameter and group, the coordinates open and how many the
+        # requests filled.
         "comb": {"parameter": {"type": "string"},
+                 "group": {"type": ["string", "null"]},
                  "kind": {"enum": ["section", "table", "figure"]},
                  "owner": {"type": "integer"}, "rows": {"type": "integer"},
                  "open": {"type": "integer"}, "filled": {"type": "integer"},
@@ -1029,13 +1034,18 @@ def trace_schema() -> dict:
     # Of the survey flow's events, the fields only some of them carry.
     optional = {
         "survey_ask": {"corrections", "parameter", "owner", "kind", "rows",
-                       "passages", "figure"},
+                       "passages", "figure", "group"},
+        "read_cells_ask": {"corrections", "parameter", "owner", "kind",
+                           "rows", "passages", "figure", "group"},
         "read_table_ask": {"corrections", "parameter", "owner", "kind",
-                           "rows", "passages", "figure"},
+                           "rows", "passages", "figure", "group"},
+        "read_values_ask": {"corrections", "parameter", "owner", "kind",
+                            "rows", "passages", "figure", "group"},
         "read_text_ask": {"corrections", "parameter", "owner", "kind",
-                          "rows", "passages", "figure"},
+                          "rows", "passages", "figure", "group"},
         "comb_ask": {"corrections", "parameter", "owner", "kind", "rows",
-                     "passages", "figure"},
+                     "passages", "figure", "group"},
+        "comb": {"group"},
         "read": {"skipped", "faulty", "corrected", "failed", "unanswered",
                  "fetched", "searched", "missed", "unread", "why"},
     }

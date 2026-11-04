@@ -13,7 +13,11 @@ request has had its schema since the grammar was introduced for it
 Nothing here is a check. A schema says which keys a reply can have and what
 kind of thing stands under each, as the prompt does. Every key the prompt
 leaves optional is optional, a closed list is not turned into an enum, and
-what a reply says is verified afterwards exactly as before.
+what a reply says is verified afterwards exactly as before. Every object
+lists its keys in the order its prompt names them (owner decision
+2026-11-04): a server that holds a reply to its schema has the model write
+them in that order, so a key listed before one already written could no
+longer come.
 
 Author: Felix Vossel
 

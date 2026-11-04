@@ -8,7 +8,7 @@ You get:
 - "passage": where the values come from, with kind, title and section.
 - "parameter": the field with its definition.
 - "rows": the values, each with "row", value and quote, what is already read about them ("known", in the publication's words) and what is still open ("open").
-- "coordinates": the open coordinates, each with its question and its list ("options").
+- "coordinates": the open coordinates, each with its question and its list ("options"); "where": where a publication usually prints them.
 - "hits": hit lists, each hit with "id", kind, title and first line. The first list holds the passages of the publication that fit these values best; after it come the hits of your own searches.
 - "more", "not_found": the passages you asked for, each with "id", and what could not be found, with its reason ("end": there is no section in that direction any more, "unknown": no or more than one placeholder or hit of that name, "invalid_pattern" or "timeout": the pattern did not work).
 - "corrections": only in a second request. What was wrong with your first answer, per value ("row") and coordinate under "what".

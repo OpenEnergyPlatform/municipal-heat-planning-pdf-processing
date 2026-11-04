@@ -1,7 +1,8 @@
 """Numbers are read by their cell, everything else is named with a quote: a
 table is read cell by cell for a parameter whose values are numbers, AND for
-any other parameter the text request names its values, quoted from the
-table and asked again where the table does not hold the quote. A category
+any other parameter the values request names its values, quoted from the
+table and asked again with the reason where the table does not hold the
+quote. A category
 parameter's request shows its entries, without the answer that the passage
 does not say it, AND its grammar takes for a value exactly one entry, or ""
 where the model is unsure and writes the wording into value_raw, never a
@@ -19,6 +20,7 @@ import pytest
 from docpipe.extraction import fields, reading
 from docpipe.extraction.pipeline import Source, row_label
 from docpipe.extraction.spec import load as load_spec
+from docpipe.extraction.wording import say
 
 
 def spec_of(profile):
@@ -52,29 +54,30 @@ ELSEWHERE = dict(NAMED, quote="Die Klimaschutzagentur Nord hat erstellt")
 
 
 def asked_for(parameter, *replies):
-    """Which request read *parameter* in TABLE, each text request with the
-    corrections it carried, and what the reading came to."""
+    """Which request read *parameter* in TABLE, each values request with the
+    corrections it carried, and what the reading came to: the n-th values
+    request answered by the n-th of *replies*."""
     asked = []
 
-    def ask_table(source, grid, parameter, slots, context, corrections=None):
-        asked.append(("table", corrections))
-        return {"values": [],
-                "coordinates": {slot.name: {"table": {"value": fields.UNSTATED}}
-                                for slot in slots}}
+    def ask_cells(view, part, parameter, context):
+        asked.append(("cells", None))
+        return {"values": []}
 
-    def ask_text(source, parameter, slots, context, corrections=None):
-        asked.append(("text", corrections))
-        return replies[min(len(asked), len(replies)) - 1]
+    def ask_values(shown, parameter, context, corrections):
+        asked.append(("values", corrections))
+        n = sum(1 for task, _ in asked if task == "values")
+        return replies[min(n, len(replies)) - 1]
 
-    read = reading.Reader(KWP, ask_table, ask_text, FRAME).read(
+    read = reading.Reader(KWP, ask_cells, lambda *a: {"coordinates": {}},
+                          ask_values, lambda *a: {"values": []}, FRAME).read(
         7, parameter, TABLE, [], [], {("table", 5): TABLE})
     return asked, read
 
 
 def test_a_table_is_read_by_its_cells_for_numbers_and_by_name_otherwise():
-    assert [kind for kind, _ in asked_for(EMISSION)[0]] == ["table"]
+    assert [kind for kind, _ in asked_for(EMISSION)[0]] == ["cells"]
     assert [kind for kind, _ in asked_for(PLANNER, {"values": []})[0]] \
-        == ["text"]
+        == ["values"]
 
 
 def test_a_wording_in_a_table_is_quoted_from_the_table_or_asked_again():
@@ -83,7 +86,9 @@ def test_a_wording_in_a_table_is_quoted_from_the_table_or_asked_again():
     assert [claim["quote"] for claim in read.claims] == [NAMED["quote"]]
     asked, read = asked_for(PLANNER, {"values": [ELSEWHERE]},
                             {"values": [dict(NAMED, row=row_label(0))]})
-    assert len(asked) == 2 and "value" in asked[1][1][0]["what"]
+    assert asked[1][1] == [{"row": row_label(0), "value": NAMED["value"],
+                            "quote": ELSEWHERE["quote"],
+                            "what": say("quote_not_in_source")}]
     assert [claim["quote"] for claim in read.claims] == [NAMED["quote"]]
 
 
@@ -92,14 +97,14 @@ PASSAGE = Source("section", 2, "Emissions follow the common reporting format.",
 
 
 def test_a_category_request_shows_its_entries_and_a_text_request_no_list():
-    shown = reading.text_payload(PASSAGE, DIVISION, [], {})["parameter"]
+    shown = reading.values_payload(PASSAGE, DIVISION, {})["parameter"]
     assert set(shown["value_classes"]) == ENTRIES
-    assert "value_classes" not in reading.text_payload(
-        PASSAGE, TITLE, [], {})["parameter"]
+    assert "value_classes" not in reading.values_payload(
+        PASSAGE, TITLE, {})["parameter"]
 
 
 def grammar(parameter):
-    return reading.text_response_format(parameter, [])["json_schema"][
+    return reading.values_response_format(parameter)["json_schema"][
         "schema"]
 
 

@@ -211,11 +211,12 @@ def comb_sweep(comber_of: Callable, spec_for: Callable, every: Callable,
 
 sweep(batch, rows, slots, anchor) of a pass over a stored harvest
 (`topup._sweep_one`) in a run that harvests from the survey: the
-coordinates the pass re-reads are combed per passage of the rows
-(`combing.Comber.comb`), their own passage and its section shown first,
-since the reading that asked them there ran under an older question, and
-with the years the stored rows give (`batch.bases`). What it leaves open
-is restored by the pass as it restores any sweep's.
+coordinates the pass re-reads are combed per passage of the rows and
+group of the spec (`combing.Comber.comb_groups`), their own passage
+and its section shown first, since the reading that asked them there
+ran under an older question, and with the years the stored rows give
+(`batch.bases`). What it leaves open is restored by the pass as it
+restores any sweep's.
 
 ### append_parameters
 

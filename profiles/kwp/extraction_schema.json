@@ -11909,8 +11909,8 @@
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
-   "^extraction/(harvest|queries|anchors|rows|field|phrase|frame|survey|read_table|read_text|comb)$": {
-    "description": "sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_table`, `read_text` and `comb` are the prompts of the survey flow",
+   "^extraction/(harvest|queries|anchors|rows|field|phrase|frame|survey|read_cells|read_table|read_values|read_text|comb)$": {
+    "description": "sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_cells`, `read_table`, `read_values`, `read_text` and `comb` are the prompts of the survey flow",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
@@ -13076,6 +13076,12 @@
       "type": "integer"
      },
      "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
      "kind": {},
      "ms": {
       "type": "integer"
@@ -13125,6 +13131,67 @@
       "type": "integer"
      },
      "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "rows": {},
+     "t": {
+      "const": "read_cells_ask"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
      "kind": {},
      "ms": {
       "type": "integer"
@@ -13174,6 +13241,67 @@
       "type": "integer"
      },
      "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "rows": {},
+     "t": {
+      "const": "read_values_ask"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
      "kind": {},
      "ms": {
       "type": "integer"
@@ -13223,6 +13351,12 @@
       "type": "integer"
      },
      "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
      "kind": {},
      "ms": {
       "type": "integer"
@@ -13355,6 +13489,12 @@
      },
      "filled": {
       "type": "integer"
+     },
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
      },
      "hits": {
       "type": "integer"

@@ -1586,7 +1586,10 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None)
 
 The reading of one parameter's passages (`reading.Reader`), or None
 when the profile writes no prompts for it or its spec names no groups.
-A figure goes with its crop.
+Four requests, each with one task (owner decision 2026-11-04): the
+cells of a table, one group's coordinates in it, the values of a
+passage, one group's coordinates of them. A figure goes with its
+crop.
 
 ### make_comber
 

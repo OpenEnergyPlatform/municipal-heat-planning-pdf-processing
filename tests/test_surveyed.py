@@ -132,8 +132,9 @@ def test_a_part_of_a_table_no_reply_answered_is_a_hole_beside_its_values():
 
 def test_a_reading_says_why_it_came_to_nothing():
     def reader(reply):
-        return reading.Reader(SPEC, lambda *a, **k: reply,
-                              lambda *a, **k: reply, [])
+        def ask(*args, **kwargs):
+            return reply
+        return reading.Reader(SPEC, ask, ask, ask, ask, [])
 
     cut = reader(reading.CUT).read(7, EMISSION, ONE, [], [], SHOWN)
     silent = reader(None).read(7, EMISSION, ONE, [], [], SHOWN)
@@ -258,32 +259,39 @@ def test_a_survey_of_part_of_a_plan_is_kept_under_its_scope(tmp_path):
 def test_a_pass_combs_a_coordinate_in_its_own_passage_first():
     calls = []
 
-    class Comber:
+    class Comber(combing.Comber):
         def comb(self, document_id, parameter, source, slots, claims,
                  passages, pairs, budget, **given):
             calls.append((source, [s.name for s in slots], claims, given))
 
-    sweep = surveyed.comb_sweep(lambda spec: Comber(), lambda d: SPEC,
-                                lambda d, exclude: [ONE, TWO, THREE],
-                                lambda d: 2)
-    year = next(s for s in reading.slots_of(SPEC, EMISSION)
-                if s.name == "year")
+    sweep = surveyed.comb_sweep(
+        lambda spec: Comber(SPEC, None, None, None, None), lambda d: SPEC,
+        lambda d, exclude: [ONE, TWO, THREE], lambda d: 2)
+    slots = {s.name: s for s in reading.slots_of(SPEC, EMISSION)}
     batch = Batch(7, EMISSION, [WorkItem(7, EMISSION, ONE),
                                 WorkItem(7, EMISSION, THREE)],
                   bases=(("status_quo", 2022),))
     first, second = {"value": 300}, {"value": 310}
-    sweep(batch, [Row("R1", 0, first), Row("R2", 1, second)], [year])
+    rows = [Row("R1", 0, first), Row("R2", 1, second)]
+    sweep(batch, rows, [slots["year"]])
     assert [(c[0], c[2]) for c in calls] == [(ONE, [first]),
                                              (THREE, [second])]
     assert all(c[1] == ["year"] and c[3]["coordinates"] == ["year"]
+               and "year" in c[3]["group"].coordinates
                and c[3]["own"] and c[3]["bases"] == (("status_quo", 2022),)
                for c in calls)
+    # Coordinates of two groups: one request per group, each its share.
+    calls.clear()
+    sweep(batch, rows, [slots["year"], slots["carrier"]])
+    assert [(c[0], c[1], c[3]["coordinates"]) for c in calls] == [
+        (ONE, ["year"], ["year"]), (ONE, ["carrier"], ["carrier"]),
+        (THREE, ["year"], ["year"]), (THREE, ["carrier"], ["carrier"])]
 
 
 def comber(*replies, ranked=()):
     asked = []
 
-    def ask(payload, shape, document_id, source):
+    def ask(payload, shape, document_id, source, group=None):
         asked.append(payload)
         return replies[min(len(asked), len(replies)) - 1]
 

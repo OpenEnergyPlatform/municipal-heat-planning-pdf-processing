@@ -1,7 +1,7 @@
 """A reply that parses but lacks a key its schema requires at the top is not
 the object that was asked for: it is asked again as missing_key, the retry
 naming the key, in every request of the stage that goes out with a schema
-(the rebuilt harvest's requests, the places and the field requests). A
+(the four reading requests, the places and the field requests). A
 reply that has every key the top requires is taken as it is, whatever it
 leaves out below. Each promise has a case that breaks it by construction
 beside the one that keeps it."""
@@ -55,32 +55,34 @@ def told(conversation) -> str:
 
 
 TABLE = reading.table_response_format(SLOTS)
+CELLS = reading.cells_response_format()
+LABELS = ["R1"]
+REQUESTS = ((CELLS, "read_cells", "values", {"values": []}),
+            (TABLE, "read_table", "coordinates", {"coordinates": {}}),
+            (reading.values_response_format(EMISSION), "read_values",
+             "values", {"values": []}),
+            (reading.text_response_format(SLOTS, LABELS), "read_text",
+             "values", {"values": []}))
 
 
-def test_a_table_reply_without_its_keys_is_asked_again_naming_the_key(faults):
-    whole = '{"coordinates": {}, "values": []}'
-    client, sent = replying("{}", whole)
-    got = runner.ask_in_grammar(client, PROMPT, [], TABLE, 7, "read_table",
-                                "coordinates")
-    assert got == {"coordinates": {}, "values": []}
-    assert faults == ["missing_key"] and len(sent) == 2
-    assert '"coordinates"' in told(sent[1])
-    # The cells left out alone: asked again for them by name.
-    client, sent = replying('{"coordinates": {}}', whole)
-    faults.clear()
-    runner.ask_in_grammar(client, PROMPT, [], TABLE, 7, "read_table",
-                          "coordinates")
-    assert faults == ["missing_key"] and '"values"' in told(sent[1])
+def test_a_reply_without_its_keys_is_asked_again_naming_the_key(faults):
+    for shape, where, key, whole in REQUESTS:
+        faults.clear()
+        client, sent = replying("{}", json.dumps(whole))
+        assert runner.ask_in_grammar(client, PROMPT, [], shape, 7, where,
+                                     key) == whole
+        assert faults == ["missing_key"] and len(sent) == 2, where
+        assert f'"{key}"' in told(sent[1])
 
 
 def test_a_reply_with_every_key_the_top_requires_is_taken_as_it_is(faults):
     # Its coordinates name none of the slots the schema requires below the
     # top: the reading asks for those by name, the request does not.
-    client, sent = replying('{"coordinates": {}, "values": []}')
-    got = runner.ask_in_grammar(client, PROMPT, [], TABLE, 7, "read_table",
-                                "coordinates")
-    assert got == {"coordinates": {}, "values": []}
-    assert len(sent) == 1 and faults == []
+    for shape, where, key, whole in REQUESTS:
+        client, sent = replying(json.dumps(whole))
+        assert runner.ask_in_grammar(client, PROMPT, [], shape, 7, where,
+                                     key) == whole
+        assert len(sent) == 1 and faults == [], where
 
 
 def test_a_places_reply_without_its_hits_is_asked_again(monkeypatch, faults,

@@ -128,51 +128,76 @@ map of places and most of the search for open coordinates of corpus_m8_100: 60,
 ### Reading a parameter in its passages
 
 The second step of the rebuilt harvest (`reading.py`, `runner.make_reader`,
-prompts `extraction/read_table` and `extraction/read_text`). Each parameter is
-read in the passages the survey named for it, one request per passage, its
-definition the only one in the request. Numbers are read by their cell,
-everything else is named with a quote (owner decision 2026-11-04). For a
-parameter whose values are numbers a table is read by its cells, in parts
-where it is longer than the survey's two pages (owner decision 2026-11-04,
-`reading.table_blocks`): every part carries the table's title and head lines,
-the text around the table and the plan's pairs, and asks under `part` which
-rows it shows. The first part is asked first and names the rows under the
-Markdown rule that still belong to the head (`head_rows`, a row of units or
-years); every later part shows them above its own rows and reads no value
-from them. A request names each value of its part by its cell, `row` and
-`column`, and where the cell prints several numbers, a value with its share in
-brackets or values stacked in one cell, how many (`parts`) and which of them
-(`part`); for every coordinate it says where it stands, at the value itself,
-at a row label, at a column head (with `part` for one place of its cells, such
-as the unit of the share) or for the whole table, the most particular first,
-each with its quote; it writes no number. The reply gives the coordinates
-first and the cells last (owner decision 2026-11-04,
-`reading.table_response_format`): a reply that named its cells first ended
-four objects deep, and on a server that does not hold a reply to its schema
-the model closed one object short on large tables, the same way on all three
-attempts; a list of cells at the end closes in three. Code reads the number from the cell
-by its place (`reading.table_rows`, `reading.value_in`), quoted by its table
-row, so a row "27 % | 28 % | 27 % | 23 %" gives each 27 % its own column; the
-numbers of a cell are taken in the order it prints them
-(`verify.numbers_in_order`), digits grouped by a space as one number or as
-several, whichever gives the count the entry names (`reading.cell_numbers`).
-A value named twice is read once; one whose cell does not print what it
-names, or whose row the part does not read, is not read and is counted
-(`cells_not_read`). A part whose reply was cut off is asked again as two
-halves; a single row still cut off, or a part no reply answered, is a hole of
-its own beside the values of the other parts (`Read.lost`,
-`surveyed.taken_of`). The survey is told that each number of a cell counts
-for its own parameter. A section, a figure, and a table for a
-parameter whose values are no numbers (kwp's planning office, every parameter
-of scenarios) is read in one request that names each value with every
-coordinate at once, each with its own quote; a section or figure longer than
-the survey's two pages is read in the survey's pieces. A category parameter's
+prompts `extraction/read_cells`, `read_table`, `read_values` and `read_text`).
+Each parameter is read in the passages the survey named for it, its
+definition the only one in the request. Reading is split into requests with
+one task each (owner decision 2026-11-04): one request names the cells or the
+values, and one request per group of the spec answers the coordinates.
+
+For a parameter whose values are numbers a table is read by its cells, in
+parts where it is longer than the survey's two pages (owner decision
+2026-11-04, `reading.table_blocks`): every part carries the table's title and
+head lines, the text around the table and the plan's pairs, and asks under
+`part` which rows it shows. The first part is asked first and names the rows
+under the Markdown rule that still belong to the head (`head_rows`, a row of
+units or years); every later part shows them above its own rows and reads no
+value from them. Step one is `extraction/read_cells`: it names the cells of
+the part that hold the parameter's values, `row` and `column`, and where a
+cell prints several numbers, a value with its share in brackets or values
+stacked in one cell, how many (`parts`) and which of them (`part`). It marks
+under `faulty` where the Markdown looks broken and writes no number. The
+reply names its cells last (`reading.cells_response_format`): on a server
+that does not hold a reply to its schema, a reply that ended deep in its
+objects closed one object short on large tables, the same way on all three
+attempts. Code reads the number from the cell by its place
+(`reading.table_rows`, `reading.value_in`), quoted by its table row, so a row
+"27 % | 28 % | 27 % | 23 %" gives each 27 % its own column; the numbers of a
+cell are taken in the order it prints them (`verify.numbers_in_order`),
+digits grouped by a space as one number or as several, whichever gives the
+count the entry names (`reading.cell_numbers`). A value named twice is read
+once; one whose cell does not print what it names, or whose row the part does
+not read, is not read and is counted (`cells_not_read`). A part whose reply
+was cut off is asked again as two halves; a single row still cut off, or a
+part no reply answered, is a hole of its own beside the values of the other
+parts (`Read.lost`, `surveyed.taken_of`). The survey is told that each number
+of a cell counts for its own parameter.
+
+Step two is `extraction/read_table`, one request for each group of the spec
+that has a coordinate to ask (kwp: `frame`, scenario and year; `number`, unit
+and subject; `context`, the rest). It shows the cells and asks only that
+group's coordinates, and answers per coordinate `rows`, `columns` (with
+`part` for one place of the cells, such as the unit of a share), `cells` (a
+single value's cell: `row`, `column`, `part`) and `table`, required: the
+answer of every value no other entry answers, `out:unstated` where the
+table does not print the coordinate. The
+most particular entry stands: a value's cell, then the row label, then the
+column head (one place before the whole column), then the table, each with
+its quote.
+
+A section, a figure, and a table for a parameter whose values are no numbers
+(kwp's planning office, every parameter of scenarios) is read in two steps
+too (owner decision 2026-11-04). `extraction/read_values` names each value
+with `value`, `value_raw` and `quote`; a section or figure longer than the
+survey's two pages is read in the survey's pieces. A category parameter's
 request shows its entries under `value_classes`, each with its meaning and
 spellings, as the field request shows the value of such a parameter asked
 again (`reading.value_classes`, `fields.value_choice`), and the grammar takes
 for a value exactly one entry, or `""` where the model is unsure and writes
 the wording into `value_raw`; the fold keeps such a wording without an entry
-(`unmapped:value`), as it does everywhere. A table or a figure is shown with the text of its section around it
+(`unmapped:value`), as it does everywhere. A value is what its field asks for
+and never a coordinate's answer: the year of a number is a coordinate, not a
+value. A value the check refuses, its quote not in the passage or its number
+not in its quote, is asked once more with its reason (`corrections`: `row`,
+`value`, `quote` and `what`) before any group is asked. Then
+`extraction/read_text` answers, for each group of the spec, every value (by
+its label "R1", "R2", ...) with every coordinate of the group.
+
+Every group request shows the group's sentence from the spec on where a plan
+prints its coordinates (`where`). It has its own tools (`more`, `hits` and
+`not_found`, below): what one group fetched is shown to that group alone. It
+has its own correction round, and the survey's pairs (`known`) and the plan's
+base and target years go only to a group that asks a frame coordinate. A
+table or a figure is shown with the text of its section around it
 (`reading.around_of`, owner decision 2026-11-04), where the sentence that
 announces it, the heading over it and the paragraph under it print its year
 and its scenario: the whole section when it fits the survey's two pages, else
@@ -188,25 +213,32 @@ passage cut to the survey's two pages, and what could not be found under
 `not_found`; a coordinate quoted from it cites that passage. The gathering
 ends when a round asks for nothing the request has not shown, or when the
 request no longer fits the model's window, and the reply before such a round
-stands. Every coordinate is answered: the grammar requires each coordinate of a
-value in text and, for a table, an entry of each coordinate for the whole table
-that holds wherever no row or column entry does, and `out:unstated` is an
-answer of every kind, a year's too (`fields.value_schema`, shared with the
-field request). Every coordinate goes through `merge_field`, a row label first,
-then a column head, then the table, so the most particular reading stands. What
-the check refuses, a coordinate's answer or a number its quote does not print,
-and a coordinate the reply left out are asked once more in the same request
-with the reason (`corrections`, the harvest's own phrases); the second reply
-fills what is still open and never a coordinate read the first time, and there
-is no third. A request that asks the year shows the plan's base and target
-years, numbers only, as the field request does (`reading.years_of`), so a value
-whose passage names its state by the plan's word ("Bestand", "Zieljahr") and
-prints no year is read with the year of that state (`pipeline.named_year`). A
-frame coordinate still open takes the survey's tuple of the passage when there
-is exactly one and the row read no frame coordinate of its
-own that contradicts it (`reading.inherit`, window `frame`); one no reply
-answered ends `unanswered`. The values are folded by `fold_batch`.
-`scripts/probe_rows.py --documents ... --survey --read` runs both steps.
+stands. Every coordinate is answered: the grammar requires each coordinate of
+a value in text and, for a table, the `table` entry of each coordinate, and
+`out:unstated` is an answer of every kind, a year's too (`fields.value_schema`,
+shared with the field request). Every coordinate goes through `merge_field`.
+What the check refuses, a coordinate's answer or a number its quote does not
+print, and a coordinate the reply left out are asked once more in the same
+group's request with the reason (`corrections`), named by value or place and
+coordinate, in the harvest's own phrases; the second reply fills what is
+still open and never a coordinate read the first time, and there is no third.
+A request that asks the year shows the plan's base and target years, numbers
+only, as the field request does (`reading.years_of`), so a value whose
+passage names its state by the plan's word ("Bestand", "Zieljahr") and prints
+no year is read with the year of that state (`pipeline.named_year`). A frame
+coordinate still open takes the survey's tuple of the passage when there is
+exactly one and the row read no frame coordinate of its own that contradicts
+it (`reading.inherit`, window `frame`); one no reply answered ends
+`unanswered`. The values are folded by `fold_batch`.
+
+Every reply schema lists its keys in the order its prompt's example names them
+(owner decision 2026-11-04, "the schema follows the prompt"): a server that
+holds a reply to its schema writes the keys in the schema's order, so an
+optional key listed before one already written can no longer come. With
+`part` listed before `parts`, no cell that printed several numbers got its
+place. `tests/test_schema_order.py` holds every prompt of both profiles whose
+reply goes out with a grammar to its schema. `scripts/probe_rows.py
+--documents ... --survey --read` runs both steps.
 
 ### Combing what the reading left open
 
@@ -214,14 +246,16 @@ The third step of the rebuilt harvest (`combing.py`, `runner.make_comber`,
 prompt `extraction/comb`, owner decisions 2026-11-04). A coordinate still open
 after the reading, one the passage does not state, one whose answer did not
 hold or one no reply answered, is looked for in the rest of the plan, one
-request per passage and parameter. Its search sentence is the passage's
+request per passage, parameter and group of the spec that still has an open
+coordinate; each shows the group's `where`. Its search sentence is the passage's
 context (`runner.context_probes`, owner decision 2026-10-22: its title, what
 its rows have read in the plan's words, what is asked), and the best 15
 sections, 20 tables and 20 figures of the ranking are shown as a list of
 titles and first lines, the passage and its section left out. The model
 fetches what it wants to read with the reading's tools (`reading.Gathered`: a
 hit by its id, the next or the previous section, a table or figure by its
-placeholder, a pattern) and answers each open coordinate of each row with its
+placeholder, a pattern), each group with its own, and answers each open
+coordinate of the group for each row with its
 quote, or that the plan does not state it. The answers go through
 `merge_field` in window `retrieval`, a coordinate read before is never
 touched, and what the check refuses or the reply leaves out is asked once
@@ -242,15 +276,16 @@ over a stored harvest) searches nothing; each search is traced as `seek`.
 ### The run harvests from the survey
 
 A run harvests from the survey of each plan wherever its profile can
-(`runner.surveyed_flow`): the spec names groups and the profile writes the four
-prompts `extraction/survey`, `read_table`, `read_text` and `comb`. kwp and
+(`runner.surveyed_flow`): the spec names groups and the profile writes the six
+prompts `extraction/survey`, `read_cells`, `read_table`, `read_values`,
+`read_text` and `comb` (`runner.SURVEY_PROMPT_IDS`). kwp and
 scenarios do; a profile without them is harvested field by field as before,
 so the two flows stand side by side until every profile has moved. Per document
 the run surveys, reads and combs (`surveyed.SurveyedHarvest`), then folds, runs
 the compute step and writes the file with its stamp as for any harvest. This
 flow writes no anchors, sends no frame request, builds no map of places and has
-no slice gate (owner decision 2026-11-04): a number is asked for all its
-coordinates in one request, and every row the reading leaves open is combed.
+no slice gate (owner decision 2026-11-04): a number is asked for its
+coordinates in one request per group of the spec, and every row the reading leaves open is combed.
 Every request goes through the one queue, served oldest document first
 (`scheduler.py`). A profile with lists per document gets its own spec per
 document, and the reading's batch carries it, so the fold checks against those
@@ -288,8 +323,9 @@ stamp says the document was read in part, as before. `--top-up` and the first
 half of `--top-up-open` re-read a coordinate with the combing
 (`surveyed.comb_sweep` under `topup._sweep_one`): the coordinates named, in
 whatever state they are, are combed with their own passage and its section
-shown first and the years of the stored rows, and the pass's restore rules are
-unchanged. The second half of `--top-up-open` (`surveyed.append_unread`)
+shown first and the years of the stored rows, through `Comber.comb_groups`:
+one request per group of the spec, each with its share of the coordinates the
+pass names. The pass's restore rules are unchanged. The second half of `--top-up-open` (`surveyed.append_unread`)
 surveys what no stored survey answered plus the passages the file holds as
 holes (scope `rest`), and reads a reading's hole again for its own parameter
 with the frame tuples its survey gave; for a harvest of the old flow, what its
@@ -297,8 +333,11 @@ rows requests were shown counts as read. `--top-up-parameters`
 (`surveyed.append_parameters`) surveys the whole plan for the gained parameters
 (scope `parameters`).
 
-The server's window is measured over the four prompts of this flow
-(`runner.sent_prompt_ids`, see Configuration). `stats.py` writes per run the
+The server's window is measured over the six prompts of this flow
+(`runner.sent_prompt_ids`, see Configuration). The trace names each request by its kind, `read_cells_ask`,
+`read_table_ask`, `read_values_ask`, `read_text_ask` and `comb_ask`, each with
+its `group` where the request has one, and the `comb` event carries `group`
+too. `stats.py` writes per run the
 requests per stage and the survey, reading and combing counts
 (`stats.from_traces`), and the cost estimate counts the requests of both flows
 (`estimate.TRACED`).

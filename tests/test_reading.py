@@ -1,13 +1,22 @@
 """A table's numbers are read by their place: one row per cell a reply names,
 the table row its quote, a value named twice read once, and a number printed
-twice in a row in two columns; a coordinate is taken at the value before its
-row label before its column head before the whole table, and only through
-the field check; a frame coordinate left open takes the survey's one tuple
-of the passage, but not against a year the row read under its own head. A
-cell that prints several numbers is split into them in the order it prints
+twice in a row in two columns; a coordinate is taken at the value's cell
+before its row label before its column head before the whole table, and only
+through the field check; a frame coordinate left open takes the survey's one
+tuple of the passage, but not against a year the row read under its own head.
+A cell that prints several numbers is split into them in the order it prints
 them, the value the place its entry names, an answer for one place holding
-there before the answer for its column, and a cell that does not print what
-its entry names is not read and counted.
+there before the answer for its column, an answer for a cell that names no
+place holding for every value of the cell, and a cell that does not print
+what its entry names is not read and counted.
+
+A passage is read in requests of one task each (owner decision 2026-11-04):
+the cells of a table or the values of a passage first, a value the check
+refuses asked once more with its reason before anything else, then each
+group of the spec in a request of its own, which shows its own coordinates,
+where a plan prints them, and the cells or values it is about, the survey's
+pairs and the plan's years only where it asks a frame coordinate, and whose
+tools fetch for it alone.
 
 A table longer than its budget is read in blocks of whole rows under its
 title and head lines; the first part is asked first and the head rows it
@@ -15,20 +24,18 @@ names are shown with every later part, never read again; a part cut off is
 asked again in halves, and a row still cut off, or a part not answered, is
 lost on its own while the others are read; a table that fits is one request.
 
-Every coordinate is answered: the grammar wants each coordinate of a value
-in text and each coordinate of a table for the whole table, and a year can
-be answered as not printed. What the check refuses of a reply is asked once
-more with its reason, and what the second reply answers is taken, but never
-over a coordinate read the first time, and never a third time; a reply the
-check takes whole is asked once. A coordinate left out is asked for by name,
-and one no reply answers ends unanswered. A request that asks the year shows
-the plan's base and target years, numbers only, and a value whose passage
-names its state by the plan's word takes the year of that state, and no
-other. A table or figure is shown with the text of its section, the whole
-section when it fits two pages and the part around its place when not, and a
-coordinate quoted from that text is read and cites the section. A search is
-listed once, also after a list of hits no search made. A table reply names
-its coordinates first and its cells last.
+Every coordinate is answered: the grammar wants each coordinate of a group
+for every value in text and for the whole table, and a year can be answered
+as not printed. What the check refuses of a group's reply is asked once more
+with its reason, and what the second reply answers is taken, but never over
+a coordinate read the first time, and never a third time; a reply the check
+takes whole is asked once. A coordinate left out is asked for by name, and
+one no reply answers ends unanswered. A value whose passage names its state
+by the plan's word takes the year of that state, and no other. A table or
+figure is shown with the text of its section, the whole section when it fits
+two pages and the part around its place when not, and a coordinate quoted
+from that text is read and cites the section. A search is listed once, also
+after a list of hits no search made. A cells reply names its cells last.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -251,10 +258,14 @@ def test_a_value_s_own_answer_holds_before_its_row_column_and_table():
     reply = cells((1, 2, 1, 2), (1, 2, 2, 2), coordinates={"sector": {
         "rows": [dict(HOUSEHOLDS, row=1)],
         "columns": [dict(HOUSEHOLDS, column=2)],
+        "cells": [dict(SERVICES, row=1, column=2, part=2)],
         "table": HOUSEHOLDS}})
-    reply["values"][1]["sector"] = SERVICES
     assert sectors(reply) == ["Private Haushalte", "GHD"]
-    del reply["values"][1]["sector"]
+    # An answer for a cell that names no place holds for every value of it.
+    reply["coordinates"]["sector"]["cells"] = [dict(SERVICES, row=1,
+                                                    column=2)]
+    assert sectors(reply) == ["GHD", "GHD"]
+    del reply["coordinates"]["sector"]["cells"]
     assert sectors(reply) == ["Private Haushalte", "Private Haushalte"]
 
 
@@ -309,14 +320,32 @@ def test_two_tuples_or_a_year_of_its_own_take_nothing_from_the_survey():
 
 # -- every coordinate answered -------------------------------------------------
 
-def value_grammar(labels=None):
+GROUPS = reading.groups_of(SPEC, list(SLOTS.values()))
+# The groups that ask a frame coordinate: they alone are shown the pairs.
+FRAMED = {group.name for group, slots in GROUPS
+          if {slot.name for slot in slots} & {slot.name for slot in FRAME}}
+
+
+def value_grammar(labels=("R1",)):
     return reading.text_response_format(
-        EMISSION, list(SLOTS.values()), labels)["json_schema"]["schema"]
+        list(SLOTS.values()), list(labels))["json_schema"]["schema"]
 
 
 def table_grammar():
     return reading.table_response_format(
         list(SLOTS.values()))["json_schema"]["schema"]
+
+
+def cells_grammar():
+    return reading.cells_response_format()["json_schema"]["schema"]
+
+
+def rejected(instance, schema) -> bool:
+    try:
+        jsonschema.validate(instance, schema)
+    except jsonschema.ValidationError:
+        return True
+    return False
 
 
 def everything(**given):
@@ -326,61 +355,57 @@ def everything(**given):
     return out
 
 
+def entry(**given):
+    """A group reply's entry for the one value of a passage, "R1"."""
+    return {"row": "R1", **everything(**given)}
+
+
 UNIT = {"value": "t CO2", "quote": "rund 300 t CO2"}
 VALUE = {"value": 300, "quote": "rund 300 t CO2"}
+EVERY = {name: {"table": {"value": UNSTATED}} for name in SLOTS}
+TABLE_UNIT = {"table": {"value": "t CO2",
+                        "quote": "| | in t CO2 | in t CO2 | in t CO2 |"}}
 
 
 def test_the_grammar_wants_every_coordinate_of_a_value_in_text():
-    whole = {"values": [dict(VALUE, **everything(unit=UNIT))]}
-    jsonschema.validate(whole, value_grammar())
-    without_year = {"values": [{k: v for k, v in whole["values"][0].items()
-                                if k != "year"}]}
-    try:
-        jsonschema.validate(without_year, value_grammar())
-    except jsonschema.ValidationError:
-        return
-    raise AssertionError("a value without its year passed the grammar")
+    assert not rejected({"values": [entry(unit=UNIT)]}, value_grammar())
+    without_year = {k: v for k, v in entry(unit=UNIT).items() if k != "year"}
+    assert rejected({"values": [without_year]}, value_grammar())
+    assert rejected({"values": [dict(entry(unit=UNIT), row="R2")]},
+                    value_grammar())
 
 
 def test_the_grammar_wants_every_coordinate_of_a_table_for_the_whole_table():
-    whole = cells((2, 2), coordinates={name: {"table": {"value": UNSTATED}}
-                                       for name in SLOTS})
-    jsonschema.validate(whole, table_grammar())
-    for broken in ({name: entry for name, entry in
-                    whole["coordinates"].items() if name != "carrier"},
-                   dict(whole["coordinates"], carrier={"rows": []})):
-        try:
-            jsonschema.validate(dict(whole, coordinates=broken),
-                                table_grammar())
-        except jsonschema.ValidationError:
-            continue
-        raise AssertionError("a table without its carrier passed the "
-                             "grammar")
+    assert not rejected({"coordinates": EVERY}, table_grammar())
+    for broken in ({name: one for name, one in EVERY.items()
+                    if name != "carrier"},
+                   dict(EVERY, carrier={"rows": []})):
+        assert rejected({"coordinates": broken}, table_grammar()), broken
 
 
-def test_the_table_grammar_takes_a_value_by_its_cell_and_its_place():
-    whole = cells((1, 2, 1, 2), head_rows=[1],
-                  coordinates={name: {"table": {"value": UNSTATED}}
-                               for name in SLOTS})
-    whole["values"][0]["unit"] = {"value": UNSTATED}
-    whole["coordinates"]["unit"] = {"table": {"value": UNSTATED}, "columns": [
-        {"column": 2, "part": 1, "value": UNSTATED}]}
-    jsonschema.validate(whole, table_grammar())
+def test_the_cells_grammar_takes_a_value_by_its_cell_and_its_place():
+    assert not rejected(cells((1, 2, 1, 2), head_rows=[1]), cells_grammar())
     for broken in ([{"row": 1}], [{"column": 2}],
                    [{"row": 1, "column": 2, "share": 1}]):
-        try:
-            jsonschema.validate(dict(whole, values=broken), table_grammar())
-        except jsonschema.ValidationError:
-            continue
-        raise AssertionError(f"a value {broken} passed the grammar")
+        assert rejected({"values": broken}, cells_grammar()), broken
 
 
-def test_a_table_reply_names_its_coordinates_first_and_its_cells_last():
-    # A grammar generates the keys in this order: a reply ending in its
-    # coordinates ends four objects deep, one ending in its cells in a list.
-    order = list(table_grammar()["properties"])
-    assert order[0] == "coordinates" and order[-1] == "values"
-    assert table_grammar()["required"] == ["coordinates", "values"]
+def test_a_group_answers_for_a_single_value_by_its_cell_and_its_place():
+    unit = {"table": {"value": UNSTATED},
+            "cells": [{"row": 1, "column": 2, "part": 1, "value": UNSTATED}]}
+    assert not rejected({"coordinates": dict(EVERY, unit=unit)},
+                        table_grammar())
+    for broken in ({"row": 1, "value": UNSTATED},
+                   {"column": 2, "value": UNSTATED}):
+        assert rejected({"coordinates": dict(EVERY, unit=dict(
+            unit, cells=[broken]))}, table_grammar()), broken
+
+
+def test_a_cells_reply_names_its_cells_last():
+    # A server that does not hold a reply to its schema closed one object
+    # short on large tables when the reply ended deep in its objects.
+    assert list(cells_grammar()["properties"])[-1] == "values"
+    assert cells_grammar()["required"] == ["values"]
 
 
 def test_a_year_can_be_answered_as_not_printed_and_only_as_a_year():
@@ -396,29 +421,58 @@ def test_a_year_can_be_answered_as_not_printed_and_only_as_a_year():
 
 # -- asked again with the reason -----------------------------------------------
 
-def read_text(*replies):
-    """What reading TEXT came to, and what each request was asked with."""
+def nth(given, calls, task):
+    """The reply to the latest request of *task*: the n-th of *given* for
+    its n-th request, the last one again after that."""
+    n = sum(1 for asked, _ in calls if asked == task)
+    return given[min(n, len(given)) - 1]
+
+
+def read_text(*replies, values=({"values": [VALUE]},), source=TEXT, **kw):
+    """What reading *source* came to, and each request as (task,
+    corrections), the task "values" or the name of a group: the values
+    requests answered by *values*, the requests of each group by
+    *replies*."""
     calls = []
 
-    def ask_text(source, parameter, slots, context, corrections=None):
-        calls.append(corrections)
-        return replies[min(len(calls), len(replies)) - 1]
+    def ask_values(shown, parameter, context, corrections):
+        calls.append(("values", corrections))
+        return nth(values, calls, "values")
 
-    reader = reading.Reader(SPEC, None, ask_text, FRAME)
-    read = reader.read(7, EMISSION, TEXT, [], [], {("section", 6): TEXT})
+    def ask_text(shown, parameter, group, slots, rows, context, corrections):
+        calls.append((group.name, corrections))
+        return nth(replies, calls, group.name)
+
+    reader = reading.Reader(SPEC, None, None, ask_values, ask_text, FRAME,
+                            **kw)
+    read = reader.read(7, EMISSION, source, [], [],
+                       {(source.owner_kind, source.owner_id): source})
     return read, calls
 
 
-def read_table(*replies):
+def read_table(*replies, named):
+    """What reading TABLE came to, and each request as (task, corrections):
+    the cells request answered by *named*, the requests of each group by
+    *replies*."""
     calls = []
 
-    def ask_table(source, grid, parameter, slots, context, corrections=None):
-        calls.append(corrections)
-        return replies[min(len(calls), len(replies)) - 1]
+    def ask_cells(view, part, parameter, context):
+        calls.append(("cells", None))
+        return named
 
-    reader = reading.Reader(SPEC, ask_table, None, FRAME)
+    def ask_table(view, part, parameter, group, slots, shown, context,
+                  corrections):
+        calls.append((group.name, corrections))
+        return nth(replies, calls, group.name)
+
+    reader = reading.Reader(SPEC, ask_cells, ask_table, None, None, FRAME)
     read = reader.read(7, EMISSION, table(), [], [], {("table", 5): table()})
     return read, calls
+
+
+def asked_again(calls) -> list:
+    return [(task, corrections) for task, corrections in calls
+            if corrections is not None]
 
 
 WRONG_CARRIER = {"value": "Erdgas", "quote": "Erdgas steht hier nicht"}
@@ -427,109 +481,144 @@ RIGHT_CARRIER = {"value": "Erdgas", "quote": "300 t CO2 bei Erdgas"}
 
 def test_a_coordinate_the_check_refuses_is_asked_again_with_its_reason():
     read, calls = read_text(
-        {"values": [dict(VALUE, **everything(unit=UNIT,
-                                             carrier=WRONG_CARRIER))]},
-        {"values": [dict(VALUE, row="R1",
-                         **everything(unit=UNIT, carrier=RIGHT_CARRIER))]})
-    assert calls[0] is None and len(calls) == 2
-    assert calls[1] == [{"row": "R1", "value": 300, "quote": "rund 300 t CO2",
-                         "what": {"carrier": say("quote_not_in_source")}}]
+        {"values": [entry(unit=UNIT, carrier=WRONG_CARRIER)]},
+        {"values": [entry(unit=UNIT, carrier=RIGHT_CARRIER)]})
+    assert asked_again(calls) == [("context", [
+        {"row": "R1", "what": {"carrier": say("quote_not_in_source")}}])]
     claim = read.claims[0]
     assert claim["carrier"] == "Erdgas" and claim["carrier_state"] == "read"
-    assert read.asked == 2
+    assert read.asked == 1 + len(GROUPS) + 1
 
 
-def test_a_number_its_quote_does_not_print_is_asked_again_and_replaced():
-    read, calls = read_text(
-        {"values": [dict(VALUE, value=300000, **everything(unit=UNIT))]},
-        {"values": [dict(VALUE, row="R1", **everything(unit=UNIT))]})
-    assert set(calls[1][0]["what"]) == {"value"}
-    assert read.claims[0]["value"] == 300
+def test_a_value_the_check_refuses_is_asked_again_before_any_group():
+    for wrong in (dict(VALUE, value=300000),            # its quote: not that
+                  dict(VALUE, quote="rund 300 t CO2 im Jahr")):  # not there
+        read, calls = read_text(
+            {"values": [entry(unit=UNIT)]},
+            values=({"values": [wrong]}, {"values": [dict(VALUE, row="R1")]}))
+        assert [task for task, _ in calls[:2]] == ["values", "values"]
+        assert [(c["row"], c["value"], c["quote"]) for c in calls[1][1]] \
+            == [("R1", wrong["value"], wrong["quote"])]
+        assert (read.claims[0]["value"], read.claims[0]["quote"]) \
+            == (300, "rund 300 t CO2")
+    _read, calls = read_text({"values": [entry(unit=UNIT)]})
+    assert [task for task, _ in calls].count("values") == 1
 
 
 def test_a_table_coordinate_the_check_refuses_is_asked_again_for_its_row():
     def reply(carrier_quote):
-        coordinates = {name: {"table": {"value": UNSTATED}} for name in SLOTS}
-        coordinates["unit"] = {"table": {
-            "value": "t CO2", "quote": "| | in t CO2 | in t CO2 | in t CO2 |"}}
-        coordinates["carrier"] = {
+        return {"coordinates": dict(EVERY, unit=TABLE_UNIT, carrier={
             "rows": [{"row": 2, "value": "Erdgas", "quote": carrier_quote}],
-            "table": {"value": UNSTATED}}
-        return cells((2, 2), coordinates=coordinates)
+            "table": {"value": UNSTATED}})}
 
     read, calls = read_table(reply("| Erdgas steht nicht |"),
-                             reply("| Erdgas | 1.200 | 800 | 2.000 |"))
-    assert calls[1] == [{"coordinate": "carrier", "row": 2,
-                         "what": say("quote_not_in_source")}]
+                             reply("| Erdgas | 1.200 | 800 | 2.000 |"),
+                             named=cells((2, 2)))
+    assert asked_again(calls) == [("context", [
+        {"coordinate": "carrier", "row": 2,
+         "what": say("quote_not_in_source")}])]
     assert read.claims[0]["carrier_state"] == "read"
 
 
 def test_a_reply_wrong_twice_is_not_asked_a_third_time():
-    wrong = dict(VALUE, **everything(unit=UNIT, carrier=WRONG_CARRIER))
-    read, calls = read_text({"values": [wrong]},
-                            {"values": [dict(wrong, row="R1")]})
-    assert len(calls) == 2
+    read, calls = read_text(
+        {"values": [entry(unit=UNIT, carrier=WRONG_CARRIER)]})
+    assert [task for task, _ in calls].count("context") == 2
     assert read.claims[0]["carrier_state"] == "unbacked"
 
 
 def test_a_reply_the_check_takes_whole_is_asked_once():
     read, calls = read_text(
-        {"values": [dict(VALUE, **everything(unit=UNIT,
-                                             carrier=RIGHT_CARRIER))]})
-    assert calls == [None] and read.asked == 1
+        {"values": [entry(unit=UNIT, carrier=RIGHT_CARRIER)]})
+    assert calls == [("values", None)] + [(group.name, None)
+                                          for group, _ in GROUPS]
+    assert read.asked == 1 + len(GROUPS)
 
 
 def test_a_coordinate_read_the_first_time_stays_as_read():
-    first = dict(VALUE, **everything(carrier=RIGHT_CARRIER))
-    del first["unit"]
+    first = entry(unit=UNIT, carrier=RIGHT_CARRIER)
+    del first["sector"]
     read, calls = read_text(
         {"values": [first]},
-        {"values": [dict(VALUE, row="R1",
-                         **everything(unit=UNIT, carrier={"value": UNSTATED}))]})
-    assert set(calls[1][0]["what"]) == {"unit"}
+        {"values": [entry(unit=UNIT, carrier={"value": UNSTATED})]})
+    assert asked_again(calls) == [("context", [
+        {"row": "R1", "what": {"sector": say("key_missing", key="sector")}}])]
     claim = read.claims[0]
     assert claim["carrier"] == "Erdgas" and claim["carrier_state"] == "read"
-    assert claim["unit_state"] == "read"
+    assert claim["sector_state"] == "unstated"
 
 
 def test_a_coordinate_left_out_is_asked_for_by_name_and_ends_unanswered():
-    entry = dict(VALUE, **everything(unit=UNIT))
-    del entry["year"]
-    read, calls = read_text({"values": [entry]},
-                            {"values": [dict(entry, row="R1")]})
-    assert calls[1][0]["what"] == {"year": say("key_missing", key="year")}
+    left = entry(unit=UNIT)
+    del left["year"]
+    read, calls = read_text({"values": [left]})
+    assert asked_again(calls) == [("frame", [
+        {"row": "R1", "what": {"year": say("key_missing", key="year")}}])]
     assert read.claims[0]["year_state"] == "unanswered"
     assert read.unanswered == 1
 
 
-def test_a_reader_reads_a_table_as_one_request_and_text_value_by_value():
+# -- one task per request ------------------------------------------------------
+
+class Found:
+    answers: dict = {}
+
+    def passages_of(self, parameter):
+        return [("table", 5), ("section", 6)] \
+            if parameter == "emission" else []
+
+    def tuples_at(self, owner, group):
+        return [TUPLE] if owner == ("table", 5) else []
+
+
+def test_each_group_is_asked_alone_and_only_a_frame_group_sees_the_pairs():
     asked = []
 
-    def ask_table(source, grid, parameter, slots, context, corrections=None):
-        asked.append(("table", context["known"]))
-        coordinates = {name: {"table": {"value": UNSTATED}} for name in SLOTS}
-        coordinates["unit"] = {"table": {
-            "value": "t CO2", "quote": "| | in t CO2 | in t CO2 | in t CO2 |"}}
-        return cells((2, 2), (2, 3), coordinates=coordinates)
+    def ask_cells(view, part, parameter, context):
+        asked.append(("cells", reading.cells_payload(view, part, parameter,
+                                                     context)))
+        return cells((2, 2), (2, 3))
 
-    def ask_text(source, parameter, slots, context, corrections=None):
-        asked.append(("text", context["known"]))
-        return {"values": [dict(VALUE, **everything(unit=UNIT))]}
+    def ask_table(view, part, parameter, group, slots, shown, context,
+                  corrections):
+        asked.append(("table", reading.table_payload(
+            view, part, parameter, slots, shown, group.where, context,
+            corrections)))
+        return {"coordinates": dict(EVERY, unit=TABLE_UNIT)}
 
-    class Found:
-        answers = {}
+    def ask_values(shown, parameter, context, corrections):
+        asked.append(("values", reading.values_payload(shown, parameter,
+                                                       context, corrections)))
+        return {"values": [VALUE]}
 
-        def passages_of(self, parameter):
-            return [("table", 5), ("section", 6)] \
-                if parameter == "emission" else []
+    def ask_text(shown, parameter, group, slots, rows, context, corrections):
+        asked.append(("text", reading.text_payload(
+            shown, parameter, slots, rows, group.where, context,
+            corrections)))
+        return {"values": [entry(unit=UNIT)]}
 
-        def tuples_at(self, owner, group):
-            return [TUPLE] if owner == ("table", 5) else []
-
-    reader = reading.Reader(SPEC, ask_table, ask_text, FRAME)
+    reader = reading.Reader(SPEC, ask_cells, ask_table, ask_values, ask_text,
+                            FRAME)
     reads = reader(7, Found(), {("table", 5): table(), ("section", 6): TEXT})
-    assert [kind for kind, _ in asked] == ["table", "text"]
-    assert asked[0][1] == [{"scenario": "Bestand", "year": 2022}]
+    assert [task for task, _ in asked] == [
+        "cells", *["table"] * len(GROUPS), "values", *["text"] * len(GROUPS)]
+    groups = [(group.where, {slot.name for slot in slots})
+              for group, slots in GROUPS]
+    for task, payload in asked:
+        framed = bool(set(payload.get("coordinates") or ())
+                      & {slot.name for slot in FRAME})
+        assert ("known" in payload) == framed, (task, payload)
+    for task, about in (("table", [{"row": 2, "column": 2},
+                                   {"row": 2, "column": 3}]),
+                        ("text", [dict(VALUE, row="R1")])):
+        payloads = [payload for asked_as, payload in asked
+                    if asked_as == task]
+        assert [(p["where"], set(p["coordinates"])) for p in payloads] \
+            == groups
+        assert all(p["values"] == about for p in payloads)
+    assert next(payload["known"] for task, payload in asked
+                if task == "table" and "known" in payload) \
+        == [{"scenario": "Bestand", "year": 2022}]
     values = {c["value"]: c for r in reads for c in r.claims}
     assert set(values) == {1200, 800, 300}
     assert values[300]["unit"] == "t CO2" and values[300]["unit_state"] \
@@ -547,36 +636,37 @@ BASES = [{"state": "base", "axis": "year", "year": 2022,
 
 
 def test_a_request_asking_the_year_shows_the_base_and_target_years():
-    assert reading.years_of(BASES, list(SLOTS.values()))         == {"base_years": [2022], "target_years": [2045]}
+    assert reading.years_of(BASES, list(SLOTS.values())) \
+        == {"base_years": [2022], "target_years": [2045]}
     assert reading.years_of(BASES, [SLOTS["carrier"]]) == {}
-    shown = []
+    shown = {}
 
-    def ask_text(source, parameter, slots, context, corrections=None):
-        shown.append(reading.text_payload(source, parameter, slots, context,
-                                          corrections))
-        return {"values": [dict(VALUE, **everything(unit=UNIT))]}
+    def ask_text(source, parameter, group, slots, rows, context, corrections):
+        shown[group.name] = reading.text_payload(
+            source, parameter, slots, rows, group.where, context, corrections)
+        return {"values": [entry(unit=UNIT)]}
 
-    reader = reading.Reader(SPEC, None, ask_text, FRAME,
-                            bases=lambda pairs: BASES)
+    reader = reading.Reader(SPEC, None, None, lambda *a: {"values": [VALUE]},
+                            ask_text, FRAME, bases=lambda pairs: BASES)
     reader.read(7, EMISSION, TEXT, [], [], {("section", 6): TEXT})
-    assert shown[0]["base_years"] == [2022]
-    assert shown[0]["target_years"] == [2045]
+    assert {name: (payload.get("base_years"), payload.get("target_years"))
+            for name, payload in shown.items()} \
+        == {group.name: (([2022], [2045]) if group.name in FRAMED
+                         else (None, None)) for group, _ in GROUPS}
     grid = reading.grid_of(TABLE)
     assert reading.table_payload(table(), grid, EMISSION, list(SLOTS.values()),
-                                 {"known": [], "base_years": [2022]})[
+                                 [], "", {"known": [], "base_years": [2022]})[
         "base_years"] == [2022]
 
 
 def read_by_word(year):
     text = Source("section", 6, "Im Bestand fielen rund 300 t CO2 an.",
                   {"document_id": 7, "section_title": "Bilanz"})
-    reply = {"values": [dict(VALUE, **everything(unit=UNIT, year={
+    read, _ = read_text({"values": [entry(unit=UNIT, year={
         "value": year, "value_raw": "Bestand",
-        "quote": "Im Bestand fielen rund 300 t CO2"}))]}
-    reader = reading.Reader(SPEC, None, lambda *args, **kw: reply, FRAME,
-                            bases=lambda pairs: BASES)
-    return reader.read(7, EMISSION, text, [], [],
-                       {("section", 6): text}).claims[0]
+        "quote": "Im Bestand fielen rund 300 t CO2"})]},
+        source=text, bases=lambda pairs: BASES)
+    return read.claims[0]
 
 
 def test_a_value_named_by_the_plans_word_for_its_state_takes_that_year():
@@ -617,21 +707,25 @@ def test_a_table_is_shown_with_its_section_or_the_part_around_its_place():
 def test_a_year_printed_in_the_text_around_a_table_is_read_from_there():
     shown = []
 
-    def ask_table(source, grid, parameter, slots, context, corrections=None):
-        shown.append(reading.table_payload(source, grid, parameter, slots,
-                                           context, corrections))
-        coordinates = {name: {"table": {"value": UNSTATED}} for name in SLOTS}
-        coordinates["unit"] = {"table": {
-            "value": "t CO2", "quote": "| | in t CO2 | in t CO2 | in t CO2 |"}}
-        coordinates["year"] = {"table": {
-            "value": 2022, "quote": "die Emissionen im Jahr 2022"}}
-        return cells((2, 2), coordinates=coordinates)
+    def ask_cells(view, part, parameter, context):
+        shown.append(reading.cells_payload(view, part, parameter, context))
+        return cells((2, 2))
 
-    reader = reading.Reader(SPEC, ask_table, None, FRAME)
+    def ask_table(view, part, parameter, group, slots, named, context,
+                  corrections):
+        shown.append(reading.table_payload(view, part, parameter, slots,
+                                           named, group.where, context,
+                                           corrections))
+        return {"coordinates": dict(EVERY, unit=TABLE_UNIT, year={"table": {
+            "value": 2022, "quote": "die Emissionen im Jahr 2022"}})}
+
+    reader = reading.Reader(SPEC, ask_cells, ask_table, None, None, FRAME)
     read = reader.read(7, EMISSION, placed(), [], [],
                        {("table", 5): placed(), ("section", 9): SECTION},
                        budget=4000)
-    assert "Die folgende Tabelle" in shown[0]["around"]
+    assert len(shown) == 1 + len(GROUPS)
+    assert all("Die folgende Tabelle" in payload["around"]
+               for payload in shown)
     claim = read.claims[0]
     assert claim["year"] == 2022 and claim["year_state"] == "read"
     assert claim["year_source"] == ["section", 9]
@@ -648,7 +742,6 @@ LONG = "\n".join(["Tabelle 7: Endenergie je Träger im Jahr 2022",
                   "| | in MWh | in MWh |"]
                  + [f"| Träger {n} | {n}.100 | {n}.200 |" for n in range(1, 9)])
 UNIT_ROW = "| | in MWh | in MWh |"
-EVERY = {name: {"table": {"value": UNSTATED}} for name in SLOTS}
 
 
 def test_a_table_longer_than_its_budget_is_read_in_blocks_of_whole_rows():
@@ -665,16 +758,17 @@ def test_a_table_longer_than_its_budget_is_read_in_blocks_of_whole_rows():
 
 
 def read_long(answer, budget=150, tuples=()):
-    """What reading LONG for EMISSION in parts came to, and each request:
-    (rows to read, text shown, part)."""
+    """What reading LONG for EMISSION in parts came to, and each cells
+    request: (rows to read, text shown, part)."""
     asked = []
 
-    def ask_table(source, grid, parameter, slots, context, corrections=None):
-        asked.append((grid.row_numbers(), source.text, context.get("part")))
-        return answer(grid)
+    def ask_cells(view, part, parameter, context):
+        asked.append((part.row_numbers(), view.text, context.get("part")))
+        return answer(part)
 
     long = table(LONG)
-    reader = reading.Reader(SPEC, ask_table, None, FRAME)
+    reader = reading.Reader(SPEC, ask_cells, lambda *a: {"coordinates": EVERY},
+                            None, None, FRAME)
     return reader.read(7, EMISSION, long, list(tuples), list(tuples),
                        {("table", 5): long}, budget=budget), asked
 
@@ -682,7 +776,7 @@ def read_long(answer, budget=150, tuples=()):
 def every_value(grid, head=(1,)):
     """Every value of column 2 in the rows of *grid*, the unit row too."""
     return cells(*[(r, 2) for r in grid.row_numbers()], (1, 2),
-                 head_rows=list(head), coordinates=EVERY)
+                 head_rows=list(head))
 
 
 def test_the_first_part_names_the_head_rows_every_later_part_shows():
@@ -735,21 +829,28 @@ PLAN = {("section", 6): BARE, ("figure", 30): FIGURE, ("section", 8): AFTER}
 BARE_UNIT = {"value": "t CO2", "quote": "rund 300 t CO2"}
 
 
-def gathering(*replies, passages=PLAN):
-    """What reading BARE came to, and what each request showed."""
-    shows = []
+def gathering(*replies, passages=PLAN, asks="year"):
+    """What reading BARE came to, what each request of the group that asks
+    *asks* showed, and what the requests of the other groups showed: the
+    n-th request of that group answered by the n-th of *replies*, every
+    other group at once."""
+    shows, others = [], []
 
-    def ask_text(source, parameter, slots, context, corrections=None):
+    def ask_text(source, parameter, group, slots, rows, context, corrections):
+        if asks not in {slot.name for slot in slots}:
+            others.append(context)
+            return bare()
         shows.append(context)
         return replies[min(len(shows), len(replies)) - 1]
 
-    reader = reading.Reader(SPEC, None, ask_text, FRAME)
+    reader = reading.Reader(SPEC, None, None, lambda *a: {"values": [VALUE]},
+                            ask_text, FRAME)
     read = reader.read(7, EMISSION, BARE, [], [], passages, budget=4000)
-    return read, shows
+    return read, shows, others
 
 
 def bare(more=None, **given):
-    reply = {"values": [dict(VALUE, **everything(unit=BARE_UNIT, **given))]}
+    reply = {"values": [entry(unit=BARE_UNIT, **given)]}
     if more:
         reply["more"] = more
     return reply
@@ -759,22 +860,25 @@ YEAR_AFTER = {"value": 2030, "quote": "gelten für das Jahr 2030"}
 
 
 def test_the_next_section_asked_for_is_shown_and_its_quote_is_read():
-    read, shows = gathering(bare([{"get": "next"}]), bare(year=YEAR_AFTER))
+    read, shows, others = gathering(bare([{"get": "next"}]),
+                                    bare(year=YEAR_AFTER))
     assert "more" not in shows[0]
     assert [m["text"] for m in shows[1]["more"]] == [AFTER.text]
+    # What one group fetched is shown to that group alone.
+    assert others and not any("more" in context for context in others)
     claim = read.claims[0]
     assert claim["year"] == 2030 and claim["year_state"] == "read"
     assert claim["year_source"] == ["section", 8]
-    assert read.asked == 2 and read.fetched == 1
+    assert len(shows) == 2 and read.fetched == 1
 
 
 def test_a_quote_from_a_section_never_shown_is_not_read():
-    read, shows = gathering(bare(year=YEAR_AFTER))
+    read, _shows, _ = gathering(bare(year=YEAR_AFTER))
     assert read.claims[0]["year_state"] == "unbacked"
 
 
 def test_a_table_or_figure_named_by_its_placeholder_is_shown_and_none_else():
-    _read, shows = gathering(
+    _read, shows, _ = gathering(
         bare([{"get": "item", "id": "[p3_img1: Abbildung 4]"},
               {"get": "item", "id": "p9_img9"}]), bare())
     assert [m["kind"] for m in shows[1]["more"]] == ["figure"]
@@ -783,7 +887,7 @@ def test_a_table_or_figure_named_by_its_placeholder_is_shown_and_none_else():
 
 
 def test_a_search_lists_its_hits_and_a_hit_asked_for_is_shown():
-    read, shows = gathering(
+    read, shows, _ = gathering(
         bare([{"get": "search", "pattern": r"Jahr 20\d\d"}]),
         bare([{"get": "hit", "id": "H1"}]), bare(year=YEAR_AFTER))
     listed = shows[1]["hits"][0]
@@ -803,18 +907,19 @@ def test_a_search_after_a_list_no_search_made_is_searched_once():
 
 
 def test_gathering_ends_when_a_round_brings_nothing_new():
-    read, shows = gathering(bare([{"get": "next"}]),
-                            bare([{"get": "next"}, {"get": "next"}]))
-    assert len(shows) == 2 and read.asked == 2
-    read, shows = gathering(bare([{"get": "item", "id": "p9_img9"}]))
+    _read, shows, _ = gathering(bare([{"get": "next"}]),
+                                bare([{"get": "next"}, {"get": "next"}]))
+    assert len(shows) == 2
+    _read, shows, _ = gathering(bare([{"get": "item", "id": "p9_img9"}]))
     assert len(shows) == 1
     again = bare([{"get": "item", "id": "p3_img1"}])
-    read, shows = gathering(again, again, bare())
+    _read, shows, _ = gathering(again, again, bare())
     assert len(shows) == 2 and len(shows[1]["more"]) == 1
 
 
 def test_a_request_that_no_longer_fits_leaves_the_reply_before_it():
-    read, shows = gathering(bare([{"get": "next"}]), reading.CUT)
+    read, shows, _ = gathering(bare([{"get": "next"}]), reading.CUT,
+                               asks="unit")
     assert len(shows) == 2 and not read.unread
     assert [claim["value"] for claim in read.claims] == [300]
     assert read.claims[0]["unit_state"] == "read"

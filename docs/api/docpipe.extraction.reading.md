@@ -3,35 +3,38 @@
 `docpipe/extraction/reading.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
 reading.py: The values of one parameter in the passages the survey named for
-it, every coordinate of a value in the same request.
+it: one request names the values, then one request per group of the spec
+names where that group's coordinates stand.
 
-Step 3 of the rebuilt harvest (owner decision 2026-11-04). Numbers are read
-by their cell, everything else is named with a quote. A table is read for a
-parameter whose values are numbers, in parts where it is longer than the
-survey's two pages (owner decision 2026-11-04): every part shows the table's
-title and head lines, the text around the table and the plan's pairs; the
+Step 3 of the rebuilt harvest (owner decision 2026-11-04). Every request has
+one task (owner decision 2026-11-04): a prompt that needs a long explanation
+does several things at once. Numbers are read by their cell, everything else
+is named with a quote. A table is read for a parameter whose values are
+numbers, in parts where it is longer than the survey's two pages: every part
+shows the table's title and head lines and the text around the table; the
 first part is asked first, and the rows under the rule it names as head go
-with every later one. A request names each value of its part by its cell,
-row and column, and where the cell prints several numbers, a value with its
-share in brackets or values stacked in one cell, how many and which of them;
-each coordinate stands at the value itself, at a row label, at a column head
+with every later one. The cells request of a part names each value by its
+cell, row and column, and where the cell prints several numbers, a value
+with its share in brackets or values stacked in one cell, how many and which
+of them. Code reads the number from the cell by its place, never by its
+value: a table row "27 % | 28 % | 27 % | 23 %" gives each 27 % its own
+column. A part whose cells reply was cut off is asked again as two halves,
+and a single row still cut off is a hole of its own. Then each group of the
+spec (`Spec.groups`, `groups_of`) is asked in a request of its own where its
+coordinates stand: at the value itself, at a row label, at a column head
 (for one place in its cells or for the whole column) or for the whole table,
-each with its quote; the reply gives the coordinates first and the cells
-last (`table_response_format`). Code reads the number from the cell by its
-place, never by its value: a table row "27 % | 28 % | 27 % | 23 %" gives
-each 27 % its own column. A part whose reply was cut off is asked again as
-two halves, and a single row still cut off is a hole of its own. A section,
-a figure, and a table for any other parameter, is read in one request that
-names its values with every coordinate at once, each with its own quote. A
-category parameter's request shows its entries, and its grammar takes one of
-them for a value, or "" where the model is unsure and writes the wording into
-value_raw; the fold checks that value as it checks every one.
+each with its quote and with the spec's words for where a plan prints the
+group. A section, a figure, and a table for any other parameter, is asked
+for its values first, each with its wording and its quote, and then per
+group for the coordinates of those values. A category parameter's values
+request shows its entries, and its grammar takes one of them for a value,
+or "" where the model is unsure and writes the wording into value_raw; the
+fold checks that value as it checks every one.
 
-Every coordinate is answered: the grammar requires each of them, a value's
-entry in text and a table's entry for the whole table, and "the passage does
-not say" is one of the answers (`fields.UNSTATED`). One request for all
-coordinates is otherwise the request that lets a model drop the one it is
-unsure of (fields.py).
+Every coordinate is answered: the grammar of a group request requires each
+of its coordinates, a value's entry in text and a table's entry for the
+whole table, and "the passage does not say" is one of the answers
+(`fields.UNSTATED`).
 
 Nothing is checked here. Every coordinate goes through `pipeline.merge_field`,
 the check every field answer of the harvest goes through, and every value
@@ -165,33 +168,39 @@ class Reader
 (document_id, survey, passages) -> [Read], one per parameter and
 passage the survey named for it.
 
-*ask_table(source, grid, parameter, slots, context, corrections)* and
-*ask_text(source, parameter, slots, context, corrections)* are one
-request each: the reply as a dict, CUT, or None; *context* is what the
-request shows beside its passage (`context_of`), *corrections* None the
-first time and what was wrong the second. *shown_with(source)* is what a
+Four requests, each with one task (owner decision 2026-11-04), each the
+reply as a dict, CUT, or None: *ask_cells(source, grid, parameter,
+context)* the cells of a table that hold the parameter's values;
+*ask_table(source, grid, parameter, group, slots, cells, context,
+corrections)* where one group's coordinates stand in that table;
+*ask_values(source, parameter, context, corrections)* the values of a
+passage; *ask_text(source, parameter, group, slots, rows, context,
+corrections)* one group's coordinates of those values. *context* is what
+the request shows beside its passage, *corrections* None the first time
+and what was wrong the second. *shown_with(source)* is what a
 coordinate's quote may stand in besides the passage: its section's
 heading. *pool* reads passages side by side.
 
 #### Reader.\_\_init\_\_
 
 ```python
-def __init__(self, spec, ask_table: Callable, ask_text: Callable,
-             frame_slots: list, *, shown_with: Optional[Callable] = None,
+def __init__(self, spec, ask_cells: Callable, ask_table: Callable,
+             ask_values: Callable, ask_text: Callable, frame_slots: list,
+             *, shown_with: Optional[Callable] = None,
              bases: Optional[Callable] = None, pool=None, trace=None)
 ```
 
 #### Reader.context_of
 
 ```python
-def context_of(self, source: Source, slots: list, tuples: list,
-               bases: list, passages: dict,
+def context_of(self, source: Source, tuples: list, passages: dict,
                budget: Optional[int]) -> tuple
 ```
 
-(what a request shows beside its passage, the section it was
-cut from): the text around a table or figure (`around_of`), the
-survey's pairs of the passage and the plan's years (`years_of`).
+(what the requests of a passage show beside it, the section it
+was cut from): the text around a table or figure (`around_of`) and
+the survey's pairs of the passage, which only a group that asks a
+frame coordinate shows (`group_context`).
 
 #### Reader.read
 
@@ -203,8 +212,10 @@ def read(self, document_id: int, parameter, source: Source,
 ```
 
 *source* is the passage a value is verified against, *shown* the
-piece of it the request shows, *budget* the survey's two pages. A
-table is read in parts (`_read_table`).
+piece of it the requests show, *budget* the survey's two pages. A
+table is read in parts by its cells (`_read_table`), anything else
+by its values (`_read_text`); then each group of the spec in a
+request of its own (`groups_of`).
 
 ## Functions
 
@@ -253,6 +264,27 @@ def slots_of(spec, parameter) -> list
 The coordinates a value of *parameter* is read with: its unit, then
 every axis the spec does not decide.
 
+### groups_of
+
+```python
+def groups_of(spec, slots: list) -> list
+```
+
+[(group, its slots)] of *slots*, in the order of the spec's groups:
+one request each (owner decision 2026-11-04). The spec puts every
+coordinate in exactly one group (`spec._validate_groups`).
+
+### group_context
+
+```python
+def group_context(context: dict, group_slots: list, frame_slots: list,
+                  bases: list) -> dict
+```
+
+What a group's request shows beside the passage: the text around it,
+and the survey's pairs and the plan's years only where the group asks a
+frame coordinate.
+
 ### coordinate_shown
 
 ```python
@@ -265,8 +297,8 @@ def coordinate_shown(slot) -> dict
 def answer_schema(slot, where: Optional[str] = None) -> dict
 ```
 
-One coordinate's answer as the grammar takes it, at a row or a column
-when *where* names it.
+One coordinate's answer as the grammar takes it, at a row, a column
+or a single value's cell when *where* names it.
 
 ### known_of
 
@@ -361,17 +393,76 @@ The part of the table a request reads: the body rows of *block*, and
 the *head* rows the first part named shown above them as text, which no
 value is read from again.
 
+### parameter_shown
+
+```python
+def parameter_shown(parameter) -> dict
+```
+
+### table_view
+
+```python
+def table_view(source: Source, grid: Grid, context: dict) -> dict
+```
+
+What every request of a table shows: the table or the part of it
+*grid* holds, the text around it, its columns by head and its rows by
+label, and which part this is.
+
+### cells_payload
+
+```python
+def cells_payload(source: Source, grid: Grid, parameter,
+                  context: dict) -> dict
+```
+
+The cells request of a table: the table, the text around it and the
+parameter, nothing of its coordinates.
+
+### cells_response_format
+
+```python
+def cells_response_format() -> dict
+```
+
+The cells that hold the parameter's values, each by its row and
+column and, where the cell prints several numbers, how many (`parts`)
+and which of them (`part`, from 1); the rows under the rule that belong
+to the head, named by the first part of a table read in parts; what is
+wrong with the Markdown.
+
+The cells come last (owner decision 2026-11-04): on a server that does
+not hold a reply to its schema, a reply that ended deep in its objects
+closed one object short on large tables. Every object lists its keys in
+the order the prompt names them (owner decision 2026-11-04): a server
+that holds a reply to its schema has the model write them in the
+schema's order, so a key listed before one already written can no
+longer come. With `part` before `parts`, every cell that prints several
+numbers came without its place.
+
+### cell_shown
+
+```python
+def cell_shown(key: tuple) -> dict
+```
+
+A value's cell as a group request shows it: its row and column, and
+its place where the cell prints several numbers.
+
 ### table_payload
 
 ```python
 def table_payload(source: Source, grid: Grid, parameter, slots: list,
-                  context: dict, corrections: Optional[list] = None) -> dict
+                  cells: list, where: str, context: dict,
+                  corrections: Optional[list] = None) -> dict
 ```
 
-The table request: the table or the part of it *grid* holds, the text
-around it and *context* (`Reader.context_of`, and which part this is);
-with *corrections* the same request asked once more, what was wrong with
-the first reply beside it.
+One group's request of a table: the table and the text around it, the
+cells of the parameter's values (*cells*, `cell_shown`), the group's
+coordinates with the spec's words for where a plan prints them
+(*where*), and *context* (`group_context`, which part this is, what the
+request fetched with its tools); with *corrections* the same request
+asked once more, what was wrong with the first reply beside it.
 
 ### table_response_format
 
@@ -379,16 +470,11 @@ the first reply beside it.
 def table_response_format(slots: list) -> dict
 ```
 
-Every value the request shows named by its cell, and every coordinate
-answered, at least for the whole table: its entry there is the answer of
-every value no value, row or column entry answers, and UNSTATED when the
-table does not print it.
-
-The cells come last (owner decision 2026-11-04): a reply that named them
-first ended four objects deep, and on a server that does not hold a
-reply to its schema the model closed one object short on large tables,
-the same way on every attempt. A list of cells at the end closes in
-three.
+Where each of a group's coordinates stands in a table, each answered
+at least for the whole table: its entry there is the answer of every
+value no cell, row or column entry answers, and UNSTATED when the table
+does not print it. The keys in the order the prompt names them
+(`cells_response_format`): rows, columns, single cells, the table.
 
 ### value_key
 
@@ -430,16 +516,27 @@ not read and counted.
 def answer_of(entry: dict) -> dict
 ```
 
+### labels_at
+
+```python
+def labels_at(at: dict, row, column, part) -> list
+```
+
+The values a group reply's entry for one cell answers for: the value
+at that row, column and place, where the cell prints several numbers,
+or every value of the cell where the entry names no place; a place 1 of
+a cell that prints one number is that number.
+
 ### table_replies
 
 ```python
 def table_replies(reply: dict, slot, at: dict) -> list
 ```
 
-[(level, window, field reply)] of one coordinate of a table reply,
-the most particular first: the value's own entry, a row label, a column
-head, for one place in the column's cells before the whole column, then
-the table.
+[(level, window, field reply)] of one coordinate of a group's reply
+over a table, the most particular first: a single value's cell, a row
+label, a column head, for one place in the column's cells before the
+whole column, then the table.
 
 ### table_corrections
 
@@ -463,29 +560,58 @@ The entries a category parameter's value is one of, as a request shows
 a closed list (`fields.Slot.answerable`), without UNSTATED: a value the
 passage does not state is no value. Empty for a parameter with no list.
 
+### source_shown
+
+```python
+def source_shown(source: Source) -> dict
+```
+
+### values_payload
+
+```python
+def values_payload(source: Source, parameter, context: dict,
+                   corrections: Optional[list] = None) -> dict
+```
+
+The values request of a section, a figure or a table read for a
+parameter whose values are no numbers: the passage, the text around a
+table or figure and the parameter, a category parameter with its
+entries (`value_classes`), nothing of its coordinates; with
+*corrections* the values the check refused, asked once more.
+
+### values_response_format
+
+```python
+def values_response_format(parameter, labels: Optional[list] = None) -> dict
+```
+
+Every value of the passage with its wording and its quote. Asked
+again, each entry names the value of the first reply it replaces, one of
+*labels*. A category value is one of its entries, or "" where the model
+is unsure of them.
+
 ### text_payload
 
 ```python
-def text_payload(source: Source, parameter, slots: list,
-                 context: dict, corrections: Optional[list] = None) -> dict
+def text_payload(source: Source, parameter, slots: list, rows: list,
+                 where: str, context: dict,
+                 corrections: Optional[list] = None) -> dict
 ```
 
-The request of a section, a figure or a table read for a parameter
-whose values are no numbers, the text around a table or figure and
-*context* (`Reader.context_of`) beside it; with *corrections* the same
-request asked once more for the values the check refused something of.
-A category parameter shows its entries (`value_classes`).
+One group's request of a passage: the passage, the text around a
+table or figure, its values (each "row" with its value and quote), the
+group's coordinates with the spec's words for where a plan prints them
+(*where*), and *context* (`group_context`, what the request fetched with
+its tools); with *corrections* the same request asked once more.
 
 ### text_response_format
 
 ```python
-def text_response_format(parameter, slots: list,
-                         labels: Optional[list] = None) -> dict
+def text_response_format(slots: list, labels: list) -> dict
 ```
 
-Every value with every coordinate. Asked again, each entry names the
-value of the first reply it answers for, one of *labels*. A category
-value is one of its entries, or "" where the model is unsure of them.
+Every value the request shows, by its "row", one of *labels*, with
+every coordinate of the group.
 
 ### text_rows
 
@@ -514,21 +640,47 @@ passage. Said as the harvest says it.
 ### refused_of
 
 ```python
-def refused_of(failed: list, corrections: list) -> collections.Counter
+def refused_of(failed: list) -> collections.Counter
 ```
 
-What the check refused of a reply, by reason, and the values it
-refused as "value".
+What the check refused of a reply, by reason.
 
-### text_corrections
+### value_corrections
 
 ```python
-def text_corrections(rows: list, failed: list, source: Source,
-                     slots: list) -> list
+def value_corrections(rows: list, source: Source) -> list
 ```
 
-What the check refused of a text reply, one entry per value it
-refused something of: [{row, value, quote, what: {value | coordinate:
+The values of a values reply the check refuses, each with its row,
+value and quote and why: [{row, value, quote, what}].
+
+### values_again
+
+```python
+def values_again(rows: list, reply: dict, corrections: list) -> int
+```
+
+The second values reply onto the values it was asked about: an entry
+answers for the value its "row" names and gives it its value, wording
+and quote anew. Returns the values given anew.
+
+### entries_of
+
+```python
+def entries_of(reply: dict, labels) -> dict
+```
+
+{label: entry} of a group's reply over a passage's values, the first
+entry for each of *labels*.
+
+### group_corrections
+
+```python
+def group_corrections(rows: list, failed: list, slots: list) -> list
+```
+
+What the check refused of a group's reply over a passage's values,
+one entry per value it refused something of: [{row, what: {coordinate:
 reason}}]. A coordinate the reply left out is named as missing.
 
 ### same

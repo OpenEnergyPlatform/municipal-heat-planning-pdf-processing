@@ -8,7 +8,7 @@ Du bekommst:
 - "passage": woher die Werte stammen, mit Art, Titel und Abschnitt.
 - "parameter": die Kennzahl mit ihrer Definition.
 - "rows": die Werte, je mit "row", Zahl, Einheit und Zitat, dazu, was zu ihnen schon gelesen ist ("known", im Wortlaut des Plans), und die Angaben, die noch offen sind ("open").
-- "coordinates": die offenen Angaben, je mit Frage und, wo es eine gibt, mit Liste ("options").
+- "coordinates": die offenen Angaben, je mit Frage und, wo es eine gibt, mit Liste ("options"); "where": wo ein Plan sie meist druckt.
 - "hits": Trefferlisten, je Treffer mit "id", Art, Titel und erster Zeile. Die erste Liste sind die Passagen des Plans, die zu diesen Werten am besten passen; danach kommen die Treffer deiner eigenen Suchen.
 - "more", "not_found": die Passagen, die du nachgefordert hast, je mit "id", und was sich nicht finden ließ, mit Grund ("end": in diese Richtung gibt es keinen Abschnitt mehr, "unknown": kein oder mehr als ein Platzhalter oder Treffer dieses Namens, "invalid_pattern" oder "timeout": das Muster ging nicht).
 - "base_years" und "target_years", nur wenn der Plan sie nennt: die Jahre, für die er seinen eigenen Stand erhoben oder bilanziert hat, und die Jahre seines Ziels, als Jahreszahlen.

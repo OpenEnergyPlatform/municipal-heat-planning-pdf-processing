@@ -5,24 +5,27 @@ the plan. Step 4 of the rebuilt harvest (owner decisions 2026-11-04).
 The reading asks a value's coordinates in its own passage and the text
 around it, and may fetch more of the plan itself. What is still open after it
 (a coordinate the passage does not state, one whose answer did not hold, one
-no reply answered) is looked for here, per passage and parameter: one search
-with the passage's context (owner decision 2026-10-22: its title, what its
-rows have read in the plan's words, what is asked). The best sections, tables
-and figures of that search are shown as a list of titles and first lines, and
-the model fetches what it wants to read with the reading's own tools: a hit
-by its id, the next or the previous section, a table or figure by its
-placeholder, a pattern. It answers each open coordinate of each row with its
-quote, or that the plan does not state it.
+no reply answered) is looked for here, per passage, parameter and group of
+the spec that still has an open coordinate (owner decision 2026-11-04: every
+request one task), the group's words for where a plan prints it shown: one
+search with the passage's context (owner decision 2026-10-22: its title,
+what its rows have read in the plan's words, what is asked). The best
+sections, tables and figures of that search are shown as a list of titles
+and first lines, and the model fetches what it wants to read with the
+reading's own tools: a hit by its id, the next or the previous section, a
+table or figure by its placeholder, a pattern. It answers each open
+coordinate of each row with its quote, or that the plan does not state it.
 
 Nothing is checked here. Every answer goes through `merge_field`, and what it
 refuses is asked once more with the reason. A coordinate this request leaves
 without an answer ends `unanswered`; one whose request no longer fits the
 model's window ends `exhausted`; `unstated` is now a finding about the plan.
 
-A pass over a stored harvest combs with the same request (`Comber.comb`):
-the coordinates it names (*coordinates*) whatever their state, the value's
-own passage and its section shown first (*own*), since the reading that
-asked them there ran under an older question, the years of the stored rows
+A pass over a stored harvest combs with the same requests
+(`Comber.comb_groups`): the coordinates it names (*coordinates*) whatever
+their state, one request per group, the value's own passage and its section
+shown first (*own*), since the reading that asked them there ran under an
+older question, the years of the stored rows
 (*bases*), and the passages a harvest before read the coordinate in listed
 before the search's hits (*first*).
 
@@ -38,8 +41,8 @@ from . import lookup
 from .fields import EXHAUSTED, READ, SAID_UNSTATED, UNANSWERED, UNBACKED
 from .pipeline import Row, mark_unanswered, merge_field, row_label
 from .reading import (Gathered, answer_of, answer_schema, around_of,
-                      coordinate_shown, first_line, gather, more_schema,
-                      slots_of, years_of)
+                      coordinate_shown, first_line, gather, groups_of,
+                      more_schema, slots_of, years_of)
 from .wording import say
 
 COMB_PROMPT_ID = "extraction/comb"
@@ -100,14 +103,16 @@ class Combed:
     missed: int = 0
     corrected: int = 0
     exhausted: int = 0
+    group: Optional[str] = None   # the group of the spec asked
 
 
 class Comber:
     """(document_id, reads, passages, pairs, budget) -> [Combed], one per
     passage and parameter whose read values have an open coordinate.
 
-    *ask(payload, shape, document_id, source)* is one request: the reply as a
-    dict, CUT, or None. *rank(document_id, probes, exclude)* is the plan's
+    *ask(payload, shape, document_id, source, group)* is one request: the
+    reply as a dict, CUT, or None, *group* the name of the group of the spec
+    it asks, for its trace. *rank(document_id, probes, exclude)* is the plan's
     passages best first for the search sentences *probes*
     (`runner.make_more_sources`), *probes(rows, asked, owner_of, label)* the
     sentence of a passage (`runner.context_probes`), *known(claim, asked)*
@@ -128,38 +133,71 @@ class Comber:
 
     def __call__(self, document_id: int, reads: list, passages: dict,
                  pairs: list, budget: Optional[int] = None) -> list:
-        groups: dict = collections.OrderedDict()
+        """One Combed per passage, parameter and group of the spec with a
+        coordinate still open on one of its values (owner decision
+        2026-11-04)."""
+        jobs: dict = collections.OrderedDict()
         for read in reads:
             source = read.batch.items[0].source
             parameter = read.batch.parameter
             slots = slots_of(self.spec, parameter)
-            for claim in read.claims:
-                if open_of(claim, slots):
-                    key = (parameter.uri, source.owner_kind, source.owner_id)
-                    groups.setdefault(key, (parameter, source, slots,
-                                            []))[3].append(claim)
-        jobs = list(groups.values())
+            for group, group_slots in groups_of(self.spec, slots):
+                for claim in read.claims:
+                    if open_of(claim, group_slots):
+                        key = (parameter.uri, source.owner_kind,
+                               source.owner_id, group.name)
+                        jobs.setdefault(key, (parameter, source, group,
+                                              group_slots, []))[4].append(
+                                                  claim)
 
         def one(job):
-            parameter, source, slots, claims = job
-            return self.comb(document_id, parameter, source, slots, claims,
-                             passages, pairs, budget)
+            parameter, source, group, group_slots, claims = job
+            return self.comb(document_id, parameter, source, group_slots,
+                             claims, passages, pairs, budget, group=group)
         if self.pool is None:
-            return [one(job) for job in jobs]
-        return list(self.pool.map(one, jobs))
+            return [one(job) for job in jobs.values()]
+        return list(self.pool.map(one, jobs.values()))
+
+    def comb_groups(self, document_id: int, parameter, source, slots: list,
+                    claims: list, passages: dict, pairs: list,
+                    budget: Optional[int] = None, *,
+                    coordinates: Optional[list] = None, own: bool = False,
+                    bases: Optional[tuple] = None,
+                    first: Optional[list] = None) -> list:
+        """`comb` once per group of the spec that has something to ask: with
+        *coordinates* the group's share of them, else a coordinate open on
+        one of *claims*. [Combed], one per group asked."""
+        out = []
+        for group, group_slots in groups_of(self.spec, slots):
+            names = {slot.name for slot in group_slots}
+            if coordinates is not None:
+                asked = [name for name in coordinates if name in names]
+                mine = list(claims) if asked else []
+            else:
+                asked = None
+                mine = [claim for claim in claims
+                        if open_of(claim, group_slots)]
+            if not mine:
+                continue
+            out.append(self.comb(document_id, parameter, source, group_slots,
+                                 mine, passages, pairs, budget,
+                                 coordinates=asked, own=own, bases=bases,
+                                 first=first, group=group))
+        return out
 
     def comb(self, document_id: int, parameter, source, slots: list,
              claims: list, passages: dict, pairs: list,
              budget: Optional[int] = None, *,
              coordinates: Optional[list] = None, own: bool = False,
              bases: Optional[tuple] = None,
-             first: Optional[list] = None) -> Combed:
+             first: Optional[list] = None, group=None) -> Combed:
         """The open coordinates of *claims*, values of *parameter* read in
         *source*, answered in place; with *coordinates* those of every row,
         open or not. *own* shows *source* and its section before the first
         request, *bases* are the years a row may name by a word (instead of
         those of *pairs*), *first* passages listed before the search's
-        hits."""
+        hits, *group* the group of the spec *slots* belong to, whose words
+        for where a plan prints them the request shows."""
         rows = [Row(label=row_label(i), item_index=0, claim=claim)
                 for i, claim in enumerate(claims)]
         if coordinates is not None:
@@ -173,7 +211,8 @@ class Comber:
         names = [slot.name for slot in asked]
         origin = (source.owner_kind, source.owner_id)
         result = Combed(parameter.uri, origin, len(rows),
-                        sum(len(names) for names in opened.values()))
+                        sum(len(names) for names in opened.values()),
+                        group=group.name if group is not None else None)
         around = around_of(source, passages, budget)
         parent = (around.owner_kind, around.owner_id) \
             if around is not None else origin
@@ -213,6 +252,7 @@ class Comber:
                       "open": opened[row.label]} for row in rows],
             "coordinates": {slot.name: coordinate_shown(slot)
                             for slot in asked},
+            **({"where": group.where} if group is not None else {}),
             **years_of(bases, asked)}
         shape = comb_response_format(asked, [row.label for row in rows])
 
@@ -220,7 +260,8 @@ class Comber:
             payload = {**base, **gathered.context()}
             if corrections:
                 payload["corrections"] = corrections
-            return self.ask(payload, shape, document_id, source)
+            return self.ask(payload, shape, document_id, source,
+                            group=group.name if group is not None else None)
 
         reply = ask()
         result.asked = 1
@@ -306,4 +347,4 @@ class Comber:
                        hits=result.hits, fetched=result.fetched,
                        searched=result.searched, missed=result.missed,
                        corrected=result.corrected,
-                       exhausted=result.exhausted)
+                       exhausted=result.exhausted, group=result.group)

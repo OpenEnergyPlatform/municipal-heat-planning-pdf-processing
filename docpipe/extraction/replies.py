@@ -10,7 +10,11 @@ request has had its schema since the grammar was introduced for it
 Nothing here is a check. A schema says which keys a reply can have and what
 kind of thing stands under each, as the prompt does. Every key the prompt
 leaves optional is optional, a closed list is not turned into an enum, and
-what a reply says is verified afterwards exactly as before.
+what a reply says is verified afterwards exactly as before. Every object
+lists its keys in the order its prompt names them (owner decision
+2026-11-04): a server that holds a reply to its schema has the model write
+them in that order, so a key listed before one already written could no
+longer come.
 
 Author: Felix Vossel
 """
@@ -70,8 +74,8 @@ def review(slots) -> dict:
         if slot.name == fields.VALUE:
             said.update({"value": {"type": ["number", "string", "null"]},
                          "value_raw": TEXT_OR_NULL,
-                         "value_quote": TEXT_OR_NULL,
-                         "unit": TEXT_OR_NULL, "unit_raw": TEXT_OR_NULL})
+                         "unit": TEXT_OR_NULL, "unit_raw": TEXT_OR_NULL,
+                         "value_quote": TEXT_OR_NULL})
             continue
         said[slot.name] = {"type": ["string", "integer", "number", "null"]}
         said[f"{slot.name}_raw"] = TEXT_OR_NULL
@@ -98,9 +102,10 @@ def rows(*, sandbox: bool = True) -> dict:
     afterwards.
     """
     shared: dict = {"source": TEXT, "unit_raw": TEXT_OR_NULL}
-    row = {**shared,
+    row = {"source": TEXT,
            "value": NUMBER_OR_TEXT, "value_raw": TEXT_OR_NULL,
            "values": {"type": "array", "items": NUMBER_OR_TEXT},
+           "unit_raw": TEXT_OR_NULL,
            "quote": TEXT, "computed": {"type": "boolean"}}
     reply = {
         "tuples": {"type": "array",

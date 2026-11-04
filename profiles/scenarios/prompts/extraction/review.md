@@ -17,4 +17,4 @@ That is an indication, not a specification. **Read the passage and return what s
 The text of the publication is English, and so are the field names and the choice lists. Quote in the language of the passage.
 
 <!-- part: example_reply -->
-{"value": 1.5, "unit": "GtCO2/yr", "value_quote": "emissions reach 1.5 GtCO2/yr by 2050", "scenario_region": "World", "scenario_region_quote": "Global results are reported for the World region"}
+{"value": "World", "value_quote": "Global results are reported for the World region", "scenario": "EN_NPi2020_400", "scenario_raw": "the NDC scenario", "scenario_quote": "In the NDC scenario, global results are reported for the World region"}
