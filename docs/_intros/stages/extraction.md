@@ -881,7 +881,8 @@ ungrouped number 09122025 and the year it plainly prints would otherwise
 be missing from that set: 12 years were dropped so on the corpus_m5
 canary. That fold now runs `unicodedata.normalize("NFKC", ...)`
 first and maps the quotation-mark, dash and thin-space variants and the
-soft hyphen onto one spelling each, before the existing whitespace
+soft hyphen onto one spelling each, and drops the markup of a transcribed
+table, a `<br>` and the `**` of bold, before the existing whitespace
 collapse: the passage comes out of the PDF and the quote out of the
 model, through two different encoders, and a ligature, a decomposed
 umlaut or „Bestand" against "Bestand" used to read as two different

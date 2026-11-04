@@ -160,6 +160,9 @@ def numbers_in(text: str) -> set:
 # and read as text it kept "holzige Festbrennstoffe" out of its own quote:
 # on Kassel six carriers stayed open and three value pairs collided.
 _BR = re.compile(r"<br\s*/?>", re.I)
+# Bold in a transcribed table is markup of the transcription too: on
+# Rendsburg a measure sheet printed "**Bedarf Bestand**<br>122,3 GWh" and its
+# quote "Bedarf Bestand 122,3 GWh" was refused twice. `flat` drops the `**`.
 
 
 # Quotation marks and dashes a PDF prints and a model retypes. The model is
@@ -186,7 +189,7 @@ def flat(text: str) -> str:
     are brought into before the one check that exists runs.
     """
     same = unicodedata.normalize("NFKC", text or "").translate(_SAME)
-    return _WS.sub(" ", _BR.sub(" ", same)).strip()
+    return _WS.sub(" ", _BR.sub(" ", same.replace("**", ""))).strip()
 
 
 def quote_in(source: str, quote: str) -> bool:

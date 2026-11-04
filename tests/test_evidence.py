@@ -111,7 +111,11 @@ def test_a_negative_value_is_refused_where_its_quote_has_no_sign():
 def test_typographic_marks_and_spacing_do_not_make_a_second_sentence():
     assert quote_in("Der „Bestand“ – 2020", 'Der "Bestand" - 2020')
     assert quote_in("holzige<br>Festbrennstoffe  12", "holzige Festbrennstoffe 12")
+    assert quote_in("| **Bedarf Bestand**<br>122,3 GWh |",
+                    "Bedarf Bestand 122,3 GWh")
     assert not quote_in("Der Bestand 2020", "Der Bestand 2021")
+    assert not quote_in("| **Bedarf Bestand**<br>122,3 GWh |",
+                        "Bedarf Bestand 123,3 GWh")
 
 
 @pytest.mark.parametrize("over", [
