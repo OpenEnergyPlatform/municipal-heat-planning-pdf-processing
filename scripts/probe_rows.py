@@ -39,6 +39,11 @@ own lists from it as the run does (the profile's `document_axes`).
 the compute step leaves open, so its prompt can be tried without reading the
 plans again.
 
+`--survey --read` runs the rebuilt harvest's survey and its reading of each
+parameter; `--comb` adds the search for what the reading left open, ranked as
+a run ranks it: the global index named by `--index` and the embedding model,
+on the CPU when the machine has no GPU.
+
 `--survey` with `--documents` asks only the survey of each whole plan, the
 first pass of the rebuilt harvest, and keeps it in `<out>/survey`. With
 `--read` each parameter is then read in the passages the survey named for it,
@@ -220,6 +225,23 @@ def survey_over(passages: dict, spec, args) -> list:
         raise SystemExit("no reading: the profile writes no read prompts")
     if reader is not None:
         reader.pool = surveyed.pool
+    comber = None
+    if args.comb:
+        from docpipe.inference import faiss_store, query_cache
+        if reader is None or args.index is None:
+            raise SystemExit("--comb needs --read and --index")
+        index, id_to_pos = faiss_store.load_global_index(args.index)
+        cache_path = args.out / "query_cache.db"
+        query_cache.connect(cache_path).close()
+        more = runner.make_more_sources(args.db, index, id_to_pos, cache_path)
+
+        def rank(document_id: int, probes: list, exclude: set) -> list:
+            return more(document_id, probes, set(exclude), limit=0)
+
+        comber = runner.make_comber(spec, rank)
+        if comber is None:
+            raise SystemExit("no combing: the profile writes no comb prompt")
+        comber.pool = surveyed.pool
     pages_of = runner.make_page_count(args.db)
     names = sorted({slot.name for parameter in spec.parameters
                     for slot in fields.axis_slots(parameter)}
@@ -245,14 +267,34 @@ def survey_over(passages: dict, spec, args) -> list:
         read_started = time.time()
         sources = passages[document]
         budget = survey.budget_of(sources, pages_of(document))
-        reads = reader(document, found,
-                       {(s.owner_kind, s.owner_id): s for s in sources},
-                       budget)
+        shown = {(s.owner_kind, s.owner_id): s for s in sources}
+        reads = reader(document, found, shown, budget)
+        read_seconds = round(time.time() - read_started, 1)
+        combed = []
+        if comber is not None:
+            pairs = []
+            for answer in answers:
+                for one in answer.tuples.get("frame", ()):
+                    if one not in pairs:
+                        pairs.append(one)
+            combed = comber(document, reads, shown, pairs, budget)
         report = DocumentReport(document_id=document)
         runner.fold_answers([(r.batch, {"tuples": r.claims}) for r in reads],
                             report, locate=None, spec=spec)
+        if comber is not None:
+            row.update({
+                "comb_seconds": round(time.time() - read_started
+                                      - read_seconds, 1),
+                "combed": len(combed),
+                "comb_requests": sum(c.asked for c in combed),
+                "comb_open": sum(c.open for c in combed),
+                "comb_filled": sum(c.filled for c in combed),
+                "comb_hits": sum(c.hits for c in combed),
+                "comb_fetched": sum(c.fetched for c in combed),
+                "comb_searched": sum(c.searched for c in combed),
+                "comb_exhausted": sum(c.exhausted for c in combed)})
         row.update({
-            "read_seconds": round(time.time() - read_started, 1),
+            "read_seconds": read_seconds,
             "read_requests": sum(r.asked for r in reads),
             "asked_again": sum(1 for r in reads if r.asked > 1),
             "corrections": sum(r.corrected for r in reads),
@@ -344,6 +386,11 @@ def main() -> int:
                         help="with --documents: only the survey of each plan")
     parser.add_argument("--read", action="store_true",
                         help="with --survey: read each parameter after it")
+    parser.add_argument("--comb", action="store_true",
+                        help="with --read: search for what the reading left "
+                             "open (needs --index)")
+    parser.add_argument("--index", type=Path, default=None,
+                        help="with --comb: the global FAISS index")
     args = parser.parse_args()
 
     from docpipe.extraction import runner, trace

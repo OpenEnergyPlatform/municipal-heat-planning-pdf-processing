@@ -41,6 +41,11 @@ own lists from it as the run does (the profile's `document_axes`).
 the compute step leaves open, so its prompt can be tried without reading the
 plans again.
 
+`--survey --read` runs the rebuilt harvest's survey and its reading of each
+parameter; `--comb` adds the search for what the reading left open, ranked as
+a run ranks it: the global index named by `--index` and the embedding model,
+on the CPU when the machine has no GPU.
+
 `--survey` with `--documents` asks only the survey of each whole plan, the
 first pass of the rebuilt harvest, and keeps it in `<out>/survey`. With
 `--read` each parameter is then read in the passages the survey named for it,
