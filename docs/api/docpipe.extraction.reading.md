@@ -49,6 +49,47 @@ Fields:
 - `body: list`: [(line, [cells])] below it
 - `columns: int`
 
+### Gathered
+
+```python
+@dataclass
+class Gathered
+```
+
+What one read fetched of the rest of the plan, in the order the model
+asked for it: the passages its request shows under "more", the hit lists
+of its searches under "hits", and what could not be found, with why,
+under "not_found". *seen* are the passages the request already shows,
+*cursor* where "next" and "previous" go on from.
+
+Fields:
+
+- `seen: set = field(default_factory=set)`
+- `cursor: dict = field(default_factory=dict)`
+- `sources: list = field(default_factory=list)`
+- `shown: list = field(default_factory=list)`
+- `hits: list = field(default_factory=list)`
+- `missed: list = field(default_factory=list)`
+- `by_hit: dict = field(default_factory=dict)`
+
+#### Gathered.context
+
+```python
+def context(self) -> dict
+```
+
+#### Gathered.fetch
+
+```python
+def fetch(self, asks, order: list, passages: dict,
+          budget: Optional[int]) -> bool
+```
+
+The asks of one reply resolved (`lookup`), each passage cut to
+*budget*, the survey's two pages. True when a passage or a hit list
+came of them the request has not shown yet: an ask for something
+shown already, or for nothing, ends the gathering.
+
 ### Read
 
 ```python
@@ -69,6 +110,9 @@ Fields:
 - `corrected: int = 0`: corrections the second request carried
 - `failed: dict = field(default_factory=dict)`: what the check refused of the first reply, by reason
 - `unanswered: int = 0`: coordinates no reply answered
+- `fetched: int = 0`: passages shown under "more"
+- `searched: int = 0`: hit lists shown under "hits"
+- `missed: int = 0`: asks that found nothing
 
 ### Reader
 
@@ -201,6 +245,14 @@ scenario are printed. The whole section when it fits *budget*, the
 survey's two pages, else that many characters around the table's place
 in it. None for a section, and for a table or figure whose section is
 not among *passages*.
+
+### more_schema
+
+```python
+def more_schema() -> dict
+```
+
+The asks a reply may carry under "more".
 
 ### table_payload
 

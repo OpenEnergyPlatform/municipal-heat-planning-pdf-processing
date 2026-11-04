@@ -33,10 +33,11 @@ from __future__ import annotations
 import collections
 import json
 import re
+import sys
 from dataclasses import dataclass, field, replace
 from typing import Callable, Optional
 
-from . import fields
+from . import fields, lookup
 from .pipeline import (READ, YEAR_STATES, Batch, Row, Source, WorkItem,
                        column_head, mark_unanswered, merge_field,
                        option_named, printed_lines, row_label, window_around)
@@ -171,6 +172,136 @@ def around_of(source: Source, passages: dict,
     return replace(section, text=text)
 
 
+# -- what a reply may ask of the rest of the plan -----------------------------
+
+# What a reply may ask for under "more" (owner decision 2026-11-04): the next
+# or the previous section, a table or figure by its placeholder, the passages
+# of the plan matching a pattern as a list, a passage of such a list by its id.
+GETS = ("next", "previous", "item", "search", "hit")
+# Why an ask found nothing, as the reply's "not_found" says it: past the end
+# of the plan, or a name that fits no passage or more than one. A pattern
+# that does not compile or does not finish says `lookup.matching`'s fault.
+END, UNKNOWN = "end", "unknown"
+
+
+def more_schema() -> dict:
+    """The asks a reply may carry under "more"."""
+    return {"type": "array", "items": {
+        "type": "object",
+        "properties": {"get": {"enum": list(GETS)},
+                       "id": {"type": "string"},
+                       "pattern": {"type": "string"}},
+        "required": ["get"], "additionalProperties": False}}
+
+
+@dataclass
+class Gathered:
+    """What one read fetched of the rest of the plan, in the order the model
+    asked for it: the passages its request shows under "more", the hit lists
+    of its searches under "hits", and what could not be found, with why,
+    under "not_found". *seen* are the passages the request already shows,
+    *cursor* where "next" and "previous" go on from."""
+    seen: set = field(default_factory=set)
+    cursor: dict = field(default_factory=dict)
+    sources: list = field(default_factory=list)
+    shown: list = field(default_factory=list)
+    hits: list = field(default_factory=list)
+    missed: list = field(default_factory=list)
+    by_hit: dict = field(default_factory=dict)
+
+    def context(self) -> dict:
+        out = {}
+        if self.shown:
+            out["more"] = self.shown
+        if self.hits:
+            out["hits"] = self.hits
+        if self.missed:
+            out["not_found"] = self.missed
+        return out
+
+    def _show(self, source: Source, text: str) -> bool:
+        owner = (source.owner_kind, source.owner_id)
+        if owner in self.seen or not text:
+            return False
+        self.seen.add(owner)
+        self.sources.append(replace(source, text=text))
+        self.shown.append({"id": f"M{len(self.shown) + 1}",
+                           "kind": source.owner_kind,
+                           "title": lookup.title_of(source), "text": text})
+        return True
+
+    def _miss(self, ask: dict, why: str, detail: str = "") -> None:
+        entry = {"get": ask.get("get"),
+                 **{key: ask[key] for key in ("id", "pattern")
+                    if ask.get(key)}, "why": why}
+        if detail:
+            entry["detail"] = detail
+        if entry not in self.missed:
+            self.missed.append(entry)
+
+    def fetch(self, asks, order: list, passages: dict,
+              budget: Optional[int]) -> bool:
+        """The asks of one reply resolved (`lookup`), each passage cut to
+        *budget*, the survey's two pages. True when a passage or a hit list
+        came of them the request has not shown yet: an ask for something
+        shown already, or for nothing, ends the gathering."""
+        new = False
+        for ask in asks if isinstance(asks, list) else ():
+            if not isinstance(ask, dict):
+                continue
+            get = ask.get("get")
+            if get in ("next", "previous"):
+                step = 1 if get == "next" else -1
+                found = lookup.following(order, self.cursor[get], step)
+                if found is None:
+                    self._miss(ask, END)
+                    continue
+                self.cursor[get] = (found.owner_kind, found.owner_id)
+                text = found.text or ""
+                if budget and len(text) > budget:
+                    text = text[:budget] if step > 0 else text[-budget:]
+                new = self._show(found, text) or new
+            elif get == "item":
+                found = lookup.item(order, ask.get("id") or "")
+                if found is None:
+                    self._miss(ask, UNKNOWN)
+                    continue
+                new = self._show(found, (found.text or "")[:budget or None]) \
+                    or new
+            elif get == "search":
+                pattern = ask.get("pattern")
+                if not pattern or any(h["pattern"] == pattern
+                                      for h in self.hits):
+                    continue
+                matches = lookup.matching(order, pattern,
+                                          budget or sys.maxsize)
+                if matches.fault:
+                    self._miss(ask, matches.fault, matches.detail)
+                    continue
+                listed = []
+                for hit in matches.hits:
+                    ref = f"H{len(self.by_hit) + 1}"
+                    self.by_hit[ref] = (tuple(hit["owner"]), hit["line"])
+                    listed.append({"id": ref, "title": hit["title"],
+                                   "line": hit["line"]})
+                self.hits.append({"pattern": pattern,
+                                  "total": matches.total, "hits": listed})
+                new = True
+            elif get == "hit":
+                ref = self.by_hit.get(ask.get("id") or "")
+                found = passages.get(ref[0]) if ref else None
+                if found is None:
+                    self._miss(ask, UNKNOWN)
+                    continue
+                text = found.text or ""
+                if budget and len(text) > budget:
+                    text = window_around(text, ref[1], budget)
+                new = self._show(found, text) or new
+            else:
+                self._miss(ask, UNKNOWN)
+        return new
+
+
 # -- a table -------------------------------------------------------------------
 
 def table_payload(source: Source, grid: Grid, parameter, slots: list,
@@ -216,7 +347,7 @@ def table_response_format(slots: list) -> dict:
         "coordinates": {"type": "object", "properties": coordinates,
                         "required": [slot.name for slot in slots],
                         "additionalProperties": False},
-        "faulty": {"type": "string"}},
+        "faulty": {"type": "string"}, "more": more_schema()},
         "required": ["value_columns", "value_rows", "coordinates"],
         "additionalProperties": False}
     return {"type": "json_schema",
@@ -345,7 +476,8 @@ def text_response_format(parameter, slots: list,
     entry = {"type": "object", "properties": properties,
              "required": required, "additionalProperties": False}
     schema = {"type": "object",
-              "properties": {"values": {"type": "array", "items": entry}},
+              "properties": {"values": {"type": "array", "items": entry},
+                             "more": more_schema()},
               "required": ["values"], "additionalProperties": False}
     return {"type": "json_schema",
             "json_schema": {"name": "text_reply", "schema": schema}}
@@ -464,6 +596,9 @@ class Read:
     # what the check refused of the first reply, by reason
     failed: dict = field(default_factory=dict)
     unanswered: int = 0           # coordinates no reply answered
+    fetched: int = 0              # passages shown under "more"
+    searched: int = 0             # hit lists shown under "hits"
+    missed: int = 0               # asks that found nothing
 
 
 class Reader:
@@ -554,21 +689,39 @@ class Reader:
         bases = self.bases(pairs)
         context, around = self.context_of(source, slots, tuples, bases,
                                           passages, budget)
+        origin = (source.owner_kind, source.owner_id)
+        parent = (around.owner_kind, around.owner_id) \
+            if around is not None else origin
+        gathered = Gathered(seen={origin, parent},
+                            cursor={"next": origin, "previous": parent})
 
         def ask(corrections: Optional[list] = None):
+            shows = {**context, **gathered.context()}
             if grid is not None:
-                return self.ask_table(source, grid, parameter, slots, context,
+                return self.ask_table(source, grid, parameter, slots, shows,
                                       corrections)
-            return self.ask_text(shown, parameter, slots, context,
-                                 corrections)
+            return self.ask_text(shown, parameter, slots, shows, corrections)
 
         reply = ask()
         result = Read(batch, [], asked=1)
         if not isinstance(reply, dict):
             result.unread = True
             return result
+        # What the reply asks of the rest of the plan, until a round asks
+        # for nothing it has not been shown or the request no longer fits
+        # the model's window: the reply before such a round stands.
+        order = list(passages.values())
+        while gathered.fetch(reply.get("more"), order, passages, budget):
+            again = ask()
+            result.asked += 1
+            if not isinstance(again, dict):
+                break
+            reply = again
+        result.fetched = len(gathered.sources)
+        result.searched = len(gathered.hits)
+        result.missed = len(gathered.missed)
         evidence = [shown] + list(self.shown_with(source)) + (
-            [around] if around is not None else []) + [
+            [around] if around is not None else []) + gathered.sources + [
             passages[tuple(one[f"{s.name}_source"])] for one in tuples
             for s in self.frame_slots
             if tuple(one.get(f"{s.name}_source") or ()) in passages]
@@ -606,7 +759,7 @@ class Reader:
             + ["value" for c in corrections if "value" in c.get("what", ())]))
         if corrections and rows:
             result.corrected = len(corrections)
-            result.asked = 2
+            result.asked += 1
             again = ask(corrections)
             if isinstance(again, dict) and grid is not None:
                 merged(rows, {slot.name: table_replies(again, slot, at)
@@ -626,7 +779,9 @@ class Reader:
                        table=grid is not None, values=len(rows),
                        skipped=result.skipped, faulty=result.faulty,
                        asked=result.asked, corrected=result.corrected,
-                       failed=result.failed, unanswered=result.unanswered)
+                       failed=result.failed, unanswered=result.unanswered,
+                       fetched=result.fetched, searched=result.searched,
+                       missed=result.missed)
         return result
 
     @staticmethod

@@ -11,6 +11,7 @@ Du bekommst:
 - "coordinates": die Angaben, die zu jedem Wert gehören, je mit Frage und, wo es eine gibt, mit Liste ("options").
 - "known": die Paare aus Szenario und Jahr, die der Plan für diese Passage nennt.
 - "base_years" und "target_years", nur wenn der Plan sie nennt: die Jahre, für die er seinen eigenen Stand erhoben oder bilanziert hat, und die Jahre seines Ziels, als Jahreszahlen.
+- "more", "hits" und "not_found", nur nachdem du nachgefordert hast (siehe unten): die nachgeforderten Passagen je mit "id", die Trefferlisten deiner Suchen und was sich nicht finden ließ, mit Grund ("end": in diese Richtung gibt es keinen Abschnitt mehr, "unknown": kein oder mehr als ein Platzhalter oder Treffer dieses Namens, "invalid_pattern" oder "timeout": das Muster ging nicht).
 - "corrections": nur bei einer zweiten Anfrage. Die Werte deiner ersten Antwort, an denen die Prüfung etwas abgelehnt hat, je mit "row", "value", "quote" und unter "what" je Feld, was nicht stimmte ("value" meint den Wert selbst).
 
 Für jeden Wert ein Eintrag in "values":
@@ -19,6 +20,13 @@ Für jeden Wert ein Eintrag in "values":
 - "quote": EINE zusammenhängende Stelle aus "text", Zeichen für Zeichen abgeschrieben, die den Wert enthält: sein Satz oder seine Tabellenzeile.
 - JEDE Angabe aus "coordinates" mit einem Eintrag aus "value" (bei einer Liste genau einer ihrer Schlüssel, sonst die Angabe selbst), "value_raw" (das Wort des Plans, wo es nicht der Schlüssel ist) und "quote" (EINE zusammenhängende Stelle aus "text" oder "around", Zeichen für Zeichen abgeschrieben, die die Angabe enthält). Aus "around" gilt nur, was über DIESE Abbildung spricht, nicht über eine andere desselben Abschnitts. Sagt die Passage eine Angabe nicht, ist ihr Eintrag "out:unstated", ohne "quote". Szenario und Jahr nennst du nur, wo die Passage oder der Text um sie sie nennt; sonst ist ihr Eintrag "out:unstated", und es gilt das Paar aus "known".
 - Steht bei einer Zahl statt einer Jahreszahl nur das Wort des Plans für seinen eigenen Stand ("Basisjahr", "Bilanzjahr", "Ist-Zustand", "Status quo", "IST", "Bestand", "aktuell") oder für sein Ziel ("Zieljahr", "Zielzustand", "Zielszenario", "Ziel"), wähl das Jahr aus "base_years" oder "target_years", auf das dieses Wort verweist: "value" ist die Jahreszahl, "value_raw" das Wort des Plans, Zeichen für Zeichen, und "quote" die Stelle, an der das Wort für deine Zahl steht. Die Jahreszahl ist anderswo belegt und braucht kein Zitat von dir. Nennt "target_years" mehrere Jahre, ist das Zieljahr das, das der Plan selbst so nennt oder in dem sein Ziel erreicht ist, kein Zwischenziel. Fehlt die Liste oder passt keins ihrer Jahre, ist der Eintrag "out:unstated". Rate das Jahr nicht aus dem Erscheinungsjahr des Plans.
+
+Steht eine Angabe weder in der Passage noch in "around", darfst du nachfordern, statt "out:unstated" zu antworten. Schreib dazu in "more" eine Liste von Anfragen:
+- {"get": "next"} oder {"get": "previous"}: den nächsten oder den vorigen Abschnitt des Plans;
+- {"get": "item", "id": "<<Platzhalter>>"}: die Tabelle oder Abbildung, deren Platzhalter in eckigen Klammern im Text steht;
+- {"get": "search", "pattern": "<<regulärer Ausdruck>>"}: eine Trefferliste der Passagen des Plans, deren Text das Muster enthält, ohne Unterschied von Groß- und Kleinschreibung, je mit "id", Titel und passender Zeile;
+- {"get": "hit", "id": "<<id eines Treffers>>"}: die Passage dieses Treffers.
+Du bekommst dann dieselbe Frage noch einmal, das Nachgeforderte unter "more" und "hits". Gib auch beim Nachfordern deine ganze Antwort mit allem, was du schon weißt; ohne neue Anfrage in "more" gilt sie. Das Zitat einer Angabe darf aus "more" stammen, die Werte selbst liest du nur aus der Passage.
 
 Bei einer zweiten Anfrage antwortest du nur für die Werte aus "corrections": je ein Eintrag mit ihrer "row" und allen Angaben, die genannten Punkte behoben.
 

@@ -144,7 +144,17 @@ announces it, the heading over it and the paragraph under it print its year
 and its scenario: the whole section when it fits the survey's two pages, else
 that many characters around its placeholder (`pipeline.window_around`, the
 cut the field request makes of a parent section). A coordinate quoted from it
-cites the section. Every coordinate is answered: the grammar requires each coordinate of a
+cites the section. Where a coordinate is in neither, the reply may ask for
+more of the plan under `more` (owner decision 2026-11-04): the next or the
+previous section, a table or figure by its placeholder, a list of the
+passages matching a regular expression, and a passage of such a list by its
+id (`lookup.py`, a pattern given up after `PATTERN_TIMEOUT_S`). The same
+request goes out again with what was fetched under `more` and `hits`, each
+passage cut to the survey's two pages, and what could not be found under
+`not_found`; a coordinate quoted from it cites that passage. The gathering
+ends when a round asks for nothing the request has not shown, or when the
+request no longer fits the model's window, and the reply before such a round
+stands. Every coordinate is answered: the grammar requires each coordinate of a
 value in text and, for a table, an entry of each coordinate for the whole table
 that holds wherever no row or column entry does, and `out:unstated` is an
 answer of every kind, a year's too (`fields.value_schema`, shared with the

@@ -479,3 +479,92 @@ def test_a_year_printed_in_the_text_around_a_table_is_read_from_there():
     alone = reader.read(7, EMISSION, placed(), [], [],
                         {("table", 5): placed()}, budget=4000)
     assert alone.claims[0]["year_state"] == "unbacked"
+
+
+# -- asking for more of the plan -----------------------------------------------
+
+BARE = Source("section", 6, "Bilanz\nEs fielen rund 300 t CO2 an.",
+              {"document_id": 7, "section_title": "Bilanz"})
+FIGURE = Source("figure", 30, "Abbildung 4\nBalken der Emissionen 2030",
+                {"document_id": 7, "title": "Abbildung 4",
+                 "parent_section": 6, "block_id": "p3_img1"})
+AFTER = Source("section", 8, "Ausblick\nDie Werte gelten für das Jahr 2030.",
+               {"document_id": 7, "section_title": "Ausblick"})
+PLAN = {("section", 6): BARE, ("figure", 30): FIGURE, ("section", 8): AFTER}
+BARE_UNIT = {"value": "t CO2", "quote": "rund 300 t CO2"}
+
+
+def gathering(*replies, passages=PLAN):
+    """What reading BARE came to, and what each request showed."""
+    shows = []
+
+    def ask_text(source, parameter, slots, context, corrections=None):
+        shows.append(context)
+        return replies[min(len(shows), len(replies)) - 1]
+
+    reader = reading.Reader(SPEC, None, ask_text, FRAME)
+    read = reader.read(7, EMISSION, BARE, [], [], passages, budget=4000)
+    return read, shows
+
+
+def bare(more=None, **given):
+    reply = {"values": [dict(VALUE, **everything(unit=BARE_UNIT, **given))]}
+    if more:
+        reply["more"] = more
+    return reply
+
+
+YEAR_AFTER = {"value": 2030, "quote": "gelten für das Jahr 2030"}
+
+
+def test_the_next_section_asked_for_is_shown_and_its_quote_is_read():
+    read, shows = gathering(bare([{"get": "next"}]), bare(year=YEAR_AFTER))
+    assert "more" not in shows[0]
+    assert [m["text"] for m in shows[1]["more"]] == [AFTER.text]
+    claim = read.claims[0]
+    assert claim["year"] == 2030 and claim["year_state"] == "read"
+    assert claim["year_source"] == ["section", 8]
+    assert read.asked == 2 and read.fetched == 1
+
+
+def test_a_quote_from_a_section_never_shown_is_not_read():
+    read, shows = gathering(bare(year=YEAR_AFTER))
+    assert read.claims[0]["year_state"] == "unbacked"
+
+
+def test_a_table_or_figure_named_by_its_placeholder_is_shown_and_none_else():
+    _read, shows = gathering(
+        bare([{"get": "item", "id": "[p3_img1: Abbildung 4]"},
+              {"get": "item", "id": "p9_img9"}]), bare())
+    assert [m["kind"] for m in shows[1]["more"]] == ["figure"]
+    assert shows[1]["not_found"] == [{"get": "item", "id": "p9_img9",
+                                      "why": reading.UNKNOWN}]
+
+
+def test_a_search_lists_its_hits_and_a_hit_asked_for_is_shown():
+    read, shows = gathering(
+        bare([{"get": "search", "pattern": r"Jahr 20\d\d"}]),
+        bare([{"get": "hit", "id": "H1"}]), bare(year=YEAR_AFTER))
+    listed = shows[1]["hits"][0]
+    assert listed["total"] == 1 and listed["hits"][0]["id"] == "H1"
+    assert "more" not in shows[1]
+    assert [m["text"] for m in shows[2]["more"]] == [AFTER.text]
+    assert read.claims[0]["year_state"] == "read"
+
+
+def test_gathering_ends_when_a_round_brings_nothing_new():
+    read, shows = gathering(bare([{"get": "next"}]),
+                            bare([{"get": "next"}, {"get": "next"}]))
+    assert len(shows) == 2 and read.asked == 2
+    read, shows = gathering(bare([{"get": "item", "id": "p9_img9"}]))
+    assert len(shows) == 1
+    again = bare([{"get": "item", "id": "p3_img1"}])
+    read, shows = gathering(again, again, bare())
+    assert len(shows) == 2 and len(shows[1]["more"]) == 1
+
+
+def test_a_request_that_no_longer_fits_leaves_the_reply_before_it():
+    read, shows = gathering(bare([{"get": "next"}]), reading.CUT)
+    assert len(shows) == 2 and not read.unread
+    assert [claim["value"] for claim in read.claims] == [300]
+    assert read.claims[0]["unit_state"] == "read"
