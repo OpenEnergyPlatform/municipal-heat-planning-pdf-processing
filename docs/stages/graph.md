@@ -347,7 +347,11 @@ that release's tag, for a project that attaches nothing to its
 releases; a `repo_files` source is files at a branch
 head, versioned by a digest over their bytes and, where the source
 names a `reviewed` commit, compared against it so a schema `kg.py`
-mirrors by hand is named the moment it moves; a `sparql` source
+mirrors by hand is named the moment it moves; a `repo_tree` source is
+every file under some folders at a branch head, taken from the branch's
+archive on github.com (`tree_members` refuses a member that would land
+outside its folder), for a tree no file list can name without the API; a
+`sparql` source
 queries the OEKG endpoint with a token read from the environment
 variable it names and written nowhere. `kwp` reads MHPO's `mhpo.owl`
 as `repo_files` at the head of `develop`, where the team builds it from
@@ -795,7 +799,7 @@ module resolves each one to a version, downloads it into a cache keyed by that
 version, and returns a record of what it got. What a file is for (a closure to
 snapshot, shapes to validate against, regions to offer) is the profile's.
 
-Five kinds:
+Six kinds:
 
   release_asset  An asset of the repository's latest GitHub release. A
                  repository without a release is an error, unless the source
@@ -807,13 +811,18 @@ Five kinds:
                  their bytes. A source may name the commit its profile was
                  `reviewed` against, and the record then lists every file that
                  differs from that commit.
+  repo_tree      Every file under some folders at the head of a branch, taken
+                 from the branch's archive, for a tree a profile cannot name
+                 file by file without the API. The version is a digest over
+                 the files taken.
   sparql         A query against the OEKG endpoint. The token comes from the
                  environment variable `token_env` names and is written nowhere.
   url            One file at a fixed address, for a publisher that is not a
                  repository. Fetched again on every refresh; the version is a
                  digest over its bytes.
 
-Of GitHub, only github.com and raw.githubusercontent.com are asked, never
+Of GitHub, only github.com (which redirects an archive to
+codeload.github.com) and raw.githubusercontent.com are asked, never
 api.github.com: the API allows 60 unauthenticated requests an hour per
 address, and every user of a shared machine shares one address.
 

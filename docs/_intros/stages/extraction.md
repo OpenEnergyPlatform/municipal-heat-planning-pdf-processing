@@ -1181,7 +1181,7 @@ and what they may touch. What changed decides which one applies:
 ```mermaid
 flowchart TD
     change[Something changed] --> kind{What changed}
-    kind -->|A vocabulary label or class| remap[remap: pure function of the harvest and spec files, no model]
+    kind -->|A vocabulary label or class| remap[remap: no model; the harvest, the spec and, for lists closed per document, the database read-only]
     kind -->|One parameter's or one axis's own question| sweepable{Is it one sweepable coordinate}
     sweepable -->|Yes| topup[top up: resweep only that coordinate, needs the model]
     sweepable -->|No: a frame axis, a gate, or a dynamic axis with no list| stale[The document stays stale as a whole: the next harvest redoes it]
@@ -1196,7 +1196,7 @@ flowchart TD
 | Pass | Needs | May touch | Leaves the stamp |
 |---|---|---|---|
 | `--recheck` | No model, no GPU, no index; the corpus database, read-only, where the profile closes lists per document | Every tuple's coordinates | Clears every stamp in the directory (unless `--keep-stamps`), except a document left alone |
-| `--remap` | Nothing: no model, no GPU, no index | A category coordinate's mapped class | Writes forward only the answer spaces it fully settled |
+| `--remap` | No model, no GPU, no index; the corpus database, read-only, where the profile closes lists per document | A category coordinate's mapped class | Writes forward only the answer spaces it fully settled; a document left alone keeps its stamp |
 | `--top-up` | The model, the FAISS index, the embedder, the database | One named coordinate of every row that has it | Writes forward only the exact stamp keys it could settle, and none when one of its requests ended on a 429 or a 5xx, or timed out |
 | `--top-up-parameters` | The model, the FAISS index, the embedder, the database | Nothing that is stored: it appends the rows, refusals and state line of each parameter the spec gained, and builds the summary line again | Writes forward the keys of the parameters it appended and of the questions the addition alone moved, and none for a document it did not read completely |
 | `--top-up-open` | The model, the FAISS index, the embedder, the database and the harvest's traces; a document without a trace is skipped | The coordinates a stored row left `exhausted`, `unanswered` or `unbacked` (an answer replaces the block, a coordinate still open keeps its old one), and it appends the rows of the passages the harvest never asked | Moves no key; enters `top-up-open` and `rest` in `producers`, and a document whose list holds `rest` is not read again |
@@ -1213,8 +1213,7 @@ matches the file. Where the profile closes lists per document, each file
 is read against its own document's lists, so the pass then opens the corpus
 database read-only; a document whose lists cannot be closed is left alone,
 stamp included, and counted under `fields.LISTS_UNREADABLE`. `--remap` (`remap.py`) re-resolves a coordinate's
-recorded wording against today's vocabulary instead, a pure function of
-the harvest and spec files: a newly listed wording is rewritten and its
+recorded wording against today's vocabulary instead, with no model: a newly listed wording is rewritten and its
 stale flags dropped, one in neither list or with none recorded is left
 as it stands, and a refusal a grown list might now place keeps its axis
 stale, since only a real harvest turns a refusal into a tuple.
@@ -1224,7 +1223,13 @@ class in `value_uri`, which the graph reads: the remap takes the wording from
 `value_raw`, or from the answered name where none was kept, compares
 `value_uri` and moves that one. A row whose wording is in no list is counted
 `not listed`, so its document stays stale in that key after the remap, and is
-what `--force-stale` is left for.
+what `--force-stale` is left for. A list the profile closes per document is
+that document's own, so the remap reads it as the recheck does: against the
+document's lists, the corpus database open read-only, and a document whose
+lists cannot be closed is left alone, stamp included, under
+`fields.LISTS_UNREADABLE`. Against the spec's lists alone the wording of a
+region group the document names would find no entry, since the entry exists
+only in that document's list.
 
 `--top-up` (`topup.py`) is the one pass that is not free: it costs a
 model call, but only for the coordinate a stamp says moved, over the
@@ -1918,7 +1923,7 @@ a `*.jsonl` or `*.stamp.json` that a reader of the harvest would list.
 | `--document ID` / `--force` / `--force-stale` | CLI flag (ID repeatable) | none / off / off | `--document` restricts a run to named ids; `--force` redoes every document, `--force-stale` only those `stale` | `runner.main`, `runner.stale` |
 | `--image-root` / `--pdf-root` | CLI flag | profile's processed dir / none | `--image-root`: crop directory for `EXTRACT_ATTACH_IMAGES`. `--pdf-root`: the PDF directory the `Documents` table names. A quote of a section's text is looked up on its page there, the highlight rectangles go into the row, and a quote not found on the page gets the flag `not_located`; without the option no quote is looked up, and tables and figures are never compared with the PDF. It also names `ROOT/processed` as the crop directory unless `--image-root` is given | `runner.main`, `resolve_image_root`, `make_locate` |
 | `--spec FILE` | CLI flag | none (the profile's `SPEC_PATH`) | The spec of a column of one's own, read instead of the profile's, for the harvest, `--review`, `--top-up`, `--top-up-parameters`, `--recheck` and `--remap`. `OUT` has to lie below the folder of FILE (exit 2 before anything is written), so the harvest has its own stamps. With `--serialize` it is not read: a warning says so (see A column of one's own) | `runner.main`, `runner.run_spec_path`, `scratch.folder_problem` |
-| `--recheck` / `--remap` / `--keep-stamps` | CLI flag | off | Runs `recheck.run` / `remap.run` over `--out`, no model needed, though `--recheck` opens the database read-only where a profile closes lists per document; `--keep-stamps` (recheck only) leaves stamps instead of clearing them | `runner.main`, `recheck.run` |
+| `--recheck` / `--remap` / `--keep-stamps` | CLI flag | off | Runs `recheck.run` / `remap.run` over `--out`, no model needed, though both open the database read-only where a profile closes lists per document; `--keep-stamps` (recheck only) leaves stamps instead of clearing them | `runner.main`, `recheck.run`, `remap.remap_file` |
 | `--top-up` / `--top-up-key KEY` | CLI flag (KEY repeatable) | off / none named | Runs `topup.run`, needing the model and index; `--top-up-key` restricts the changed keys swept to the named coordinates | `runner.main`, `topup.actionable` |
 | `--top-up-parameters` | CLI flag | off | Appends the parameters the spec has gained since a document was harvested to the harvest in `--out`, per document, with the harvest's own loop, instead of harvesting it again; needs the model and index. Refused together with `--top-up` (exit 2); `--top-up-key`, `--force` and `--force-stale` change nothing for it; its traces go to `trace-topup/`. Exit 1 when a document was not read completely, and nothing is written for it | `runner.main`, `topup_parameter.append_document` |
 | `--review` / `--review-limit N` | CLI flag | off / `0` | Runs `review.run`, one request per value of level C or D, up to N total | `review.run` |
@@ -2055,7 +2060,7 @@ hold the process for minutes.
 
 Among the six maintenance passes, `--recheck` and `--remap` never call a
 model, so their only failure mode is a coordinate they cannot settle,
-left open rather than guessed at; `--recheck` and `--review` also leave
+left open rather than guessed at; `--recheck`, `--remap` and `--review` also leave
 alone, stamp included, a document whose lists cannot be closed. `--top-up` blocks an entire document
 the moment a changed stamp key names anything it cannot sweep, and a
 re-swept claim the verifier refuses keeps its prior reading.

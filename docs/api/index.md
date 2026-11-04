@@ -38,7 +38,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.run](docpipe.run.md): `docpipe run`, the stages that turn a folder into a corpus. (5 functions)
 - [docpipe.settings](docpipe.settings.md): What an installation can set, in one list, and where each value came from. (2 classes, 9 functions)
 - [docpipe.status](docpipe.status.md): `docpipe status`, which stage left what for each document. (1 class, 4 functions)
-- [docpipe.upstream](docpipe.upstream.md): Pulls the files a profile is written against, at the version upstream currently calls its own. (1 class, 9 functions)
+- [docpipe.upstream](docpipe.upstream.md): Pulls the files a profile is written against, at the version upstream currently calls its own. (1 class, 10 functions)
 - [docpipe.usage](docpipe.usage.md): Counts the tokens every run spends, into one SQLite file that outlives the runs. (1 class, 11 functions)
 
 ## docpipe.app
@@ -261,7 +261,7 @@ is for and what it hands to what; this is the reference.
 
 - [profiles.scenarios.catalog](profiles.scenarios.catalog.md): How AR6 publications present themselves in the picker: by title and year, filtered by year, venue and the scenarios they document. (1 class)
 - [profiles.scenarios.config](profiles.scenarios.config.md): Constants for the AR6 profile.
-- [profiles.scenarios.extraction](profiles.scenarios.extraction.md): Extraction stage wiring: where the ar6 spec lives, and the lists that are only closed once a document is named. (5 functions)
+- [profiles.scenarios.extraction](profiles.scenarios.extraction.md): Extraction stage wiring: where the ar6 spec lives, and the lists that are only closed once a document is named. (6 functions)
 - [profiles.scenarios.inference](profiles.scenarios.inference.md): What the answer loop says around the ar6 prompts.
 - [profiles.scenarios.kg](profiles.scenarios.kg.md): Harvested publication metadata to OEKG Turtle. (15 functions)
 - [profiles.scenarios.oekg_api](profiles.scenarios.oekg_api.md): What the OEKG scenario-bundle API would be asked, and what it would answer. (1 class, 14 functions)
@@ -270,7 +270,7 @@ is for and what it hands to what; this is the reference.
 - [profiles.scenarios.reading](profiles.scenarios.reading.md): What the refinement, visuals and page-transcription stages say to the model when its reply was not the one JSON object that was asked for.
 - [profiles.scenarios.source](profiles.scenarios.source.md): Where the AR6 corpus comes from: pdf_index.json, the crawl over the publications the AR6 scenario database cites. (1 class, 5 functions)
 - [profiles.scenarios.store](profiles.scenarios.store.md): The project's own tables: publication metadata, the AR6 scenarios and the links between them. (4 functions)
-- [profiles.scenarios.vocabulary](profiles.scenarios.vocabulary.md): This profile's half of the ontology snapshot. (13 functions)
+- [profiles.scenarios.vocabulary](profiles.scenarios.vocabulary.md): This profile's half of the ontology snapshot. (17 functions)
 
 ## scripts
 

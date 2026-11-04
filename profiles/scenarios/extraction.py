@@ -138,6 +138,35 @@ def _acronym(label: str) -> bool:
     return len(label) <= 4 and label.upper() == label and label.lower() != label
 
 
+def _code(label: str) -> bool:
+    """A group's code: one word without a small letter ("LAM", "EU")."""
+    return (" " not in label and label.lower() != label
+            and not any(c.islower() for c in label))
+
+
+def spellings(labels: list, joined: bool = False) -> list:
+    """An entry's labels and the ways a paper writes them.
+
+    "&" and "and" stand for each other. Where *joined*, a group's code and
+    its name are joined as a paper joins them ("LAM (Latin America)",
+    "Latin America (LAM)", "LAM - Latin America"): a wording made of two
+    names of one entry names that entry, and `_one_meaning` keeps one two
+    entries share from naming either.
+    """
+    out = list(labels)
+    for label in labels:
+        for one, other in ((" & ", " and "), (" and ", " & ")):
+            if one in label:
+                out.append(label.replace(one, other))
+    if joined:
+        names = [label for label in out if any(c.islower() for c in label)]
+        for code in [label for label in labels if _code(label)]:
+            for name in names:
+                out += [f"{code} ({name})", f"{name} ({code})",
+                        f"{code} - {name}", f"{code} – {name}"]
+    return list(dict.fromkeys(out))
+
+
 def _mentioned(text: str, labels: list) -> bool:
     lowered = text.casefold()
     for label in labels:
@@ -173,28 +202,75 @@ def document_scenarios(conn: sqlite3.Connection, document_id: int) -> dict:
     return {str(r[0]): [str(r[0])] for r in rows if r[0]}
 
 
+def _named(text: str, names) -> bool:
+    """Does the text name one of these models, with its capitals? A model's
+    name is a proper name: "IMAGE" is a model, "image" is a word of every
+    paper with a figure."""
+    return any(re.search(_WORD.format(re.escape(name)), text)
+               for name in names)
+
+
+def _one_meaning(offered: dict, groups: dict) -> dict:
+    """The offered entries, each label kept where it means one thing.
+
+    Two entries offered under one label would make one answer name two
+    groups. The region of a model the paper names keeps the label; where no
+    such region or two of them carry it, no entry does. An entry left
+    without a label is not offered.
+    """
+    from docpipe.extraction.spec import fold_label
+    holders: dict = {}
+    for key, labels in offered.items():
+        for label in labels:
+            keys = holders.setdefault(fold_label(label), [])
+            if key not in keys:
+                keys.append(key)
+    out = {}
+    for key, labels in offered.items():
+        kept = []
+        for label in labels:
+            keys = holders[fold_label(label)]
+            models = [k for k in keys if (groups.get(k) or {}).get("named_by")]
+            if keys == [key] or models == [key]:
+                kept.append(label)
+        if kept:
+            out[key] = kept
+    return out
+
+
 def document_regions(conn: sqlite3.Connection, document_id: int) -> dict:
     """The countries and groups of countries this document names.
 
     The world is always offered, as `global` was. A group of the AR6
     database is also offered by its bare name where the document names its
-    family: a paper writes "the R10 regions" and then "Europe".
+    family: a paper writes "the R10 regions" and then "Europe". A model's
+    own region is offered where the paper names the model and the region,
+    and keeps a label it shares with another group (`_one_meaning`). Every
+    entry is offered with the ways a paper writes its labels (`spellings`).
     """
     groups = aggregates()
-    out = ({WORLD: groups[WORLD]["labels"]} if WORLD in groups else {})
+    out = ({WORLD: spellings(groups[WORLD]["labels"], True)}
+           if WORLD in groups else {})
     text = _document_text(conn, document_id)
     if not text:
         return out
-    out.update({iri: labels for iri, labels in _regions().items()
-                if _mentioned(text, labels)})
+    for iri, labels in _regions().items():
+        labels = spellings(labels)
+        if _mentioned(text, labels):
+            out[iri] = labels
     for key, group in groups.items():
-        labels = group["labels"]
+        labels = spellings(group["labels"], True)
+        if group.get("named_by"):
+            if (key not in out and _named(text, group["named_by"])
+                    and _mentioned(text, labels)):
+                out[key] = labels
+            continue
         family = group.get("family")
         named = labels + ([labels[0].rsplit(" (", 1)[0]]
                           if family and _mentioned(text, [family]) else [])
         if key not in out and _mentioned(text, named):
             out[key] = labels
-    return out
+    return _one_meaning(out, groups)
 
 
 def document_axes(conn: sqlite3.Connection, document_id: int) -> dict:
@@ -282,11 +358,6 @@ NOT_EXTRACTED = {
         "covers energy carrier: optional in the shapes, a closed list; the "
         "sector and technology tags of the study are asked and its energy "
         "carrier tag is not",
-    # the study's sector division tag
-    ("study", "OEO_00390079"):
-        "based on sector division: a closed list the AR6 papers almost never "
-        "answer; on the AR6 run 531 of 535 answers were a sector and four "
-        "publications named a listed division (owner, 2026-10-29)",
     # interacting region
     ("scenario", "OEO_00020222"):
         "has interacting region: optional in the shapes; a scenario's study "

@@ -49,6 +49,20 @@ def aggregates() -> dict
 {key: {labels, members, ...}}, the groups of countries of the last
 refresh; empty before one has written them.
 
+### spellings
+
+```python
+def spellings(labels: list, joined: bool = False) -> list
+```
+
+An entry's labels and the ways a paper writes them.
+
+"&" and "and" stand for each other. Where *joined*, a group's code and
+its name are joined as a paper joins them ("LAM (Latin America)",
+"Latin America (LAM)", "LAM - Latin America"): a wording made of two
+names of one entry names that entry, and `_one_meaning` keeps one two
+entries share from naming either.
+
 ### document_scenarios
 
 ```python
@@ -70,7 +84,10 @@ The countries and groups of countries this document names.
 
 The world is always offered, as `global` was. A group of the AR6
 database is also offered by its bare name where the document names its
-family: a paper writes "the R10 regions" and then "Europe".
+family: a paper writes "the R10 regions" and then "Europe". A model's
+own region is offered where the paper names the model and the region,
+and keeps a label it shares with another group (`_one_meaning`). Every
+entry is offered with the ways a paper writes its labels (`spellings`).
 
 ### document_axes
 

@@ -13,6 +13,9 @@ every coordinate, the class in `<axis>` and the document's own wording in
 files on disk. A new alias, a renamed label, or an option moved to another
 class is answered by running that function again, with no model, no GPU, and no
 index.
+A list a profile closes per document, such as the regions a paper names, is
+that document's own: the pass rebuilds it from the corpus database, opened
+read-only, so a wording is mapped onto the list its harvest was offered.
 
 Four cases stop the pass from settling a coordinate, and each is counted rather
 than silently dropped. No wording: the model never sent `<axis>_raw`, so there
@@ -41,11 +44,11 @@ import logging
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from .. import jsonl
 from . import archive
-from .fields import CHOICE, axis_slots
+from .fields import CHOICE, LISTS_UNREADABLE, axis_slots
 from .spec import Spec, fold_label
 from .trust import document_summary
 
@@ -276,9 +279,23 @@ def stamp_path_of(path: Path) -> Path:
     return path.parent / (path.name[: -len(".jsonl")] + ".stamp.json")
 
 
-def remap_file(path: Path, spec: Spec, current: dict) -> Counter:
-    """Re-map one harvest file in place, then carry its stamp forward."""
+def remap_file(path: Path, spec: Spec, current: dict,
+               spec_for: Optional[Callable] = None) -> Counter:
+    """Re-map one harvest file in place, then carry its stamp forward.
+
+    *spec_for* gives a document its own spec, with the lists its harvest was
+    offered: a dynamic list (the regions a document names, its AR6 runs) is
+    there and in no other. A document whose lists cannot be closed is left
+    alone and counted, as the recheck leaves it.
+    """
     stats: Counter = Counter()
+    if spec_for is not None:
+        from .recheck import _document_of
+        own = spec_for(_document_of(Path(path).read_text(encoding="utf-8")))
+        if own is None:
+            stats[LISTS_UNREADABLE] += 1
+            return stats
+        spec = own
     lines: list = []
     tuples, refusals, document_id = [], [], None
     spaces = spaces_of(current)
@@ -339,19 +356,23 @@ def remap_file(path: Path, spec: Spec, current: dict) -> Counter:
     return stats
 
 
-def run(harvest_dir: Path, spec: Spec, current: dict) -> Counter:
+def run(harvest_dir: Path, spec: Spec, current: dict,
+        spec_for: Optional[Callable] = None) -> Counter:
     """Re-map a whole harvest directory against the spec as it reads today.
 
     `current` is the stamp this run would write, so the pass can carry the
     keys it earned forward without knowing how a stamp is assembled.
+    `spec_for` is each document's own spec (`remap_file`).
     """
     stats: Counter = Counter()
     harvest_dir = Path(harvest_dir)
     for path in sorted(harvest_dir.glob("*.jsonl")):
         if path.name.endswith(".trace.jsonl"):
             continue
-        stats.update(remap_file(path, spec, current))
-        stats["documents"] += 1
+        got = remap_file(path, spec, current, spec_for)
+        stats.update(got)
+        if not got[LISTS_UNREADABLE]:
+            stats["documents"] += 1
     for key, value in sorted(stats.items()):
         log.info("remap: %-32s %d", key, value)
     return stats

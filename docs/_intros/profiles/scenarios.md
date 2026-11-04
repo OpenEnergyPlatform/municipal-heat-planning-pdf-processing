@@ -150,8 +150,19 @@ reads the 249 entries of `regions.json` and keeps only the ones whose
 label is mentioned somewhere in this document's own text, and does the
 same with the groups of countries in `region_aggregates.json`; a region of
 the AR6 database also counts as named by its bare name ("Europe") where the
-document names its family ("R10"). The world, `aggregate:World`, is always
-offered.
+document names its family ("R10"). A model's own region ("Other Asia",
+"OAS" of REMIND) is offered where the document names the model with its
+capitals ("REMIND", not "remind") and the region (`_named`). Two offered
+groups never share a label (`_one_meaning`): the region of the paper's
+model keeps it, and where no such region or two of them carry it, no group
+does, so one answer never names two groups. The world, `aggregate:World`,
+is always offered. Every entry comes with the ways a paper writes its labels
+(`spellings`): "&" and "and" stand for each other ("Middle East and North
+Africa" for the World Bank's "Middle East & North Africa"), and a group's
+code and name joined as a paper joins them ("LAM (Latin America)", "Latin
+America (LAM)", "LAM - Latin America") name the group; a country's labels
+are not joined. So the remap maps such a wording too, and the harvest's check
+of a wording against the option it names takes it.
 
 `_document_text` concatenates every row of `Sections.content`,
 `Tables.markdown`, `Tables.caption`, `Images.description` and
@@ -181,13 +192,15 @@ and hold an answer to the same lists the search used. `--review` and
 alone, stamp included, a document whose lists cannot be closed.
 
 The fixed kind carries the rest of the list-valued fields: `scenario_type`,
-and three of the four tags the OEKG shapes demand of every bundle,
-`study_descriptor` (`OEO_00390071`), `study_sector` (`OEO_00020439`) and
-`study_technology` (`OEO_00020438`). The sector division (`OEO_00390079`)
-is not asked: in the AR6 run 531 of its 535 answers were a sector, and
-four publications named a listed division. Each tag is a `category`
+and the four tags the OEKG shapes demand of every bundle,
+`study_descriptor` (`OEO_00390071`), `study_sector_division`
+(`OEO_00390079`), `study_sector` (`OEO_00020439`) and
+`study_technology` (`OEO_00020438`). The sector division is the scheme the
+sectors follow (the CRF of the IPCC guidelines, NACE, an energy balance),
+and its description says that a sector is never one: in the run that last
+asked it, 531 of its 535 answers were a sector. Each tag is a `category`
 parameter without axes whose
-vocabulary is the shapes' own `sh:in` list for its path, 31, 153 and
+vocabulary is the shapes' own `sh:in` list for its path, 31, 17, 153 and
 43 entries with the OEO label, spellings and definition of each, plus an
 `out:not_in_list` entry. The model picks an entry and quotes the passage,
 exactly as for `scenario_type`. The lists are written into
@@ -276,17 +289,30 @@ identifiers named in the spec, plus the 249 OEKG study regions, against
 the same OEO release the kwp profile's own 58-identifier snapshot uses.
 `python -m profiles.scenarios.vocabulary --refresh` pulls the OEO
 closure, the live study regions and the groups of countries (the AR6
-database's R5, R9 and R10 regions from IAMconsortium/common-definitions
-and the UN's M49 regions from the SDG API), rewrites `vocabulary.json`,
+database's R5, R9 and R10 regions and each model's own regions, with the
+codes the model's mapping gives them, from IAMconsortium/common-definitions;
+the UN's M49 regions from the SDG API; the World Bank's groups of economies,
+the European Union and the OECD among them, from its classification
+`CLASS.xlsx`, the two also named "EU" and "OECD" as a paper writes them
+(`SHORT_FORMS`); and EU28, the World Bank's Union and the United Kingdom, the
+one group no source lists, owner decisions 2026-11-04), rewrites `vocabulary.json`,
 `regions.json` and `region_aggregates.json`, and runs the same check `--check` alone runs against
 the checked-in snapshot; `region_aliases.json` keeps the hand-written
 spellings a document uses that the OEKG's own labels do not, merged in
 ahead of the live ones by `merge_regions` (`vocabulary.py`, lines 1 to
 26; [../stages/graph.md](../stages/graph.md)). `aggregates` places each
 member of a group on an OEKG region by one of its labels, or by a label
-with the same words in another order; a member no label places, a group
+with the same words in another order. Accents do not count and the sources'
+abbreviations are written out ("St. Lucia", "Lao PDR", `ABBREVIATIONS`); a
+name with a comma whose whole words find no label is placed by the words
+before the comma where exactly one region's labels hold them all ("Egypt,
+Arab Rep.", "Hong Kong SAR, China"), while "Congo, Dem. Rep." is placed by
+its whole words, since two regions hold "Congo". A member no label places, a group
 label that is a country's and a label two groups share are counted and
-printed, never guessed.
+printed, never guessed. A model's region needs its labels to be its own
+only among the models of one name ("REMIND" and "REMIND-MAgPIE" are one),
+since a paper is offered them only where it names the model; every version
+of a model defines its regions again, and the newest one is kept.
 
 Every IRI is minted under `BASE`, which defaults to
 `https://openenergyplatform.org/ontology/oekg/` and can be overridden by
@@ -448,7 +474,7 @@ does not name, which it would let through. `graph` builds a model
 of the bundle as the server would hold it after the create, and
 `shape_problems` asks the shapes about it through `pyshacl`.
 `list_problems` compares the spec's choice lists, `scenario_type` and the
-three tags, with the shapes' `sh:in` lists for their paths: a class the
+four tags, with the shapes' `sh:in` lists for their paths: a class the
 shapes dropped would be harvested and then refused, and one they gained
 could never be chosen.
 `acronym_problems` compares acronyms, without case, across the harvest

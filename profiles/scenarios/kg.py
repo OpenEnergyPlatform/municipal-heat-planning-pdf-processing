@@ -235,8 +235,8 @@ IAM_SCENARIO = "OEO_00020517"
 SCENARIO_FIELDS = tuple(
     parameter["uri"] for parameter in _SPEC["parameters"]
     if "scenario" in (parameter.get("axes") or {}))
-# The tags of a bundle: what the study is about, which sectors and
-# technologies it covers, and any other category field of the bundle. Each is
+# The tags of a bundle: what the study is about, which sector division it
+# follows, which sectors and technologies it covers. Each is
 # an entry of a list the shapes fix, so the object is an IRI the model chose
 # and never a string it wrote. Read from the spec, for the reason SCENARIO_FIELDS is.
 BUNDLE_TAGS = tuple(

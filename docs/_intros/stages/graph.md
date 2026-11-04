@@ -345,7 +345,11 @@ that release's tag, for a project that attaches nothing to its
 releases; a `repo_files` source is files at a branch
 head, versioned by a digest over their bytes and, where the source
 names a `reviewed` commit, compared against it so a schema `kg.py`
-mirrors by hand is named the moment it moves; a `sparql` source
+mirrors by hand is named the moment it moves; a `repo_tree` source is
+every file under some folders at a branch head, taken from the branch's
+archive on github.com (`tree_members` refuses a member that would land
+outside its folder), for a tree no file list can name without the API; a
+`sparql` source
 queries the OEKG endpoint with a token read from the environment
 variable it names and written nowhere. `kwp` reads MHPO's `mhpo.owl`
 as `repo_files` at the head of `develop`, where the team builds it from

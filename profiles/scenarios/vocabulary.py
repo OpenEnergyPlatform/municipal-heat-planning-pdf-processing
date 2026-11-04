@@ -12,8 +12,8 @@ ontology release and are therefore pinned differently.
 
 `--refresh` is what a run calls first: the OEO closure at its latest release,
 the study regions live from the OEKG, the OEKG shapes at the head of their
-branch and the groups of countries a scenario may cover (IIASA, UN M49),
-then the check. Without
+branch and the groups of countries a scenario may cover (IIASA, UN M49, World
+Bank), then the check. Without
 OEP_API_TOKEN in the environment it stops, because the regions are offered to
 the model and a list nobody pulled is not the OEKG's current one.
 
@@ -33,6 +33,7 @@ import io
 import json
 import re
 import sys
+import unicodedata
 from collections import Counter
 from pathlib import Path
 
@@ -94,18 +95,44 @@ SOURCES = {
                     "reviewed": "b4604e02060624b381bdbe2f872df94cfd0f5630",
                     "files": ["oekg/shapes/oekg_shapes.ttl"]},
     # The groups of countries a scenario covers, with their members: the
-    # regions the AR6 database itself defines (R5, R9, R10) and the UN's
-    # statistical regions (M49), which carry the names a paper writes
+    # regions the AR6 database itself defines (R5, R9, R10), the regions of
+    # each model with the codes its mapping gives them ("LAM", "OAS"), and the
+    # UN's statistical regions (M49), which carry the names a paper writes
     # ("Sub-Saharan Africa", "Western Europe"). The OEKG has countries only,
     # so a group is written as its members (`aggregates`).
-    "iiasa_regions": {"kind": "repo_files",
+    "iiasa_regions": {"kind": "repo_tree",
                       "repo": "IAMconsortium/common-definitions",
                       "ref": "main",
-                      "files": ["definitions/region/common.yaml"]},
+                      "paths": ["definitions/region/", "mappings/"],
+                      "suffix": ".yaml"},
     "m49": {"kind": "url",
             "url": "https://unstats.un.org/SDGAPI/v1/sdg/GeoArea/Tree",
             "file": "tree.json"},
+    # The World Bank's groups of economies with their members: the European
+    # Union, the OECD members and its world regions ("Middle East & North
+    # Africa"), which neither source above lists by country.
+    "worldbank": {"kind": "url",
+                  "url": ("https://datacatalogfiles.worldbank.org/"
+                          "ddh-published/0037712/DR0090755/CLASS.xlsx"),
+                  "file": "CLASS.xlsx"},
 }
+
+# The one group no source lists by country (owner, 2026-11-04): the European
+# Union of 2013 to 2020, the Union of the World Bank's list and the United
+# Kingdom. Its labels are the ways its name is written.
+EU28 = {"key": "aggregate:EU28", "labels": ["EU28", "EU-28", "EU 28"],
+        "union": "aggregate:worldbank:EUU", "joined": ["United Kingdom"]}
+
+# The short forms a paper writes for two groups the World Bank lists under a
+# longer name (owner, 2026-11-04).
+SHORT_FORMS = {"EUU": ["EU"], "OED": ["OECD"]}
+
+# How the sources abbreviate a country's name ("St. Lucia", "Congo, Dem.
+# Rep.", "Lao PDR", "Hong Kong SAR, China"), written out before a member is
+# looked up. SAR is a status, not part of the name.
+ABBREVIATIONS = {"st.": "saint", "rep.": "republic", "dem.": "democratic",
+                 "fed.": "federated", "sts.": "states",
+                 "pdr": "people's democratic republic", "sar": ""}
 
 # The group a worldwide scenario covers: every region the OEKG holds. Its
 # spellings are the answer the list always offered for it.
@@ -179,37 +206,169 @@ def merge_regions(rows: list, aliases: dict) -> dict:
     return out
 
 
-def aggregates(families: list, tree: list, regions: dict) -> tuple:
+def model_names(model: str) -> list:
+    """The names a paper calls a model by: its name without the version
+    ("REMIND-MAgPIE 3.2-4.6" -> "REMIND-MAgPIE") and the first part of that
+    name ("REMIND"). A version is a last word that starts with a digit, or
+    with v and a digit."""
+    words = str(model).split()
+    while len(words) > 1 and re.match(r"(?i)v?\d", words[-1]):
+        words.pop()
+    name = " ".join(words)
+    first = re.split(r"[-/ ]", name, maxsplit=1)[0]
+    return [name] + ([first] if first and first != name else [])
+
+
+def _version_key(model: str) -> tuple:
+    """A model with its version as a sort key, the numbers as numbers: 4.10
+    comes after 4.9."""
+    return tuple((0, int(part)) if part.isdigit() else (1, part)
+                 for part in re.split(r"(\d+)", str(model)) if part)
+
+
+def iiasa(record: dict) -> tuple:
+    """(region definitions, {region: [codes]}) of a refreshed IIASA tree.
+
+    The definitions are what `aggregates` reads. A model's mapping file gives
+    each of its regions the code its own files and its papers write ("LAM:
+    REMIND-MAgPIE 3.2-4.6|Latin America and the Caribbean").
+    """
+    import yaml
+    families, codes = [], {}
+    for entry in (record or {}).get("files") or ():
+        data = yaml.safe_load(Path(entry["path"]).read_text(encoding="utf-8"))
+        if entry["repo_path"].startswith("definitions/"):
+            families.append(data)
+            continue
+        for item in (data or {}).get("native_regions") or ():
+            for code, name in (item.items() if isinstance(item, dict) else ()):
+                if isinstance(name, str) and str(code) not in codes.get(name, ()):
+                    codes.setdefault(name, []).append(str(code))
+    return families, codes
+
+
+_SHEET = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+_RELATION = ("{http://schemas.openxmlformats.org/officeDocument/2006/"
+             "relationships}id")
+
+
+def sheet_rows(book, name: str) -> list:
+    """[{column name: cell}] of the sheet *name* of an xlsx file (a path or a
+    file object), its first row naming the columns. An xlsx file is a zip of
+    XML, so the standard library reads it; a spreadsheet library would be a
+    dependency for one table."""
+    import xml.etree.ElementTree as ElementTree
+    import zipfile
+    with zipfile.ZipFile(book) as archive:
+        def tree(member):
+            return ElementTree.fromstring(archive.read(member))
+        targets = {rel.get("Id"): rel.get("Target")
+                   for rel in tree("xl/_rels/workbook.xml.rels")}
+        sheet = next((s for s in tree("xl/workbook.xml").iter(_SHEET + "sheet")
+                      if s.get("name") == name), None)
+        if sheet is None:
+            raise upstream.UpstreamError(f"{book}: no sheet {name!r}")
+        target = targets[sheet.get(_RELATION)].lstrip("/")
+        member = target if target.startswith("xl/") else "xl/" + target
+        shared = ([("".join(t.text or "" for t in item.iter(_SHEET + "t")))
+                   for item in tree("xl/sharedStrings.xml").iter(_SHEET + "si")]
+                  if "xl/sharedStrings.xml" in archive.namelist() else [])
+        rows = []
+        for row in tree(member).iter(_SHEET + "row"):
+            cells = {}
+            for place, cell in enumerate(row.iter(_SHEET + "c")):
+                column = re.match(r"[A-Z]*", cell.get("r") or "").group(0)
+                if cell.get("t") == "inlineStr":
+                    value = "".join(t.text or "" for t in cell.iter(_SHEET + "t"))
+                else:
+                    raw = cell.find(_SHEET + "v")
+                    value = (None if raw is None
+                             else shared[int(raw.text)] if cell.get("t") == "s"
+                             else raw.text)
+                cells[column or str(place)] = value
+            rows.append(cells)
+    header = rows[0] if rows else {}
+    return [{header[column]: value for column, value in row.items()
+             if header.get(column)} for row in rows[1:]]
+
+
+def worldbank(book) -> list:
+    """[(code, name, [economy])], the World Bank's groups of economies as its
+    classification lists them (sheet `compositions`)."""
+    groups: dict = {}
+    for row in sheet_rows(book, "compositions"):
+        code, name = row.get("WB_Group_Code"), row.get("WB_Group_Name")
+        economy = row.get("WB_Country_Name")
+        if code and name and economy:
+            groups.setdefault((code, name), []).append(economy)
+    if not groups:
+        raise upstream.UpstreamError(f"{book}: no group in its compositions")
+    return [(code, name, members) for (code, name), members in groups.items()]
+
+
+def aggregates(families: list, tree: list, regions: dict, codes=None,
+               banks=()) -> tuple:
     """({key: {labels, members, source}}, Counter of what could not be placed).
 
     *families* are the parsed IIASA region files, *tree* the M49 tree,
-    *regions* regions.json. A member is an OEKG region, found by one of its
+    *regions* regions.json, *codes* the codes the IIASA mappings give a
+    model's regions and *banks* the World Bank's groups. A member is an OEKG
+    region, found by one of its
     labels, or by a label with the same words in another order and
     punctuation ("Republic of Moldova", "Moldova (the Republic of)"), so a
-    country both lists spell alike needs no table; one no label names, or
-    two regions' labels do, is counted, never guessed. A group's label that is a country's
+    country both lists spell alike needs no table. Accents do not count and
+    the sources' abbreviations are written out (ABBREVIATIONS). A name with a
+    comma whose whole words find no label is found by the words before the
+    comma ("Egypt, Arab Rep.", "Taiwan, China") where exactly one region's
+    labels hold them all: "Congo, Dem. Rep." is found by its whole words, and
+    the words before its comma are two regions'. One no label names, or two
+    regions' labels do, is counted, never guessed. A group's label that is a country's
     label is the country, and a label two groups share is the first one's:
     both would make one answer mean two things, so each is counted too.
+
+    A model's region ("REMIND-MAgPIE 3.2-4.6|Other Asia") is a group of that
+    model, labelled with its name and its codes ("Other Asia", "OAS"). Its
+    labels need to be its own only among the regions of models of one name
+    (`model_names`), since a paper is offered them where it names the model;
+    every version defines its regions again, and the newest is kept. EU28 is
+    the World Bank's European Union and the United Kingdom.
     """
     from docpipe.extraction.spec import fold_label
+
+    def plain(name) -> str:
+        spelt = unicodedata.normalize("NFKD", fold_label(str(name)))
+        return "".join(c for c in spelt if not unicodedata.combining(c))
+
     def words(name) -> frozenset:
-        return frozenset(w for w in re.split(r"[^\w]+", fold_label(str(name)))
+        spelt = " ".join(ABBREVIATIONS.get(w, w) for w in plain(name).split())
+        return frozenset(w for w in re.split(r"[^\w]+", spelt)
                          if w and w not in ("the", "of"))
 
     country, worded = {}, {}
     for iri, labels in regions.items():
         for label in labels:
             country.setdefault(fold_label(label), iri)
+            country.setdefault(plain(label), iri)
             worded.setdefault(words(label), set()).add(iri)
     missing: Counter = Counter()
     taken: dict = {}
 
+    def found(name):
+        iri = country.get(fold_label(str(name))) or country.get(plain(name))
+        if iri is None and len(worded.get(words(name), ())) == 1:
+            iri = next(iter(worded[words(name)]))
+        if iri is None and "," in str(name):
+            head = words(str(name).split(",", 1)[0])
+            holders = {region for held, regions_ in worded.items()
+                       if head and head <= held for region in regions_}
+            if len(holders) == 1:
+                iri = next(iter(holders))
+        return iri
+
     def placed(names) -> list:
         out = []
         for name in names:
-            iri = country.get(fold_label(str(name)))
-            if iri is None and len(worded.get(words(name), ())) == 1:
-                iri = next(iter(worded[words(name)]))
+            iri = found(name)
             if iri is None:
                 missing[f"member {name}"] += 1
             elif iri not in out:
@@ -218,14 +377,18 @@ def aggregates(families: list, tree: list, regions: dict) -> tuple:
 
     out = {WORLD: {"labels": list(WORLD_LABELS), "members": sorted(regions),
                    "source": "every region of the OEKG"}}
+    for label in WORLD_LABELS:
+        taken[(None, fold_label(label))] = WORLD
 
-    def add(key, labels, members, source, family=None) -> None:
+    def add(key, labels, members, source, family=None, model=None) -> None:
+        # A model's labels need to be its own among its namesakes only.
+        scope = model_names(model)[-1] if model else None
         kept = []
         for label in labels:
             folded = fold_label(label)
             if folded in country:
                 missing[f"label {label} is a country"] += 1
-            elif taken.setdefault(folded, key) != key:
+            elif taken.setdefault((scope, folded), key) != key:
                 missing[f"label {label} names two groups"] += 1
             elif label not in kept:
                 kept.append(label)
@@ -235,7 +398,11 @@ def aggregates(families: list, tree: list, regions: dict) -> tuple:
         out[key] = {"labels": kept, "members": members, "source": source}
         if family:
             out[key]["family"] = family
+        if model:
+            out[key]["model"] = model
+            out[key]["named_by"] = model_names(model)
 
+    natives = []
     for parsed in families:
         for block in parsed or ():
             for family, entries in (block or {}).items():
@@ -247,10 +414,31 @@ def aggregates(families: list, tree: list, regions: dict) -> tuple:
                         countries = (attrs or {}).get("countries")
                         if not countries:
                             continue
+                        if isinstance(countries, str):
+                            countries = [countries]
+                        if "|" in name:
+                            natives.append((family, name, countries))
+                            continue
                         labels = [name] + ([attrs["ar6"]] if attrs.get("ar6")
                                            else [])
                         add(f"aggregate:iiasa:{name}", labels,
                             placed(countries), "iiasa", family)
+
+    # The newest version first: the regions of a model of one name are
+    # defined again in each of its versions, and only one of them is kept.
+    defined = set()
+    for model, name, countries in sorted(
+            natives, key=lambda native: (model_names(native[0])[-1],
+                                         _version_key(native[0])),
+            reverse=True):
+        region = name.split("|", 1)[1]
+        held = (model_names(model)[-1], fold_label(region))
+        if held in defined:
+            continue
+        defined.add(held)
+        add(f"aggregate:iiasa:{name}",
+            [region] + list((codes or {}).get(name, ())), placed(countries),
+            "iiasa", model=model)
 
     def walk(node: dict) -> list:
         # The members are the countries below a group. A leaf that is not a
@@ -268,6 +456,16 @@ def aggregates(families: list, tree: list, regions: dict) -> tuple:
 
     for node in tree or ():
         walk(node)
+    for code, name, members in banks or ():
+        add(f"aggregate:worldbank:{code}", [name] + SHORT_FORMS.get(code, []),
+            placed(members), "worldbank")
+    union = out.get(EU28["union"])
+    if union is None:
+        missing[f"group {EU28['labels'][0]}"] += 1
+    else:
+        add(EU28["key"], EU28["labels"],
+            list(dict.fromkeys(union["members"] + placed(EU28["joined"]))),
+            "worldbank and the United Kingdom")
     return out, missing
 
 
@@ -285,12 +483,11 @@ def refresh(cache: Path = upstream.CACHE) -> dict:
     with io.open(REGIONS_PATH, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(json.dumps(regions, ensure_ascii=False, indent=1,
                                 sort_keys=True) + "\n")
-    import yaml
-    families = [yaml.safe_load(path.read_text(encoding="utf-8"))
-                for path in upstream.files(records["iiasa_regions"])]
+    families, codes = iiasa(records["iiasa_regions"])
     tree = json.loads(upstream.files(records["m49"])[0]
                       .read_text(encoding="utf-8"))
-    groups, missing = aggregates(families, tree, regions)
+    banks = worldbank(upstream.files(records["worldbank"])[0])
+    groups, missing = aggregates(families, tree, regions, codes, banks)
     with io.open(AGGREGATES_PATH, "w", encoding="utf-8",
                  newline="\n") as handle:
         handle.write(json.dumps(groups, ensure_ascii=False, indent=1,

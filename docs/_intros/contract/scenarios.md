@@ -48,16 +48,14 @@ coordinate is `null` unless its own `<name>_state` says `read` or
 
 ## The lists this page cannot publish
 
-Six parameters answer from a list rather than write a wording:
+Seven parameters answer from a list rather than write a wording:
 `scenario_label`, `scenario_type` and `scenario_region`
 (`profiles/scenarios/extraction_spec.json`), and
-three of the four tags of a bundle, `study_descriptor`, `study_sector`
-and `study_technology`. The fourth, the sector division, is not asked:
-the AR6 papers almost never name one of the listed divisions. Four
-publish their list as
+the four tags of a bundle, `study_descriptor`, `study_sector_division`,
+`study_sector` and `study_technology`. Five publish their list as
 `x-options` below: `scenario_type` carries seventeen OEO classes plus
 one `out:` entry for a type none of them cover, and each tag the
-shapes' own list (31, 153 and 43 entries) plus such an entry, for
+shapes' own list (31, 17, 153 and 43 entries) plus such an entry, for
 every document, so the spec states each list once.
 
 The other two are marked `vocabulary_dynamic` in the spec: their value

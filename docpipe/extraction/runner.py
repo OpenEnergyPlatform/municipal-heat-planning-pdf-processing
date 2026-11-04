@@ -7756,9 +7756,16 @@ def main(argv: Optional[list] = None) -> int:
         spec_path = Path(raw_spec_path)
         spec = load_spec(spec_path)
         from .remap import run as remap_run
-        stats = remap_run(args.out, spec,
-                          _stamp_current(hashlib.sha256(spec_path.read_bytes()).hexdigest(),
-                                        "", spec))
+        # A dynamic list is the document's own, as its harvest offered it.
+        with document_specs(args.db, spec, profile.component(
+                "extraction", "document_axes")) as spec_for:
+            stats = remap_run(args.out, spec,
+                              _stamp_current(hashlib.sha256(spec_path.read_bytes()).hexdigest(),
+                                            "", spec), spec_for=spec_for)
+        if stats[fields.LISTS_UNREADABLE]:
+            log.warning("remap: %d document(s) left alone, their choice "
+                        "lists could not be closed",
+                        stats[fields.LISTS_UNREADABLE])
         settled = stats["unchanged"] + stats["remapped"] \
             + stats["remapped (required)"] + stats["newly mapped"]
         log.info("remap: %d of %d coordinate(s) map onto the current lists, "
