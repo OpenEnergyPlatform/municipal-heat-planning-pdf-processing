@@ -1572,6 +1572,17 @@ The reading of one parameter's passages (`reading.Reader`), or None
 when the profile writes no prompts for it or its spec names no groups.
 A figure goes with its crop.
 
+### make_comber
+
+```python
+def make_comber(spec: Spec, rank: Callable)
+```
+
+The search for what the reading left open (`combing.Comber`), or None
+when the profile writes no prompt for it or its spec names no groups.
+*rank(document_id, probes, exclude)* is the plan's passages best first
+for the search sentences, `make_more_sources` in a harvest.
+
 ### make_survey
 
 ```python

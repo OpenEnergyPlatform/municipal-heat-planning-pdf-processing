@@ -239,6 +239,19 @@ class Gathered:
         if entry not in self.missed:
             self.missed.append(entry)
 
+    def list_hits(self, found: list, **about) -> int:
+        """Show *found*, [(owner, title, line)], as one list of hits, each
+        with the id a later ask names it by. Returns how many."""
+        listed = []
+        for owner, title, line in found:
+            ref = f"H{len(self.by_hit) + 1}"
+            self.by_hit[ref] = (tuple(owner), line)
+            listed.append({"id": ref, "kind": owner[0], "title": title,
+                           "line": line})
+        if listed:
+            self.hits.append({**about, "hits": listed})
+        return len(listed)
+
     def fetch(self, asks, order: list, passages: dict,
               budget: Optional[int]) -> bool:
         """The asks of one reply resolved (`lookup`), each passage cut to
@@ -278,14 +291,12 @@ class Gathered:
                 if matches.fault:
                     self._miss(ask, matches.fault, matches.detail)
                     continue
-                listed = []
-                for hit in matches.hits:
-                    ref = f"H{len(self.by_hit) + 1}"
-                    self.by_hit[ref] = (tuple(hit["owner"]), hit["line"])
-                    listed.append({"id": ref, "title": hit["title"],
-                                   "line": hit["line"]})
-                self.hits.append({"pattern": pattern,
-                                  "total": matches.total, "hits": listed})
+                self.list_hits([(hit["owner"], hit["title"], hit["line"])
+                                for hit in matches.hits],
+                               pattern=pattern, total=matches.total)
+                if not matches.hits:
+                    self.hits.append({"pattern": pattern,
+                                      "total": matches.total, "hits": []})
                 new = True
             elif get == "hit":
                 ref = self.by_hit.get(ask.get("id") or "")
@@ -300,6 +311,30 @@ class Gathered:
             else:
                 self._miss(ask, UNKNOWN)
         return new
+
+
+def first_line(source: Source) -> str:
+    """The first line of a passage under its title: what a hit list shows
+    of it."""
+    title = lookup.title_of(source)
+    return next((line.strip()[:200] for line in (source.text or "").splitlines()
+                 if line.strip() and line.strip() != title), "")
+
+
+def gather(ask: Callable, reply: dict, gathered: Gathered, order: list,
+           passages: dict, budget: Optional[int]) -> tuple:
+    """(the reply that stands, the requests made): what each reply asks of
+    the rest of the plan is fetched and the request sent again, until a round
+    asks for nothing the request has not shown or the request no longer fits
+    the model's window. The reply before such a round stands."""
+    asked = 0
+    while gathered.fetch(reply.get("more"), order, passages, budget):
+        again = ask()
+        asked += 1
+        if not isinstance(again, dict):
+            break
+        reply = again
+    return reply, asked
 
 
 # -- a table -------------------------------------------------------------------
@@ -380,7 +415,7 @@ def table_rows(reply: dict, grid: Grid) -> tuple:
     return rows, at, skipped
 
 
-def _answer(entry: dict) -> dict:
+def answer_of(entry: dict) -> dict:
     return {key: entry[key] for key in ("value", "value_raw", "quote")
             if key in entry}
 
@@ -402,7 +437,7 @@ def table_replies(reply: dict, slot, at: dict) -> list:
     out = []
     for key, where, labels in ((ROWS, "row", by_row),
                                (COLUMNS, "column", by_column)):
-        groups = [dict(_answer(answer), rows=labels[answer[where]])
+        groups = [dict(answer_of(answer), rows=labels[answer[where]])
                   for answer in entry.get(key) or ()
                   if isinstance(answer, dict) and answer.get(where) in labels]
         if groups:
@@ -410,7 +445,7 @@ def table_replies(reply: dict, slot, at: dict) -> list:
     whole = entry.get(TABLE)
     if isinstance(whole, dict) and at:
         out.append((TABLE, ("table", 1),
-                    {"groups": [dict(_answer(whole), rows=list(at))]}))
+                    {"groups": [dict(answer_of(whole), rows=list(at))]}))
     return out
 
 
@@ -500,7 +535,7 @@ def text_rows(reply: dict) -> tuple:
 
 
 def text_replies(entries: dict, slot) -> list:
-    answers = {label: _answer(entry[slot.name])
+    answers = {label: answer_of(entry[slot.name])
                for label, entry in entries.items()
                if isinstance(entry.get(slot.name), dict)}
     return [(ROWS, ("own", 1), {"answers": answers})] if answers else []
@@ -707,16 +742,9 @@ class Reader:
         if not isinstance(reply, dict):
             result.unread = True
             return result
-        # What the reply asks of the rest of the plan, until a round asks
-        # for nothing it has not been shown or the request no longer fits
-        # the model's window: the reply before such a round stands.
-        order = list(passages.values())
-        while gathered.fetch(reply.get("more"), order, passages, budget):
-            again = ask()
-            result.asked += 1
-            if not isinstance(again, dict):
-                break
-            reply = again
+        reply, more = gather(ask, reply, gathered, list(passages.values()),
+                             passages, budget)
+        result.asked += more
         result.fetched = len(gathered.sources)
         result.searched = len(gathered.hits)
         result.missed = len(gathered.missed)

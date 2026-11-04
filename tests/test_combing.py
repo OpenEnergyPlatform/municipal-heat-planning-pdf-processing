@@ -1,0 +1,157 @@
+"""Only values with a coordinate still open are combed, one request per
+passage and parameter; the search is asked with the passage's sentence and
+shows the best 15 sections, 20 tables and 20 figures of its ranking as a list
+of hits, the passage itself and its section left out. A coordinate answered
+from a fetched hit is read and cites that passage in window `retrieval`; one
+answered as not stated ends unstated; one left without an answer is asked for
+by name once more and ends unanswered; a coordinate read before is never
+touched; and a request that does not fit leaves every open coordinate
+exhausted.
+
+Each promise has a case that breaks it by construction beside the one that
+keeps it."""
+import json
+from pathlib import Path
+
+from docpipe.extraction import combing, fields, reading
+from docpipe.extraction.pipeline import Batch, Source, WorkItem
+from docpipe.extraction.spec import load as load_spec
+from docpipe.extraction.wording import say
+
+SPEC = load_spec(json.loads((Path(__file__).resolve().parent.parent
+                             / "profiles" / "kwp" / "extraction_spec.json")
+                            .read_text(encoding="utf-8")))
+EMISSION = SPEC.by_uri["emission"]
+SLOTS = [slot.name for slot in reading.slots_of(SPEC, EMISSION)]
+UNSTATED = fields.UNSTATED
+
+OWN = Source("section", 6, "Bilanz\nEs fielen rund 300 t CO2 an.",
+             {"document_id": 7, "section_title": "Bilanz"})
+HIT = Source("section", 8, "Ausblick\nDie Werte gelten für das Jahr 2030.",
+             {"document_id": 7, "section_title": "Ausblick"})
+PASSAGES = {("section", 6): OWN, ("section", 8): HIT}
+
+
+def claim(**states):
+    """A value of OWN: its unit and carrier read, the rest as *states*."""
+    out = {"source": "Q1", "value": 300, "quote": "rund 300 t CO2",
+           "unit": "t CO2", "unit_state": fields.READ,
+           "carrier": "Erdgas", "carrier_state": fields.READ}
+    for name in SLOTS:
+        out.setdefault(f"{name}_state", fields.SAID_UNSTATED)
+    out.update({f"{name}_state": state for name, state in states.items()})
+    return out
+
+
+def reads(*claims):
+    batch = Batch(7, EMISSION, [WorkItem(7, EMISSION, OWN)])
+    return [reading.Read(batch, list(claims))]
+
+
+def comber(*replies, ranked=(HIT,)):
+    asked, searched = [], []
+
+    def ask(payload, shape, document_id, source):
+        asked.append(payload)
+        return replies[min(len(asked), len(replies)) - 1]
+
+    def rank(document_id, probes, exclude):
+        searched.append((probes, set(exclude)))
+        return [s for s in ranked
+                if (s.owner_kind, s.owner_id) not in exclude]
+
+    made = combing.Comber(SPEC, ask, rank,
+                          lambda rows, names, owner_of, label: ["Bilanz"],
+                          lambda claim, names: {})
+    return made, asked, searched
+
+
+def everything(**given):
+    out = {name: {"value": UNSTATED} for name in SLOTS}
+    out.update(given)
+    return out
+
+
+YEAR = {"value": 2030, "quote": "gelten für das Jahr 2030"}
+
+
+def test_only_values_with_an_open_coordinate_are_combed_once_per_passage():
+    made, asked, _ = comber({"rows": []})
+    read = reads(claim(), claim(**{name: fields.READ for name in SLOTS}))
+    done = made(7, read, PASSAGES, [])
+    assert len(done) == 1 and done[0].rows == 1
+    assert len(asked) >= 1
+    assert [row["row"] for row in asked[0]["rows"]] == ["R1"]
+
+
+def test_the_search_shows_the_best_of_each_kind_as_a_list_without_its_own():
+    ranked = ([Source("section", 100 + i, f"S{i}\ntext", {}) for i in range(20)]
+              + [Source("table", 200 + i, f"T{i}\n| a |", {}) for i in range(25)]
+              + [Source("figure", 300 + i, f"F{i}\nbild", {}) for i in range(3)])
+    shown = combing.shown_hits(ranked)
+    kinds = [s.owner_kind for s in shown]
+    assert kinds.count("section") == 15 and kinds.count("table") == 20
+    assert kinds.count("figure") == 3
+    assert shown == [s for s in ranked if s in shown]
+    made, asked, searched = comber({"rows": []}, ranked=(OWN, HIT))
+    made(7, reads(claim()), PASSAGES, [])
+    assert searched[0][1] == {("section", 6)}
+    listed = asked[0]["hits"][0]["hits"]
+    assert [(hit["id"], hit["title"]) for hit in listed] == [("H1", "Ausblick")]
+    assert listed[0]["line"] == "Die Werte gelten für das Jahr 2030."
+
+
+def test_a_coordinate_answered_from_a_fetched_hit_is_read_and_cites_it():
+    made, asked, _ = comber(
+        {"rows": [dict(row="R1", **everything())],
+         "more": [{"get": "hit", "id": "H1"}]},
+        {"rows": [dict(row="R1", **everything(year=YEAR))]})
+    read = reads(claim())
+    done = made(7, read, PASSAGES, [])[0]
+    value = read[0].claims[0]
+    assert value["year"] == 2030 and value["year_state"] == fields.READ
+    assert value["year_source"] == ["section", 8]
+    assert list(value["year_window"]) == ["retrieval", 1]
+    assert done.fetched == 1 and done.filled == 1
+    assert [m["text"] for m in asked[1]["more"]] == [HIT.text]
+
+
+def test_a_quote_from_a_passage_never_fetched_is_not_read():
+    made, _, _ = comber({"rows": [dict(row="R1", **everything(year=YEAR))]})
+    read = reads(claim())
+    made(7, read, PASSAGES, [])
+    assert read[0].claims[0]["year_state"] == fields.UNBACKED
+
+
+def test_not_stated_stays_and_no_answer_is_asked_by_name_then_unanswered():
+    entry = dict(row="R1", **everything())
+    del entry["year"]
+    made, asked, _ = comber({"rows": [entry]})
+    read = reads(claim())
+    done = made(7, read, PASSAGES, [])[0]
+    value = read[0].claims[0]
+    assert value["scenario_state"] == fields.SAID_UNSTATED
+    assert value["year_state"] == fields.UNANSWERED
+    assert asked[1]["corrections"] == [
+        {"row": "R1", "what": {"year": say("key_missing", key="year")}}]
+    assert done.asked == 2 and len(asked) == 2
+
+
+def test_a_coordinate_read_before_is_never_touched():
+    made, _, _ = comber(
+        {"rows": [dict(row="R1", **everything(
+            carrier={"value": "Heizöl", "quote": "Ausblick"}))]})
+    read = reads(claim())
+    made(7, read, PASSAGES, [])
+    value = read[0].claims[0]
+    assert value["carrier"] == "Erdgas" and value["carrier_state"] == fields.READ
+
+
+def test_a_request_that_does_not_fit_leaves_every_open_coordinate_exhausted():
+    made, _, _ = comber(reading.CUT)
+    read = reads(claim())
+    done = made(7, read, PASSAGES, [])[0]
+    value = read[0].claims[0]
+    assert value["year_state"] == fields.EXHAUSTED
+    assert value["carrier_state"] == fields.READ
+    assert done.exhausted == done.open

@@ -78,6 +78,15 @@ Fields:
 def context(self) -> dict
 ```
 
+#### Gathered.list_hits
+
+```python
+def list_hits(self, found: list, **about) -> int
+```
+
+Show *found*, [(owner, title, line)], as one list of hits, each
+with the id a later ask names it by. Returns how many.
+
 #### Gathered.fetch
 
 ```python
@@ -254,6 +263,27 @@ def more_schema() -> dict
 
 The asks a reply may carry under "more".
 
+### first_line
+
+```python
+def first_line(source: Source) -> str
+```
+
+The first line of a passage under its title: what a hit list shows
+of it.
+
+### gather
+
+```python
+def gather(ask: Callable, reply: dict, gathered: Gathered, order: list,
+           passages: dict, budget: Optional[int]) -> tuple
+```
+
+(the reply that stands, the requests made): what each reply asks of
+the rest of the plan is fetched and the request sent again, until a round
+asks for nothing the request has not shown or the request no longer fits
+the model's window. The reply before such a round stands.
+
 ### table_payload
 
 ```python
@@ -284,6 +314,12 @@ def table_rows(reply: dict, grid: Grid) -> tuple
 (rows, {label: (row, column)}, cells not read) of a table reply: one
 row per cell of a value row and a value column that prints one number,
 its quote the table row, its head the words over its column.
+
+### answer_of
+
+```python
+def answer_of(entry: dict) -> dict
+```
 
 ### table_replies
 

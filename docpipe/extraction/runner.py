@@ -75,6 +75,7 @@ from docpipe.profile import add_profile_argument, program, require_profile
 from docpipe.store.schema import readonly_uri
 
 from . import archive
+from . import combing as combing_map
 from . import compute as computing
 from . import fields
 from . import found as found_places
@@ -1902,6 +1903,38 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
 
     return reading_map.Reader(
         spec, ask_table, ask_text, frame_slots, shown_with=shown_with,
+        bases=lambda pairs: named_years(pairs, frame_slots, states),
+        pool=AHEAD, trace=trace.event)
+
+
+def make_comber(spec: Spec, rank: Callable):
+    """The search for what the reading left open (`combing.Comber`), or None
+    when the profile writes no prompt for it or its spec names no groups.
+    *rank(document_id, probes, exclude)* is the plan's passages best first
+    for the search sentences, `make_more_sources` in a harvest."""
+    if not spec.groups:
+        return None
+    try:
+        prompt = prompts.load(combing_map.COMB_PROMPT_ID)
+    except (FileNotFoundError, LookupError):
+        return None
+    client = _client()
+    frame_slots = [slot for group in spec.groups_read_in("survey")
+                   for slot in fields.frame_slots(spec, group.coordinates)]
+    from docpipe.profile import active_profile
+    states = year_states_of(active_profile())
+
+    def ask(payload, shape, document_id, source):
+        text = json.dumps(payload, ensure_ascii=False, indent=2)
+        return ask_in_grammar(
+            client, prompt, [{"role": "user", "content": text}], shape,
+            document_id, "comb", "rows",
+            parameter=payload["parameter"]["key"], kind=source.owner_kind,
+            owner=source.owner_id,
+            corrections=len(payload.get("corrections") or ()))
+
+    return combing_map.Comber(
+        spec, ask, rank, context_probes, row_context,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
         pool=AHEAD, trace=trace.event)
 

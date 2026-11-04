@@ -176,6 +176,28 @@ own that contradicts it (`reading.inherit`, window `frame`); one no reply
 answered ends `unanswered`. The values are folded by `fold_batch`.
 `scripts/probe_rows.py --documents ... --survey --read` runs both steps.
 
+### Combing what the reading left open
+
+The third step of the rebuilt harvest (`combing.py`, `runner.make_comber`,
+prompt `extraction/comb`, owner decisions 2026-11-04). A coordinate still open
+after the reading, one the passage does not state, one whose answer did not
+hold or one no reply answered, is looked for in the rest of the plan, one
+request per passage and parameter. Its search sentence is the passage's
+context (`runner.context_probes`, owner decision 2026-10-22: its title, what
+its rows have read in the plan's words, what is asked), and the best 15
+sections, 20 tables and 20 figures of the ranking are shown as a list of
+titles and first lines, the passage and its section left out. The model
+fetches what it wants to read with the reading's tools (`reading.Gathered`: a
+hit by its id, the next or the previous section, a table or figure by its
+placeholder, a pattern) and answers each open coordinate of each row with its
+quote, or that the plan does not state it. The answers go through
+`merge_field` in window `retrieval`, a coordinate read before is never
+touched, and what the check refuses or the reply leaves out is asked once
+more. A coordinate the request leaves without an answer ends `unanswered`; one
+whose request no longer fits the model's window ends `exhausted`; `unstated`
+is from here on a finding about the plan. The ranking is handed in:
+`make_more_sources` in a harvest.
+
 ### The retrieval plan
 
 `pipeline.plan_document` builds one plan per document, not per parameter,
