@@ -92,6 +92,8 @@ class Scheduler:
         self._rank: dict = {}
         self._ranks = itertools.count()
         self._cond = threading.Condition()
+        # Why the dispatcher stopped, once it has: every request ends with it.
+        self._broken: Optional[BaseException] = None
         self._pool = ThreadPoolExecutor(
             max_workers=max(1, workers or limit.maximum),
             thread_name_prefix="llm-send")
@@ -129,6 +131,9 @@ class Scheduler:
         entry = (ahead, self.rank(document), next(self._seq), send, future,
                  ticket)
         with self._cond:
+            if self._broken is not None:
+                future.set_exception(self._broken)
+                return future
             heapq.heappush(self._heap, entry)
             self._cond.notify_all()
         return future
@@ -144,19 +149,39 @@ class Scheduler:
             self._cond.notify_all()
 
     def _dispatch(self) -> None:
-        while True:
-            with self._cond:
-                while not self._heap or (self.limit.in_flight
-                                         >= self.limit.limit):
-                    self._cond.wait(timeout=1.0)
-                *_order, send, future, ticket = heapq.heappop(self._heap)
-            if ticket is not None and ticket.withdrawn:
-                future.set_exception(Withdrawn())
-                continue
-            if not future.set_running_or_notify_cancel():
-                continue
-            self.limit.acquire()
-            self._pool.submit(self._send, send, future)
+        try:
+            while True:
+                with self._cond:
+                    while not self._heap or (self.limit.in_flight
+                                             >= self.limit.limit):
+                        self._cond.wait(timeout=1.0)
+                    *_order, send, future, ticket = heapq.heappop(self._heap)
+                if ticket is not None and ticket.withdrawn:
+                    future.set_exception(Withdrawn())
+                    continue
+                if not future.set_running_or_notify_cancel():
+                    continue
+                self.limit.acquire()
+                try:
+                    self._pool.submit(self._send, send, future)
+                except BaseException as exc:
+                    self.limit.release()
+                    future.set_exception(exc)
+                    raise
+        except BaseException as exc:     # the dispatcher sends no more
+            self._close(exc)
+
+    def _close(self, exc: BaseException) -> None:
+        """Every waiting request, and every later one, ends with *exc*. A
+        caller waits on its future without a limit, and a dispatcher that
+        died without answering them held a crashed probe open until its time
+        limit, two hours of a node doing nothing."""
+        with self._cond:
+            self._broken = exc
+            waiting, self._heap = self._heap, []
+        for *_order, _send, future, _ticket in waiting:
+            if not future.done():
+                future.set_exception(exc)
 
     def _send(self, send: Callable, future: Future) -> None:
         try:

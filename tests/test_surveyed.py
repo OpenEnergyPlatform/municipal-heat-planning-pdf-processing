@@ -19,7 +19,9 @@ and taken again only for the same passages, its unanswered passages kept.
 A pass re-reads a coordinate by combing it, whatever its state, in its own
 passage first and with the years of the stored rows; the combing lists the
 passages an earlier harvest read it in before the search's hits. A request
-whose last attempt ended on a 429 leaves its document unserved.
+whose last attempt ended on a 429 leaves its document unserved, and one that
+timed out is asked again with the time of a repeat, one refused by the
+server with the time it had.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -349,6 +351,45 @@ def test_a_request_whose_last_attempt_hit_a_429_leaves_its_document_unserved(
     reply = runner.ask_in_grammar(client(Refused(), answered), prompt, [], {},
                                   72, "comb", "rows")
     assert reply == {"rows": []} and runner.UNSERVED.of(72) == 0
+    runner.UNSERVED.clear()
+
+
+def test_a_request_that_timed_out_is_asked_again_with_the_time_of_a_repeat(
+        monkeypatch):
+    import httpx
+    import openai
+
+    answered = SimpleNamespace(choices=[SimpleNamespace(
+        message=SimpleNamespace(content='{"rows": []}'),
+        finish_reason="stop")], usage=None)
+    times = []
+
+    def client(first):
+        left = [first, answered]
+
+        def create(**kwargs):
+            times.append(kwargs.get("timeout"))
+            outcome = left.pop(0)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+        return SimpleNamespace(chat=SimpleNamespace(
+            completions=SimpleNamespace(create=create)))
+
+    class Failed(Exception):
+        status_code = 500
+
+    monkeypatch.setattr(runner, "retry_wait", lambda *a, **k: 0)
+    monkeypatch.setattr(runner, "answer_room", lambda *a, **k: 4096)
+    prompt = SimpleNamespace(meta={}, text="x")
+    slow = openai.APITimeoutError(request=httpx.Request("POST", "http://x"))
+    assert runner.ask_in_grammar(client(slow), prompt, [], {}, 73,
+                                 "read_text", "rows") == {"rows": []}
+    assert times == [None, runner.RETRY_TIMEOUT]
+    times.clear()
+    runner.ask_in_grammar(client(Failed()), prompt, [], {}, 74, "read_text",
+                          "rows")
+    assert times == [None, None]        # a server error is no timeout
     runner.UNSERVED.clear()
 
 

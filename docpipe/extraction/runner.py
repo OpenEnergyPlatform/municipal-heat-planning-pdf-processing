@@ -1812,17 +1812,22 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
 
     A request whose last attempt ended on a 429, a 5xx or a timeout was
     never answered, so its document is noted (`UNSERVED`) and goes
-    unstamped, as for every request of the run.
+    unstamped, as for every request of the run. One that timed out is asked
+    again with the time a repeat gets (`request_timeout`), as every request
+    of the harvest is: the eight-plan probe asked three times in the same
+    180 s and lost the replies that take longer.
     """
     temperature = float(prompt.meta.get("temperature", 0))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
     faults = 0
+    timed_out = False
     for attempt in range(1, MAX_RETRIES + 1):
         limit = answer_room(prompt.text, conversation, max_tokens)
         if limit < MIN_ANSWER_TOKENS:
             return "cut_off"
         transport = False
         refused = False
+        allowed = request_timeout(limit, max_tokens, timed_out)
         started = time.time()
         try:
             with _for(document_id):
@@ -1833,7 +1838,8 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
                     response_format=shape,
-                    extra_body=request_extras())
+                    extra_body=request_extras(),
+                    **({"timeout": allowed} if allowed else {}))
             reply = response.choices[0]
             usage = getattr(response, "usage", None)
             _observe_usage(usage)
@@ -1861,6 +1867,7 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
                         attempt=attempt, detail=str(exc)[:300])
             transport = server_side(exc)
             refused = unserved(exc)
+            timed_out = _timed_out(exc)
             if not transport:
                 return None
         if attempt < MAX_RETRIES:

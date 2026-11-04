@@ -1572,7 +1572,10 @@ Each answer is traced as `<where>_ask` with *noted*.
 
 A request whose last attempt ended on a 429, a 5xx or a timeout was
 never answered, so its document is noted (`UNSERVED`) and goes
-unstamped, as for every request of the run.
+unstamped, as for every request of the run. One that timed out is asked
+again with the time a repeat gets (`request_timeout`), as every request
+of the harvest is: the eight-plan probe asked three times in the same
+180 s and lost the replies that take longer.
 
 ### make_reader
 
