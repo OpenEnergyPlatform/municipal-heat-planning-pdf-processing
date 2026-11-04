@@ -58,7 +58,7 @@ def asked_for(parameter, *replies):
 
     def ask_table(source, grid, parameter, slots, context, corrections=None):
         asked.append(("table", corrections))
-        return {"value_columns": [], "value_rows": [],
+        return {"values": [],
                 "coordinates": {slot.name: {"table": {"value": fields.UNSTATED}}
                                 for slot in slots}}
 

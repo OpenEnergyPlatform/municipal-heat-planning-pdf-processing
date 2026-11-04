@@ -110,6 +110,21 @@ def test_a_reading_with_no_readable_reply_is_a_hole_that_names_its_parameter():
             if batch.parameter is HEAT_LOAD] == [[claim]]
 
 
+def test_a_part_of_a_table_no_reply_answered_is_a_hole_beside_its_values():
+    claim = {"source": "Q1", "value": 40, "quote": "| 2022 | 40 MW |"}
+    read = read_of(HEAT_LOAD, TWO, [claim])
+    read.lost = [reading.CUT]
+    taken = surveyed.taken_of(7, SPEC, found_of(answer(TWO, "heat_load")),
+                              [read], [], SHOWN)
+    assert [(c["_why"], c["_parameter"]) for _b, c in sentinels(taken)] \
+        == [(reading.CUT, "heat_load")]
+    assert [reply["tuples"] for batch, reply in taken.answered
+            if batch.parameter is HEAT_LOAD] == [[claim]]
+    read.lost = []
+    assert sentinels(surveyed.taken_of(
+        7, SPEC, found_of(answer(TWO, "heat_load")), [read], [], SHOWN)) == []
+
+
 def test_a_reading_says_why_it_came_to_nothing():
     def reader(reply):
         return reading.Reader(SPEC, lambda *a, **k: reply,

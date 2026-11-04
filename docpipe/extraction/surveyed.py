@@ -109,12 +109,16 @@ def taken_of(document_id: int, spec, found: Found, reads: list,
     """The fold's view of one document's reading, holes included."""
     answered: list = []
     for read in reads:
+        source = read.batch.items[0].source
         if read.unread:
-            answered.append(hole(document_id, read.batch.items[0].source,
-                                 read.why or NO_ANSWER,
+            answered.append(hole(document_id, source, read.why or NO_ANSWER,
                                  read.batch.parameter.uri))
         else:
             answered.append((read.batch, {"tuples": read.claims}))
+            # A part of a table no reply answered, the others read.
+            answered.extend(hole(document_id, source, why,
+                                 read.batch.parameter.uri)
+                            for why in read.lost)
     for owner in found.unanswered:
         source = shown.get(tuple(owner))
         if source is not None:

@@ -132,22 +132,31 @@ prompts `extraction/read_table` and `extraction/read_text`). Each parameter is
 read in the passages the survey named for it, one request per passage, its
 definition the only one in the request. Numbers are read by their cell,
 everything else is named with a quote (owner decision 2026-11-04). For a
-parameter whose values are numbers a table is one unit: the request names
-the columns and rows that hold the parameter's values and, for every
-coordinate, where it stands, at a row label, at a column head or for the whole
-table, each with its quote; it writes no number. Code makes one row per number
-of a cell of a value row and a value column (`reading.table_rows`), quoted by
-its table row, so a number is read by its place and a row "27 % | 28 % | 27 % |
-23 %" gives each 27 % its own column. A cell may print several numbers, a value
-with its share in brackets or values stacked in one cell (owner decision
-2026-11-04): the reply then names, under `cells`, how many numbers the cells
-of that column print and which places hold values of the parameter, and a
-coordinate that holds for one place only, such as the unit of the share, is
-answered at that column with its `part`. Code reads the numbers of a cell in
-the order it prints them (`verify.numbers_in_order`), with digits grouped by a
-space taken as one number or as several, whichever gives the count the reply
-named (`reading.cell_numbers`); a cell built otherwise is not read and is
-counted as before. The survey is told that each number of such a cell counts
+parameter whose values are numbers a table is read by its cells, in parts
+where it is longer than the survey's two pages (owner decision 2026-11-04,
+`reading.table_blocks`): every part carries the table's title and head lines,
+the text around the table and the plan's pairs, and asks under `part` which
+rows it shows. The first part is asked first and names the rows under the
+Markdown rule that still belong to the head (`head_rows`, a row of units or
+years); every later part shows them above its own rows and reads no value
+from them. A request names each value of its part by its cell, `row` and
+`column`, and where the cell prints several numbers, a value with its share in
+brackets or values stacked in one cell, how many (`parts`) and which of them
+(`part`); for every coordinate it says where it stands, at the value itself,
+at a row label, at a column head (with `part` for one place of its cells, such
+as the unit of the share) or for the whole table, the most particular first,
+each with its quote; it writes no number. Code reads the number from the cell
+by its place (`reading.table_rows`, `reading.value_in`), quoted by its table
+row, so a row "27 % | 28 % | 27 % | 23 %" gives each 27 % its own column; the
+numbers of a cell are taken in the order it prints them
+(`verify.numbers_in_order`), digits grouped by a space as one number or as
+several, whichever gives the count the entry names (`reading.cell_numbers`).
+A value named twice is read once; one whose cell does not print what it
+names, or whose row the part does not read, is not read and is counted
+(`cells_not_read`). A part whose reply was cut off is asked again as two
+halves; a single row still cut off, or a part no reply answered, is a hole of
+its own beside the values of the other parts (`Read.lost`,
+`surveyed.taken_of`). The survey is told that each number of a cell counts
 for its own parameter. A section, a figure, and a table for a
 parameter whose values are no numbers (kwp's planning office, every parameter
 of scenarios) is read in one request that names each value with every

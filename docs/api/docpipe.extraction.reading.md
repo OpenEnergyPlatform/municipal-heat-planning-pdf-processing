@@ -6,18 +6,20 @@ reading.py: The values of one parameter in the passages the survey named for
 it, every coordinate of a value in the same request.
 
 Step 3 of the rebuilt harvest (owner decision 2026-11-04). Numbers are read
-by their cell, everything else is named with a quote. A table is read as one
-unit for a parameter whose values are numbers: one request says which of its
-columns and rows hold the
-parameter's values and where each coordinate stands, at a row label, a
-column head or for the whole table, each with its quote. Code then makes one
-row per number of a cell and reads the number by its place, never by its
-value: a table row "27 % | 28 % | 27 % | 23 %" gives each 27 % its own column.
-A cell may print several numbers, a value with its share in brackets or
-values stacked in one cell (owner decision 2026-11-04): the reply says how
-many numbers the cells of such a column print and which of them are values
-of the parameter, and a number's place is then its row, its column and its
-place in the cell, a coordinate answered for that place alone. A section, a
+by their cell, everything else is named with a quote. A table is read for a
+parameter whose values are numbers, in parts where it is longer than the
+survey's two pages (owner decision 2026-11-04): every part shows the table's
+title and head lines, the text around the table and the plan's pairs; the
+first part is asked first, and the rows under the rule it names as head go
+with every later one. A request names each value of its part by its cell,
+row and column, and where the cell prints several numbers, a value with its
+share in brackets or values stacked in one cell, how many and which of them;
+each coordinate stands at the value itself, at a row label, at a column head
+(for one place in its cells or for the whole column) or for the whole table,
+each with its quote. Code reads the number from the cell by its place, never
+by its value: a table row "27 % | 28 % | 27 % | 23 %" gives each 27 % its own
+column. A part whose reply was cut off is asked again as two halves, and a
+single row still cut off is a hole of its own. A section, a
 figure, and a table for any other parameter, is read in one request that
 names its values with every coordinate at once, each with its own quote. A
 category parameter's request shows its entries, and its grammar takes one of
@@ -50,7 +52,9 @@ Author: Felix Vossel
 class Grid
 ```
 
-A transcribed table: its head lines and its body rows, cell by cell.
+A transcribed table, or the part of one a request shows: its head
+lines and its body rows, cell by cell, each row with the number the
+whole table gives it.
 
 Fields:
 
@@ -58,6 +62,22 @@ Fields:
 - `heads: list`: the lines above the rule
 - `body: list`: [(line, [cells])] below it
 - `columns: int`
+- `numbers: Optional[list] = None`: the table's numbers of *body*; 1.. whole
+
+#### Grid.row_numbers
+
+```python
+def row_numbers(self) -> list
+```
+
+#### Grid.row
+
+```python
+def row(self, number) -> Optional[tuple]
+```
+
+(line, cells) of the body row the table numbers *number*, None for
+a row this grid does not hold.
 
 ### Gathered
 
@@ -123,10 +143,11 @@ Fields:
 - `batch: Batch`
 - `claims: list`
 - `asked: int = 0`
-- `skipped: int = 0`: cells of value rows and columns not read
+- `skipped: int = 0`: values of a table reply not read
 - `faulty: Optional[str] = None`
 - `unread: bool = False`: no readable reply
 - `why: Optional[str] = None`: and why: cut_off or no_answer
+- `lost: list = field(default_factory=list)`: Why each part of a table no reply answered came to nothing, the other parts read: one hole each (`surveyed.taken_of`).
 - `corrected: int = 0`: corrections the second request carried
 - `failed: dict = field(default_factory=dict)`: what the check refused of the first reply, by reason
 - `unanswered: int = 0`: coordinates no reply answered
@@ -181,7 +202,8 @@ def read(self, document_id: int, parameter, source: Source,
 ```
 
 *source* is the passage a value is verified against, *shown* the
-piece of it the request shows, *budget* the survey's two pages.
+piece of it the request shows, *budget* the survey's two pages. A
+table is read in parts (`_read_table`).
 
 ## Functions
 
@@ -307,6 +329,37 @@ the rest of the plan is fetched and the request sent again, until a round
 asks for nothing the request has not shown or the request no longer fits
 the model's window. The reply before such a round stands.
 
+### part_text
+
+```python
+def part_text(grid: Grid, shown) -> str
+```
+
+The table's text with only the body rows *shown*, as the table numbers
+them: its title, its head lines and every line that is no body row stay
+where they stand.
+
+### table_blocks
+
+```python
+def table_blocks(grid: Grid, budget: Optional[int]) -> list
+```
+
+The table's body rows in the blocks one request reads, as the table
+numbers them (owner decision 2026-11-04): all of them where the table
+fits *budget* characters, the survey's two pages, else as many rows as
+fit beside its title and head lines, at least one.
+
+### part_of
+
+```python
+def part_of(grid: Grid, block: list, head: list = ()) -> Grid
+```
+
+The part of the table a request reads: the body rows of *block*, and
+the *head* rows the first part named shown above them as text, which no
+value is read from again.
+
 ### table_payload
 
 ```python
@@ -314,9 +367,10 @@ def table_payload(source: Source, grid: Grid, parameter, slots: list,
                   context: dict, corrections: Optional[list] = None) -> dict
 ```
 
-The table request: the table, the text around it and *context*
-(`Reader.context_of`); with *corrections* the same request asked once
-more, what was wrong with the first reply beside it.
+The table request: the table or the part of it *grid* holds, the text
+around it and *context* (`Reader.context_of`, and which part this is);
+with *corrections* the same request asked once more, what was wrong with
+the first reply beside it.
 
 ### table_response_format
 
@@ -324,35 +378,44 @@ more, what was wrong with the first reply beside it.
 def table_response_format(slots: list) -> dict
 ```
 
-Every coordinate answered, at least for the whole table: its entry
-there is the answer of every value no row or column entry answers, and
-UNSTATED when the table does not print it.
+Every value the request shows named by its cell, and every coordinate
+answered, at least for the whole table: its entry there is the answer of
+every value no value, row or column entry answers, and UNSTATED when the
+table does not print it.
 
-### parts_of
+### value_key
 
 ```python
-def parts_of(reply: dict, grid: Grid) -> dict
+def value_key(entry) -> Optional[tuple]
 ```
 
-{column: (numbers, [places])} of the columns whose cells print several
-numbers, as the reply's "cells" says: how many numbers each cell of the
-column prints and the places of those that are values, counted from 1 in
-the order the cell prints them. An entry naming no such place says
-nothing; the first entry of a column stands.
+(row, column, part) of a value a table reply names: part its place in
+a cell that prints `parts` numbers, None where the cell prints one. None
+for an entry that names no cell, or a place its cell cannot have.
+
+### value_in
+
+```python
+def value_in(cell: str, entry: dict)
+```
+
+The number a value entry names in its *cell*: the one number the cell
+prints, or the `part`-th of the `parts` numbers it prints in their order
+(`cell_numbers`); None where the cell does not print them.
 
 ### table_rows
 
 ```python
-def table_rows(reply: dict, grid: Grid) -> tuple
+def table_rows(reply: dict, grid: Grid, start: int = 0) -> tuple
 ```
 
-(rows, {label: (row, column, part)}, cells not read) of a table reply:
-one row per number of a cell of a value row and a value column, its quote
-the table row, its head the words over its column. A cell prints one
-number, part None; or, in a column the reply's "cells" names, as many as
-it says, and each of them it names a value is a row of its own, part its
-place in the cell (`parts_of`). A cell that does not print that many is
-not read.
+(rows, {label: (row, column, part)}, values not read) of a table reply:
+one row per value it names, its number read from its cell by place
+(`value_in`), never written by the model, its quote the table row, its
+head the words over its column, its label counted on from *start*. A
+value named twice is read once; one whose row the request did not show
+among the rows to read, or whose cell does not print what it names, is
+not read and counted.
 
 ### answer_of
 
@@ -367,8 +430,9 @@ def table_replies(reply: dict, slot, at: dict) -> list
 ```
 
 [(level, window, field reply)] of one coordinate of a table reply,
-the most particular first: a row label, then a column head, for one
-place in the column's cells before the whole column, then the table.
+the most particular first: the value's own entry, a row label, a column
+head, for one place in the column's cells before the whole column, then
+the table.
 
 ### table_corrections
 
@@ -377,9 +441,10 @@ def table_corrections(failed: list, at: dict) -> list
 ```
 
 What the check refused of a table reply, once per coordinate and
-place: [{coordinate, row | column [, part], what}], the row or column
-numbered as the request numbered it, the place in a cell where the cell
-prints several numbers, neither for the whole table.
+place: [{coordinate, row | column [, part], what}], the row and column of
+a value's own entry, the row or the column of a row or column entry, as
+the request numbered them, the place in a cell where the cell prints
+several numbers, none for the whole table.
 
 ### value_classes
 
@@ -438,6 +503,15 @@ def value_failure(claim: dict, source: Source) -> Optional[str]
 Why the check of a value refuses it, or None: a number its quote does
 not print (the harvest's own `number_outside_quote`), a quote not in its
 passage. Said as the harvest says it.
+
+### refused_of
+
+```python
+def refused_of(failed: list, corrections: list) -> collections.Counter
+```
+
+What the check refused of a reply, by reason, and the values it
+refused as "value".
 
 ### text_corrections
 
