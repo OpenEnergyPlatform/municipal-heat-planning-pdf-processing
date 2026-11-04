@@ -16,11 +16,12 @@ row and column, and where the cell prints several numbers, a value with its
 share in brackets or values stacked in one cell, how many and which of them;
 each coordinate stands at the value itself, at a row label, at a column head
 (for one place in its cells or for the whole column) or for the whole table,
-each with its quote. Code reads the number from the cell by its place, never
-by its value: a table row "27 % | 28 % | 27 % | 23 %" gives each 27 % its own
-column. A part whose reply was cut off is asked again as two halves, and a
-single row still cut off is a hole of its own. A section, a
-figure, and a table for any other parameter, is read in one request that
+each with its quote; the reply gives the coordinates first and the cells
+last (`table_response_format`). Code reads the number from the cell by its
+place, never by its value: a table row "27 % | 28 % | 27 % | 23 %" gives
+each 27 % its own column. A part whose reply was cut off is asked again as
+two halves, and a single row still cut off is a hole of its own. A section,
+a figure, and a table for any other parameter, is read in one request that
 names its values with every coordinate at once, each with its own quote. A
 category parameter's request shows its entries, and its grammar takes one of
 them for a value, or "" where the model is unsure and writes the wording into
@@ -382,6 +383,12 @@ Every value the request shows named by its cell, and every coordinate
 answered, at least for the whole table: its entry there is the answer of
 every value no value, row or column entry answers, and UNSTATED when the
 table does not print it.
+
+The cells come last (owner decision 2026-11-04): a reply that named them
+first ended four objects deep, and on a server that does not hold a
+reply to its schema the model closed one object short on large tables,
+the same way on every attempt. A list of cells at the end closes in
+three.
 
 ### value_key
 

@@ -1747,10 +1747,12 @@ def make_places(db_path: Optional[Path], spec: Spec, out: Path,
                 reply = response.choices[0]
                 _observe_usage(getattr(response, "usage", None))
                 answer = _loads_object(reply.message.content)
-                if isinstance(answer, dict):
+                lacking = _lacking(answer, shape)
+                if isinstance(answer, dict) and lacking is None:
                     return answer
                 faults += 1
-                cause, correction = _reply_fault(reply, limit, key="hits")
+                cause, correction = _reply_fault(reply, limit,
+                                                 key=lacking or "hits")
                 trace.event("error", document_id, where="places",
                             kind="unreadable", cause=cause, attempt=attempt)
                 if cause == "cut_off":
@@ -1806,9 +1808,10 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
     """One request of the rebuilt harvest: the reply as a dict, "cut_off"
     when it did not fit its room, or None when it could not be read.
 
-    Asked again with the cause when the reply is no JSON object, as every
-    request of the stage is; a reply cut off at its limit is not rescued.
-    Each answer is traced as `<where>_ask` with *noted*.
+    Asked again with the cause when the reply is no JSON object, or one
+    without a key its schema requires (`_lacking`), as every request of the
+    stage is; a reply cut off at its limit is not rescued. Each answer is
+    traced as `<where>_ask` with *noted*.
 
     A request whose last attempt ended on a 429, a 5xx or a timeout was
     never answered, so its document is noted (`UNSERVED`) and goes
@@ -1849,10 +1852,12 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
                         completion_tokens=getattr(usage, "completion_tokens",
                                                   None), **noted)
             answer = _loads_object(reply.message.content)
-            if isinstance(answer, dict):
+            lacking = _lacking(answer, shape)
+            if isinstance(answer, dict) and lacking is None:
                 return answer
             faults += 1
-            cause, correction = _reply_fault(reply, limit, key=key)
+            cause, correction = _reply_fault(reply, limit,
+                                             key=lacking or key)
             trace.event("error", document_id, where=where,
                         kind="unreadable", cause=cause, attempt=attempt)
             if cause == "cut_off":
@@ -2856,6 +2861,23 @@ def _shape_rule() -> str:
     """What has to be said back whatever went wrong: the shape that was
     asked for."""
     return say("shape_rule")
+
+
+def _lacking(answer, shape: Optional[dict]) -> Optional[str]:
+    """The first key the schema of *shape* requires at its top that the
+    object *answer* lacks; None when it has them all, or is no object.
+
+    Such a reply parses and is still not the object that was asked for, so
+    it is asked again as `missing_key` (owner decision 2026-11-04). A server
+    that holds a reply to its grammar never sends it; one that holds it to
+    no schema sent `{}` for tables full of values, which read as tables
+    without any.
+    """
+    if not isinstance(answer, dict):
+        return None
+    schema = ((shape or {}).get("json_schema") or {}).get("schema") or {}
+    return next((key for key in schema.get("required") or ()
+                 if key not in answer), None)
 
 
 def _reply_fault(reply, limit: int, *, key: str = "",
@@ -3966,11 +3988,13 @@ def make_field_asker(image_root: Optional[Path] = None, *,
                         usage_out[key] = ((usage_out.get(key) or 0)
                                           + (getattr(usage, key, None) or 0))
                 answer = _loads_object(reply.message.content)
-                if isinstance(answer, dict):
+                lacking = _lacking(answer, shape)
+                if isinstance(answer, dict) and lacking is None:
                     return answer
                 faults += 1
                 cause, correction = _reply_fault(
-                    reply, limit, shorter=say("shorter_field"))
+                    reply, limit, key=lacking or "",
+                    shorter=say("shorter_field"))
                 log.warning("   field %s attempt %d: %s reply%s",
                             name, attempt, cause, _unparsable(reply))
                 trace.event("error", document_id, where="field",

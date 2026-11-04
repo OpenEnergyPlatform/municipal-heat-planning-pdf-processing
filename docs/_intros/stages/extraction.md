@@ -145,7 +145,12 @@ brackets or values stacked in one cell, how many (`parts`) and which of them
 (`part`); for every coordinate it says where it stands, at the value itself,
 at a row label, at a column head (with `part` for one place of its cells, such
 as the unit of the share) or for the whole table, the most particular first,
-each with its quote; it writes no number. Code reads the number from the cell
+each with its quote; it writes no number. The reply gives the coordinates
+first and the cells last (owner decision 2026-11-04,
+`reading.table_response_format`): a reply that named its cells first ended
+four objects deep, and on a server that does not hold a reply to its schema
+the model closed one object short on large tables, the same way on all three
+attempts; a list of cells at the end closes in three. Code reads the number from the cell
 by its place (`reading.table_rows`, `reading.value_in`), quoted by its table
 row, so a row "27 % | 28 % | 27 % | 23 %" gives each 27 % its own column; the
 numbers of a cell are taken in the order it prints them
@@ -881,6 +886,16 @@ as the field prompt leaves it, and what the reply says is still verified
 by `merge_field` exactly as before. 70,395 field replies of corpus_m5
 carried text beside the object and were asked again for it; under the
 grammar none can.
+
+A reply that parses but lacks a key its schema requires at the top is not the
+object that was asked for, and is asked again as `missing_key`, the retry
+naming the key (`runner._lacking`, owner decision 2026-11-04). This holds for
+every request of the stage that goes out with a schema: the survey, the
+reading, the combing, the places and the field requests. A server that holds
+a reply to its grammar never sends such a reply. A server that holds it to no
+schema, tested with the schema sent five ways (`json_schema` with and without
+`strict`, `json_object`, `guided_json`, `structured_outputs`), answered `{}`
+for tables full of values, which then read as tables without any.
 
 ### Requests the server did not serve
 

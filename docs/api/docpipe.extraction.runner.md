@@ -1566,9 +1566,10 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
 One request of the rebuilt harvest: the reply as a dict, "cut_off"
 when it did not fit its room, or None when it could not be read.
 
-Asked again with the cause when the reply is no JSON object, as every
-request of the stage is; a reply cut off at its limit is not rescued.
-Each answer is traced as `<where>_ask` with *noted*.
+Asked again with the cause when the reply is no JSON object, or one
+without a key its schema requires (`_lacking`), as every request of the
+stage is; a reply cut off at its limit is not rescued. Each answer is
+traced as `<where>_ask` with *noted*.
 
 A request whose last attempt ended on a 429, a 5xx or a timeout was
 never answered, so its document is noted (`UNSERVED`) and goes

@@ -27,7 +27,8 @@ names its state by the plan's word takes the year of that state, and no
 other. A table or figure is shown with the text of its section, the whole
 section when it fits two pages and the part around its place when not, and a
 coordinate quoted from that text is read and cites the section. A search is
-listed once, also after a list of hits no search made.
+listed once, also after a list of hits no search made. A table reply names
+its coordinates first and its cells last.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -372,6 +373,14 @@ def test_the_table_grammar_takes_a_value_by_its_cell_and_its_place():
         except jsonschema.ValidationError:
             continue
         raise AssertionError(f"a value {broken} passed the grammar")
+
+
+def test_a_table_reply_names_its_coordinates_first_and_its_cells_last():
+    # A grammar generates the keys in this order: a reply ending in its
+    # coordinates ends four objects deep, one ending in its cells in a list.
+    order = list(table_grammar()["properties"])
+    assert order[0] == "coordinates" and order[-1] == "values"
+    assert table_grammar()["required"] == ["coordinates", "values"]
 
 
 def test_a_year_can_be_answered_as_not_printed_and_only_as_a_year():
