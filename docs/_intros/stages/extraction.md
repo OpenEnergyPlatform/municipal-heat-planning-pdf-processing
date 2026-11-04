@@ -138,7 +138,13 @@ quoted by its table row, so a number is read by its place and a row "27 % | 28
 % | 27 % | 23 %" gives each 27 % its own column. A section or a figure is read
 in one request that names each value with every coordinate at once, each with
 its own quote; one longer than the survey's two pages is read in the survey's
-pieces. Every coordinate is answered: the grammar requires each coordinate of a
+pieces. A table or a figure is shown with the text of its section around it
+(`reading.around_of`, owner decision 2026-11-04), where the sentence that
+announces it, the heading over it and the paragraph under it print its year
+and its scenario: the whole section when it fits the survey's two pages, else
+that many characters around its placeholder (`pipeline.window_around`, the
+cut the field request makes of a parent section). A coordinate quoted from it
+cites the section. Every coordinate is answered: the grammar requires each coordinate of a
 value in text and, for a table, an entry of each coordinate for the whole table
 that holds wherever no row or column entry does, and `out:unstated` is an
 answer of every kind, a year's too (`fields.value_schema`, shared with the

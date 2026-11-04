@@ -39,7 +39,7 @@ from typing import Callable, Optional
 from . import fields
 from .pipeline import (READ, YEAR_STATES, Batch, Row, Source, WorkItem,
                        column_head, mark_unanswered, merge_field,
-                       option_named, printed_lines, row_label)
+                       option_named, printed_lines, row_label, window_around)
 from .verify import number_outside_quote, numbers_in, quote_in
 from .wording import say
 
@@ -148,17 +148,41 @@ def years_of(bases: list, slots: list) -> dict:
     return out
 
 
+def around_of(source: Source, passages: dict,
+              budget: Optional[int]) -> Optional[Source]:
+    """The text of the section a table or figure stands in, as its request
+    shows it (owner decision 2026-11-04): the sentence that announces it,
+    the heading over it and the paragraph under it, where its year and its
+    scenario are printed. The whole section when it fits *budget*, the
+    survey's two pages, else that many characters around the table's place
+    in it. None for a section, and for a table or figure whose section is
+    not among *passages*."""
+    provenance = source.provenance or {}
+    parent = provenance.get("parent_section")
+    if source.owner_kind == "section" or parent is None:
+        return None
+    section = passages.get(("section", int(parent)))
+    if section is None or not section.text:
+        return None
+    text = section.text
+    if budget and len(text) > budget:
+        block = provenance.get("block_id") or ""
+        text = window_around(text, f"[{block}", budget)
+    return replace(section, text=text)
+
+
 # -- a table -------------------------------------------------------------------
 
 def table_payload(source: Source, grid: Grid, parameter, slots: list,
-                  known: list, corrections: Optional[list] = None,
-                  years: Optional[dict] = None) -> dict:
-    """The table request; with *corrections* the same request asked once
+                  context: dict, corrections: Optional[list] = None) -> dict:
+    """The table request: the table, the text around it and *context*
+    (`Reader.context_of`); with *corrections* the same request asked once
     more, what was wrong with the first reply beside it."""
     provenance = source.provenance or {}
     payload = {
         "table": {"section": provenance.get("section_title"),
                   "text": source.text},
+        **({"around": context["around"]} if context.get("around") else {}),
         "columns": [{"column": c, "head": column_head(grid.text, c,
                                                       grid.columns)}
                     for c in range(1, grid.columns + 1)],
@@ -168,7 +192,7 @@ def table_payload(source: Source, grid: Grid, parameter, slots: list,
         "parameter": {"key": parameter.uri, "label": parameter.label,
                       "definition": parameter.description},
         "coordinates": {slot.name: coordinate_shown(slot) for slot in slots},
-        "known": known, **(years or {})}
+        **{key: value for key, value in context.items() if key != "around"}}
     if corrections:
         payload["corrections"] = corrections
     return payload
@@ -284,19 +308,22 @@ def table_corrections(failed: list, at: dict) -> list:
 # -- a section or a figure -----------------------------------------------------
 
 def text_payload(source: Source, parameter, slots: list,
-                 known: list, corrections: Optional[list] = None,
-                 years: Optional[dict] = None) -> dict:
-    """The request of a section or a figure; with *corrections* the same
+                 context: dict, corrections: Optional[list] = None) -> dict:
+    """The request of a section or a figure, the text around a figure and
+    *context* (`Reader.context_of`) beside it; with *corrections* the same
     request asked once more for the values the check refused something of."""
     provenance = source.provenance or {}
     payload = {"source": {"kind": source.owner_kind,
                           "section": provenance.get("section_title"),
                           "text": source.text},
+               **({"around": context["around"]} if context.get("around")
+                  else {}),
                "parameter": {"key": parameter.uri, "label": parameter.label,
                              "definition": parameter.description},
                "coordinates": {slot.name: coordinate_shown(slot)
                                for slot in slots},
-               "known": known, **(years or {})}
+               **{key: value for key, value in context.items()
+                  if key != "around"}}
     if corrections:
         payload["corrections"] = corrections
     return payload
@@ -443,11 +470,11 @@ class Reader:
     """(document_id, survey, passages) -> [Read], one per parameter and
     passage the survey named for it.
 
-    *ask_table(source, grid, parameter, slots, known, corrections, years)*
-    and *ask_text(source, parameter, slots, known, corrections, years)* are
-    one request each: the reply as a dict, CUT, or None; *corrections* is
-    None the first time and what was wrong the second, *years* the plan's
-    base and target years (`years_of`). *shown_with(source)* is what a
+    *ask_table(source, grid, parameter, slots, context, corrections)* and
+    *ask_text(source, parameter, slots, context, corrections)* are one
+    request each: the reply as a dict, CUT, or None; *context* is what the
+    request shows beside its passage (`context_of`), *corrections* None the
+    first time and what was wrong the second. *shown_with(source)* is what a
     coordinate's quote may stand in besides the passage: its section's
     heading. *pool* reads passages side by side.
     """
@@ -496,38 +523,52 @@ class Reader:
             owner = (source.owner_kind, source.owner_id)
             return self.read(document_id, parameter, source,
                              found.tuples_at(owner, "frame"), pairs, passages,
-                             shown=shown)
+                             shown=shown, budget=budget)
         if self.pool is None:
             return [one(job) for job in jobs]
         return list(self.pool.map(one, jobs))
 
+    def context_of(self, source: Source, slots: list, tuples: list,
+                   bases: list, passages: dict,
+                   budget: Optional[int]) -> tuple:
+        """(what a request shows beside its passage, the section it was
+        cut from): the text around a table or figure (`around_of`), the
+        survey's pairs of the passage and the plan's years (`years_of`)."""
+        around = around_of(source, passages, budget)
+        context = {"around": around.text} if around is not None else {}
+        context["known"] = known_of(tuples, self.frame_slots)
+        context.update(years_of(bases, slots))
+        return context, around
+
     def read(self, document_id: int, parameter, source: Source,
              tuples: list, pairs: list, passages: dict,
-             shown: Optional[Source] = None) -> Read:
+             shown: Optional[Source] = None,
+             budget: Optional[int] = None) -> Read:
         """*source* is the passage a value is verified against, *shown* the
-        piece of it the request shows."""
+        piece of it the request shows, *budget* the survey's two pages."""
         shown = shown or source
         slots = slots_of(self.spec, parameter)
-        known = known_of(tuples, self.frame_slots)
         batch = Batch(document_id, parameter,
                       [WorkItem(document_id, parameter, source)])
         grid = grid_of(source.text) if source.owner_kind == "table" else None
         bases = self.bases(pairs)
-        years = years_of(bases, slots)
+        context, around = self.context_of(source, slots, tuples, bases,
+                                          passages, budget)
 
         def ask(corrections: Optional[list] = None):
             if grid is not None:
-                return self.ask_table(source, grid, parameter, slots, known,
-                                      corrections, years)
-            return self.ask_text(shown, parameter, slots, known, corrections,
-                                 years)
+                return self.ask_table(source, grid, parameter, slots, context,
+                                      corrections)
+            return self.ask_text(shown, parameter, slots, context,
+                                 corrections)
 
         reply = ask()
         result = Read(batch, [], asked=1)
         if not isinstance(reply, dict):
             result.unread = True
             return result
-        evidence = [shown] + list(self.shown_with(source)) + [
+        evidence = [shown] + list(self.shown_with(source)) + (
+            [around] if around is not None else []) + [
             passages[tuple(one[f"{s.name}_source"])] for one in tuples
             for s in self.frame_slots
             if tuple(one.get(f"{s.name}_source") or ()) in passages]

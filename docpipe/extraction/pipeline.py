@@ -478,6 +478,16 @@ def row_label(index: int) -> str:
     return f"R{index + 1}"
 
 
+def window_around(text: str, needle: str, budget: int) -> str:
+    """A window of *budget* characters centred on *needle*, the start of
+    *text* when it is not there."""
+    at = text.find(needle) if needle else -1
+    if at == -1:
+        return text[:budget]
+    start = max(0, at - budget // 2)
+    return text[start:start + budget]
+
+
 def printed_lines(text) -> list:
     """The table rows of this text, the rule under a head left out."""
     if not isinstance(text, str):

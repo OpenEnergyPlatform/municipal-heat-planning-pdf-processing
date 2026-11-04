@@ -14,11 +14,14 @@ check takes whole is asked once. A coordinate left out is asked for by name,
 and one no reply answers ends unanswered. A request that asks the year shows
 the plan's base and target years, numbers only, and a value whose passage
 names its state by the plan's word takes the year of that state, and no
-other.
+other. A table or figure is shown with the text of its section, the whole
+section when it fits two pages and the part around its place when not, and a
+coordinate quoted from that text is read and cites the section.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import jsonschema
@@ -235,8 +238,7 @@ def read_text(*replies):
     """What reading TEXT came to, and what each request was asked with."""
     calls = []
 
-    def ask_text(source, parameter, slots, known, corrections=None,
-                 years=None):
+    def ask_text(source, parameter, slots, context, corrections=None):
         calls.append(corrections)
         return replies[min(len(calls), len(replies)) - 1]
 
@@ -248,8 +250,7 @@ def read_text(*replies):
 def read_table(*replies):
     calls = []
 
-    def ask_table(source, grid, parameter, slots, known, corrections=None,
-                  years=None):
+    def ask_table(source, grid, parameter, slots, context, corrections=None):
         calls.append(corrections)
         return replies[min(len(calls), len(replies)) - 1]
 
@@ -343,18 +344,16 @@ def test_a_coordinate_left_out_is_asked_for_by_name_and_ends_unanswered():
 def test_a_reader_reads_a_table_as_one_request_and_text_value_by_value():
     asked = []
 
-    def ask_table(source, grid, parameter, slots, known, corrections=None,
-                  years=None):
-        asked.append(("table", known))
+    def ask_table(source, grid, parameter, slots, context, corrections=None):
+        asked.append(("table", context["known"]))
         coordinates = {name: {"table": {"value": UNSTATED}} for name in SLOTS}
         coordinates["unit"] = {"table": {
             "value": "t CO2", "quote": "| | in t CO2 | in t CO2 | in t CO2 |"}}
         return {"value_columns": [2, 3], "value_rows": [2],
                 "coordinates": coordinates}
 
-    def ask_text(source, parameter, slots, known, corrections=None,
-                 years=None):
-        asked.append(("text", known))
+    def ask_text(source, parameter, slots, context, corrections=None):
+        asked.append(("text", context["known"]))
         return {"values": [dict(VALUE, **everything(unit=UNIT))]}
 
     class Found:
@@ -392,10 +391,9 @@ def test_a_request_asking_the_year_shows_the_base_and_target_years():
     assert reading.years_of(BASES, [SLOTS["carrier"]]) == {}
     shown = []
 
-    def ask_text(source, parameter, slots, known, corrections=None,
-                 years=None):
-        shown.append(reading.text_payload(source, parameter, slots, known,
-                                          corrections, years))
+    def ask_text(source, parameter, slots, context, corrections=None):
+        shown.append(reading.text_payload(source, parameter, slots, context,
+                                          corrections))
         return {"values": [dict(VALUE, **everything(unit=UNIT))]}
 
     reader = reading.Reader(SPEC, None, ask_text, FRAME,
@@ -405,7 +403,7 @@ def test_a_request_asking_the_year_shows_the_base_and_target_years():
     assert shown[0]["target_years"] == [2045]
     grid = reading.grid_of(TABLE)
     assert reading.table_payload(table(), grid, EMISSION, list(SLOTS.values()),
-                                 [], None, {"base_years": [2022]})[
+                                 {"known": [], "base_years": [2022]})[
         "base_years"] == [2022]
 
 
@@ -430,3 +428,54 @@ def test_a_value_named_by_the_plans_word_for_its_state_takes_that_year():
 
 def test_a_year_named_by_the_word_but_not_of_the_plan_is_not_read():
     assert read_by_word(2019)["year_state"] == "unbacked"
+
+
+# -- the text around a table ---------------------------------------------------
+
+SECTION = Source("section", 9,
+                 "Bilanz\nDie folgende Tabelle zeigt die Emissionen im Jahr "
+                 "2022.\n[t5: Tabelle 3]\nDarunter steht ein Absatz.",
+                 {"document_id": 7, "section_title": "Bilanz"})
+
+
+def placed():
+    return Source("table", 5, TABLE, {"document_id": 7,
+                                      "section_title": "Bilanz",
+                                      "parent_section": 9, "block_id": "t5"})
+
+
+def test_a_table_is_shown_with_its_section_or_the_part_around_its_place():
+    passages = {("section", 9): SECTION}
+    assert reading.around_of(placed(), passages, 4000).text == SECTION.text
+    long = replace(SECTION, text="x" * 5000 + "[t5: Tabelle 3]" + "y" * 5000)
+    cut = reading.around_of(placed(), {("section", 9): long}, 1000).text
+    assert len(cut) == 1000 and "[t5" in cut
+    assert reading.around_of(table(), passages, 4000) is None
+    assert reading.around_of(SECTION, passages, 4000) is None
+
+
+def test_a_year_printed_in_the_text_around_a_table_is_read_from_there():
+    shown = []
+
+    def ask_table(source, grid, parameter, slots, context, corrections=None):
+        shown.append(reading.table_payload(source, grid, parameter, slots,
+                                           context, corrections))
+        coordinates = {name: {"table": {"value": UNSTATED}} for name in SLOTS}
+        coordinates["unit"] = {"table": {
+            "value": "t CO2", "quote": "| | in t CO2 | in t CO2 | in t CO2 |"}}
+        coordinates["year"] = {"table": {
+            "value": 2022, "quote": "die Emissionen im Jahr 2022"}}
+        return {"value_columns": [2], "value_rows": [2],
+                "coordinates": coordinates}
+
+    reader = reading.Reader(SPEC, ask_table, None, FRAME)
+    read = reader.read(7, EMISSION, placed(), [], [],
+                       {("table", 5): placed(), ("section", 9): SECTION},
+                       budget=4000)
+    assert "Die folgende Tabelle" in shown[0]["around"]
+    claim = read.claims[0]
+    assert claim["year"] == 2022 and claim["year_state"] == "read"
+    assert claim["year_source"] == ["section", 9]
+    alone = reader.read(7, EMISSION, placed(), [], [],
+                        {("table", 5): placed()}, budget=4000)
+    assert alone.claims[0]["year_state"] == "unbacked"

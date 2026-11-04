@@ -99,7 +99,7 @@ from .pipeline import (CELL, YEAR_STATES, DocumentReport, Source, WorkItem,
                        names_pair, printed_lines, prints_no_frame,
                        refused_upstream, route_claims,
                        option_named, row_label, rows_from_reply, sweep_key,
-                       window_sources,
+                       window_around, window_sources,
                        write_report)
 from .fields import EXHAUSTED
 from .queries import expand as expand_queries
@@ -758,15 +758,6 @@ def make_structure(conn: sqlite3.Connection,
 PARENT_CHARS = int(os.environ.get("EXTRACT_PARENT_CHARS", "4000"))
 
 
-def _around(text: str, needle: str, budget: int) -> str:
-    """A window of *budget* characters centred on *needle*."""
-    at = text.find(needle) if needle else -1
-    if at == -1:
-        return text[:budget]
-    start = max(0, at - budget // 2)
-    return text[start:start + budget]
-
-
 def make_parents(db_path: Path, content: Optional[Callable] = None) -> Callable:
     """(sources) -> the section each table or figure stands in, once each.
 
@@ -819,7 +810,7 @@ def make_parents(db_path: Path, content: Optional[Callable] = None) -> Callable:
                 block = provenance.get("block_id") or ""
                 parent = Source(owner_kind=parent.owner_kind,
                                 owner_id=parent.owner_id,
-                                text=_around(parent.text, f"[{block}",
+                                text=window_around(parent.text, f"[{block}",
                                              PARENT_CHARS),
                                 provenance=parent.provenance,
                                 image_path=parent.image_path)
@@ -1868,10 +1859,9 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
     def document_of(source) -> int:
         return int((source.provenance or {}).get("document_id") or 0)
 
-    def ask_table(source, grid, parameter, slots, known, corrections=None,
-                  years=None):
+    def ask_table(source, grid, parameter, slots, context, corrections=None):
         text = json.dumps(reading_map.table_payload(
-            source, grid, parameter, slots, known, corrections, years),
+            source, grid, parameter, slots, context, corrections),
             ensure_ascii=False, indent=2)
         return ask_in_grammar(
             client, table_prompt, [{"role": "user", "content": text}],
@@ -1880,10 +1870,9 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
             owner=source.owner_id, rows=len(grid.body),
             corrections=len(corrections or ()))
 
-    def ask_text(source, parameter, slots, known, corrections=None,
-                 years=None):
+    def ask_text(source, parameter, slots, context, corrections=None):
         text = json.dumps(reading_map.text_payload(
-            source, parameter, slots, known, corrections, years),
+            source, parameter, slots, context, corrections),
             ensure_ascii=False, indent=2)
         content: object = text
         if source.owner_kind == "figure" and source.image_path \

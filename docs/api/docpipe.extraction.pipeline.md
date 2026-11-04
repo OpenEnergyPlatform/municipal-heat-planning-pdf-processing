@@ -345,6 +345,15 @@ fold the label the field-wise harvester had put back for it.
 def row_label(index: int) -> str
 ```
 
+### window_around
+
+```python
+def window_around(text: str, needle: str, budget: int) -> str
+```
+
+A window of *budget* characters centred on *needle*, the start of
+*text* when it is not there.
+
 ### printed_lines
 
 ```python

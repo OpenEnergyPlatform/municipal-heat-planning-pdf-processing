@@ -79,11 +79,11 @@ class Reader
 (document_id, survey, passages) -> [Read], one per parameter and
 passage the survey named for it.
 
-*ask_table(source, grid, parameter, slots, known, corrections, years)*
-and *ask_text(source, parameter, slots, known, corrections, years)* are
-one request each: the reply as a dict, CUT, or None; *corrections* is
-None the first time and what was wrong the second, *years* the plan's
-base and target years (`years_of`). *shown_with(source)* is what a
+*ask_table(source, grid, parameter, slots, context, corrections)* and
+*ask_text(source, parameter, slots, context, corrections)* are one
+request each: the reply as a dict, CUT, or None; *context* is what the
+request shows beside its passage (`context_of`), *corrections* None the
+first time and what was wrong the second. *shown_with(source)* is what a
 coordinate's quote may stand in besides the passage: its section's
 heading. *pool* reads passages side by side.
 
@@ -95,16 +95,29 @@ def __init__(self, spec, ask_table: Callable, ask_text: Callable,
              bases: Optional[Callable] = None, pool=None, trace=None)
 ```
 
+#### Reader.context_of
+
+```python
+def context_of(self, source: Source, slots: list, tuples: list,
+               bases: list, passages: dict,
+               budget: Optional[int]) -> tuple
+```
+
+(what a request shows beside its passage, the section it was
+cut from): the text around a table or figure (`around_of`), the
+survey's pairs of the passage and the plan's years (`years_of`).
+
 #### Reader.read
 
 ```python
 def read(self, document_id: int, parameter, source: Source,
          tuples: list, pairs: list, passages: dict,
-         shown: Optional[Source] = None) -> Read
+         shown: Optional[Source] = None,
+         budget: Optional[int] = None) -> Read
 ```
 
 *source* is the passage a value is verified against, *shown* the
-piece of it the request shows.
+piece of it the request shows, *budget* the survey's two pages.
 
 ## Functions
 
@@ -174,15 +187,30 @@ coordinate asked is the one they date: what the field request shows
 the plan's word and prints no year can answer one of them
 (`pipeline.named_year`).
 
+### around_of
+
+```python
+def around_of(source: Source, passages: dict,
+              budget: Optional[int]) -> Optional[Source]
+```
+
+The text of the section a table or figure stands in, as its request
+shows it (owner decision 2026-11-04): the sentence that announces it,
+the heading over it and the paragraph under it, where its year and its
+scenario are printed. The whole section when it fits *budget*, the
+survey's two pages, else that many characters around the table's place
+in it. None for a section, and for a table or figure whose section is
+not among *passages*.
+
 ### table_payload
 
 ```python
 def table_payload(source: Source, grid: Grid, parameter, slots: list,
-                  known: list, corrections: Optional[list] = None,
-                  years: Optional[dict] = None) -> dict
+                  context: dict, corrections: Optional[list] = None) -> dict
 ```
 
-The table request; with *corrections* the same request asked once
+The table request: the table, the text around it and *context*
+(`Reader.context_of`); with *corrections* the same request asked once
 more, what was wrong with the first reply beside it.
 
 ### table_response_format
@@ -229,11 +257,11 @@ the request numbered it, neither for the whole table.
 
 ```python
 def text_payload(source: Source, parameter, slots: list,
-                 known: list, corrections: Optional[list] = None,
-                 years: Optional[dict] = None) -> dict
+                 context: dict, corrections: Optional[list] = None) -> dict
 ```
 
-The request of a section or a figure; with *corrections* the same
+The request of a section or a figure, the text around a figure and
+*context* (`Reader.context_of`) beside it; with *corrections* the same
 request asked once more for the values the check refused something of.
 
 ### text_response_format
