@@ -80,6 +80,7 @@ from . import fields
 from . import found as found_places
 from . import places as places_map
 from . import replies
+from . import survey as survey_map
 from . import scheduler
 from . import scratch
 from . import trace
@@ -1765,6 +1766,132 @@ def make_places(db_path: Optional[Path], spec: Spec, out: Path,
                              fits, axes, parameters, key,
                              store=Path(out) / "places", pool=AHEAD,
                              trace=trace.event)
+
+
+def make_page_count(db_path: Optional[Path]) -> Callable:
+    """document_id -> its page count in the catalog, None where unknown."""
+    def pages(document_id: int) -> Optional[int]:
+        if db_path is None:
+            return None
+        try:
+            conn = sqlite3.connect(readonly_uri(db_path), uri=True)
+            try:
+                row = conn.execute("SELECT num_pages FROM Documents "
+                                   "WHERE id = ?", (document_id,)).fetchone()
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            return None
+        return int(row[0]) if row and row[0] else None
+    return pages
+
+
+def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
+                content: Optional[Callable] = None,
+                every: Optional[Callable] = None,
+                image_root: Optional[Path] = None):
+    """The survey of whole plans (`survey.Survey`), or None when the profile
+    writes no prompt for it or its spec names no groups. *every* is
+    (document, exclude) -> passages, read from *db_path* when not given.
+    A figure goes with its crop, one to a context."""
+    if not spec.groups:
+        return None
+    try:
+        prompt = prompts.load(survey_map.SURVEY_PROMPT_ID)
+    except (FileNotFoundError, LookupError):
+        return None
+    client = _client()
+    temperature = float(prompt.meta.get("temperature", 0))
+    max_tokens = int(prompt.meta.get("max_tokens", 4096))
+    parameters = survey_map.parameters_of(spec)
+    groups = survey_map.groups_shown(spec)
+    slots = survey_map.tuple_slots(spec)
+    every = every or make_rest_of_document(db_path, content=content)
+
+    def conversation_of(context: list) -> list:
+        text = json.dumps(survey_map.payload(context, parameters, groups),
+                          ensure_ascii=False, indent=2)
+        parts: list = [{"type": "text", "text": text}]
+        for index, source in enumerate(context):
+            if source.owner_kind != "figure" or not (source.image_path
+                                                     and ATTACH_IMAGES):
+                continue
+            part = _image_part(str(image_root / source.image_path)
+                               if image_root else source.image_path)
+            if part is not None:
+                parts.append({"type": "text", "text": say(
+                    "image_for", label=f"P{index + 1}")})
+                parts.append(part)
+        return [{"role": "user", "content": parts if len(parts) > 1
+                 else text}]
+
+    def ask(context: list, document_id: int):
+        conversation = conversation_of(context)
+        shape = survey_map.response_format(context, parameters, slots)
+        faults = 0
+        for attempt in range(1, MAX_RETRIES + 1):
+            limit = answer_room(prompt.text, conversation, max_tokens)
+            if limit < MIN_ANSWER_TOKENS:
+                return survey_map.CUT
+            transport = False
+            started = time.time()
+            try:
+                with _for(document_id):
+                    response = client.chat.completions.create(
+                        model=LLM_MODEL,
+                        temperature=retry_temperature(temperature, faults),
+                        max_tokens=limit,
+                        messages=[{"role": "system", "content": prompt.text},
+                                  *conversation],
+                        response_format=shape,
+                        extra_body=request_extras())
+                reply = response.choices[0]
+                usage = getattr(response, "usage", None)
+                _observe_usage(usage)
+                trace.event("survey_ask", document_id,
+                            passages=len(context), attempt=attempt,
+                            figure=any(s.owner_kind == "figure"
+                                       for s in context),
+                            ms=int((time.time() - started) * 1000),
+                            prompt_tokens=getattr(usage, "prompt_tokens",
+                                                  None),
+                            completion_tokens=getattr(
+                                usage, "completion_tokens", None))
+                answer = _loads_object(reply.message.content)
+                if isinstance(answer, dict):
+                    return answer
+                faults += 1
+                cause, correction = _reply_fault(reply, limit,
+                                                 key="passages")
+                trace.event("error", document_id, where="survey",
+                            kind="unreadable", cause=cause, attempt=attempt)
+                if cause == "cut_off":
+                    return survey_map.CUT
+                conversation = conversation + [
+                    {"role": "assistant",
+                     "content": reply.message.content or ""},
+                    {"role": "user", "content": correction}]
+            except Exception as exc:
+                log.warning("   survey %s attempt %d failed: %s",
+                            document_id, attempt, exc)
+                trace.event("error", document_id, where="survey",
+                            kind="exception", attempt=attempt,
+                            detail=str(exc)[:300])
+                transport = server_side(exc)
+                if not transport:
+                    return None
+            if attempt < MAX_RETRIES:
+                time.sleep(retry_wait(attempt, transport))
+        return None
+
+    key = survey_map.key_of(prompt.text, parameters, groups, LLM_MODEL)
+    log.info("survey: one per plan over %d parameter(s) and the group(s) %s, "
+             "kept in %s", len(parameters), ", ".join(groups) or "-",
+             Path(out) / "survey")
+    return survey_map.Survey(
+        ask, lambda document_id: every(document_id, set()),
+        make_page_count(db_path), parameters, slots, frame_pairs, key,
+        store=Path(out) / "survey", pool=AHEAD, trace=trace.event)
 
 
 def make_frame_asker(image_root: Optional[Path] = None) -> Callable:

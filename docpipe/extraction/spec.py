@@ -36,6 +36,11 @@ from typing import Optional, Union
 NUMERIC_TYPES = ("float", "int")
 VALUE_TYPES = NUMERIC_TYPES + ("text", "category")
 SCENARIOS = ("status_quo", "trend", "target", "unknown")
+# The steps that read a group of coordinates: the survey of the whole plan,
+# or the reading of one parameter's passages.
+READ_IN = ("survey", "reading")
+# The coordinate that names a number's entry of units_accepted.
+UNIT = "unit"
 
 
 def fold_label(raw) -> str:
@@ -192,6 +197,24 @@ class Parameter:
 
 
 @dataclass
+class Group:
+    """Coordinates a plan prints together, and the step that reads them.
+
+    The ontology says what a value is; it does not say where a plan writes
+    it. A number and its unit stand in one cell or one sentence, a scenario
+    and its year in a title or a heading above a whole table. Asked one
+    coordinate per request, the same passage went out once for each of them:
+    245,762 field requests for 100 plans in corpus_m8_100. A group is asked
+    in one request, each coordinate still answered and quoted for itself.
+    """
+    name: str
+    coordinates: tuple
+    read_in: str
+    # Where a plan prints the group, in the words the prompts show.
+    where: str
+
+
+@dataclass
 class Spec:
     parameters: list
     # The one line that asks which parameter a value belongs to. The harvest
@@ -206,10 +229,16 @@ class Spec:
     # every numeric parameter, because the entry is what settles the
     # parameter. Only a spec with a numeric parameter has a use for it.
     unit_question: Optional[str] = None
+    # name -> Group; empty for a spec read the old way only.
+    groups: dict = field(default_factory=dict)
     by_uri: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.by_uri = {p.uri: p for p in self.parameters}
+
+    def groups_read_in(self, step: str) -> list:
+        return [group for group in self.groups.values()
+                if group.read_in == step]
 
 
 def _vocabulary(path: str, raw):
@@ -512,9 +541,63 @@ def load(source: Union[Path, str, dict]) -> Spec:
     if unit_question is not None and not (isinstance(unit_question, str)
                                           and unit_question.strip()):
         _fail("spec.unit_question", "must be a non-empty string")
+    groups = _validate_groups(data.get("groups"), parameters,
+                              bool(unit_question))
     return Spec(parameters=parameters,
                 parameter_question=(question or None),
-                unit_question=(unit_question or None))
+                unit_question=(unit_question or None), groups=groups)
+
+
+def _validate_groups(raw, parameters: list, asks_unit: bool) -> dict:
+    """name -> Group, each coordinate of the spec in exactly one of them.
+
+    A coordinate in no group would be read by no step, and one in two would
+    be read twice with two answers to choose from. A group the survey reads
+    has to be one parameter's axes, the way a frame is: half of one is a set
+    of pairs that silently misses a coordinate.
+    """
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict) or not raw:
+        _fail("spec.groups", "must be a non-empty object of name -> group")
+    known = {name for parameter in parameters for name in parameter.axes}
+    if asks_unit and any(parameter.is_numeric for parameter in parameters):
+        known.add(UNIT)
+    groups: dict = {}
+    owner: dict = {}
+    for name, entry in raw.items():
+        path = f"spec.groups.{name}"
+        if not isinstance(entry, dict):
+            _fail(path, "must be an object")
+        coordinates = entry.get("coordinates")
+        if (not isinstance(coordinates, list) or not coordinates
+                or not all(isinstance(c, str) and c.strip()
+                           for c in coordinates)):
+            _fail(f"{path}.coordinates", "non-empty list of coordinate names")
+        for coordinate in coordinates:
+            if coordinate not in known:
+                _fail(f"{path}.coordinates",
+                      f"{coordinate!r} is no coordinate of the spec")
+            if coordinate in owner:
+                _fail(f"{path}.coordinates",
+                      f"{coordinate!r} is already in group {owner[coordinate]!r}")
+            owner[coordinate] = name
+        read_in = entry.get("read_in")
+        if read_in not in READ_IN:
+            _fail(f"{path}.read_in", f"must be one of {READ_IN}")
+        where = entry.get("where")
+        if not isinstance(where, str) or not where.strip():
+            _fail(f"{path}.where", "required, non-empty string")
+        if read_in == "survey" and not any(
+                all(c in parameter.axes for c in coordinates)
+                for parameter in parameters):
+            _fail(f"{path}.coordinates",
+                  "a group the survey reads must be axes of one parameter")
+        groups[name] = Group(name, tuple(coordinates), read_in, where.strip())
+    missing = sorted(known - set(owner))
+    if missing:
+        _fail("spec.groups", f"in no group: {', '.join(missing)}")
+    return groups
 
 
 def _digest(parts) -> str:

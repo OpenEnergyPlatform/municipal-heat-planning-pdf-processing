@@ -92,6 +92,34 @@ an evidence rule is refused at load time (`spec.py`): a
 coordinate is checked for its quote and its answer, wherever the
 passage stands.
 
+A spec may name `groups`: the coordinates a plan prints together, each group
+with the step that reads it (`read_in`, `survey` or `reading`) and a sentence
+on where a plan prints it (`where`). kwp has three: `frame` (scenario and
+year, read in the survey), `number` (unit and subject) and `context` (the
+other axes), both read with the number. `spec.load` refuses a coordinate in no
+group or in two, a name that is no coordinate, an unknown step, and a survey
+group that is not the axes of one parameter. Groups are for the rebuilt
+harvest (owner decision 2026-11-04); the harvest below reads none of them.
+
+### The survey of a whole plan
+
+The first step of the rebuilt harvest (`survey.py`, `runner.make_survey`,
+prompt `extraction/survey`). Every passage of a plan is read once, in contexts
+of at most one figure, sent with its crop, and at most the text of two of the
+plan's pages (`survey.budget_of`: twice its characters per page, figure
+descriptions not counted); a longer passage goes in pieces of its own that keep
+its owner. The reply has an entry for every passage of the context, which the
+grammar requires: the parameters whose values stand there, with a quote, or
+`out:none`, and the tuples of each group the survey reads, each coordinate with
+its own quote. A parameter is taken on a quote that stands in its own passage
+and has the minimum length; a tuple is held to `frame_pairs`. A reply that does
+not fit is split, not rescued. The survey is kept in `<harvest>/survey/<document
+id>.json` under a key over prompt, parameters, groups and model, and only a
+complete one is read again. `scripts/probe_rows.py --documents ... --survey`
+asks it over whole plans. On Rendsburg it replaces the anchors, the frame, the
+map of places and most of the search for open coordinates of corpus_m8_100: 60,
+31, 112 and 833 requests.
+
 ### The retrieval plan
 
 `pipeline.plan_document` builds one plan per document, not per parameter,

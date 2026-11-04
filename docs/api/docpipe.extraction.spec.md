@@ -132,6 +132,29 @@ def value_to_uri(self) -> dict
 
 Corpus label (folded) -> URI, for a category parameter.
 
+### Group
+
+```python
+@dataclass
+class Group
+```
+
+Coordinates a plan prints together, and the step that reads them.
+
+The ontology says what a value is; it does not say where a plan writes
+it. A number and its unit stand in one cell or one sentence, a scenario
+and its year in a title or a heading above a whole table. Asked one
+coordinate per request, the same passage went out once for each of them:
+245,762 field requests for 100 plans in corpus_m8_100. A group is asked
+in one request, each coordinate still answered and quoted for itself.
+
+Fields:
+
+- `name: str`
+- `coordinates: tuple`
+- `read_in: str`
+- `where: str`: Where a plan prints the group, in the words the prompts show.
+
 ### Spec
 
 ```python
@@ -144,7 +167,14 @@ Fields:
 - `parameters: list`
 - `parameter_question: Optional[str] = None`: The one line that asks which parameter a value belongs to. The harvest reads a passage once and finds the numbers in it; WHICH quantity each number is, is a coordinate like any other and is asked for like any other, with its own closed list and its own evidence. Reading the same table once per parameter is how the plan came to be three times the document.
 - `unit_question: Optional[str] = None`: The one line that asks which entry of units_accepted a number is in. A coordinate like the parameter, asked before it and with the lists of every numeric parameter, because the entry is what settles the parameter. Only a spec with a numeric parameter has a use for it.
+- `groups: dict = field(default_factory=dict)`: name -> Group; empty for a spec read the old way only.
 - `by_uri: dict = field(default_factory=dict)`
+
+#### Spec.groups_read_in
+
+```python
+def groups_read_in(self, step: str) -> list
+```
 
 ## Functions
 

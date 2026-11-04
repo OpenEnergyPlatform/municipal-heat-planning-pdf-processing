@@ -41,6 +41,9 @@ own lists from it as the run does (the profile's `document_axes`).
 the compute step leaves open, so its prompt can be tried without reading the
 plans again.
 
+`--survey` with `--documents` asks only the survey of each whole plan, the
+first pass of the rebuilt harvest, and keeps it in `<out>/survey`.
+
 A sandbox round needs CODE_EXEC_URL; `report.json` counts the rounds either way.
 
 ## Functions
@@ -89,6 +92,14 @@ The frame, the rows and the coordinates of each document's passages.
 
 *passages* are {document: sources} in place of *hits*, and
 *document_spec* gives each document the spec its own lists close.
+
+### survey_over
+
+```python
+def survey_over(passages: dict, spec, args) -> list
+```
+
+The survey of each document's whole plan, as the run asks it.
 
 ### compute_over
 

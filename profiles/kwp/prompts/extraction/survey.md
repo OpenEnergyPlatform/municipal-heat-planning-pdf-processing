@@ -1,0 +1,20 @@
+---
+temperature: 0
+max_tokens: 4096
+---
+Du gehst einen deutschen kommunalen Wärmeplan ("Kommunale Wärmeplanung") Passage für Passage durch und legst fest, welche Passage für welche Kennzahl gelesen wird. Du liest dabei KEINE Werte ab.
+
+Du bekommst:
+- "passages": Passagen des Plans in seiner Reihenfolge, je mit "id" (P1, P2, …), Art ("section" Abschnitt, "table" Tabelle, "figure" Abbildung), Abschnittstitel, Seite und "text". Zu einer Abbildung kommt ihr Bild; lies es mit.
+- "parameters": die Kennzahlen, die gelesen werden, je Schlüssel mit Bezeichnung und Definition.
+- "groups": Angaben, die meist für eine ganze Tabelle, eine ganze Abbildung oder einen ganzen Abschnitt gelten, je Gruppe mit "where" (wo ein Plan sie druckt) und ihren Angaben. Eine Angabe mit Liste beantwortest du mit einem Schlüssel der Liste, "number" ist eine Jahreszahl mit vier Ziffern.
+
+Für JEDE Passage gibst du unter ihrer id an:
+1. "parameters": die Schlüssel der Kennzahlen, deren Werte in genau dieser Passage stehen: eine Zahl, die die Definition beschreibt, oder beim Planungsbüro sein Name. Steht kein solcher Wert darin, dann genau ["out:none"].
+2. "quote": bei einer Kennzahl eine Stelle aus genau dieser Passage, Zeichen für Zeichen abgeschrieben, an der man das sieht, mindestens einige Wörter.
+3. Unter dem Namen jeder Gruppe (etwa "frame") jedes Tupel, das für die Werte dieser Passage gilt und in den gezeigten Passagen steht. Zu jeder Angabe gehört "<angabe>_quote": eine Stelle aus den gezeigten Passagen, Zeichen für Zeichen abgeschrieben, die die Antwort enthält. Bei einer Liste enthält sie den Namen des Eintrags oder eine seiner Schreibweisen, oder das eigene Wort des Plans, das du dann in "<angabe>_raw" schreibst. Bei einer Jahreszahl enthält sie die Zahl. Ein Tupel, dessen Angaben die gezeigten Passagen nicht alle drucken, lässt du weg.
+
+Nenne eine Kennzahl im Zweifel lieber einmal zu viel als einmal zu wenig: eine Passage mit "out:none" wird für keine Kennzahl gelesen.
+
+Antworte mit genau einem JSON-Objekt, in einer Zeile, ohne Text davor oder danach. Die Zitate unten sind Beschreibungen in << >> und stehen in keinem Plan:
+{"passages": {"P1": {"parameters": ["out:none"]}, "P2": {"parameters": ["emission"], "quote": "<<Tabellentitel, wörtlich>>", "frame": [{"scenario": "Bestand", "scenario_quote": "<<Stelle mit dem Wort des Plans für seinen Ist-Zustand>>", "scenario_raw": "<<dieses Wort>>", "year": 2022, "year_quote": "<<Stelle mit der Jahreszahl>>"}]}}}

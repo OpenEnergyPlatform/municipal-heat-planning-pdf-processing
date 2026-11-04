@@ -39,6 +39,9 @@ own lists from it as the run does (the profile's `document_axes`).
 the compute step leaves open, so its prompt can be tried without reading the
 plans again.
 
+`--survey` with `--documents` asks only the survey of each whole plan, the
+first pass of the rebuilt harvest, and keeps it in `<out>/survey`.
+
 A sandbox round needs CODE_EXEC_URL; `report.json` counts the rounds either way.
 """
 import argparse
@@ -194,6 +197,41 @@ def whole(hits: list, spec, args, passages=None, document_spec=None) -> list:
         return list(pool.map(one, documents))
 
 
+def survey_over(passages: dict, spec, args) -> list:
+    """The survey of each document's whole plan, as the run asks it."""
+    from docpipe.extraction import runner
+
+    def every(document: int, exclude: set) -> list:
+        return [source for source in passages.get(document, ())
+                if (source.owner_kind, source.owner_id) not in exclude]
+
+    surveyed = runner.make_survey(args.db, spec, args.out, every=every,
+                                  image_root=args.image_root)
+    if surveyed is None:
+        raise SystemExit("no survey: the profile writes no survey prompt or "
+                         "its spec names no groups")
+    surveyed.pool = ThreadPoolExecutor(args.parallel)
+
+    def one(document: int) -> dict:
+        started = time.time()
+        found = surveyed(document)
+        answers = list(found.answers.values())
+        return {"document": document, "passages": len(passages[document]),
+                "seconds": round(time.time() - started, 1),
+                "complete": found.complete,
+                "by_parameter": {p: len(found.passages_of(p))
+                                 for p in surveyed.parameters},
+                "none": sum(1 for a in answers if not a.parameters),
+                "dropped": sum(len(a.dropped) for a in answers),
+                "unanswered": len(found.unanswered),
+                "tuples": {name: sum(len(a.tuples.get(name, ()))
+                                     for a in answers)
+                           for name in surveyed.slots}}
+
+    with ThreadPoolExecutor(len(passages) or 1) as pool:
+        return list(pool.map(one, passages))
+
+
 def compute_over(stored: Path, hits: list, spec, args) -> list:
     """The compute step over the verified rows of a stored `--whole` probe.
     The raw claims cannot be folded again: their source is a label of the batch
@@ -255,6 +293,8 @@ def main() -> int:
                         help="with --places: no window narrows its rows")
     parser.add_argument("--compute", type=Path,
                         help="the compute step over this stored --whole probe")
+    parser.add_argument("--survey", action="store_true",
+                        help="with --documents: only the survey of each plan")
     args = parser.parse_args()
 
     from docpipe.extraction import runner, trace
@@ -289,6 +329,14 @@ def main() -> int:
 
     args.out.mkdir(parents=True, exist_ok=True)
     trace.open_trace(args.out, lambda document_id: f"doc{document_id}")
+    if args.survey:
+        if not passages:
+            parser.error("--survey reads whole plans: give --documents")
+        report = survey_over(passages, spec, args)
+        trace.close()
+        for row in report:
+            print(json.dumps(row, ensure_ascii=False))
+        return write_report(args.out, report)
     if args.compute:
         report = compute_over(args.compute, hits, spec, args)
         trace.close()

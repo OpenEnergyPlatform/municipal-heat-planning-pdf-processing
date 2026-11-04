@@ -1540,6 +1540,28 @@ None when the profile writes no prompt for it or EXTRACT_PLACES=0.
 *every* is (document, exclude) -> passages, read from *db_path* when
 not given.
 
+### make_page_count
+
+```python
+def make_page_count(db_path: Optional[Path]) -> Callable
+```
+
+document_id -> its page count in the catalog, None where unknown.
+
+### make_survey
+
+```python
+def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
+                content: Optional[Callable] = None,
+                every: Optional[Callable] = None,
+                image_root: Optional[Path] = None)
+```
+
+The survey of whole plans (`survey.Survey`), or None when the profile
+writes no prompt for it or its spec names no groups. *every* is
+(document, exclude) -> passages, read from *db_path* when not given.
+A figure goes with its crop, one to a context.
+
 ### make_frame_asker
 
 ```python

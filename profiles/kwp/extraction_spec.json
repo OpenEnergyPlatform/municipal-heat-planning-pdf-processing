@@ -17,6 +17,23 @@
   ],
   "unit_question": "Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: \"Gigawattstunden\" ist GWh, \"t CO₂-Äq.\" ist t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" sind kWh und GWh, \"1.700 kg CO2\" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann \"value\" weg und gib die Einheit wörtlich in \"value_raw\". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden (\"Anzahl Gebäude\", \"Wohngebäude\") hat die Einheit Gebäude.",
   "parameter_question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil. Eine Zahl von Gebäuden ist eine Gebäudeanzahl.",
+  "groups": {
+    "frame": {
+      "coordinates": ["scenario", "year"],
+      "read_in": "survey",
+      "where": "Szenario und Jahr gelten meist für eine ganze Tabelle, eine ganze Abbildung oder einen ganzen Abschnitt und stehen nahe beieinander: im Titel, in der Überschrift, in einem Spaltenkopf oder in dem Satz, der eine Tabelle ankündigt."
+    },
+    "number": {
+      "coordinates": ["unit", "subject"],
+      "read_in": "reading",
+      "where": "Die Zahl, ihre Einheit und ihr Bezug stehen zusammen: in derselben Zelle, derselben Tabellenzeile oder demselben Satz. Die Einheit kann auch im Spaltenkopf, in einer Einheitenzeile oder im Titel der Tabelle stehen."
+    },
+    "context": {
+      "coordinates": ["quantity", "aggregation", "carrier", "sector", "technology", "whole", "spatial_scope"],
+      "read_in": "reading",
+      "where": "Die Einordnung einer Zahl steht in ihrer Zeilenbeschriftung, in ihrem Spaltenkopf, im Titel ihrer Tabelle oder Abbildung oder in ihrem Satz."
+    }
+  },
   "parameters": [
     {
       "uri": "energy_consumption",

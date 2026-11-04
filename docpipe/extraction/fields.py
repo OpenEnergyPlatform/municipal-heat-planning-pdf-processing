@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from . import wording
-from .spec import Parameter, fold_label
+from .spec import UNIT, Parameter, fold_label
 
 # What a slot wants back. VALUE is the only one that decides how many rows
 # there are; every other slot fills a column of rows that already exist.
@@ -227,10 +227,6 @@ def holds(parameter: Parameter, claim: dict) -> bool:
     if not isinstance(value, str) or not value.strip():
         return True
     return fold_label(value.strip()) in parameter.value_to_uri()
-
-
-# The coordinate that says which entry of units_accepted a number is in.
-UNIT = "unit"
 
 
 # Counted by a pass over a harvest on disk for a document whose own choice
