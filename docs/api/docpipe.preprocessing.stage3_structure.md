@@ -32,6 +32,15 @@ Author: Felix Vossel
 
 ## Functions
 
+### title_page_of
+
+```python
+def title_page_of(pages: list[PageData]) -> Optional[int]
+```
+
+The page the document title stands on: that of the first `doc_title`
+block with text, else the first page. None for no pages.
+
 ### strip_running_headers
 
 ```python
@@ -40,9 +49,10 @@ def strip_running_headers(pages: list[PageData]) -> int
 
 Drop text blocks whose page-number-normalized text recurs in the same
 header/footer zone on at least HEADER_FOOTER_MIN_PAGE_FRAC of the pages.
-Section titles are never touched. The first page keeps its blocks: its
-copy of a running head is the document's citation line (journal, volume,
-year), though it still counts toward detecting the header on later pages.
+Section titles are never touched. The title page (`title_page_of`) keeps
+its blocks: its copy of a running head is the document's citation line
+(journal, volume, year), though it still counts toward detecting the
+header on other pages.
 Mutates *pages* in place; returns the number of blocks dropped.
 
 ### drop_directory_sections
@@ -84,16 +94,20 @@ headers/footers are stripped, both in place).
 ### sections_to_dict
 
 ```python
-def sections_to_dict(sections: list[Section]) -> dict
+def sections_to_dict(sections: list[Section],
+                     title_page: Optional[int] = None) -> dict
 ```
 
 Serialises the section list into the final output JSON structure, which
-docpipe/schemas/sections.schema.json describes.
+docpipe/schemas/sections.schema.json describes. *title_page* (see
+`title_page_of`) goes beside the sections for Stage 4, which does not read
+pages.json; readers that take `sections` alone ignore it.
 
 ### save_output
 
 ```python
-def save_output(sections: list[Section], output_dir: Path) -> Path
+def save_output(sections: list[Section], output_dir: Path,
+                title_page: Optional[int] = None) -> Path
 ```
 
 Writes the Stage 3 JSON under *output_dir* and returns its path.

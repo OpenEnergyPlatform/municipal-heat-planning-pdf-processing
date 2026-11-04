@@ -10,11 +10,13 @@ yields no author at all, the authors. The year is the value, as the
 parameter defines it, and the record keeps the full date.
 
 The record is the first one these keys find, in this order: the DOI the
-harvest read, the DOI the corpus index holds for the document
-(`catalogue_doi`), the title the harvest read. A DOI names one publication,
-so its record is taken as it is; a record the title finds counts only where
-at least two of its authors' family names stand among the authors the
-harvest read, or one where either side names one author.
+corpus index holds for the document (`catalogue_doi`), the DOI the harvest
+read, the title the harvest read. The index's DOI goes first because it
+belongs to this very file, while a DOI read off the page can be one the
+paper cites, such as a dataset's. A DOI names one publication, so its
+record is taken as it is; a record the title finds counts only where at
+least two of its authors' family names stand among the authors the harvest
+read, or one where either side names one author.
 
 Such a row is built like a computed one: its quote and its passage are those
 of the read value the record was found with, the printed DOI, else the
@@ -56,9 +58,9 @@ DOI = "publication_doi"
 QUOTE_FLAGS = ("quote_repaired", "not_located")
 SOURCE = "OpenAlex"
 
-# The keys a record is found by, in the order they are tried.
-BY_READ_DOI = "doi"
+# The keys a record is found by; tried index DOI, read DOI, title.
 BY_INDEX_DOI = "index_doi"
+BY_READ_DOI = "doi"
 BY_TITLE = "title"
 
 # Set the first time the catalogue cannot be reached; a run is one process.
@@ -219,12 +221,13 @@ def complete(report, spec, *, fetch: Optional[Callable] = None,
     doi_row = _most_read([row for row in rows_of(DOI)
                           if bare_doi(row["value"])])
     keys = []
-    if doi_row is not None:
-        keys.append((BY_READ_DOI, bare_doi(doi_row["value"]), doi_row))
     index_doi = bare_doi(catalogue_doi)
-    if index_doi and not any(k[1].casefold() == index_doi.casefold()
-                             for k in keys):
+    if index_doi:
         keys.append((BY_INDEX_DOI, index_doi, title_row))
+    if doi_row is not None and not any(
+            k[1].casefold() == bare_doi(doi_row["value"]).casefold()
+            for k in keys):
+        keys.append((BY_READ_DOI, bare_doi(doi_row["value"]), doi_row))
     keys.append((BY_TITLE, title_row["value"], title_row))
     read = [row.get("value") for row in report.tuples
             if row.get("parameter") == AUTHOR]

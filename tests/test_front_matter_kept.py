@@ -37,3 +37,20 @@ def test_a_body_section_the_model_removes_still_goes():
 def test_the_first_page_is_the_lowest_page_any_section_carries():
     assert _page_of(DOC) == 1
     assert _page_of([{"title": "x", "content": ""}]) is None
+
+
+# Promise: Stage 4 removes no section starting on the title page; with a cover
+# page 1 and the title on page 2, page 2 is protected and page 1 is not.
+COVERED = [section("Repository cover", "Open access archive", 1),
+           section("Ken Oshiro, Mikiko Kainuma", "a Institute, Tokyo", 2)]
+
+
+def test_an_author_section_on_title_page_two_survives_a_remove():
+    applied, _ = _apply_actions([remove(COVERED[1])], None, 2)
+    assert [s["content"] for s in applied] == ["a Institute, Tokyo"]
+
+
+def test_the_cover_on_page_one_can_be_removed_when_the_title_is_on_page_two():
+    applied, _ = _apply_actions([remove(COVERED[0])], None, 2)
+    assert [s["content"] for s in applied] == [""]
+

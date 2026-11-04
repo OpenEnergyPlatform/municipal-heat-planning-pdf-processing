@@ -31,7 +31,8 @@ from .config import (
     dump_json_atomic,
 )
 from .models import PageData
-from .stage3_structure import build_sections, save_output, sections_to_dict
+from .stage3_structure import (build_sections, save_output, sections_to_dict,
+                               title_page_of)
 # Keep Stage 1/2 imports (fitz, torch, PP-DocLayout) lazy inside the functions
 # that need them: --rebuild-stage3 must run without pulling in the GPU stack.
 
@@ -189,9 +190,10 @@ def run_single(
             result = None
     if result is None:
         sections = build_sections(pages, column_layout)
+        title_page = title_page_of(pages)
         if not n_failed:
-            save_output(sections, output_dir)
-        result = clean_data(sections_to_dict(sections))
+            save_output(sections, output_dir, title_page)
+        result = clean_data(sections_to_dict(sections, title_page))
 
     log.info(
         f"Stage 3: {len(result['sections'])} sections | "
@@ -339,7 +341,8 @@ def rebuild_stage3_from_cache(output_dir: Path, column_layout: str = "auto") -> 
             log.warning("  [%d/%d] %s: pages cache unreadable – skipping",
                         i + 1, len(doc_dirs), d.name)
             continue
-        save_output(build_sections(pages, column_layout), d)
+        sections = build_sections(pages, column_layout)
+        save_output(sections, d, title_page_of(pages))
         done += 1
         if (i + 1) % 50 == 0 or (i + 1) == len(doc_dirs):
             log.info("  [%d/%d] rebuilt", i + 1, len(doc_dirs))

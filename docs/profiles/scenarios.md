@@ -464,10 +464,12 @@ What the paper does not print of its DOI and year, often an authors'
 manuscript, and its authors where the text yields none at all, the run
 looks up in OpenAlex, whose records are CC0 (`completion.py`, owner
 decisions 2026-11-04). After a document's fold a program, no model, finds
-the record by the first of three keys that finds one: the DOI the harvest
-read, the DOI the corpus index holds for the document (`catalogue_doi`;
-the crawl's copy is the key here, never the value), then the title the
-harvest read. A record a DOI finds is taken as it is; one the title finds
+the record by the first of three keys that finds one: the DOI the corpus
+index holds for the document (`catalogue_doi`; the crawl's copy is the key
+here, never the value), the DOI the harvest read, then the title the
+harvest read. The index's DOI goes first: it belongs to this very file,
+while a DOI read off the page can be one the paper cites, such as a
+dataset's (one of 48 records in a measurement on run m6). A record a DOI finds is taken as it is; one the title finds
 counts only where two of its authors' family names stand among the authors
 read, one where either side names one author. The DOI, the year and the
 authors then become rows of `publication_doi`, `publication_date` and

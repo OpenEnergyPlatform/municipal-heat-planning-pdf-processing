@@ -15,7 +15,7 @@ example, a preprint's line numbers landing inside a sentence: a number
 counting up line after line is removed, one the sentence itself states
 stays.
 
-The front matter of the first page (title, authors, affiliations, the journal line with volume and year, the DOI, dates and the copyright line) is never refinement's to remove: the prompts say so, and `_apply_actions` refuses a `remove` for any section that starts on the document's first page.
+The front matter of the title page (title, authors, affiliations, the journal line with volume and year, the DOI, dates and the copyright line) is never refinement's to remove: the prompts say so, and `_apply_actions` refuses a `remove` for any section that starts on the title page. That is the page of the detected document title, which stage 3 hands on as `title_page` in `sections.json`; a `sections.json` without it gives the lowest page any section carries.
 
 Stage 4 also enforces the size limit the embedding step needs: a
 retrieval chunk is one section and one vector, so a section long enough

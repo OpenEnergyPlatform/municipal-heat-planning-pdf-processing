@@ -1,5 +1,6 @@
 from docpipe.preprocessing.models import Block, PageData
-from docpipe.preprocessing.stage3_structure import strip_running_headers
+from docpipe.preprocessing.stage3_structure import (
+    sections_to_dict, strip_running_headers, title_page_of)
 
 H = 1000.0
 
@@ -48,3 +49,47 @@ def test_first_page_is_smallest_page_number_not_index():
         pg.page_number += 10
     strip_running_headers(pages)
     assert [b.id for b in pages[0].blocks] == ["h1", "b1"]
+
+
+# Promise: the title page is the page of the detected document title, else the
+# first page; Stage 3 keeps its blocks.
+def _titled(pages, page):
+    pg = next(p for p in pages if p.page_number == page)
+    pg.blocks.append(Block(id="t", type="text", bbox=[50, 100, 400, 120],
+                           content="Pathways to net zero", layout_label="doc_title"))
+
+
+def test_title_page_is_the_page_of_the_doc_title():
+    pages = _pages(6)
+    _titled(pages, 2)
+    assert title_page_of(pages) == 2
+
+
+def test_cover_page_one_loses_its_header_title_page_two_keeps_it():
+    pages = _pages(6)
+    _titled(pages, 2)
+    strip_running_headers(pages)
+    assert [b.id for b in pages[0].blocks] == ["b1"]
+    assert "h2" in [b.id for b in pages[1].blocks]
+    for pg in pages[2:]:
+        assert not any(b.id.startswith("h") for b in pg.blocks)
+
+
+def test_without_a_doc_title_the_first_page_is_the_title_page():
+    pages = _pages(6)
+    assert title_page_of(pages) == 1
+    strip_running_headers(pages)
+    assert [b.id for b in pages[0].blocks] == ["h1", "b1"]
+    assert not any(b.id == "h2" for b in pages[1].blocks)
+
+
+def test_an_empty_doc_title_does_not_count():
+    pages = _pages(6)
+    _titled(pages, 3)
+    pages[2].blocks[-1].content = "  "
+    assert title_page_of(pages) == 1
+
+
+def test_the_title_page_reaches_sections_json_beside_the_sections():
+    assert sections_to_dict([], 2)["title_page"] == 2
+    assert "title_page" not in sections_to_dict([])

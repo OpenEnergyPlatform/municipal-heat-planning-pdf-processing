@@ -531,7 +531,7 @@ def _apply_actions(
 ) -> tuple[list[dict], Optional[dict]]:
     """
     Applies the _action directives returned by the LLM. A section that starts
-    on *first_page*, the document's first page, is its front matter (title,
+    on *first_page*, the title page, is its front matter (title,
     authors, affiliations, journal line, dates) and is never removed.
 
     Returns:
@@ -1083,7 +1083,8 @@ def _make_splitter(client) -> Callable[..., dict | Hole]:
 def refine_sections(sections: list[dict],
                     report: Optional[dict] = None,
                     done: Optional[dict] = None,
-                    left: Optional[dict] = None) -> list[dict]:
+                    left: Optional[dict] = None,
+                    title_page: Optional[int] = None) -> list[dict]:
     """
     Processes all sections through the LLM in windows of WINDOW_SIZE, dispatched
     in parallel but assembled in order (merge/split semantics are positional).
@@ -1213,7 +1214,8 @@ def refine_sections(sections: list[dict],
     # ── Sequential assembly (order matters for merge_into_previous) ──────
     refined: list[dict] = []
     previous_kept: Optional[dict] = None
-    first_page = _page_of(sections)
+    # Stage 3's title page; an older sections.json has none: the lowest page.
+    first_page = title_page if title_page is not None else _page_of(sections)
     # A window (or the part of one) that is a hole keeps its original text,
     # which is indistinguishable in the output from a window that needed no
     # change, so the only place this can be recorded is here, while it
@@ -1494,8 +1496,13 @@ def run_refine(output_dir: Path, data: Optional[dict] = None,
     left: dict = {}
     try:
         # A third argument only when there is something to resume.
-        refined = (refine_sections(sections, report, left=left) if done is None
-                   else refine_sections(sections, report, done, left=left))
+        title_page = data.get("title_page")
+        if not isinstance(title_page, int):
+            title_page = None
+        refined = (refine_sections(sections, report, left=left,
+                                   title_page=title_page) if done is None
+                   else refine_sections(sections, report, done, left=left,
+                                        title_page=title_page))
     except Unfinished as unfinished:
         if unfinished.sections is None:
             log.error("Stage 4: %s: the model server did not serve the cut "

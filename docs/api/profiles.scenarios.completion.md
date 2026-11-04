@@ -13,11 +13,13 @@ yields no author at all, the authors. The year is the value, as the
 parameter defines it, and the record keeps the full date.
 
 The record is the first one these keys find, in this order: the DOI the
-harvest read, the DOI the corpus index holds for the document
-(`catalogue_doi`), the title the harvest read. A DOI names one publication,
-so its record is taken as it is; a record the title finds counts only where
-at least two of its authors' family names stand among the authors the
-harvest read, or one where either side names one author.
+corpus index holds for the document (`catalogue_doi`), the DOI the harvest
+read, the title the harvest read. The index's DOI goes first because it
+belongs to this very file, while a DOI read off the page can be one the
+paper cites, such as a dataset's. A DOI names one publication, so its
+record is taken as it is; a record the title finds counts only where at
+least two of its authors' family names stand among the authors the harvest
+read, or one where either side names one author.
 
 Such a row is built like a computed one: its quote and its passage are those
 of the read value the record was found with, the printed DOI, else the

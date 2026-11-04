@@ -1,6 +1,6 @@
 """A DOI, a year and, where the text yields none, the authors the document
 does not print are looked up in its catalogue record: found first by the DOI
-the harvest read, then by the DOI the corpus index holds, then by the title,
+the corpus index holds, then by the DOI the harvest read, then by the title,
 AND a record a DOI finds is taken without an author match, while one the
 title finds counts only where two of its authors' family names stand among
 the authors read, or one where either side names one author, AND never over
@@ -191,7 +191,7 @@ def test_a_printed_doi_finds_the_record_without_authors_and_fills_them():
     assert outcome["outcome"] == "authors" and looked_up(by_title) == {}
 
 
-def test_the_index_doi_comes_after_the_printed_one_and_before_the_title():
+def test_the_index_doi_goes_before_the_printed_one_and_the_title():
     title = read("publication_title", TITLE)
     asked = []
 
@@ -204,14 +204,21 @@ def test_the_index_doi_comes_after_the_printed_one_and_before_the_title():
     assert asked == [DOI] and outcome["key"] == completion.BY_INDEX_DOI
     assert looked_up(report)["publication_doi"]["value"] == DOI
     assert looked_up(report)["publication_doi"]["quote"] == title["quote"]
-    # A printed DOI the catalogue does not hold is tried first, then the index's.
+    # A DOI the paper cites, read as its own, is never asked before the index's.
     asked.clear()
-    printed = read("publication_doi", "10.1000/unknown", "doi:10.1000/unknown")
-    report = report_of(title, printed)
+    cited = read("publication_doi", "10.5281/zenodo.123", "doi:10.5281/zenodo.123")
+    report = report_of(title, cited)
     outcome = completion.complete(report, SPEC, fetch=no_doi, fetch_doi=by_doi,
                                   catalogue_doi=DOI)
+    assert asked == [DOI] and outcome["key"] == completion.BY_INDEX_DOI
+    # An index DOI the catalogue does not hold gives way to the printed one.
+    asked.clear()
+    printed = read("publication_doi", DOI, f"doi:{DOI}")
+    report = report_of(title, printed)
+    outcome = completion.complete(report, SPEC, fetch=no_doi, fetch_doi=by_doi,
+                                  catalogue_doi="10.1000/unknown")
     assert asked == ["10.1000/unknown", DOI]
-    assert outcome["key"] == completion.BY_INDEX_DOI
+    assert outcome["key"] == completion.BY_READ_DOI
 
 
 def test_authors_from_the_record_never_join_authors_the_text_names():

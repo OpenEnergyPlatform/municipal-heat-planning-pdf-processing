@@ -183,7 +183,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.preprocessing.pipeline](docpipe.preprocessing.pipeline.md): Orchestrates the PDF preprocessing pipeline, Stages 1 to 3. (7 functions)
 - [docpipe.preprocessing.stage1_extract](docpipe.preprocessing.stage1_extract.md): Extracts text with PyMuPDF, as rawdict. (2 functions)
 - [docpipe.preprocessing.stage2_layout](docpipe.preprocessing.stage2_layout.md): Detects page layout with PP-DocLayoutV3 and turns detections into tables, images, section titles and text suppressions for Stage 3. (1 class, 4 functions)
-- [docpipe.preprocessing.stage3_structure](docpipe.preprocessing.stage3_structure.md): Assembles document sections deterministically from pages that carry the layout labels Stage 2 attached. (5 functions)
+- [docpipe.preprocessing.stage3_structure](docpipe.preprocessing.stage3_structure.md): Assembles document sections deterministically from pages that carry the layout labels Stage 2 attached. (6 functions)
 
 ## docpipe.providers
 

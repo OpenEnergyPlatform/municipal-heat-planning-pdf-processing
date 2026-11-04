@@ -131,13 +131,26 @@ def _header_candidate(block: Block) -> bool:
     return bool(txt) and len(txt) <= HEADER_FOOTER_MAX_LEN
 
 
+def title_page_of(pages: list[PageData]) -> Optional[int]:
+    """The page the document title stands on: that of the first `doc_title`
+    block with text, else the first page. None for no pages."""
+    ordered = sorted(pages, key=lambda pg: pg.page_number)
+    for pg in ordered:
+        for b in pg.blocks:
+            if (b.layout_label == "doc_title"
+                    and _resolve_title_text(b) is not None):
+                return pg.page_number
+    return ordered[0].page_number if ordered else None
+
+
 def strip_running_headers(pages: list[PageData]) -> int:
     """
     Drop text blocks whose page-number-normalized text recurs in the same
     header/footer zone on at least HEADER_FOOTER_MIN_PAGE_FRAC of the pages.
-    Section titles are never touched. The first page keeps its blocks: its
-    copy of a running head is the document's citation line (journal, volume,
-    year), though it still counts toward detecting the header on later pages.
+    Section titles are never touched. The title page (`title_page_of`) keeps
+    its blocks: its copy of a running head is the document's citation line
+    (journal, volume, year), though it still counts toward detecting the
+    header on other pages.
     Mutates *pages* in place; returns the number of blocks dropped.
     """
     if not HEADER_FOOTER_STRIP_ENABLE or len(pages) < 4:
@@ -161,10 +174,10 @@ def strip_running_headers(pages: list[PageData]) -> int:
     if not headers:
         return 0
 
-    first_page = min(pg.page_number for pg in pages)
+    title_page = title_page_of(pages)
     dropped = 0
     for pg in pages:
-        if pg.page_number == first_page:
+        if pg.page_number == title_page:
             continue
         kept: list[Block] = []
         for b in pg.blocks:
@@ -496,18 +509,25 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
 # Serialisation helpers
 # ---------------------------------------------------------------------------
 
-def sections_to_dict(sections: list[Section]) -> dict:
+def sections_to_dict(sections: list[Section],
+                     title_page: Optional[int] = None) -> dict:
     """Serialises the section list into the final output JSON structure, which
-    docpipe/schemas/sections.schema.json describes."""
-    return {"version": SECTIONS_VERSION,
-            "sections": [s.to_dict() for s in sections]}
+    docpipe/schemas/sections.schema.json describes. *title_page* (see
+    `title_page_of`) goes beside the sections for Stage 4, which does not read
+    pages.json; readers that take `sections` alone ignore it."""
+    out = {"version": SECTIONS_VERSION,
+           "sections": [s.to_dict() for s in sections]}
+    if title_page is not None:
+        out["title_page"] = title_page
+    return out
 
 
 
-def save_output(sections: list[Section], output_dir: Path) -> Path:
+def save_output(sections: list[Section], output_dir: Path,
+                title_page: Optional[int] = None) -> Path:
     """Writes the Stage 3 JSON under *output_dir* and returns its path."""
     out_path = output_dir / SECTIONS_JSON
-    data     = clean_data(sections_to_dict(sections))
+    data     = clean_data(sections_to_dict(sections, title_page))
     dump_json_atomic(data, out_path)
     log.info(f"Stage 3: output written → {out_path}")
     return out_path
