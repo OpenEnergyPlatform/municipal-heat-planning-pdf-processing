@@ -1548,6 +1548,30 @@ def make_page_count(db_path: Optional[Path]) -> Callable
 
 document_id -> its page count in the catalog, None where unknown.
 
+### ask_in_grammar
+
+```python
+def ask_in_grammar(client, prompt, conversation: list, shape: dict,
+                   document_id: int, where: str, key: str, **noted)
+```
+
+One request of the rebuilt harvest: the reply as a dict, "cut_off"
+when it did not fit its room, or None when it could not be read.
+
+Asked again with the cause when the reply is no JSON object, as every
+request of the stage is; a reply cut off at its limit is not rescued.
+Each answer is traced as `<where>_ask` with *noted*.
+
+### make_reader
+
+```python
+def make_reader(spec: Spec, image_root: Optional[Path] = None)
+```
+
+The reading of one parameter's passages (`reading.Reader`), or None
+when the profile writes no prompts for it or its spec names no groups.
+A figure goes with its crop.
+
 ### make_survey
 
 ```python

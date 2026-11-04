@@ -79,6 +79,7 @@ from . import compute as computing
 from . import fields
 from . import found as found_places
 from . import places as places_map
+from . import reading as reading_map
 from . import replies
 from . import survey as survey_map
 from . import scheduler
@@ -1786,6 +1787,130 @@ def make_page_count(db_path: Optional[Path]) -> Callable:
     return pages
 
 
+def ask_in_grammar(client, prompt, conversation: list, shape: dict,
+                   document_id: int, where: str, key: str, **noted):
+    """One request of the rebuilt harvest: the reply as a dict, "cut_off"
+    when it did not fit its room, or None when it could not be read.
+
+    Asked again with the cause when the reply is no JSON object, as every
+    request of the stage is; a reply cut off at its limit is not rescued.
+    Each answer is traced as `<where>_ask` with *noted*.
+    """
+    temperature = float(prompt.meta.get("temperature", 0))
+    max_tokens = int(prompt.meta.get("max_tokens", 4096))
+    faults = 0
+    for attempt in range(1, MAX_RETRIES + 1):
+        limit = answer_room(prompt.text, conversation, max_tokens)
+        if limit < MIN_ANSWER_TOKENS:
+            return "cut_off"
+        transport = False
+        started = time.time()
+        try:
+            with _for(document_id):
+                response = client.chat.completions.create(
+                    model=LLM_MODEL,
+                    temperature=retry_temperature(temperature, faults),
+                    max_tokens=limit,
+                    messages=[{"role": "system", "content": prompt.text},
+                              *conversation],
+                    response_format=shape,
+                    extra_body=request_extras())
+            reply = response.choices[0]
+            usage = getattr(response, "usage", None)
+            _observe_usage(usage)
+            trace.event(f"{where}_ask", document_id, attempt=attempt,
+                        ms=int((time.time() - started) * 1000),
+                        prompt_tokens=getattr(usage, "prompt_tokens", None),
+                        completion_tokens=getattr(usage, "completion_tokens",
+                                                  None), **noted)
+            answer = _loads_object(reply.message.content)
+            if isinstance(answer, dict):
+                return answer
+            faults += 1
+            cause, correction = _reply_fault(reply, limit, key=key)
+            trace.event("error", document_id, where=where,
+                        kind="unreadable", cause=cause, attempt=attempt)
+            if cause == "cut_off":
+                return "cut_off"
+            conversation = conversation + [
+                {"role": "assistant", "content": reply.message.content or ""},
+                {"role": "user", "content": correction}]
+        except Exception as exc:
+            log.warning("   %s %s attempt %d failed: %s", where, document_id,
+                        attempt, exc)
+            trace.event("error", document_id, where=where, kind="exception",
+                        attempt=attempt, detail=str(exc)[:300])
+            transport = server_side(exc)
+            if not transport:
+                return None
+        if attempt < MAX_RETRIES:
+            time.sleep(retry_wait(attempt, transport))
+    return None
+
+
+def make_reader(spec: Spec, image_root: Optional[Path] = None):
+    """The reading of one parameter's passages (`reading.Reader`), or None
+    when the profile writes no prompts for it or its spec names no groups.
+    A figure goes with its crop."""
+    if not spec.groups:
+        return None
+    try:
+        table_prompt = prompts.load(reading_map.READ_TABLE_PROMPT_ID)
+        text_prompt = prompts.load(reading_map.READ_TEXT_PROMPT_ID)
+    except (FileNotFoundError, LookupError):
+        return None
+    client = _client()
+    frame_slots = [slot for group in spec.groups_read_in("survey")
+                   for slot in fields.frame_slots(spec, group.coordinates)]
+    from docpipe.profile import active_profile
+    states = year_states_of(active_profile())
+
+    def document_of(source) -> int:
+        return int((source.provenance or {}).get("document_id") or 0)
+
+    def ask_table(source, grid, parameter, slots, known):
+        text = json.dumps(reading_map.table_payload(
+            source, grid, parameter, slots, known), ensure_ascii=False,
+            indent=2)
+        return ask_in_grammar(
+            client, table_prompt, [{"role": "user", "content": text}],
+            reading_map.table_response_format(slots), document_of(source),
+            "read_table", "coordinates", parameter=parameter.uri,
+            owner=source.owner_id, rows=len(grid.body))
+
+    def ask_text(source, parameter, slots, known):
+        text = json.dumps(reading_map.text_payload(
+            source, parameter, slots, known), ensure_ascii=False, indent=2)
+        content: object = text
+        if source.owner_kind == "figure" and source.image_path \
+                and ATTACH_IMAGES:
+            part = _image_part(str(image_root / source.image_path)
+                               if image_root else source.image_path)
+            if part is not None:
+                content = [{"type": "text", "text": text}, part]
+        return ask_in_grammar(
+            client, text_prompt, [{"role": "user", "content": content}],
+            reading_map.text_response_format(parameter, slots),
+            document_of(source), "read_text", "values",
+            parameter=parameter.uri, kind=source.owner_kind,
+            owner=source.owner_id)
+
+    def shown_with(source) -> list:
+        provenance = source.provenance or {}
+        title = provenance.get("section_title")
+        parent = provenance.get("parent_section")
+        if source.owner_kind == "section" or not title or not parent \
+                or title in (source.text or ""):
+            return []
+        return [Source("section", int(parent), title,
+                       {**provenance, "owner_kind": "section"})]
+
+    return reading_map.Reader(
+        spec, ask_table, ask_text, frame_slots, shown_with=shown_with,
+        bases=lambda pairs: named_years(pairs, frame_slots, states),
+        pool=AHEAD, trace=trace.event)
+
+
 def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
                 content: Optional[Callable] = None,
                 every: Optional[Callable] = None,
@@ -1801,8 +1926,6 @@ def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
     except (FileNotFoundError, LookupError):
         return None
     client = _client()
-    temperature = float(prompt.meta.get("temperature", 0))
-    max_tokens = int(prompt.meta.get("max_tokens", 4096))
     parameters = survey_map.parameters_of(spec)
     groups = survey_map.groups_shown(spec)
     slots = survey_map.tuple_slots(spec)
@@ -1829,64 +1952,12 @@ def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
 
     def ask(context: list, document_id: int,
             corrections: Optional[list] = None):
-        conversation = conversation_of(context, corrections)
-        shape = survey_map.response_format(context, parameters, slots)
-        faults = 0
-        for attempt in range(1, MAX_RETRIES + 1):
-            limit = answer_room(prompt.text, conversation, max_tokens)
-            if limit < MIN_ANSWER_TOKENS:
-                return survey_map.CUT
-            transport = False
-            started = time.time()
-            try:
-                with _for(document_id):
-                    response = client.chat.completions.create(
-                        model=LLM_MODEL,
-                        temperature=retry_temperature(temperature, faults),
-                        max_tokens=limit,
-                        messages=[{"role": "system", "content": prompt.text},
-                                  *conversation],
-                        response_format=shape,
-                        extra_body=request_extras())
-                reply = response.choices[0]
-                usage = getattr(response, "usage", None)
-                _observe_usage(usage)
-                trace.event("survey_ask", document_id,
-                            passages=len(context), attempt=attempt,
-                            corrections=len(corrections or ()),
-                            figure=any(s.owner_kind == "figure"
-                                       for s in context),
-                            ms=int((time.time() - started) * 1000),
-                            prompt_tokens=getattr(usage, "prompt_tokens",
-                                                  None),
-                            completion_tokens=getattr(
-                                usage, "completion_tokens", None))
-                answer = _loads_object(reply.message.content)
-                if isinstance(answer, dict):
-                    return answer
-                faults += 1
-                cause, correction = _reply_fault(reply, limit,
-                                                 key="passages")
-                trace.event("error", document_id, where="survey",
-                            kind="unreadable", cause=cause, attempt=attempt)
-                if cause == "cut_off":
-                    return survey_map.CUT
-                conversation = conversation + [
-                    {"role": "assistant",
-                     "content": reply.message.content or ""},
-                    {"role": "user", "content": correction}]
-            except Exception as exc:
-                log.warning("   survey %s attempt %d failed: %s",
-                            document_id, attempt, exc)
-                trace.event("error", document_id, where="survey",
-                            kind="exception", attempt=attempt,
-                            detail=str(exc)[:300])
-                transport = server_side(exc)
-                if not transport:
-                    return None
-            if attempt < MAX_RETRIES:
-                time.sleep(retry_wait(attempt, transport))
-        return None
+        return ask_in_grammar(
+            client, prompt, conversation_of(context, corrections),
+            survey_map.response_format(context, parameters, slots),
+            document_id, "survey", "passages", passages=len(context),
+            corrections=len(corrections or ()),
+            figure=any(s.owner_kind == "figure" for s in context))
 
     key = survey_map.key_of(prompt.text, parameters, groups, LLM_MODEL)
     log.info("survey: one per plan over %d parameter(s) and the group(s) %s, "

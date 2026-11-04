@@ -1,0 +1,229 @@
+# docpipe.extraction.reading
+
+`docpipe/extraction/reading.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
+
+reading.py: The values of one parameter in the passages the survey named for
+it, every coordinate of a value in the same request.
+
+Step 3 of the rebuilt harvest (owner decision 2026-11-04). A table is read as
+one unit: one request says which of its columns and rows hold the
+parameter's values and where each coordinate stands, at a row label, a
+column head or for the whole table, each with its quote. Code then makes one
+row per cell and reads the number by its place, never by its value: a table
+row "27 % | 28 % | 27 % | 23 %" gives each 27 % its own column. A section or
+a figure is read in one request that names its values with every coordinate
+at once, each with its own quote.
+
+Nothing is checked here. Every coordinate goes through `pipeline.merge_field`,
+the check every field answer of the harvest goes through, and every value
+through `fold_batch`. A frame coordinate the request leaves open is taken from
+the survey's tuple of the passage, with its quote, where the survey named one
+(window `frame`).
+
+Author: Felix Vossel
+
+## Classes
+
+### Grid
+
+```python
+@dataclass
+class Grid
+```
+
+A transcribed table: its head lines and its body rows, cell by cell.
+
+Fields:
+
+- `text: str`
+- `heads: list`: the lines above the rule
+- `body: list`: [(line, [cells])] below it
+- `columns: int`
+
+### Read
+
+```python
+@dataclass
+class Read
+```
+
+What reading one parameter in one passage came to.
+
+Fields:
+
+- `batch: Batch`
+- `claims: list`
+- `asked: int = 0`
+- `skipped: int = 0`: cells of value rows and columns not read
+- `faulty: Optional[str] = None`
+- `unread: bool = False`: no readable reply
+
+### Reader
+
+```python
+class Reader
+```
+
+(document_id, survey, passages) -> [Read], one per parameter and
+passage the survey named for it.
+
+*ask_table(source, grid, parameter, slots, known)* and
+*ask_text(source, parameter, slots, known)* are one request each: the
+reply as a dict, CUT, or None. *shown_with(source)* is what a
+coordinate's quote may stand in besides the passage: its section's
+heading. *pool* reads passages side by side.
+
+#### Reader.\_\_init\_\_
+
+```python
+def __init__(self, spec, ask_table: Callable, ask_text: Callable,
+             frame_slots: list, *, shown_with: Optional[Callable] = None,
+             bases: Optional[Callable] = None, pool=None, trace=None)
+```
+
+#### Reader.read
+
+```python
+def read(self, document_id: int, parameter, source: Source,
+         tuples: list, pairs: list, passages: dict,
+         shown: Optional[Source] = None) -> Read
+```
+
+*source* is the passage a value is verified against, *shown* the
+piece of it the request shows.
+
+## Functions
+
+### cells_of
+
+```python
+def cells_of(line: str) -> list
+```
+
+### grid_of
+
+```python
+def grid_of(text: str) -> Optional[Grid]
+```
+
+The table of *text*, or None when it has no Markdown table.
+
+### cell_number
+
+```python
+def cell_number(cell: str)
+```
+
+The one number a cell prints, as int or float, or None for a cell
+with none or with several. Digits after a letter are part of a name,
+"CO2" or "Q3", and no number of the cell.
+
+### slots_of
+
+```python
+def slots_of(spec, parameter) -> list
+```
+
+The coordinates a value of *parameter* is read with: its unit, then
+every axis the spec does not decide.
+
+### coordinate_shown
+
+```python
+def coordinate_shown(slot) -> dict
+```
+
+### answer_schema
+
+```python
+def answer_schema(slot, where: Optional[str] = None) -> dict
+```
+
+One coordinate's answer as the grammar takes it, at a row or a column
+when *where* names it.
+
+### known_of
+
+```python
+def known_of(tuples: list, frame_slots: list) -> list
+```
+
+### table_payload
+
+```python
+def table_payload(source: Source, grid: Grid, parameter, slots: list,
+                  known: list) -> dict
+```
+
+### table_response_format
+
+```python
+def table_response_format(slots: list) -> dict
+```
+
+### table_rows
+
+```python
+def table_rows(reply: dict, grid: Grid) -> tuple
+```
+
+(rows, {label: (row, column)}, cells not read) of a table reply: one
+row per cell of a value row and a value column that prints one number,
+its quote the table row, its head the words over its column.
+
+### table_replies
+
+```python
+def table_replies(reply: dict, slot, at: dict) -> list
+```
+
+[(window, field reply)] of one coordinate of a table reply, the most
+particular first: a row label, then a column head, then the table.
+
+### text_payload
+
+```python
+def text_payload(source: Source, parameter, slots: list,
+                 known: list) -> dict
+```
+
+### text_response_format
+
+```python
+def text_response_format(parameter, slots: list) -> dict
+```
+
+### text_rows
+
+```python
+def text_rows(reply: dict) -> tuple
+```
+
+(rows, the entry of each row) of a text reply.
+
+### text_replies
+
+```python
+def text_replies(entries: dict, slot) -> list
+```
+
+### same
+
+```python
+def same(slot, a, b) -> bool
+```
+
+### inherit
+
+```python
+def inherit(rows: list, slots: list, tuples: list, pairs: list,
+            shown: list) -> int
+```
+
+A frame coordinate still open on a row takes the survey's tuple of
+the passage, when the survey named exactly one, through the field check
+with the tuple's own quote. Not on a row that read a frame coordinate of
+its own the tuple contradicts: a year under its column head is not the
+year of the table's title. Returns the coordinates taken.
+
+[Back to the index](../README.md)

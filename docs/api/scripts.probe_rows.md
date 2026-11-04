@@ -42,7 +42,9 @@ the compute step leaves open, so its prompt can be tried without reading the
 plans again.
 
 `--survey` with `--documents` asks only the survey of each whole plan, the
-first pass of the rebuilt harvest, and keeps it in `<out>/survey`.
+first pass of the rebuilt harvest, and keeps it in `<out>/survey`. With
+`--read` each parameter is then read in the passages the survey named for it,
+and the values are folded as the run folds them.
 
 A sandbox round needs CODE_EXEC_URL; `report.json` counts the rounds either way.
 
@@ -99,7 +101,8 @@ The frame, the rows and the coordinates of each document's passages.
 def survey_over(passages: dict, spec, args) -> list
 ```
 
-The survey of each document's whole plan, as the run asks it.
+The survey of each document's whole plan, as the run asks it, and
+with --read the reading of each parameter after it.
 
 ### compute_over
 

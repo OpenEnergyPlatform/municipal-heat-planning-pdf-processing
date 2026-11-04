@@ -63,7 +63,7 @@ def budget_of(passages: list, pages: Optional[int]) -> int:
     return max(1, round(2 * chars / max(pages or 1, 1)))
 
 
-def _pieces(text: str, budget: int) -> list:
+def pieces(text: str, budget: int) -> list:
     """*text* in pieces of at most *budget* characters, cut at a line end
     where one stands in the second half of the piece."""
     out, start = [], 0
@@ -98,7 +98,7 @@ def contexts_of(passages: list, budget: int) -> list:
                 out.append(current)
             current, chars, figure = [], 0, False
             out.extend([replace(passage, text=piece)]
-                       for piece in _pieces(text, budget))
+                       for piece in pieces(text, budget))
             continue
         if current and (chars + size > budget or (is_figure and figure)):
             out.append(current)

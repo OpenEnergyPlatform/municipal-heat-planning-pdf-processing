@@ -113,6 +113,15 @@ The text of two pages of this plan, in characters: twice its mean.
 A figure's description is not counted: a context holds one figure,
 whatever its description's length.
 
+### pieces
+
+```python
+def pieces(text: str, budget: int) -> list
+```
+
+*text* in pieces of at most *budget* characters, cut at a line end
+where one stands in the second half of the piece.
+
 ### contexts_of
 
 ```python

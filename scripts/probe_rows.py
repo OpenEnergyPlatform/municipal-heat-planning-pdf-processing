@@ -40,7 +40,9 @@ the compute step leaves open, so its prompt can be tried without reading the
 plans again.
 
 `--survey` with `--documents` asks only the survey of each whole plan, the
-first pass of the rebuilt harvest, and keeps it in `<out>/survey`.
+first pass of the rebuilt harvest, and keeps it in `<out>/survey`. With
+`--read` each parameter is then read in the passages the survey named for it,
+and the values are folded as the run folds them.
 
 A sandbox round needs CODE_EXEC_URL; `report.json` counts the rounds either way.
 """
@@ -198,8 +200,10 @@ def whole(hits: list, spec, args, passages=None, document_spec=None) -> list:
 
 
 def survey_over(passages: dict, spec, args) -> list:
-    """The survey of each document's whole plan, as the run asks it."""
-    from docpipe.extraction import runner
+    """The survey of each document's whole plan, as the run asks it, and
+    with --read the reading of each parameter after it."""
+    from docpipe.extraction import fields, runner, survey
+    from docpipe.extraction.pipeline import DocumentReport
 
     def every(document: int, exclude: set) -> list:
         return [source for source in passages.get(document, ())
@@ -211,22 +215,57 @@ def survey_over(passages: dict, spec, args) -> list:
         raise SystemExit("no survey: the profile writes no survey prompt or "
                          "its spec names no groups")
     surveyed.pool = ThreadPoolExecutor(args.parallel)
+    reader = runner.make_reader(spec, args.image_root) if args.read else None
+    if args.read and reader is None:
+        raise SystemExit("no reading: the profile writes no read prompts")
+    if reader is not None:
+        reader.pool = surveyed.pool
+    pages_of = runner.make_page_count(args.db)
+    names = sorted({slot.name for parameter in spec.parameters
+                    for slot in fields.axis_slots(parameter)}
+                   | {"unit", "parameter", "value"})
 
     def one(document: int) -> dict:
         started = time.time()
         found = surveyed(document)
         answers = list(found.answers.values())
-        return {"document": document, "passages": len(passages[document]),
-                "seconds": round(time.time() - started, 1),
-                "complete": found.complete,
-                "by_parameter": {p: len(found.passages_of(p))
-                                 for p in surveyed.parameters},
-                "none": sum(1 for a in answers if not a.parameters),
-                "dropped": sum(len(a.dropped) for a in answers),
-                "unanswered": len(found.unanswered),
-                "tuples": {name: sum(len(a.tuples.get(name, ()))
-                                     for a in answers)
-                           for name in surveyed.slots}}
+        row = {"document": document, "passages": len(passages[document]),
+               "seconds": round(time.time() - started, 1),
+               "complete": found.complete,
+               "by_parameter": {p: len(found.passages_of(p))
+                                for p in surveyed.parameters},
+               "none": sum(1 for a in answers if not a.parameters),
+               "dropped": sum(len(a.dropped) for a in answers),
+               "unanswered": len(found.unanswered),
+               "tuples": {name: sum(len(a.tuples.get(name, ()))
+                                    for a in answers)
+                          for name in surveyed.slots}}
+        if reader is None:
+            return row
+        read_started = time.time()
+        sources = passages[document]
+        budget = survey.budget_of(sources, pages_of(document))
+        reads = reader(document, found,
+                       {(s.owner_kind, s.owner_id): s for s in sources},
+                       budget)
+        report = DocumentReport(document_id=document)
+        runner.fold_answers([(r.batch, {"tuples": r.claims}) for r in reads],
+                            report, locate=None, spec=spec)
+        row.update({
+            "read_seconds": round(time.time() - read_started, 1),
+            "read_requests": sum(r.asked for r in reads),
+            "unread": sum(1 for r in reads if r.unread),
+            "faulty": [r.faulty for r in reads if r.faulty],
+            "cells_not_read": sum(r.skipped for r in reads),
+            "claims": sum(len(r.claims) for r in reads),
+            "verified": report.tuples, "refusals": len(report.refusals),
+            "refused_for": dict(Counter(refusal.get("reason")
+                                        for refusal in report.refusals)),
+            "states": states_of(report.tuples, names)})
+        (args.out / f"doc{document}.json").write_text(
+            json.dumps(row, ensure_ascii=False, default=str),
+            encoding="utf-8")
+        return {k: v for k, v in row.items() if k != "verified"}
 
     with ThreadPoolExecutor(len(passages) or 1) as pool:
         return list(pool.map(one, passages))
@@ -295,6 +334,8 @@ def main() -> int:
                         help="the compute step over this stored --whole probe")
     parser.add_argument("--survey", action="store_true",
                         help="with --documents: only the survey of each plan")
+    parser.add_argument("--read", action="store_true",
+                        help="with --survey: read each parameter after it")
     args = parser.parse_args()
 
     from docpipe.extraction import runner, trace

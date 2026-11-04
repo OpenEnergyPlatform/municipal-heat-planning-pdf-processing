@@ -124,6 +124,27 @@ asks it over whole plans. On Rendsburg it replaces the anchors, the frame, the
 map of places and most of the search for open coordinates of corpus_m8_100: 60,
 31, 112 and 833 requests.
 
+### Reading a parameter in its passages
+
+The second step of the rebuilt harvest (`reading.py`, `runner.make_reader`,
+prompts `extraction/read_table` and `extraction/read_text`). Each parameter is
+read in the passages the survey named for it, one request per passage, its
+definition the only one in the request. A table is one unit: the request names
+the columns and rows that hold the parameter's values and, for every
+coordinate, where it stands, at a row label, at a column head or for the whole
+table, each with its quote; it writes no number. Code makes one row per cell of
+a value row and a value column that prints one number (`reading.table_rows`),
+quoted by its table row, so a number is read by its place and a row "27 % | 28
+% | 27 % | 23 %" gives each 27 % its own column. A section or a figure is read
+in one request that names each value with every coordinate at once, each with
+its own quote; one longer than the survey's two pages is read in the survey's
+pieces. Every coordinate goes through `merge_field`, a row label first, then a
+column head, then the table, so the most particular reading stands; a frame
+coordinate still open takes the survey's tuple of the passage when there is
+exactly one and the row read no frame coordinate of its own that contradicts
+it (`reading.inherit`, window `frame`). The values are folded by `fold_batch`.
+`scripts/probe_rows.py --documents ... --survey --read` runs both steps.
+
 ### The retrieval plan
 
 `pipeline.plan_document` builds one plan per document, not per parameter,
