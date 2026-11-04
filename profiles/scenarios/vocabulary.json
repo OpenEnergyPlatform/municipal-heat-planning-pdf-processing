@@ -33,13 +33,19 @@
    "UO"
   ],
   "oeo_file": "oeo-closure.owl",
-  "oeo_sha256": "df25aa5aec966be79096cb5dc1f09023fc66a99b984c485a24897adb76a99dd4",
-  "oeo_version_iri": "https://openenergyplatform.org/ontology/oeo/releases/2.13.0/oeo.owl",
+  "oeo_sha256": "0642170268b6e207fe56ff7b455a6216cc41084a56dbe67190e4bc1caf17ea1a",
+  "oeo_version_iri": "https://openenergyplatform.org/ontology/oeo/releases/2.14.0/oeo.owl",
   "regions_count": 249,
   "regions_file": "regions.json",
   "sources": {
-   "oeo": "v2.13.0",
-   "regions": "3e10b43cd976"
+   "iiasa_regions": "5f6d02db2182",
+   "lcc": "58c609df159f",
+   "m49": "9037b020ebb6",
+   "oekg_context": "ccfab7e4c54c",
+   "oekg_shapes": "4ff60768d5a5",
+   "oeo": "v2.14.0",
+   "regions": "3e10b43cd976",
+   "worldbank": "c654d9de0acd"
   }
  },
  "regions": [
@@ -307,6 +313,7 @@
    "OEO_00020345",
    "OEO_00020411",
    "OEO_00020412",
+   "OEO_00020517",
    "OEO_00030007",
    "OEO_00030008",
    "OEO_00030009",
@@ -2400,6 +2407,7 @@
    "label": "has spatial region",
    "parents": [
     "IAO_0000136",
+    "OEO_00370000",
     "topObjectProperty"
    ],
    "range": [
@@ -2824,6 +2832,7 @@
    "parents": [
     "IAO_0000136",
     "OEO_00010378",
+    "OEO_00370000",
     "topObjectProperty"
    ],
    "range": [
@@ -3241,6 +3250,18 @@
     "xsd:dateTime"
    ]
   },
+  "OEO_00020517": {
+   "alt_labels": [
+    "IAM scenario"
+   ],
+   "definition": "An integrated assessment modeling scenario is a scenario for which economic, energy, and climate systems are modeled in an integrated manner to examine the effects of policy measures on global emissions trajectories and temperature targets. It considers the standardisation guidelines from the IAM Consortium.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "integrated assessment modeling scenario",
+   "parents": [
+    "OEO_00000364"
+   ]
+  },
   "OEO_00030007": {
    "alt_labels": [],
    "definition": "A climate scenario is a scenario that describes a possible future state of a climate system.",
@@ -3646,6 +3667,23 @@
    "label": "BSI-KritisV sector division",
    "parents": [
     "OEO_00000368"
+   ]
+  },
+  "OEO_00370000": {
+   "alt_labels": [],
+   "definition": "A relation between an information content entity and another entity that specifies a context in which the information content entity is to be interpreted.",
+   "deprecated": false,
+   "domain": [
+    "IAO_0000030"
+   ],
+   "kind": "object_property",
+   "label": "refers to",
+   "parents": [
+    "IAO_0000136",
+    "topObjectProperty"
+   ],
+   "range": [
+    "BFO_0000001"
    ]
   },
   "OEO_00390071": {

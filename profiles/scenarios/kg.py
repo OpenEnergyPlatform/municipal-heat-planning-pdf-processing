@@ -147,6 +147,9 @@ CLS_AUTHOR = _class("publication_author")      # author
 CLS_ORGANISATION = _class("study_organisation")
 CLS_FUNDER = _class("study_funder")
 CLS_SCENARIO = _class("scenario_label")        # factsheet (ScenarioShape)
+# Not minted here: the class the shapes require at the end of the study
+# region edge where they name one, else this.
+CLS_STUDY_REGION = "OEO_00020032"              # study region
 
 # Paths, from the spec, which is what the published JSON schema shows a reader
 # as `x-kg`. What a reader is told and what is written are one string.
@@ -174,6 +177,29 @@ P_SCENARIO_ABSTRACT = _property("scenario_abstract")       # dc:abstract
 P_UUID = "oeo:OEO_00390095"        # has uuid
 
 PREFIX_IRI = dict(re.findall(r"@prefix (\w+):\s*<([^>]+)>", PREFIXES))
+
+# Where the names of the nodes this graph points at without minting them are,
+# as the last refresh wrote them (vocabulary.py).
+REGION_NAMES_PATH = Path(__file__).with_name("region_names.json")
+SNAPSHOT_PATH = Path(__file__).with_name("vocabulary.json")
+
+
+def node_names(regions: Path = REGION_NAMES_PATH,
+               snapshot: Path = SNAPSHOT_PATH) -> dict:
+    """{IRI: name} of every node this graph may point at without minting it:
+    a region by the English short name LCC gives it, an OEO term by its
+    label in the release the snapshot is pinned to. A file no refresh has
+    written names nothing."""
+    names: dict = {}
+    if regions.is_file():
+        names.update(json.loads(regions.read_text(encoding="utf-8")))
+    if snapshot.is_file():
+        terms = json.loads(snapshot.read_text(encoding="utf-8")).get(
+            "terms") or {}
+        names.update({OEO_BASE + key: term["label"]
+                      for key, term in terms.items()
+                      if key.startswith("OEO_") and term.get("label")})
+    return names
 
 
 def _bare(name: str) -> str:
@@ -223,9 +249,9 @@ def edges() -> list:
              "predicate": _bare(P_UUID), "datatype": "xsd:string"}
             for node, cls in _SHAPED.items() if node in uuid_on]
 
-# Mirjam: "all IAM scenarios get the annotation for now". JH notes it is
-# not in the release nor in the shape's sh:in list yet, so a graph written
-# today will fail that constraint until it is.
+# Mirjam: "all IAM scenarios get the annotation for now". In the OEO since
+# release 2.14.0, in the shape's sh:in list with the OEKG's shape update
+# (oekg#68).
 IAM_SCENARIO = "OEO_00020517"
 
 # Scenario-scope fields: everything carrying a `scenario` axis, which names
@@ -280,7 +306,7 @@ def bind(model) -> SimpleNamespace:
       required  the per-document fields the shapes demand, so a document
                 that misses one is reported
       uuid_on   the shaped nodes whose shape has the uuid path
-      author, organisation, funder
+      author, organisation, funder, region
                 the class at the end of each edge, where the shape names
                 exactly one
     """
@@ -331,7 +357,8 @@ def bind(model) -> SimpleNamespace:
                           if model.has(OEO_BASE + cls, _iri(P_UUID))),
         author=end(P_AUTHOR, "studyreport", CLS_AUTHOR),
         organisation=end(P_ORGANISATION, "scenariobundle", CLS_ORGANISATION),
-        funder=end(P_FUNDER, "scenariobundle", CLS_FUNDER))
+        funder=end(P_FUNDER, "scenariobundle", CLS_FUNDER),
+        region=end(P_STUDY_REGION, "scenariofactsheet", CLS_STUDY_REGION))
 
 
 _LEGAL = r"(gmbh|mbh|ag|kg|ohg|e\.?\s*v\.?|gbr|se|ug|inc|ltd|llc)"
@@ -696,14 +723,16 @@ def _evidence(subject: str, predicate: str, row: dict, document: str) -> tuple:
             NL.join(node) + NL)
 
 
-def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None):
+def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
+                  names: Optional[dict] = None):
     """(document name, accepted tuple rows) -> (TTL body, study) or None.
 
     *model* is the shapes the graph is written to (`shapemodel.Model`),
     those of the last refresh when none is given; `bind` reads off them what
     the builder needs and refuses a shapes file it cannot write to. *groups*
-    are the groups of countries a region answer may name, those of the last
-    refresh when none are given.
+    are the groups of countries a region answer may name, *names* the names
+    of the nodes the graph points at without minting them (`node_names`),
+    both those of the last refresh when none are given.
 
     One reading of a document's harvest and two things written from it: the
     Turtle, and `study`, the same decisions as plain data. The second is for
@@ -718,6 +747,10 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None):
     if groups is None:
         from profiles.scenarios.extraction import aggregates
         groups = aggregates()
+    if names is None:
+        names = node_names()
+    # The nodes of others this file has described: once per file.
+    told: set = set()
     minted: dict = {}
     # A node several documents describe is one node of the file. The value
     # the first of them gave a single-valued property is the node's, and a
@@ -1031,8 +1064,7 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None):
 
             # The types the model chose from the shapes' own list, each with
             # the passage it read them in. On top of that Mirjam asks every IAM
-            # scenario to carry OEO_00020517, which the release does not have
-            # yet — see the note on IAM_SCENARIO.
+            # scenario to carry OEO_00020517 (IAM_SCENARIO).
             types: dict = {}
             for row in rows_for("scenario_type", scenario=norm):
                 if in_graph(row.get("value_uri")):
@@ -1054,19 +1086,12 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None):
 
             # A region the model picked already exists in the OEKG under
             # its own IRI (oekg/region/Germany), so it is referenced, not
-            # minted. Only a wording that matched nothing gets an IRI of ours,
-            # and that one is a finding to review rather than a node to trust.
-            # Only a region the model actually chose off the OEKG's list is
-            # referenced, and it is ONLY referenced: the individual already
-            # exists over there with its own type and its own label, so
-            # asserting them again from a harvest writes our wording onto
-            # somebody else's node — a second label on a maxCount-1 property,
-            # caused on data this profile did not create.
-            # Everything else — an out: entry, or a wording the list did not
-            # hold — is counted and not minted. Minting put a German gloss
-            # under oekg/region/ next to the 249 real ones.
-            # A group of countries is written as its members, and its
-            # passage is cited once, above the first of them.
+            # minted, and described below by the name LCC gives it, never by
+            # the harvest's wording. Everything else — an out: entry, or a
+            # wording the list did not hold — is counted and not minted.
+            # Minting put a German gloss under oekg/region/ next to the 249
+            # real ones. A group of countries is written as its members, and
+            # its passage is cited once, above the first of them.
             regions: dict = {}
             for row in rows_for("scenario_region", scenario=norm):
                 for region_iri in region_members(row.get("value_uri"),
@@ -1157,8 +1182,41 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None):
                      "of the graph", name,
                      sum(len(found) for found in left.values()), len(left))
 
+        # The nodes the graph points at and does not mint, each described
+        # once per file (OEKG team, 2026-11-04): a region by the class the
+        # shapes require at the end of its edge and the name LCC gives it, an
+        # OEO term by its label in the pinned release, without a language
+        # tag. A node its source does not name gets no label of ours.
+        pointed: dict = {}
+        for scenario in scenarios:
+            for region_iri in scenario["regions"]:
+                pointed.setdefault(region_iri, bound.region)
+            for type_iri in scenario["types"]:
+                pointed.setdefault(type_iri, None)
+        for found in tags.values():
+            for tag_iri in found:
+                pointed.setdefault(tag_iri, None)
+        node_blocks, nameless = [], []
+        for node, cls in pointed.items():
+            if node in told:
+                continue
+            told.add(node)
+            lines = [f"<{node}>"] + ([f"    a oeo:{cls} ;"] if cls else [])
+            if names.get(node):
+                lines.append(f"    {P_LABEL} {ttl_literal(names[node])} ;")
+            else:
+                nameless.append(node)
+            if len(lines) > 1:
+                lines[-1] = lines[-1].rstrip(" ;") + " ."
+                node_blocks.append(NL.join(lines) + NL)
+        if nameless:
+            log.warning("kg: %s: %d node(s) the graph points at have no name "
+                        "in their source and no label: %s", name,
+                        len(nameless), nameless[:5])
+
         parts = [NL.join(pub) + NL, NL.join(std) + NL]
         parts += scenario_nodes + author_nodes + org_nodes + funder_nodes
+        parts += node_blocks
         parts += evidence_nodes
         study = {
             "document": name,
@@ -1177,16 +1235,18 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None):
     return build
 
 
-def make_serializer(db_path: Path, model=None, groups: Optional[dict] = None):
+def make_serializer(db_path: Path, model=None, groups: Optional[dict] = None,
+                    names: Optional[dict] = None):
     """(document name, accepted tuple rows) -> TTL string or None.
 
-    Written to *model*, the shapes of the last refresh by default.
+    Written to *model*, the shapes of the last refresh by default, with the
+    *groups* and *names* of the last refresh by default (`_make_builder`).
 
     What people decided about the rows is left in `serializer.decisions` by
     `serialize.run`, {document: {tuple name: [decision]}}, and goes into the
     Turtle as comment lines above the value each concerns.
     """
-    build = _make_builder(db_path, model, groups)
+    build = _make_builder(db_path, model, groups, names)
     header_pending = [True]
 
     def serializer(name: str, rows: list):

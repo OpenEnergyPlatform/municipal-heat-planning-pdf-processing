@@ -286,7 +286,7 @@ serializer reads are published field by field at
 [../contract/scenarios.md](../contract/scenarios.md). This profile's own
 half of that audit, `profiles/scenarios/vocabulary.py`, pins 280 ontology
 identifiers named in the spec, plus the 249 OEKG study regions, against
-the same OEO release the kwp profile's own 58-identifier snapshot uses.
+the OEO release of its last refresh (2.14.0 since 2026-11-04).
 `python -m profiles.scenarios.vocabulary --refresh` pulls the OEO
 closure, the live study regions and the groups of countries (the AR6
 database's R5, R9 and R10 regions and each model's own regions, with the
@@ -295,8 +295,10 @@ the UN's M49 regions from the SDG API; the World Bank's groups of economies,
 the European Union and the OECD among them, from its classification
 `CLASS.xlsx`, the two also named "EU" and "OECD" as a paper writes them
 (`SHORT_FORMS`); and EU28, the World Bank's Union and the United Kingdom, the
-one group no source lists, owner decisions 2026-11-04), rewrites `vocabulary.json`,
-`regions.json` and `region_aggregates.json`, and runs the same check `--check` alone runs against
+one group no source lists, owner decisions 2026-11-04) and the English short
+name each region has in the OMG's LCC (`lcc`, its ISO 3166-1 file), rewrites
+`vocabulary.json`, `regions.json`, `region_aggregates.json` and
+`region_names.json`, and runs the same check `--check` alone runs against
 the checked-in snapshot; `region_aliases.json` keeps the hand-written
 spellings a document uses that the OEKG's own labels do not, merged in
 ahead of the live ones by `merge_regions` (`vocabulary.py`, lines 1 to
@@ -358,13 +360,22 @@ existing harvest before a job starts its model
 ontology disagree, the shapes win: the region is written with the path the
 closed `ScenarioShape` names (owner decision 2026-10-22).
 
-The graph only references a region or an OEO term the OEKG already has, and
-the shapes check its class and label. So the validation holds the graph
-together with what the OEKG says about those nodes: the refresh pulls their
-`rdf:type` and `rdfs:label` (`oekg_context`), `vocabulary.context()` hands
-them over and `ontology.with_context` adds them for every node the graph
-points at without describing it. Without that, 475 of the 5,902 violations
-of the run of 2026-10-22 were regions and terms that are fine in the OEKG.
+The graph describes the regions and the OEO terms it points at, once per
+file and by their own sources (OEKG team, 2026-11-04): a region by the class
+the shapes require at the end of its edge (study region, `OEO_00020032`) and
+the English short name LCC gives it ("Syrian Arab Republic (the)",
+`region_names.json`), an OEO term used as a scenario type or a tag by its
+label in the release the snapshot is pinned to, both as plain strings
+without a language tag (`node_names`, and the block above `parts` in
+`_make_builder`). A region is the LCC country of its own name; one LCC has
+renamed since the OEKG minted it is the one country whose short name is
+among the region's labels (`region/Macedonia` is North Macedonia), and one
+that finds none or two stays unnamed (`vocabulary.region_names`). A node
+its source does not name gets no label of ours and is logged. A node the
+graph leaves bare is validated together with what the OEKG says about it:
+the refresh pulls `rdf:type` and `rdfs:label` (`oekg_context`),
+`vocabulary.context()` hands them over and `ontology.with_context` adds
+them for every node the graph points at without describing it.
 A node several documents describe, an author or a project's bundle, is one
 node of the file: its single-valued properties carry the value of the first
 document that gave one, and a later document's other reading goes unwritten
@@ -394,12 +405,10 @@ whatever `scenario_type` classes the model read off the text
 (`IAM_SCENARIO`, `kg.py`, lines 199, 882).
 
 A study region is referenced, never minted. A region the model matched
-against the document's own narrowed OEKG list is written as a bare link
-to that region's existing IRI, carrying no `rdfs:type` and no
-`rdfs:label` of its own, since the individual already exists on the OEKG
-under its own type and label, and asserting them again would place a
-second label where the shapes allow only one
-(`kg.py`, the comment above the region block). A group of countries is
+against the document's own narrowed OEKG list is written as a link to
+that region's existing IRI, described once by LCC's name for it and never
+by the document's wording (above; `kg.py`, the comment above the region
+block). A group of countries is
 written as a link to each of its members, its passage cited once above
 the first (`region_members`). An `out:multiregion` or `out:other`
 choice, or a wording the narrowed list did not hold, mints no region

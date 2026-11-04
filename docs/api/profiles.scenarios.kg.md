@@ -31,6 +31,18 @@ wrong and neither should find that out in production.
 
 ## Functions
 
+### node_names
+
+```python
+def node_names(regions: Path = REGION_NAMES_PATH,
+               snapshot: Path = SNAPSHOT_PATH) -> dict
+```
+
+{IRI: name} of every node this graph may point at without minting it:
+a region by the English short name LCC gives it, an OEO term by its
+label in the release the snapshot is pinned to. A file no refresh has
+written names nothing.
+
 ### default_model
 
 ```python
@@ -74,7 +86,7 @@ here rather than in a report after the run. What is read off them:
   required  the per-document fields the shapes demand, so a document
             that misses one is reported
   uuid_on   the shaped nodes whose shape has the uuid path
-  author, organisation, funder
+  author, organisation, funder, region
             the class at the end of each edge, where the shape names
             exactly one
 
@@ -195,12 +207,14 @@ the verdict, who made it and when, and the note.
 ### make_serializer
 
 ```python
-def make_serializer(db_path: Path, model=None, groups: Optional[dict] = None)
+def make_serializer(db_path: Path, model=None, groups: Optional[dict] = None,
+                    names: Optional[dict] = None)
 ```
 
 (document name, accepted tuple rows) -> TTL string or None.
 
-Written to *model*, the shapes of the last refresh by default.
+Written to *model*, the shapes of the last refresh by default, with the
+*groups* and *names* of the last refresh by default (`_make_builder`).
 
 What people decided about the rows is left in `serializer.decisions` by
 `serialize.run`, {document: {tuple name: [decision]}}, and goes into the

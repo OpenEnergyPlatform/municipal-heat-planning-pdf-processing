@@ -12,8 +12,8 @@ ontology release and are therefore pinned differently.
 
 `--refresh` is what a run calls first: the OEO closure at its latest release,
 the study regions live from the OEKG, the OEKG shapes at the head of their
-branch and the groups of countries a scenario may cover (IIASA, UN M49, World
-Bank), then the check. Without
+branch, the groups of countries a scenario may cover (IIASA, UN M49, World
+Bank) and the name LCC gives each region, then the check. Without
 OEP_API_TOKEN in the environment it stops, because the regions are offered to
 the model and a list nobody pulled is not the OEKG's current one.
 
@@ -46,6 +46,7 @@ HERE = Path(__file__).resolve().parent
 VOCABULARY_PATH = HERE / "vocabulary.json"
 SPEC_PATH = HERE / "extraction_spec.json"
 REGIONS_PATH = HERE / "regions.json"
+REGION_NAMES_PATH = HERE / "region_names.json"
 ALIASES_PATH = HERE / "region_aliases.json"
 AGGREGATES_PATH = HERE / "region_aggregates.json"
 PROFILE = HERE.name
@@ -61,10 +62,10 @@ SELECT DISTINCT ?region ?label WHERE {{
   OPTIONAL {{ ?region rdfs:label ?label }}
 }}"""
 
-# What the OEKG already says about the nodes a written graph only points at:
-# the class and the label of each region and each OEO term it holds. The
-# graph references them without repeating them (kg.py), and the shapes check
-# both, so the graph is validated together with these (`context`).
+# What the OEKG already says about the nodes a written graph points at: the
+# class and the label of each region and each OEO term it holds. The graph
+# describes the ones it names itself (kg.node_names); one it leaves bare is
+# validated as the OEKG holds it (`context`).
 CONTEXT_QUERY = f"""PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 SELECT ?s ?p ?o WHERE {{
@@ -115,7 +116,17 @@ SOURCES = {
                   "url": ("https://datacatalogfiles.worldbank.org/"
                           "ddh-published/0037712/DR0090755/CLASS.xlsx"),
                   "file": "CLASS.xlsx"},
+    # The countries of ISO 3166-1 in the OMG's LCC: a region of the OEKG is
+    # named after its LCC individual, and its node carries LCC's English
+    # short name as its label (OEKG team, 2026-11-04).
+    "lcc": {"kind": "url",
+            "url": ("https://www.omg.org/spec/LCC/Countries/"
+                    "ISO3166-1-CountryCodes.rdf"),
+            "file": "ISO3166-1-CountryCodes.rdf"},
 }
+
+LCC_SHORT_NAME = ("https://www.omg.org/spec/LCC/Countries/"
+                  "CountryRepresentation/hasEnglishShortName")
 
 # The one group no source lists by country (owner, 2026-11-04): the European
 # Union of 2013 to 2020, the Union of the World Bank's list and the United
@@ -204,6 +215,44 @@ def merge_regions(rows: list, aliases: dict) -> dict:
     if not out:
         raise upstream.UpstreamError("regions: the OEKG returned no region")
     return out
+
+
+def region_names(path: Path, regions: dict) -> tuple:
+    """({region IRI: LCC's English short name}, [regions LCC does not name]).
+
+    *path* is LCC's ISO 3166-1 file, *regions* regions.json. A region is the
+    LCC country of its own name (oekg/region/Germany is the individual
+    Germany); one whose name LCC no longer holds is the one country whose
+    English short name is among the region's labels (oekg/region/Macedonia is
+    NorthMacedonia). The name is written as LCC writes it, without its
+    language tag. A region neither finds, or that finds two, is returned
+    unnamed and never guessed.
+    """
+    from rdflib import Graph, URIRef
+    from docpipe.extraction.spec import fold_label
+    graph = Graph()
+    graph.parse(str(path), format="xml")
+    short: dict = {}
+    for country, name in graph.subject_objects(URIRef(LCC_SHORT_NAME)):
+        local = str(country).rstrip("/").rsplit("/", 1)[-1]
+        short.setdefault(local, set()).add(str(name))
+    short = {local: next(iter(names)) for local, names in short.items()
+             if len(names) == 1}
+    holders: dict = {}
+    for local, name in short.items():
+        holders.setdefault(fold_label(name), set()).add(local)
+    named, unnamed = {}, []
+    for iri, labels in sorted(regions.items()):
+        local = iri.rsplit("/", 1)[-1]
+        if local not in short:
+            found = {country for label in labels
+                     for country in holders.get(fold_label(label), ())}
+            local = next(iter(found)) if len(found) == 1 else None
+        if local is None:
+            unnamed.append(iri)
+        else:
+            named[iri] = short[local]
+    return named, unnamed
 
 
 def model_names(model: str) -> list:
@@ -470,7 +519,8 @@ def aggregates(families: list, tree: list, regions: dict, codes=None,
 
 
 def refresh(cache: Path = upstream.CACHE) -> dict:
-    """Pull SOURCES, write regions.json and vocabulary.json, write the lock.
+    """Pull SOURCES, write regions.json, region_names.json and vocabulary.json,
+    write the lock.
 
     The lock is what `shapes` reads: the serializer and the validation of
     the written graph take the shapes this refresh pulled.
@@ -483,6 +533,13 @@ def refresh(cache: Path = upstream.CACHE) -> dict:
     with io.open(REGIONS_PATH, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(json.dumps(regions, ensure_ascii=False, indent=1,
                                 sort_keys=True) + "\n")
+    names, unnamed = region_names(upstream.files(records["lcc"])[0], regions)
+    with io.open(REGION_NAMES_PATH, "w", encoding="utf-8",
+                 newline="\n") as handle:
+        handle.write(json.dumps(names, ensure_ascii=False, indent=1,
+                                sort_keys=True) + "\n")
+    records["lcc"]["named"] = len(names)
+    records["lcc"]["not_named"] = unnamed
     families, codes = iiasa(records["iiasa_regions"])
     tree = json.loads(upstream.files(records["m49"])[0]
                       .read_text(encoding="utf-8"))
@@ -596,6 +653,11 @@ def main(argv=None) -> int:
               f"{sum(groups['not_placed'].values())} name(s) not placed")
         for what, count in sorted(groups["not_placed"].items()):
             print(f"  not placed: {what} ({count}x)")
+        lcc = records["lcc"]
+        print(f"region names: {lcc['named']} region(s) named by LCC, "
+              f"{len(lcc['not_named'])} not")
+        for iri in lcc["not_named"]:
+            print(f"  not named: {iri}")
         after = set(json.loads(REGIONS_PATH.read_text(encoding="utf-8")))
         for iri in sorted(after - before):
             print(f"regions: new {iri}")

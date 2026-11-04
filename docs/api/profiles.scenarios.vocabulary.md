@@ -15,8 +15,8 @@ ontology release and are therefore pinned differently.
 
 `--refresh` is what a run calls first: the OEO closure at its latest release,
 the study regions live from the OEKG, the OEKG shapes at the head of their
-branch and the groups of countries a scenario may cover (IIASA, UN M49, World
-Bank), then the check. Without
+branch, the groups of countries a scenario may cover (IIASA, UN M49, World
+Bank) and the name LCC gives each region, then the check. Without
 OEP_API_TOKEN in the environment it stops, because the regions are offered to
 the model and a list nobody pulled is not the OEKG's current one.
 
@@ -56,6 +56,22 @@ spellings a document writes that the graph does not carry (both "Cabo
 Verde" and "Cape Verde", say); they come first, in
 their order, and a live label they lack is appended. A region with no
 label from either side cannot be offered to the model and raises.
+
+### region_names
+
+```python
+def region_names(path: Path, regions: dict) -> tuple
+```
+
+({region IRI: LCC's English short name}, [regions LCC does not name]).
+
+*path* is LCC's ISO 3166-1 file, *regions* regions.json. A region is the
+LCC country of its own name (oekg/region/Germany is the individual
+Germany); one whose name LCC no longer holds is the one country whose
+English short name is among the region's labels (oekg/region/Macedonia is
+NorthMacedonia). The name is written as LCC writes it, without its
+language tag. A region neither finds, or that finds two, is returned
+unnamed and never guessed.
 
 ### model_names
 
@@ -138,7 +154,8 @@ the World Bank's European Union and the United Kingdom.
 def refresh(cache: Path = upstream.CACHE) -> dict
 ```
 
-Pull SOURCES, write regions.json and vocabulary.json, write the lock.
+Pull SOURCES, write regions.json, region_names.json and vocabulary.json,
+write the lock.
 
 The lock is what `shapes` reads: the serializer and the validation of
 the written graph take the shapes this refresh pulled.

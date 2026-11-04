@@ -1,15 +1,21 @@
 """A writer takes its paths, cardinalities and classes from the shapes it is
 held to, follows a property the shapes renamed, and stops on one they
 dropped; the gate shuts on a writer that does not build and on a kind of
-violation the last graph did not have."""
+violation the last graph did not have. A node the scenarios graph points at
+without minting it is described once per file by its own source, a region by
+the class its edge requires and LCC's English short name, an OEO term by its
+release label, without a language tag, AND one its source does not name
+carries no label of ours. A region is the LCC country of its own name, else
+the one whose short name is among its labels, AND one that finds none or two
+stays unnamed."""
 from pathlib import Path
 
 import pytest
-from rdflib import Graph, URIRef
+from rdflib import Graph, Literal, URIRef
 
 from docpipe.extraction import gate
 from docpipe.extraction.shapemodel import Model, SchemaError
-from profiles.scenarios import kg
+from profiles.scenarios import kg, vocabulary
 
 OEO = "https://openenergyplatform.org/ontology/oeo/"
 HEAD = """@prefix sh: <http://www.w3.org/ns/shacl#> .
@@ -216,6 +222,82 @@ def test_a_referenced_node_is_checked_as_the_target_graph_holds_it():
                                           URIRef(label))] == ["Ada Lovelace"]
     assert not list(graph.predicate_objects(URIRef(f"{oekg_}region/Atlantis")))
     assert not list(graph.predicate_objects(URIRef(f"{oekg_}region/Germany")))
+
+
+REGION = "https://openenergyplatform.org/ontology/oekg/region/"
+LABEL = URIRef("http://www.w3.org/2000/01/rdf-schema#label")
+
+
+def described(names, *documents):
+    """The graph and the texts of *documents*, [(name, [region IRI])], each
+    a study with one scenario, written with *names*."""
+    serializer = kg.make_serializer(Path("no-such.db"), model=oekg(),
+                                    groups={}, names=names)
+    texts = []
+    for name, regions in documents:
+        rows = [{"parameter": "publication_title", "value": f"Study {name}",
+                 "quote": f"Study {name}"},
+                {"parameter": "scenario_label", "value": "NDC",
+                 "value_uri": "NDC", "value_raw": "NDC",
+                 "quote": "the NDC scenario"}]
+        rows += [{"parameter": "scenario_region", "value": iri,
+                  "value_uri": iri, "value_raw": "there", "scenario": "NDC",
+                  "scenario_raw": "NDC", "quote": "NDC covers there"}
+                 for iri in regions]
+        texts.append(serializer(name, rows))
+    return Graph().parse(data="\n".join(texts), format="turtle"), texts
+
+
+def test_a_node_the_graph_points_at_is_described_once_by_its_own_source():
+    iam = OEO + kg.IAM_SCENARIO
+    names = {REGION + "Germany": "Germany",
+             iam: "integrated assessment modeling scenario"}
+    graph, texts = described(names, ("a", [REGION + "Germany"]),
+                             ("b", [REGION + "Germany", REGION + "Atlantis"]))
+    germany = URIRef(REGION + "Germany")
+    labels = list(graph.objects(germany, LABEL))
+    assert labels == [Literal("Germany")]
+    assert labels[0].language is None and labels[0].datatype is None
+    rdf_type = URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+    assert (germany, rdf_type, URIRef(OEO + "OEO_00020032")) in graph
+    assert list(graph.objects(URIRef(iam), LABEL)) == [
+        Literal("integrated assessment modeling scenario")]
+    # The second study cites both again and describes neither.
+    assert f"<{REGION}Germany>\n" in texts[0]
+    assert f"<{REGION}Germany>\n" not in texts[1]
+    assert f"<{iam}>\n" not in texts[1]
+    # A region the names lack is still the class its edge requires, and
+    # carries no label of ours.
+    atlantis = URIRef(REGION + "Atlantis")
+    assert (atlantis, rdf_type, URIRef(OEO + "OEO_00020032")) in graph
+    assert not list(graph.objects(atlantis, LABEL))
+
+
+LCC = "https://www.omg.org/spec/LCC/Countries/"
+LCC_FILE = f"""<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:cr="{LCC}CountryRepresentation/">
+""" + "".join(
+    f"""  <rdf:Description rdf:about="{LCC}ISO3166-1-CountryCodes/{local}">
+    <cr:hasEnglishShortName xml:lang="en">{name}</cr:hasEnglishShortName>
+  </rdf:Description>
+""" for local, name in (("Germany", "Germany"),
+                        ("NorthMacedonia", "North Macedonia"),
+                        ("Niger", "Niger (the)"), ("Nigeria", "Nigeria"))
+) + "</rdf:RDF>\n"
+
+
+def test_a_region_is_named_by_its_lcc_country_and_never_guessed(tmp_path):
+    path = tmp_path / "lcc.rdf"
+    path.write_text(LCC_FILE, encoding="utf-8")
+    named, unnamed = vocabulary.region_names(path, {
+        REGION + "Germany": ["Germany"],
+        REGION + "Macedonia": ["Macedonia", "North Macedonia"],
+        REGION + "Atlantis": ["Atlantis"],
+        REGION + "Sahel": ["Niger (the)", "Nigeria"]})
+    assert named == {REGION + "Germany": "Germany",
+                     REGION + "Macedonia": "North Macedonia"}
+    assert unnamed == [REGION + "Atlantis", REGION + "Sahel"]
 
 
 # -- the gate -----------------------------------------------------------------
