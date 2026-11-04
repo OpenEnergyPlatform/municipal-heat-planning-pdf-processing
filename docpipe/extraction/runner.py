@@ -1,6 +1,14 @@
 """
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
+A run harvests from the survey of each plan wherever its profile can
+(`surveyed_flow`: the spec names groups and the profile writes the survey,
+reading and combing prompts): survey, reading and combing per document
+(`surveyed.py`), then the fold, the compute step and the file with its stamp
+as below. A profile that cannot yet is harvested field by field, the flow the
+rest of this note describes; the passes over a stored harvest run on the
+steps of whichever flow the run has.
+
 This module supplies the loop's expensive dependencies from the real world:
 FAISS retrieval with owner exclusion, the harvesting LLM call, and locating a
 quote on its page in the source PDF, plus resume stamps and the CLI. Heavy
@@ -83,6 +91,7 @@ from . import places as places_map
 from . import reading as reading_map
 from . import replies
 from . import survey as survey_map
+from . import surveyed as surveyed_map
 from . import scheduler
 from . import scratch
 from . import trace
@@ -322,6 +331,19 @@ PHRASE_PROMPT_ID = "extraction/phrase"
 FRAME_PROMPT_ID = "extraction/frame"
 PROMPT_IDS = (QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID, ROWS_PROMPT_ID,
               FIELD_PROMPT_ID, PHRASE_PROMPT_ID, FRAME_PROMPT_ID)
+# The prompts of a harvest from the survey (survey.py, reading.py,
+# combing.py), the run's own wherever the profile writes them and its spec
+# names groups (`surveyed_flow`).
+SURVEY_PROMPT_IDS = (survey_map.SURVEY_PROMPT_ID,
+                     reading_map.READ_TABLE_PROMPT_ID,
+                     reading_map.READ_TEXT_PROMPT_ID,
+                     combing_map.COMB_PROMPT_ID)
+# Which of the two flows this run harvests with: "survey" or "fieldwise".
+# `main` sets it; stamps and producers record it and the prompts it sends,
+# and nothing compares either.
+SURVEYED = "survey"
+FIELDWISE = "fieldwise"
+FLOW = FIELDWISE
 # The second reading of one value, under a window narrowed to the two passages
 # the row may legally quote from. Not in PROMPT_IDS, which are the harvest's
 # own prompts: what the review writes into a stamp goes under `review/`.
@@ -1787,6 +1809,10 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
     Asked again with the cause when the reply is no JSON object, as every
     request of the stage is; a reply cut off at its limit is not rescued.
     Each answer is traced as `<where>_ask` with *noted*.
+
+    A request whose last attempt ended on a 429, a 5xx or a timeout was
+    never answered, so its document is noted (`UNSERVED`) and goes
+    unstamped, as for every request of the run.
     """
     temperature = float(prompt.meta.get("temperature", 0))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
@@ -1796,6 +1822,7 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
         if limit < MIN_ANSWER_TOKENS:
             return "cut_off"
         transport = False
+        refused = False
         started = time.time()
         try:
             with _for(document_id):
@@ -1833,10 +1860,13 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
             trace.event("error", document_id, where=where, kind="exception",
                         attempt=attempt, detail=str(exc)[:300])
             transport = server_side(exc)
+            refused = unserved(exc)
             if not transport:
                 return None
         if attempt < MAX_RETRIES:
             time.sleep(retry_wait(attempt, transport))
+    if refused:
+        UNSERVED.note(document_id)
     return None
 
 
@@ -1942,11 +1972,12 @@ def make_comber(spec: Spec, rank: Callable):
 def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
                 content: Optional[Callable] = None,
                 every: Optional[Callable] = None,
-                image_root: Optional[Path] = None):
+                image_root: Optional[Path] = None, scope: str = ""):
     """The survey of whole plans (`survey.Survey`), or None when the profile
     writes no prompt for it or its spec names no groups. *every* is
     (document, exclude) -> passages, read from *db_path* when not given.
-    A figure goes with its crop, one to a context."""
+    A figure goes with its crop, one to a context. *scope* names a survey of
+    part of a plan, kept beside the whole one's."""
     if not spec.groups:
         return None
     try:
@@ -1988,13 +2019,14 @@ def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
             figure=any(s.owner_kind == "figure" for s in context))
 
     key = survey_map.key_of(prompt.text, parameters, groups, LLM_MODEL)
-    log.info("survey: one per plan over %d parameter(s) and the group(s) %s, "
-             "kept in %s", len(parameters), ", ".join(groups) or "-",
-             Path(out) / "survey")
+    log.info("survey%s: one per plan over %d parameter(s) and the group(s) "
+             "%s, kept in %s", f" ({scope})" if scope else "",
+             len(parameters), ", ".join(groups) or "-", Path(out) / "survey")
     return survey_map.Survey(
         ask, lambda document_id: every(document_id, set()),
         make_page_count(db_path), parameters, slots, frame_pairs, key,
-        store=Path(out) / "survey", pool=AHEAD, trace=trace.event)
+        store=Path(out) / "survey", scope=scope, pool=AHEAD,
+        trace=trace.event)
 
 
 def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
@@ -6426,8 +6458,27 @@ def _stamp_current(spec_sha: str, anchors_sha: str = "",
     with nothing finer to go on `spec` decides again.
     """
     return {"spec": spec_sha, "model": LLM_MODEL, "anchors": anchors_sha,
-            **prompts.versions(PROMPT_IDS),
+            **prompts.versions(flow_prompts()),
             **(fingerprints(spec) if spec is not None else {})}
+
+
+def flow_prompts(flow: Optional[str] = None) -> tuple:
+    """The prompts a harvest of *flow* (this run's when None) sends."""
+    return SURVEY_PROMPT_IDS if (flow or FLOW) == SURVEYED else PROMPT_IDS
+
+
+def surveyed_flow(spec: Spec, profile=None) -> bool:
+    """Whether a run harvests from the survey: its spec names groups and the
+    profile writes every prompt of it. Otherwise it harvests field by field
+    as before, which is where a profile not yet moved over stays."""
+    if not spec.groups:
+        return False
+    try:
+        for prompt_id in SURVEY_PROMPT_IDS:
+            prompts.load(prompt_id, profile)
+    except (FileNotFoundError, LookupError):
+        return False
+    return True
 
 
 def producer(kind: str, model: Optional[str] = None) -> dict:
@@ -6446,7 +6497,7 @@ def producer(kind: str, model: Optional[str] = None) -> dict:
              "utc": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     if model is not None:
         entry.update(model=model, provider=providers.provider("llm"),
-                     prompts=prompts.versions(PROMPT_IDS))
+                     prompts=prompts.versions(flow_prompts()), flow=FLOW)
     return entry
 
 
@@ -7073,20 +7124,24 @@ def fit_batch_sources(prompt, spec, wanted: int = BATCH_SOURCES) -> int:
     return max(1, min(wanted, allowed))
 
 
-def sent_prompt_ids(framed: bool) -> tuple:
+def sent_prompt_ids(framed: bool, flow: Optional[str] = None) -> tuple:
     """The prompts a harvest sends to the model as a system message.
 
-    The rows request, the field request, the sentence a document is searched
-    with and the anchor questions; the frame request only when the profile has
-    frame axes, because `ask_frame` does not exist otherwise. Not the queries
-    (a list of search templates, never sent) and not the review, which has a
-    line of its own in the doctor.
+    From the survey (`SURVEYED`): the survey, the two reading requests and
+    the combing. Field by field: the rows request, the field request, the
+    sentence a document is searched with and the anchor questions; the frame
+    request only when the profile has frame axes, because `ask_frame` does
+    not exist otherwise. Not the queries (a list of search templates, never
+    sent) and not the review, which has a line of its own in the doctor.
     """
+    if (flow or FLOW) == SURVEYED:
+        return SURVEY_PROMPT_IDS
     return (ROWS_PROMPT_ID, FIELD_PROMPT_ID, PHRASE_PROMPT_ID,
             ANCHORS_PROMPT_ID, *((FRAME_PROMPT_ID,) if framed else ()))
 
 
-def request_budget(spec, framed: bool, profile=None) -> int:
+def request_budget(spec, framed: bool, profile=None,
+                   flow: Optional[str] = None) -> int:
     """Tokens the largest request this run sends needs, per request.
 
     The window a server is started with has to hold every request kind of the
@@ -7095,7 +7150,7 @@ def request_budget(spec, framed: bool, profile=None) -> int:
     prompts the run sends and never off one that no request carries.
     """
     return max(context_budget(prompts.load(prompt_id, profile), spec)
-               for prompt_id in sent_prompt_ids(framed))
+               for prompt_id in sent_prompt_ids(framed, flow))
 
 
 def batch_sources_for(spec, profile=None) -> int:
@@ -7866,6 +7921,12 @@ def main(argv: Optional[list] = None) -> int:
                      f"with SPEC_PATH)")
     spec_path = Path(raw_spec_path)
     spec = load_spec(spec_path)
+    # From the survey of each plan wherever the profile can (`surveyed_flow`),
+    # field by field where it cannot yet. Decided before any pass, since each
+    # records it in its producer entry.
+    global FLOW
+    FLOW = SURVEYED if surveyed_flow(spec, profile) else FIELDWISE
+    from_survey = FLOW == SURVEYED
     if args.review:
         # The two guards `main` applies below, applied here as well: this
         # branch returns before either of them is reached, and a review that
@@ -7923,11 +7984,17 @@ def main(argv: Optional[list] = None) -> int:
     # The profile's business: "scenario == target" is what the kwp target
     # slice holds and says nothing about any other corpus.
     slice_gate = profile.component("extraction", "SLICE") or {}
+    if from_survey:
+        # A harvest from the survey asks every coordinate of a number in one
+        # request and combs every row it leaves open: it has no gate (owner
+        # decision 2026-11-04).
+        slice_gate = {}
     if slice_gate:
         log.info("extraction: slice gate on %s — a row that falls out here "
                  "is not asked for its other coordinates",
                  ", ".join(sorted(slice_gate)))
-    anchors_sha = anchors_key()
+    # A harvest from the survey writes no anchors, and its stamps say so.
+    anchors_sha = "" if from_survey else anchors_key()
     templates = [line for line in
                  prompts.load(QUERIES_PROMPT_ID).text.splitlines()
                  if line.strip() and not line.lstrip().startswith("#")]
@@ -7957,6 +8024,9 @@ def main(argv: Optional[list] = None) -> int:
     # document's stamp for a reader; `stale` compares the ontology keys alone.
     asked: dict = {}
 
+    log.info("extraction: %s", "from the survey of each plan: survey, "
+             "reading, combing" if from_survey else "field by field: rows, "
+             "then one request per coordinate")
     # The largest request of the run, over the prompts it sends: what the
     # server is started with, what the doctor checks and what it is asked for.
     required = request_budget(spec, bool(frame_axes))
@@ -8071,7 +8141,8 @@ def main(argv: Optional[list] = None) -> int:
     # probe string that is the same for the whole corpus is what makes the
     # query-embedding cache pay.
     UNSERVED.clear()
-    anchors = ({} if os.environ.get("EXTRACT_ANCHORS", "1") == "0"
+    anchors = ({} if from_survey
+               or os.environ.get("EXTRACT_ANCHORS", "1") == "0"
                else make_anchors(spec, store=args.out / "anchors.json",
                                  key=anchors_sha))
     if UNSERVED.of(None):
@@ -8085,13 +8156,67 @@ def main(argv: Optional[list] = None) -> int:
 
     cache_path = args.out / "query_cache.db"
     primer = query_cache.connect(cache_path)
-    prime_probe_cache(primer, spec, templates, anchors)
+    if not from_survey:
+        prime_probe_cache(primer, spec, templates, anchors)
     primer.close()
     # One store of passage content for every helper and thread of this run.
     content = make_shared_content()
     more_sources = make_more_sources(args.db, faiss_index, id_to_pos,
                                      cache_path, content=content)
-    places = make_places(args.db, spec, args.out, content=content)
+    places = (None if from_survey
+              else make_places(args.db, spec, args.out, content=content))
+    # The combing of a harvest from the survey, which the passes over a
+    # stored harvest re-read a coordinate with as well, and what it reads the
+    # plan with.
+    pages_of = make_page_count(args.db)
+    every = make_rest_of_document(args.db, content=content)
+    specs: dict = {}
+    specs_lock = threading.Lock()
+
+    def spec_for(document_id: int) -> Spec:
+        """The spec with the lists this document closes, made once per
+        document (`fill_dynamic_axes`, as `closed_spec` below)."""
+        if document_axes is None:
+            return spec
+        with specs_lock:
+            if document_id in specs:
+                return specs[document_id]
+        conn = sqlite3.connect(readonly_uri(args.db), uri=True)
+        conn.row_factory = sqlite3.Row
+        try:
+            made = fill_dynamic_axes(spec, document_axes(conn, document_id))
+        finally:
+            conn.close()
+        with specs_lock:
+            return specs.setdefault(document_id, made)
+
+    def rank(document_id: int, probes: list, exclude: set) -> list:
+        """The whole plan, best first for the combing's search sentences."""
+        return more_sources(document_id, probes, set(exclude), limit=0)
+
+    whole = None
+    if from_survey:
+        whole = surveyed_map.SurveyedHarvest(
+            spec,
+            lambda doc_spec, only, scope: make_survey(
+                args.db, narrow_spec(doc_spec, only), args.out, every=every,
+                image_root=args.image_root, scope=scope),
+            lambda doc_spec: make_reader(doc_spec, args.image_root),
+            lambda doc_spec: make_comber(doc_spec, rank),
+            lambda document_id: every(document_id, set()), pages_of,
+            spec_for=spec_for)
+
+    def pass_sweep():
+        """What a pass over a stored harvest re-reads a coordinate with: the
+        combing in a harvest from the survey, the field sweep otherwise."""
+        if from_survey:
+            return surveyed_map.comb_sweep(whole.comber_of, spec_for, every,
+                                           pages_of)
+        return make_sweeper(
+            make_field_asker(args.image_root), more_sources=more_sources,
+            rest_of_document=make_rest_of_document(args.db, content=content),
+            parents=make_parents(args.db, content=content), anchors=anchors,
+            search_share=search_share, places=places, frame_axes=frame_axes)
 
     if args.top_up:
         from . import topup
@@ -8111,15 +8236,7 @@ def main(argv: Optional[list] = None) -> int:
             stats = topup.run(
                 args.out, spec,
                 _stamp_current(spec_sha, anchors_sha, spec),
-                {"sweep": make_sweeper(
-                    make_field_asker(args.image_root),
-                    more_sources=more_sources,
-                    rest_of_document=make_rest_of_document(args.db,
-                                                           content=content),
-                    parents=make_parents(args.db, content=content),
-                    anchors=anchors,
-                    search_share=search_share, places=places,
-                    frame_axes=frame_axes),
+                {"sweep": pass_sweep(),
                  "owner_sources": make_owner_sources(args.db, content=content),
                  "document_spec": document_spec,
                  "frame_names": frame_names,
@@ -8148,15 +8265,7 @@ def main(argv: Optional[list] = None) -> int:
                          {did: Path(fn).stem for did, fn in documents}.get)
         stats = topup.run_open(
             args.out, spec,
-            {"sweep": make_sweeper(
-                make_field_asker(args.image_root),
-                more_sources=more_sources,
-                rest_of_document=make_rest_of_document(args.db,
-                                                       content=content),
-                parents=make_parents(args.db, content=content),
-                anchors=anchors,
-                search_share=search_share, places=places,
-                frame_axes=frame_axes),
+            {"sweep": pass_sweep(),
              "owner_sources": make_owner_sources(args.db, content=content),
              "document_spec": document_spec_per_call(args.db, spec,
                                                      document_axes),
@@ -8169,7 +8278,8 @@ def main(argv: Optional[list] = None) -> int:
                  "document(s), %d still open", stats["open coordinates asked"],
                  stats["documents"], stats["open coordinates left"])
 
-    ask_frame = make_frame_asker(args.image_root) if frame_axes else None
+    ask_frame = (make_frame_asker(args.image_root)
+                 if frame_axes and not from_survey else None)
 
     # The sentences each pair was searched with, by (document, pair index),
     # so the request that reads the pair's passages can say what it asks.
@@ -8274,9 +8384,12 @@ def main(argv: Optional[list] = None) -> int:
 
     computer = make_computer(profile)
 
-    def verify(entry: tuple) -> bool:
+    def verify(entry: tuple, replies: Optional[int] = None) -> bool:
+        """Fold, work out and write one document. *replies* is how many of
+        its requests came back, its batches when not given: for a harvest
+        from the survey the passages its survey answered."""
         name, report, answered = entry
-        replies = len(answered)
+        replies = len(answered) if replies is None else replies
         fold_answers(answered, report, locate=locate, spec=spec)
         # Stopped half way a document is half worked out, and unwritten like
         # one half read.
@@ -8441,8 +8554,50 @@ def main(argv: Optional[list] = None) -> int:
         stamped = verify((name, report, answered))
         return stamped, failed + (0 if stamped else 1)
 
+    if from_survey:
+        whole.halted = Halted.is_set
+
+        def harvest_document(document_id: int, filename: str) -> tuple:
+            """One document from its survey to its file: (written, failures).
+
+            With --start-at the survey covers the passages earlier harvests
+            found something in, and the rest of the plan for a parameter none
+            of them was asked (`found.Found.gained`); the stamp then says the
+            document was read in part.
+            """
+            name = Path(filename).stem
+            kept = found.passages(document_id) if found is not None else []
+            if kept:
+                taken = surveyed_map.take_found(
+                    whole, document_id, kept,
+                    found.gained(document_id, spec))
+                stage = found_places.STAGE
+            else:
+                taken = whole(document_id)
+                stage = surveyed_map.STAGE
+            if taken is None:
+                return False, 0
+            report = DocumentReport(document_id=document_id,
+                                    owners_harvested=taken.passages,
+                                    planned={stage: taken.passages},
+                                    sources_of=taken.sources_of)
+            stamped = verify((name, report, taken.answered),
+                             replies=taken.replies)
+            return stamped, 0 if stamped else 1
+
     parameter_pass = None
-    if args.top_up_parameters:
+    if args.top_up_parameters and from_survey:
+        parameter_pass = surveyed_map.ParameterPass(
+            args.out, spec, _stamp_current(spec_sha, anchors_sha, spec),
+            {"document_spec": document_spec_per_call(args.db, spec,
+                                                     document_axes),
+             "take": lambda document_id, uris: whole(
+                 document_id, only=tuple(uris), scope="parameters"),
+             "locate": locate,
+             "frame_names": [slot.name for slot in frame_axes],
+             "dynamic_ok": document_axes is not None})
+        harvest_document = parameter_pass
+    elif args.top_up_parameters:
         from . import topup_parameter
 
         # The same loop, the same pools, the same stop, dead-server and exit
@@ -8459,7 +8614,15 @@ def main(argv: Optional[list] = None) -> int:
              "halted": Halted.is_set})
         harvest_document = parameter_pass
     rest_pass = None
-    if args.top_up_open:
+    if args.top_up_open and from_survey:
+        rest_pass = surveyed_map.UnreadPass(
+            args.out,
+            {"take": lambda document_id, passages, also: whole(
+                document_id, scope="rest", passages=passages, also=also),
+             "passages_of": lambda document_id: every(document_id, set()),
+             "locate": locate, "spec": spec})
+        harvest_document = rest_pass
+    elif args.top_up_open:
         from . import topup_rest
         rest_pass = topup_rest.RestPass(
             args.out,

@@ -19,6 +19,13 @@ refuses is asked once more with the reason. A coordinate this request leaves
 without an answer ends `unanswered`; one whose request no longer fits the
 model's window ends `exhausted`; `unstated` is now a finding about the plan.
 
+A pass over a stored harvest combs with the same request (`Comber.comb`):
+the coordinates it names (*coordinates*) whatever their state, the value's
+own passage and its section shown first (*own*), since the reading that
+asked them there ran under an older question, the years of the stored rows
+(*bases*), and the passages a harvest before read the coordinate in listed
+before the search's hits (*first*).
+
 Author: Felix Vossel
 """
 from __future__ import annotations
@@ -143,12 +150,24 @@ class Comber:
 
     def comb(self, document_id: int, parameter, source, slots: list,
              claims: list, passages: dict, pairs: list,
-             budget: Optional[int] = None) -> Combed:
+             budget: Optional[int] = None, *,
+             coordinates: Optional[list] = None, own: bool = False,
+             bases: Optional[tuple] = None,
+             first: Optional[list] = None) -> Combed:
         """The open coordinates of *claims*, values of *parameter* read in
-        *source*, answered in place."""
+        *source*, answered in place; with *coordinates* those of every row,
+        open or not. *own* shows *source* and its section before the first
+        request, *bases* are the years a row may name by a word (instead of
+        those of *pairs*), *first* passages listed before the search's
+        hits."""
         rows = [Row(label=row_label(i), item_index=0, claim=claim)
                 for i, claim in enumerate(claims)]
-        opened = {row.label: open_of(row.claim, slots) for row in rows}
+        if coordinates is not None:
+            have = {slot.name for slot in slots}
+            opened = {row.label: [name for name in coordinates
+                                  if name in have] for row in rows}
+        else:
+            opened = {row.label: open_of(row.claim, slots) for row in rows}
         asked = [slot for slot in slots
                  if any(slot.name in names for names in opened.values())]
         names = [slot.name for slot in asked]
@@ -164,11 +183,22 @@ class Comber:
             if probes else []
         gathered = Gathered(seen={origin, parent},
                             cursor={"next": origin, "previous": parent})
+        if own:
+            # Shown, not listed: the request reads the passage it asks for
+            # again, and its section with it.
+            gathered.seen -= {origin, parent}
+            for shown in [source] + ([around] if around is not None else []):
+                gathered._show(shown, (shown.text or "")[:budget or None])
+        listed = [s for s in first or ()
+                  if (s.owner_kind, s.owner_id) not in gathered.seen]
+        taken = {(s.owner_kind, s.owner_id) for s in listed}
+        listed += shown_hits([s for s in ranked
+                              if (s.owner_kind, s.owner_id) not in taken])
         result.hits = gathered.list_hits(
             [((hit.owner_kind, hit.owner_id), lookup.title_of(hit),
-              first_line(hit)) for hit in shown_hits(ranked)],
+              first_line(hit)) for hit in listed],
             query=" | ".join(probes))
-        bases = self.bases(pairs)
+        bases = list(bases) if bases is not None else self.bases(pairs)
         base = {
             "passage": {"kind": source.owner_kind,
                         "title": lookup.title_of(source),

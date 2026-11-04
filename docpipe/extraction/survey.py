@@ -20,7 +20,10 @@ in its own passage and is long enough to name a place there; a tuple is held
 to `runner.frame_pairs`, the frame's own check.
 
 The survey of a document is kept (`survey/<document>.json`) under a key over
-the prompt, the parameters, the groups and the model.
+the prompt, the parameters, the groups and the model. A survey of part of a
+plan (the passages a harvest before found something in, the rest of a plan,
+the parameters a spec gained) is kept beside it under its own scope
+(`survey/<document>.<scope>.json`), so that neither is taken for the other.
 
 Author: Felix Vossel
 """
@@ -344,13 +347,15 @@ class Survey:
     what either reply backs is taken. *passages_of(document_id)* is every
     passage of the document in its order, *pages_of(document_id)* its page
     count. *pool* runs a document's requests side by side (None: one after
-    another). *store* is where surveys are kept.
+    another). *store* is where surveys are kept, *scope* the name of a
+    survey of part of a plan beside the whole one's.
     """
 
     def __init__(self, ask: Callable, passages_of: Callable,
                  pages_of: Callable, parameters: dict, slots: dict,
                  pairs_of: Callable, key: str, *,
-                 store: Optional[Path] = None, pool=None, trace=None):
+                 store: Optional[Path] = None, scope: str = "",
+                 pool=None, trace=None):
         self.ask = ask
         self.passages_of = passages_of
         self.pages_of = pages_of
@@ -359,26 +364,37 @@ class Survey:
         self.pairs_of = pairs_of
         self.key = key
         self.store = Path(store) if store else None
+        self.scope = scope
         self.pool = pool
         self.trace = trace
         self._found: dict = {}
         self._locks: dict = {}
         self._guard = threading.Lock()
 
-    def __call__(self, document_id: int) -> Found:
+    def __call__(self, document_id: int,
+                 passages: Optional[list] = None) -> Found:
+        """The survey of *document_id*: of every passage it has, or of
+        *passages* for a survey of part of it."""
         with self._guard:
             lock = self._locks.setdefault(document_id, threading.Lock())
         with lock:
             found = self._found.get(document_id)
             if found is None:
-                found = self._load(document_id) or self._build(document_id)
+                if passages is None:
+                    passages = self.passages_of(document_id)
+                found = (self._load(document_id, passages)
+                         or self._build(document_id, passages))
                 self._found[document_id] = found
             return found
 
     def _path(self, document_id: int) -> Optional[Path]:
-        return self.store / f"{document_id}.json" if self.store else None
+        if self.store is None:
+            return None
+        name = (f"{document_id}.{self.scope}" if self.scope
+                else str(document_id))
+        return self.store / f"{name}.json"
 
-    def _load(self, document_id: int) -> Optional[Found]:
+    def _load(self, document_id: int, passages: list) -> Optional[Found]:
         path = self._path(document_id)
         if path is None or not path.is_file():
             return None
@@ -388,15 +404,16 @@ class Survey:
             return None
         if kept.get("key") != self.key or not kept.get("complete"):
             return None
-        at = {(s.owner_kind, s.owner_id)
-              for s in self.passages_of(document_id)}
+        at = {(s.owner_kind, s.owner_id) for s in passages}
         answers = {tuple(a["owner"]): Answer(
             tuple(a["owner"]), list(a.get("parameters") or ()),
             a.get("quote"), dict(a.get("tuples") or {}),
             list(a.get("dropped") or ())) for a in kept.get("answers", ())}
-        if set(answers) - at:
-            return None                 # the document changed since
-        return Found(True, answers, [])
+        unanswered = [tuple(o) for o in kept.get("unanswered") or ()]
+        if set(answers) | set(unanswered) != at:
+            return None                 # the passages changed since
+        # What it could not answer stays a hole, as it was the first time.
+        return Found(True, answers, unanswered)
 
     def _ask_context(self, context: list, document_id: int) -> tuple:
         """(answers, unanswered, complete) of one context, halved while its
@@ -424,8 +441,7 @@ class Survey:
         return (list(found.answers.values()),
                 [owner for owner in unanswered if owner in still], True)
 
-    def _build(self, document_id: int) -> Found:
-        passages = self.passages_of(document_id)
+    def _build(self, document_id: int, passages: list) -> Found:
         budget = budget_of(passages, self.pages_of(document_id))
         contexts = contexts_of(passages, budget)
         if self.pool is None:
@@ -457,7 +473,8 @@ class Survey:
                  budget, none, dropped, len(found.unanswered),
                  "" if found.complete else " -- incomplete")
         if self.trace is not None:
-            self.trace("survey", document_id, passages=len(passages),
+            self.trace("survey", document_id, scope=self.scope or None,
+                       passages=len(passages),
                        contexts=len(contexts), budget=budget, none=none,
                        dropped=dropped, unanswered=len(found.unanswered),
                        complete=found.complete, by_parameter=by_parameter,

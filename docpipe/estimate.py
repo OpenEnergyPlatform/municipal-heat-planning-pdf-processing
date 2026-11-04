@@ -56,7 +56,10 @@ COMMANDS = ("ingest", "preprocess", "refine", "visuals", "chunk", "extract")
 # The events of the harvest's trace that are one answered request each.
 # runner.py writes them; a frame event without tokens is the summary of a
 # frame search and no request.
-TRACED = ("frame", "rows", "field")
+# The answered requests of either flow: field by field, and from the
+# survey (survey, the two readings, the combing).
+TRACED = ("frame", "rows", "field", "survey_ask", "read_table_ask",
+          "read_text_ask", "comb_ask")
 TRACE_DIR = "trace"
 
 

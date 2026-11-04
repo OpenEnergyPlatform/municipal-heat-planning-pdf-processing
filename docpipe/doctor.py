@@ -330,13 +330,17 @@ def _extraction_spec(profile):
 
 def _extract_budget(profile) -> int:
     """What `extract --print-context-budget` prints: the largest request of
-    the prompts the run sends. A frame request counts when the profile names
-    frame axes, as it does in the run."""
+    the prompts the run sends: those of a harvest from the survey where the
+    profile has one (`runner.surveyed_flow`), as the run decides. A frame
+    request counts when the profile names frame axes, as it does in the
+    run."""
     from .extraction import fields, runner
     spec = _extraction_spec(profile)
     framed = bool(fields.frame_slots(
         spec, profile.component("extraction", "FRAME") or ()))
-    return runner.request_budget(spec, framed, profile)
+    flow = (runner.SURVEYED if runner.surveyed_flow(spec, profile)
+            else runner.FIELDWISE)
+    return runner.request_budget(spec, framed, profile, flow)
 
 
 def _review_budget(profile) -> int:

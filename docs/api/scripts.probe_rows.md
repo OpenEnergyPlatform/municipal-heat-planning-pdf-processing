@@ -107,7 +107,8 @@ def survey_over(passages: dict, spec, args) -> list
 ```
 
 The survey of each document's whole plan, as the run asks it, and
-with --read the reading of each parameter after it.
+with --read the reading of each parameter after it and with --comb the
+combing, through the run's own steps (`surveyed.SurveyedHarvest`).
 
 ### compute_over
 

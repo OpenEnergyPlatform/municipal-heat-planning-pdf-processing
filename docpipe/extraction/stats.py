@@ -18,7 +18,10 @@ numbers a report and the ontology side can act on:
 - per axis and search stage, the requests sent and the coordinates they
   filled, which is what a coordinate costs;
 - the reasons answers were dropped, per axis;
-- the open questions of the compute step, per kind and how they ended.
+- the open questions of the compute step, per kind and how they ended;
+- the survey flow: requests, tokens and second rounds per stage, the
+  survey's passages, the readings per reason unread, and the combing's
+  coordinates open, filled and exhausted.
 
 Every count says what it counts. Read from the harvest files and the trace
 directories named; written to `<harvest dir>/stats/<pass>-<run start>.json`.
@@ -38,6 +41,15 @@ log = logging.getLogger(__name__)
 
 STATS = "stats"
 OPEN = ("exhausted", "unanswered", "unbacked")
+# Trace event kind -> the stage of the survey flow that asked.
+ASK_STAGES = {"survey_ask": "survey", "read_table_ask": "read_table",
+              "read_text_ask": "read_text", "comb_ask": "comb"}
+
+
+def _int(event: dict, key: str) -> int:
+    value = event.get(key)
+    return value if isinstance(value, int) and not isinstance(value, bool) \
+        else 0
 
 
 def _lines(path: Path) -> Iterable[dict]:
@@ -127,6 +139,13 @@ def from_traces(trace_dirs: Iterable[Path],
     withdrawn = 0
     from_table = 0
     computed: dict = defaultdict(Counter)
+    stages: dict = defaultdict(Counter)
+    surveyed: Counter = Counter()
+    survey_by_parameter: Counter = Counter()
+    readings: Counter = Counter()
+    unread_why: Counter = Counter()
+    refused_first: Counter = Counter()
+    combed: Counter = Counter()
     for directory in trace_dirs:
         for path in sorted(Path(directory).glob("*.jsonl")):
             stem = path.name[:-len(".trace.jsonl")] \
@@ -162,6 +181,42 @@ def from_traces(trace_dirs: Iterable[Path],
                 elif kind == "compute":
                     computed[str(event.get("kind"))][
                         str(event.get("outcome"))] += 1
+                elif kind in ASK_STAGES:
+                    stage = ASK_STAGES[kind]
+                    stages[stage]["requests"] += 1
+                    stages[stage]["prompt_tokens"] += _int(event,
+                                                           "prompt_tokens")
+                    stages[stage]["completion_tokens"] += _int(
+                        event, "completion_tokens")
+                    stages[stage]["second_rounds"] += (
+                        _int(event, "corrections") > 0)
+                elif kind == "survey":
+                    surveyed["documents"] += 1
+                    surveyed["complete"] += bool(event.get("complete"))
+                    for key in ("passages", "contexts", "none", "dropped",
+                                "unanswered"):
+                        surveyed[key] += _int(event, key)
+                    survey_by_parameter.update(
+                        {str(p): n for p, n in
+                         (event.get("by_parameter") or {}).items()
+                         if isinstance(n, int)})
+                elif kind == "read":
+                    readings["readings"] += 1
+                    if event.get("unread"):
+                        unread_why[str(event.get("why"))] += 1
+                    for key in ("values", "skipped", "unanswered", "fetched",
+                                "searched", "missed"):
+                        readings[key] += _int(event, key)
+                    readings["faulty_tables"] += bool(event.get("faulty"))
+                    refused_first.update(
+                        {str(w): n for w, n in
+                         (event.get("failed") or {}).items()
+                         if isinstance(n, int)})
+                elif kind == "comb":
+                    combed["passages"] += 1
+                    for key in ("open", "filled", "exhausted", "hits",
+                                "fetched", "searched", "missed"):
+                        combed[key] += _int(event, key)
     return {
         # The maps of places: documents mapped and how many completely,
         # passages, requests, places taken and not, requests unread, and
@@ -187,6 +242,53 @@ def from_traces(trace_dirs: Iterable[Path],
             axis: [{"given": g, "wording": w, "answers": n}
                    for (g, w), n in c.most_common()]
             for axis, c in outside.items()},
+        # The survey flow. Per stage: requests that got a reply, their
+        # tokens, and those that were a second round (corrections sent).
+        "requests_by_stage": {
+            stage: {k: stages[stage][k] for k in (
+                "requests", "prompt_tokens", "completion_tokens",
+                "second_rounds")}
+            for stage in ASK_STAGES.values()},
+        # Documents surveyed and completely, passages found, contexts sent,
+        # passages carrying no parameter, passages without an answer,
+        # answers not taken, and passages per parameter.
+        "survey": {
+            "documents": surveyed["documents"],
+            "complete": surveyed["complete"],
+            "passages": surveyed["passages"],
+            "contexts": surveyed["contexts"],
+            "passages_without_parameter": surveyed["none"],
+            "passages_unanswered": surveyed["unanswered"],
+            "answers_not_taken": surveyed["dropped"],
+            "passages_by_parameter": dict(survey_by_parameter)},
+        # Readings (one passage for one parameter), the readings that came to
+        # no reply per reason, values read, tables the model called faulty,
+        # table cells not read, coordinates left unanswered, the check's
+        # refusals of the first answer per reason, passages fetched by a
+        # search, hit lists shown, and asks for a passage that was not found.
+        "reading": {
+            "readings": readings["readings"],
+            "unread_by_reason": dict(unread_why),
+            "values": readings["values"],
+            "faulty_tables": readings["faulty_tables"],
+            "cells_not_read": readings["skipped"],
+            "coordinates_unanswered": readings["unanswered"],
+            "refused_first_by_reason": dict(refused_first),
+            "passages_fetched": readings["fetched"],
+            "hit_lists": readings["searched"],
+            "asks_not_found": readings["missed"]},
+        # Combed passages (one passage for one parameter), coordinates open
+        # when combed, filled and left exhausted, hits shown, passages
+        # fetched, hit lists, asks not found.
+        "combing": {
+            "passages": combed["passages"],
+            "coordinates_open": combed["open"],
+            "coordinates_filled": combed["filled"],
+            "coordinates_exhausted": combed["exhausted"],
+            "hits_shown": combed["hits"],
+            "passages_fetched": combed["fetched"],
+            "hit_lists": combed["searched"],
+            "asks_not_found": combed["missed"]},
     }
 
 

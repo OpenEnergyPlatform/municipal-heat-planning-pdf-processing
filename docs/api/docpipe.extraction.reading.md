@@ -116,6 +116,7 @@ Fields:
 - `skipped: int = 0`: cells of value rows and columns not read
 - `faulty: Optional[str] = None`
 - `unread: bool = False`: no readable reply
+- `why: Optional[str] = None`: and why: cut_off or no_answer
 - `corrected: int = 0`: corrections the second request carried
 - `failed: dict = field(default_factory=dict)`: what the check refused of the first reply, by reason
 - `unanswered: int = 0`: coordinates no reply answered

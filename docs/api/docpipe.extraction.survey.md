@@ -23,7 +23,10 @@ in its own passage and is long enough to name a place there; a tuple is held
 to `runner.frame_pairs`, the frame's own check.
 
 The survey of a document is kept (`survey/<document>.json`) under a key over
-the prompt, the parameters, the groups and the model.
+the prompt, the parameters, the groups and the model. A survey of part of a
+plan (the passages a harvest before found something in, the rest of a plan,
+the parameters a spec gained) is kept beside it under its own scope
+(`survey/<document>.<scope>.json`), so that neither is taken for the other.
 
 Author: Felix Vossel
 
@@ -89,7 +92,8 @@ taken is asked once more with what was wrong (`corrections_of`), and
 what either reply backs is taken. *passages_of(document_id)* is every
 passage of the document in its order, *pages_of(document_id)* its page
 count. *pool* runs a document's requests side by side (None: one after
-another). *store* is where surveys are kept.
+another). *store* is where surveys are kept, *scope* the name of a
+survey of part of a plan beside the whole one's.
 
 #### Survey.\_\_init\_\_
 
@@ -97,7 +101,8 @@ another). *store* is where surveys are kept.
 def __init__(self, ask: Callable, passages_of: Callable,
              pages_of: Callable, parameters: dict, slots: dict,
              pairs_of: Callable, key: str, *,
-             store: Optional[Path] = None, pool=None, trace=None)
+             store: Optional[Path] = None, scope: str = "",
+             pool=None, trace=None)
 ```
 
 ## Functions

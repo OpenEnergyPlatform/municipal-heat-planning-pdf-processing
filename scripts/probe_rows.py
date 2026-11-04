@@ -206,29 +206,20 @@ def whole(hits: list, spec, args, passages=None, document_spec=None) -> list:
 
 def survey_over(passages: dict, spec, args) -> list:
     """The survey of each document's whole plan, as the run asks it, and
-    with --read the reading of each parameter after it."""
-    from docpipe.extraction import fields, runner, survey
+    with --read the reading of each parameter after it and with --comb the
+    combing, through the run's own steps (`surveyed.SurveyedHarvest`)."""
+    from docpipe.extraction import fields, runner, surveyed
     from docpipe.extraction.pipeline import DocumentReport
 
     def every(document: int, exclude: set) -> list:
         return [source for source in passages.get(document, ())
                 if (source.owner_kind, source.owner_id) not in exclude]
 
-    surveyed = runner.make_survey(args.db, spec, args.out, every=every,
-                                  image_root=args.image_root)
-    if surveyed is None:
-        raise SystemExit("no survey: the profile writes no survey prompt or "
-                         "its spec names no groups")
-    surveyed.pool = ThreadPoolExecutor(args.parallel)
-    reader = runner.make_reader(spec, args.image_root) if args.read else None
-    if args.read and reader is None:
-        raise SystemExit("no reading: the profile writes no read prompts")
-    if reader is not None:
-        reader.pool = surveyed.pool
-    comber = None
+    pool = ThreadPoolExecutor(args.parallel)
+    rank = None
     if args.comb:
         from docpipe.inference import faiss_store, query_cache
-        if reader is None or args.index is None:
+        if not args.read or args.index is None:
             raise SystemExit("--comb needs --read and --index")
         index, id_to_pos = faiss_store.load_global_index(args.index)
         cache_path = args.out / "query_cache.db"
@@ -238,53 +229,68 @@ def survey_over(passages: dict, spec, args) -> list:
         def rank(document_id: int, probes: list, exclude: set) -> list:
             return more(document_id, probes, set(exclude), limit=0)
 
-        comber = runner.make_comber(spec, rank)
-        if comber is None:
+    def made_survey(doc_spec, only, scope):
+        made = runner.make_survey(args.db, runner.narrow_spec(doc_spec, only),
+                                  args.out, every=every,
+                                  image_root=args.image_root, scope=scope)
+        if made is None:
+            raise SystemExit("no survey: the profile writes no survey prompt "
+                             "or its spec names no groups")
+        made.pool = pool
+        return made
+
+    def made_reader(doc_spec):
+        made = runner.make_reader(doc_spec, args.image_root)
+        if made is None:
+            raise SystemExit("no reading: the profile writes no read prompts")
+        made.pool = pool
+        return made
+
+    def made_comber(doc_spec):
+        if rank is None:
+            return None
+        made = runner.make_comber(doc_spec, rank)
+        if made is None:
             raise SystemExit("no combing: the profile writes no comb prompt")
-        comber.pool = surveyed.pool
-    pages_of = runner.make_page_count(args.db)
+        made.pool = pool
+        return made
+
+    whole = surveyed.SurveyedHarvest(
+        spec, made_survey, made_reader, made_comber,
+        lambda document: every(document, set()),
+        runner.make_page_count(args.db))
+    survey = whole.survey_of(spec)
     names = sorted({slot.name for parameter in spec.parameters
                     for slot in fields.axis_slots(parameter)}
                    | {"unit", "parameter", "value"})
 
     def one(document: int) -> dict:
         started = time.time()
-        found = surveyed(document)
+        found = survey(document, passages[document])
         answers = list(found.answers.values())
         row = {"document": document, "passages": len(passages[document]),
                "seconds": round(time.time() - started, 1),
                "complete": found.complete,
                "by_parameter": {p: len(found.passages_of(p))
-                                for p in surveyed.parameters},
+                                for p in survey.parameters},
                "none": sum(1 for a in answers if not a.parameters),
                "dropped": sum(len(a.dropped) for a in answers),
                "unanswered": len(found.unanswered),
                "tuples": {name: sum(len(a.tuples.get(name, ()))
                                     for a in answers)
-                          for name in surveyed.slots}}
-        if reader is None:
+                          for name in survey.slots}}
+        if not args.read:
             return row
         read_started = time.time()
-        sources = passages[document]
-        budget = survey.budget_of(sources, pages_of(document))
-        shown = {(s.owner_kind, s.owner_id): s for s in sources}
-        reads = reader(document, found, shown, budget)
-        read_seconds = round(time.time() - read_started, 1)
-        combed = []
-        if comber is not None:
-            pairs = []
-            for answer in answers:
-                for one in answer.tuples.get("frame", ()):
-                    if one not in pairs:
-                        pairs.append(one)
-            combed = comber(document, reads, shown, pairs, budget)
-        report = DocumentReport(document_id=document)
-        runner.fold_answers([(r.batch, {"tuples": r.claims}) for r in reads],
-                            report, locate=None, spec=spec)
-        if comber is not None:
+        taken = whole(document)
+        reads, combed = taken.reads, taken.combed
+        report = DocumentReport(document_id=document,
+                                owners_harvested=taken.passages,
+                                planned={surveyed.STAGE: taken.passages},
+                                sources_of=taken.sources_of)
+        runner.fold_answers(taken.answered, report, locate=None, spec=spec)
+        if args.comb:
             row.update({
-                "comb_seconds": round(time.time() - read_started
-                                      - read_seconds, 1),
                 "combed": len(combed),
                 "comb_requests": sum(c.asked for c in combed),
                 "comb_open": sum(c.open for c in combed),
@@ -294,7 +300,8 @@ def survey_over(passages: dict, spec, args) -> list:
                 "comb_searched": sum(c.searched for c in combed),
                 "comb_exhausted": sum(c.exhausted for c in combed)})
         row.update({
-            "read_seconds": read_seconds,
+            # Reading and combing together, as the run does them.
+            "read_seconds": round(time.time() - read_started, 1),
             "read_requests": sum(r.asked for r in reads),
             "asked_again": sum(1 for r in reads if r.asked > 1),
             "corrections": sum(r.corrected for r in reads),
@@ -305,6 +312,9 @@ def survey_over(passages: dict, spec, args) -> list:
             "searched": sum(r.searched for r in reads),
             "not_found": sum(r.missed for r in reads),
             "unread": sum(1 for r in reads if r.unread),
+            "holes": sum(1 for _batch, reply in taken.answered
+                         for claim in reply.get("tuples") or ()
+                         if claim.get("_harvest_failed")),
             "faulty": [r.faulty for r in reads if r.faulty],
             "cells_not_read": sum(r.skipped for r in reads),
             "claims": sum(len(r.claims) for r in reads),
@@ -317,8 +327,8 @@ def survey_over(passages: dict, spec, args) -> list:
             encoding="utf-8")
         return {k: v for k, v in row.items() if k != "verified"}
 
-    with ThreadPoolExecutor(len(passages) or 1) as pool:
-        return list(pool.map(one, passages))
+    with ThreadPoolExecutor(len(passages) or 1) as documents:
+        return list(documents.map(one, passages))
 
 
 def compute_over(stored: Path, hits: list, spec, args) -> list:

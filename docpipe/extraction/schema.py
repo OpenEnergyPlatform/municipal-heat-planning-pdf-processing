@@ -538,9 +538,12 @@ def harvest_schema(spec) -> dict:
                                        "answered 429 or 5xx, the model "
                                        "answered nothing, or the reply did "
                                        "not fit and there was nothing left "
-                                       "to split.",
+                                       "to split. A hole of a reading also "
+                                       "carries _parameter, the parameter "
+                                       "the passage was to be read for.",
                         "properties": {
                             "_harvest_failed": {"const": True},
+                            "_parameter": {"type": "string"},
                             "_why": {"enum": ["unreachable", "unserved",
                                               "no_answer", "cut_off"]}}},
                     "owner": _owner(),
@@ -721,7 +724,14 @@ def stamp_schema() -> dict:
                             "description": "A pass that appended parameters "
                                            "to a stored harvest: where the "
                                            "frame's pairs of the document "
-                                           "came from."}},
+                                           "came from."},
+                        "flow": {
+                            "type": "string",
+                            "enum": ["survey", "fieldwise"],
+                            "description": "Which flow the pass harvested "
+                                           "with, written whenever a model "
+                                           "is named. Recorded and never "
+                                           "compared."}},
                     "required": ["pass"], "additionalProperties": False}},
             "page_text_transcribed": {
                 "type": ["integer", "null"],
@@ -731,9 +741,13 @@ def stamp_schema() -> dict:
                                "reading."},
         },
         "patternProperties": {
-            "^extraction/(harvest|queries|anchors|rows|field|phrase|frame)$":
+            "^extraction/(harvest|queries|anchors|rows|field|phrase|frame"
+            "|survey|read_table|read_text|comb)$":
                 {**sha, "description": "sha256 of the prompt file; `harvest` "
-                                       "is in stamps of an older release"},
+                                       "is in stamps of an older release; "
+                                       "`survey`, `read_table`, `read_text` "
+                                       "and `comb` are the prompts of the "
+                                       "survey flow"},
             "^question_text/[^/]+$": {
                 "type": "array", "items": {"type": "string"},
                 "description": "The sentence THIS document was searched "
@@ -948,6 +962,73 @@ def trace_schema() -> dict:
                     "where": {"type": "string"},
                     "why": {"type": "string"},
                     "detail": {"type": "string"}},
+        # The survey flow. `survey`: the survey of one document (survey.py),
+        # `scope` what it covered, `none` passages that carry no parameter,
+        # `dropped` answers not taken, `unanswered` passages without an
+        # answer, `by_parameter` passages per parameter.
+        "survey": {"scope": {"type": ["string", "null"]},
+                   "passages": {"type": "integer"},
+                   "contexts": {"type": "integer"},
+                   "budget": {"type": "integer"},
+                   "none": {"type": "integer"},
+                   "dropped": {"type": "integer"},
+                   "unanswered": {"type": "integer"},
+                   "complete": {"type": "boolean"},
+                   "by_parameter": by_field,
+                   "tuples": {"type": "integer"}},
+        # One request of the survey flow that got a reply, per stage; a
+        # `corrections` above zero is a second round. Which of `parameter`,
+        # `owner`, `kind`, `rows`, `passages`, `figure` it carries depends on
+        # the stage.
+        **{f"{stage}_ask": {"attempt": {"type": "integer"},
+                            "corrections": {"type": "integer"},
+                            "parameter": {"type": ["string", "null"]},
+                            "owner": {}, "kind": {}, "rows": {},
+                            "passages": {}, "figure": {},
+                            "prompt_tokens": {"type": ["integer", "null"]},
+                            "completion_tokens": {"type": ["integer", "null"]},
+                            "ms": {"type": "integer"}}
+           for stage in ("survey", "read_table", "read_text", "comb")},
+        # One passage read for one parameter (reading.py). A passage that
+        # came to no readable reply is `unread` with `why` and no values.
+        "read": {"parameter": {"type": "string"},
+                 "kind": {"enum": ["section", "table", "figure"]},
+                 "owner": {"type": "integer"}, "table": {"type": "boolean"},
+                 "values": {"type": "integer"}, "skipped": {"type": "integer"},
+                 "faulty": {"type": ["string", "null"]},
+                 "asked": {"type": "integer"},
+                 "corrected": {"type": "integer"}, "failed": by_field,
+                 "unanswered": {"type": "integer"},
+                 "fetched": {"type": "integer"},
+                 "searched": {"type": "integer"},
+                 "missed": {"type": "integer"},
+                 "unread": {"type": "boolean"},
+                 "why": {"enum": ["cut_off", "no_answer"]}},
+        # The comb of what a reading left open (combing.py): per passage and
+        # parameter, the coordinates open and how many the request filled.
+        "comb": {"parameter": {"type": "string"},
+                 "kind": {"enum": ["section", "table", "figure"]},
+                 "owner": {"type": "integer"}, "rows": {"type": "integer"},
+                 "open": {"type": "integer"}, "filled": {"type": "integer"},
+                 "asked": {"type": "integer"}, "hits": {"type": "integer"},
+                 "fetched": {"type": "integer"},
+                 "searched": {"type": "integer"},
+                 "missed": {"type": "integer"},
+                 "corrected": {"type": "integer"},
+                 "exhausted": {"type": "integer"}},
+    }
+    # Of the survey flow's events, the fields only some of them carry.
+    optional = {
+        "survey_ask": {"corrections", "parameter", "owner", "kind", "rows",
+                       "passages", "figure"},
+        "read_table_ask": {"corrections", "parameter", "owner", "kind",
+                           "rows", "passages", "figure"},
+        "read_text_ask": {"corrections", "parameter", "owner", "kind",
+                          "rows", "passages", "figure"},
+        "comb_ask": {"corrections", "parameter", "owner", "kind", "rows",
+                     "passages", "figure"},
+        "read": {"skipped", "faulty", "corrected", "failed", "unanswered",
+                 "fetched", "searched", "missed", "unread", "why"},
     }
     # Optional on every event: what the run could not always know. Requiring
     # them would refuse a legitimate record from a request that never reached
@@ -967,8 +1048,9 @@ def trace_schema() -> dict:
         "oneOf": [{"type": "object",
                    "properties": {"t": {"const": t},
                                   "doc": {"type": "integer"}, **props},
-                   "required": ["t", "doc"] + [k for k in props
-                                               if k not in loose],
+                   "required": ["t", "doc"] + [
+                       k for k in props
+                       if k not in loose and k not in optional.get(t, ())],
                    "additionalProperties": False}
                   for t, props in kinds.items()],
     }

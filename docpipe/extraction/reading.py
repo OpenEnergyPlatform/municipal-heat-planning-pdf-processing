@@ -50,6 +50,8 @@ READ_TEXT_PROMPT_ID = "extraction/read_text"
 # What a request came to besides a reply: too long to be sent, or an answer
 # that did not fit its token limit.
 CUT = "cut_off"
+# And no readable reply at all: the `_why` of the hole the run writes for it.
+NO_ANSWER = "no_answer"
 
 _IN_A_NAME = re.compile(r"(?<=[^\W\d_])\d+")
 
@@ -627,6 +629,7 @@ class Read:
     skipped: int = 0              # cells of value rows and columns not read
     faulty: Optional[str] = None
     unread: bool = False          # no readable reply
+    why: Optional[str] = None     # and why: cut_off or no_answer
     corrected: int = 0            # corrections the second request carried
     # what the check refused of the first reply, by reason
     failed: dict = field(default_factory=dict)
@@ -718,8 +721,11 @@ class Reader:
         piece of it the request shows, *budget* the survey's two pages."""
         shown = shown or source
         slots = slots_of(self.spec, parameter)
+        # The reading's spec rides on the batch, so the fold checks a value
+        # against the lists this document closes (`runner.spec_of`).
         batch = Batch(document_id, parameter,
-                      [WorkItem(document_id, parameter, source)])
+                      [WorkItem(document_id, parameter, source)],
+                      spec=self.spec)
         grid = grid_of(source.text) if source.owner_kind == "table" else None
         bases = self.bases(pairs)
         context, around = self.context_of(source, slots, tuples, bases,
@@ -741,6 +747,12 @@ class Reader:
         result = Read(batch, [], asked=1)
         if not isinstance(reply, dict):
             result.unread = True
+            result.why = CUT if reply == CUT else NO_ANSWER
+            if self.trace is not None:
+                self.trace("read", document_id, parameter=parameter.uri,
+                           kind=source.owner_kind, owner=source.owner_id,
+                           table=grid is not None, values=0, unread=True,
+                           why=result.why, asked=result.asked)
             return result
         reply, more = gather(ask, reply, gathered, list(passages.values()),
                              passages, budget)

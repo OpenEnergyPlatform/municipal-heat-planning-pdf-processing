@@ -303,7 +303,9 @@ def _numbers(profile, prompts, spec_path) -> dict:
     framed = bool(fields.frame_slots(
         spec, profile.component("extraction", "FRAME") or ()))
     budgets = {}
-    for pid in (*runner.PROMPT_IDS, runner.REVIEW_PROMPT_ID):
+    for pid in (*runner.PROMPT_IDS,
+                *getattr(runner, "SURVEY_PROMPT_IDS", ()),
+                runner.REVIEW_PROMPT_ID):
         if pid == runner.QUERIES_PROMPT_ID:     # search templates, no request
             continue
         try:
@@ -311,8 +313,15 @@ def _numbers(profile, prompts, spec_path) -> dict:
                 prompts.load(pid, profile), spec)
         except FileNotFoundError:
             budgets[pid] = None
-    if hasattr(runner, "request_budget") and hasattr(runner,
-                                                     "batch_sources_for"):
+    if hasattr(runner, "surveyed_flow"):
+        # The flow the run harvests with decides which prompts it sends.
+        rule = "sent"
+        flow = (runner.SURVEYED if runner.surveyed_flow(spec, profile)
+                else runner.FIELDWISE)
+        window = runner.request_budget(spec, framed, profile, flow)
+        sources = runner.batch_sources_for(spec)
+    elif hasattr(runner, "request_budget") and hasattr(runner,
+                                                       "batch_sources_for"):
         rule = "sent"
         window = runner.request_budget(spec, framed)
         sources = runner.batch_sources_for(spec)

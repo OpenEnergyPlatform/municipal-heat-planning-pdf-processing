@@ -198,6 +198,66 @@ whose request no longer fits the model's window ends `exhausted`; `unstated`
 is from here on a finding about the plan. The ranking is handed in:
 `make_more_sources` in a harvest.
 
+### The run harvests from the survey
+
+A run harvests from the survey of each plan wherever its profile can
+(`runner.surveyed_flow`): the spec names groups and the profile writes the four
+prompts `extraction/survey`, `read_table`, `read_text` and `comb`. kwp does; a
+profile without them (scenarios today) is harvested field by field as before,
+so the two flows stand side by side until every profile has moved. Per document
+the run surveys, reads and combs (`surveyed.SurveyedHarvest`), then folds, runs
+the compute step and writes the file with its stamp as for any harvest. This
+flow writes no anchors, sends no frame request, builds no map of places and has
+no slice gate (owner decision 2026-11-04): a number is asked for all its
+coordinates in one request, and every row the reading leaves open is combed.
+Every request goes through the one queue, served oldest document first
+(`scheduler.py`). A profile with lists per document gets its own spec per
+document, and the reading's batch carries it, so the fold checks against those
+lists.
+
+What none of the three could read is a hole with its reason, not a plan that
+seems silent. A passage the survey left unanswered goes to the fold as the
+harvest's sentinel under no parameter (`_why` no_answer) and counts among the
+passages of every parameter. A reading that came to no readable reply goes as a
+sentinel with `_why` cut_off or no_answer and `_parameter`, so a later pass
+knows what to read again. A parameter without a row whose passages were holes
+ends `exhausted` and not `unstated` (`trust.parameter_states`, with the
+survey's passages plus the unanswered ones as `sources_of`): `unstated` stays a
+finding about the plan. A survey that answered no passage is no reply at all,
+and the document is not stamped. A request of this flow whose last attempt
+ended on a 429, a 5xx or a timeout notes its document (`UNSERVED`,
+`runner.ask_in_grammar`), which is then not stamped, so a resume redoes it.
+
+The stamp records the prompts of the flow the run harvested with, and every
+producer entry carries `flow` ("survey" or "fieldwise"); it is recorded and
+never compared (owner rule of 2026-09-10), so a stamp of the other flow does
+not make a document stale. A survey of part of a plan is kept beside the whole
+one's as `survey/<document>.<scope>.json`, the scopes being `found`, `gained`,
+`parameters` and `rest`. A kept survey is taken again only for the same
+passages (`Survey._load`), and what it could not answer stays a hole.
+
+The passes over a stored harvest run the same steps. `--start-at` surveys the
+passages earlier harvests found something in (scope `found`) and, for a
+parameter none of them was asked, the rest of the plan (scope `gained`); the
+stamp says the document was read in part, as before. `--top-up` and the first
+half of `--top-up-open` re-read a coordinate with the combing
+(`surveyed.comb_sweep` under `topup._sweep_one`): the coordinates named, in
+whatever state they are, are combed with their own passage and its section
+shown first and the years of the stored rows, and the pass's restore rules are
+unchanged. The second half of `--top-up-open` (`surveyed.append_unread`)
+surveys what no stored survey answered plus the passages the file holds as
+holes (scope `rest`), and reads a reading's hole again for its own parameter
+with the frame tuples its survey gave; for a harvest of the old flow, what its
+rows requests were shown counts as read. `--top-up-parameters`
+(`surveyed.append_parameters`) surveys the whole plan for the gained parameters
+(scope `parameters`).
+
+The server's window is measured over the four prompts of this flow
+(`runner.sent_prompt_ids`, see Configuration). `stats.py` writes per run the
+requests per stage and the survey, reading and combing counts
+(`stats.from_traces`), and the cost estimate counts the requests of both flows
+(`estimate.TRACED`).
+
 ### The retrieval plan
 
 `pipeline.plan_document` builds one plan per document, not per parameter,
@@ -1915,7 +1975,7 @@ a `*.jsonl` or `*.stamp.json` that a reader of the harvest would list.
 | `EXTRACT_MAX_MODEL_LEN` | env var | `32768` | Fallback context window a request's answer room is sized against; overwritten by `set_model_len` from the server's own preflight report where it gives one | `runner.set_model_len`, `runner.answer_room` |
 | `EXTRACT_RETRY_TEMPERATURE_STEP` | env var | `0.1` | Sampling temperature of a retried attempt raised by this step, once per unreadable reply, capped at `1.0`; every retry loop of this stage applies it (phrase, frame, anchors, rows, field, places, review) | `runner.retry_temperature` |
 | `EXTRACT_TRACE` | env var | `1` | Off, every trace call returns immediately and no trace file is written | `trace.py` (`ENABLED`) |
-| `EXTRACT_ANCHORS` | env var | `1` | `0` writes none of the corpus-wide anchor sets (`make_anchors`); the field sweep's searches then run without them | `runner.main` |
+| `EXTRACT_ANCHORS` | env var | `1` | `0` writes none of the corpus-wide anchor sets (`make_anchors`); the field sweep's searches then run without them. A harvest from the survey writes no anchors whatever it is set to | `runner.main` |
 | `EXTRACT_SERVER_DEAD_AFTER` | env var | `180` | Seconds the model server may stay silent to the health probe (`GET /models`, every 15 seconds; not run for a hosted API or a replay) before the run ends as for a dead server: what is harvested is written, the rest is not, exit 1 | `runner.watch_server` |
 | `EXTRACT_SHOW_UNPARSABLE` | env var | `20` | How many unreadable replies of a run the log shows with their start and finish reason; the cause is logged for every one | `runner._unparsable` |
 | `EXTRACT_LIMIT_ADAPTIVE` | env var | `1` | `0` turns off the adaptive request limit, the scheduler and the windows asked ahead; the pools alone then bound the requests | `runner.start_limit` |
@@ -1952,9 +2012,10 @@ parameter carries at once, and the widest slot a field request offers, its
 options with their definitions as the model reads them (`runner.field_slots`).
 For scenarios that slot is the value of `study_sector` asked again, 154
 entries in 63,230 characters. A run needs the largest of these budgets over
-the prompts it sends (`runner.request_budget`): the rows, field, phrase
-and anchors prompts, and the frame prompt only where the profile names
-frame axes (`runner.sent_prompt_ids`). The queries prompt is a list of
+the prompts it sends (`runner.request_budget`): in a harvest from the survey
+the survey, the two reading and the combing prompts; field by field the rows,
+field, phrase and anchors prompts, and the frame prompt only where the profile
+names frame axes (`runner.sent_prompt_ids`). The queries prompt is a list of
 search templates no request carries, and the review prompt has a line of
 its own in the doctor, so neither counts. That number, in tokens per
 request, is what `--print-context-budget` prints, what the doctor's extract
@@ -2255,6 +2316,14 @@ Author: Felix Vossel
 <summary><code>docpipe/extraction/runner.py</code></summary>
 
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
+
+A run harvests from the survey of each plan wherever its profile can
+(`surveyed_flow`: the spec names groups and the profile writes the survey,
+reading and combing prompts): survey, reading and combing per document
+(`surveyed.py`), then the fold, the compute step and the file with its stamp
+as below. A profile that cannot yet is harvested field by field, the flow the
+rest of this note describes; the passes over a stored harvest run on the
+steps of whichever flow the run has.
 
 This module supplies the loop's expensive dependencies from the real world:
 FAISS retrieval with owner exclusion, the harvesting LLM call, and locating a

@@ -4,6 +4,14 @@
 
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
+A run harvests from the survey of each plan wherever its profile can
+(`surveyed_flow`: the spec names groups and the profile writes the survey,
+reading and combing prompts): survey, reading and combing per document
+(`surveyed.py`), then the fold, the compute step and the file with its stamp
+as below. A profile that cannot yet is harvested field by field, the flow the
+rest of this note describes; the passes over a stored harvest run on the
+steps of whichever flow the run has.
+
 This module supplies the loop's expensive dependencies from the real world:
 FAISS retrieval with owner exclusion, the harvesting LLM call, and locating a
 quote on its page in the source PDF, plus resume stamps and the CLI. Heavy
@@ -1562,6 +1570,10 @@ Asked again with the cause when the reply is no JSON object, as every
 request of the stage is; a reply cut off at its limit is not rescued.
 Each answer is traced as `<where>_ask` with *noted*.
 
+A request whose last attempt ended on a 429, a 5xx or a timeout was
+never answered, so its document is noted (`UNSERVED`) and goes
+unstamped, as for every request of the run.
+
 ### make_reader
 
 ```python
@@ -1589,13 +1601,14 @@ for the search sentences, `make_more_sources` in a harvest.
 def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
                 content: Optional[Callable] = None,
                 every: Optional[Callable] = None,
-                image_root: Optional[Path] = None)
+                image_root: Optional[Path] = None, scope: str = "")
 ```
 
 The survey of whole plans (`survey.Survey`), or None when the profile
 writes no prompt for it or its spec names no groups. *every* is
 (document, exclude) -> passages, read from *db_path* when not given.
-A figure goes with its crop, one to a context.
+A figure goes with its crop, one to a context. *scope* names a survey of
+part of a plan, kept beside the whole one's.
 
 ### make_frame_asker
 
@@ -2184,6 +2197,24 @@ provenance and the box a reader sees are produced by one implementation.
 A section can run over a page break, so the section's other pages are
 tried too - bounded, because this opens the PDF each time.
 
+### flow_prompts
+
+```python
+def flow_prompts(flow: Optional[str] = None) -> tuple
+```
+
+The prompts a harvest of *flow* (this run's when None) sends.
+
+### surveyed_flow
+
+```python
+def surveyed_flow(spec: Spec, profile=None) -> bool
+```
+
+Whether a run harvests from the survey: its spec names groups and the
+profile writes every prompt of it. Otherwise it harvests field by field
+as before, which is where a profile not yet moved over stays.
+
 ### producer
 
 ```python
@@ -2506,21 +2537,23 @@ which is the very contract the prompt shows the model.
 ### sent_prompt_ids
 
 ```python
-def sent_prompt_ids(framed: bool) -> tuple
+def sent_prompt_ids(framed: bool, flow: Optional[str] = None) -> tuple
 ```
 
 The prompts a harvest sends to the model as a system message.
 
-The rows request, the field request, the sentence a document is searched
-with and the anchor questions; the frame request only when the profile has
-frame axes, because `ask_frame` does not exist otherwise. Not the queries
-(a list of search templates, never sent) and not the review, which has a
-line of its own in the doctor.
+From the survey (`SURVEYED`): the survey, the two reading requests and
+the combing. Field by field: the rows request, the field request, the
+sentence a document is searched with and the anchor questions; the frame
+request only when the profile has frame axes, because `ask_frame` does
+not exist otherwise. Not the queries (a list of search templates, never
+sent) and not the review, which has a line of its own in the doctor.
 
 ### request_budget
 
 ```python
-def request_budget(spec, framed: bool, profile=None) -> int
+def request_budget(spec, framed: bool, profile=None,
+                   flow: Optional[str] = None) -> int
 ```
 
 Tokens the largest request this run sends needs, per request.
