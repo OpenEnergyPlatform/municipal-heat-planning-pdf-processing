@@ -96,6 +96,17 @@ BY_UNKNOWN, and never the harvest. `--recheck` deletes the stamps, so a
 position can outlive the list it was written for; reading that as the
 harvest would put a top-up's answer under a model that never saw it.
 
+### value_schema
+
+```python
+def value_schema(slot: Slot) -> dict
+```
+
+The answers a coordinate can take in a grammar: one entry of its list,
+UNSTATED included; for a number an integer or UNSTATED; else a wording.
+UNSTATED is an answer of every kind: a grammar that takes only an integer
+for a year leaves the model no way to say the passage prints none.
+
 ### parameter_slot
 
 ```python

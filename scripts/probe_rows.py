@@ -254,6 +254,11 @@ def survey_over(passages: dict, spec, args) -> list:
         row.update({
             "read_seconds": round(time.time() - read_started, 1),
             "read_requests": sum(r.asked for r in reads),
+            "asked_again": sum(1 for r in reads if r.asked > 1),
+            "corrections": sum(r.corrected for r in reads),
+            "refused_first": dict(sum((Counter(r.failed) for r in reads),
+                                      Counter())),
+            "coordinates_unanswered": sum(r.unanswered for r in reads),
             "unread": sum(1 for r in reads if r.unread),
             "faulty": [r.faulty for r in reads if r.faulty],
             "cells_not_read": sum(r.skipped for r in reads),

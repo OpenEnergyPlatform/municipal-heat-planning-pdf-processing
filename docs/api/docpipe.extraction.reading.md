@@ -14,11 +14,20 @@ row "27 % | 28 % | 27 % | 23 %" gives each 27 % its own column. A section or
 a figure is read in one request that names its values with every coordinate
 at once, each with its own quote.
 
+Every coordinate is answered: the grammar requires each of them, a value's
+entry in text and a table's entry for the whole table, and "the passage does
+not say" is one of the answers (`fields.UNSTATED`). One request for all
+coordinates is otherwise the request that lets a model drop the one it is
+unsure of (fields.py).
+
 Nothing is checked here. Every coordinate goes through `pipeline.merge_field`,
 the check every field answer of the harvest goes through, and every value
-through `fold_batch`. A frame coordinate the request leaves open is taken from
-the survey's tuple of the passage, with its quote, where the survey named one
-(window `frame`).
+through `fold_batch`. What that check refuses is asked once more, with the
+reason it was refused for, as the harvest asks a failed field answer again;
+a coordinate the reply left out is asked for by name. A frame coordinate the
+passage leaves open is taken from the survey's tuple of the passage, with its
+quote, where the survey named one (window `frame`). A coordinate no reply
+answered ends `unanswered`.
 
 Author: Felix Vossel
 
@@ -57,6 +66,9 @@ Fields:
 - `skipped: int = 0`: cells of value rows and columns not read
 - `faulty: Optional[str] = None`
 - `unread: bool = False`: no readable reply
+- `corrected: int = 0`: corrections the second request carried
+- `failed: dict = field(default_factory=dict)`: what the check refused of the first reply, by reason
+- `unanswered: int = 0`: coordinates no reply answered
 
 ### Reader
 
@@ -67,9 +79,10 @@ class Reader
 (document_id, survey, passages) -> [Read], one per parameter and
 passage the survey named for it.
 
-*ask_table(source, grid, parameter, slots, known)* and
-*ask_text(source, parameter, slots, known)* are one request each: the
-reply as a dict, CUT, or None. *shown_with(source)* is what a
+*ask_table(source, grid, parameter, slots, known, corrections)* and
+*ask_text(source, parameter, slots, known, corrections)* are one request
+each: the reply as a dict, CUT, or None; *corrections* is None the first
+time and what was wrong the second. *shown_with(source)* is what a
 coordinate's quote may stand in besides the passage: its section's
 heading. *pool* reads passages side by side.
 
@@ -152,14 +165,21 @@ def known_of(tuples: list, frame_slots: list) -> list
 
 ```python
 def table_payload(source: Source, grid: Grid, parameter, slots: list,
-                  known: list) -> dict
+                  known: list, corrections: Optional[list] = None) -> dict
 ```
+
+The table request; with *corrections* the same request asked once
+more, what was wrong with the first reply beside it.
 
 ### table_response_format
 
 ```python
 def table_response_format(slots: list) -> dict
 ```
+
+Every coordinate answered, at least for the whole table: its entry
+there is the answer of every value no row or column entry answers, and
+UNSTATED when the table does not print it.
 
 ### table_rows
 
@@ -177,21 +197,39 @@ its quote the table row, its head the words over its column.
 def table_replies(reply: dict, slot, at: dict) -> list
 ```
 
-[(window, field reply)] of one coordinate of a table reply, the most
-particular first: a row label, then a column head, then the table.
+[(level, window, field reply)] of one coordinate of a table reply,
+the most particular first: a row label, then a column head, then the
+table.
+
+### table_corrections
+
+```python
+def table_corrections(failed: list, at: dict) -> list
+```
+
+What the check refused of a table reply, once per coordinate and
+place: [{coordinate, row | column, what}], the row or column numbered as
+the request numbered it, neither for the whole table.
 
 ### text_payload
 
 ```python
 def text_payload(source: Source, parameter, slots: list,
-                 known: list) -> dict
+                 known: list, corrections: Optional[list] = None) -> dict
 ```
+
+The request of a section or a figure; with *corrections* the same
+request asked once more for the values the check refused something of.
 
 ### text_response_format
 
 ```python
-def text_response_format(parameter, slots: list) -> dict
+def text_response_format(parameter, slots: list,
+                         labels: Optional[list] = None) -> dict
 ```
+
+Every value with every coordinate. Asked again, each entry names the
+value of the first reply it answers for, one of *labels*.
 
 ### text_rows
 
@@ -206,6 +244,27 @@ def text_rows(reply: dict) -> tuple
 ```python
 def text_replies(entries: dict, slot) -> list
 ```
+
+### value_failure
+
+```python
+def value_failure(claim: dict, source: Source) -> Optional[str]
+```
+
+Why the check of a value refuses it, or None: a number its quote does
+not print (the harvest's own `number_outside_quote`), a quote not in its
+passage. Said as the harvest says it.
+
+### text_corrections
+
+```python
+def text_corrections(rows: list, failed: list, source: Source,
+                     slots: list) -> list
+```
+
+What the check refused of a text reply, one entry per value it
+refused something of: [{row, value, quote, what: {value | coordinate:
+reason}}]. A coordinate the reply left out is named as missing.
 
 ### same
 

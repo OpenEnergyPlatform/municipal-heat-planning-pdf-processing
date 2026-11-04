@@ -167,6 +167,18 @@ class Slot:
         return out
 
 
+def value_schema(slot: Slot) -> dict:
+    """The answers a coordinate can take in a grammar: one entry of its list,
+    UNSTATED included; for a number an integer or UNSTATED; else a wording.
+    UNSTATED is an answer of every kind: a grammar that takes only an integer
+    for a year leaves the model no way to say the passage prints none."""
+    if slot.is_closed:
+        return {"enum": list(slot.answerable())}
+    if slot.kind == NUMBER:
+        return {"anyOf": [{"type": "integer"}, {"enum": [UNSTATED]}]}
+    return {"type": "string"}
+
+
 def _options(vocabulary: dict, definitions: Optional[dict] = None) -> tuple:
     """The closed list as options, first label canonical, rest synonyms.
 

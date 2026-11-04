@@ -5,20 +5,32 @@ row label before its column head before the whole table, and only through
 the field check; a frame coordinate left open takes the survey's one tuple
 of the passage, but not against a year the row read under its own head.
 
+Every coordinate is answered: the grammar wants each coordinate of a value
+in text and each coordinate of a table for the whole table, and a year can
+be answered as not printed. What the check refuses of a reply is asked once
+more with its reason, and what the second reply answers is taken, but never
+over a coordinate read the first time, and never a third time; a reply the
+check takes whole is asked once. A coordinate left out is asked for by name,
+and one no reply answers ends unanswered.
+
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
 import json
 from pathlib import Path
 
+import jsonschema
+
 from docpipe.extraction import fields, reading
 from docpipe.extraction.pipeline import Source
 from docpipe.extraction.spec import load as load_spec
+from docpipe.extraction.wording import say
 
 SPEC = load_spec(json.loads((Path(__file__).resolve().parent.parent
                              / "profiles" / "kwp" / "extraction_spec.json")
                             .read_text(encoding="utf-8")))
 EMISSION = SPEC.by_uri["emission"]
 SLOTS = {slot.name: slot for slot in reading.slots_of(SPEC, EMISSION)}
+UNSTATED = fields.UNSTATED
 
 TABLE = ("Tabelle 3: Treibhausgasemissionen der Stadt im Jahr 2022\n"
          "| Bilanz | Haushalte | GHD | gesamt |\n"
@@ -26,6 +38,8 @@ TABLE = ("Tabelle 3: Treibhausgasemissionen der Stadt im Jahr 2022\n"
          "| | in t CO2 | in t CO2 | in t CO2 |\n"
          "| Erdgas | 1.200 | 800 | 2.000 |\n"
          "| Heizöl | 27 | 28 | 27 |")
+TEXT = Source("section", 6, "Im Jahr 2022 fielen rund 300 t CO2 bei Erdgas an.",
+              {"document_id": 7, "section_title": "Bilanz"})
 
 
 def table(text=TABLE):
@@ -82,8 +96,8 @@ def merged(reply):
     grid = reading.grid_of(TABLE)
     rows, at, _ = reading.table_rows(reply, grid)
     for name in ("carrier", "sector", "unit"):
-        for window, field_reply in reading.table_replies(reply, SLOTS[name],
-                                                         at):
+        for _level, window, field_reply in reading.table_replies(
+                reply, SLOTS[name], at):
             reading.merge_field(rows, [table()], SLOTS[name], field_reply,
                                 window=window)
     return rows
@@ -149,22 +163,192 @@ def test_two_tuples_or_a_year_of_its_own_take_nothing_from_the_survey():
     assert rows[0].claim.get("scenario_state") != "read"
 
 
+# -- every coordinate answered -------------------------------------------------
+
+def value_grammar(labels=None):
+    return reading.text_response_format(
+        EMISSION, list(SLOTS.values()), labels)["json_schema"]["schema"]
+
+
+def table_grammar():
+    return reading.table_response_format(
+        list(SLOTS.values()))["json_schema"]["schema"]
+
+
+def everything(**given):
+    """Every coordinate of an emission value: not printed but for *given*."""
+    out = {name: {"value": UNSTATED} for name in SLOTS}
+    out.update(given)
+    return out
+
+
+UNIT = {"value": "t CO2", "quote": "rund 300 t CO2"}
+VALUE = {"value": 300, "quote": "rund 300 t CO2"}
+
+
+def test_the_grammar_wants_every_coordinate_of_a_value_in_text():
+    whole = {"values": [dict(VALUE, **everything(unit=UNIT))]}
+    jsonschema.validate(whole, value_grammar())
+    without_year = {"values": [{k: v for k, v in whole["values"][0].items()
+                                if k != "year"}]}
+    try:
+        jsonschema.validate(without_year, value_grammar())
+    except jsonschema.ValidationError:
+        return
+    raise AssertionError("a value without its year passed the grammar")
+
+
+def test_the_grammar_wants_every_coordinate_of_a_table_for_the_whole_table():
+    whole = {"value_columns": [2], "value_rows": [2],
+             "coordinates": {name: {"table": {"value": UNSTATED}}
+                             for name in SLOTS}}
+    jsonschema.validate(whole, table_grammar())
+    for broken in ({name: entry for name, entry in
+                    whole["coordinates"].items() if name != "carrier"},
+                   dict(whole["coordinates"], carrier={"rows": []})):
+        try:
+            jsonschema.validate(dict(whole, coordinates=broken),
+                                table_grammar())
+        except jsonschema.ValidationError:
+            continue
+        raise AssertionError("a table without its carrier passed the "
+                             "grammar")
+
+
+def test_a_year_can_be_answered_as_not_printed_and_only_as_a_year():
+    year = reading.answer_schema(SLOTS["year"])
+    jsonschema.validate({"value": 2022}, year)
+    jsonschema.validate({"value": UNSTATED}, year)
+    try:
+        jsonschema.validate({"value": "2022 bis 2030"}, year)
+    except jsonschema.ValidationError:
+        return
+    raise AssertionError("a year as text passed the grammar")
+
+
+# -- asked again with the reason -----------------------------------------------
+
+def read_text(*replies):
+    """What reading TEXT came to, and what each request was asked with."""
+    calls = []
+
+    def ask_text(source, parameter, slots, known, corrections=None):
+        calls.append(corrections)
+        return replies[min(len(calls), len(replies)) - 1]
+
+    reader = reading.Reader(SPEC, None, ask_text, FRAME)
+    read = reader.read(7, EMISSION, TEXT, [], [], {("section", 6): TEXT})
+    return read, calls
+
+
+def read_table(*replies):
+    calls = []
+
+    def ask_table(source, grid, parameter, slots, known, corrections=None):
+        calls.append(corrections)
+        return replies[min(len(calls), len(replies)) - 1]
+
+    reader = reading.Reader(SPEC, ask_table, None, FRAME)
+    read = reader.read(7, EMISSION, table(), [], [], {("table", 5): table()})
+    return read, calls
+
+
+WRONG_CARRIER = {"value": "Erdgas", "quote": "Erdgas steht hier nicht"}
+RIGHT_CARRIER = {"value": "Erdgas", "quote": "300 t CO2 bei Erdgas"}
+
+
+def test_a_coordinate_the_check_refuses_is_asked_again_with_its_reason():
+    read, calls = read_text(
+        {"values": [dict(VALUE, **everything(unit=UNIT,
+                                             carrier=WRONG_CARRIER))]},
+        {"values": [dict(VALUE, row="R1",
+                         **everything(unit=UNIT, carrier=RIGHT_CARRIER))]})
+    assert calls[0] is None and len(calls) == 2
+    assert calls[1] == [{"row": "R1", "value": 300, "quote": "rund 300 t CO2",
+                         "what": {"carrier": say("quote_not_in_source")}}]
+    claim = read.claims[0]
+    assert claim["carrier"] == "Erdgas" and claim["carrier_state"] == "read"
+    assert read.asked == 2
+
+
+def test_a_number_its_quote_does_not_print_is_asked_again_and_replaced():
+    read, calls = read_text(
+        {"values": [dict(VALUE, value=300000, **everything(unit=UNIT))]},
+        {"values": [dict(VALUE, row="R1", **everything(unit=UNIT))]})
+    assert set(calls[1][0]["what"]) == {"value"}
+    assert read.claims[0]["value"] == 300
+
+
+def test_a_table_coordinate_the_check_refuses_is_asked_again_for_its_row():
+    def reply(carrier_quote):
+        coordinates = {name: {"table": {"value": UNSTATED}} for name in SLOTS}
+        coordinates["unit"] = {"table": {
+            "value": "t CO2", "quote": "| | in t CO2 | in t CO2 | in t CO2 |"}}
+        coordinates["carrier"] = {
+            "rows": [{"row": 2, "value": "Erdgas", "quote": carrier_quote}],
+            "table": {"value": UNSTATED}}
+        return {"value_columns": [2], "value_rows": [2],
+                "coordinates": coordinates}
+
+    read, calls = read_table(reply("| Erdgas steht nicht |"),
+                             reply("| Erdgas | 1.200 | 800 | 2.000 |"))
+    assert calls[1] == [{"coordinate": "carrier", "row": 2,
+                         "what": say("quote_not_in_source")}]
+    assert read.claims[0]["carrier_state"] == "read"
+
+
+def test_a_reply_wrong_twice_is_not_asked_a_third_time():
+    wrong = dict(VALUE, **everything(unit=UNIT, carrier=WRONG_CARRIER))
+    read, calls = read_text({"values": [wrong]},
+                            {"values": [dict(wrong, row="R1")]})
+    assert len(calls) == 2
+    assert read.claims[0]["carrier_state"] == "unbacked"
+
+
+def test_a_reply_the_check_takes_whole_is_asked_once():
+    read, calls = read_text(
+        {"values": [dict(VALUE, **everything(unit=UNIT,
+                                             carrier=RIGHT_CARRIER))]})
+    assert calls == [None] and read.asked == 1
+
+
+def test_a_coordinate_read_the_first_time_stays_as_read():
+    first = dict(VALUE, **everything(carrier=RIGHT_CARRIER))
+    del first["unit"]
+    read, calls = read_text(
+        {"values": [first]},
+        {"values": [dict(VALUE, row="R1",
+                         **everything(unit=UNIT, carrier={"value": UNSTATED}))]})
+    assert set(calls[1][0]["what"]) == {"unit"}
+    claim = read.claims[0]
+    assert claim["carrier"] == "Erdgas" and claim["carrier_state"] == "read"
+    assert claim["unit_state"] == "read"
+
+
+def test_a_coordinate_left_out_is_asked_for_by_name_and_ends_unanswered():
+    entry = dict(VALUE, **everything(unit=UNIT))
+    del entry["year"]
+    read, calls = read_text({"values": [entry]},
+                            {"values": [dict(entry, row="R1")]})
+    assert calls[1][0]["what"] == {"year": say("key_missing", key="year")}
+    assert read.claims[0]["year_state"] == "unanswered"
+    assert read.unanswered == 1
+
+
 def test_a_reader_reads_a_table_as_one_request_and_text_value_by_value():
     asked = []
 
-    def ask_table(source, grid, parameter, slots, known):
+    def ask_table(source, grid, parameter, slots, known, corrections=None):
         asked.append(("table", known))
+        coordinates = {name: {"table": {"value": UNSTATED}} for name in SLOTS}
+        coordinates["unit"] = {"table": {
+            "value": "t CO2", "quote": "| | in t CO2 | in t CO2 | in t CO2 |"}}
         return {"value_columns": [2, 3], "value_rows": [2],
-                "coordinates": {}}
+                "coordinates": coordinates}
 
-    def ask_text(source, parameter, slots, known):
+    def ask_text(source, parameter, slots, known, corrections=None):
         asked.append(("text", known))
-        return {"values": [{"value": 300, "quote": "rund 300 t CO2",
-                            "unit": {"value": "t CO2",
-                                     "quote": "rund 300 t CO2"}}]}
-
-    text = Source("section", 6, "Im Jahr fielen rund 300 t CO2 an.",
-                  {"document_id": 7, "section_title": "Bilanz"})
+        return {"values": [dict(VALUE, **everything(unit=UNIT))]}
 
     class Found:
         answers = {}
@@ -177,7 +361,7 @@ def test_a_reader_reads_a_table_as_one_request_and_text_value_by_value():
             return [TUPLE] if owner == ("table", 5) else []
 
     reader = reading.Reader(SPEC, ask_table, ask_text, FRAME)
-    reads = reader(7, Found(), {("table", 5): table(), ("section", 6): text})
+    reads = reader(7, Found(), {("table", 5): table(), ("section", 6): TEXT})
     assert [kind for kind, _ in asked] == ["table", "text"]
     assert asked[0][1] == [{"scenario": "Bestand", "year": 2022}]
     values = {c["value"]: c for r in reads for c in r.claims}
@@ -185,3 +369,4 @@ def test_a_reader_reads_a_table_as_one_request_and_text_value_by_value():
     assert values[300]["unit"] == "t CO2" and values[300]["unit_state"] \
         == "read"
     assert values[1200]["year"] == 2022
+    assert values[300]["year_state"] == "unstated"

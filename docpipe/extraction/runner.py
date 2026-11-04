@@ -1868,19 +1868,21 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
     def document_of(source) -> int:
         return int((source.provenance or {}).get("document_id") or 0)
 
-    def ask_table(source, grid, parameter, slots, known):
+    def ask_table(source, grid, parameter, slots, known, corrections=None):
         text = json.dumps(reading_map.table_payload(
-            source, grid, parameter, slots, known), ensure_ascii=False,
-            indent=2)
+            source, grid, parameter, slots, known, corrections),
+            ensure_ascii=False, indent=2)
         return ask_in_grammar(
             client, table_prompt, [{"role": "user", "content": text}],
             reading_map.table_response_format(slots), document_of(source),
             "read_table", "coordinates", parameter=parameter.uri,
-            owner=source.owner_id, rows=len(grid.body))
+            owner=source.owner_id, rows=len(grid.body),
+            corrections=len(corrections or ()))
 
-    def ask_text(source, parameter, slots, known):
+    def ask_text(source, parameter, slots, known, corrections=None):
         text = json.dumps(reading_map.text_payload(
-            source, parameter, slots, known), ensure_ascii=False, indent=2)
+            source, parameter, slots, known, corrections),
+            ensure_ascii=False, indent=2)
         content: object = text
         if source.owner_kind == "figure" and source.image_path \
                 and ATTACH_IMAGES:
@@ -1890,10 +1892,12 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
                 content = [{"type": "text", "text": text}, part]
         return ask_in_grammar(
             client, text_prompt, [{"role": "user", "content": content}],
-            reading_map.text_response_format(parameter, slots),
+            reading_map.text_response_format(
+                parameter, slots,
+                [c["row"] for c in corrections or ()] or None),
             document_of(source), "read_text", "values",
             parameter=parameter.uri, kind=source.owner_kind,
-            owner=source.owner_id)
+            owner=source.owner_id, corrections=len(corrections or ()))
 
     def shown_with(source) -> list:
         provenance = source.provenance or {}
@@ -3760,15 +3764,8 @@ def field_response_format(slot) -> dict:
     `quote` is not asked of UNSTATED), and what the reply says is verified by
     `merge_field` as before.
     """
-    if slot.kind == fields.CHOICE and slot.options:
-        value = {"enum": list(slot.answerable())}
-    elif slot.kind == fields.NUMBER:
-        value = {"anyOf": [{"type": "integer"},
-                           {"enum": [fields.UNSTATED]}]}
-    else:
-        value = {"type": "string"}
-    said = {"value": value, "value_raw": {"type": "string"},
-            "quote": {"type": "string"}}
+    said = {"value": fields.value_schema(slot),
+            "value_raw": {"type": "string"}, "quote": {"type": "string"}}
     answer = {"type": "object", "properties": said,
               "additionalProperties": False}
     group = {"type": "object",

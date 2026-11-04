@@ -11,25 +11,37 @@ row "27 % | 28 % | 27 % | 23 %" gives each 27 % its own column. A section or
 a figure is read in one request that names its values with every coordinate
 at once, each with its own quote.
 
+Every coordinate is answered: the grammar requires each of them, a value's
+entry in text and a table's entry for the whole table, and "the passage does
+not say" is one of the answers (`fields.UNSTATED`). One request for all
+coordinates is otherwise the request that lets a model drop the one it is
+unsure of (fields.py).
+
 Nothing is checked here. Every coordinate goes through `pipeline.merge_field`,
 the check every field answer of the harvest goes through, and every value
-through `fold_batch`. A frame coordinate the request leaves open is taken from
-the survey's tuple of the passage, with its quote, where the survey named one
-(window `frame`).
+through `fold_batch`. What that check refuses is asked once more, with the
+reason it was refused for, as the harvest asks a failed field answer again;
+a coordinate the reply left out is asked for by name. A frame coordinate the
+passage leaves open is taken from the survey's tuple of the passage, with its
+quote, where the survey named one (window `frame`). A coordinate no reply
+answered ends `unanswered`.
 
 Author: Felix Vossel
 """
 from __future__ import annotations
 
 import collections
+import json
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Callable, Optional
 
 from . import fields
 from .pipeline import (READ, Batch, Row, Source, WorkItem, column_head,
-                       merge_field, option_named, printed_lines, row_label)
-from .verify import numbers_in
+                       mark_unanswered, merge_field, option_named,
+                       printed_lines, row_label)
+from .verify import number_outside_quote, numbers_in, quote_in
+from .wording import say
 
 READ_TABLE_PROMPT_ID = "extraction/read_table"
 READ_TEXT_PROMPT_ID = "extraction/read_text"
@@ -104,13 +116,8 @@ def coordinate_shown(slot) -> dict:
 def answer_schema(slot, where: Optional[str] = None) -> dict:
     """One coordinate's answer as the grammar takes it, at a row or a column
     when *where* names it."""
-    if slot.is_closed:
-        value = {"enum": sorted(slot.answerable())}
-    elif slot.kind == fields.NUMBER:
-        value = {"type": "integer"}
-    else:
-        value = {"type": "string"}
-    properties = {"value": value, "value_raw": {"type": "string"},
+    properties = {"value": fields.value_schema(slot),
+                  "value_raw": {"type": "string"},
                   "quote": {"type": "string"}}
     required = ["value"]
     if where:
@@ -128,9 +135,11 @@ def known_of(tuples: list, frame_slots: list) -> list:
 # -- a table -------------------------------------------------------------------
 
 def table_payload(source: Source, grid: Grid, parameter, slots: list,
-                  known: list) -> dict:
+                  known: list, corrections: Optional[list] = None) -> dict:
+    """The table request; with *corrections* the same request asked once
+    more, what was wrong with the first reply beside it."""
     provenance = source.provenance or {}
-    return {
+    payload = {
         "table": {"section": provenance.get("section_title"),
                   "text": source.text},
         "columns": [{"column": c, "head": column_head(grid.text, c,
@@ -143,21 +152,28 @@ def table_payload(source: Source, grid: Grid, parameter, slots: list,
                       "definition": parameter.description},
         "coordinates": {slot.name: coordinate_shown(slot) for slot in slots},
         "known": known}
+    if corrections:
+        payload["corrections"] = corrections
+    return payload
 
 
 def table_response_format(slots: list) -> dict:
+    """Every coordinate answered, at least for the whole table: its entry
+    there is the answer of every value no row or column entry answers, and
+    UNSTATED when the table does not print it."""
     coordinates = {
         slot.name: {"type": "object", "properties": {
             "table": answer_schema(slot),
             "columns": {"type": "array",
                         "items": answer_schema(slot, "column")},
             "rows": {"type": "array", "items": answer_schema(slot, "row")}},
-            "additionalProperties": False}
+            "required": ["table"], "additionalProperties": False}
         for slot in slots}
     schema = {"type": "object", "properties": {
         "value_columns": {"type": "array", "items": {"type": "integer"}},
         "value_rows": {"type": "array", "items": {"type": "integer"}},
         "coordinates": {"type": "object", "properties": coordinates,
+                        "required": [slot.name for slot in slots],
                         "additionalProperties": False},
         "faulty": {"type": "string"}},
         "required": ["value_columns", "value_rows", "coordinates"],
@@ -197,9 +213,13 @@ def _answer(entry: dict) -> dict:
             if key in entry}
 
 
+ROWS, COLUMNS, TABLE = "rows", "columns", "table"
+
+
 def table_replies(reply: dict, slot, at: dict) -> list:
-    """[(window, field reply)] of one coordinate of a table reply, the most
-    particular first: a row label, then a column head, then the table."""
+    """[(level, window, field reply)] of one coordinate of a table reply,
+    the most particular first: a row label, then a column head, then the
+    table."""
     entry = ((reply.get("coordinates") or {}).get(slot.name)
              if isinstance(reply.get("coordinates"), dict) else None) or {}
     by_row, by_column = collections.defaultdict(list), \
@@ -208,43 +228,77 @@ def table_replies(reply: dict, slot, at: dict) -> list:
         by_row[r].append(label)
         by_column[c].append(label)
     out = []
-    for key, where, labels in (("rows", "row", by_row),
-                               ("columns", "column", by_column)):
+    for key, where, labels in ((ROWS, "row", by_row),
+                               (COLUMNS, "column", by_column)):
         groups = [dict(_answer(answer), rows=labels[answer[where]])
                   for answer in entry.get(key) or ()
                   if isinstance(answer, dict) and answer.get(where) in labels]
         if groups:
-            out.append((("own", 1), {"groups": groups}))
-    whole = entry.get("table")
+            out.append((key, ("own", 1), {"groups": groups}))
+    whole = entry.get(TABLE)
     if isinstance(whole, dict) and at:
-        out.append((("table", 1),
+        out.append((TABLE, ("table", 1),
                     {"groups": [dict(_answer(whole), rows=list(at))]}))
+    return out
+
+
+def table_corrections(failed: list, at: dict) -> list:
+    """What the check refused of a table reply, once per coordinate and
+    place: [{coordinate, row | column, what}], the row or column numbered as
+    the request numbered it, neither for the whole table."""
+    out, seen = [], set()
+    for name, level, failure in failed:
+        place = at.get(failure.get("row"))
+        if level == ROWS and place:
+            where = {"row": place[0]}
+        elif level == COLUMNS and place:
+            where = {"column": place[1]}
+        else:
+            where = {}
+        key = (name, level, tuple(where.values()), failure.get("why"))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"coordinate": name, **where,
+                    "what": failure.get("reason")})
     return out
 
 
 # -- a section or a figure -----------------------------------------------------
 
 def text_payload(source: Source, parameter, slots: list,
-                 known: list) -> dict:
+                 known: list, corrections: Optional[list] = None) -> dict:
+    """The request of a section or a figure; with *corrections* the same
+    request asked once more for the values the check refused something of."""
     provenance = source.provenance or {}
-    return {"source": {"kind": source.owner_kind,
-                       "section": provenance.get("section_title"),
-                       "text": source.text},
-            "parameter": {"key": parameter.uri, "label": parameter.label,
-                          "definition": parameter.description},
-            "coordinates": {slot.name: coordinate_shown(slot)
-                            for slot in slots},
-            "known": known}
+    payload = {"source": {"kind": source.owner_kind,
+                          "section": provenance.get("section_title"),
+                          "text": source.text},
+               "parameter": {"key": parameter.uri, "label": parameter.label,
+                             "definition": parameter.description},
+               "coordinates": {slot.name: coordinate_shown(slot)
+                               for slot in slots},
+               "known": known}
+    if corrections:
+        payload["corrections"] = corrections
+    return payload
 
 
-def text_response_format(parameter, slots: list) -> dict:
+def text_response_format(parameter, slots: list,
+                         labels: Optional[list] = None) -> dict:
+    """Every value with every coordinate. Asked again, each entry names the
+    value of the first reply it answers for, one of *labels*."""
     value = ({"type": "number"} if parameter.is_numeric
              else {"type": "string"})
     properties = {"value": value, "value_raw": {"type": "string"},
                   "quote": {"type": "string"}}
     properties.update({slot.name: answer_schema(slot) for slot in slots})
+    required = ["value", "quote", *(slot.name for slot in slots)]
+    if labels:
+        properties = {"row": {"enum": list(labels)}, **properties}
+        required = ["row", *required]
     entry = {"type": "object", "properties": properties,
-             "required": ["value", "quote"], "additionalProperties": False}
+             "required": required, "additionalProperties": False}
     schema = {"type": "object",
               "properties": {"values": {"type": "array", "items": entry}},
               "required": ["values"], "additionalProperties": False}
@@ -272,7 +326,42 @@ def text_replies(entries: dict, slot) -> list:
     answers = {label: _answer(entry[slot.name])
                for label, entry in entries.items()
                if isinstance(entry.get(slot.name), dict)}
-    return [(("own", 1), {"answers": answers})] if answers else []
+    return [(ROWS, ("own", 1), {"answers": answers})] if answers else []
+
+
+def value_failure(claim: dict, source: Source) -> Optional[str]:
+    """Why the check of a value refuses it, or None: a number its quote does
+    not print (the harvest's own `number_outside_quote`), a quote not in its
+    passage. Said as the harvest says it."""
+    quote = claim.get("quote")
+    if not isinstance(quote, str) or not quote_in(source.text or "", quote):
+        return say("quote_not_in_source")
+    if number_outside_quote(claim):
+        return say("value_outside_quote", values=json.dumps(
+            [{"value": claim.get("value"), "quote": quote}],
+            ensure_ascii=False))
+    return None
+
+
+def text_corrections(rows: list, failed: list, source: Source,
+                     slots: list) -> list:
+    """What the check refused of a text reply, one entry per value it
+    refused something of: [{row, value, quote, what: {value | coordinate:
+    reason}}]. A coordinate the reply left out is named as missing."""
+    what: dict = collections.defaultdict(dict)
+    for row in rows:
+        reason = value_failure(row.claim, source)
+        if reason:
+            what[row.label]["value"] = reason
+        for slot in slots:
+            if not row.claim.get(f"{slot.name}_state"):
+                what[row.label][slot.name] = say("key_missing", key=slot.name)
+    for name, _level, failure in failed:
+        if failure.get("row") in {row.label for row in rows}:
+            what[failure["row"]].setdefault(name, failure.get("reason"))
+    return [{"row": row.label, "value": row.claim.get("value"),
+             "quote": row.claim.get("quote"), "what": what[row.label]}
+            for row in rows if what.get(row.label)]
 
 
 # -- one parameter in one passage ----------------------------------------------
@@ -326,15 +415,20 @@ class Read:
     skipped: int = 0              # cells of value rows and columns not read
     faulty: Optional[str] = None
     unread: bool = False          # no readable reply
+    corrected: int = 0            # corrections the second request carried
+    # what the check refused of the first reply, by reason
+    failed: dict = field(default_factory=dict)
+    unanswered: int = 0           # coordinates no reply answered
 
 
 class Reader:
     """(document_id, survey, passages) -> [Read], one per parameter and
     passage the survey named for it.
 
-    *ask_table(source, grid, parameter, slots, known)* and
-    *ask_text(source, parameter, slots, known)* are one request each: the
-    reply as a dict, CUT, or None. *shown_with(source)* is what a
+    *ask_table(source, grid, parameter, slots, known, corrections)* and
+    *ask_text(source, parameter, slots, known, corrections)* are one request
+    each: the reply as a dict, CUT, or None; *corrections* is None the first
+    time and what was wrong the second. *shown_with(source)* is what a
     coordinate's quote may stand in besides the passage: its section's
     heading. *pool* reads passages side by side.
     """
@@ -399,10 +493,14 @@ class Reader:
         batch = Batch(document_id, parameter,
                       [WorkItem(document_id, parameter, source)])
         grid = grid_of(source.text) if source.owner_kind == "table" else None
-        if grid is not None:
-            reply = self.ask_table(source, grid, parameter, slots, known)
-        else:
-            reply = self.ask_text(shown, parameter, slots, known)
+
+        def ask(corrections: Optional[list] = None):
+            if grid is not None:
+                return self.ask_table(source, grid, parameter, slots, known,
+                                      corrections)
+            return self.ask_text(shown, parameter, slots, known, corrections)
+
+        reply = ask()
         result = Read(batch, [], asked=1)
         if not isinstance(reply, dict):
             result.unread = True
@@ -411,30 +509,85 @@ class Reader:
             passages[tuple(one[f"{s.name}_source"])] for one in tuples
             for s in self.frame_slots
             if tuple(one.get(f"{s.name}_source") or ()) in passages]
+        bases = self.bases(pairs)
+
+        def merged(rows: list, replies: dict) -> list:
+            """Every coordinate's answers onto *rows*, the most particular
+            first; [(coordinate, level, failure)] of what the check refused."""
+            failed = []
+            for slot in slots:
+                for level, window, field_reply in replies.get(slot.name, ()):
+                    got = merge_field(rows, evidence, slot, field_reply,
+                                      window=window, bases=bases)
+                    failed.extend((slot.name, level, failure)
+                                  for failure in got["failed"])
+            return failed
+
         if grid is not None:
             rows, at, result.skipped = table_rows(reply, grid)
             result.faulty = reply.get("faulty") or None
-            replies = {slot.name: table_replies(reply, slot, at)
-                       for slot in slots}
+            failed = merged(rows, {slot.name: table_replies(reply, slot, at)
+                                   for slot in slots})
+            corrections = table_corrections(failed, at) + [
+                {"coordinate": slot.name,
+                 "what": say("key_missing", key=slot.name)}
+                for slot in slots
+                if any(not row.claim.get(f"{slot.name}_state")
+                       for row in rows)]
         else:
             rows, entries = text_rows(reply)
-            replies = {slot.name: text_replies(entries, slot)
-                       for slot in slots}
-        bases = self.bases(pairs)
-        for slot in slots:
-            for window, field_reply in replies[slot.name]:
-                merge_field(rows, evidence, slot, field_reply, window=window,
-                            bases=bases)
-            if slot.name == fields.UNIT:
-                for axis in fields.axis_slots(parameter):
-                    fields.apply_derived(rows, axis)
+            failed = merged(rows, {slot.name: text_replies(entries, slot)
+                                   for slot in slots})
+            corrections = text_corrections(rows, failed, source, slots)
+        result.failed = dict(collections.Counter(
+            [failure.get("why") for _name, _level, failure in failed]
+            + ["value" for c in corrections if "value" in c.get("what", ())]))
+        if corrections and rows:
+            result.corrected = len(corrections)
+            result.asked = 2
+            again = ask(corrections)
+            if isinstance(again, dict) and grid is not None:
+                merged(rows, {slot.name: table_replies(again, slot, at)
+                              for slot in slots})
+            elif isinstance(again, dict):
+                merged(rows, self._again(rows, again, corrections, slots))
+        for axis in fields.axis_slots(parameter):
+            fields.apply_derived(rows, axis)
         inherit(rows, [s for s in self.frame_slots
                        if s.name in {x.name for x in slots}],
                 tuples, pairs, evidence)
+        result.unanswered = mark_unanswered(rows, slots)
         result.claims = [row.claim for row in rows]
         if self.trace is not None:
             self.trace("read", document_id, parameter=parameter.uri,
                        kind=source.owner_kind, owner=source.owner_id,
                        table=grid is not None, values=len(rows),
-                       skipped=result.skipped, faulty=result.faulty)
+                       skipped=result.skipped, faulty=result.faulty,
+                       asked=result.asked, corrected=result.corrected,
+                       failed=result.failed, unanswered=result.unanswered)
         return result
+
+    @staticmethod
+    def _again(rows: list, reply: dict, corrections: list,
+               slots: list) -> dict:
+        """The second text reply onto the values it was asked about: an
+        entry answers for the value its "row" names. A value the check
+        refused takes the entry's value and quote; its coordinates are
+        merged as the first reply's were, and one read the first time
+        stays as it was read."""
+        asked = {c["row"]: c for c in corrections}
+        by_label = {row.label: row for row in rows}
+        entries: dict = {}
+        for entry in reply.get("values") or ():
+            label = entry.get("row") if isinstance(entry, dict) else None
+            if label not in asked or label in entries:
+                continue
+            entries[label] = entry
+            if "value" in asked[label]["what"]:
+                claim = by_label[label].claim
+                claim["value"] = entry.get("value")
+                claim["quote"] = entry.get("quote")
+                claim.pop("value_raw", None)
+                if entry.get("value_raw"):
+                    claim["value_raw"] = entry["value_raw"]
+        return {slot.name: text_replies(entries, slot) for slot in slots}

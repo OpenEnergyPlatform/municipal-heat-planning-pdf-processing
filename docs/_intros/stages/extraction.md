@@ -138,11 +138,20 @@ quoted by its table row, so a number is read by its place and a row "27 % | 28
 % | 27 % | 23 %" gives each 27 % its own column. A section or a figure is read
 in one request that names each value with every coordinate at once, each with
 its own quote; one longer than the survey's two pages is read in the survey's
-pieces. Every coordinate goes through `merge_field`, a row label first, then a
-column head, then the table, so the most particular reading stands; a frame
-coordinate still open takes the survey's tuple of the passage when there is
-exactly one and the row read no frame coordinate of its own that contradicts
-it (`reading.inherit`, window `frame`). The values are folded by `fold_batch`.
+pieces. Every coordinate is answered: the grammar requires each coordinate of a
+value in text and, for a table, an entry of each coordinate for the whole table
+that holds wherever no row or column entry does, and `out:unstated` is an
+answer of every kind, a year's too (`fields.value_schema`, shared with the
+field request). Every coordinate goes through `merge_field`, a row label first,
+then a column head, then the table, so the most particular reading stands. What
+the check refuses, a coordinate's answer or a number its quote does not print,
+and a coordinate the reply left out are asked once more in the same request
+with the reason (`corrections`, the harvest's own phrases); the second reply
+fills what is still open and never a coordinate read the first time, and there
+is no third. A frame coordinate still open takes the survey's tuple of the
+passage when there is exactly one and the row read no frame coordinate of its
+own that contradicts it (`reading.inherit`, window `frame`); one no reply
+answered ends `unanswered`. The values are folded by `fold_batch`.
 `scripts/probe_rows.py --documents ... --survey --read` runs both steps.
 
 ### The retrieval plan
