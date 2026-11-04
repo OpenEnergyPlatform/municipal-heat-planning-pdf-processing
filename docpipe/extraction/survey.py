@@ -245,10 +245,12 @@ def read_reply(reply: dict, context: list, parameters: dict, slots: dict,
                                        "why": "no quote"})
             elif len(quote.strip()) < MIN_QUOTE_CHARS:
                 answer.dropped.append({"parameters": named,
-                                       "why": "quote too short"})
+                                       "why": "quote too short",
+                                       "quote": quote})
             elif not quote_in(source.text or "", quote):
                 answer.dropped.append({"parameters": named,
-                                       "why": "quote not in its passage"})
+                                       "why": "quote not in its passage",
+                                       "quote": quote})
             else:
                 answer.parameters = named
                 answer.quote = quote.strip()
