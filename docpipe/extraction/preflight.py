@@ -199,8 +199,9 @@ def reads_back(line: str, spec) -> tuple:
     out unbacked on every row, or the first half would hold of any reply.
 
     The field is the spec's coordinate of that name. A list that the profile
-    only fills per document is no list here, and a name the spec has no
-    coordinate for is read as free text, which the detail says.
+    only fills per document is closed by the example's own answers, as a run
+    closes it by the document's, and a name the spec has no coordinate for
+    is read as free text, which the detail says.
     """
     import json
 
@@ -254,6 +255,23 @@ def reads_back(line: str, spec) -> tuple:
         slot = next((one for parameter in spec.parameters
                      for one in fields.axis_slots(parameter)
                      if one.name == field_name), None)
+        # A list the profile closes per document is closed here by the
+        # example's own answers, as the run closes it by the document's
+        # (`runner.fill_dynamic_axes`): read as free text, an answer that is
+        # an entry of the list would have to stand in its quote itself.
+        if any(axis.dynamic for parameter in spec.parameters
+               for name, axis in parameter.axes.items()
+               if name == field_name):
+            from .runner import fill_dynamic_axes
+            entries = {str(one.get("value")).strip()
+                       for one in said.values() if isinstance(one, dict)
+                       and str(one.get("value") or "").strip()
+                       not in ("", fields.UNSTATED)}
+            closed = fill_dynamic_axes(
+                spec, {field_name: {entry: [entry] for entry in entries}})
+            slot = next((one for parameter in closed.parameters
+                         for one in fields.axis_slots(parameter)
+                         if one.name == field_name), slot)
     free = slot is None
     if free:
         slot = fields.Slot(name=field_name, kind=fields.TEXT)

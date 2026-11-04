@@ -115,7 +115,7 @@ FLAG_PATTERN = (
     r"^(mapped:[a-z_]+:[\s\S]*->[\s\S]*|unmapped:[a-z_]+:[\s\S]*"
     r"|period:unstated"
     r"|review:(agree|disagree|unbacked)"
-    r"|quote_repaired|computed|not_located)$")
+    r"|quote_repaired|computed|catalogue|not_located)$")
 
 # The fifteen families a refusal reason belongs to. Every one is raised in
 # verify.py or pipeline.py and none is composed at runtime from user text.
@@ -362,6 +362,15 @@ def _tuple_schema(spec, parameter) -> dict:
                                    "last with the numbers it was worked out "
                                    "from (inputs) and what they make "
                                    "(expected)."},
+        "catalogue": {"type": "object",
+                      "description": "The open catalogue record a value was "
+                                     "looked up in, not read off the page: "
+                                     "its source and id, what was searched, "
+                                     "what it holds and which of its values "
+                                     "matched the document's. The quote is "
+                                     "the read value it was looked up "
+                                     "with; the flag catalogue goes with "
+                                     "it."},
     }
     required = ["kind", "parameter", "parameter_state", "quote", "tier",
                 "provenance", "value"]

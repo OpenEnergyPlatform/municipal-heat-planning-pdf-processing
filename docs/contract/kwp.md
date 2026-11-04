@@ -381,6 +381,10 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 [stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
 The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
@@ -1180,6 +1184,10 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 ### `carrier_window`
 
 [stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
@@ -2046,6 +2054,10 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 [stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
 The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
@@ -2890,6 +2902,10 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 [stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
 The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
@@ -3451,6 +3467,10 @@ How the row becomes a node:
 - `node`: `organisation`
 - `schema_class`: `Organisation`
 
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
 The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
@@ -3671,6 +3691,10 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 ### `carrier_window`
 
 [stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 

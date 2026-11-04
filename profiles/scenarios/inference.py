@@ -168,6 +168,7 @@ UI = {
     "reason_conflict": "another reading of the same value differs",
     "reason_repaired": "the quote was adjusted afterwards",
     "reason_computed": "computed, not read",
+    "reason_catalogue": "looked up in a catalogue, not read",
     "reason_not_located": "the quote was not found on its page",
     "reason_review_disagree": "a review disagrees",
     "reason_page_transcribed": "from a page a model transcribed",

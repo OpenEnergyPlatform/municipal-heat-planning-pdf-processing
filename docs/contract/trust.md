@@ -51,8 +51,10 @@ closed list: a reason nobody can enumerate is a reason nobody can count
 (`trust.py:27-31`). A coordinate contributes `exhausted:<axis>`,
 `unbacked:<axis>` or `unanswered:<axis>` (`trust.py:106-107`); `exhausted`
 and `unanswered` make a `C`, `unbacked` a `D`. A row's own `flags`
-contribute `repaired`, `computed`, `not_located` or `review:disagree`
-(`FLAG_REASONS`, `trust.py:84-86`), each of them a `D`. `conflict`, a `D`
+contribute `repaired`, `computed`, `catalogue`, `not_located` or
+`review:disagree` (`FLAG_REASONS`, `trust.py`), each of them a `D`;
+`catalogue` marks a value a profile looked up in an open catalogue record
+that values read from the document found (owner decision 2026-11-04). `conflict`, a `D`
 too, is added by a profile's own graph serializer resolving two competing
 readings of one coordinate: kwp settles them first (`settle`: by the plan's
 wording, by rounding, by trust), drops every claimant of what stays tied and
@@ -145,8 +147,8 @@ threshold anybody tuned.
   C  open: a coordinate nobody read, and nothing speaks against what
      was read
   D  in doubt: a coordinate that could not be backed, a repaired quote,
-     a computed number, a contested identity, a second reading that
-     came to something else
+     a computed number, a value looked up in a catalogue, a contested
+     identity, a second reading that came to something else
 
 The reasons form a closed list, because a reason nobody can enumerate
 is a reason nobody can count. C and D are told apart because they ask
@@ -186,6 +188,7 @@ Author: Felix Vossel
 
 A closed list, because a reason nobody can enumerate is a reason nobody can count. The published schema accepts exactly these shapes:
 
+- `^catalogue$`
 - `^computed$`
 - `^not_located$`
 - `^repaired$`
@@ -198,6 +201,7 @@ A closed list, because a reason nobody can enumerate is a reason nobody can coun
 
 | flag on the row | reason it becomes |
 |---|---|
+| `catalogue` | `catalogue` |
 | `computed` | `computed` |
 | `not_located` | `not_located` |
 | `quote_repaired` | `repaired` |

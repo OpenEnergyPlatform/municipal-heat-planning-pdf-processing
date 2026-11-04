@@ -27,7 +27,9 @@ not dropped silently.
 The crawl's DocumentMeta (title, year, doi) is not the source here — it comes
 with the crawl's licence. It is the cross-check: a disagreement between what
 the PDF says and what the crawl said is logged, because one of the two is
-wrong and neither should find that out in production.
+wrong and neither should find that out in production. What the PDF does not
+print of DOI and year the run looks up in OpenAlex with the title and the
+authors it read (`completion.py`); such a value names its record.
 
 ## Functions
 

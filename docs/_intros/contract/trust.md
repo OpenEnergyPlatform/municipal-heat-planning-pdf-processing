@@ -47,8 +47,10 @@ closed list: a reason nobody can enumerate is a reason nobody can count
 (`trust.py:27-31`). A coordinate contributes `exhausted:<axis>`,
 `unbacked:<axis>` or `unanswered:<axis>` (`trust.py:106-107`); `exhausted`
 and `unanswered` make a `C`, `unbacked` a `D`. A row's own `flags`
-contribute `repaired`, `computed`, `not_located` or `review:disagree`
-(`FLAG_REASONS`, `trust.py:84-86`), each of them a `D`. `conflict`, a `D`
+contribute `repaired`, `computed`, `catalogue`, `not_located` or
+`review:disagree` (`FLAG_REASONS`, `trust.py`), each of them a `D`;
+`catalogue` marks a value a profile looked up in an open catalogue record
+that values read from the document found (owner decision 2026-11-04). `conflict`, a `D`
 too, is added by a profile's own graph serializer resolving two competing
 readings of one coordinate: kwp settles them first (`settle`: by the plan's
 wording, by rounding, by trust), drops every claimant of what stays tied and

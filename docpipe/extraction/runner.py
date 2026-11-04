@@ -5899,6 +5899,25 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
     return harvest
 
 
+def make_completer(profile) -> Optional[Callable]:
+    """The step that completes a document's rows from outside the document,
+    after its fold and its computing (`profiles/<name>/completion.py:
+    complete(report, spec)`): `completed(report, spec)`, which adds what it
+    found to the report and returns what it came to, traced as `completion`,
+    or None where nothing was open. None where the profile has no such step.
+    """
+    complete = profile.component("completion", "complete")
+    if complete is None:
+        return None
+
+    def completed(report, spec) -> Optional[dict]:
+        outcome = complete(report, spec)
+        if outcome:
+            trace.event("completion", report.document_id, **outcome)
+        return outcome
+    return completed
+
+
 def make_computer(profile) -> Optional[Callable]:
     """The step that works out what a document's verified rows leave open
     (`compute.py`): `compute(answered, report, locate=, spec=, stop=)`, which
@@ -8414,11 +8433,12 @@ def main(argv: Optional[list] = None) -> int:
     prior_rows = functools.partial(accepted_rows, spec=spec)
 
     computer = make_computer(profile)
+    completer = make_completer(profile)
 
     def verify(entry: tuple, replies: Optional[int] = None) -> bool:
-        """Fold, work out and write one document. *replies* is how many of
-        its requests came back, its batches when not given: for a harvest
-        from the survey the passages its survey answered."""
+        """Fold, work out, complete and write one document. *replies* is how
+        many of its requests came back, its batches when not given: for a
+        harvest from the survey the passages its survey answered."""
         name, report, answered = entry
         replies = len(answered) if replies is None else replies
         fold_answers(answered, report, locate=locate, spec=spec)
@@ -8427,6 +8447,8 @@ def main(argv: Optional[list] = None) -> int:
         if computer is not None and not computer(
                 answered, report, locate=locate, spec=spec, stop=Halted):
             return False
+        if completer is not None:
+            completer(report, spec)
         stamped = finish_document(report, name, args.out, spec_sha,
                                   anchors_sha, answered=replies, spec=spec,
                                   questions=asked.pop(name, None),

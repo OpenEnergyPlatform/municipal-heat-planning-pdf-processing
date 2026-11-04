@@ -211,6 +211,7 @@ UI = {
     "reason_conflict": "eine andere Lesung desselben Werts weicht ab",
     "reason_repaired": "das Zitat wurde nachträglich angeglichen",
     "reason_computed": "berechnet, nicht gelesen",
+    "reason_catalogue": "aus einem Katalog nachgeschlagen, nicht gelesen",
     "reason_not_located": "das Zitat wurde auf seiner Seite nicht gefunden",
     "reason_review_disagree": "eine Prüfung widerspricht",
     "reason_page_transcribed": "aus einer vom Modell abgeschriebenen Seite",

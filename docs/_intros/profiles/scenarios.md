@@ -237,7 +237,10 @@ whatever starts with it.
 Three families of sentinel exist, plus the last entry of each fixed
 vocabulary, which behaves the same way. `SCENARIO_OUT` offers
 `out:family`, for a wording that names a group of runs (a policy
-family, for example) rather than one identified run, and `out:not_documented`, for a scenario the paper names
+family, for example) rather than one identified run: the prompts give it to
+any name that fits several runs and none of them exactly, whatever the runs
+share, their beginning, their climate target or their variant alone (owner
+decision 2026-11-04), and `out:not_documented`, for a scenario the paper names
 that this document's own AR6 list does not carry (`extraction.py`, lines
 83 to 91). `REGION_OUT` offers `out:multiregion` (a named grouping,
 such as a trade bloc, that neither the countries nor the groups carry) and
@@ -447,6 +450,18 @@ own extraction; a disagreement is logged and the crawled value is never
 substituted into the graph, since a published value must carry its own
 evidence, and the crawl's copy is only the cross-check
 (`kg.py`'s module docstring; `_crosscheck`, lines 452 to 468).
+
+What the paper does not print of its DOI and year, often an authors'
+manuscript, the run looks up in OpenAlex, whose records are CC0
+(`completion.py`, owner decisions 2026-11-04). After a document's fold a
+program, no model, searches with the title the harvest read and takes the
+first record only where two of its authors' family names stand among the
+authors read, one where either side names one author. The DOI and the year
+then become rows of `publication_doi` and `publication_date`, the year as
+the parameter defines it and the full date in the record. Each row quotes
+the title it was looked up with, carries the record (`catalogue`) and is a
+D for the reason `catalogue`; the graph names the record above the triple.
+A value the paper prints goes first.
 
 Every triple this serializer writes about a value carries, immediately
 above it, the passage it was read from. By default that passage is a

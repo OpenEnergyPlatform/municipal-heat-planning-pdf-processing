@@ -169,6 +169,21 @@ whole, the sum of the parts), and the number has to be it, to the rounding
 it is written with (owner decision 2026-11-03). A number the rows request
 worked out names no inputs and is held to its output alone.
 
+### wording_of
+
+```python
+def wording_of(raw: dict, parameter: Parameter)
+```
+
+The words a value's quote has to hold.
+
+For a category the tuple carries two things: the class the model mapped
+to and, in *\_raw, how the document worded it. The evidence check is
+about the document, so it runs against the wording, never against the
+class name the mapping produced. Any other value is its own wording: a
+value_raw beside it vouches for nothing but itself (owner decision
+2026-11-04).
+
 ### value_in_quote
 
 ```python

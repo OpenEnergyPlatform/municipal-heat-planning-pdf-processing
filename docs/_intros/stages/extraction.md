@@ -230,6 +230,15 @@ whose request no longer fits the model's window ends `exhausted`; `unstated`
 is from here on a finding about the plan. The ranking is handed in:
 `make_more_sources` in a harvest.
 
+A parameter the survey of the whole plan named no passage for is searched for
+once before it can count as not stated (owner decision 2026-11-04,
+`surveyed.sought_survey`): the same ranking, for the parameter's label, names
+the first passage of the plan for it, and the reading reads it there with its
+own tools to look further, before the combing. That passage is one of the
+parameter's sources, so a reading there that came to nothing leaves the
+parameter `exhausted` and not `unstated`. A survey of part of a plan (a pass
+over a stored harvest) searches nothing; each search is traced as `seek`.
+
 ### The run harvests from the survey
 
 A run harvests from the survey of each plan wherever its profile can
@@ -1021,7 +1030,11 @@ carry the ontology's English names, which stand in no German plan, and
 corpus_m5 had dropped 284,643 quantity answers on exactly that gap before
 this widened (`answer_in_quote`, `pipeline.py`, owner's decision
 2026-09-13); a wording that is given still has to stand in the quote
-itself. A year counts only where its own four digits stand in the quote
+itself. A wording speaks only for a choice from a list: a text answer is
+its own wording and has to stand in its quote itself, whatever is written
+beside it (owner decision 2026-11-04). The preflight reads a prompt's
+example of a list the profile closes per document with the list closed by
+the example's own answers, as the run reads it (`preflight.reads_back`). A year counts only where its own four digits stand in the quote
 in one run, so "2.022 MWh" no longer backs the year 2022 though a dated
 "31.12.2022" still does; and a spelling counts only where no longer
 entry of another option of the same list stands at that spot, so a bare
@@ -1057,7 +1070,9 @@ last check against the spec's closed lists and the literal source text. A
 number is compared digit for digit after `canonical_number` normalises
 locale grouping and decimal marks; a category or text value is compared
 case- and whitespace-folded against its own wording, through `verify.flat`
-(`verify.py`). A category value that is none of its list's entries is
+(`verify.py`): a category's wording is its `value_raw` where one is given,
+any other value's is the value itself (`verify.wording_of`, owner decision
+2026-11-04). A category value that is none of its list's entries is
 refused (`value ... not in vocabulary`), and a grown list reopens that
 answer space for `remap` (`refused_spaces`); a value left out with its
 wording in `value_raw` is the answer that no entry fits and is kept. The set of numbers a quote is checked against,
@@ -1090,7 +1105,8 @@ figure description, an uncheckable model reading of a picture. A prose
 quote that could not be placed on the PDF page still keeps the
 `text_located` tier; it only gains a `not_located` flag (`verify.py`).
 Non-fatal findings are carried as flags: `quote_repaired`, `computed`
-(a sandbox result checked against its own printed output),
+(a sandbox result checked against its own printed output), `catalogue` (a
+value a profile looked up outside the document, below),
 `not_located`, `unmapped:<axis>:<wording>`, and, for an amount over a
 span, `period:unstated` when the spec says the entry chosen for the unit
 names no period (`names_period: false`).
@@ -1185,6 +1201,17 @@ per run cost two to twelve seconds from an image store on a network disk. The
 service answers only once every container stands, which takes about half a
 minute each, one after the other (`KWP_SANDBOX_READY_TIMEOUT`): a run that came
 earlier made a container of its own while podman was still starting, and failed.
+
+### Completing a document from outside it
+
+After the compute step a profile may complete a document's rows from outside
+the document (`runner.make_completer`, `profiles/<name>/completion.py:
+complete(report, spec)`), in the run and in the probe alike. Each lookup is
+traced as `completion` with what it came to, and `stats.py` counts them by
+outcome. scenarios looks up DOI and year where the paper does not print them
+(see the profile). Such a row is built like a computed one: its quote and its
+passage are the read value it was looked up with, the record stands beside it
+(`catalogue`), and the flag `catalogue` makes it a D.
 
 ### Trust levels
 

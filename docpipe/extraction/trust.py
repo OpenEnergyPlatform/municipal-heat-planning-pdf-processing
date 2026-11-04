@@ -21,8 +21,8 @@ threshold anybody tuned.
   C  open: a coordinate nobody read, and nothing speaks against what
      was read
   D  in doubt: a coordinate that could not be backed, a repaired quote,
-     a computed number, a contested identity, a second reading that
-     came to something else
+     a computed number, a value looked up in a catalogue, a contested
+     identity, a second reading that came to something else
 
 The reasons form a closed list, because a reason nobody can enumerate
 is a reason nobody can count. C and D are told apart because they ask
@@ -78,11 +78,15 @@ REVIEW_AGREE = "review:agree"
 REVIEW_DISAGREE = "review:disagree"
 REVIEW_UNBACKED = "review:unbacked"
 
+# A value a profile looked up outside the document, in an open catalogue
+# record its own read values found (owner decision 2026-11-04).
+CATALOGUE = "catalogue"
+
 # Flags that document how the value itself was arrived at. Each is a
 # reason on its own, and each is a different thing for a curator to
 # check.
 FLAG_REASONS = {"quote_repaired": "repaired", "computed": "computed",
-                "not_located": "not_located",
+                "not_located": "not_located", CATALOGUE: CATALOGUE,
                 REVIEW_DISAGREE: "review:disagree"}
 
 

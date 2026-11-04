@@ -533,7 +533,7 @@ trust level
 
 trust reason
 : One token in a verdict's `reasons` list, naming why a tuple is not
-  level A: `repaired`, `computed`, `not_located`, `review:disagree`,
+  level A: `repaired`, `computed`, `catalogue`, `not_located`, `review:disagree`,
   `conflict`, `page_transcribed`, or an `exhausted:<axis>`,
   `unanswered:<axis>` or `unbacked:<axis>` pointer at the axis at fault.
   `exhausted` and `unanswered` make a C, `page_transcribed` caps a tuple at B,

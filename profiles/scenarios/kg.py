@@ -24,7 +24,9 @@ not dropped silently.
 The crawl's DocumentMeta (title, year, doi) is not the source here — it comes
 with the crawl's licence. It is the cross-check: a disagreement between what
 the PDF says and what the crawl said is logged, because one of the two is
-wrong and neither should find that out in production.
+wrong and neither should find that out in production. What the PDF does not
+print of DOI and year the run looks up in OpenAlex with the title and the
+authors it read (`completion.py`); such a value names its record.
 """
 from __future__ import annotations
 
@@ -690,6 +692,17 @@ def _evidence_comment(row: dict, document: str) -> list:
     return lines
 
 
+def _catalogue_text(record: dict) -> str:
+    """The catalogue record a looked-up value stands on, as one line
+    (`completion.py`)."""
+    said = [f"looked up in {record.get('source')}: {record.get('id')}"]
+    if record.get("publication_date"):
+        said.append(f"published {record['publication_date']}")
+    if record.get("matched"):
+        said.append("authors matched: " + ", ".join(record["matched"]))
+    return ", ".join(said)
+
+
 def _evidence(subject: str, predicate: str, row: dict, document: str) -> tuple:
     """(link line, node block) for one value's passage.
 
@@ -889,6 +902,11 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
                                 conflict=bool(contested.get(row.get("parameter"))))
                 lines.append(_ttl_comment(render(verdict, TRUST_PROSE,
                                                  join=TRUST_JOIN, row=row)))
+                # A value looked up outside the document names its record on
+                # both branches: its quote is the title it was looked up with.
+                if isinstance(row.get("catalogue"), dict):
+                    lines.append(_ttl_comment(_catalogue_text(
+                        row["catalogue"])))
                 for decision in asked.get(id(row), ()):
                     lines.append(_ttl_comment(decision_text(decision)))
                     recorded.add(id(row))

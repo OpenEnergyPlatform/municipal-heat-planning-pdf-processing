@@ -50,7 +50,7 @@ from .spec import Spec, fold_label
 from .fields import (CHOICE, NUMBER, READ, SAID_UNSTATED, TEXT,
                      UNANSWERED, UNBACKED, UNSTATED)
 from .verify import (MIN_QUOTE_CHARS, Refusal, Verified, canonical_number,
-                     flat, numbers_in, quote_in, verify_tuple)
+                     flat, numbers_in, quote_in, verify_tuple, wording_of)
 from .trust import document_summary
 
 log = logging.getLogger(__name__)
@@ -718,11 +718,16 @@ def _invented_wording(claim: dict, spec=None) -> bool:
     if canonical_number(value) is not None and (
             spec is None or any(p.is_numeric for p in spec.parameters)):
         return False
-    # value_raw first, exactly as value_in_quote does it. A choice carries
-    # the class in `value` and the document's own wording in `value_raw`, and
-    # holding the class name against the passage would refuse every correctly
-    # evidenced choice in the corpus.
-    wording = claim.get("value_raw") or value
+    # The words value_in_quote holds against the quote (`verify.wording_of`).
+    # A choice carries the class in `value` and the document's own wording in
+    # `value_raw`, and holding the class name against the passage would
+    # refuse every correctly evidenced choice in the corpus. Before its
+    # parameter is known a value is taken for a choice, and the verifier
+    # holds it to its own parameter after.
+    parameter = (spec.by_uri.get(claim.get("parameter"))
+                 if spec is not None else None)
+    wording = (wording_of(claim, parameter) if parameter is not None
+               else claim.get("value_raw") or value)
     quote = claim.get("quote")
     if not isinstance(quote, str):
         return True
@@ -967,7 +972,10 @@ def answer_in_quote(slot, given, wording: Optional[str], quote: str) -> bool:
     said = flat(quote).casefold()
     option = (option_named(slot, given)
               if slot.kind == CHOICE and slot.options else None)
-    if wording:
+    # The document's own wording speaks for a choice from a list. A text
+    # answer is its own wording, and one written beside it vouches for
+    # nothing but itself (owner decision 2026-11-04).
+    if wording and slot.kind == CHOICE:
         return stands_in(slot, option, flat(wording).casefold(), said)
     spellings = ((option.label, *option.synonyms) if option is not None
                  else (str(given),))

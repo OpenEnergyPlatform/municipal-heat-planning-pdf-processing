@@ -133,8 +133,9 @@ quote replaced by one that stands in none of those passages has to come
 out unbacked on every row, or the first half would hold of any reply.
 
 The field is the spec's coordinate of that name. A list that the profile
-only fills per document is no list here, and a name the spec has no
-coordinate for is read as free text, which the detail says.
+only fills per document is closed by the example's own answers, as a run
+closes it by the document's, and a name the spec has no coordinate for
+is read as free text, which the detail says.
 
 ### example_verdict
 

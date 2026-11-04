@@ -9,6 +9,14 @@ the passages it named (reading.py) and the combing for what the reading left
 open (combing.py). The run folds what they read, works out what the profile
 computes and writes the file with its stamp, as it writes every harvest.
 
+A parameter the survey of the whole plan named no passage for is searched
+for once before it can count as not stated (owner decision 2026-11-04): the
+combing's search over the whole plan ranks the passages for its label, and
+the reading reads it in the first of them with its own tools to look
+further (`sought_survey`). The passage it was read in is one of its
+sources, so a request that came to nothing there leaves a hole and not a
+silent plan.
+
 What none of them could read is a hole with its reason, never a plan that
 seems silent: a passage the survey left unanswered, and a passage a parameter
 was to be read in that came to no readable reply, each go to the fold as the
@@ -51,6 +59,7 @@ Fields:
 - `replies: int = 0`: Passages the survey answered: none of them means no reply at all.
 - `passages: int = 0`
 - `sources_of: dict = field(default_factory=dict)`: parameter uri -> the passages the survey named for it, and every passage it could not answer (`trust.parameter_states`).
+- `sought: Found = field(default_factory=lambda: Found(True))`: The parameters the survey named no passage for, each with the passage a search of the whole plan read it in (`sought_survey`).
 
 ### SurveyedHarvest
 
@@ -154,14 +163,32 @@ def joined(found: Found, also: Found) -> Found
 One survey of both: what *also* names is read beside what *found*
 names, a passage both answer with the parameters of both.
 
+### sought_survey
+
+```python
+def sought_survey(found: Found, rank: Callable, document_id: int,
+                  parameters: list) -> Found
+```
+
+The survey of *parameters*, which the survey of the whole plan named
+no passage for: each named for the passage the combing's search over the
+whole plan (*rank*) ranks first for its label. What the survey said of
+every passage stands beside it without its parameters, so the reading
+sees the plan's pairs and years as it does anywhere else. A parameter
+the search finds no passage for is left out.
+
 ### taken_of
 
 ```python
 def taken_of(document_id: int, spec, found: Found, reads: list,
-             combed: list, shown: dict) -> Taken
+             combed: list, shown: dict,
+             sought: Optional[Found] = None) -> Taken
 ```
 
-The fold's view of one document's reading, holes included.
+The fold's view of one document's reading, holes included. A
+parameter's sources are the passages the survey named for it, the one a
+search read it in (*sought*) and every passage the survey could not
+answer.
 
 ### take_found
 

@@ -6,6 +6,14 @@ the passages it named (reading.py) and the combing for what the reading left
 open (combing.py). The run folds what they read, works out what the profile
 computes and writes the file with its stamp, as it writes every harvest.
 
+A parameter the survey of the whole plan named no passage for is searched
+for once before it can count as not stated (owner decision 2026-11-04): the
+combing's search over the whole plan ranks the passages for its label, and
+the reading reads it in the first of them with its own tools to look
+further (`sought_survey`). The passage it was read in is one of its
+sources, so a request that came to nothing there leaves a hole and not a
+silent plan.
+
 What none of them could read is a hole with its reason, never a plan that
 seems silent: a passage the survey left unanswered, and a passage a parameter
 was to be read in that came to no readable reply, each go to the fold as the
@@ -102,11 +110,39 @@ class Taken:
     # parameter uri -> the passages the survey named for it, and every
     # passage it could not answer (`trust.parameter_states`).
     sources_of: dict = field(default_factory=dict)
+    # The parameters the survey named no passage for, each with the passage
+    # a search of the whole plan read it in (`sought_survey`).
+    sought: Found = field(default_factory=lambda: Found(True))
+
+
+def sought_survey(found: Found, rank: Callable, document_id: int,
+                  parameters: list) -> Found:
+    """The survey of *parameters*, which the survey of the whole plan named
+    no passage for: each named for the passage the combing's search over the
+    whole plan (*rank*) ranks first for its label. What the survey said of
+    every passage stands beside it without its parameters, so the reading
+    sees the plan's pairs and years as it does anywhere else. A parameter
+    the search finds no passage for is left out."""
+    out = Found(True)
+    merge(out, [Answer(owner, [], answer.quote,
+                       {k: list(v) for k, v in answer.tuples.items()}, [])
+                for owner, answer in found.answers.items()])
+    for parameter in parameters:
+        ranked = rank(document_id, [parameter.label], set())
+        if ranked:
+            merge(out, [Answer((ranked[0].owner_kind, ranked[0].owner_id),
+                               [parameter.uri])])
+    return out
 
 
 def taken_of(document_id: int, spec, found: Found, reads: list,
-             combed: list, shown: dict) -> Taken:
-    """The fold's view of one document's reading, holes included."""
+             combed: list, shown: dict,
+             sought: Optional[Found] = None) -> Taken:
+    """The fold's view of one document's reading, holes included. A
+    parameter's sources are the passages the survey named for it, the one a
+    search read it in (*sought*) and every passage the survey could not
+    answer."""
+    sought = sought if sought is not None else Found(True)
     answered: list = []
     for read in reads:
         source = read.batch.items[0].source
@@ -125,10 +161,11 @@ def taken_of(document_id: int, spec, found: Found, reads: list,
             answered.append(hole(document_id, source, NO_ANSWER))
     unanswered = {tuple(owner) for owner in found.unanswered}
     sources_of = {parameter.uri: {tuple(owner) for owner
-                                  in found.passages_of(parameter.uri)}
+                                  in found.passages_of(parameter.uri)
+                                  + sought.passages_of(parameter.uri)}
                   | unanswered for parameter in spec.parameters}
     return Taken(found, reads, combed, answered, len(found.answers),
-                 len(found.answers) + len(unanswered), sources_of)
+                 len(found.answers) + len(unanswered), sources_of, sought)
 
 
 class SurveyedHarvest:
@@ -201,12 +238,30 @@ class SurveyedHarvest:
             return None
         combed: list = []
         comber = self.comber_of(spec)
+        sought = Found(True)
+        # Only after a survey of the whole plan: a survey of some passages
+        # names none for a parameter the rest of the plan may hold.
+        if comber is not None and passages is None and also is None:
+            missing = [parameter for parameter in spec.parameters
+                       if (not only or parameter.uri in only)
+                       and not found.passages_of(parameter.uri)]
+            sought = sought_survey(found, comber.rank, document_id, missing)
+            if comber.trace is not None:
+                for owner, answer in sought.answers.items():
+                    for uri in answer.parameters:
+                        comber.trace("seek", document_id, parameter=uri,
+                                     kind=owner[0], owner=owner[1])
+            reads = reads + self.reader_of(spec)(document_id, sought, shown,
+                                                 budget)
+            if self.halted():
+                return None
         if comber is not None:
             combed = comber(document_id, reads, shown, frame_pairs(found),
                             budget)
             if self.halted():
                 return None
-        return taken_of(document_id, spec, found, reads, combed, shown)
+        return taken_of(document_id, spec, found, reads, combed, shown,
+                        sought)
 
 
 def take_found(whole: SurveyedHarvest, document_id: int, kept: list,

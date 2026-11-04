@@ -157,6 +157,7 @@ def whole(hits: list, spec, args, passages=None, document_spec=None) -> list:
         args.image_root, rest_of_document=rest_of_document, spec=spec,
         slice_gate=gate, frame_axes=frame_axes, places=places)
     computer = runner.make_computer(profile)
+    completer = runner.make_completer(profile)
     names = sorted({slot.name for parameter in spec.parameters
                     for slot in fields.axis_slots(parameter)}
                    | {"parameter", "value"})
@@ -185,8 +186,10 @@ def whole(hits: list, spec, args, passages=None, document_spec=None) -> list:
         runner.fold_answers(answered, report, locate=None, spec=own)
         if computer is not None:
             computer(answered, report, spec=spec)
+        completion = completer(report, own) if completer else None
         row = {
             "document": document, "passages": len(sources),
+            "completion": completion,
             "seconds": round(time.time() - started, 1),
             "pairs": [{s.name: pair.get(s.name) for s in frame_axes}
                       for pair in pairs],
@@ -212,9 +215,11 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
     per document, as the run makes them."""
     from docpipe.extraction import fields, runner, surveyed
     from docpipe.extraction.pipeline import DocumentReport
+    from docpipe.profile import active_profile
 
     specs = {document: (document_spec(document) if document_spec else None)
              or spec for document in passages}
+    completer = runner.make_completer(active_profile())
 
     def every(document: int, exclude: set) -> list:
         return [source for source in passages.get(document, ())
@@ -298,11 +303,19 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
         read_started = time.time()
         taken = whole(document)
         reads, combed = taken.reads, taken.combed
+        # The parameters the survey named no passage for, each with the
+        # passage a search of the whole plan read it in.
+        row["sought"] = {uri: list(owner)
+                         for owner, answer in taken.sought.answers.items()
+                         for uri in answer.parameters}
         report = DocumentReport(document_id=document,
                                 owners_harvested=taken.passages,
                                 planned={surveyed.STAGE: taken.passages},
                                 sources_of=taken.sources_of)
         runner.fold_answers(taken.answered, report, locate=None, spec=spec)
+        # What the run completes from outside the document, as it does
+        # after the fold.
+        row["completion"] = completer(report, own) if completer else None
         if args.comb:
             row.update({
                 "combed": len(combed),

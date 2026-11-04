@@ -352,15 +352,26 @@ def computed_from_inputs(raw: dict) -> bool:
     return abs(value - expected) <= printed_rounding(value) + noise
 
 
+def wording_of(raw: dict, parameter: Parameter):
+    """The words a value's quote has to hold.
+
+    For a category the tuple carries two things: the class the model mapped
+    to and, in *_raw, how the document worded it. The evidence check is
+    about the document, so it runs against the wording, never against the
+    class name the mapping produced. Any other value is its own wording: a
+    value_raw beside it vouches for nothing but itself (owner decision
+    2026-11-04).
+    """
+    if parameter.value_type == "category":
+        return raw.get("value_raw") or raw.get("value")
+    return raw.get("value")
+
+
 def value_in_quote(raw: dict, parameter: Parameter, quote: str) -> bool:
     """Is the claimed value actually in the passage it cites?"""
     if parameter.is_numeric:
         return canonical_number(raw.get("value")) in numbers_in(quote)
-    # For a category the tuple carries two things: the class the model mapped
-    # to and, in *_raw, how the document worded it. The evidence check is
-    # about the document, so it runs against the wording, never against the
-    # class name the mapping produced.
-    wording = raw.get("value_raw") or raw.get("value")
+    wording = wording_of(raw, parameter)
     return flat(str(wording)).casefold() in flat(quote).casefold()
 
 
@@ -396,7 +407,7 @@ def _occurrences(raw: dict, parameter: Parameter, source: str) -> list:
         spans += [m.span() for m in _SPACE_GROUPED.finditer(source)
                   if canonical_number(m.group(0)) == magnitude]
         return sorted(set(spans))
-    wording = raw.get("value_raw") or raw.get("value")
+    wording = wording_of(raw, parameter)
     if not isinstance(wording, str) or len(wording.strip()) < 2:
         return []
     needle, hay = wording.strip().casefold(), source.casefold()

@@ -149,6 +149,9 @@ CONCEPTS = {
                 "source.",
     "computed": "The value does not stand in the document; it was computed "
                 "from values that do.",
+    trust.CATALOGUE: "The value does not stand in the document; it was "
+                     "looked up in an open catalogue record that values "
+                     "read from the document found.",
     "not_located": "The quote could not be located on the page.",
     "conflict": "Another reading claims the same value with another "
                 "number.",
@@ -163,10 +166,11 @@ SCHEMES = {
     "TrustLevel": trust.LEVELS,
     "TrustReason": ("page_transcribed", fields.EXHAUSTED, fields.UNBACKED,
                     fields.UNANSWERED, "repaired", "computed",
-                    "not_located", "disagree", "conflict"),
+                    trust.CATALOGUE, "not_located", "disagree", "conflict"),
     "ReviewOutcome": ("agree", "disagree", fields.UNBACKED),
 }
 _REASON = {"repaired": "repaired", "computed": "computed",
+           trust.CATALOGUE: trust.CATALOGUE,
            "not_located": "not_located", "conflict": "conflict",
            "page_transcribed": "page_transcribed",
            trust.REVIEW_DISAGREE: "disagree"}

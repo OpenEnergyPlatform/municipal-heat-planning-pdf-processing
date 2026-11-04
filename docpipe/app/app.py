@@ -822,6 +822,7 @@ def reason_words() -> dict:
             "conflict": T["reason_conflict"],
             "repaired": T["reason_repaired"],
             "computed": T["reason_computed"],
+            "catalogue": T["reason_catalogue"],
             "not_located": T["reason_not_located"],
             "review:disagree": T["reason_review_disagree"],
             "page_transcribed": T["reason_page_transcribed"]}

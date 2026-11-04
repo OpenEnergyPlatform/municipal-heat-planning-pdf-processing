@@ -309,6 +309,9 @@
       "propertyNames": {
        "anyOf": [
         {
+         "pattern": "^catalogue$"
+        },
+        {
          "pattern": "^computed$"
         },
         {
@@ -354,6 +357,10 @@
    "tuple_publication_abstract": {
     "additionalProperties": false,
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -368,7 +375,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -542,6 +549,10 @@
    "tuple_publication_author": {
     "additionalProperties": false,
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -556,7 +567,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -738,6 +749,10 @@
    "tuple_publication_date": {
     "additionalProperties": false,
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -752,7 +767,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -928,6 +943,10 @@
    "tuple_publication_doi": {
     "additionalProperties": false,
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -942,7 +961,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -1116,6 +1135,10 @@
    "tuple_publication_title": {
     "additionalProperties": false,
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -1130,7 +1153,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -1340,6 +1363,10 @@
      }
     ],
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -1354,7 +1381,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -1641,6 +1668,10 @@
    "tuple_scenario_label": {
     "additionalProperties": false,
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -1655,7 +1686,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -1957,6 +1988,10 @@
      }
     ],
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -1971,7 +2006,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -2383,6 +2418,10 @@
      }
     ],
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -2397,7 +2436,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -2945,6 +2984,10 @@
      }
     ],
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -2959,7 +3002,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -3249,6 +3292,10 @@
    "tuple_study_acronym": {
     "additionalProperties": false,
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -3263,7 +3310,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -3436,6 +3483,10 @@
    "tuple_study_descriptor": {
     "additionalProperties": false,
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -3450,7 +3501,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -3916,6 +3967,10 @@
    "tuple_study_funder": {
     "additionalProperties": false,
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -3930,7 +3985,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -4111,6 +4166,10 @@
    "tuple_study_organisation": {
     "additionalProperties": false,
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -4125,7 +4184,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -4306,6 +4365,10 @@
    "tuple_study_project_name": {
     "additionalProperties": false,
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -4320,7 +4383,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -4496,6 +4559,10 @@
    "tuple_study_sector": {
     "additionalProperties": false,
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -4510,7 +4577,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -5601,6 +5668,10 @@
    "tuple_study_sector_division": {
     "additionalProperties": false,
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -5615,7 +5686,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -5982,6 +6053,10 @@
    "tuple_study_technology": {
     "additionalProperties": false,
     "properties": {
+     "catalogue": {
+      "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
+      "type": "object"
+     },
      "compute": {
       "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).",
       "items": {
@@ -5996,7 +6071,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"

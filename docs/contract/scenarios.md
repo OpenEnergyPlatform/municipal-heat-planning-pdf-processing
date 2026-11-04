@@ -205,6 +205,10 @@ On the bundle, not on the report: the shapes carry the study's abstract there.
 
 </details>
 
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
 The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
@@ -316,6 +320,10 @@ One node per distinct name. Two spellings of one person are one node and keep bo
 
 </details>
 
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
 The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
@@ -425,6 +433,10 @@ A PDF states a year; the serializer pads it to YYYY-01-01T00:00:00, which the do
 
 </details>
 
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
 The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
@@ -527,6 +539,10 @@ How the row becomes a node:
 
 - `node`: `studyreport`
 - `property`: `{'label': 'has doi', 'predicate': 'OEO_00390098', 'prefix': 'oeo'}`
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
@@ -638,6 +654,10 @@ Mints the study report. The title is also the bundle's label when no project nam
 
 </details>
 
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
 The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
@@ -740,6 +760,10 @@ How the row becomes a node:
 
 - `node`: `scenariofactsheet`
 - `property`: `{'predicate': 'abstract', 'prefix': 'dc'}`
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
@@ -913,6 +937,10 @@ The AR6 run name labels the factsheet; the document's own wording is the acronym
 
 </details>
 
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
 The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
@@ -1057,6 +1085,10 @@ How the row becomes a node:
 The object is an OEKG region individual that already exists over there and is only referenced. A wording the list did not hold mints nothing: writing our own gloss under oekg/region/ would put a 250th region beside the 249 real ones. The predicate is the one the closed ScenarioShape names. Its declared domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET; the shapes win over that mismatch (owner decision 2026-10-22), which is the ontology side's to settle.
 
 </details>
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
@@ -1263,6 +1295,10 @@ How the row becomes a node:
 The object is one of the classes the shapes accept, chosen from the list, never written. Every factsheet additionally carries OEO_00020517 IAM scenario, which is not behind a harvested value and stands in the serializer.
 
 </details>
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
@@ -1504,6 +1540,10 @@ One triple per distinct four-digit year on the factsheet, padded to the first of
 
 </details>
 
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
 The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
@@ -1668,6 +1708,10 @@ How the row becomes a node:
 - `node`: `scenariobundle`
 - `property`: `{'predicate': 'acronym', 'prefix': 'dc'}`
 
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
 The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
@@ -1776,6 +1820,10 @@ How the row becomes a node:
 The object is one of the entries the shapes accept on this path, chosen from the list, never written.
 
 </details>
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
@@ -1967,6 +2015,10 @@ How the row becomes a node:
 - `node`: `funder`
 - `property`: `{'label': 'label', 'predicate': 'label', 'prefix': 'rdfs'}`
 
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
 The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
@@ -2071,6 +2123,10 @@ How the row becomes a node:
 - `edge_from`: `{'label': 'has organisation', 'node': 'scenariobundle', 'predicate': 'OEO_00000510', 'prefix': 'oeo'}`
 - `node`: `organisation`
 - `property`: `{'label': 'label', 'predicate': 'label', 'prefix': 'rdfs'}`
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
@@ -2182,6 +2238,10 @@ Mints the bundle and labels it. Falls back to the publication title where the do
 
 </details>
 
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
 The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
@@ -2290,6 +2350,10 @@ How the row becomes a node:
 The object is one of the entries the shapes accept on this path, chosen from the list, never written.
 
 </details>
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
@@ -2747,6 +2811,10 @@ The object is one of the entries the shapes accept on this path, chosen from the
 
 </details>
 
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
 The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
@@ -2921,6 +2989,10 @@ How the row becomes a node:
 The object is one of the entries the shapes accept on this path, chosen from the list, never written.
 
 </details>
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 

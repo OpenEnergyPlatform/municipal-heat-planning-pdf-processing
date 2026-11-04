@@ -24,8 +24,8 @@ threshold anybody tuned.
   C  open: a coordinate nobody read, and nothing speaks against what
      was read
   D  in doubt: a coordinate that could not be backed, a repaired quote,
-     a computed number, a contested identity, a second reading that
-     came to something else
+     a computed number, a value looked up in a catalogue, a contested
+     identity, a second reading that came to something else
 
 The reasons form a closed list, because a reason nobody can enumerate
 is a reason nobody can count. C and D are told apart because they ask

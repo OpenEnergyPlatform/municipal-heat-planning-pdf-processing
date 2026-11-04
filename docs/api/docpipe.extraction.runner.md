@@ -2064,6 +2064,18 @@ own values only, and `harvest.search_document(answered)` is what is still
 open after them, searched once per document and coordinate with the rows
 of all the batches together.
 
+### make_completer
+
+```python
+def make_completer(profile) -> Optional[Callable]
+```
+
+The step that completes a document's rows from outside the document,
+after its fold and its computing (`profiles/\<name>/completion.py:
+complete(report, spec)`): `completed(report, spec)`, which adds what it
+found to the report and returns what it came to, traced as `completion`,
+or None where nothing was open. None where the profile has no such step.
+
 ### make_computer
 
 ```python

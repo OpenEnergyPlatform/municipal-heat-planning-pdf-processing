@@ -139,6 +139,8 @@ def from_traces(trace_dirs: Iterable[Path],
     withdrawn = 0
     from_table = 0
     computed: dict = defaultdict(Counter)
+    completed: Counter = Counter()
+    sought: Counter = Counter()
     stages: dict = defaultdict(Counter)
     surveyed: Counter = Counter()
     survey_by_parameter: Counter = Counter()
@@ -181,6 +183,10 @@ def from_traces(trace_dirs: Iterable[Path],
                 elif kind == "compute":
                     computed[str(event.get("kind"))][
                         str(event.get("outcome"))] += 1
+                elif kind == "completion":
+                    completed[str(event.get("outcome"))] += 1
+                elif kind == "seek":
+                    sought[str(event.get("parameter"))] += 1
                 elif kind in ASK_STAGES:
                     stage = ASK_STAGES[kind]
                     stages[stage]["requests"] += 1
@@ -229,6 +235,12 @@ def from_traces(trace_dirs: Iterable[Path],
         "coordinates_taken_from_their_table": from_table,
         "computed_questions_by_kind_outcome": {k: dict(c)
                                                for k, c in computed.items()},
+        # Documents a profile completed from outside them, by what the
+        # lookup came to.
+        "completions_by_outcome": dict(completed),
+        # Parameters the survey named no passage for, searched for in the
+        # whole plan, per parameter (documents).
+        "parameters_sought_by_parameter": dict(sought),
         # Where the plans' passages came from: a search or a found place.
         "passages_planned_by_origin": dict(planned),
         "requests_and_fills_by_axis_stage": {
