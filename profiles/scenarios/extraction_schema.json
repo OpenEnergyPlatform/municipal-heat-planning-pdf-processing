@@ -582,7 +582,7 @@
      "parameter": {
       "const": "publication_author",
       "description": "Spec parameter: Author.",
-      "x-description-source": "A single person named as an author of the document. One tuple per person, spelled as on the title page. No institutions, no editors, no one thanked in the acknowledgements.",
+      "x-description-source": "An author of the document, one tuple each, spelled as the document prints it: a person the document names as its author, on the title page or wherever it lists its authors. Where the document names no person as its author, the institution it names as its own author or issuer, on the cover or in the imprint. No editors, no one only thanked in the acknowledgements.",
       "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {

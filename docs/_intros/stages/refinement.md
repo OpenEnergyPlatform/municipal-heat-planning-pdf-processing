@@ -15,6 +15,8 @@ example, a preprint's line numbers landing inside a sentence: a number
 counting up line after line is removed, one the sentence itself states
 stays.
 
+The front matter of the first page (title, authors, affiliations, the journal line with volume and year, the DOI, dates and the copyright line) is never refinement's to remove: the prompts say so, and `_apply_actions` refuses a `remove` for any section that starts on the document's first page.
+
 Stage 4 also enforces the size limit the embedding step needs: a
 retrieval chunk is one section and one vector, so a section long enough
 that its embedding no longer represents one topic, or long enough to

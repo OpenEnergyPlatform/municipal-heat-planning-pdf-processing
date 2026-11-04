@@ -695,7 +695,9 @@ def _evidence_comment(row: dict, document: str) -> list:
 def _catalogue_text(record: dict) -> str:
     """The catalogue record a looked-up value stands on, as one line
     (`completion.py`)."""
-    said = [f"looked up in {record.get('source')}: {record.get('id')}"]
+    by = {"doi": " by the DOI it prints", "index_doi": " by the corpus index's DOI",
+          "title": " by its title"}.get(record.get("key"), "")
+    said = [f"looked up in {record.get('source')}{by}: {record.get('id')}"]
     if record.get("publication_date"):
         said.append(f"published {record['publication_date']}")
     if record.get("matched"):

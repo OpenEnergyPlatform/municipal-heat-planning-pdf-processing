@@ -261,7 +261,7 @@ is for and what it hands to what; this is the reference.
 ## profiles.scenarios
 
 - [profiles.scenarios.catalog](profiles.scenarios.catalog.md): How AR6 publications present themselves in the picker: by title and year, filtered by year, venue and the scenarios they document. (1 class)
-- [profiles.scenarios.completion](profiles.scenarios.completion.md): What a publication's own text leaves open of its identity, looked up in an open catalogue (owner decisions 2026-11-04). (11 functions)
+- [profiles.scenarios.completion](profiles.scenarios.completion.md): What a publication's own text leaves open of its identity, looked up in an open catalogue (owner decisions 2026-11-04). (13 functions)
 - [profiles.scenarios.config](profiles.scenarios.config.md): Constants for the AR6 profile.
 - [profiles.scenarios.extraction](profiles.scenarios.extraction.md): Extraction stage wiring: where the ar6 spec lives, and the lists that are only closed once a document is named. (6 functions)
 - [profiles.scenarios.inference](profiles.scenarios.inference.md): What the answer loop says around the ar6 prompts.

@@ -527,9 +527,12 @@ def _coerce_section(sec: dict) -> dict:
 def _apply_actions(
     processed_sections: list[dict],
     previous_kept: Optional[dict],
+    first_page: Optional[int] = None,
 ) -> tuple[list[dict], Optional[dict]]:
     """
-    Applies the _action directives returned by the LLM.
+    Applies the _action directives returned by the LLM. A section that starts
+    on *first_page*, the document's first page, is its front matter (title,
+    authors, affiliations, journal line, dates) and is never removed.
 
     Returns:
         (result_sections, last_kept_section)
@@ -560,6 +563,12 @@ def _apply_actions(
                 # as a running head, it took a scenario document's title along.
                 log.info("  Refusing to remove the text before the first "
                          "heading: the title may stand in it")
+            elif _on_page(sec, first_page):
+                # Authors often come out of layout detection as a one-line
+                # heading; removed as a running head, 19 of 85 author lines
+                # were gone from the AR6 corpus.
+                log.info("  Refusing to remove '%s': it is on the first page",
+                         sec.get("title", "?"))
             else:
                 log.debug(f"  Removing section: {sec.get('title', '?')}")
                 # Its text goes, its heading does not: a contents page or an
@@ -864,6 +873,30 @@ def _is_empty_section(sec: dict) -> bool:
     has_tables = bool(sec.get("tables"))
     has_figures = bool(sec.get("figures"))
     return not has_content and not has_tables and not has_figures
+
+
+def _page_of(sections: list[dict]) -> Optional[int]:
+    """The lowest page any of *sections* carries, None when none carries one."""
+    pages = [p for sec in sections for p in _section_pages(sec)]
+    return min(pages) if pages else None
+
+
+def _section_pages(sec: dict) -> list:
+    """The pages a section's segments stand on, else its page list, else its
+    page number: a heading-only section carries no segment."""
+    pages = [seg["page"] for seg in sec.get("segments") or []
+             if isinstance(seg, dict) and seg.get("page") is not None]
+    if not pages:
+        pages = list(sec.get("pages") or [])
+    if not pages and isinstance(sec.get("page_number"), int):
+        pages = [sec["page_number"]]
+    return pages
+
+
+def _on_page(sec: dict, page: Optional[int]) -> bool:
+    """Whether *sec* starts on *page*."""
+    pages = _section_pages(sec)
+    return page is not None and bool(pages) and min(pages) == page
 
 
 def _synthetic_heading(title: str) -> bool:
@@ -1180,6 +1213,7 @@ def refine_sections(sections: list[dict],
     # ── Sequential assembly (order matters for merge_into_previous) ──────
     refined: list[dict] = []
     previous_kept: Optional[dict] = None
+    first_page = _page_of(sections)
     # A window (or the part of one) that is a hole keeps its original text,
     # which is indistinguishable in the output from a window that needed no
     # change, so the only place this can be recorded is here, while it
@@ -1227,7 +1261,8 @@ def refine_sections(sections: list[dict],
                 previous_kept = part[-1] if part else previous_kept
             else:
                 _thread_provenance(part, result)
-                applied, previous_kept = _apply_actions(result, previous_kept)
+                applied, previous_kept = _apply_actions(result, previous_kept,
+                                                         first_page)
                 refined.extend(applied)
 
     log.info(f"Stage 4: {len(refined)} sections after LLM refinement")

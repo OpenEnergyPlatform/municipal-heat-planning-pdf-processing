@@ -202,7 +202,8 @@ only by running stage 4 with `--force`.
 
 `build_sections()` first calls `sort_pages()`, which, per page, calls
 `find_gutters()` and `order_blocks()` from `columns.py`, then
-`strip_running_headers()`, then walks every block: a
+`strip_running_headers()` (which keeps the first page's copy of a running
+head, the document's citation line), then walks every block: a
 `SECTION_TITLE_CLASSES` block opens a new `Section`, a table or image
 block becomes a `TableRef` or `FigureRef` plus a `[block_id]` placeholder
 whose caption is settled by `docpipe.captions.resolve_title()`, and text

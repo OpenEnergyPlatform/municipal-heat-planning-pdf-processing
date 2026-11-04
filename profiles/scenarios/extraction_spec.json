@@ -77,7 +77,7 @@
     {
       "uri": "publication_author",
       "label": "Author",
-      "description": "A single person named as an author of the document. One tuple per person, spelled as on the title page. No institutions, no editors, no one thanked in the acknowledgements.",
+      "description": "An author of the document, one tuple each, spelled as the document prints it: a person the document names as its author, on the title page or wherever it lists its authors. Where the document names no person as its author, the institution it names as its own author or issuer, on the cover or in the imprint. No editors, no one only thanked in the acknowledgements.",
       "value_type": "text",
       "example": {
         "source": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P., Garaffa, R., Després, J.",

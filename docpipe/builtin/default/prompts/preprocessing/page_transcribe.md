@@ -15,7 +15,7 @@ You transcribe a single page of an English-language document that has no text la
 3. HEADINGS as markdown headings, at the level the page implies: `#` for a chapter heading, `##` for a section, `###` below that. Existing numbering stays part of the heading ("## 3.2 Population by district").
 4. PARAGRAPHS separated by a blank line. Join words broken across a line end ("popula-\ntion" becomes "population"); do not keep line breaks inside a paragraph.
 5. DO NOT transcribe TABLES OR FIGURES. They are read separately from their own crops. Leave them out where they sit and put nothing in their place, no description and no placeholder. A caption such as "Figure 12: Population by age group" is part of the text and IS transcribed.
-6. DROP RUNNING HEADS AND FEET: page numbers, the document title and volume in the header, DOI stamps, download footers, copyright lines running along the margin.
+6. DROP RUNNING HEADS AND FEET: page numbers, the document title and volume in the header, DOI stamps, download footers, copyright lines running along the margin. On a title page, the journal line with volume and year, the DOI and the copyright line are the document's own front matter and ARE transcribed.
 7. LISTS as markdown lists (`- ` or `1. `).
 8. Footnotes at the foot of the page are transcribed, after the body text, each on its own line.
 9. If the page carries no readable running text, for instance because it is a single full-page figure, return an empty string. An empty result is a valid result and better than an invented one.

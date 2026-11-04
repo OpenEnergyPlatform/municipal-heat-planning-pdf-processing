@@ -135,8 +135,10 @@ def strip_running_headers(pages: list[PageData]) -> int:
     """
     Drop text blocks whose page-number-normalized text recurs in the same
     header/footer zone on at least HEADER_FOOTER_MIN_PAGE_FRAC of the pages.
-    Section titles are never touched. Mutates *pages* in place; returns the
-    number of blocks dropped.
+    Section titles are never touched. The first page keeps its blocks: its
+    copy of a running head is the document's citation line (journal, volume,
+    year), though it still counts toward detecting the header on later pages.
+    Mutates *pages* in place; returns the number of blocks dropped.
     """
     if not HEADER_FOOTER_STRIP_ENABLE or len(pages) < 4:
         return 0
@@ -159,8 +161,11 @@ def strip_running_headers(pages: list[PageData]) -> int:
     if not headers:
         return 0
 
+    first_page = min(pg.page_number for pg in pages)
     dropped = 0
     for pg in pages:
+        if pg.page_number == first_page:
+            continue
         kept: list[Block] = []
         for b in pg.blocks:
             if _header_candidate(b):

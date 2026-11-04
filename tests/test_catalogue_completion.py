@@ -1,15 +1,22 @@
-"""A DOI and a year the document does not print are looked up by the title
-it was read with: the first record the catalogue finds counts only where two
-of its authors' family names stand among the authors read, or one where
-either side names one author, AND never over a value the document prints,
-AND not without a title read; such a row is quoted by the title it was
-looked up with and carries its record, AND is graded D for its own reason,
-AND is a valid harvest row.
+"""A DOI, a year and, where the text yields none, the authors the document
+does not print are looked up in its catalogue record: found first by the DOI
+the harvest read, then by the DOI the corpus index holds, then by the title,
+AND a record a DOI finds is taken without an author match, while one the
+title finds counts only where two of its authors' family names stand among
+the authors read, or one where either side names one author, AND never over
+a value the document prints, AND not without a title read; such a row is
+quoted by the read value it was found with and carries its record, AND is
+graded D for its own reason, AND is a valid harvest row, AND once the
+catalogue cannot be reached the run asks it no more.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
+import io
 import json
+import urllib.error
 from pathlib import Path
+
+import pytest
 
 from docpipe.extraction import runner
 from docpipe.extraction.pipeline import DocumentReport
@@ -71,6 +78,18 @@ def looked_up(report) -> dict:
             if row.get("catalogue")}
 
 
+@pytest.fixture(autouse=True)
+def reachable():
+    """Each case starts with a catalogue the run has not yet failed to reach."""
+    completion.OFFLINE.clear()
+    yield
+    completion.OFFLINE.clear()
+
+
+def no_doi(doi):
+    raise AssertionError(f"a DOI was looked up: {doi}")
+
+
 def test_a_record_two_read_authors_name_fills_doi_and_year_by_the_title():
     title = read("publication_title", TITLE)
     report = report_of(title, *AUTHORS)
@@ -110,14 +129,15 @@ def test_a_value_the_document_prints_goes_first():
     printed = read("publication_doi", "10.1000/printed",
                    "doi: 10.1000/printed, Carbon Management")
     report = report_of(read("publication_title", TITLE), *AUTHORS, printed)
-    completion.complete(report, SPEC, fetch=looked(RECORD)[0])
+    completion.complete(report, SPEC, fetch=looked(RECORD)[0],
+                        fetch_doi=looked(RECORD)[0])
     assert [row["value"] for row in report.tuples
             if row["parameter"] == "publication_doi"] == ["10.1000/printed"]
     assert list(looked_up(report)) == ["publication_date"]
     year = read("publication_date", "2018", "Published 2018, Carbon Management")
-    both = report_of(read("publication_title", TITLE), printed, year)
+    both = report_of(read("publication_title", TITLE), *AUTHORS, printed, year)
     fetch, asked = looked(RECORD)
-    assert completion.complete(both, SPEC, fetch=fetch) is None
+    assert completion.complete(both, SPEC, fetch=fetch, fetch_doi=fetch) is None
     assert asked == []
 
 
@@ -145,3 +165,93 @@ def test_a_looked_up_row_is_a_valid_harvest_row():
     wrong = dict(rows[0])
     wrong["catalog"] = wrong.pop("catalogue")
     assert errors(wrong)
+
+
+def test_a_printed_doi_finds_the_record_without_authors_and_fills_them():
+    title = read("publication_title", TITLE)
+    printed = read("publication_doi", DOI, f"https://doi.org/{DOI} Received")
+    report = report_of(title, printed)
+    by_doi, asked = looked(RECORD)
+    outcome = completion.complete(report, SPEC, fetch=no_doi, fetch_doi=by_doi)
+    assert asked == [DOI] and outcome["key"] == completion.BY_READ_DOI
+    got = [row for row in report.tuples if row.get("catalogue")]
+    assert {row["parameter"] for row in got} == {"publication_date",
+                                                 "publication_author"}
+    assert [row["value"] for row in got
+            if row["parameter"] == "publication_author"] == [
+        "Jingyu Liu", "Shinichiro Fujimori", "Kiyoshi Takahashi"]
+    for row in got:
+        assert row["quote"] == printed["quote"]
+        assert row["catalogue"]["key"] == completion.BY_READ_DOI
+        assert trust(row)["level"] == LEVEL_D
+    # The same record found by the title, with no author read, is not taken.
+    by_title = report_of(read("publication_title", TITLE))
+    outcome = completion.complete(by_title, SPEC, fetch=looked(RECORD)[0],
+                                  fetch_doi=lambda doi: None)
+    assert outcome["outcome"] == "authors" and looked_up(by_title) == {}
+
+
+def test_the_index_doi_comes_after_the_printed_one_and_before_the_title():
+    title = read("publication_title", TITLE)
+    asked = []
+
+    def by_doi(doi):
+        asked.append(doi)
+        return RECORD if doi == DOI else None
+    report = report_of(title)
+    outcome = completion.complete(report, SPEC, fetch=no_doi, fetch_doi=by_doi,
+                                  catalogue_doi=f"https://doi.org/{DOI}")
+    assert asked == [DOI] and outcome["key"] == completion.BY_INDEX_DOI
+    assert looked_up(report)["publication_doi"]["value"] == DOI
+    assert looked_up(report)["publication_doi"]["quote"] == title["quote"]
+    # A printed DOI the catalogue does not hold is tried first, then the index's.
+    asked.clear()
+    printed = read("publication_doi", "10.1000/unknown", "doi:10.1000/unknown")
+    report = report_of(title, printed)
+    outcome = completion.complete(report, SPEC, fetch=no_doi, fetch_doi=by_doi,
+                                  catalogue_doi=DOI)
+    assert asked == ["10.1000/unknown", DOI]
+    assert outcome["key"] == completion.BY_INDEX_DOI
+
+
+def test_authors_from_the_record_never_join_authors_the_text_names():
+    report = report_of(read("publication_title", TITLE), AUTHORS[0])
+    completion.complete(report, SPEC, fetch=no_doi,
+                        fetch_doi=looked(RECORD)[0], catalogue_doi=DOI)
+    assert [row["value"] for row in report.tuples
+            if row["parameter"] == "publication_author"] == [
+        AUTHORS[0]["value"]]
+
+
+def test_an_unreachable_catalogue_is_asked_no_more_in_the_run():
+    def down(_key):
+        raise urllib.error.URLError("timed out")
+    fetch, asked = looked(RECORD)
+    first = report_of(read("publication_title", TITLE), *AUTHORS)
+    assert completion.complete(first, SPEC, fetch=down)["outcome"] == "offline"
+    second = report_of(read("publication_title", TITLE), *AUTHORS)
+    assert completion.complete(second, SPEC, fetch=fetch)["outcome"] == "offline"
+    assert asked == [] and looked_up(second) == {}
+
+
+def test_an_answer_with_an_error_is_no_reason_to_stop_asking():
+    def refused(_key):
+        raise urllib.error.HTTPError("u", 503, "busy", {}, io.BytesIO(b""))
+    report = report_of(read("publication_title", TITLE), *AUTHORS)
+    assert completion.complete(report, SPEC, fetch=refused)["outcome"] == "error"
+    assert not completion.OFFLINE.is_set()
+    fetch, asked = looked(RECORD)
+    completion.complete(report, SPEC, fetch=fetch)
+    assert asked == [TITLE]
+
+
+def test_a_doi_the_catalogue_does_not_hold_is_no_hit_not_an_error(monkeypatch):
+    def missing(_url):
+        raise urllib.error.HTTPError("u", 404, "not found", {}, io.BytesIO(b""))
+    monkeypatch.setattr(completion, "_get", missing)
+    assert completion.by_doi(DOI) is None
+    def busy(_url):
+        raise urllib.error.HTTPError("u", 500, "error", {}, io.BytesIO(b""))
+    monkeypatch.setattr(completion, "_get", busy)
+    with pytest.raises(urllib.error.HTTPError):
+        completion.by_doi(DOI)

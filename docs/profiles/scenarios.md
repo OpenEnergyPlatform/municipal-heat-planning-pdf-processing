@@ -457,16 +457,28 @@ evidence, and the crawl's copy is only the cross-check
 (`kg.py`'s module docstring; `_crosscheck`, lines 452 to 468).
 
 What the paper does not print of its DOI and year, often an authors'
-manuscript, the run looks up in OpenAlex, whose records are CC0
-(`completion.py`, owner decisions 2026-11-04). After a document's fold a
-program, no model, searches with the title the harvest read and takes the
-first record only where two of its authors' family names stand among the
-authors read, one where either side names one author. The DOI and the year
-then become rows of `publication_doi` and `publication_date`, the year as
-the parameter defines it and the full date in the record. Each row quotes
-the title it was looked up with, carries the record (`catalogue`) and is a
-D for the reason `catalogue`; the graph names the record above the triple.
-A value the paper prints goes first.
+manuscript, and its authors where the text yields none at all, the run
+looks up in OpenAlex, whose records are CC0 (`completion.py`, owner
+decisions 2026-11-04). After a document's fold a program, no model, finds
+the record by the first of three keys that finds one: the DOI the harvest
+read, the DOI the corpus index holds for the document (`catalogue_doi`;
+the crawl's copy is the key here, never the value), then the title the
+harvest read. A record a DOI finds is taken as it is; one the title finds
+counts only where two of its authors' family names stand among the authors
+read, one where either side names one author. The DOI, the year and the
+authors then become rows of `publication_doi`, `publication_date` and
+`publication_author`, the year as the parameter defines it and the full
+date in the record. Each row quotes the read value the record was found
+with, the printed DOI, else the title, carries the record (`catalogue`) and
+is a D for the reason `catalogue`; the graph names the record and its key
+above the triple. A value the paper prints goes first. The first time the
+catalogue cannot be reached at all, the run asks it no more (`OFFLINE`),
+and every later document says so in its trace at once.
+
+An author is a person the document names as its author; where it names no
+person, the institution it names as its own author or issuer (owner
+decision 2026-11-04: OEO's `author` is a role of an agent, a person or an
+organisation, and the OEKG shape asks only for that class).
 
 Every triple this serializer writes about a value carries, immediately
 above it, the passage it was read from. By default that passage is a

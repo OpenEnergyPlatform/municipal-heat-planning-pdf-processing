@@ -4,18 +4,27 @@ looked up in an open catalogue (owner decisions 2026-11-04).
 
 A paper's PDF is often the authors' manuscript: it prints its title and its
 authors, and neither its DOI nor its year. After a document's fold a program
-asks OpenAlex, whose records are CC0, for the title the harvest read, and
-takes the first hit only where at least two of its authors' family names
-stand among the authors the harvest read; where either side names one
-author, that one. Its DOI and its year then enter the harvest for the
-parameters no reading filled. The year is the value, as the parameter
-defines it, and the record keeps the full date.
+asks OpenAlex, whose records are CC0, for the publication's record and fills
+the parameters no reading filled: the DOI, the year and, where the text
+yields no author at all, the authors. The year is the value, as the
+parameter defines it, and the record keeps the full date.
 
-Such a row is built like a computed one: its quote and its passage are the
-title it was looked up with, the record stands beside it (`catalogue`), and
-the flag `catalogue` makes it a D (`trust.FLAG_REASONS`). A value the
-document prints goes first: a parameter that has a row is not looked up. No
-model is asked.
+The record is the first one these keys find, in this order: the DOI the
+harvest read, the DOI the corpus index holds for the document
+(`catalogue_doi`), the title the harvest read. A DOI names one publication,
+so its record is taken as it is; a record the title finds counts only where
+at least two of its authors' family names stand among the authors the
+harvest read, or one where either side names one author.
+
+Such a row is built like a computed one: its quote and its passage are those
+of the read value the record was found with, the printed DOI, else the
+title; the record stands beside it (`catalogue`), and the flag `catalogue`
+makes it a D (`trust.FLAG_REASONS`). A value the document prints goes
+first: a parameter that has a row is not looked up. No model is asked.
+
+The first time the catalogue cannot be reached at all, the run asks it no
+more (`OFFLINE`): each later document says so at once instead of waiting
+out the timeout.
 
 Author: Felix Vossel
 """
@@ -23,7 +32,9 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import unicodedata
+import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter
@@ -39,22 +50,44 @@ FIELDS = "id,doi,display_name,publication_date,publication_year,authorships"
 
 TITLE = "publication_title"
 AUTHOR = "publication_author"
-# The flags of the title row that speak about its quote, which a looked-up
-# row shares with it. The others are about the title's own reading.
+DOI = "publication_doi"
+# The flags of the anchor row that speak about its quote, which a looked-up
+# row shares with it. The others are about the anchor's own reading.
 QUOTE_FLAGS = ("quote_repaired", "not_located")
 SOURCE = "OpenAlex"
+
+# The keys a record is found by, in the order they are tried.
+BY_READ_DOI = "doi"
+BY_INDEX_DOI = "index_doi"
+BY_TITLE = "title"
+
+# Set the first time the catalogue cannot be reached; a run is one process.
+OFFLINE = threading.Event()
+
+
+def _get(url: str) -> dict:
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+        return json.loads(response.read().decode("utf-8"))
 
 
 def search(title: str) -> Optional[dict]:
     """The first record OpenAlex finds for *title*, or None."""
     query = urllib.parse.urlencode({"search": title, "per_page": 1,
                                     "select": FIELDS})
-    request = urllib.request.Request(f"{WORKS}?{query}",
-                                     headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-        found = json.loads(response.read().decode("utf-8"))
-    results = found.get("results") or []
+    results = _get(f"{WORKS}?{query}").get("results") or []
     return results[0] if results else None
+
+
+def by_doi(doi: str) -> Optional[dict]:
+    """The record OpenAlex holds under *doi*, or None where it holds none."""
+    query = urllib.parse.urlencode({"select": FIELDS})
+    try:
+        return _get(f"{WORKS}/doi:{urllib.parse.quote(doi, safe='/')}?{query}")
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return None
+        raise
 
 
 def words(name) -> set:
@@ -92,19 +125,23 @@ def matched(record: dict, read: list) -> list:
 
 
 def accepted(record: dict, read: list) -> bool:
-    """Whether the record is the document: two of its family names among the
-    authors read, or one where either side names one author."""
+    """Whether the record a title found is the document: two of its family
+    names among the authors read, or one where either side names one."""
     families = {family(name) for name in authors_of(record)} - {""}
     named = [name for name in read if words(name)]
     needed = min(2, len(families), len(named))
     return needed >= 1 and len(matched(record, read)) >= needed
 
 
-def doi_of(record: dict) -> Optional[str]:
-    """The DOI alone, without the resolver before it."""
-    doi = str(record.get("doi") or "").strip()
-    doi = re.sub(r"^(https?://(dx\.)?doi\.org/|doi:)", "", doi, flags=re.I)
+def bare_doi(text) -> Optional[str]:
+    """A DOI alone, without the resolver or the "doi:" before it."""
+    doi = re.sub(r"^(https?://(dx\.)?doi\.org/|doi:)\s*", "",
+                 str(text or "").strip(), flags=re.I)
     return doi or None
+
+
+def doi_of(record: dict) -> Optional[str]:
+    return bare_doi(record.get("doi"))
 
 
 def year_of(record: dict) -> Optional[str]:
@@ -114,68 +151,114 @@ def year_of(record: dict) -> Optional[str]:
     return year if re.fullmatch(r"\d{4}", year) else None
 
 
-# The parameters a record fills, each with what it takes from the record.
-FILLED = {"publication_doi": doi_of, "publication_date": year_of}
+def _one(value) -> list:
+    return [value] if value else []
 
 
-def evidence(record: dict, title: str, hit: list) -> dict:
+# The parameters a record fills, each with the values it takes from it.
+FILLED = {DOI: lambda record: _one(doi_of(record)),
+          "publication_date": lambda record: _one(year_of(record)),
+          AUTHOR: lambda record: [name for name in authors_of(record)
+                                  if words(name)]}
+
+
+def evidence(record: dict, key: tuple, hit: list) -> dict:
     """The record a looked-up value stands on, as the row carries it."""
     return {"source": SOURCE, "id": record.get("id"),
-            "searched": title, "title": record.get("display_name"),
+            "key": key[0], "searched": key[1],
+            "title": record.get("display_name"),
             "authors": authors_of(record), "matched": hit,
             "doi": doi_of(record),
             "publication_date": record.get("publication_date")}
 
 
-def row_of(title_row: dict, uri: str, value: str, record: dict,
+def row_of(anchor: dict, uri: str, value: str, record: dict, key: tuple,
            hit: list) -> dict:
-    """A looked-up value in the shape of the title row it was looked up
-    with: its quote and its passage, the record beside it."""
-    row = dict(title_row)
+    """A looked-up value in the shape of the read row it was found with:
+    its quote and its passage, the record beside it."""
+    row = dict(anchor)
     row.update(parameter=uri, value=value, value_raw=value,
-               flags=[flag for flag in title_row.get("flags") or ()
+               flags=[flag for flag in anchor.get("flags") or ()
                       if flag in QUOTE_FLAGS] + [CATALOGUE],
-               catalogue=evidence(record, title_row["value"], hit))
-    row["provenance"] = {**(title_row.get("provenance") or {}),
-                         "via": CATALOGUE}
+               catalogue=evidence(record, key, hit))
+    row["provenance"] = {**(anchor.get("provenance") or {}), "via": CATALOGUE}
     return row
 
 
-def complete(report, spec, *, fetch: Optional[Callable] = None
-             ) -> Optional[dict]:
-    """Fill what the document leaves open of DOI and year from the record
-    its title and authors find. What it came to, for the trace, or None
-    where nothing was open."""
+def _most_read(rows: list) -> Optional[dict]:
+    """The row of the value most of *rows* read, as the graph takes it."""
+    if not rows:
+        return None
+    value = Counter(row["value"] for row in rows).most_common(1)[0][0]
+    return next(row for row in rows if row["value"] == value)
+
+
+def complete(report, spec, *, fetch: Optional[Callable] = None,
+             fetch_doi: Optional[Callable] = None,
+             catalogue_doi: Optional[str] = None) -> Optional[dict]:
+    """Fill what the document leaves open of DOI, year and authors from its
+    catalogue record. *catalogue_doi* is the DOI the corpus index holds for
+    the document. What it came to, for the trace, or None where nothing was
+    open."""
     known = {parameter.uri for parameter in spec.parameters}
     filled = {row.get("parameter") for row in report.tuples}
     wanted = [uri for uri in FILLED if uri in known and uri not in filled]
     if not wanted:
         return None
-    titles = [row for row in report.tuples if row.get("parameter") == TITLE
-              and isinstance(row.get("value"), str) and row["value"].strip()]
-    if not titles:
+
+    def rows_of(uri: str) -> list:
+        return [row for row in report.tuples if row.get("parameter") == uri
+                and isinstance(row.get("value"), str) and row["value"].strip()]
+
+    title_row = _most_read(rows_of(TITLE))
+    # Without a title the graph has no node to put a value on.
+    if title_row is None:
         return {"outcome": "no_title", "open": wanted}
-    # The title most of its rows read, as the graph takes it.
-    title = Counter(row["value"] for row in titles).most_common(1)[0][0]
-    title_row = next(row for row in titles if row["value"] == title)
+    if OFFLINE.is_set():
+        return {"outcome": "offline", "open": wanted}
+    doi_row = _most_read([row for row in rows_of(DOI)
+                          if bare_doi(row["value"])])
+    keys = []
+    if doi_row is not None:
+        keys.append((BY_READ_DOI, bare_doi(doi_row["value"]), doi_row))
+    index_doi = bare_doi(catalogue_doi)
+    if index_doi and not any(k[1].casefold() == index_doi.casefold()
+                             for k in keys):
+        keys.append((BY_INDEX_DOI, index_doi, title_row))
+    keys.append((BY_TITLE, title_row["value"], title_row))
     read = [row.get("value") for row in report.tuples
             if row.get("parameter") == AUTHOR]
+
+    record = key = anchor = None
     try:
-        record = (fetch or search)(title)
-    except Exception as exc:   # the catalogue is outside the run's hands
+        for kind, value, row in keys:
+            found = ((fetch or search)(value) if kind == BY_TITLE
+                     else (fetch_doi or by_doi)(value))
+            if found:
+                record, key, anchor = found, (kind, value), row
+                break
+    except urllib.error.HTTPError as exc:   # it answered, with an error
+        return {"outcome": "error", "open": wanted,
+                "detail": f"HTTP {exc.code}"}
+    except OSError as exc:                  # it could not be reached
+        OFFLINE.set()
+        return {"outcome": "offline", "open": wanted,
+                "detail": str(exc)[:200]}
+    except ValueError as exc:               # its reply was no record
         return {"outcome": "error", "open": wanted, "detail": str(exc)[:200]}
-    if not record:
+    if record is None:
         return {"outcome": "no_hit", "open": wanted}
     hit = matched(record, read)
-    if not accepted(record, read):
+    if key[0] == BY_TITLE and not accepted(record, read):
         return {"outcome": "authors", "open": wanted, "id": record.get("id"),
                 "matched": hit}
     taken = []
     for uri in wanted:
-        value = FILLED[uri](record)
-        if value:
-            report.tuples.append(row_of(title_row, uri, value, record, hit))
+        values = FILLED[uri](record)
+        for value in values:
+            report.tuples.append(row_of(anchor, uri, value, record, key, hit))
+        if values:
             taken.append(uri)
     return {"outcome": "taken" if taken else "empty", "filled": taken,
             "open": [uri for uri in wanted if uri not in taken],
-            "id": record.get("id"), "matched": hit}
+            "id": record.get("id"), "key": key[0], "matched": hit}

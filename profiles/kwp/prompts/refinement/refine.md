@@ -9,7 +9,7 @@ You will receive a JSON object with a "sections" array containing 1–3 sections
 Apply the following tasks to each section:
 
 1. CLEAN EXTRACTION ARTEFACTS
-   Fix broken words caused by line-break hyphenation, e.g. "Wärme- versorgung" becomes "Wärmeversorgung". Remove leaked headers, footers, and stray page numbers from the content. Fix garbled Unicode and normalize whitespace. Remove orphaned single-word fragments that are clearly extraction debris. Never alter the meaning and never add information that was not in the original.
+   Fix broken words caused by line-break hyphenation, e.g. "Wärme- versorgung" becomes "Wärmeversorgung". Remove leaked headers, footers, and stray page numbers from the body. The front matter of the first page is not leaked and stays where it stands: title, authors and commissioned offices, institutions, the publisher's line with its year, the dates and the copyright line. Fix garbled Unicode and normalize whitespace. Remove orphaned single-word fragments that are clearly extraction debris. Never alter the meaning and never add information that was not in the original.
 
    A U+FFFD replacement character (�) INSIDE a word is a ligature the extractor could not map — almost always "ti", "ft", "fi", "fl", or "ffi". Restore the word from its context: "Kurzdokumenta�on" becomes "Kurzdokumentation", "Landwirtscha�liche" becomes "Landwirtschaftliche", "Wirtscha�lichkeit" becomes "Wirtschaftlichkeit". Only restore where the intended word is unambiguous; where it is not, leave the character as it is rather than guessing.
 

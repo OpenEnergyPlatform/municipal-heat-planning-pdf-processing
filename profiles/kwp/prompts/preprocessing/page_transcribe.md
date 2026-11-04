@@ -15,7 +15,7 @@ You transcribe a single page of a German municipal heat plan ("Kommunale Wärmep
 3. ÜBERSCHRIFTEN als Markdown-Überschrift ausgeben, mit der Ebene, die der Seite entspricht: `#` für eine Kapitelüberschrift, `##` für einen Abschnitt, `###` darunter. Die Nummerierung, falls vorhanden, bleibt Teil der Überschrift ("## 3.2 Bestandsanalyse").
 4. ABSÄTZE durch eine Leerzeile trennen. Trennstriche am Zeilenende zusammenführen ("Wärme-\nplanung" wird "Wärmeplanung"), Zeilenumbrüche innerhalb eines Absatzes nicht übernehmen.
 5. TABELLEN UND ABBILDUNGEN NICHT transkribieren. Die werden separat aus ihrem eigenen Bildausschnitt gelesen. Lass sie an ihrer Stelle einfach aus und schreibe nichts an ihre Stelle, auch keine Beschreibung und keinen Platzhalter. Eine Beschriftung wie "Abbildung 12: Wärmedichte" gehört dagegen zum Text und wird übernommen.
-6. KOPF- UND FUSSZEILEN weglassen: Seitenzahlen, Dokumenttitel in der Kopfzeile, Bürologos, Dateipfade, Datumsstempel am Seitenrand.
+6. KOPF- UND FUSSZEILEN weglassen: Seitenzahlen, Dokumenttitel in der Kopfzeile, Bürologos, Dateipfade, Datumsstempel am Seitenrand. Auf der Titelseite gehören Herausgeber, Datum und Copyright-Zeile zum Dokument selbst und werden übernommen.
 7. AUFZÄHLUNGEN als Markdown-Liste ausgeben (`- ` beziehungsweise `1. `).
 8. Wenn die Seite keinen lesbaren Fließtext enthält, etwa weil sie nur aus einer ganzseitigen Karte besteht, gib einen leeren String zurück. Ein leeres Ergebnis ist ein zulässiges Ergebnis und besser als ein erfundenes.
 9. Schreibe nichts über deine eigene Arbeit, keine Einleitung, keine Anmerkung, keine Entschuldigung für Unlesbares.
