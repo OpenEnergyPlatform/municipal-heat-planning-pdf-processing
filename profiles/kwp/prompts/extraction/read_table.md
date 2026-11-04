@@ -10,6 +10,7 @@ Du bekommst:
 - "parameter": die Kennzahl mit ihrer Definition.
 - "coordinates": die Angaben, die zu jedem Wert gehören, je mit Frage und, wo es eine gibt, mit Liste ("options").
 - "known": die Paare aus Szenario und Jahr, die der Plan für diese Tabelle nennt.
+- "base_years" und "target_years", nur wenn der Plan sie nennt: die Jahre, für die er seinen eigenen Stand erhoben oder bilanziert hat, und die Jahre seines Ziels, als Jahreszahlen.
 - "corrections": nur bei einer zweiten Anfrage. Was an deiner ersten Antwort nicht stimmte, je Angabe ("coordinate") mit ihrer Zeile ("row") oder Spalte ("column"), ohne beides für die ganze Tabelle, und dem Grund ("what"). Du antwortest dann noch einmal vollständig und behebst diese Punkte.
 
 Du antwortest mit:
@@ -19,6 +20,7 @@ Du antwortest mit:
    - unter "columns" für jede Spalte, deren Kopf die Angabe nennt (etwa einen Sektor oder ein Jahr), ein Eintrag mit "column";
    - unter "table" für JEDE Angabe ein Eintrag: ihr Wert, wenn er für die ganze Tabelle gilt (etwa die Einheit im Titel oder in einer Einheitenzeile, das Gebiet im Titel), sonst "out:unstated" ohne "quote". Ein Eintrag unter "rows" oder "columns" gilt vor dem unter "table".
    Jeder Eintrag hat "value" (bei einer Liste genau einer ihrer Schlüssel, sonst die Angabe selbst), "value_raw" (das Wort des Plans, wo es nicht der Schlüssel ist) und "quote": EINE zusammenhängende Stelle aus "table", Zeichen für Zeichen abgeschrieben, die die Angabe enthält, etwa die Kopfzeile, die Zeile oder der Titel. Eine Zeile oder Spalte, die die Summe oder das Gesamte nennt ("Summe", "gesamt"), beantwortest du mit dem Eintrag der Liste, der das sagt. Szenario und Jahr nennst du nur, wo die Tabelle sie selbst druckt; sonst ist ihr Eintrag unter "table" "out:unstated", und es gilt das Paar aus "known".
+   Trägt eine Spalte, eine Zeile oder der Titel statt einer Jahreszahl nur das Wort des Plans für seinen eigenen Stand ("Basisjahr", "Bilanzjahr", "Ist-Zustand", "Status quo", "IST", "Bestand", "aktuell") oder für sein Ziel ("Zieljahr", "Zielzustand", "Zielszenario", "Ziel"), wähl das Jahr aus "base_years" oder "target_years", auf das dieses Wort verweist: "value" ist die Jahreszahl, "value_raw" das Wort des Plans, Zeichen für Zeichen, und "quote" die Stelle, an der das Wort steht. Die Jahreszahl ist anderswo belegt und braucht kein Zitat von dir. Nennt "target_years" mehrere Jahre, ist das Zieljahr das, das der Plan selbst so nennt oder in dem sein Ziel erreicht ist, kein Zwischenziel. Fehlt die Liste oder passt keins ihrer Jahre, ist der Eintrag "out:unstated".
 3. "faulty", nur wenn die Tabelle als Markdown kaputt aussieht (verrutschte Spalten, zusammengelegte Köpfe, Zeilen mit falscher Zahl von Zellen): kurz, was nicht stimmt.
 
 Antworte mit genau einem JSON-Objekt, in einer Zeile, ohne Text davor oder danach. Die Zitate unten sind Beschreibungen in << >> und stehen in keinem Plan:

@@ -1868,9 +1868,10 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
     def document_of(source) -> int:
         return int((source.provenance or {}).get("document_id") or 0)
 
-    def ask_table(source, grid, parameter, slots, known, corrections=None):
+    def ask_table(source, grid, parameter, slots, known, corrections=None,
+                  years=None):
         text = json.dumps(reading_map.table_payload(
-            source, grid, parameter, slots, known, corrections),
+            source, grid, parameter, slots, known, corrections, years),
             ensure_ascii=False, indent=2)
         return ask_in_grammar(
             client, table_prompt, [{"role": "user", "content": text}],
@@ -1879,9 +1880,10 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
             owner=source.owner_id, rows=len(grid.body),
             corrections=len(corrections or ()))
 
-    def ask_text(source, parameter, slots, known, corrections=None):
+    def ask_text(source, parameter, slots, known, corrections=None,
+                 years=None):
         text = json.dumps(reading_map.text_payload(
-            source, parameter, slots, known, corrections),
+            source, parameter, slots, known, corrections, years),
             ensure_ascii=False, indent=2)
         content: object = text
         if source.owner_kind == "figure" and source.image_path \

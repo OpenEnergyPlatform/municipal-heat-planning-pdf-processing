@@ -37,9 +37,9 @@ from dataclasses import dataclass, field, replace
 from typing import Callable, Optional
 
 from . import fields
-from .pipeline import (READ, Batch, Row, Source, WorkItem, column_head,
-                       mark_unanswered, merge_field, option_named,
-                       printed_lines, row_label)
+from .pipeline import (READ, YEAR_STATES, Batch, Row, Source, WorkItem,
+                       column_head, mark_unanswered, merge_field,
+                       option_named, printed_lines, row_label)
 from .verify import number_outside_quote, numbers_in, quote_in
 from .wording import say
 
@@ -132,10 +132,27 @@ def known_of(tuples: list, frame_slots: list) -> list:
             for one in tuples]
 
 
+def years_of(bases: list, slots: list) -> dict:
+    """The plan's base years and target years, numbers only, where a
+    coordinate asked is the one they date: what the field request shows
+    (`runner._field_payload`), so a value whose passage names its state by
+    the plan's word and prints no year can answer one of them
+    (`pipeline.named_year`)."""
+    names = {slot.name for slot in slots}
+    out = {}
+    for state, key in YEAR_STATES.items():
+        dated = sorted({b["year"] for b in bases or ()
+                        if b.get("axis") in names and b.get("state") == state})
+        if dated:
+            out[key] = dated
+    return out
+
+
 # -- a table -------------------------------------------------------------------
 
 def table_payload(source: Source, grid: Grid, parameter, slots: list,
-                  known: list, corrections: Optional[list] = None) -> dict:
+                  known: list, corrections: Optional[list] = None,
+                  years: Optional[dict] = None) -> dict:
     """The table request; with *corrections* the same request asked once
     more, what was wrong with the first reply beside it."""
     provenance = source.provenance or {}
@@ -151,7 +168,7 @@ def table_payload(source: Source, grid: Grid, parameter, slots: list,
         "parameter": {"key": parameter.uri, "label": parameter.label,
                       "definition": parameter.description},
         "coordinates": {slot.name: coordinate_shown(slot) for slot in slots},
-        "known": known}
+        "known": known, **(years or {})}
     if corrections:
         payload["corrections"] = corrections
     return payload
@@ -267,7 +284,8 @@ def table_corrections(failed: list, at: dict) -> list:
 # -- a section or a figure -----------------------------------------------------
 
 def text_payload(source: Source, parameter, slots: list,
-                 known: list, corrections: Optional[list] = None) -> dict:
+                 known: list, corrections: Optional[list] = None,
+                 years: Optional[dict] = None) -> dict:
     """The request of a section or a figure; with *corrections* the same
     request asked once more for the values the check refused something of."""
     provenance = source.provenance or {}
@@ -278,7 +296,7 @@ def text_payload(source: Source, parameter, slots: list,
                              "definition": parameter.description},
                "coordinates": {slot.name: coordinate_shown(slot)
                                for slot in slots},
-               "known": known}
+               "known": known, **(years or {})}
     if corrections:
         payload["corrections"] = corrections
     return payload
@@ -425,10 +443,11 @@ class Reader:
     """(document_id, survey, passages) -> [Read], one per parameter and
     passage the survey named for it.
 
-    *ask_table(source, grid, parameter, slots, known, corrections)* and
-    *ask_text(source, parameter, slots, known, corrections)* are one request
-    each: the reply as a dict, CUT, or None; *corrections* is None the first
-    time and what was wrong the second. *shown_with(source)* is what a
+    *ask_table(source, grid, parameter, slots, known, corrections, years)*
+    and *ask_text(source, parameter, slots, known, corrections, years)* are
+    one request each: the reply as a dict, CUT, or None; *corrections* is
+    None the first time and what was wrong the second, *years* the plan's
+    base and target years (`years_of`). *shown_with(source)* is what a
     coordinate's quote may stand in besides the passage: its section's
     heading. *pool* reads passages side by side.
     """
@@ -493,12 +512,15 @@ class Reader:
         batch = Batch(document_id, parameter,
                       [WorkItem(document_id, parameter, source)])
         grid = grid_of(source.text) if source.owner_kind == "table" else None
+        bases = self.bases(pairs)
+        years = years_of(bases, slots)
 
         def ask(corrections: Optional[list] = None):
             if grid is not None:
                 return self.ask_table(source, grid, parameter, slots, known,
-                                      corrections)
-            return self.ask_text(shown, parameter, slots, known, corrections)
+                                      corrections, years)
+            return self.ask_text(shown, parameter, slots, known, corrections,
+                                 years)
 
         reply = ask()
         result = Read(batch, [], asked=1)
@@ -509,7 +531,6 @@ class Reader:
             passages[tuple(one[f"{s.name}_source"])] for one in tuples
             for s in self.frame_slots
             if tuple(one.get(f"{s.name}_source") or ()) in passages]
-        bases = self.bases(pairs)
 
         def merged(rows: list, replies: dict) -> list:
             """Every coordinate's answers onto *rows*, the most particular

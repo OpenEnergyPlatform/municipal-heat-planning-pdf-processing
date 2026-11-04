@@ -79,10 +79,11 @@ class Reader
 (document_id, survey, passages) -> [Read], one per parameter and
 passage the survey named for it.
 
-*ask_table(source, grid, parameter, slots, known, corrections)* and
-*ask_text(source, parameter, slots, known, corrections)* are one request
-each: the reply as a dict, CUT, or None; *corrections* is None the first
-time and what was wrong the second. *shown_with(source)* is what a
+*ask_table(source, grid, parameter, slots, known, corrections, years)*
+and *ask_text(source, parameter, slots, known, corrections, years)* are
+one request each: the reply as a dict, CUT, or None; *corrections* is
+None the first time and what was wrong the second, *years* the plan's
+base and target years (`years_of`). *shown_with(source)* is what a
 coordinate's quote may stand in besides the passage: its section's
 heading. *pool* reads passages side by side.
 
@@ -161,11 +162,24 @@ when *where* names it.
 def known_of(tuples: list, frame_slots: list) -> list
 ```
 
+### years_of
+
+```python
+def years_of(bases: list, slots: list) -> dict
+```
+
+The plan's base years and target years, numbers only, where a
+coordinate asked is the one they date: what the field request shows
+(`runner._field_payload`), so a value whose passage names its state by
+the plan's word and prints no year can answer one of them
+(`pipeline.named_year`).
+
 ### table_payload
 
 ```python
 def table_payload(source: Source, grid: Grid, parameter, slots: list,
-                  known: list, corrections: Optional[list] = None) -> dict
+                  known: list, corrections: Optional[list] = None,
+                  years: Optional[dict] = None) -> dict
 ```
 
 The table request; with *corrections* the same request asked once
@@ -215,7 +229,8 @@ the request numbered it, neither for the whole table.
 
 ```python
 def text_payload(source: Source, parameter, slots: list,
-                 known: list, corrections: Optional[list] = None) -> dict
+                 known: list, corrections: Optional[list] = None,
+                 years: Optional[dict] = None) -> dict
 ```
 
 The request of a section or a figure; with *corrections* the same

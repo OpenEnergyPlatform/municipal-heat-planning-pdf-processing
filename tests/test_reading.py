@@ -11,7 +11,10 @@ be answered as not printed. What the check refuses of a reply is asked once
 more with its reason, and what the second reply answers is taken, but never
 over a coordinate read the first time, and never a third time; a reply the
 check takes whole is asked once. A coordinate left out is asked for by name,
-and one no reply answers ends unanswered.
+and one no reply answers ends unanswered. A request that asks the year shows
+the plan's base and target years, numbers only, and a value whose passage
+names its state by the plan's word takes the year of that state, and no
+other.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -232,7 +235,8 @@ def read_text(*replies):
     """What reading TEXT came to, and what each request was asked with."""
     calls = []
 
-    def ask_text(source, parameter, slots, known, corrections=None):
+    def ask_text(source, parameter, slots, known, corrections=None,
+                 years=None):
         calls.append(corrections)
         return replies[min(len(calls), len(replies)) - 1]
 
@@ -244,7 +248,8 @@ def read_text(*replies):
 def read_table(*replies):
     calls = []
 
-    def ask_table(source, grid, parameter, slots, known, corrections=None):
+    def ask_table(source, grid, parameter, slots, known, corrections=None,
+                  years=None):
         calls.append(corrections)
         return replies[min(len(calls), len(replies)) - 1]
 
@@ -338,7 +343,8 @@ def test_a_coordinate_left_out_is_asked_for_by_name_and_ends_unanswered():
 def test_a_reader_reads_a_table_as_one_request_and_text_value_by_value():
     asked = []
 
-    def ask_table(source, grid, parameter, slots, known, corrections=None):
+    def ask_table(source, grid, parameter, slots, known, corrections=None,
+                  years=None):
         asked.append(("table", known))
         coordinates = {name: {"table": {"value": UNSTATED}} for name in SLOTS}
         coordinates["unit"] = {"table": {
@@ -346,7 +352,8 @@ def test_a_reader_reads_a_table_as_one_request_and_text_value_by_value():
         return {"value_columns": [2, 3], "value_rows": [2],
                 "coordinates": coordinates}
 
-    def ask_text(source, parameter, slots, known, corrections=None):
+    def ask_text(source, parameter, slots, known, corrections=None,
+                 years=None):
         asked.append(("text", known))
         return {"values": [dict(VALUE, **everything(unit=UNIT))]}
 
@@ -370,3 +377,56 @@ def test_a_reader_reads_a_table_as_one_request_and_text_value_by_value():
         == "read"
     assert values[1200]["year"] == 2022
     assert values[300]["year_state"] == "unstated"
+
+
+# -- the plan's own years ------------------------------------------------------
+
+BASES = [{"state": "base", "axis": "year", "year": 2022,
+          "quote": "im Jahr 2022", "source": ["table", 5], "index": 0},
+         {"state": "target", "axis": "year", "year": 2045,
+          "quote": "bis zum Jahr 2045", "source": ["table", 5], "index": 1}]
+
+
+def test_a_request_asking_the_year_shows_the_base_and_target_years():
+    assert reading.years_of(BASES, list(SLOTS.values()))         == {"base_years": [2022], "target_years": [2045]}
+    assert reading.years_of(BASES, [SLOTS["carrier"]]) == {}
+    shown = []
+
+    def ask_text(source, parameter, slots, known, corrections=None,
+                 years=None):
+        shown.append(reading.text_payload(source, parameter, slots, known,
+                                          corrections, years))
+        return {"values": [dict(VALUE, **everything(unit=UNIT))]}
+
+    reader = reading.Reader(SPEC, None, ask_text, FRAME,
+                            bases=lambda pairs: BASES)
+    reader.read(7, EMISSION, TEXT, [], [], {("section", 6): TEXT})
+    assert shown[0]["base_years"] == [2022]
+    assert shown[0]["target_years"] == [2045]
+    grid = reading.grid_of(TABLE)
+    assert reading.table_payload(table(), grid, EMISSION, list(SLOTS.values()),
+                                 [], None, {"base_years": [2022]})[
+        "base_years"] == [2022]
+
+
+def read_by_word(year):
+    text = Source("section", 6, "Im Bestand fielen rund 300 t CO2 an.",
+                  {"document_id": 7, "section_title": "Bilanz"})
+    reply = {"values": [dict(VALUE, **everything(unit=UNIT, year={
+        "value": year, "value_raw": "Bestand",
+        "quote": "Im Bestand fielen rund 300 t CO2"}))]}
+    reader = reading.Reader(SPEC, None, lambda *args, **kw: reply, FRAME,
+                            bases=lambda pairs: BASES)
+    return reader.read(7, EMISSION, text, [], [],
+                       {("section", 6): text}).claims[0]
+
+
+def test_a_value_named_by_the_plans_word_for_its_state_takes_that_year():
+    claim = read_by_word(2022)
+    assert claim["year"] == 2022 and claim["year_state"] == "read"
+    assert claim["year_quote"] == "im Jahr 2022"
+    assert claim["year_link_quote"] == "Im Bestand fielen rund 300 t CO2"
+
+
+def test_a_year_named_by_the_word_but_not_of_the_plan_is_not_read():
+    assert read_by_word(2019)["year_state"] == "unbacked"

@@ -148,8 +148,12 @@ the check refuses, a coordinate's answer or a number its quote does not print,
 and a coordinate the reply left out are asked once more in the same request
 with the reason (`corrections`, the harvest's own phrases); the second reply
 fills what is still open and never a coordinate read the first time, and there
-is no third. A frame coordinate still open takes the survey's tuple of the
-passage when there is exactly one and the row read no frame coordinate of its
+is no third. A request that asks the year shows the plan's base and target
+years, numbers only, as the field request does (`reading.years_of`), so a value
+whose passage names its state by the plan's word ("Bestand", "Zieljahr") and
+prints no year is read with the year of that state (`pipeline.named_year`). A
+frame coordinate still open takes the survey's tuple of the passage when there
+is exactly one and the row read no frame coordinate of its
 own that contradicts it (`reading.inherit`, window `frame`); one no reply
 answered ends `unanswered`. The values are folded by `fold_batch`.
 `scripts/probe_rows.py --documents ... --survey --read` runs both steps.
