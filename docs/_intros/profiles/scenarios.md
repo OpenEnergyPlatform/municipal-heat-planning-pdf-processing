@@ -59,17 +59,32 @@ table gives this profile's own answer.
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 6 prompt ids of its own | page transcription, English artefact repair, table and figure captioning; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object (`reading.REQUIRED`), in English, the language of the prompts of the first three; the extraction prompts are German and `extraction.PHRASES` is another table, the harvest's own |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and names (a name opens each line of the values index) and three filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, nine prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
+| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, thirteen prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
 | The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 11 prompt ids of its own | the English chat wording and the answer loop's own prompts; the twelfth, `json_format`, is the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copy gave |
 
-`extraction/places` asks once per publication which passages answer which
-fact and question, with a quote and no value; the search then reads from
-that map (see [extraction](../stages/extraction.md)).
+A run harvests a publication from its survey (owner decisions 2026-11-04,
+see [extraction](../stages/extraction.md)): the spec names one group,
+`scenario`, read with the value, and four English prompts serve it.
+`extraction/survey` names per passage the fields the publication states
+about itself, its study or its own scenarios, `extraction/read_text` names
+each value with its quote and the scenario it refers to, matched to a run
+identifier of the document's own list, and `extraction/comb` looks for a
+scenario still open in the rest of the publication. No field of this
+profile holds numbers, so a table is read by the text request too, and a
+field with a list is shown it and answers one entry, or `""` with its
+wording in `value_raw`; `extraction/read_table` exists because the flow
+needs all four prompts, and no request of this profile sends it.
+
+Field by field, `extraction/places` asks once per publication which passages
+answer which fact and question, with a quote and no value; the search then
+reads from that map.
 
 `FRONT_PAGE_PARAMETERS` in `extraction.py` has what a publication says
 about itself (title, authors, date, DOI, abstract) asked once more on its
-own over the opening of the document, besides wherever else it is read.
+own over the opening of the document, besides wherever else it is read, in
+a harvest field by field; a harvest from the survey sends no such request
+until a probe has measured whether its survey finds them by itself.
 The abstract was left out in 132 of 164 publications and the date in 60
 when they were only asked among all the other rows. Without a title the serializer writes no
 node for a publication: 17 of the 164 publications of the run of 2026-10-22
@@ -78,7 +93,7 @@ harvest (a heading with no body, or the heading of a section the model
 removed; see [refinement](../stages/refinement.md)), and one because the
 model left it out of a crowded request.
 
-Five of the nine extraction prompts, `rows`, `field`, `frame`, `review` and
+Five of the thirteen extraction prompts, `rows`, `field`, `frame`, `review` and
 `example`, are parts files (see [profiles](../profiles.md), The extraction
 prompts): each names its template of the core in its front matter, and
 `CONTRACT_LANGUAGE = "en"` in `profiles/scenarios/extraction.py` says that the
@@ -99,7 +114,7 @@ bullet. It leaves out the blocks of the templates it never had a sentence for:
 word nothing. `python scripts/render_prompts.py --what-if` shows each block it
 leaves out put back (see [Running the pipeline](../running.md)).
 
-Extraction's `rows` and `field` prompts hold a value's quote to the
+Extraction's `rows`, `field` and `read_text` prompts hold a value's quote to the
 piece that carries it, a clause, a list entry, one table cell, not the
 whole paragraph: an author list gives one quote per name, and a
 title's quote is the title itself. Quoting the whole block for every
@@ -186,8 +201,8 @@ gets a complete list; otherwise the field reverts to open text, exactly
 what a closed list exists to avoid (`extraction.py`, lines 172 to 184).
 
 The copy of the spec these lists fill in goes with every batch of the
-document, so the value request, the field requests and their checks offer
-and hold an answer to the same lists the search used. `--review` and
+document, so the value request, the field requests, the reading and their
+checks offer and hold an answer to the same lists the search used. `--review` and
 `--recheck` read a harvest file against its own document's lists, and leave
 alone, stamp included, a document whose lists cannot be closed.
 

@@ -204,12 +204,17 @@ def whole(hits: list, spec, args, passages=None, document_spec=None) -> list:
         return list(pool.map(one, documents))
 
 
-def survey_over(passages: dict, spec, args) -> list:
+def survey_over(passages: dict, spec, args, document_spec=None) -> list:
     """The survey of each document's whole plan, as the run asks it, and
     with --read the reading of each parameter after it and with --comb the
-    combing, through the run's own steps (`surveyed.SurveyedHarvest`)."""
+    combing, through the run's own steps (`surveyed.SurveyedHarvest`). Each
+    document is asked with the lists it closes (*document_spec*), made once
+    per document, as the run makes them."""
     from docpipe.extraction import fields, runner, surveyed
     from docpipe.extraction.pipeline import DocumentReport
+
+    specs = {document: (document_spec(document) if document_spec else None)
+             or spec for document in passages}
 
     def every(document: int, exclude: set) -> list:
         return [source for source in passages.get(document, ())
@@ -258,18 +263,27 @@ def survey_over(passages: dict, spec, args) -> list:
     whole = surveyed.SurveyedHarvest(
         spec, made_survey, made_reader, made_comber,
         lambda document: every(document, set()),
-        runner.make_page_count(args.db))
-    survey = whole.survey_of(spec)
+        runner.make_page_count(args.db), spec_for=specs.__getitem__)
     names = sorted({slot.name for parameter in spec.parameters
                     for slot in fields.axis_slots(parameter)}
                    | {"unit", "parameter", "value"})
 
     def one(document: int) -> dict:
         started = time.time()
+        survey = whole.survey_of(specs[document])
         found = survey(document, passages[document])
         answers = list(found.answers.values())
+        own = specs[document]
         row = {"document": document, "passages": len(passages[document]),
                "seconds": round(time.time() - started, 1),
+               # The lists this document closes, entries per list: 0 is a
+               # list the run would close and this probe did not.
+               "lists": {**{p.uri: len(p.vocabulary or ())
+                            for p in own.parameters if p.vocabulary_dynamic},
+                         **{f"{p.uri}.{name}": len(axis.vocabulary or ())
+                            for p in own.parameters
+                            for name, axis in p.axes.items()
+                            if axis.dynamic}},
                "complete": found.complete,
                "by_parameter": {p: len(found.passages_of(p))
                                 for p in survey.parameters},
@@ -438,7 +452,7 @@ def main() -> int:
     if args.survey:
         if not passages:
             parser.error("--survey reads whole plans: give --documents")
-        report = survey_over(passages, spec, args)
+        report = survey_over(passages, spec, args, document_spec)
         trace.close()
         for row in report:
             print(json.dumps(row, ensure_ascii=False))

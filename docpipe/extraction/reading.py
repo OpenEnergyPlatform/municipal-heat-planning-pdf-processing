@@ -2,8 +2,10 @@
 reading.py: The values of one parameter in the passages the survey named for
 it, every coordinate of a value in the same request.
 
-Step 3 of the rebuilt harvest (owner decision 2026-11-04). A table is read as
-one unit: one request says which of its columns and rows hold the
+Step 3 of the rebuilt harvest (owner decision 2026-11-04). Numbers are read
+by their cell, everything else is named with a quote. A table is read as one
+unit for a parameter whose values are numbers: one request says which of its
+columns and rows hold the
 parameter's values and where each coordinate stands, at a row label, a
 column head or for the whole table, each with its quote. Code then makes one
 row per number of a cell and reads the number by its place, never by its
@@ -12,9 +14,12 @@ A cell may print several numbers, a value with its share in brackets or
 values stacked in one cell (owner decision 2026-11-04): the reply says how
 many numbers the cells of such a column print and which of them are values
 of the parameter, and a number's place is then its row, its column and its
-place in the cell, a coordinate answered for that place alone. A section or
-a figure is read in one request that names its values with every coordinate
-at once, each with its own quote.
+place in the cell, a coordinate answered for that place alone. A section, a
+figure, and a table for any other parameter, is read in one request that
+names its values with every coordinate at once, each with its own quote. A
+category parameter's request shows its entries, and its grammar takes one of
+them for a value, or "" where the model is unsure and writes the wording into
+value_raw; the fold checks that value as it checks every one.
 
 Every coordinate is answered: the grammar requires each of them, a value's
 entry in text and a table's entry for the whole table, and "the passage does
@@ -310,7 +315,8 @@ class Gathered:
                     or new
             elif get == "search":
                 pattern = ask.get("pattern")
-                if not pattern or any(h["pattern"] == pattern
+                # A list no search made, the ranking's, has no pattern.
+                if not pattern or any(h.get("pattern") == pattern
                                       for h in self.hits):
                     continue
                 matches = lookup.matching(order, pattern,
@@ -558,21 +564,39 @@ def table_corrections(failed: list, at: dict) -> list:
     return out
 
 
-# -- a section or a figure -----------------------------------------------------
+# -- a section, a figure, a table for a wording --------------------------------
+
+def value_classes(parameter) -> dict:
+    """The entries a category parameter's value is one of, as a request shows
+    a closed list (`fields.Slot.answerable`), without UNSTATED: a value the
+    passage does not state is no value. Empty for a parameter with no list."""
+    if parameter.is_numeric:
+        return {}
+    slot = fields.value_choice(parameter)
+    if not slot.is_closed:
+        return {}
+    return {label: entry for label, entry in slot.answerable().items()
+            if label != fields.UNSTATED}
+
 
 def text_payload(source: Source, parameter, slots: list,
                  context: dict, corrections: Optional[list] = None) -> dict:
-    """The request of a section or a figure, the text around a figure and
+    """The request of a section, a figure or a table read for a parameter
+    whose values are no numbers, the text around a table or figure and
     *context* (`Reader.context_of`) beside it; with *corrections* the same
-    request asked once more for the values the check refused something of."""
+    request asked once more for the values the check refused something of.
+    A category parameter shows its entries (`value_classes`)."""
     provenance = source.provenance or {}
+    classes = value_classes(parameter)
     payload = {"source": {"kind": source.owner_kind,
                           "section": provenance.get("section_title"),
                           "text": source.text},
                **({"around": context["around"]} if context.get("around")
                   else {}),
                "parameter": {"key": parameter.uri, "label": parameter.label,
-                             "definition": parameter.description},
+                             "definition": parameter.description,
+                             **({"value_classes": classes} if classes
+                                else {})},
                "coordinates": {slot.name: coordinate_shown(slot)
                                for slot in slots},
                **{key: value for key, value in context.items()
@@ -585,9 +609,15 @@ def text_payload(source: Source, parameter, slots: list,
 def text_response_format(parameter, slots: list,
                          labels: Optional[list] = None) -> dict:
     """Every value with every coordinate. Asked again, each entry names the
-    value of the first reply it answers for, one of *labels*."""
-    value = ({"type": "number"} if parameter.is_numeric
-             else {"type": "string"})
+    value of the first reply it answers for, one of *labels*. A category
+    value is one of its entries, or "" where the model is unsure of them."""
+    classes = value_classes(parameter)
+    if parameter.is_numeric:
+        value = {"type": "number"}
+    elif classes:
+        value = {"enum": [*classes, ""]}
+    else:
+        value = {"type": "string"}
     properties = {"value": value, "value_raw": {"type": "string"},
                   "quote": {"type": "string"}}
     properties.update({slot.name: answer_schema(slot) for slot in slots})
@@ -811,7 +841,10 @@ class Reader:
         batch = Batch(document_id, parameter,
                       [WorkItem(document_id, parameter, source)],
                       spec=self.spec)
-        grid = grid_of(source.text) if source.owner_kind == "table" else None
+        # A table's cells hold numbers; a wording in a table is named as in
+        # a section, with its quote.
+        grid = grid_of(source.text) \
+            if source.owner_kind == "table" and parameter.is_numeric else None
         bases = self.bases(pairs)
         context, around = self.context_of(source, slots, tuples, bases,
                                           passages, budget)

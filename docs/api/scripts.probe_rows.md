@@ -103,12 +103,14 @@ The frame, the rows and the coordinates of each document's passages.
 ### survey_over
 
 ```python
-def survey_over(passages: dict, spec, args) -> list
+def survey_over(passages: dict, spec, args, document_spec=None) -> list
 ```
 
 The survey of each document's whole plan, as the run asks it, and
 with --read the reading of each parameter after it and with --comb the
-combing, through the run's own steps (`surveyed.SurveyedHarvest`).
+combing, through the run's own steps (`surveyed.SurveyedHarvest`). Each
+document is asked with the lists it closes (*document_spec*), made once
+per document, as the run makes them.
 
 ### compute_over
 

@@ -21,7 +21,8 @@ the plan's base and target years, numbers only, and a value whose passage
 names its state by the plan's word takes the year of that state, and no
 other. A table or figure is shown with the text of its section, the whole
 section when it fits two pages and the part around its place when not, and a
-coordinate quoted from that text is read and cites the section.
+coordinate quoted from that text is read and cites the section. A search is
+listed once, also after a list of hits no search made.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -669,6 +670,15 @@ def test_a_search_lists_its_hits_and_a_hit_asked_for_is_shown():
     assert "more" not in shows[1]
     assert [m["text"] for m in shows[2]["more"]] == [AFTER.text]
     assert read.claims[0]["year_state"] == "read"
+
+
+def test_a_search_after_a_list_no_search_made_is_searched_once():
+    gathered = reading.Gathered()
+    gathered.list_hits([(("section", 6), "Bilanz", "Es fielen rund 300 t CO2")],
+                       query="Emissionen")
+    ask = [{"get": "search", "pattern": r"Jahr 20\d\d"}]
+    assert gathered.fetch(ask, list(PLAN.values()), PLAN, None)
+    assert not gathered.fetch(ask, list(PLAN.values()), PLAN, None)
 
 
 def test_gathering_ends_when_a_round_brings_nothing_new():

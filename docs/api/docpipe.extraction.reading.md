@@ -5,8 +5,10 @@
 reading.py: The values of one parameter in the passages the survey named for
 it, every coordinate of a value in the same request.
 
-Step 3 of the rebuilt harvest (owner decision 2026-11-04). A table is read as
-one unit: one request says which of its columns and rows hold the
+Step 3 of the rebuilt harvest (owner decision 2026-11-04). Numbers are read
+by their cell, everything else is named with a quote. A table is read as one
+unit for a parameter whose values are numbers: one request says which of its
+columns and rows hold the
 parameter's values and where each coordinate stands, at a row label, a
 column head or for the whole table, each with its quote. Code then makes one
 row per number of a cell and reads the number by its place, never by its
@@ -15,9 +17,12 @@ A cell may print several numbers, a value with its share in brackets or
 values stacked in one cell (owner decision 2026-11-04): the reply says how
 many numbers the cells of such a column print and which of them are values
 of the parameter, and a number's place is then its row, its column and its
-place in the cell, a coordinate answered for that place alone. A section or
-a figure is read in one request that names its values with every coordinate
-at once, each with its own quote.
+place in the cell, a coordinate answered for that place alone. A section, a
+figure, and a table for any other parameter, is read in one request that
+names its values with every coordinate at once, each with its own quote. A
+category parameter's request shows its entries, and its grammar takes one of
+them for a value, or "" where the model is unsure and writes the wording into
+value_raw; the fold checks that value as it checks every one.
 
 Every coordinate is answered: the grammar requires each of them, a value's
 entry in text and a table's entry for the whole table, and "the passage does
@@ -376,6 +381,16 @@ place: [{coordinate, row | column [, part], what}], the row or column
 numbered as the request numbered it, the place in a cell where the cell
 prints several numbers, neither for the whole table.
 
+### value_classes
+
+```python
+def value_classes(parameter) -> dict
+```
+
+The entries a category parameter's value is one of, as a request shows
+a closed list (`fields.Slot.answerable`), without UNSTATED: a value the
+passage does not state is no value. Empty for a parameter with no list.
+
 ### text_payload
 
 ```python
@@ -383,9 +398,11 @@ def text_payload(source: Source, parameter, slots: list,
                  context: dict, corrections: Optional[list] = None) -> dict
 ```
 
-The request of a section or a figure, the text around a figure and
+The request of a section, a figure or a table read for a parameter
+whose values are no numbers, the text around a table or figure and
 *context* (`Reader.context_of`) beside it; with *corrections* the same
 request asked once more for the values the check refused something of.
+A category parameter shows its entries (`value_classes`).
 
 ### text_response_format
 
@@ -395,7 +412,8 @@ def text_response_format(parameter, slots: list,
 ```
 
 Every value with every coordinate. Asked again, each entry names the
-value of the first reply it answers for, one of *labels*.
+value of the first reply it answers for, one of *labels*. A category
+value is one of its entries, or "" where the model is unsure of them.
 
 ### text_rows
 

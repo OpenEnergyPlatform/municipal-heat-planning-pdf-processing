@@ -33,15 +33,21 @@
     "measurement that tells us how far apart those two vocabularies are.",
     "",
     "The classes of the five corpus-wide lists carry the ontology's own definition, copied verbatim from the pinned release",
-    "openenergyplatform.org/ontology/oeo/releases/2.13.0/oeo.owl, whose closure file has sha256",
-    "df25aa5aec966be79096cb5dc1f09023fc66a99b984c485a24897adb76a99dd4 -- the same pin profiles/kwp/vocabulary.json",
+    "openenergyplatform.org/ontology/oeo/releases/2.14.0/oeo.owl, whose closure file has sha256",
+    "0642170268b6e207fe56ff7b455a6216cc41084a56dbe67190e4bc1caf17ea1a -- the same pin profiles/kwp/vocabulary.json",
     "records. The property is IAO_0000115 except where an entry says otherwise in its own note. A class the",
-    "ontology gives no definition carries none. profiles/scenarios/vocabulary.json is the snapshot of that release,",
-    "and tests/test_scenarios_extraction.py holds the four tag lists' definitions against it.",
+    "ontology gives no definition carries none. profiles/scenarios/vocabulary.json is the snapshot of that release.",
     "out:not_in_list is not an ontology term, so its meaning is this profile's own words, in the language of",
     "its prompts."
   ],
   "parameter_question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.",
+  "groups": {
+    "scenario": {
+      "coordinates": ["scenario"],
+      "read_in": "reading",
+      "where": "The scenario a value refers to is named in the value's own sentence, in the heading of its section, in the title, a column head or a row label of its table, or in the caption of its figure."
+    }
+  },
   "parameters": [
     {
       "uri": "publication_title",

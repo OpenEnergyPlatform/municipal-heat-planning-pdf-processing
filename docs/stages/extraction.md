@@ -98,7 +98,8 @@ A spec may name `groups`: the coordinates a plan prints together, each group
 with the step that reads it (`read_in`, `survey` or `reading`) and a sentence
 on where a plan prints it (`where`). kwp has three: `frame` (scenario and
 year, read in the survey), `number` (unit and subject) and `context` (the
-other axes), both read with the number. `spec.load` refuses a coordinate in no
+other axes), both read with the number. scenarios has one, `scenario` (the
+scenario a value refers to, read with the value). `spec.load` refuses a coordinate in no
 group or in two, a name that is no coordinate, an unknown step, and a survey
 group that is not the axes of one parameter. Groups are for the rebuilt
 harvest (owner decision 2026-11-04); the harvest below reads none of them.
@@ -131,7 +132,9 @@ map of places and most of the search for open coordinates of corpus_m8_100: 60,
 The second step of the rebuilt harvest (`reading.py`, `runner.make_reader`,
 prompts `extraction/read_table` and `extraction/read_text`). Each parameter is
 read in the passages the survey named for it, one request per passage, its
-definition the only one in the request. A table is one unit: the request names
+definition the only one in the request. Numbers are read by their cell,
+everything else is named with a quote (owner decision 2026-11-04). For a
+parameter whose values are numbers a table is one unit: the request names
 the columns and rows that hold the parameter's values and, for every
 coordinate, where it stands, at a row label, at a column head or for the whole
 table, each with its quote; it writes no number. Code makes one row per number
@@ -147,10 +150,17 @@ the order it prints them (`verify.numbers_in_order`), with digits grouped by a
 space taken as one number or as several, whichever gives the count the reply
 named (`reading.cell_numbers`); a cell built otherwise is not read and is
 counted as before. The survey is told that each number of such a cell counts
-for its own parameter. A section or a figure is read
-in one request that names each value with every coordinate at once, each with
-its own quote; one longer than the survey's two pages is read in the survey's
-pieces. A table or a figure is shown with the text of its section around it
+for its own parameter. A section, a figure, and a table for a
+parameter whose values are no numbers (kwp's planning office, every parameter
+of scenarios) is read in one request that names each value with every
+coordinate at once, each with its own quote; a section or figure longer than
+the survey's two pages is read in the survey's pieces. A category parameter's
+request shows its entries under `value_classes`, each with its meaning and
+spellings, as the field request shows the value of such a parameter asked
+again (`reading.value_classes`, `fields.value_choice`), and the grammar takes
+for a value exactly one entry, or `""` where the model is unsure and writes
+the wording into `value_raw`; the fold keeps such a wording without an entry
+(`unmapped:value`), as it does everywhere. A table or a figure is shown with the text of its section around it
 (`reading.around_of`, owner decision 2026-11-04), where the sentence that
 announces it, the heading over it and the paragraph under it print its year
 and its scenario: the whole section when it fits the survey's two pages, else
@@ -212,8 +222,8 @@ is from here on a finding about the plan. The ranking is handed in:
 
 A run harvests from the survey of each plan wherever its profile can
 (`runner.surveyed_flow`): the spec names groups and the profile writes the four
-prompts `extraction/survey`, `read_table`, `read_text` and `comb`. kwp does; a
-profile without them (scenarios today) is harvested field by field as before,
+prompts `extraction/survey`, `read_table`, `read_text` and `comb`. kwp and
+scenarios do; a profile without them is harvested field by field as before,
 so the two flows stand side by side until every profile has moved. Per document
 the run surveys, reads and combs (`surveyed.SurveyedHarvest`), then folds, runs
 the compute step and writes the file with its stamp as for any harvest. This
@@ -331,7 +341,10 @@ left them out, the title in 17 of 164 publications and the abstract in 132,
 though nearly every one prints them at its start. Reading the opening
 rather than the first page leaves room for a cover, a repository's title
 sheet or a bibliography entry in front of the paper. A pass over a stored
-harvest's unread passages (`already_read`) asks none of these.
+harvest's unread passages (`already_read`) asks none of these. A harvest from
+the survey sends no such request either: whether its survey names these
+parameters on the front page by itself is measured first (owner decision
+2026-11-04).
 
 ### Anchors
 
@@ -2009,7 +2022,7 @@ a `*.jsonl` or `*.stamp.json` that a reader of the harvest would list.
 | `shapes_files` | profile hook | none (the check is skipped) | A callable that returns the SHACL files the profile's graph is held against, those of its last refresh. Scenarios finds its own there; kwp names none | `preflight.shapes_verdict` |
 | `ALT_LABEL_LANGUAGE` | profile hook | required by the profile's `vocabulary` module | The language tag of the alternative labels a vocabulary snapshot keeps: `de` for kwp, `en` for scenarios and the built-in profile. The core fixes none | `profiles/*/vocabulary.py`, `ontology.build` |
 | `BASE_YEAR` / `TARGET_YEAR` | profile hook | none (the state has no years) | Which frame pairs are the plan's own state and which are its target: a mapping from a frame coordinate to its entry, kwp's `{"scenario": "status_quo"}` and `{"scenario": "target"}`. Their years date a row that names the state by its word and prints no year (see Base years) | `runner.year_states_of`, `pipeline.state_years` |
-| `FRONT_PAGE_PARAMETERS` | profile hook | none | The uris of the parameters asked once more on their own in one request over the document's opening sections, with origin `front`; scenarios names title, authors, date, DOI and abstract | `runner.make_front_page`, `runner.plan_batches` |
+| `FRONT_PAGE_PARAMETERS` | profile hook | none | The uris of the parameters asked once more on their own in one request over the document's opening sections, with origin `front`, field by field only; scenarios names title, authors, date, DOI and abstract | `runner.make_front_page`, `runner.plan_batches` |
 | `DECIMAL_MARK` | profile hook | `,` | `,` or `.`: how the profile's documents write the decimal, which decides what the digits alone leave open ("3,251" is 3.251 or 3251); any other value is an error | `verify.decimal_mark` |
 | `document_axes` | profile hook | none | A callable `(connection, document_id)` that returns `{axis name: {uri: [labels]}}`, the closed lists of the spec's dynamic axes for that document (AR6 closes its scenarios and regions); every batch of the document carries the spec with them | `runner.fill_dynamic_axes`, `runner.make_document_spec` |
 | `document_context` | profile hook | none | A callable `(connection, document_id)` that returns `{"name": ...}`, what the document itself contributes to its own search anchor (the municipality); the caption of the first passage found is added to it | `runner.document_anchor` |
@@ -2031,9 +2044,12 @@ its own in the doctor, so neither counts. That number, in tokens per
 request, is what `--print-context-budget` prints, what the doctor's extract
 line shows and what the check of the served window before the first
 document holds the server to: it is what the model server's
-`--max-model-len` has to cover. For kwp it is 30,347 tokens per request,
-set by the field prompt; for scenarios 51,343 tokens per request, set by the
-rows prompt. Both numbers are those of the composed prompts. A
+`--max-model-len` has to cover. In a harvest from the survey it is 29,677
+tokens per request for kwp and 52,101 for scenarios, both set by the
+reading prompt for text, which carries a category parameter's whole list;
+field by field it is 30,347 for kwp, set by the field prompt, and 51,343 for
+scenarios, set by the rows prompt. All four numbers are those of the composed
+prompts. A
 profile with several long lists, as scenarios has, can therefore need a
 window above the 32768 that `EXTRACT_MAX_MODEL_LEN` falls back to.
 
