@@ -132,10 +132,20 @@ read in the passages the survey named for it, one request per passage, its
 definition the only one in the request. A table is one unit: the request names
 the columns and rows that hold the parameter's values and, for every
 coordinate, where it stands, at a row label, at a column head or for the whole
-table, each with its quote; it writes no number. Code makes one row per cell of
-a value row and a value column that prints one number (`reading.table_rows`),
-quoted by its table row, so a number is read by its place and a row "27 % | 28
-% | 27 % | 23 %" gives each 27 % its own column. A section or a figure is read
+table, each with its quote; it writes no number. Code makes one row per number
+of a cell of a value row and a value column (`reading.table_rows`), quoted by
+its table row, so a number is read by its place and a row "27 % | 28 % | 27 % |
+23 %" gives each 27 % its own column. A cell may print several numbers, a value
+with its share in brackets or values stacked in one cell (owner decision
+2026-11-04): the reply then names, under `cells`, how many numbers the cells
+of that column print and which places hold values of the parameter, and a
+coordinate that holds for one place only, such as the unit of the share, is
+answered at that column with its `part`. Code reads the numbers of a cell in
+the order it prints them (`verify.numbers_in_order`), with digits grouped by a
+space taken as one number or as several, whichever gives the count the reply
+named (`reading.cell_numbers`); a cell built otherwise is not read and is
+counted as before. The survey is told that each number of such a cell counts
+for its own parameter. A section or a figure is read
 in one request that names each value with every coordinate at once, each with
 its own quote; one longer than the survey's two pages is read in the survey's
 pieces. A table or a figure is shown with the text of its section around it

@@ -9,8 +9,13 @@ Step 3 of the rebuilt harvest (owner decision 2026-11-04). A table is read as
 one unit: one request says which of its columns and rows hold the
 parameter's values and where each coordinate stands, at a row label, a
 column head or for the whole table, each with its quote. Code then makes one
-row per cell and reads the number by its place, never by its value: a table
-row "27 % | 28 % | 27 % | 23 %" gives each 27 % its own column. A section or
+row per number of a cell and reads the number by its place, never by its
+value: a table row "27 % | 28 % | 27 % | 23 %" gives each 27 % its own column.
+A cell may print several numbers, a value with its share in brackets or
+values stacked in one cell (owner decision 2026-11-04): the reply says how
+many numbers the cells of such a column print and which of them are values
+of the parameter, and a number's place is then its row, its column and its
+place in the cell, a coordinate answered for that place alone. A section or
 a figure is read in one request that names its values with every coordinate
 at once, each with its own quote.
 
@@ -199,6 +204,18 @@ The one number a cell prints, as int or float, or None for a cell
 with none or with several. Digits after a letter are part of a name,
 "CO2" or "Q3", and no number of the cell.
 
+### cell_numbers
+
+```python
+def cell_numbers(cell: str, count: int) -> Optional[list]
+```
+
+The *count* numbers a cell prints, in the order it prints them, as int
+or float, or None for a cell that does not print that many. Digits after
+a letter are part of a name. Digits grouped by a space are read as one
+number and as several, whichever gives *count*: "967 168%" is two numbers
+where its column prints two, "1 234" one where it prints one.
+
 ### slots_of
 
 ```python
@@ -306,15 +323,31 @@ Every coordinate answered, at least for the whole table: its entry
 there is the answer of every value no row or column entry answers, and
 UNSTATED when the table does not print it.
 
+### parts_of
+
+```python
+def parts_of(reply: dict, grid: Grid) -> dict
+```
+
+{column: (numbers, [places])} of the columns whose cells print several
+numbers, as the reply's "cells" says: how many numbers each cell of the
+column prints and the places of those that are values, counted from 1 in
+the order the cell prints them. An entry naming no such place says
+nothing; the first entry of a column stands.
+
 ### table_rows
 
 ```python
 def table_rows(reply: dict, grid: Grid) -> tuple
 ```
 
-(rows, {label: (row, column)}, cells not read) of a table reply: one
-row per cell of a value row and a value column that prints one number,
-its quote the table row, its head the words over its column.
+(rows, {label: (row, column, part)}, cells not read) of a table reply:
+one row per number of a cell of a value row and a value column, its quote
+the table row, its head the words over its column. A cell prints one
+number, part None; or, in a column the reply's "cells" names, as many as
+it says, and each of them it names a value is a row of its own, part its
+place in the cell (`parts_of`). A cell that does not print that many is
+not read.
 
 ### answer_of
 
@@ -329,8 +362,8 @@ def table_replies(reply: dict, slot, at: dict) -> list
 ```
 
 [(level, window, field reply)] of one coordinate of a table reply,
-the most particular first: a row label, then a column head, then the
-table.
+the most particular first: a row label, then a column head, for one
+place in the column's cells before the whole column, then the table.
 
 ### table_corrections
 
@@ -339,8 +372,9 @@ def table_corrections(failed: list, at: dict) -> list
 ```
 
 What the check refused of a table reply, once per coordinate and
-place: [{coordinate, row | column, what}], the row or column numbered as
-the request numbered it, neither for the whole table.
+place: [{coordinate, row | column [, part], what}], the row or column
+numbered as the request numbered it, the place in a cell where the cell
+prints several numbers, neither for the whole table.
 
 ### text_payload
 

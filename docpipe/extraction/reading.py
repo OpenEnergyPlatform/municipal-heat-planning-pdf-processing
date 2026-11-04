@@ -6,8 +6,13 @@ Step 3 of the rebuilt harvest (owner decision 2026-11-04). A table is read as
 one unit: one request says which of its columns and rows hold the
 parameter's values and where each coordinate stands, at a row label, a
 column head or for the whole table, each with its quote. Code then makes one
-row per cell and reads the number by its place, never by its value: a table
-row "27 % | 28 % | 27 % | 23 %" gives each 27 % its own column. A section or
+row per number of a cell and reads the number by its place, never by its
+value: a table row "27 % | 28 % | 27 % | 23 %" gives each 27 % its own column.
+A cell may print several numbers, a value with its share in brackets or
+values stacked in one cell (owner decision 2026-11-04): the reply says how
+many numbers the cells of such a column print and which of them are values
+of the parameter, and a number's place is then its row, its column and its
+place in the cell, a coordinate answered for that place alone. A section or
 a figure is read in one request that names its values with every coordinate
 at once, each with its own quote.
 
@@ -41,7 +46,8 @@ from . import fields, lookup
 from .pipeline import (READ, YEAR_STATES, Batch, Row, Source, WorkItem,
                        column_head, mark_unanswered, merge_field,
                        option_named, printed_lines, row_label, window_around)
-from .verify import number_outside_quote, numbers_in, quote_in
+from .verify import (number_outside_quote, numbers_in, numbers_in_order,
+                     quote_in)
 from .wording import say
 
 READ_TABLE_PROMPT_ID = "extraction/read_table"
@@ -97,6 +103,20 @@ def cell_number(cell: str):
     return float(text) if "." in text else int(text)
 
 
+def cell_numbers(cell: str, count: int) -> Optional[list]:
+    """The *count* numbers a cell prints, in the order it prints them, as int
+    or float, or None for a cell that does not print that many. Digits after
+    a letter are part of a name. Digits grouped by a space are read as one
+    number and as several, whichever gives *count*: "967 168%" is two numbers
+    where its column prints two, "1 234" one where it prints one."""
+    text = _IN_A_NAME.sub("", cell or "")
+    for grouped in (False, True):
+        found = numbers_in_order(text, grouped=grouped)
+        if len(found) == count:
+            return [float(n) if "." in n else int(n) for n in found]
+    return None
+
+
 def slots_of(spec, parameter) -> list:
     """The coordinates a value of *parameter* is read with: its unit, then
     every axis the spec does not decide."""
@@ -124,7 +144,12 @@ def answer_schema(slot, where: Optional[str] = None) -> dict:
                   "quote": {"type": "string"}}
     required = ["value"]
     if where:
-        properties = {where: {"type": "integer"}, **properties}
+        place = {where: {"type": "integer"}}
+        if where == "column":
+            # A place in the cells of the column, where they print several
+            # numbers (`table_rows`): the answer is that place's alone.
+            place["part"] = {"type": "integer"}
+        properties = {**place, **properties}
         required = [where, "value"]
     return {"type": "object", "properties": properties,
             "required": required, "additionalProperties": False}
@@ -384,6 +409,16 @@ def table_response_format(slots: list) -> dict:
         "coordinates": {"type": "object", "properties": coordinates,
                         "required": [slot.name for slot in slots],
                         "additionalProperties": False},
+        # The value columns whose cells print several numbers: how many each
+        # cell prints and which of them, counted from 1, are values.
+        "cells": {"type": "array", "items": {
+            "type": "object",
+            "properties": {"column": {"type": "integer"},
+                           "numbers": {"type": "integer"},
+                           "values": {"type": "array",
+                                      "items": {"type": "integer"}}},
+            "required": ["column", "numbers", "values"],
+            "additionalProperties": False}},
         "faulty": {"type": "string"}, "more": more_schema()},
         "required": ["value_columns", "value_rows", "coordinates"],
         "additionalProperties": False}
@@ -391,29 +426,63 @@ def table_response_format(slots: list) -> dict:
             "json_schema": {"name": "table_reply", "schema": schema}}
 
 
+def parts_of(reply: dict, grid: Grid) -> dict:
+    """{column: (numbers, [places])} of the columns whose cells print several
+    numbers, as the reply's "cells" says: how many numbers each cell of the
+    column prints and the places of those that are values, counted from 1 in
+    the order the cell prints them. An entry naming no such place says
+    nothing; the first entry of a column stands."""
+    out: dict = {}
+    for entry in reply.get("cells") or ():
+        if not isinstance(entry, dict):
+            continue
+        column, numbers = entry.get("column"), entry.get("numbers")
+        if not (isinstance(column, int) and 1 <= column <= grid.columns
+                and isinstance(numbers, int) and numbers >= 1):
+            continue
+        places = sorted({k for k in entry.get("values") or ()
+                         if isinstance(k, int) and 1 <= k <= numbers})
+        if places:
+            out.setdefault(column, (numbers, places))
+    return out
+
+
 def table_rows(reply: dict, grid: Grid) -> tuple:
-    """(rows, {label: (row, column)}, cells not read) of a table reply: one
-    row per cell of a value row and a value column that prints one number,
-    its quote the table row, its head the words over its column."""
+    """(rows, {label: (row, column, part)}, cells not read) of a table reply:
+    one row per number of a cell of a value row and a value column, its quote
+    the table row, its head the words over its column. A cell prints one
+    number, part None; or, in a column the reply's "cells" names, as many as
+    it says, and each of them it names a value is a row of its own, part its
+    place in the cell (`parts_of`). A cell that does not print that many is
+    not read."""
     columns = sorted({c for c in reply.get("value_columns") or ()
                       if isinstance(c, int) and 1 <= c <= grid.columns})
     numbers = sorted({r for r in reply.get("value_rows") or ()
                       if isinstance(r, int) and 1 <= r <= len(grid.body)})
+    split = parts_of(reply, grid)
     rows, at, skipped = [], {}, 0
     for r in numbers:
         line, cells = grid.body[r - 1]
         for c in columns:
-            value = cell_number(cells[c - 1]) if c <= len(cells) else None
-            if value is None:
+            cell = cells[c - 1] if c <= len(cells) else None
+            if c in split:
+                count, places = split[c]
+                found = cell_numbers(cell, count) if cell is not None else None
+                values = [(k, found[k - 1]) for k in places] if found else []
+            else:
+                value = cell_number(cell) if cell is not None else None
+                values = [(None, value)] if value is not None else []
+            if not values:
                 skipped += 1
                 continue
-            claim = {"source": "Q1", "value": value, "quote": line.strip()}
             head = column_head(grid.text, c, len(cells))
-            if head:
-                claim["head"] = head
-            label = row_label(len(rows))
-            rows.append(Row(label=label, item_index=0, claim=claim))
-            at[label] = (r, c)
+            for part, value in values:
+                claim = {"source": "Q1", "value": value, "quote": line.strip()}
+                if head:
+                    claim["head"] = head
+                label = row_label(len(rows))
+                rows.append(Row(label=label, item_index=0, claim=claim))
+                at[label] = (r, c, part)
     return rows, at, skipped
 
 
@@ -427,21 +496,34 @@ ROWS, COLUMNS, TABLE = "rows", "columns", "table"
 
 def table_replies(reply: dict, slot, at: dict) -> list:
     """[(level, window, field reply)] of one coordinate of a table reply,
-    the most particular first: a row label, then a column head, then the
-    table."""
+    the most particular first: a row label, then a column head, for one
+    place in the column's cells before the whole column, then the table."""
     entry = ((reply.get("coordinates") or {}).get(slot.name)
              if isinstance(reply.get("coordinates"), dict) else None) or {}
-    by_row, by_column = collections.defaultdict(list), \
-        collections.defaultdict(list)
-    for label, (r, c) in at.items():
+    by_row, by_column, by_part = (collections.defaultdict(list)
+                                  for _ in range(3))
+    for label, (r, c, part) in at.items():
         by_row[r].append(label)
         by_column[c].append(label)
+        by_part[(c, part or 1)].append(label)
+    answers = [answer for answer in entry.get(COLUMNS) or ()
+               if isinstance(answer, dict)]
+    at_part = [dict(answer_of(answer),
+                    rows=by_part[(answer.get("column"), answer["part"])])
+               for answer in answers
+               if isinstance(answer.get("part"), int)
+               and (answer.get("column"), answer["part"]) in by_part]
+    whole = [dict(answer_of(answer), rows=by_column[answer["column"]])
+             for answer in answers
+             if answer.get("part") is None
+             and answer.get("column") in by_column]
     out = []
-    for key, where, labels in ((ROWS, "row", by_row),
-                               (COLUMNS, "column", by_column)):
-        groups = [dict(answer_of(answer), rows=labels[answer[where]])
-                  for answer in entry.get(key) or ()
-                  if isinstance(answer, dict) and answer.get(where) in labels]
+    for key, groups in ((ROWS, [dict(answer_of(answer),
+                                     rows=by_row[answer["row"]])
+                                for answer in entry.get(ROWS) or ()
+                                if isinstance(answer, dict)
+                                and answer.get("row") in by_row]),
+                        (COLUMNS, at_part + whole)):
         if groups:
             out.append((key, ("own", 1), {"groups": groups}))
     whole = entry.get(TABLE)
@@ -453,8 +535,9 @@ def table_replies(reply: dict, slot, at: dict) -> list:
 
 def table_corrections(failed: list, at: dict) -> list:
     """What the check refused of a table reply, once per coordinate and
-    place: [{coordinate, row | column, what}], the row or column numbered as
-    the request numbered it, neither for the whole table."""
+    place: [{coordinate, row | column [, part], what}], the row or column
+    numbered as the request numbered it, the place in a cell where the cell
+    prints several numbers, neither for the whole table."""
     out, seen = [], set()
     for name, level, failure in failed:
         place = at.get(failure.get("row"))
@@ -462,6 +545,8 @@ def table_corrections(failed: list, at: dict) -> list:
             where = {"row": place[0]}
         elif level == COLUMNS and place:
             where = {"column": place[1]}
+            if place[2] is not None:
+                where["part"] = place[2]
         else:
             where = {}
         key = (name, level, tuple(where.values()), failure.get("why"))

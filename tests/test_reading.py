@@ -3,7 +3,12 @@ cell of a value row and a value column, the table row its quote, and a
 number printed twice in a row in two columns; a coordinate is taken at its
 row label before its column head before the whole table, and only through
 the field check; a frame coordinate left open takes the survey's one tuple
-of the passage, but not against a year the row read under its own head.
+of the passage, but not against a year the row read under its own head. A
+cell that prints several numbers is split into them in the order it prints
+them where the reply says how many its column prints, each place it names a
+value a row of its own, an answer for one place holding there before the
+answer for its column, and a cell that prints another count is not read; a
+column the reply does not split reads one number per cell as before.
 
 Every coordinate is answered: the grammar wants each coordinate of a value
 in text and each coordinate of a table for the whole table, and a year can
@@ -29,6 +34,7 @@ import jsonschema
 from docpipe.extraction import fields, reading
 from docpipe.extraction.pipeline import Source
 from docpipe.extraction.spec import load as load_spec
+from docpipe.extraction.verify import numbers_in_order
 from docpipe.extraction.wording import say
 
 SPEC = load_spec(json.loads((Path(__file__).resolve().parent.parent
@@ -138,6 +144,103 @@ def test_a_coordinate_whose_quote_is_not_in_the_table_is_not_read():
     assert rows[0].claim.get("carrier_state") != "read"
 
 
+# -- a cell that prints several numbers ----------------------------------------
+
+SHARES = ("Tabelle 9: Emissionen mit Anteil\n"
+          "| Träger | Haushalte und GHD | gesamt |\n"
+          "| --- | --- | --- |\n"
+          "| Erdgas | 1.200 (60 %) | 2.000 |\n"
+          "| Heizöl | 800 | 1.000 |")
+SHARES_HEAD = "| Träger | Haushalte und GHD | gesamt |"
+
+
+def split(places, rows=(1,), numbers=2):
+    return reading.table_rows(
+        {"value_columns": [2, 3], "value_rows": list(rows),
+         "cells": [{"column": 2, "numbers": numbers, "values": places}]},
+        reading.grid_of(SHARES))
+
+
+def test_a_cell_is_split_into_its_numbers_and_each_value_is_a_row_of_its_own():
+    rows, at, skipped = split([1, 2])
+    assert [r.claim["value"] for r in rows] == [1200, 60, 2000]
+    assert [at[r.label][1:] for r in rows] == [(2, 1), (2, 2), (3, None)]
+    assert {r.claim["quote"] for r in rows} == {
+        "| Erdgas | 1.200 (60 %) | 2.000 |"}
+    assert rows[0].claim["head"] == rows[1].claim["head"] and skipped == 0
+
+
+def test_only_the_places_the_reply_names_are_read():
+    assert [r.claim["value"] for r in split([2])[0]] == [60, 2000]
+    assert [r.claim["value"] for r in split([1])[0]] == [1200, 2000]
+    rows, _, skipped = split([3])       # no such place: the entry says nothing
+    assert [r.claim["value"] for r in rows] == [2000] and skipped == 1
+
+
+def test_a_cell_that_does_not_print_as_many_numbers_is_not_read():
+    rows, _, skipped = split([1], rows=(1, 2))
+    assert [r.claim["value"] for r in rows] == [1200, 2000, 1000]
+    assert skipped == 1                 # "800" prints one number, not two
+
+
+def test_a_column_the_reply_does_not_split_reads_one_number_per_cell():
+    rows, at, skipped = reading.table_rows(
+        {"value_columns": [2], "value_rows": [1, 2]},
+        reading.grid_of(SHARES))
+    assert [r.claim["value"] for r in rows] == [800]
+    assert skipped == 1 and at[rows[0].label][2] is None
+
+
+def test_a_cell_reads_its_numbers_in_order_with_their_signs():
+    assert reading.cell_numbers("566 MWh (-59 %)", 2) == [566, -59]
+    assert reading.cell_numbers("500 kW<br>1.821 MWh/a<br>73%", 3) \
+        == [500, 1821, 73]
+    assert reading.cell_numbers("2020-2030", 2) == [2020, 2030]
+    assert reading.cell_numbers("1.200 (60 %)", 3) is None
+    assert reading.cell_numbers("1.200 (60 %)", 1) is None
+
+
+def test_digits_grouped_by_a_space_are_read_as_the_count_asks():
+    assert reading.cell_numbers("967 168%", 2) == [967, 168]
+    assert reading.cell_numbers("1 234", 1) == [1234]
+    assert reading.cell_numbers("1 234 (5 %)", 2) == [1234, 5]
+
+
+def test_a_text_gives_its_numbers_in_the_order_it_prints_them():
+    assert numbers_in_order("566 (-59 %) von 2020-2030") \
+        == ["566", "-59", "2020", "2030"]
+    assert numbers_in_order("967 168%") == ["967", "168"]
+    assert numbers_in_order("967 168%", grouped=True) == ["967168"]
+
+
+def test_an_answer_for_one_place_holds_there_before_its_whole_column():
+    reply = {"value_columns": [2], "value_rows": [1],
+             "cells": [{"column": 2, "numbers": 2, "values": [1, 2]}],
+             "coordinates": {"sector": {"columns": [
+                 {"column": 2, "value": "Private Haushalte",
+                  "value_raw": "Haushalte", "quote": SHARES_HEAD},
+                 {"column": 2, "part": 2, "value": "GHD",
+                  "quote": SHARES_HEAD},
+                 {"column": 2, "part": 3, "value": "GHD",
+                  "quote": SHARES_HEAD}]}}}
+    rows, at, _ = reading.table_rows(reply, reading.grid_of(SHARES))
+    for _level, window, field_reply in reading.table_replies(
+            reply, SLOTS["sector"], at):
+        reading.merge_field(rows, [table(SHARES)], SLOTS["sector"],
+                            field_reply, window=window)
+    assert [r.claim["sector"] for r in rows] == ["Private Haushalte", "GHD"]
+
+
+def test_a_refused_answer_for_one_place_is_asked_again_for_that_place():
+    rows, at, _ = split([1, 2])
+    failed = [("unit", reading.COLUMNS,
+               {"row": label, "reason": "r", "why": "w"})
+              for label in (rows[1].label, rows[2].label)]
+    assert reading.table_corrections(failed, at) == [
+        {"coordinate": "unit", "column": 2, "part": 2, "what": "r"},
+        {"coordinate": "unit", "column": 3, "what": "r"}]
+
+
 FRAME = [slot for slot in reading.slots_of(SPEC, EMISSION)
          if slot.name in ("scenario", "year")]
 TUPLE = {"scenario": "Bestand", "scenario_raw": "im Jahr 2022",
@@ -219,6 +322,22 @@ def test_the_grammar_wants_every_coordinate_of_a_table_for_the_whole_table():
             continue
         raise AssertionError("a table without its carrier passed the "
                              "grammar")
+
+
+def test_the_table_grammar_takes_the_parts_of_a_cell_and_wants_them_whole():
+    whole = {"value_columns": [2], "value_rows": [1],
+             "cells": [{"column": 2, "numbers": 2, "values": [1]}],
+             "coordinates": {name: {"table": {"value": UNSTATED}}
+                             for name in SLOTS}}
+    whole["coordinates"]["unit"] = {"table": {"value": UNSTATED}, "columns": [
+        {"column": 2, "part": 1, "value": UNSTATED}]}
+    jsonschema.validate(whole, table_grammar())
+    try:
+        jsonschema.validate(dict(whole, cells=[{"column": 2, "values": [1]}]),
+                            table_grammar())
+    except jsonschema.ValidationError:
+        return
+    raise AssertionError("a cells entry without its count passed the grammar")
 
 
 def test_a_year_can_be_answered_as_not_printed_and_only_as_a_year():
