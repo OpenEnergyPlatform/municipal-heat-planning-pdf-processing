@@ -69,7 +69,10 @@ see [extraction](../stages/extraction.md)): the spec names one group,
 `extraction/survey` names per passage the fields the publication states
 about itself, its study or its own scenarios, `extraction/read_text` names
 each value with its quote and the scenario it refers to, matched to a run
-identifier of the document's own list, and `extraction/comb` looks for a
+identifier of the document's own list; a value is what its field asks
+for and never the answer of a coordinate, so a scenario's description is
+what the publication says the scenario assumes, not the scenario's name
+(owner decision 2026-11-04). `extraction/comb` looks for a
 scenario still open in the rest of the publication. No field of this
 profile holds numbers, so a table is read by the text request too, and a
 field with a list is shown it and answers one entry, or `""` with its
