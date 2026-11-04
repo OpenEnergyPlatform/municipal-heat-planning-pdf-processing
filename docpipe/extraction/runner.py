@@ -1808,8 +1808,10 @@ def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
     slots = survey_map.tuple_slots(spec)
     every = every or make_rest_of_document(db_path, content=content)
 
-    def conversation_of(context: list) -> list:
-        text = json.dumps(survey_map.payload(context, parameters, groups),
+    def conversation_of(context: list,
+                        corrections: Optional[list] = None) -> list:
+        text = json.dumps(survey_map.payload(context, parameters, groups,
+                                             corrections),
                           ensure_ascii=False, indent=2)
         parts: list = [{"type": "text", "text": text}]
         for index, source in enumerate(context):
@@ -1825,8 +1827,9 @@ def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
         return [{"role": "user", "content": parts if len(parts) > 1
                  else text}]
 
-    def ask(context: list, document_id: int):
-        conversation = conversation_of(context)
+    def ask(context: list, document_id: int,
+            corrections: Optional[list] = None):
+        conversation = conversation_of(context, corrections)
         shape = survey_map.response_format(context, parameters, slots)
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
@@ -1850,6 +1853,7 @@ def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
                 _observe_usage(usage)
                 trace.event("survey_ask", document_id,
                             passages=len(context), attempt=attempt,
+                            corrections=len(corrections or ()),
                             figure=any(s.owner_kind == "figure"
                                        for s in context),
                             ms=int((time.time() - started) * 1000),

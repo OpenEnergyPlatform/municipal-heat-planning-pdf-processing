@@ -122,7 +122,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.shapemodel](docpipe.extraction.shapemodel.md): The graph a writer produces, as the shapes it is held to say. (3 classes, 1 function)
 - [docpipe.extraction.spec](docpipe.extraction.spec.md): The contract between a profile's ontology knowledge and the core. (5 classes, 9 functions)
 - [docpipe.extraction.stats](docpipe.extraction.stats.md): Where a harvest is hard, written beside it after every run. (5 functions)
-- [docpipe.extraction.survey](docpipe.extraction.survey.md): One pass over the whole plan before any number is read. (3 classes, 11 functions)
+- [docpipe.extraction.survey](docpipe.extraction.survey.md): One pass over the whole plan before any number is read. (3 classes, 12 functions)
 - [docpipe.extraction.throttle](docpipe.extraction.throttle.md): How many model requests the harvest keeps open, steered by the server's own queue. (6 classes, 3 functions)
 - [docpipe.extraction.topup](docpipe.extraction.topup.md): Re-reads the one coordinate a stamp names as moved, instead of the whole document. (1 class, 17 functions)
 - [docpipe.extraction.topup_parameter](docpipe.extraction.topup_parameter.md): Appends the rows of a parameter the spec has gained to a harvest that is already on disk, instead of harvesting the document again. (3 classes, 13 functions)

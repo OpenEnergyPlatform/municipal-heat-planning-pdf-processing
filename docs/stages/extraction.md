@@ -114,7 +114,11 @@ its owner. The reply has an entry for every passage of the context, which the
 grammar requires: the parameters whose values stand there, with a quote, or
 `out:none`, and the tuples of each group the survey reads, each coordinate with
 its own quote. A parameter is taken on a quote that stands in its own passage
-and has the minimum length; a tuple is held to `frame_pairs`. A reply that does
+and has the minimum length; a tuple is held to `frame_pairs`. A reply with
+something not taken is asked once more, with what was wrong per passage
+(`survey.corrections_of`), and what either reply backs is taken: on Rendsburg
+15 assignments were refused, nearly all of them right and quoted with elisions,
+cells of several rows or words only the image prints. A reply that does
 not fit is split, not rescued. The survey is kept in `<harvest>/survey/<document
 id>.json` under a key over prompt, parameters, groups and model, and only a
 complete one is read again. `scripts/probe_rows.py --documents ... --survey`

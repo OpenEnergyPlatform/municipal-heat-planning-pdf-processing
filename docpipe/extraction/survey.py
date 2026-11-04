@@ -158,8 +158,9 @@ def key_of(prompt_text: str, parameters: dict, groups: dict,
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
-def payload(context: list, parameters: dict, groups: dict) -> dict:
-    passages = []
+def payload(context: list, parameters: dict, groups: dict,
+            corrections: Optional[list] = None) -> dict:
+    sources = []
     for index, source in enumerate(context):
         provenance = source.provenance or {}
         entry = {"id": f"P{index + 1}", "kind": source.owner_kind,
@@ -167,8 +168,37 @@ def payload(context: list, parameters: dict, groups: dict) -> dict:
                  "text": source.text or ""}
         if provenance.get("page"):
             entry["page"] = provenance["page"]
-        passages.append(entry)
-    return {"passages": passages, "parameters": parameters, "groups": groups}
+        sources.append(entry)
+    body = {"sources": sources, "parameters": parameters, "groups": groups}
+    if corrections:
+        body["corrections"] = list(corrections)
+    return body
+
+
+def corrections_of(answers: list, unanswered: list, context: list) -> list:
+    """What was wrong with a reply over *context*, one sentence each, for
+    the request that asks it again: a quote not in its passage or too short,
+    a tuple not taken, a passage not answered. Empty when nothing was."""
+    from .wording import say
+
+    label = {(s.owner_kind, s.owner_id): f"P{i + 1}"
+             for i, s in enumerate(context)}
+    out: list = []
+    for answer in answers:
+        for dropped in answer.dropped:
+            why = dropped.get("why")
+            if why == "quote too short":
+                sentence = say("quote_too_short", minimum=MIN_QUOTE_CHARS)
+            elif why in ("quote not in its passage", "no quote"):
+                sentence = say("quote_not_in_source")
+            elif dropped.get("group") and why:
+                sentence = why
+            else:
+                continue
+            out.append(f"{label.get(answer.owner, '?')}: {sentence}")
+    out.extend(say("key_missing", key=label.get(tuple(owner), "?"))
+               for owner in unanswered)
+    return out
 
 
 def response_format(context: list, parameters: dict, slots: dict) -> dict:
@@ -308,8 +338,10 @@ def merge(found: Found, answers: list) -> None:
 class Survey:
     """document_id -> Found.
 
-    *ask(context, document_id)* is one request: the reply as a dict, CUT,
-    or None when it could not be read. *passages_of(document_id)* is every
+    *ask(context, document_id, corrections)* is one request: the reply as a
+    dict, CUT, or None when it could not be read. A reply with something not
+    taken is asked once more with what was wrong (`corrections_of`), and
+    what either reply backs is taken. *passages_of(document_id)* is every
     passage of the document in its order, *pages_of(document_id)* its page
     count. *pool* runs a document's requests side by side (None: one after
     another). *store* is where surveys are kept.
@@ -368,8 +400,8 @@ class Survey:
 
     def _ask_context(self, context: list, document_id: int) -> tuple:
         """(answers, unanswered, complete) of one context, halved while its
-        reply does not fit."""
-        reply = self.ask(context, document_id)
+        reply does not fit, asked once more for what it got wrong."""
+        reply = self.ask(context, document_id, None)
         if reply == CUT and len(context) > 1:
             cut = len(context) // 2
             a = self._ask_context(context[:cut], document_id)
@@ -379,7 +411,18 @@ class Survey:
             return [], [(s.owner_kind, s.owner_id) for s in context], False
         answers, unanswered = read_reply(reply, context, self.parameters,
                                          self.slots, self.pairs_of)
-        return answers, unanswered, True
+        corrections = corrections_of(answers, unanswered, context)
+        if not corrections:
+            return answers, unanswered, True
+        again = self.ask(context, document_id, corrections)
+        if not isinstance(again, dict):
+            return answers, unanswered, True
+        more, still = read_reply(again, context, self.parameters,
+                                 self.slots, self.pairs_of)
+        found = Found(True)
+        merge(found, answers + more)
+        return (list(found.answers.values()),
+                [owner for owner in unanswered if owner in still], True)
 
     def _build(self, document_id: int) -> Found:
         passages = self.passages_of(document_id)

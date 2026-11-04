@@ -182,7 +182,7 @@ def make(store, ask, key="k"):
                          runner.frame_pairs, key, store=store)
 
 
-def emission_where_printed(context, document_id):
+def emission_where_printed(context, document_id, corrections=None):
     return {"passages": {
         f"P{i + 1}": ({"parameters": ["emission"],
                        "quote": "Treibhausgasemissionen der Stadt"}
@@ -197,7 +197,7 @@ def test_a_survey_names_a_parameters_passages_and_is_read_again(tmp_path):
     assert found.passages_of("emission") == [("table", 2)]
     asked = []
 
-    def counting(context, document_id):
+    def counting(context, document_id, corrections=None):
         asked.append(context)
         return emission_where_printed(context, document_id)
 
@@ -208,10 +208,52 @@ def test_a_survey_names_a_parameters_passages_and_is_read_again(tmp_path):
 
 
 def test_a_reply_cut_off_is_split_and_not_rescued(tmp_path):
-    def cut_when_long(context, document_id):
+    def cut_when_long(context, document_id, corrections=None):
         if len(context) > 1:
             return survey.CUT
         return emission_where_printed(context, document_id)
 
     found = make(tmp_path, cut_when_long)(7)
     assert found.complete and found.passages_of("emission") == [("table", 2)]
+
+
+def test_a_quote_outside_its_passage_is_asked_again_and_the_answer_taken(
+        tmp_path):
+    calls = []
+
+    def wrong_first(context, document_id, corrections=None):
+        calls.append(corrections)
+        reply = emission_where_printed(context, document_id)
+        if corrections is None:
+            for entry in reply["passages"].values():
+                if entry.get("quote"):
+                    entry["quote"] = "Emissionen ... 2022 ... Erdgas"
+        return reply
+
+    found = make(tmp_path, wrong_first)(7)
+    assert found.passages_of("emission") == [("table", 2)]
+    assert len(calls) == 2 and calls[1][0].startswith("P2:")
+
+
+def test_a_reply_without_fault_is_asked_once(tmp_path):
+    calls = []
+
+    def right(context, document_id, corrections=None):
+        calls.append(corrections)
+        return emission_where_printed(context, document_id)
+
+    make(tmp_path, right)(7)
+    assert calls == [None]
+
+
+def test_a_reply_wrong_twice_is_not_asked_a_third_time(tmp_path):
+    calls = []
+
+    def always_wrong(context, document_id, corrections=None):
+        calls.append(corrections)
+        return {"passages": {f"P{i + 1}": {"parameters": ["emission"],
+                                           "quote": "steht nirgends im Plan"}
+                             for i in range(len(context))}}
+
+    found = make(tmp_path, always_wrong)(7)
+    assert len(calls) == 2 and found.passages_of("emission") == []

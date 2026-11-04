@@ -83,8 +83,10 @@ class Survey
 
 document_id -> Found.
 
-*ask(context, document_id)* is one request: the reply as a dict, CUT,
-or None when it could not be read. *passages_of(document_id)* is every
+*ask(context, document_id, corrections)* is one request: the reply as a
+dict, CUT, or None when it could not be read. A reply with something not
+taken is asked once more with what was wrong (`corrections_of`), and
+what either reply backs is taken. *passages_of(document_id)* is every
 passage of the document in its order, *pages_of(document_id)* its page
 count. *pool* runs a document's requests side by side (None: one after
 another). *store* is where surveys are kept.
@@ -169,8 +171,19 @@ def key_of(prompt_text: str, parameters: dict, groups: dict,
 ### payload
 
 ```python
-def payload(context: list, parameters: dict, groups: dict) -> dict
+def payload(context: list, parameters: dict, groups: dict,
+            corrections: Optional[list] = None) -> dict
 ```
+
+### corrections_of
+
+```python
+def corrections_of(answers: list, unanswered: list, context: list) -> list
+```
+
+What was wrong with a reply over *context*, one sentence each, for
+the request that asks it again: a quote not in its passage or too short,
+a tuple not taken, a passage not answered. Empty when nothing was.
 
 ### response_format
 
