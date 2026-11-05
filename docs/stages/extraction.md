@@ -170,7 +170,12 @@ and named again after that it ends the rounds. The reasons are
 the fold's own reason in it. Before, the round checked only the quote and the
 number, and the fold dropped without a word what the model could have
 corrected: 115 of the 222 refusals of an AR6 probe of four papers, such as an
-entry its quote did not hold or an answer off the list.
+entry its quote did not hold or an answer off the list. A correction asks for
+the value again or, where the passage holds no such value, for the next value
+not yet read; only a null after it ends the rounds, as the prompt's second
+request says. Its first wording asked for null instead, and in the next probe
+62 of 113 readings with a refused value ended on their correction (23 of 41
+before).
 
 A value may stand in any passage the round showed: the passage itself, the
 text around it, or a passage its tools fetched (owner decision 2026-11-05). It

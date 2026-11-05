@@ -289,7 +289,9 @@ PHRASES = {
         'abgeschrieben ist, die ihn druckt. Bei einem Parameter mit Liste ist '
         '"value" einer ihrer Einträge, oder "", wo keiner passt, und das Wort '
         'der Passage dafür steht in "value_raw". Steht kein solcher Wert in '
-        'der Passage, antworte mit "next": null.'),
+        'der Passage, nenne stattdessen den nächsten Wert, der noch nicht '
+        'unter "read" steht, oder antworte mit "next": null, wenn keiner mehr '
+        'kommt.'),
     "head_not_in_table": (
         'Der Kopf {head!r} steht in keiner Kopfzeile der Tabelle. Schreib '
         'den Kopf der Spalte des Werts Zeichen für Zeichen, wie er dort '
