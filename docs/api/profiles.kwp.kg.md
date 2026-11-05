@@ -167,6 +167,14 @@ OEO_00000405 and are not one number, and neither are "Bis 1918" and
 "Unbekannt" in one column of a table; the wording is what tells them
 apart, and it is what the node is named by when they collide.
 
+### place
+
+```python
+def place(row: dict) -> tuple
+```
+
+The passage a row was read from, where the plan prints its number.
+
 ### settle
 
 ```python
@@ -176,7 +184,9 @@ def settle(iri: str, rows: list, part: str, *,
 
 ({iri: row} kept, Counter skipped, {iri: marks}) for one identity.
 
-One number several times is one node, marked as read twice. Different
+One number several times is one node, marked as confirmed where a second
+passage prints it: one passage read twice is one statement, whatever its
+quotes (owner decision 2026-11-05). Different
 numbers are settled in this order (owner decision 2026-09-23): the plan's
 different wording splits them into a node each, named by that wording; a
 rounded statement of the other loses to the more precise one; a lower

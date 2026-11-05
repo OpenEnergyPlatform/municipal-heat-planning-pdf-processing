@@ -36,10 +36,12 @@ carries the answer, and grading it again by that passage's distance
 from the row would be a check the harvest does not make.
 
 A value can be read a second time (`review.py`), and what that reading
-came to is recorded here as a mark. It never raises a level: the
+came to is recorded on the row as a flag. It never raises a level: the
 second reading uses the same model over a narrower window, so an
 agreement states that the reading is self-consistent, not that it is
-right.
+right. Nor does an agreement mark the value `corroborated`: it reads the
+same place again, and one place counts once (owner decision 2026-11-05).
+Only a second passage that prints the number confirms it.
 
 Measured on Kassel's 559 tuples, 527 came out of a table or figure
 image, so image origin alone separates nothing and is not by itself a
@@ -129,11 +131,6 @@ def trust(row: dict, *, conflict: bool = False, transcribed: bool = False,
           corroborated: bool = False) -> dict:
     """{level, reasons, image_origin, corroborated} for one accepted tuple."""
     why = reasons(row, conflict=conflict, transcribed=transcribed)
-    # The review's own answer, read off the row rather than passed in: the
-    # serializers build a verdict from a stored tuple and have no second
-    # reading to hand. It never enters `hard`, so it never lifts a level --
-    # see the module docstring.
-    corroborated = corroborated or REVIEW_AGREE in (row.get("flags") or [])
     hard = [r for r in why if r != "page_transcribed"]
     image = row.get("tier") != TIER_TEXT
     if any(r.partition(":")[0] not in OPEN_STATES for r in hard):

@@ -4,11 +4,14 @@ import pytest
 from profiles.kwp import kg
 
 
-def row(value, subject=None, quote=None):
-    return {"quantity": "OEO_00050016", "year": 2045, "value": value,
-            "value_target": float(value), "subject": subject,
-            "quote": quote or f"| Zeile | {value} |", "scenario": "target",
-            "tier": "text_located", "flags": []}
+def row(value, subject=None, quote=None, passage=None):
+    found = {"quantity": "OEO_00050016", "year": 2045, "value": value,
+             "value_target": float(value), "subject": subject,
+             "quote": quote or f"| Zeile | {value} |", "scenario": "target",
+             "tier": "text_located", "flags": []}
+    if passage:
+        found["provenance"] = {"owner_kind": passage[0], "owner_id": passage[1]}
+    return found
 
 
 def settled(rows, keep_open=True):
@@ -25,6 +28,26 @@ def test_the_subject_of_a_number_splits_two_rows_into_two_nodes():
 def test_one_number_on_two_subjects_is_one_node():
     kept, _lost, _marks = settled([row(53, "Bis 1918"), row(53, "bis 1918")])
     assert len(kept) == 1
+
+
+def test_a_number_a_second_passage_prints_is_confirmed():
+    # A table row beside a sentence, or beside another table: two places
+    # (owner decision 2026-11-05).
+    for second in (("section", 7), ("table", 9)):
+        _kept, _lost, marks = settled([
+            row(53, quote="| Zeile | 53 |", passage=("table", 8)),
+            row(53, quote="Es sind 53 Gebäude.", passage=second)])
+        assert next(iter(marks.values())).get("corroborated") is True
+
+
+def test_one_passage_read_twice_confirms_nothing():
+    # One place, whatever the extent of its quotes: a sentence and a clause
+    # of it.
+    _kept, lost, marks = settled([
+        row(53, quote="Im Jahr 2045 sind es 53 Gebäude.", passage=("section", 7)),
+        row(53, quote="sind es 53 Gebäude", passage=("section", 7))])
+    assert not any(mark.get("corroborated") for mark in marks.values())
+    assert lost["duplicate"] == 1
 
 
 def test_what_still_disagrees_stays_marked_in_the_full_graph():

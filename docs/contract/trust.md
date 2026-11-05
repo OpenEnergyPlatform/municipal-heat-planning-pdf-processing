@@ -78,10 +78,13 @@ row is skipped unless forced, so a row is reviewed once. The second reading
 writes exactly one of three flags: `review:agree` when it matches the stored
 value, `review:disagree` when it does not, `review:unbacked` when its own
 answer cannot be checked against the narrowed window (`review.py:222-226`).
-None of the three raises the level: an agreement is recorded as
-`corroborated`, since the second reading checks self-consistency, not that it
-is right (`trust.py:128-132`). A disagreement becomes a `review:disagree`
-reason instead, a fact a curator can count, and it makes the value a `D`.
+None of the three raises the level, and an agreement marks nothing: the
+second reading checks self-consistency at the same place, not that it is
+right, and one place counts once (owner decision 2026-11-05). `corroborated`
+comes only from the graph, where a second passage prints the same number on
+one node (`profiles/kwp/kg.py`, `settle`). A disagreement becomes a
+`review:disagree` reason instead, a fact a curator can count, and it makes the
+value a `D`.
 
 ## What the marks of a trust line say
 
@@ -162,10 +165,12 @@ carries the answer, and grading it again by that passage's distance
 from the row would be a check the harvest does not make.
 
 A value can be read a second time (`review.py`), and what that reading
-came to is recorded here as a mark. It never raises a level: the
+came to is recorded on the row as a flag. It never raises a level: the
 second reading uses the same model over a narrower window, so an
 agreement states that the reading is self-consistent, not that it is
-right.
+right. Nor does an agreement mark the value `corroborated`: it reads the
+same place again, and one place counts once (owner decision 2026-11-05).
+Only a second passage that prints the number confirms it.
 
 Measured on Kassel's 559 tuples, 527 came out of a table or figure
 image, so image origin alone separates nothing and is not by itself a

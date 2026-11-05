@@ -52,6 +52,15 @@ def test_what_speaks_against_the_reading_makes_a_d():
     assert level(row(), conflict=True) == "D"
 
 
+def test_the_reviews_agreement_confirms_nothing():
+    # It reads the same place again, and one place counts once (owner
+    # decision 2026-11-05); a second passage, said by the graph, confirms.
+    agreed = row(flags=["review:agree"])
+    assert trust.trust(agreed)["corroborated"] is False
+    assert trust.trust(agreed, corroborated=True)["corroborated"] is True
+    assert level(agreed) == "A"
+
+
 def test_open_and_in_doubt_at_once_is_a_d():
     assert level(row(carrier="exhausted", flags=["quote_repaired"])) == "D"
 

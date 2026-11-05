@@ -192,7 +192,9 @@ nodes. A carrier or sector enters the IRI only where `is_class` calls it
 a real OEO class; a deliberate `out:` answer or an unmapped wording is
 left out exactly like an absent one, so the identity matches what gets
 an edge. `settle` resolves every row minting one identity together: the
-same number twice is one node, marked read twice, counted `duplicate`;
+same number twice is one node, counted `duplicate`, and marked `corroborated`
+only where a second passage prints it (`place`: one passage read twice is one
+statement, whatever its quotes, owner decision 2026-11-05);
 different numbers under different plan wording (`wording_key`: `subject`,
 `head`, `whole`, `carrier_raw`, `sector_raw`) split into a node per wording,
 named by it, counted `split:wording`; failing that, a reading within `ROUNDING_TOLERANCE`

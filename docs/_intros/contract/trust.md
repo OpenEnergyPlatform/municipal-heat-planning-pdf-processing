@@ -74,10 +74,13 @@ row is skipped unless forced, so a row is reviewed once. The second reading
 writes exactly one of three flags: `review:agree` when it matches the stored
 value, `review:disagree` when it does not, `review:unbacked` when its own
 answer cannot be checked against the narrowed window (`review.py:222-226`).
-None of the three raises the level: an agreement is recorded as
-`corroborated`, since the second reading checks self-consistency, not that it
-is right (`trust.py:128-132`). A disagreement becomes a `review:disagree`
-reason instead, a fact a curator can count, and it makes the value a `D`.
+None of the three raises the level, and an agreement marks nothing: the
+second reading checks self-consistency at the same place, not that it is
+right, and one place counts once (owner decision 2026-11-05). `corroborated`
+comes only from the graph, where a second passage prints the same number on
+one node (`profiles/kwp/kg.py`, `settle`). A disagreement becomes a
+`review:disagree` reason instead, a fact a curator can count, and it makes the
+value a `D`.
 
 ## What the marks of a trust line say
 

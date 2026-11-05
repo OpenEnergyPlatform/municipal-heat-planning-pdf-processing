@@ -1323,8 +1323,9 @@ else, or a contested identity decided at graph build time; a value that is
 both open and in doubt is a D. A C wants its gap filled, a D wants a person
 to look at what was read. Where a coordinate's
 passage stands is no reason. A second
-reading from `--review` can mark a tuple `corroborated`, described
-under The passes that revisit a harvest, but never raises its level.
+reading from `--review`, described under The passes that revisit a harvest,
+never raises a level and marks nothing `corroborated`: it reads the same place
+again, and one place counts once.
 `trust.document_summary`
 folds one document's tuples into a closing line, its level distribution
 and reason counts. See [how much of a value the run can stand
@@ -1660,8 +1661,9 @@ PROV-O file of a graph gives a coordinate with a pointer an activity of its own
 never makes a document look stale. It rereads a harvest's values of levels
 C and D once more, over a window narrowed to the value's own two legal
 passages, a self-consistency check rather than an independent opinion.
-Only a disagreement counts as a trust reason; an agreement is marked
-`corroborated` without raising the level. The second reading goes to
+Only a disagreement counts as a trust reason; an agreement marks nothing,
+since it reads the same place again and one place counts once (owner decision
+2026-11-05). The second reading goes to
 `review.csv`, never onto the tuple itself. A value is read against its
 document's own lists, and a document whose lists cannot be closed is left
 alone, as in `--recheck`.

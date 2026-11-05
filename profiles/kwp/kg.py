@@ -618,11 +618,19 @@ def wording_key(row: dict) -> str:
                       ).strip(" /")
 
 
+def place(row: dict) -> tuple:
+    """The passage a row was read from, where the plan prints its number."""
+    provenance = row.get("provenance") or {}
+    return provenance.get("owner_kind"), provenance.get("owner_id")
+
+
 def settle(iri: str, rows: list, part: str, *,
            transcribed: bool = False, keep_open: bool = False) -> tuple:
     """({iri: row} kept, Counter skipped, {iri: marks}) for one identity.
 
-    One number several times is one node, marked as read twice. Different
+    One number several times is one node, marked as confirmed where a second
+    passage prints it: one passage read twice is one statement, whatever its
+    quotes (owner decision 2026-11-05). Different
     numbers are settled in this order (owner decision 2026-09-23): the plan's
     different wording splits them into a node each, named by that wording; a
     rounded statement of the other loses to the more precise one; a lower
@@ -663,7 +671,7 @@ def settle(iri: str, rows: list, part: str, *,
 
     def keep(row: dict, **mark) -> None:
         kept[iri] = row
-        if len(claims[row["value_target"]]) > 1:
+        if len({place(other) for other in claims[row["value_target"]]}) > 1:
             mark["corroborated"] = True
         if mark:
             marks[iri] = mark

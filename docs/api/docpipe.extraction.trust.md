@@ -39,10 +39,12 @@ carries the answer, and grading it again by that passage's distance
 from the row would be a check the harvest does not make.
 
 A value can be read a second time (`review.py`), and what that reading
-came to is recorded here as a mark. It never raises a level: the
+came to is recorded on the row as a flag. It never raises a level: the
 second reading uses the same model over a narrower window, so an
 agreement states that the reading is self-consistent, not that it is
-right.
+right. Nor does an agreement mark the value `corroborated`: it reads the
+same place again, and one place counts once (owner decision 2026-11-05).
+Only a second passage that prints the number confirms it.
 
 Measured on Kassel's 559 tuples, 527 came out of a table or figure
 image, so image origin alone separates nothing and is not by itself a
