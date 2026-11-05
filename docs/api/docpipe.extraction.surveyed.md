@@ -61,7 +61,7 @@ Fields:
 - `replies: int = 0`: Passages the survey answered: none of them means no reply at all.
 - `passages: int = 0`
 - `sources_of: dict = field(default_factory=dict)`: parameter uri -> the passages the survey named for it, and every passage it could not answer (`trust.parameter_states`).
-- `sought: Found = field(default_factory=lambda: Found(True))`: The parameters the survey named no passage for, each with every passage the walk down its search's list read it in (`sought_walk`).
+- `sought: Found = field(default_factory=lambda: Found(True))`: The parameters the survey named no passage for, each with every passage the walk down its search's list read it in (`sought_walk`), in the order read (`walks_of`).
 
 ### SurveyedHarvest
 
@@ -212,9 +212,22 @@ comes back with a value or its list ends (owner decision 2026-11-05: the
 run reads the list, since the model fetched none of its hits itself). A
 reading that came to no reply ends nothing. Every passage walked names
 its parameter in the survey returned, so it is one of the parameter's
-sources (`taken_of`). *seen(uri, owner, rank)* hears of each passage
-before it is read, *rank* its place in the list, from 1. None where
-*halted()* stopped the walk.
+sources (`taken_of`), and stands under `hits` with the rest of the list
+its reading showed, in the order the walk read it (`walks_of`).
+*seen(uri, owner, rank)* hears of each passage before it is read,
+*rank* its place in the list, from 1. None where *halted()* stopped the
+walk.
+
+### walks_of
+
+```python
+def walks_of(sought: Found) -> dict
+```
+
+{parameter uri: [owner]}: the passages the walk read each parameter
+in, in the order it read them (`sought_walk`). Not the order of
+`Found.passages_of`, which is the order passages joined the survey, and a
+passage another parameter read first joined it earlier.
 
 ### taken_of
 

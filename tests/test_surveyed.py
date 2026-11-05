@@ -25,7 +25,8 @@ nothing (owner decision 2026-11-05); AND not after a survey of part of the
 plan; every passage it was read in is one of its sources, so a reading there
 that came to nothing leaves it exhausted, not unstated; AND each reading
 shows the rest of the list it has not read under that parameter, AND each
-passage walked is traced with its place in the list; and two surveys joined
+passage walked is traced with its place in the list, AND each parameter's
+passages are kept in the order the walk read them; and two surveys joined
 keep the lists of both.
 
 A pass re-reads a coordinate by combing it, whatever its state, in its own
@@ -595,6 +596,20 @@ def test_each_reading_of_the_walk_shows_the_rest_of_its_list_not_read():
                                                      ("section", 1)]},
                         {("heat_load", "section", 3): [("section", 1)]},
                         {("heat_load", "section", 1): []}]
+
+
+def test_each_parameter_s_passages_are_kept_in_the_order_the_walk_read_them():
+    other = next(p for p in SPEC.parameters
+                 if p.uri not in ("emission", "heat_load"))
+    walked, _reads = surveyed.sought_walk(
+        survey.Found(True), {other.uri: [THREE, ONE], "heat_load": [TWO, THREE]},
+        lambda one: [])
+    assert surveyed.walks_of(walked) == {
+        other.uri: [("section", 3), ("section", 1)],
+        "heat_load": [("table", 2), ("section", 3)]}
+    # the failure by construction: the survey's own order puts the passage
+    # the other parameter read first ahead of the one read before it
+    assert walked.passages_of("heat_load") == [("section", 3), ("table", 2)]
 
 
 def test_each_passage_walked_is_traced_with_its_place_in_the_list():

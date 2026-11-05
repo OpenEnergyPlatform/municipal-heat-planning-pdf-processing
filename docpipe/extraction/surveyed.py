@@ -114,7 +114,8 @@ class Taken:
     # passage it could not answer (`trust.parameter_states`).
     sources_of: dict = field(default_factory=dict)
     # The parameters the survey named no passage for, each with every
-    # passage the walk down its search's list read it in (`sought_walk`).
+    # passage the walk down its search's list read it in (`sought_walk`),
+    # in the order read (`walks_of`).
     sought: Found = field(default_factory=lambda: Found(True))
 
 
@@ -170,9 +171,11 @@ def sought_walk(found: Found, lists: dict, read: Callable,
     run reads the list, since the model fetched none of its hits itself). A
     reading that came to no reply ends nothing. Every passage walked names
     its parameter in the survey returned, so it is one of the parameter's
-    sources (`taken_of`). *seen(uri, owner, rank)* hears of each passage
-    before it is read, *rank* its place in the list, from 1. None where
-    *halted()* stopped the walk."""
+    sources (`taken_of`), and stands under `hits` with the rest of the list
+    its reading showed, in the order the walk read it (`walks_of`).
+    *seen(uri, owner, rank)* hears of each passage before it is read,
+    *rank* its place in the list, from 1. None where *halted()* stopped the
+    walk."""
     walked = Found(True)
     reads: list = []
     walking = dict(lists)
@@ -181,6 +184,7 @@ def sought_walk(found: Found, lists: dict, read: Callable,
         for uri, listed in walking.items():
             owner = (listed[step].owner_kind, listed[step].owner_id)
             merge(walked, [Answer(owner, [uri])])
+            walked.hits[(uri,) + owner] = list(listed[step + 1:])
             if seen is not None:
                 seen(uri, owner, step + 1)
         got = read(sought_survey(found, walking, step))
@@ -192,6 +196,17 @@ def sought_walk(found: Found, lists: dict, read: Callable,
         walking = {uri: listed for uri, listed in walking.items()
                    if uri not in valued and step < len(listed)}
     return walked, reads
+
+
+def walks_of(sought: Found) -> dict:
+    """{parameter uri: [owner]}: the passages the walk read each parameter
+    in, in the order it read them (`sought_walk`). Not the order of
+    `Found.passages_of`, which is the order passages joined the survey, and a
+    passage another parameter read first joined it earlier."""
+    out: dict = {}
+    for uri, kind, owner in sought.hits:
+        out.setdefault(uri, []).append((kind, owner))
+    return out
 
 
 def taken_of(document_id: int, spec, found: Found, reads: list,

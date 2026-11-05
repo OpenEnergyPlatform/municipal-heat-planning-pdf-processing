@@ -299,7 +299,9 @@ and with its label only where no sentence could be written. Each sentence is
 traced as `seek_probe`. Every passage the walk read is one of the
 parameter's sources, so a reading there that came to nothing leaves the
 parameter `exhausted` and not `unstated`. A survey of part of a plan (a pass
-over a stored harvest) searches nothing. Each passage walked is traced as
+over a stored harvest) searches nothing. The walk keeps each parameter's
+passages in the order it read them (`surveyed.walks_of`), which a probe
+lists under `sought`. Each passage walked is traced as
 `seek` with its place in the list (`rank`, from 1); the run's statistics
 count a parameter's search once per document
 (`parameters_sought_by_parameter`) and the passages its walks read
