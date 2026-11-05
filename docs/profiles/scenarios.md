@@ -72,7 +72,10 @@ see [extraction](../stages/extraction.md)): the spec names one group,
 about itself, its study or its own scenarios. `extraction/read_values`
 names the values one per request, with `value`, `value_raw` and quote, and
 `extraction/read_text` answers for each value the scenario
-it refers to, matched to a run identifier of the document's own list. A
+it refers to, matched to a run identifier of the document's own list. Its
+example shows both answers, a scenario named and one the passage does not
+name with the sentence the combing searches with (`probe`); with the first
+alone, 7 of 123 comb tasks of a four-paper probe had such a sentence. A
 value is what its field asks for and never the answer of a coordinate, so
 a scenario's description is what the publication says the scenario assumes,
 not the scenario's name (owner decision 2026-11-04), and an author value is
