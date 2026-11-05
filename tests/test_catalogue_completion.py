@@ -13,6 +13,7 @@ Each promise has a case that breaks it by construction beside the one that
 keeps it."""
 import io
 import json
+import sqlite3
 import urllib.error
 from pathlib import Path
 
@@ -262,3 +263,43 @@ def test_a_doi_the_catalogue_does_not_hold_is_no_hit_not_an_error(monkeypatch):
     monkeypatch.setattr(completion, "_get", busy)
     with pytest.raises(urllib.error.HTTPError):
         completion.by_doi(DOI)
+
+
+def test_the_index_doi_is_the_one_the_index_holds_for_this_document():
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE DocumentMeta (document INTEGER, doi TEXT)")
+    conn.executemany("INSERT INTO DocumentMeta VALUES (?, ?)",
+                     [(5, "10.1000/other"), (4, f"https://doi.org/{DOI}"),
+                      (6, None)])
+    assert completion.index_doi(conn, 4) == DOI
+    assert completion.index_doi(conn, 6) is None
+    assert completion.index_doi(conn, 7) is None
+    # Another profile's DocumentMeta, without a doi column, holds none.
+    other = sqlite3.connect(":memory:")
+    other.execute("CREATE TABLE DocumentMeta (document INTEGER, ags TEXT)")
+    assert completion.index_doi(other, 4) is None
+
+
+def test_the_completer_hands_the_run_database_to_the_profile():
+    got = {}
+
+    class Profile:
+        def component(self, module, attr):
+            def complete(report, spec, **kwargs):
+                got.update(kwargs)
+            return complete if (module, attr) == ("completion",
+                                                  "complete") else None
+    runner.make_completer(Profile(), Path("run.db"))(report_of(), SPEC)
+    assert got == {"db": Path("run.db")}
+
+
+def test_without_a_given_index_doi_the_run_database_is_asked(monkeypatch):
+    seen = []
+    monkeypatch.setattr(completion, "_index_doi_in",
+                        lambda db, document: seen.append((db, document)) or DOI)
+    by_doi, asked = looked(RECORD)
+    report = report_of(read("publication_title", TITLE))
+    outcome = completion.complete(report, SPEC, fetch=no_doi, fetch_doi=by_doi,
+                                  db="run.db")
+    assert seen == [("run.db", 4)] and asked == [DOI]
+    assert outcome["key"] == completion.BY_INDEX_DOI

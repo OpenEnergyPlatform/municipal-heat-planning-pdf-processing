@@ -452,8 +452,13 @@ most sources agree on: first dropping any candidate that is a strict
 substring of another (a running header would otherwise outvote a title
 on its own title page), then ranking by vote count, whether the reading
 was located on its PDF page, and length (`kg.py`, lines 393 to 421).
-Runner-up spellings are counted `contested` rather than dropped from the
-log. A read-only connection then cross-checks the chosen title, date and
+For the title, the date and the DOI a reading on page 1 or on the first
+page the title was read on, the title page behind a cover, goes first
+however often other readings agree (`FRONT_FIELDS`, `_front_first`, owner
+decision 2026-11-05): a chapter that presents other studies prints their
+titles, publishers and years, and the field descriptions say that only the
+document's own count. Runner-up spellings are counted `contested` rather
+than dropped from the log. A read-only connection then cross-checks the chosen title, date and
 DOI against `DocumentMeta`, filled in by the crawl, not this profile's
 own extraction; a disagreement is logged and the crawled value is never
 substituted into the graph, since a published value must carry its own
@@ -465,8 +470,9 @@ manuscript, and its authors where the text yields none at all, the run
 looks up in OpenAlex, whose records are CC0 (`completion.py`, owner
 decisions 2026-11-04). After a document's fold a program, no model, finds
 the record by the first of three keys that finds one: the DOI the corpus
-index holds for the document (`catalogue_doi`; the crawl's copy is the key
-here, never the value), the DOI the harvest read, then the title the
+index holds for the document (`DocumentMeta.doi`, read from the run's
+database, which `runner.make_completer` hands the profile; the crawl's copy
+is the key here, never the value), the DOI the harvest read, then the title the
 harvest read. The index's DOI goes first: it belongs to this very file,
 while a DOI read off the page can be one the paper cites, such as a
 dataset's (one of 48 records in a measurement on run m6). A record a DOI finds is taken as it is; one the title finds

@@ -2070,12 +2070,13 @@ of all the batches together.
 ### make_completer
 
 ```python
-def make_completer(profile) -> Optional[Callable]
+def make_completer(profile, db: Optional[Path] = None) -> Optional[Callable]
 ```
 
 The step that completes a document's rows from outside the document,
 after its fold and its computing (`profiles/\<name>/completion.py:
-complete(report, spec)`): `completed(report, spec)`, which adds what it
+complete(report, spec, db=)`, *db* the run's database, for what the
+profile looks up there): `completed(report, spec)`, which adds what it
 found to the report and returns what it came to, traced as `completion`,
 or None where nothing was open. None where the profile has no such step.
 

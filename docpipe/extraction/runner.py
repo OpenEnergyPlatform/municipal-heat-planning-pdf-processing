@@ -5932,10 +5932,11 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
     return harvest
 
 
-def make_completer(profile) -> Optional[Callable]:
+def make_completer(profile, db: Optional[Path] = None) -> Optional[Callable]:
     """The step that completes a document's rows from outside the document,
     after its fold and its computing (`profiles/<name>/completion.py:
-    complete(report, spec)`): `completed(report, spec)`, which adds what it
+    complete(report, spec, db=)`, *db* the run's database, for what the
+    profile looks up there): `completed(report, spec)`, which adds what it
     found to the report and returns what it came to, traced as `completion`,
     or None where nothing was open. None where the profile has no such step.
     """
@@ -5944,7 +5945,7 @@ def make_completer(profile) -> Optional[Callable]:
         return None
 
     def completed(report, spec) -> Optional[dict]:
-        outcome = complete(report, spec)
+        outcome = complete(report, spec, db=db)
         if outcome:
             trace.event("completion", report.document_id, **outcome)
         return outcome
@@ -8466,7 +8467,7 @@ def main(argv: Optional[list] = None) -> int:
     prior_rows = functools.partial(accepted_rows, spec=spec)
 
     computer = make_computer(profile)
-    completer = make_completer(profile)
+    completer = make_completer(profile, args.db)
 
     def verify(entry: tuple, replies: Optional[int] = None) -> bool:
         """Fold, work out, complete and write one document. *replies* is how

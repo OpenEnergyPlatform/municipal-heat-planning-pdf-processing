@@ -1245,7 +1245,8 @@ earlier made a container of its own while podman was still starting, and failed.
 
 After the compute step a profile may complete a document's rows from outside
 the document (`runner.make_completer`, `profiles/<name>/completion.py:
-complete(report, spec)`), in the run and in the probe alike. Each lookup is
+complete(report, spec, db=)`, with the run's database for what the profile
+looks up there), in the run and in the probe alike. Each lookup is
 traced as `completion` with what it came to, and `stats.py` counts them by
 outcome. scenarios looks up DOI and year where the paper does not print them
 (see the profile). Such a row is built like a computed one: its quote and its

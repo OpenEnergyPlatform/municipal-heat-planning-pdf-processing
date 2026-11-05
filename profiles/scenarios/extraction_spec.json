@@ -52,7 +52,7 @@
     {
       "uri": "publication_title",
       "label": "Publication title",
-      "description": "The full title of the document. In most PDFs it is the heading of the first section and stands as the first line above the list of authors; otherwise in the head of the first page. The value is the whole title line. Not the running head, not the name of the series, not the name of the publisher.",
+      "description": "The full title of the document. In most PDFs it is the heading of the first section and stands as the first line above the list of authors; otherwise in the head of the first page. The value is the whole title line. Not the running head, not the name of the series, not the name of the publisher. Only this document's own title, never that of a study, report or article it cites, presents or compares.",
       "value_type": "text",
       "example": {
         "source": "Global Energy and Climate Outlook 2023: Transforming Energy Systems for a Net Zero Future. JRC Science for Policy Report.",
@@ -77,7 +77,7 @@
     {
       "uri": "publication_author",
       "label": "Author",
-      "description": "An author of the document, one tuple each, spelled as the document prints it: a person the document names as its author, on the title page or wherever it lists its authors. Where the document names no person as its author, the institution it names as its own author or issuer, on the cover or in the imprint. No editors, no one only thanked in the acknowledgements.",
+      "description": "An author of the document, one tuple each, spelled as the document prints it: a person the document names as its author, on the title page or wherever it lists its authors. Where the document names no person as its author, the institution it names as its own author or issuer, on the cover or in the imprint. No editors, no one only thanked in the acknowledgements, and never the authors or the publisher of a study, report or article the document cites, presents or compares.",
       "value_type": "text",
       "example": {
         "source": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P., Garaffa, R., Després, J.",
@@ -112,7 +112,7 @@
     {
       "uri": "publication_date",
       "label": "Publication year",
-      "description": "The year the document was published, four digits and exactly as it stands in the document: imprint, title page or citation note. Not the year of the data, not a year projected in the text.",
+      "description": "The year the document was published, four digits and exactly as it stands in the document: imprint, title page or citation note. Not the year of the data, not a year projected in the text, and never the year of a study, report or article the document cites, presents or compares.",
       "value_type": "text",
       "example": {
         "source": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619.",
@@ -137,7 +137,7 @@
     {
       "uri": "publication_doi",
       "label": "DOI",
-      "description": "The Digital Object Identifier of the document, as it stands in the imprint or the citation note. Only the DOI itself, without the prefix doi: and without the URL before it.",
+      "description": "The Digital Object Identifier of the document, as it stands in the imprint or the citation note. Only the DOI itself, without the prefix doi: and without the URL before it. Never the DOI of a study, report, article or dataset the document cites, presents, compares or uses.",
       "value_type": "text",
       "example": {
         "source": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619.",

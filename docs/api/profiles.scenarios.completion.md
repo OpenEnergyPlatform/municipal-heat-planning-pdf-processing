@@ -13,8 +13,8 @@ yields no author at all, the authors. The year is the value, as the
 parameter defines it, and the record keeps the full date.
 
 The record is the first one these keys find, in this order: the DOI the
-corpus index holds for the document (`catalogue_doi`), the DOI the harvest
-read, the title the harvest read. The index's DOI goes first because it
+corpus index holds for the document (`DocumentMeta.doi` in the run's
+database), the DOI the harvest read, the title the harvest read. The index's DOI goes first because it
 belongs to this very file, while a DOI read off the page can be one the
 paper cites, such as a dataset's. A DOI names one publication, so its
 record is taken as it is; a record the title finds counts only where at
@@ -101,6 +101,15 @@ def bare_doi(text) -> Optional[str]
 
 A DOI alone, without the resolver or the "doi:" before it.
 
+### index_doi
+
+```python
+def index_doi(conn, document_id) -> Optional[str]
+```
+
+The DOI the corpus index holds for the document (`DocumentMeta.doi`),
+without its resolver, or None where it holds none.
+
 ### doi_of
 
 ```python
@@ -136,12 +145,14 @@ its quote and its passage, the record beside it.
 ```python
 def complete(report, spec, *, fetch: Optional[Callable] = None,
              fetch_doi: Optional[Callable] = None,
-             catalogue_doi: Optional[str] = None) -> Optional[dict]
+             catalogue_doi: Optional[str] = None,
+             db=None) -> Optional[dict]
 ```
 
 Fill what the document leaves open of DOI, year and authors from its
 catalogue record. *catalogue_doi* is the DOI the corpus index holds for
-the document. What it came to, for the trace, or None where nothing was
+the document; where it is not given, it is read from *db*, the run's
+database. What it came to, for the trace, or None where nothing was
 open.
 
 [Back to the index](../README.md)

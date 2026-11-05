@@ -10,8 +10,8 @@ yields no author at all, the authors. The year is the value, as the
 parameter defines it, and the record keeps the full date.
 
 The record is the first one these keys find, in this order: the DOI the
-corpus index holds for the document (`catalogue_doi`), the DOI the harvest
-read, the title the harvest read. The index's DOI goes first because it
+corpus index holds for the document (`DocumentMeta.doi` in the run's
+database), the DOI the harvest read, the title the harvest read. The index's DOI goes first because it
 belongs to this very file, while a DOI read off the page can be one the
 paper cites, such as a dataset's. A DOI names one publication, so its
 record is taken as it is; a record the title finds counts only where at
@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
 import threading
 import unicodedata
 import urllib.error
@@ -43,6 +44,7 @@ from collections import Counter
 from typing import Callable, Optional
 
 from docpipe.extraction.trust import CATALOGUE
+from docpipe.store.schema import readonly_uri
 
 WORKS = "https://api.openalex.org/works"
 # A generic client name: the catalogue asks nothing more of a client.
@@ -142,6 +144,28 @@ def bare_doi(text) -> Optional[str]:
     return doi or None
 
 
+def index_doi(conn, document_id) -> Optional[str]:
+    """The DOI the corpus index holds for the document (`DocumentMeta.doi`),
+    without its resolver, or None where it holds none."""
+    try:
+        row = conn.execute("SELECT doi FROM DocumentMeta WHERE document = ?",
+                           (document_id,)).fetchone()
+    except sqlite3.Error:
+        return None
+    return bare_doi(row[0]) if row and row[0] else None
+
+
+def _index_doi_in(db, document_id) -> Optional[str]:
+    try:
+        conn = sqlite3.connect(readonly_uri(db), uri=True)
+    except sqlite3.Error:
+        return None
+    try:
+        return index_doi(conn, document_id)
+    finally:
+        conn.close()
+
+
 def doi_of(record: dict) -> Optional[str]:
     return bare_doi(record.get("doi"))
 
@@ -197,10 +221,12 @@ def _most_read(rows: list) -> Optional[dict]:
 
 def complete(report, spec, *, fetch: Optional[Callable] = None,
              fetch_doi: Optional[Callable] = None,
-             catalogue_doi: Optional[str] = None) -> Optional[dict]:
+             catalogue_doi: Optional[str] = None,
+             db=None) -> Optional[dict]:
     """Fill what the document leaves open of DOI, year and authors from its
     catalogue record. *catalogue_doi* is the DOI the corpus index holds for
-    the document. What it came to, for the trace, or None where nothing was
+    the document; where it is not given, it is read from *db*, the run's
+    database. What it came to, for the trace, or None where nothing was
     open."""
     known = {parameter.uri for parameter in spec.parameters}
     filled = {row.get("parameter") for row in report.tuples}
@@ -218,6 +244,8 @@ def complete(report, spec, *, fetch: Optional[Callable] = None,
         return {"outcome": "no_title", "open": wanted}
     if OFFLINE.is_set():
         return {"outcome": "offline", "open": wanted}
+    if catalogue_doi is None and db is not None:
+        catalogue_doi = _index_doi_in(db, report.document_id)
     doi_row = _most_read([row for row in rows_of(DOI)
                           if bare_doi(row["value"])])
     keys = []

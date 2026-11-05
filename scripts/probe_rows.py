@@ -157,7 +157,7 @@ def whole(hits: list, spec, args, passages=None, document_spec=None) -> list:
         args.image_root, rest_of_document=rest_of_document, spec=spec,
         slice_gate=gate, frame_axes=frame_axes, places=places)
     computer = runner.make_computer(profile)
-    completer = runner.make_completer(profile)
+    completer = runner.make_completer(profile, args.db)
     names = sorted({slot.name for parameter in spec.parameters
                     for slot in fields.axis_slots(parameter)}
                    | {"parameter", "value"})
@@ -219,7 +219,7 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
 
     specs = {document: (document_spec(document) if document_spec else None)
              or spec for document in passages}
-    completer = runner.make_completer(active_profile())
+    completer = runner.make_completer(active_profile(), args.db)
 
     def every(document: int, exclude: set) -> list:
         return [source for source in passages.get(document, ())

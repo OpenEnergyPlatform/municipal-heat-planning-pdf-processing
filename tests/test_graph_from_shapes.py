@@ -197,6 +197,39 @@ def test_a_node_two_documents_describe_keeps_the_first_value_of_a_single_path():
                                                              "Paper B"}
 
 
+# Promise: a title, date or DOI read on page 1 or on the first page the title
+# was read on goes before one read anywhere else, AND without such a row the
+# value most rows read still wins (owner decision 2026-11-05).
+def dated(*years_on_pages, title_page=1):
+    rows = [{"parameter": "publication_title", "value": "Net-zero EU",
+             "quote": "Net-zero EU", "provenance": {"page": title_page}},
+            {"parameter": "publication_author", "value": "Ioannis Tsiropoulos",
+             "quote": "Ioannis Tsiropoulos",
+             "provenance": {"page": title_page}}]
+    return rows + [{"parameter": "publication_date", "value": year,
+                    "quote": f"Published {year}", "provenance": {"page": page}}
+                   for year, page in years_on_pages]
+
+
+def year_in_graph(rows):
+    serializer = kg.make_serializer(Path("no-such.db"), model=oekg())
+    graph = Graph().parse(data=serializer("doc", rows), format="turtle")
+    return [str(o)[:4] for o in
+            graph.objects(predicate=URIRef(OEO + "OEO_00390096"))]
+
+
+def test_a_year_on_the_first_page_goes_before_years_read_more_often_later():
+    review = [("2018", 11), ("2018", 12), ("2018", 13), ("2018", 15)]
+    assert year_in_graph(dated(("2020", 1), *review)) == ["2020"]
+    # the failure by construction: no year on a front page, the most read wins
+    assert year_in_graph(dated(("2020", 7), *review)) == ["2018"]
+
+
+def test_behind_a_cover_the_page_the_title_was_read_on_is_a_front_page():
+    rows = dated(("2019", 2), ("2017", 9), ("2017", 10), title_page=2)
+    assert year_in_graph(rows) == ["2019"]
+
+
 def test_a_referenced_node_is_checked_as_the_target_graph_holds_it():
     from docpipe.ontology import with_context
     oekg_ = "https://openenergyplatform.org/ontology/oekg/"

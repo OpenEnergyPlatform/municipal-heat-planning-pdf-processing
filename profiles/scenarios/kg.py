@@ -576,6 +576,35 @@ def _pick_one(rows: list) -> tuple:
     return ranked[0][0], len(ranked) - 1
 
 
+# What a publication says of itself stands on its first page or its title
+# page. A value read there goes before one read anywhere else, however often
+# that was read: a chapter that presents other studies prints their titles,
+# publishers and years (owner decision 2026-11-05).
+FRONT_FIELDS = ("publication_title", "publication_date", "publication_doi")
+
+
+def _page(row: dict) -> Optional[int]:
+    """The page a row was read on, None where it names none."""
+    try:
+        return int((row.get("provenance") or {}).get("page"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _front_pages(by_param: dict) -> set:
+    """Page 1 and the first page the document's title was read on: its
+    title page, where a cover stands before it (owner decision 2026-11-05)."""
+    titled = [page for page in map(_page, by_param.get("publication_title", ()))
+              if page is not None]
+    return {1, min(titled)} if titled else {1}
+
+
+def _front_first(rows: list, front: set) -> list:
+    """The rows read on one of the *front* pages where there are any, else
+    all of *rows*."""
+    return [row for row in rows if _page(row) in front] or rows
+
+
 def _publication_date(year_text: str) -> str:
     """The shape asks for xsd:dateTime; a PDF gives a year.
 
@@ -822,9 +851,13 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
 
         chosen: dict = {}
         contested: dict = {}
+        front = _front_pages(by_param)
         for key in bound.single:
             if by_param.get(key):
-                chosen[key], others = _pick_one(by_param[key])
+                offered = by_param[key]
+                if key in FRONT_FIELDS:
+                    offered = _front_first(offered, front)
+                chosen[key], others = _pick_one(offered)
                 if others:
                     contested[key] = others
 
