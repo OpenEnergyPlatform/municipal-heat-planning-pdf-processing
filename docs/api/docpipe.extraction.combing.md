@@ -96,14 +96,16 @@ it asks, for its trace. *rank(document_id, probes, exclude)* is the plan's
 passages best first for the search sentences *probes*
 (`runner.make_more_sources`): the reading's sentences, and the model's
 own under "similar". *known(claim, asked)* is what a row has read in the
-plan's words (`runner.row_context`).
+plan's words (`runner.row_context`). *match* chooses the entry of a list
+matched apart that a wording answered is (`matching.Matcher`), shown
+the passage its quote stands in.
 
 #### Comber.\_\_init\_\_
 
 ```python
 def __init__(self, spec, ask: Callable, rank: Optional[Callable],
              known: Callable, *, bases: Optional[Callable] = None,
-             pool=None, trace=None)
+             match: Optional[Callable] = None, pool=None, trace=None)
 ```
 
 #### Comber.comb_groups

@@ -1701,6 +1701,17 @@ group's coordinates of one value, each group with its own system prompt
 (`reading.group_prompts`). A figure goes with its crop. Neither request
 has tools (owner decision 2026-11-05, ticket 26).
 
+### make_matcher
+
+```python
+def make_matcher(spec: Spec)
+```
+
+The request that chooses the entry of a list matched apart that a
+wording read is (`matching.Matcher`, owner decision 2026-11-05), or None
+where the spec matches no list apart or the profile writes no prompt for
+it, which `surveyed_flow` refuses at the start of a run.
+
 ### make_comber
 
 ```python
@@ -2350,6 +2361,16 @@ def flow_prompts(flow: Optional[str] = None) -> tuple
 
 The prompts a harvest of *flow* (this run's when None) sends.
 
+### survey_prompt_ids
+
+```python
+def survey_prompt_ids(profile=None) -> tuple
+```
+
+The prompts of a harvest from the survey: `SURVEY_PROMPT_IDS`, and
+the match where the profile writes it, which a spec with a list matched
+apart sends (`matching.MATCH_PROMPT_ID`, required by `surveyed_flow`).
+
 ### surveyed_flow
 
 ```python
@@ -2695,9 +2716,11 @@ def sent_prompt_ids(framed: bool, flow: Optional[str] = None) -> tuple
 
 The prompts a harvest sends to the model as a system message.
 
-From the survey (`SURVEYED`): the survey, the two reading requests and
-the combing. Field by field: the rows request, the field request, the
-sentence a document is searched with and the anchor questions; the frame
+From the survey (`SURVEYED`): the survey, the two reading requests, the
+combing and, where the profile writes it, the match
+(`survey_prompt_ids`). Field by field: the rows request, the field
+request, the sentence a document is searched with and the anchor
+questions; the frame
 request only when the profile has frame axes, because `ask_frame` does
 not exist otherwise. Not the queries (a list of search templates, never
 sent) and not the review, which has a line of its own in the doctor.

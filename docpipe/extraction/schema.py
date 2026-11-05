@@ -751,12 +751,13 @@ def stamp_schema() -> dict:
         },
         "patternProperties": {
             "^extraction/(harvest|queries|anchors|rows|field|phrase|frame"
-            "|survey|read_values|read_text|comb)$":
+            "|survey|read_values|read_text|comb|match)$":
                 {**sha, "description": "sha256 of the prompt file; `harvest` "
                                        "is in stamps of an older release; "
                                        "`survey`, `read_values`, "
-                                       "`read_text` and `comb` are the "
-                                       "prompts of the survey flow"},
+                                       "`read_text`, `comb` and `match` "
+                                       "are the prompts of the survey "
+                                       "flow"},
             "^question_text/[^/]+$": {
                 "type": "array", "items": {"type": "string"},
                 "description": "The sentence THIS document was searched "
@@ -815,10 +816,11 @@ def stamp_schema() -> dict:
 
 
 # The stages whose every request writes `<stage>_ask` to the trace: the
-# survey flow's own (`runner.ask_in_grammar`) and the search sentences, the
-# frame, the review and the compute step (`runner._asked`).
-ASK_STAGES = ("survey", "read_values", "read_text", "comb", "phrase",
-              "frame", "review", "compute")
+# survey flow's own (`runner.ask_in_grammar`), the match among them, and the
+# search sentences, the frame, the review and the compute step
+# (`runner._asked`).
+ASK_STAGES = ("survey", "read_values", "read_text", "comb", "match",
+              "phrase", "frame", "review", "compute")
 
 
 def trace_schema() -> dict:
@@ -1092,6 +1094,9 @@ def trace_schema() -> dict:
                           "rows", "passages", "figure", "group", "round"},
         "comb_ask": {"corrections", "parameter", "owner", "kind", "rows",
                      "passages", "figure", "group", "round", "value"},
+        # The match names its parameter and the passage it shows.
+        "match_ask": {"rows", "passages", "figure", "group", "round",
+                      "value"},
         # A search sentence, the frame, the review and the compute step say
         # their attempt and what it cost; a parameter where they have one.
         **{f"{stage}_ask": {"corrections", "parameter", "owner", "kind",

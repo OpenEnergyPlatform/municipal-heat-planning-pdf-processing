@@ -131,6 +131,9 @@ class Slot:
     options: tuple = ()
     # {"from": "unit", "value": uri} when the spec decides this coordinate.
     derive: Optional[dict] = None
+    # A list a request of its own chooses from (`spec.Axis.matched_apart`):
+    # the reading asks the wording the document prints, not the list.
+    matched_apart: bool = False
 
     @property
     def is_closed(self) -> bool:
@@ -173,8 +176,9 @@ def value_schema(slot: Slot) -> dict:
     """The answers a coordinate can take in a grammar: one entry of its list,
     UNSTATED included; for a number an integer or UNSTATED; else a wording.
     UNSTATED is an answer of every kind: a grammar that takes only an integer
-    for a year leaves the model no way to say the passage prints none."""
-    if slot.is_closed:
+    for a year leaves the model no way to say the passage prints none. A
+    list matched apart is answered by its wording (`Slot.matched_apart`)."""
+    if slot.is_closed and not slot.matched_apart:
         return {"enum": list(slot.answerable())}
     if slot.kind == NUMBER:
         return {"anyOf": [{"type": "integer"}, {"enum": [UNSTATED]}]}
@@ -482,7 +486,8 @@ def value_choice(parameter: Parameter) -> Slot:
                 question=parameter.description,
                 options=_options(parameter.vocabulary,
                                  getattr(parameter, "definitions", None),
-                                 getattr(parameter, "glosses", None)))
+                                 getattr(parameter, "glosses", None)),
+                matched_apart=getattr(parameter, "matched_apart", False))
 
 
 def axis_slots(parameter: Parameter) -> list:
@@ -499,7 +504,8 @@ def axis_slots(parameter: Parameter) -> list:
                         question=axis.question,
                         options=_options(axis.vocabulary, axis.definitions,
                                          axis.glosses),
-                        derive=axis.derive)
+                        derive=axis.derive,
+                        matched_apart=axis.matched_apart)
         elif axis.enum:
             slot = Slot(name=name, kind=CHOICE, required=axis.required,
                         question=axis.question,

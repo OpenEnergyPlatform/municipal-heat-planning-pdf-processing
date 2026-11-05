@@ -31,6 +31,9 @@
     "AR6 names are run identifiers (EN_INDCi2030_300f) and a publication writes",
     "'the NDC scenario'. Refusing what the model cannot map would delete the one",
     "measurement that tells us how far apart those two vocabularies are.",
+    "Both are matched apart (owner decision 2026-11-05): the reading reads the",
+    "name the publication prints, and a request of its own maps it onto the",
+    "document's runs (docpipe/extraction/matching.py).",
     "",
     "The classes of the five corpus-wide lists carry the ontology's own definition, copied verbatim from the pinned release",
     "openenergyplatform.org/ontology/oeo/releases/2.14.0/oeo.owl, whose closure file has sha256",
@@ -1755,7 +1758,7 @@
     {
       "uri": "scenario_label",
       "label": "Scenario name",
-      "description": "The scenario of the AR6 database that is described at this place. Choose it from value_classes; the class names are the run identifiers of the AR6 database for this very publication. value_raw takes what the document calls the scenario, word for word. One tuple per scenario, for EVERY one the passage names, including those you cannot assign. If the document names only a family ('NPi', 'NDC'), choose 'scenario family'; if the scenario is not in the AR6 list of this publication, choose 'not in AR6'. If you are unsure, leave value out and still write the name into value_raw. Only a scenario the passage names counts, a run or pathway the study computes or compares: the name of a table, figure or section, a finding, a parameter or assumption a scenario changes, and the word 'scenarios' itself name none and get no tuple. Leaving a named scenario out is the only wrong answer.",
+      "description": "A scenario of this publication by the name the document prints, word for word: a run or pathway the study computes or compares. One tuple per scenario, for EVERY one the passage names. The name of a table, figure or section, a finding, a parameter or assumption a scenario changes, and the word 'scenarios' itself name none and get no tuple. Leaving a named scenario out is the only wrong answer.",
       "value_type": "category",
       "example": {
         "source": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway.",
@@ -1778,6 +1781,7 @@
         ]
       },
       "vocabulary_dynamic": true,
+      "matched_apart": true,
       "kg": {
         "node": "scenariofactsheet",
         "class": "OEO_00000365",
@@ -1925,8 +1929,9 @@
       "axes": {
         "scenario": {
           "dynamic": true,
+          "matched_apart": true,
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier.",
+          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\".",
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",
@@ -1978,8 +1983,9 @@
       "axes": {
         "scenario": {
           "dynamic": true,
+          "matched_apart": true,
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier.",
+          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\".",
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",
@@ -2020,8 +2026,9 @@
       "axes": {
         "scenario": {
           "dynamic": true,
+          "matched_apart": true,
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier.",
+          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\".",
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",
@@ -2089,8 +2096,9 @@
       "axes": {
         "scenario": {
           "dynamic": true,
+          "matched_apart": true,
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier.",
+          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\".",
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",

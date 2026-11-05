@@ -1514,7 +1514,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier."
+      "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\"."
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
@@ -1698,7 +1698,7 @@
      "parameter": {
       "const": "scenario_label",
       "description": "Spec parameter: Scenario name.",
-      "x-description-source": "The scenario of the AR6 database that is described at this place. Choose it from value_classes; the class names are the run identifiers of the AR6 database for this very publication. value_raw takes what the document calls the scenario, word for word. One tuple per scenario, for EVERY one the passage names, including those you cannot assign. If the document names only a family ('NPi', 'NDC'), choose 'scenario family'; if the scenario is not in the AR6 list of this publication, choose 'not in AR6'. If you are unsure, leave value out and still write the name into value_raw. Only a scenario the passage names counts, a run or pathway the study computes or compares: the name of a table, figure or section, a finding, a parameter or assumption a scenario changes, and the word 'scenarios' itself name none and get no tuple. Leaving a named scenario out is the only wrong answer.",
+      "x-description-source": "A scenario of this publication by the name the document prints, word for word: a run or pathway the study computes or compares. One tuple per scenario, for EVERY one the passage names. The name of a table, figure or section, a finding, a parameter or assumption a scenario changes, and the word 'scenarios' itself name none and get no tuple. Leaving a named scenario out is the only wrong answer.",
       "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
@@ -2139,7 +2139,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier."
+      "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\"."
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
@@ -2569,7 +2569,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier."
+      "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\"."
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
@@ -3135,7 +3135,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Which scenario of this publication does the value refer to? The list carries the run identifiers that this very publication documents in the AR6 database. They almost never stand in the text; there the same scenario is called \"Current Policies\" or \"the NDC scenario\". If the document names only the family, \"scenario family\" is the right answer and not an identifier."
+      "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\"."
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
@@ -6655,8 +6655,8 @@
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
-   "^extraction/(harvest|queries|anchors|rows|field|phrase|frame|survey|read_values|read_text|comb)$": {
-    "description": "sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_values`, `read_text` and `comb` are the prompts of the survey flow",
+   "^extraction/(harvest|queries|anchors|rows|field|phrase|frame|survey|read_values|read_text|comb|match)$": {
+    "description": "sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_values`, `read_text`, `comb` and `match` are the prompts of the survey flow",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
@@ -8124,6 +8124,76 @@
      "t",
      "doc",
      "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "input": {
+      "type": "object"
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "output": {
+      "type": "object"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "round": {
+      "type": "integer"
+     },
+     "rows": {},
+     "t": {
+      "const": "match_ask"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt",
+     "corrections",
+     "parameter",
+     "kind"
     ],
     "type": "object"
    },

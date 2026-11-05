@@ -69,6 +69,7 @@ from dataclasses import dataclass, field, replace
 from typing import Callable, Optional
 
 from . import fields, lookup
+from .matching import matched
 from .pipeline import (CELL, READ, YEAR_STATES, Batch, Row, Source, WorkItem,
                        cell_index, column_head, head_cells, head_pair,
                        in_several_rows, mark_unanswered, merge_field,
@@ -207,11 +208,14 @@ def group_context(context: dict, group_slots: list, frame_slots: list,
 
 
 def coordinate_shown(slot) -> dict:
+    """A coordinate as a request shows it: its question, and its list, or
+    the kind of its answer. A list matched apart is answered by its wording
+    and goes to the match alone (`matching.py`)."""
     shown: dict = {"question": slot.question}
-    if slot.is_closed:
+    if slot.is_closed and not slot.matched_apart:
         shown["options"] = slot.answerable()
     else:
-        shown["kind"] = slot.kind
+        shown["kind"] = fields.TEXT if slot.matched_apart else slot.kind
     return shown
 
 
@@ -544,11 +548,13 @@ def parameter_shown(parameter, full: bool = True) -> dict:
 def value_classes(parameter) -> dict:
     """The entries a category parameter's value is one of, as a request shows
     a closed list (`fields.Slot.answerable`), without UNSTATED: a value the
-    passage does not state is no value. Empty for a parameter with no list."""
+    passage does not state is no value. Empty for a parameter with no list,
+    and for one whose list is matched apart (`matching.py`): its value is
+    read as the document prints it."""
     if parameter.is_numeric:
         return {}
     slot = fields.value_choice(parameter)
-    if not slot.is_closed:
+    if not slot.is_closed or slot.matched_apart:
         return {}
     return {label: entry for label, entry in slot.answerable().items()
             if label != fields.UNSTATED}
@@ -1005,7 +1011,9 @@ class Reader:
     the passage: the heading it stands under (`heading_of`); so may what
     the value has read, as its request shows it (`known_shown`).
     *known(claim, asked)* is what a value has read in the plan's words
-    (`runner.row_context`). *pool* reads passages side by side. No request
+    (`runner.row_context`). *match* chooses the entry of a list matched
+    apart that a wording read is (`matching.Matcher`); without it such a
+    wording stays as read. *pool* reads passages side by side. No request
     of the reading has tools (owner decision 2026-11-05, ticket 26).
     """
 
@@ -1013,6 +1021,7 @@ class Reader:
                  frame_slots: list, *, shown_with: Optional[Callable] = None,
                  bases: Optional[Callable] = None,
                  known: Optional[Callable] = None,
+                 match: Optional[Callable] = None,
                  pool=None, trace=None):
         self.spec = spec
         self.ask_values = ask_values
@@ -1021,6 +1030,7 @@ class Reader:
         self.shown_with = shown_with or (lambda source: [])
         self.bases = bases or (lambda pairs: [])
         self.known = known or (lambda claim, asked: {})
+        self.match = match
         self.pool = pool
         self.trace = trace
 
@@ -1216,7 +1226,7 @@ class Reader:
                     return CUT if reply == CUT else None
                 break
             first = False
-            claim = claim_of(reply, head)
+            claim = self._matched_value(job, view, claim_of(reply, head))
             if claim is None:
                 break
             failure = round_failure(claim, shown, [r.claim for r in rows],
@@ -1228,7 +1238,7 @@ class Reader:
                 result.corrected += 1
                 again = ask([{**shown_value(claim), "what": reason}])
                 result.asked += 1
-                claim = claim_of(again, head)
+                claim = self._matched_value(job, view, claim_of(again, head))
                 if claim is None:
                     break
                 failure = round_failure(claim, shown,
@@ -1247,6 +1257,19 @@ class Reader:
                             claim=claim))
             read.append(shown_value(claim))
         return rows
+
+    def _matched_value(self, job: _Job, view: Source,
+                       claim: Optional[dict]) -> Optional[dict]:
+        """A value of a parameter whose list is matched apart, read as the
+        document prints it, as the entry the match chose, the printed
+        wording as its `value_raw` (`matching.matched`)."""
+        if claim is None or not getattr(job.parameter, "matched_apart",
+                                        False):
+            return claim
+        return matched(self.match, job.document_id, job.parameter,
+                       [fields.value_choice(job.parameter)],
+                       {"value": claim}, view,
+                       job.context.get("around"))["value"]
 
     def _placed(self, job: _Job, row: Row) -> None:
         """A number in a table placed in its column: the head over it on the
@@ -1306,6 +1329,9 @@ class Reader:
         result.asked += 1
         if not isinstance(reply, dict):
             return
+        around = job.context.get("around")
+        reply = matched(self.match, job.document_id, job.parameter, asked,
+                        reply, view, around)
         self._probed(job, row, reply, asked)
         # What the value has read is shown too, and may be quoted (owner
         # decision 2026-11-05).
@@ -1322,6 +1348,8 @@ class Reader:
             result.asked += 1
             again = ask(corrections)
             if isinstance(again, dict):
+                again = matched(self.match, job.document_id, job.parameter,
+                                asked, again, view, around)
                 self._probed(job, row, again, asked)
                 job.merged([row], {slot.name: value_replies(again, slot,
                                                             row.label)

@@ -243,6 +243,23 @@ tools stay (`reading.Gathered`, `reading.gather`, `lookup.py`) for the combing
 and the compute step, which are the requests that look beyond what they are
 shown.
 
+A list the spec marks `matched_apart` (a dynamic list only, a parameter's own
+or an axis') is matched in a request of its own (`matching.py`, prompt
+`extraction/match`, owner decision 2026-11-05): no reading or combing request
+shows it, and they ask the wording the document prints instead, with its
+quote, as for a free-text coordinate. Each wording read is then matched on its
+own, shown the document's list, the passage, the text around a table or
+figure, the wording and its quote; the combing shows the passage the quote
+stands in. The entry it chooses becomes the answer and the wording its
+`value_raw`, and the check runs as on any closed list. A reply that is no
+entry is asked once more with the reason (`not_an_option`); one still none
+leaves the entry empty with the wording kept, as an answer whose entry the
+model is unsure of: a value unmapped (`verify._check_value`), a coordinate
+`unstated` with the wording seen, which the combing looks for again. No
+answer is kept for the next wording of the same name. scenarios matches the
+AR6 runs of a publication so (`scenario_label` and the `scenario` axis); the
+run list and the rule for choosing a run went out of every reading request.
+
 The prompt of `read_text` may be split by lines `<!-- group: NAME -->`: the text
 before the first is every group's, and each group is sent that plus its own
 section (`reading.group_prompts`, owner decision 2026-11-05). A prompt without
@@ -371,7 +388,8 @@ the passages read so under `front`.
 A run harvests from the survey of each plan wherever its spec names groups
 (`runner.surveyed_flow`), and then the profile must write the four prompts
 `extraction/survey`, `read_values`, `read_text` and `comb`
-(`runner.SURVEY_PROMPT_IDS`). kwp and scenarios do. A profile whose spec names
+(`runner.SURVEY_PROMPT_IDS`), and `extraction/match` where its spec matches a
+list apart (`matching.MATCH_PROMPT_ID`, below). kwp and scenarios do. A profile whose spec names
 groups and lacks one of them is broken, and the run stops at the start and names
 the prompt, for every run and every probe, as `spec.load` stops at a broken group
 (owner decision 2026-11-04). It used to harvest field by field instead, saying
@@ -429,9 +447,9 @@ rows requests were shown counts as read. `--top-up-parameters`
 (`surveyed.append_parameters`) surveys the whole plan for the gained parameters
 (scope `parameters`).
 
-The server's window is measured over the four prompts of this flow
+The server's window is measured over the prompts of this flow
 (`runner.sent_prompt_ids`, see Configuration). The trace names each request by
-its kind, `read_values_ask`, `read_text_ask` and `comb_ask`, each with its
+its kind, `read_values_ask`, `read_text_ask`, `comb_ask` and `match_ask`, each with its
 `group` where the request has one: `read_values_ask` carries `round`,
 `read_text_ask` carries `group` and `value`, and the `comb` event carries
 `group` too. The requests for a search sentence, the frame, the review and

@@ -88,6 +88,7 @@ from . import combing as combing_map
 from . import compute as computing
 from . import fields
 from . import found as found_places
+from . import matching as matching_map
 from . import places as places_map
 from . import reading as reading_map
 from . import replies
@@ -2074,7 +2075,32 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
         spec, ask_values, ask_text, frame_slots,
         shown_with=reading_map.heading_of,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
-        known=row_context, pool=AHEAD, trace=trace.event)
+        known=row_context, match=make_matcher(spec), pool=AHEAD,
+        trace=trace.event)
+
+
+def make_matcher(spec: Spec):
+    """The request that chooses the entry of a list matched apart that a
+    wording read is (`matching.Matcher`, owner decision 2026-11-05), or None
+    where the spec matches no list apart or the profile writes no prompt for
+    it, which `surveyed_flow` refuses at the start of a run."""
+    if not matching_map.matched_apart(spec):
+        return None
+    try:
+        prompt = prompts.load(matching_map.MATCH_PROMPT_ID)
+    except (FileNotFoundError, LookupError):
+        return None
+    client = _client()
+
+    def ask(payload, shape, document_id, source, parameter):
+        text = json.dumps(payload, ensure_ascii=False, indent=2)
+        return ask_in_grammar(
+            client, prompt, [{"role": "user", "content": text}], shape,
+            document_id, "match", "value", parameter=parameter.uri,
+            kind=source.owner_kind, owner=source.owner_id,
+            corrections=len(payload.get("corrections") or ()))
+
+    return matching_map.Matcher(ask)
 
 
 def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
@@ -2107,7 +2133,7 @@ def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
     comber = combing_map.Comber(
         spec, ask, rank, row_context,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
-        pool=AHEAD, trace=trace.event)
+        match=make_matcher(spec), pool=AHEAD, trace=trace.event)
     # The sentences the search for a parameter the survey named no passage
     # for ranks with (`make_seek_probes`); None searches with its label.
     comber.seek = seek
@@ -6809,7 +6835,18 @@ def _stamp_current(spec_sha: str, anchors_sha: str = "",
 
 def flow_prompts(flow: Optional[str] = None) -> tuple:
     """The prompts a harvest of *flow* (this run's when None) sends."""
-    return SURVEY_PROMPT_IDS if (flow or FLOW) == SURVEYED else PROMPT_IDS
+    return survey_prompt_ids() if (flow or FLOW) == SURVEYED else PROMPT_IDS
+
+
+def survey_prompt_ids(profile=None) -> tuple:
+    """The prompts of a harvest from the survey: `SURVEY_PROMPT_IDS`, and
+    the match where the profile writes it, which a spec with a list matched
+    apart sends (`matching.MATCH_PROMPT_ID`, required by `surveyed_flow`)."""
+    try:
+        prompts.load(matching_map.MATCH_PROMPT_ID, profile)
+    except (FileNotFoundError, LookupError):
+        return SURVEY_PROMPT_IDS
+    return (*SURVEY_PROMPT_IDS, matching_map.MATCH_PROMPT_ID)
 
 
 def surveyed_flow(spec: Spec, profile=None) -> bool:
@@ -6826,7 +6863,11 @@ def surveyed_flow(spec: Spec, profile=None) -> bool:
     request is sent rather than at the first plan's reading."""
     if not spec.groups:
         return False
-    for prompt_id in SURVEY_PROMPT_IDS:
+    # The match only where a list is matched apart (`matching.py`).
+    needed = (*SURVEY_PROMPT_IDS,
+              *((matching_map.MATCH_PROMPT_ID,)
+                if matching_map.matched_apart(spec) else ()))
+    for prompt_id in needed:
         try:
             prompt = prompts.load(prompt_id, profile)
             if prompt_id == reading_map.READ_TEXT_PROMPT_ID:
@@ -7486,15 +7527,17 @@ def fit_batch_sources(prompt, spec, wanted: int = BATCH_SOURCES) -> int:
 def sent_prompt_ids(framed: bool, flow: Optional[str] = None) -> tuple:
     """The prompts a harvest sends to the model as a system message.
 
-    From the survey (`SURVEYED`): the survey, the two reading requests and
-    the combing. Field by field: the rows request, the field request, the
-    sentence a document is searched with and the anchor questions; the frame
+    From the survey (`SURVEYED`): the survey, the two reading requests, the
+    combing and, where the profile writes it, the match
+    (`survey_prompt_ids`). Field by field: the rows request, the field
+    request, the sentence a document is searched with and the anchor
+    questions; the frame
     request only when the profile has frame axes, because `ask_frame` does
     not exist otherwise. Not the queries (a list of search templates, never
     sent) and not the review, which has a line of its own in the doctor.
     """
     if (flow or FLOW) == SURVEYED:
-        return SURVEY_PROMPT_IDS
+        return survey_prompt_ids()
     return (ROWS_PROMPT_ID, FIELD_PROMPT_ID, PHRASE_PROMPT_ID,
             ANCHORS_PROMPT_ID, *((FRAME_PROMPT_ID,) if framed else ()))
 

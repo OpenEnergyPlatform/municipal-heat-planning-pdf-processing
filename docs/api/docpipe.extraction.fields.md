@@ -58,6 +58,7 @@ Fields:
 - `question: Optional[str] = None`
 - `options: tuple = ()`
 - `derive: Optional[dict] = None`: {"from": "unit", "value": uri} when the spec decides this coordinate.
+- `matched_apart: bool = False`: A list a request of its own chooses from (`spec.Axis.matched_apart`): the reading asks the wording the document prints, not the list.
 
 #### Slot.is_closed
 
@@ -105,7 +106,8 @@ def value_schema(slot: Slot) -> dict
 The answers a coordinate can take in a grammar: one entry of its list,
 UNSTATED included; for a number an integer or UNSTATED; else a wording.
 UNSTATED is an answer of every kind: a grammar that takes only an integer
-for a year leaves the model no way to say the passage prints none.
+for a year leaves the model no way to say the passage prints none. A
+list matched apart is answered by its wording (`Slot.matched_apart`).
 
 ### parameter_slot
 

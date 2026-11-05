@@ -99,6 +99,10 @@ class Axis:
     enum: Optional[tuple] = None
     required: bool = False
     dynamic: bool = False
+    # A dynamic list whose entry a request of its own chooses (owner
+    # decision 2026-11-05, `matching.py`): the reading reads the wording the
+    # document prints, and the list goes to that request alone.
+    matched_apart: bool = False
     # The one line the field request asks. It lives on the axis because the
     # harvest asks per field: a rule buried in a prompt that covers sixteen
     # fields at once is a rule the model can skip, and skipping is what cost
@@ -169,6 +173,8 @@ class Parameter:
     # A category whose closed list is real but per document, filled in by the
     # profile before the harvest. Same rule as a dynamic axis, one level up.
     vocabulary_dynamic: bool = False
+    # That list's entry chosen by a request of its own, as on an axis.
+    matched_apart: bool = False
     # What a row of this parameter becomes in the graph: which node, which
     # class, which predicate carries the number and which the unit. Read by
     # the serializer and published by the JSON schema, so neither can drift
@@ -374,9 +380,13 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
     if question is not None and (not isinstance(question, str) or
                                  not question.strip()):
         _fail(path, "question must be a non-empty string when given")
+    matched_apart = bool(raw.get("matched_apart", False))
+    if matched_apart and not dynamic:
+        _fail(path, "matched_apart is for a dynamic list only")
     return Axis(name=name, vocabulary=vocabulary, type=axis_type,
                 enum=enum, required=bool(raw.get("required", False)),
-                dynamic=dynamic, question=question, derive=derive,
+                dynamic=dynamic, matched_apart=matched_apart,
+                question=question, derive=derive,
                 kg=kg, definitions=definitions, glosses=glosses)
 
 
@@ -467,6 +477,9 @@ def _validate_parameter(path: str, raw) -> Parameter:
     vocabulary, value_definitions, value_glosses = _vocabulary(
         f"{path}.vocabulary", raw.get("vocabulary"))
     vocabulary_dynamic = bool(raw.get("vocabulary_dynamic", False))
+    matched_apart = bool(raw.get("matched_apart", False))
+    if matched_apart and not vocabulary_dynamic:
+        _fail(f"{path}.matched_apart", "for a dynamic list only")
     brief = raw.get("brief")
     if brief is not None and (not isinstance(brief, str)
                               or not brief.strip()):
@@ -546,6 +559,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
                      glosses=value_glosses,
                      brief=brief.strip() if brief else None,
                      vocabulary_dynamic=vocabulary_dynamic,
+                     matched_apart=matched_apart,
                      axes=axes, example=example, kg=raw.get("kg"))
 
 
@@ -631,6 +645,13 @@ def _validate_groups(raw, parameters: list, asks_unit: bool) -> dict:
                 for parameter in parameters):
             _fail(f"{path}.coordinates",
                   "a group the survey reads must be axes of one parameter")
+        if read_in == "survey" and any(
+                parameter.axes[c].matched_apart for parameter in parameters
+                for c in coordinates if c in parameter.axes):
+            # The survey shows a coordinate's list and has no match.
+            _fail(f"{path}.coordinates",
+                  "a list matched apart is read in the reading, not the "
+                  "survey")
         definition = entry.get("definition", "brief")
         if definition not in DEFINITIONS:
             _fail(f"{path}.definition", f"must be one of {DEFINITIONS}")
@@ -672,6 +693,8 @@ def axis_fingerprint(axis: "Axis") -> str:
         "enum": sorted(axis.enum) if axis.enum else None,
         "required": axis.required,
         "dynamic": axis.dynamic,
+        # Only where set, so no other coordinate's key moves.
+        **({"matched_apart": True} if axis.matched_apart else {}),
         "derive": axis.derive,
         # The offered list: identifier, the spellings a plan may use, and the
         # sentence saying what the term means. All three reach the model, so
@@ -729,6 +752,7 @@ def value_fingerprint(parameter: "Parameter") -> str:
         return ""
     return _digest({
         "dynamic": parameter.vocabulary_dynamic,
+        **({"matched_apart": True} if parameter.matched_apart else {}),
         "options": {uri: {"spellings": sorted(map(str, labels or []))}
                     for uri, labels in (parameter.vocabulary or {}).items()},
     })

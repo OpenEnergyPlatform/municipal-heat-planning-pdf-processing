@@ -193,7 +193,9 @@ value. *context* is what the request shows beside its passage,
 the passage: the heading it stands under (`heading_of`); so may what
 the value has read, as its request shows it (`known_shown`).
 *known(claim, asked)* is what a value has read in the plan's words
-(`runner.row_context`). *pool* reads passages side by side. No request
+(`runner.row_context`). *match* chooses the entry of a list matched
+apart that a wording read is (`matching.Matcher`); without it such a
+wording stays as read. *pool* reads passages side by side. No request
 of the reading has tools (owner decision 2026-11-05, ticket 26).
 
 #### Reader.\_\_init\_\_
@@ -203,6 +205,7 @@ def __init__(self, spec, ask_values: Callable, ask_text: Callable,
              frame_slots: list, *, shown_with: Optional[Callable] = None,
              bases: Optional[Callable] = None,
              known: Optional[Callable] = None,
+             match: Optional[Callable] = None,
              pool=None, trace=None)
 ```
 
@@ -311,6 +314,10 @@ frame coordinate.
 ```python
 def coordinate_shown(slot) -> dict
 ```
+
+A coordinate as a request shows it: its question, and its list, or
+the kind of its answer. A list matched apart is answered by its wording
+and goes to the match alone (`matching.py`).
 
 ### answer_schema
 
@@ -447,7 +454,9 @@ def value_classes(parameter) -> dict
 
 The entries a category parameter's value is one of, as a request shows
 a closed list (`fields.Slot.answerable`), without UNSTATED: a value the
-passage does not state is no value. Empty for a parameter with no list.
+passage does not state is no value. Empty for a parameter with no list,
+and for one whose list is matched apart (`matching.py`): its value is
+read as the document prints it.
 
 ### source_shown
 

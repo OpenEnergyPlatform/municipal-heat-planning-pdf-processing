@@ -51,11 +51,13 @@ from typing import Callable, Optional
 
 from . import lookup
 from .fields import EXHAUSTED, READ, SAID_UNSTATED, UNANSWERED, UNBACKED
+from .matching import matched
 from .pipeline import Row, mark_unanswered, merge_field, row_label
 from .reading import (SHOWN, Gathered, answer_of, answer_schema, around_of,
                       coordinate_shown, first_line, gather, groups_of,
                       heading_of, known_shown, more_schema, shown_as,
                       shown_hits, slots_of, source_of, years_of)
+from .verify import quote_in
 from .wording import say
 
 COMB_PROMPT_ID = "extraction/comb"
@@ -120,17 +122,20 @@ class Comber:
     passages best first for the search sentences *probes*
     (`runner.make_more_sources`): the reading's sentences, and the model's
     own under "similar". *known(claim, asked)* is what a row has read in the
-    plan's words (`runner.row_context`).
+    plan's words (`runner.row_context`). *match* chooses the entry of a list
+    matched apart that a wording answered is (`matching.Matcher`), shown
+    the passage its quote stands in.
     """
 
     def __init__(self, spec, ask: Callable, rank: Optional[Callable],
                  known: Callable, *, bases: Optional[Callable] = None,
-                 pool=None, trace=None):
+                 match: Optional[Callable] = None, pool=None, trace=None):
         self.spec = spec
         self.ask = ask
         self.rank = rank
         self.known = known
         self.bases = bases or (lambda pairs: [])
+        self.match = match
         self.pool = pool
         self.trace = trace
 
@@ -312,19 +317,57 @@ class Comber:
         for row in rows:
             for name in opened[row.label]:
                 row.claim.pop(f"{name}_state", None)
-        failed = self._merged(rows, reply, asked, opened, evidence, bases)
+
+        def entries(reply: dict) -> dict:
+            return self._matched(document_id, parameter, asked, reply,
+                                 evidence, passages, budget)
+        failed = self._merged(rows, entries(reply), asked, opened, evidence,
+                              bases)
         corrections = self._corrections(rows, failed, opened)
         if corrections:
             result.corrected = len(corrections)
             again = ask(corrections)
             result.asked += 1
             if isinstance(again, dict):
-                self._merged(rows, again, asked, opened, evidence, bases)
+                self._merged(rows, entries(again), asked, opened, evidence,
+                             bases)
         mark_unanswered(rows, asked)
         result.filled = sum(1 for row in rows for name in opened[row.label]
                             if row.claim.get(f"{name}_state") == READ)
         self._traced(document_id, result)
         return result
+
+    def _matched(self, document_id: int, parameter, slots: list, reply: dict,
+                 evidence: list, passages: dict,
+                 budget: Optional[int]) -> dict:
+        """*reply* with the wording of each list matched apart replaced by
+        its entry (`matching.matched`), each matched with the passage its
+        quote stands in and the text around a table or figure. A quote that
+        stands in nothing shown is left to the check, unmatched."""
+        if self.match is None or not any(slot.matched_apart
+                                         for slot in slots):
+            return reply
+        rows = []
+        for entry in reply.get("rows") or ():
+            if isinstance(entry, dict):
+                for slot in slots:
+                    answer = entry.get(slot.name)
+                    quote = answer.get("quote") \
+                        if isinstance(answer, dict) else None
+                    found = next((s for s in evidence
+                                  if isinstance(quote, str)
+                                  and quote_in(s.text or "", quote)), None)
+                    if not slot.matched_apart or found is None:
+                        continue
+                    passage = passages.get((found.owner_kind,
+                                            found.owner_id), found)
+                    around = around_of(passage, passages, budget)
+                    entry = matched(self.match, document_id, parameter,
+                                    [slot], entry, passage,
+                                    around.text if around is not None
+                                    else None)
+            rows.append(entry)
+        return {**reply, "rows": rows}
 
     @staticmethod
     def _merged(rows: list, reply: dict, slots: list, opened: dict,

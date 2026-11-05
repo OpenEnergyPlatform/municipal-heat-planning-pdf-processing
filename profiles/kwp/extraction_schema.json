@@ -11906,8 +11906,8 @@
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
-   "^extraction/(harvest|queries|anchors|rows|field|phrase|frame|survey|read_values|read_text|comb)$": {
-    "description": "sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_values`, `read_text` and `comb` are the prompts of the survey flow",
+   "^extraction/(harvest|queries|anchors|rows|field|phrase|frame|survey|read_values|read_text|comb|match)$": {
+    "description": "sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_values`, `read_text`, `comb` and `match` are the prompts of the survey flow",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
@@ -13375,6 +13375,76 @@
      "t",
      "doc",
      "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "input": {
+      "type": "object"
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "output": {
+      "type": "object"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "round": {
+      "type": "integer"
+     },
+     "rows": {},
+     "t": {
+      "const": "match_ask"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt",
+     "corrections",
+     "parameter",
+     "kind"
     ],
     "type": "object"
    },

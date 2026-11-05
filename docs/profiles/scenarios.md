@@ -61,7 +61,7 @@ table gives this profile's own answer.
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 6 prompt ids of its own | page transcription, English artefact repair, table and figure captioning; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object (`reading.REQUIRED`), in English, the language of the prompts of the first three; the extraction prompts are German and `extraction.PHRASES` is another table, the harvest's own |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and names (a name opens each line of the values index) and three filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `FRONT_PAGE_PARAMETERS`, `FRONT_PAGE_TITLE`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 13 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
+| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `FRONT_PAGE_PARAMETERS`, `FRONT_PAGE_TITLE`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 14 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
 | The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 11 prompt ids of its own | the English chat wording and the answer loop's own prompts; the twelfth, `json_format`, is the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copy gave |
 
@@ -72,7 +72,11 @@ see [extraction](../stages/extraction.md)): the spec names one group,
 about itself, its study or its own scenarios. `extraction/read_values`
 names the values one per request, with `value`, `value_raw` and quote, and
 `extraction/read_text` answers for each value the scenario
-it refers to, matched to a run identifier of the document's own list. It
+it refers to by the name the publication prints. `extraction/match` then
+maps each name read onto a run identifier of the document's own list, in a
+request of its own with the list, the passage and the name's quote (owner
+decision 2026-11-05: `scenario_label` and the `scenario` axis are
+`matched_apart`, see [extraction](../stages/extraction.md)). `read_text`
 shows both forms of an answer, a scenario named and one the passage does not
 name with the sentence the combing searches with (`probe`); with the first
 alone, 7 of 123 comb tasks of a four-paper probe had such a sentence. A
@@ -84,7 +88,7 @@ no person. `extraction/comb` looks for a scenario still open in the rest of
 the publication. No field of this profile holds numbers, so a table is read
 by `read_values` and `read_text` too, as a table is in every profile, and a
 field with a list is shown it and answers one entry, or `""` with its wording
-in `value_raw`.
+in `value_raw`; the scenario's list alone is matched apart.
 
 Field by field, `extraction/places` asks once per publication which passages
 answer which fact and question, with a quote and no value; the search then
