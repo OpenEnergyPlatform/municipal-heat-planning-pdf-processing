@@ -96,6 +96,69 @@ def of(self, document_id) -> int
 def clear(self) -> None
 ```
 
+### Failures
+
+```python
+class Failures
+```
+
+What the failures of one request mean, the same for every request of
+the stage. The rule stands here once and not in each retry loop: of nine
+loops, three kept all of it, and the compute request asked again at once
+after a server error, asked a refused request again, and left its
+document stamped as finished when no attempt of it was served.
+
+A failure that is the server's (`server_side`) is asked again, after the
+long wait (`retry_wait`). Any other refuses the request itself, every
+time, and is not asked again. A request given up on whose last attempt
+the server did not serve (`unserved`) leaves its document unfinished
+(`UNSERVED`): the stamp is withheld and a resume reads it again.
+
+*document_id* is the document the request reads, None for a request of
+the run itself. *noted* is False for a request whose end is told another
+way: one the document is finished without (the places map, the review),
+or one whose hole carries its cause to the stamp itself (the rows
+harvest, `not_happened`). It still waits and stops by the rule.
+
+#### Failures.\_\_init\_\_
+
+```python
+def __init__(self, document_id=None, noted: bool = True)
+```
+
+#### Failures.failed
+
+```python
+def failed(self, exc: BaseException) -> bool
+```
+
+Whether the request that raised *exc* is asked again.
+
+#### Failures.answered
+
+```python
+def answered(self) -> None
+```
+
+The server answered the request, whatever its reply says.
+
+#### Failures.wait
+
+```python
+def wait(self, attempt: int) -> None
+```
+
+Before asking again after attempt *attempt*: the long curve after
+the server's failure, the short one after a reply.
+
+#### Failures.given_up
+
+```python
+def given_up(self) -> None
+```
+
+The request is asked no more and has no answer.
+
 ### Coalescer
 
 ```python

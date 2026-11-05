@@ -323,7 +323,7 @@ survey's passages plus the unanswered ones as `sources_of`): `unstated` stays a
 finding about the plan. A survey that answered no passage is no reply at all,
 and the document is not stamped. A request of this flow whose last attempt
 ended on a 429, a 5xx or a timeout notes its document (`UNSERVED`,
-`runner.ask_in_grammar`), which is then not stamped, so a resume redoes it. A
+`runner.Failures`), which is then not stamped, so a resume redoes it. A
 request that timed out is asked again with the time of a repeat
 (`EXTRACT_RETRY_TIMEOUT`, `scheduler.Repeats`), as every request of the
 stage is: the eight-plan probe asked three times within the same 180 s and
@@ -982,30 +982,42 @@ for tables full of values, which then read as tables without any.
 
 ### Requests the server did not serve
 
-Every request loop of this stage reads the exception's HTTP status to tell
-three ends apart. A request that never arrived has no status and is the
-server's: `server_side` is true, and the loop waits on the long curve,
-`retry_wait(attempt, transport=True)`, rather than the short one the model's
-own mistakes get (`runner.py`). A 429, a 5xx or a
-timeout is `unserved` (`runner.py`): the server was asked and did
-not do the work, which says nothing about the request, so it is
-`server_side` too,
-waits on the long curve, and ends the request as unserved if the last
-attempt still got it. Any other 4xx refuses the request itself, and every
-retry would be refused alike: the row, coordinate, frame and review loops
-stop at once, and a passage ends as `no_answer`.
+Every request loop of this stage hands a failed request to one rule,
+`runner.Failures`, which reads the exception's HTTP status to tell three ends
+apart. A request that never arrived has no status and is the server's:
+`server_side` is true, and the loop waits on the long curve,
+`retry_wait(attempt, transport=True)`, rather than the short one a reply the
+model got wrong gets (`runner.py`). A 429, a 5xx or a timeout is `unserved`:
+the server was asked and did not do the work, which says nothing about the
+request, so it is `server_side` too, waits on the long curve, and ends the
+request as unserved if the last attempt still got it. Any other 4xx refuses
+the request itself, and every retry would be refused alike, so it is not
+asked again, and a passage ends as `no_answer`. The compute request waits by
+the failures alone: a round of code, of fetching or of taking is no failure.
+
+The rule stands once and not in each loop. Of nine loops three kept all of
+it: the search-sentence and anchor requests asked a refused request again,
+and the compute request asked again at once after a server error, asked a
+refused request again and left its document stamped as finished when no
+attempt of it was served. A source check holds every request of the stage to
+the rule (`tests/test_failures.py`).
 
 What an unserved end means depends on the request. A passage's rows request
 writes one sentinel per source with `_why: "unserved"` (the harvest
 schema's `_why` has four values: `unreachable`, `unserved`, `no_answer`,
 `cut_off`; `docpipe/extraction/schema.py`), and such a sentinel
 counts towards the dead-server streak like an `unreachable` one
-(`runner.py`). A coordinate request, the frame
-request and a search-sentence request return nothing, as they do for any
-failure; what marks the document is `UNSERVED.note(document_id)`, which
-counts it in the registry `UNSERVED` (`runner.py`). The coordinate request's own streak counts it
-too. The run's anchor requests belong to no document and
-are counted under `None` (`runner.py`).
+(`runner.py`); the sentinel carries the cause to the stamp (`not_happened`).
+The coordinate, frame, reading, search-sentence and compute requests return
+nothing, as they do for any failure; what marks the document is
+`Failures.given_up`, which counts it in the registry `UNSERVED`
+(`runner.py`), so the document is not stamped and a resume reads it again.
+The coordinate request's own streak counts it too. The run's anchor requests
+belong to no document and are counted under `None`. Two requests are not
+counted there, as their end is told another way: the map of places, without
+which the search reads as before (`places.py`), and the review, a pass over a
+written harvest whose row without a flag the next review reads again
+(`review.py`).
 
 A timeout counts because a server whose engine stopped taking requests keeps
 its connections open until every request times out; those documents used to be

@@ -1,0 +1,250 @@
+"""A request the server failed is asked again after the long wait, a refused
+one is not asked again, and one given up on that the server never served
+leaves its document unfinished. The rule stands once (`runner.Failures`), and
+every request of the stage follows it. Each promise has a case that breaks it
+beside the one that keeps it."""
+import ast
+import json
+import threading
+from pathlib import Path
+from types import SimpleNamespace
+
+import httpx
+import openai
+import pytest
+
+from docpipe.extraction import runner
+from docpipe.extraction.spec import load as load_spec
+
+ROOT = Path(__file__).resolve().parent.parent
+STAGE = ROOT / "docpipe" / "extraction"
+# The clients every other client of the stage is made of: they pass a request
+# on and send none of their own.
+WRAPPERS = {"scheduler.py", "throttle.py"}
+SPEC = load_spec(json.loads((ROOT / "profiles" / "kwp" / "extraction_spec.json")
+                            .read_text(encoding="utf-8")))
+
+
+class Status(Exception):
+    def __init__(self, status_code):
+        super().__init__(f"HTTP {status_code}")
+        self.status_code = status_code
+
+
+def slow():
+    return openai.APITimeoutError(request=httpx.Request("POST", "http://x"))
+
+
+@pytest.fixture
+def waits(monkeypatch):
+    """The curve of each wait, (attempt, the server's failure), and a count of
+    unfinished documents of this test's own."""
+    taken = []
+    monkeypatch.setattr(runner, "retry_wait",
+                        lambda n, transport=False:
+                        taken.append((n, transport)) or 0.0)
+    monkeypatch.setattr(runner, "UNSERVED", runner.Unserved())
+    return taken
+
+
+# -- the rule ----------------------------------------------------------------
+
+def test_a_server_error_is_asked_again_after_the_long_wait(waits):
+    failures = runner.Failures(7)
+    assert failures.failed(Status(500)) is True
+    failures.wait(1)
+    assert waits == [(1, True)]
+
+
+def test_a_reply_after_it_waits_the_short_curve(waits):
+    failures = runner.Failures(7)
+    failures.failed(Status(500))
+    failures.answered()
+    failures.wait(2)
+    assert waits == [(2, False)]
+
+
+def test_a_refusal_is_not_asked_again(waits):
+    failures = runner.Failures(7)
+    assert failures.failed(Status(400)) is False
+    failures.given_up()
+    assert runner.UNSERVED.of(7) == 0
+
+
+@pytest.mark.parametrize("failure", [Status(503), Status(429), slow()])
+def test_a_request_given_up_unserved_leaves_its_document_unfinished(
+        waits, failure):
+    failures = runner.Failures(7)
+    assert failures.failed(failure) is True
+    failures.given_up()
+    assert runner.UNSERVED.of(7) == 1
+
+
+def test_an_answer_after_a_server_error_leaves_nothing_unfinished(waits):
+    failures = runner.Failures(7)
+    failures.failed(Status(503))
+    failures.answered()
+    failures.given_up()
+    assert runner.UNSERVED.of(7) == 0
+
+
+def test_a_request_whose_end_is_told_another_way_is_not_noted(waits):
+    failures = runner.Failures(7, noted=False)
+    assert failures.failed(Status(503)) is True
+    failures.given_up()
+    assert runner.UNSERVED.of(7) == 0
+
+
+# -- requests that had no part of it -----------------------------------------
+
+def flaky(first, reply):
+    """A client that raises *first* at the first request of each conversation
+    and answers *reply* after, and how often each conversation was asked."""
+    lock, asked = threading.Lock(), {}
+
+    def create(**request):
+        text = request["messages"][-1]["content"]
+        with lock:
+            asked[text] = asked.get(text, 0) + 1
+            first_time = asked[text] == 1
+        if first_time:
+            raise first
+        return SimpleNamespace(usage=None, choices=[SimpleNamespace(
+            finish_reason="stop", message=SimpleNamespace(content=reply))])
+
+    return SimpleNamespace(chat=SimpleNamespace(
+        completions=SimpleNamespace(create=create))), asked
+
+
+PHRASE = SimpleNamespace(meta={}, text="x")
+SENTENCE = json.dumps({"phrase": "Ein Satz."})
+ANCHORS = json.dumps({"anchors": ["Ein Satz."]})
+
+
+def parameters(*uris):
+    return SimpleNamespace(parameters=[
+        SimpleNamespace(uri=uri, label=uri, description=f"Was {uri} ist",
+                        vocabulary={})
+        for uri in uris])
+
+
+def test_a_refused_search_sentence_is_asked_once(waits):
+    client, asked = flaky(Status(400), SENTENCE)
+    out = runner.document_anchor(parameters("a", "b"), client=client,
+                                 prompt=PHRASE, document_id=7)
+    assert sorted(asked.values()) == [1, 1]
+    assert out == {}
+    assert runner.UNSERVED.of(7) == 0
+
+
+def test_a_search_sentence_the_server_failed_is_asked_again(waits):
+    client, asked = flaky(Status(503), SENTENCE)
+    out = runner.document_anchor(parameters("a", "b"), client=client,
+                                 prompt=PHRASE, document_id=7)
+    assert sorted(asked.values()) == [2, 2]
+    assert out == {"a": ["Ein Satz."], "b": ["Ein Satz."]}
+    assert waits == [(1, True), (1, True)]
+
+
+def test_a_refused_anchor_set_is_asked_once(waits):
+    client, asked = flaky(Status(400), ANCHORS)
+    out = runner.make_anchors(SPEC, client)
+    assert set(asked.values()) == {1}
+    assert not any(out.values())
+    assert runner.UNSERVED.of(None) == 0
+
+
+def test_an_anchor_set_the_server_failed_is_asked_again(waits):
+    client, asked = flaky(Status(503), ANCHORS)
+    out = runner.make_anchors(SPEC, client)
+    assert set(asked.values()) == {2}
+    assert out and all(out.values())
+
+
+# -- every request of the stage ----------------------------------------------
+
+RULE = {"failed", "answered", "wait", "given_up"}
+
+
+def _request(call: ast.Call) -> bool:
+    """Whether *call* is `<client>.chat.completions.create(...)`."""
+    func = call.func
+    return (isinstance(func, ast.Attribute) and func.attr == "create"
+            and isinstance(func.value, ast.Attribute)
+            and func.value.attr == "completions"
+            and isinstance(func.value.value, ast.Attribute)
+            and func.value.value.attr == "chat")
+
+
+def _lacking(top: ast.AST) -> set:
+    """What of the rule *top* does not follow: no `Failures` made, or the
+    parts of it it never calls."""
+    names = {target.id for node in ast.walk(top)
+             if isinstance(node, ast.Assign)
+             and isinstance(node.value, ast.Call)
+             and isinstance(node.value.func, ast.Name)
+             and node.value.func.id == "Failures"
+             for target in node.targets if isinstance(target, ast.Name)}
+    if not names:
+        return {"Failures"}
+    called = {node.func.attr for node in ast.walk(top)
+              if isinstance(node, ast.Call)
+              and isinstance(node.func, ast.Attribute)
+              and isinstance(node.func.value, ast.Name)
+              and node.func.value.id in names}
+    return RULE - called
+
+
+def requests_without_the_rule(root: Path = STAGE) -> list:
+    """Every function of the stage that sends a request and does not follow
+    the rule, as "file:function:what it lacks"."""
+    found = []
+    for path in sorted(root.rglob("*.py")):
+        if path.name in WRAPPERS:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for top in tree.body:
+            if not any(isinstance(node, ast.Call) and _request(node)
+                       for node in ast.walk(top)):
+                continue
+            lacking = _lacking(top)
+            if lacking:
+                found.append(f"{path.name}:{getattr(top, 'name', '?')}:"
+                             f"{','.join(sorted(lacking))}")
+    return found
+
+
+def test_every_request_of_the_stage_follows_the_rule():
+    assert requests_without_the_rule() == []
+
+
+def test_a_request_without_the_rule_or_part_of_it_is_found(tmp_path):
+    (tmp_path / "made.py").write_text(
+        "def ask():\n"
+        "    client = _client()\n"
+        "    try:\n"
+        "        return client.chat.completions.create(model='m')\n"
+        "    except Exception:\n"
+        "        return None\n"
+        "def unwaited():\n"
+        "    failures = Failures(1)\n"
+        "    client = _client()\n"
+        "    try:\n"
+        "        client.chat.completions.create(model='m')\n"
+        "        failures.answered()\n"
+        "    except Exception as exc:\n"
+        "        failures.failed(exc)\n"
+        "    failures.given_up()\n"
+        "def kept():\n"
+        "    failures = Failures(1)\n"
+        "    client = _client()\n"
+        "    try:\n"
+        "        client.chat.completions.create(model='m')\n"
+        "        failures.answered()\n"
+        "    except Exception as exc:\n"
+        "        if failures.failed(exc):\n"
+        "            failures.wait(1)\n"
+        "    failures.given_up()\n",
+        encoding="utf-8")
+    assert requests_without_the_rule(tmp_path) == ["made.py:ask:Failures",
+                                                    "made.py:unwaited:wait"]

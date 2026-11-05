@@ -270,6 +270,52 @@ class Unserved:
 
 # For the whole run, like STOP: the request loops only know a document's id.
 UNSERVED = Unserved()
+
+
+class Failures:
+    """What the failures of one request mean, the same for every request of
+    the stage. The rule stands here once and not in each retry loop: of nine
+    loops, three kept all of it, and the compute request asked again at once
+    after a server error, asked a refused request again, and left its
+    document stamped as finished when no attempt of it was served.
+
+    A failure that is the server's (`server_side`) is asked again, after the
+    long wait (`retry_wait`). Any other refuses the request itself, every
+    time, and is not asked again. A request given up on whose last attempt
+    the server did not serve (`unserved`) leaves its document unfinished
+    (`UNSERVED`): the stamp is withheld and a resume reads it again.
+
+    *document_id* is the document the request reads, None for a request of
+    the run itself. *noted* is False for a request whose end is told another
+    way: one the document is finished without (the places map, the review),
+    or one whose hole carries its cause to the stamp itself (the rows
+    harvest, `not_happened`). It still waits and stops by the rule.
+    """
+
+    def __init__(self, document_id=None, noted: bool = True):
+        self.document_id = document_id
+        self.noted = noted
+        self.transport = False
+        self.lost = False
+
+    def failed(self, exc: BaseException) -> bool:
+        """Whether the request that raised *exc* is asked again."""
+        self.transport, self.lost = server_side(exc), unserved(exc)
+        return self.transport
+
+    def answered(self) -> None:
+        """The server answered the request, whatever its reply says."""
+        self.transport = self.lost = False
+
+    def wait(self, attempt: int) -> None:
+        """Before asking again after attempt *attempt*: the long curve after
+        the server's failure, the short one after a reply."""
+        time.sleep(retry_wait(attempt, self.transport))
+
+    def given_up(self) -> None:
+        """The request is asked no more and has no answer."""
+        if self.lost and self.noted:
+            UNSERVED.note(self.document_id)
 # Requests in flight against the server, for the whole run — not per document.
 # vLLM batches continuously: what it can schedule is what it is given, and a
 # handful of requests leaves four GPUs idle between tokens. The first pilot
@@ -1475,7 +1521,7 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
     def one(parameter):
         payload = json.dumps(phrase_payload(parameter, context, frame),
                              ensure_ascii=False, indent=2)
-        transport = lost = False
+        failures = Failures(document_id)
         conversation: list = [{"role": "user", "content": payload}]
         limit = int(prompt.meta.get("max_tokens", 300))
         faults = 0
@@ -1493,6 +1539,7 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                     **providers.formatted("llm", "phrase_reply",
                                           replies.phrase()),
                 )
+                failures.answered()
                 token_usage.reply(response, LLM_MODEL)
                 _asked("phrase", document_id, response, attempt=attempt,
                        started=started, parameter=parameter.uri)
@@ -1507,7 +1554,6 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                 # tries were three copies of the same reply.
                 cause, correction = _reply_fault(reply, limit)
                 faults += 1
-                transport = lost = False
                 log.warning("phrase %s attempt %d: %s reply",
                             parameter.uri, attempt, cause)
                 conversation.append({"role": "assistant",
@@ -1516,11 +1562,11 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
             except Exception as exc:
                 log.warning("phrase %s attempt %d failed: %s",
                             parameter.uri, attempt, exc)
-                transport, lost = server_side(exc), unserved(exc)
+                if not failures.failed(exc):
+                    break
             if attempt < MAX_RETRIES:
-                time.sleep(retry_wait(attempt, transport))
-        if lost:
-            UNSERVED.note(document_id)
+                failures.wait(attempt)
+        failures.given_up()
         log.warning("phrase %s: no anchor written for this document",
                     parameter.uri)
         return parameter.uri, []
@@ -1809,12 +1855,14 @@ def make_places(db_path: Optional[Path], spec: Spec, out: Path,
     def ask(window: list, document_id: int):
         conversation = conversation_of(window)
         shape = places_map.response_format(window, axes, parameters)
+        # A map with a window unread is not used, and the search reads as
+        # before (places.py): the document is finished without it.
+        failures = Failures(document_id, noted=False)
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
             limit = answer_room(prompt.text, conversation, max_tokens)
             if limit < MIN_ANSWER_TOKENS:
                 return places_map.CUT
-            transport = False
             try:
                 with _for(document_id):
                     response = client.chat.completions.create(
@@ -1825,6 +1873,7 @@ def make_places(db_path: Optional[Path], spec: Spec, out: Path,
                                   *conversation],
                         response_format=shape,
                         extra_body=request_extras())
+                failures.answered()
                 reply = response.choices[0]
                 _observe_usage(getattr(response, "usage", None))
                 answer = _loads_object(reply.message.content)
@@ -1848,11 +1897,11 @@ def make_places(db_path: Optional[Path], spec: Spec, out: Path,
                 trace.event("error", document_id, where="places",
                             kind="exception", attempt=attempt,
                             detail=str(exc)[:300])
-                transport = server_side(exc)
-                if not transport:
+                if not failures.failed(exc):
                     return None
             if attempt < MAX_RETRIES:
-                time.sleep(retry_wait(attempt, transport))
+                failures.wait(attempt)
+        failures.given_up()
         return None
 
     key = places_map.key_of(prompt.text, axes, parameters, LLM_MODEL)
@@ -1903,13 +1952,12 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
     client = _repeating(client)
     temperature = float(prompt.meta.get("temperature", 0))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
+    failures = Failures(document_id)
     faults = 0
     for attempt in range(1, MAX_RETRIES + 1):
         limit = answer_room(prompt.text, conversation, max_tokens)
         if limit < MIN_ANSWER_TOKENS:
             return "cut_off"
-        transport = False
-        refused = False
         started = time.time()
         try:
             with _for(document_id):
@@ -1921,6 +1969,7 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
                               *conversation],
                     response_format=shape,
                     extra_body=request_extras())
+            failures.answered()
             reply = response.choices[0]
             usage = getattr(response, "usage", None)
             _observe_usage(usage)
@@ -1948,14 +1997,11 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
                         attempt, exc)
             trace.event("error", document_id, where=where, kind="exception",
                         attempt=attempt, detail=str(exc)[:300])
-            transport = server_side(exc)
-            refused = unserved(exc)
-            if not transport:
+            if not failures.failed(exc):
                 return None
         if attempt < MAX_RETRIES:
-            time.sleep(retry_wait(attempt, transport))
-    if refused:
-        UNSERVED.note(document_id)
+            failures.wait(attempt)
+    failures.given_up()
     return None
 
 
@@ -2165,7 +2211,7 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                 parts.append(part)
         if len(parts) > 1:
             content = parts
-        transport = lost = False
+        failures = Failures(document_id)
         conversation: list = [{"role": "user", "content": content}]
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
@@ -2190,7 +2236,7 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                     **providers.formatted("llm", "frame_reply",
                                           replies.frame(slots)),
                 )
-                transport = lost = False
+                failures.answered()
                 _observe_usage(getattr(completion, "usage", None))
                 _asked("frame", document_id, completion, attempt=attempt,
                        started=started)
@@ -2252,16 +2298,14 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
             except Exception as exc:
                 log.warning("frame %s attempt %d failed: %s",
                             document_id, attempt, exc)
-                transport, lost = server_side(exc), unserved(exc)
                 trace.event("error", document_id, where="frame",
                             kind="exception", attempt=attempt,
                             detail=str(exc)[:200])
-                if not transport:
+                if not failures.failed(exc):
                     break
             if attempt < MAX_RETRIES:
-                time.sleep(retry_wait(attempt, transport))
-        if lost:
-            UNSERVED.note(document_id)
+                failures.wait(attempt)
+        failures.given_up()
         return None
 
     return ask
@@ -2600,7 +2644,9 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
             # would get the same six sentences about the parameter.
             body["question"] = question
         payload = json.dumps(body, ensure_ascii=False, indent=2)
-        transport = lost = False
+        # The run's own request: there is no document to leave unstamped, so
+        # the caller decides before any document is planned.
+        failures = Failures(None)
         conversation: list = [{"role": "user", "content": payload}]
         limit = int(prompt.meta.get("max_tokens", 800))
         faults = 0
@@ -2617,6 +2663,7 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
                     **providers.formatted("llm", "anchors_reply",
                                           replies.anchors()),
                 )
+                failures.answered()
                 token_usage.reply(response, LLM_MODEL)
                 reply = response.choices[0]
                 parsed = _loads_object(reply.message.content)
@@ -2626,7 +2673,6 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
                     return anchor_id, anchors
                 cause, correction = _reply_fault(reply, limit, key="anchors")
                 faults += 1
-                transport = lost = False
                 log.warning("anchors %s attempt %d: %s reply",
                             anchor_id, attempt, cause)
                 conversation.append({"role": "assistant",
@@ -2635,13 +2681,11 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
             except Exception as exc:
                 log.warning("anchors %s attempt %d failed: %s",
                             anchor_id, attempt, exc)
-                transport, lost = server_side(exc), unserved(exc)
+                if not failures.failed(exc):
+                    break
             if attempt < MAX_RETRIES:
-                time.sleep(retry_wait(attempt, transport))
-        if lost:
-            # The run's own request: there is no document to leave unstamped,
-            # so the caller decides before any document is planned.
-            UNSERVED.note(None)
+                failures.wait(attempt)
+        failures.given_up()
         log.warning("anchors %s: none generated", anchor_id)
         return anchor_id, []
 
@@ -3548,12 +3592,13 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
         first = batch.items[0].source
         why = ["no_answer"]
         conversation: list = [{"role": "user", "content": content}]
-        transport = False
+        # Its holes carry why it failed to the stamp (`not_happened`).
+        failures = Failures(batch.document_id, noted=False)
         timed_out = False
         # The wait follows the FAILURES, not the turns of the conversation: a
         # sandbox round is a turn and not a failure, and counting it escalated
         # the backoff of the next real one.
-        failures = 0
+        failed = 0
         # More room than the prompt asks for only when a single passage came
         # back cut off and there is nothing left to split.
         wanted = ceiling or max_tokens
@@ -3578,7 +3623,7 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
                 response = send(conversation, limit,
                                 retry_temperature(temperature, faults),
                                 allowed)
-                transport = False
+                failures.answered()
                 why[0] = "no_answer"
                 reply = response.choices[0]
                 _observe_usage(getattr(response, "usage", None))
@@ -3661,9 +3706,8 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
                 why[0] = ("unserved" if unserved(exc)
                           else "no_answer" if isinstance(status, int)
                           else "unreachable")
-                transport = server_side(exc)
                 timed_out = _timed_out(exc)
-                if not transport:
+                if not failures.failed(exc):
                     # A request the server refuses is refused every time. The
                     # last run spent three tries and eight seconds of sleep on
                     # each over-long section before writing the same sentinel.
@@ -3679,9 +3723,10 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
                     break
             # Every attempt but the last, and the loop runs to
             # MAX_RETRIES + CODE_ROUNDS: the old bound stopped two short of it.
-            failures += 1
+            failed += 1
             if attempt < MAX_RETRIES + CODE_ROUNDS:
-                time.sleep(retry_wait(failures, transport))
+                failures.wait(failed)
+        failures.given_up()
         # Sources the model never answered for are a hole in the harvest, and
         # holes must be visible: the caller counts these via the sentinel.
         # One per source, so a batch of six that died is six holes, not one.
@@ -4069,7 +4114,9 @@ def make_field_asker(image_root: Optional[Path] = None, *,
         # failure is. Retrying a malformed reply without saying what was
         # malformed is one attempt three times.
         shape = field_response_format(slot)
-        transport = lost = False
+        # One coordinate of this document never read is one the sweep that
+        # asked cannot tell from a window that held nothing.
+        failures = Failures(document_id)
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
             limit = answer_room(prompt.text, conversation, max_tokens)
@@ -4086,7 +4133,7 @@ def make_field_asker(image_root: Optional[Path] = None, *,
                         response_format=shape,
                         extra_body=request_extras(),
                     )
-                transport = lost = False
+                failures.answered()
                 if dead is not None:
                     dead.clear()
                 reply = response.choices[0]
@@ -4124,16 +4171,12 @@ def make_field_asker(image_root: Optional[Path] = None, *,
                 trace.event("error", document_id, where="field",
                             kind="exception", slot=name, attempt=attempt,
                             status=status, detail=str(exc)[:300])
-                transport, lost = server_side(exc), unserved(exc)
-                if not transport:
+                if not failures.failed(exc):
                     break
             if attempt < MAX_RETRIES:
-                time.sleep(retry_wait(attempt, transport))
-        if lost:
-            # One coordinate of this document was never read, and the sweep
-            # that asked cannot tell that from a window that held nothing.
-            UNSERVED.note(document_id)
-        if transport and dead is not None and dead.hit():
+                failures.wait(attempt)
+        failures.given_up()
+        if failures.transport and dead is not None and dead.hit():
             log.error("field: %d requests in a row the server did not serve "
                       "-- the run gives up", dead.limit)
             if on_give_up is not None:
@@ -4253,7 +4296,9 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                 parts.append(part)
         if len(parts) > 1:
             content = parts
-        transport = False
+        # A pass over a written harvest: a row it could not read again gets
+        # no flag and is read again by the next review (review.py).
+        failures = Failures(noted=False)
         conversation: list = [{"role": "user", "content": content}]
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
@@ -4275,7 +4320,7 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                     **providers.formatted("llm", "review_reply",
                                           replies.review(slots)),
                 )
-                transport = False
+                failures.answered()
                 reply = response.choices[0]
                 _observe_usage(getattr(response, "usage", None))
                 _asked("review", (row.get("provenance") or {}).get(
@@ -4297,11 +4342,11 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                 conversation.append({"role": "user", "content": correction})
             except Exception as exc:
                 log.warning("   review attempt %d failed: %s", attempt, exc)
-                transport = server_side(exc)
-                if not transport:
+                if not failures.failed(exc):
                     break
             if attempt < MAX_RETRIES:
-                time.sleep(retry_wait(attempt, transport))
+                failures.wait(attempt)
+        failures.given_up()
         return None
 
     return ask
@@ -6112,6 +6157,10 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
                 "searched": sum(1 for hit in gathered.hits
                                 if hit.get("pattern")), **noted}
 
+        failures = Failures(document_id)
+        # The wait follows the failures, not the rounds: a round of code, of
+        # fetching or of taking is no failure.
+        failed = 0
         attempt = 0
         while attempt < MAX_RETRIES + CODE_ROUNDS + 1:
             attempt += 1
@@ -6143,7 +6192,13 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
                 trace.event("error", document_id, where="compute",
                             kind="exception", attempt=attempt,
                             detail=str(exc)[:300])
+                if not failures.failed(exc):
+                    break
+                failed += 1
+                if attempt < MAX_RETRIES + CODE_ROUNDS + 1:
+                    failures.wait(failed)
                 continue
+            failures.answered()
             reply = response.choices[0]
             _observe_usage(getattr(response, "usage", None))
             _asked("compute", document_id, response, attempt=attempt,
@@ -6218,6 +6273,7 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
             claim = computing.claim_of(question, answer["value"], used, runs,
                                        cited=answer.get("quote"))
             return ended("read", claim) if claim else ended("none")
+        failures.given_up()
         return ended("unanswered")
 
     def compute(answered: list, report, *, locate: Optional[Callable] = None,

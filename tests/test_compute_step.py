@@ -398,8 +398,11 @@ def computing(monkeypatch, *said, ran=None, plan=None):
 
     def create(**request):
         asked.append(request)
+        said = next(told)
+        if isinstance(said, Exception):
+            raise said
         return SimpleNamespace(usage=None, choices=[SimpleNamespace(
-            finish_reason="stop", message=SimpleNamespace(content=next(told)))])
+            finish_reason="stop", message=SimpleNamespace(content=said))])
 
     def run_code(code, context=None, timeout=None):
         runs.append((code, context))
@@ -544,8 +547,15 @@ def timed(monkeypatch, first):
     monkeypatch.setattr(pool, "wide", lambda: False)
     monkeypatch.setattr(code_exec, "is_enabled", lambda: True)
     monkeypatch.setattr(runner.trace, "event", lambda *a, **k: None)
+    monkeypatch.setattr(runner, "retry_wait", lambda *a, **k: 0.0)
     run_step(runner.make_computer(PROFILE), share(21), amount(185200))
     return times
+
+
+class Status(Exception):
+    def __init__(self, status_code):
+        super().__init__(f"HTTP {status_code}")
+        self.status_code = status_code
 
 
 def test_a_request_that_timed_out_is_repeated_with_the_time_of_a_repeat(
@@ -555,10 +565,58 @@ def test_a_request_that_timed_out_is_repeated_with_the_time_of_a_repeat(
 
 
 def test_a_request_after_a_server_error_keeps_its_time(monkeypatch):
-    class Failed(Exception):
-        status_code = 500
+    assert timed(monkeypatch, Status(500)) == [None, None]
 
-    assert timed(monkeypatch, Failed()) == [None, None]
+
+# -- a request that fails, by the rule of every request (`runner.Failures`) --
+
+@pytest.fixture
+def waits(monkeypatch):
+    """The curve of each wait, (failures so far, the server's failure), and a
+    count of unfinished documents of this test's own."""
+    taken = []
+    monkeypatch.setattr(runner, "retry_wait",
+                        lambda n, transport=False:
+                        taken.append((n, transport)) or 0.0)
+    monkeypatch.setattr(runner, "UNSERVED", runner.Unserved())
+    return taken
+
+
+def test_a_server_error_is_waited_out_before_the_request_is_asked_again(
+        monkeypatch, waits):
+    step, asked, _runs, _events = computing(monkeypatch, Status(500), CODE,
+                                            ANSWER)
+    report, _done = run_step(step, share(21), amount(185200))
+    assert len(asked) == 3
+    # One failure, on the server's long curve; a round of code is no failure.
+    assert waits == [(1, True)]
+    assert report.tuples[-1]["computed"] is True
+    assert runner.UNSERVED.of(7) == 0
+
+
+def test_a_refused_request_is_asked_once(monkeypatch, waits):
+    step, asked, _runs, events = computing(monkeypatch, Status(400), CODE,
+                                           ANSWER)
+    report, _done = run_step(step, share(21), amount(185200))
+    assert len(asked) == 1
+    assert waits == []
+    assert len(report.tuples) == 2
+    assert events[-1]["outcome"] == "unanswered"
+    assert runner.UNSERVED.of(7) == 0
+
+
+def test_a_request_the_server_never_served_leaves_its_document_unfinished(
+        monkeypatch, waits):
+    tries = runner.MAX_RETRIES + runner.CODE_ROUNDS + 1
+    step, asked, _runs, events = computing(monkeypatch,
+                                           *[Status(503)] * tries)
+    report, _done = run_step(step, share(21), amount(185200))
+    assert len(asked) == tries
+    # A wait before every attempt but the first.
+    assert waits == [(n, True) for n in range(1, tries)]
+    assert len(report.tuples) == 2
+    assert events[-1]["outcome"] == "unanswered"
+    assert runner.UNSERVED.of(7) == 1
 
 
 # -- the whole of a share, chosen with evidence -------------------------------
