@@ -270,9 +270,8 @@ Every reply schema lists its keys in the order its prompt's example names them
 (owner decision 2026-11-04, "the schema follows the prompt"): a server that
 holds a reply to its schema writes the keys in the schema's order, so an
 optional key listed before one already written can no longer come.
-`tests/test_schema_order.py` holds every prompt of both profiles whose reply
-goes out with a grammar to its schema. `scripts/probe_rows.py --documents ...
---survey --read` runs both steps.
+No test reads a prompt (owner decision 2026-11-05).
+`scripts/probe_rows.py --documents ... --survey --read` runs both steps.
 
 ### Combing what the reading left open
 
