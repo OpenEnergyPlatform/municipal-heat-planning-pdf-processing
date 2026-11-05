@@ -101,7 +101,9 @@ year, read in the survey), `number` (unit and subject) and `context` (the
 other axes), both read with the number. scenarios has one, `scenario` (the
 scenario a value refers to, read with the value). `spec.load` refuses a coordinate in no
 group or in two, a name that is no coordinate, an unknown step, and a survey
-group that is not the axes of one parameter. Groups are for the rebuilt
+group that is not the axes of one parameter. A group may say
+`"definition": "full"` to have its requests show a parameter's whole
+description and not its `brief` (`Group.full_definition`). Groups are for the rebuilt
 harvest (owner decision 2026-11-04); the harvest below reads none of them.
 
 ### The survey of a whole plan
@@ -139,11 +141,15 @@ place (owner decisions 2026-11-04 and 2026-11-05). One request has one task:
 value for one group of the spec.
 
 `extraction/read_values` runs in rounds, one value per request. A round shows
-the whole passage (a table with its title, head and all rows; a section as the
-survey's piece), the text around a table or figure (`around`), the parameter,
-the values already read (`read`) and the reading's tools, and asks for the next
-value not under `read`: `{"next": {value, value_raw, quote, head}}`, or
-`{"next": null}`, which ends the rounds. A list field is shown with its
+the parameter, the whole passage (a table with its title, head and all rows; a
+section as the survey's piece), the text around a table or figure (`around`)
+and the values already read (`read`), in that order, so that the rounds of a
+passage share a prefix for the server's cache (owner decision 2026-11-05).
+It asks for the next value not under `read`: `{"next": {value, value_raw,
+quote, head}}`, or `{"next": null}`, which ends the rounds. The reading has no
+tools (see below). The parameter is shown by its `brief` where the spec
+writes one, a paragraph on what a value of it is, else by its description. A
+list field is shown with its
 entries under `value_classes`, each with its meaning and spellings, as the
 field request shows the value of such a parameter asked again
 (`reading.value_classes`, `fields.value_choice`), and the grammar takes for a
@@ -177,12 +183,11 @@ request says. Its first wording asked for null instead, and in the next probe
 62 of 113 readings with a refused value ended on their correction (23 of 41
 before).
 
-A value may stand in any passage the round showed: the passage itself, the
-text around it, or a passage its tools fetched (owner decision 2026-11-05). It
-is read from the passage its quote stands in (`reading.passage_of`), which
-joins the reading's batch, so the fold checks it there
-(`pipeline.route_claims`); a value read twice this way is one node in the kwp
-graph, which merges repeats. A number in a table gets its column from the head
+A value may stand in any text the round showed: the passage itself, the heading
+of its section or the text around it (owner decision 2026-11-05). It is read
+from the one its quote stands in (`reading.passage_of`), which joins the
+reading's batch, so the fold checks it there (`pipeline.route_claims`); a value
+read twice this way is one node in the kwp graph, which merges repeats. A number in a table gets its column from the head
 the model wrote, else from the one cell of its row that prints it
 (`reading.column_of`, `pipeline.cell_index`). `pipeline.with_head` writes the
 head and the year the head names (`head_year`, owner decision 2026-11-03);
@@ -197,43 +202,52 @@ pieces are read (`surveyed.taken_of`).
 
 `extraction/read_text` asks one request per value and group of the spec, and
 only the group's coordinates still open; a group with none open is not asked.
-The passage comes first (a server reads it once for all values), the value
-last with its quote, head, `read` (what is read of it, in the plan's words,
-`runner.row_context`) and `passage` (the passage it stands in, when that is
-neither the passage nor the text around it). Every request shows the group's
-sentence from the spec on where a plan prints its coordinates (`where`). Only
-a group that asks a frame coordinate sees `known` (the survey's pairs),
-`base_years` and `target_years`. A table or a figure is shown with the text of
-its section around it (`reading.around_of`, owner decision 2026-11-04), where
-the sentence that announces it, the heading over it and the paragraph under
-it print its year and its scenario: the whole section when it fits the
-survey's two pages, else that many characters around its placeholder
-(`pipeline.window_around`, the cut the field request makes of a parent
-section). A coordinate quoted from it cites the section. Every request also
+What requests share stands first, so a server reads it once: the parameter, the
+group's coordinates with their questions, `where` (the spec's sentence on where
+a plan prints them), the plan's `base_years` and `target_years`, then the
+passage, the text around it and `known`, and last the value with its quote,
+head and `read` (what is read of it, in the plan's words, `runner.row_context`);
+a second request adds `corrections` at the end (owner decision 2026-11-05).
+Only a group that asks a frame coordinate sees `known` (the survey's pairs),
+`base_years` and `target_years`. The parameter is shown by its `brief`, except
+for a group whose spec entry says `"definition": "full"`, which shows the full
+description (kwp: `context`, the group that classifies; a parameter without a
+brief shows its description everywhere). A table or a figure is shown with the
+text around it (`reading.around_of`, owner decisions 2026-11-04 and
+2026-11-05), where the sentence that announces it and the line under it print
+its year and its scenario: at most `AROUND_CHARS` (200) characters before and
+after its placeholder in its section, cut at the last word inside the limit,
+and ending early at the placeholder of any other table or figure
+(`[p3_tbl0]` or `[p3_tbl0: caption]`). It was the whole section up to the
+survey's two pages, which showed the numbers of a neighbouring area. A
+coordinate quoted from it cites the section. Every request also
 shows the heading its passage stands under, a table's or figure's that of its
 section, a section's its own (`reading.heading_of`, owner decision
 2026-11-05): where the passage's text does not carry it, a quote may stand in
 it, and the prompts name it among the places a quote is copied from, every
 one a text the request showed.
 
-The tools are in every reading request, the rounds of `read_values` and the
-group requests of `read_text` (owner decision 2026-11-05: every request but
-the survey), and the rounds of one piece share what their tools fetched. Where
-what a request needs is in neither the passage nor the text around it, the
-reply may ask for more of the plan under `more`: the next or the previous
-section, a table or figure by its placeholder (`item`), a list of the passages
-matching a regular expression (`search`), a list of the passages nearest to a
-sentence the model writes as the plan would print it (`similar`, owner
-decision 2026-11-05: HyDE; ranked by `make_more_sources` as the combing ranks,
-cut to `reading.SHOWN`, title and first line each), and a passage of such a
-list by its id (`hit`; `lookup.py`, a pattern given up after
-`PATTERN_TIMEOUT_S`). A run that ranks nothing finds nothing for `similar`. The
-request goes out again with what was fetched under `more`, each passage cut to
-the survey's two pages, the lists under `hits`, and what could not be found
-under `not_found`; a value or coordinate quoted from it cites that passage.
-The gathering ends when a round asks for nothing the request has not shown, or
-when the request no longer fits the model's window, and the reply before such
-a round stands.
+The reading has no tools (owner decision 2026-11-05, ticket 26). Its requests
+used to offer `more` (the next or the previous section, a table or figure by
+its placeholder, a pattern, a sentence to rank the plan with, a hit by its id)
+and to show what came of it under `hits` and `not_found`; of 2,231 readings of a
+probe none used them, while 146 of 259 combing tasks did. So a value or
+coordinate can only come from the passage, the heading of its section or the
+text around a table or figure, and the group request has no `passage` key. The
+tools stay (`reading.Gathered`, `reading.gather`, `lookup.py`) for the combing
+and the compute step, which are the requests that look beyond what they are
+shown.
+
+The prompt of `read_text` may be split by lines `<!-- group: NAME -->`: the text
+before the first is every group's, and each group is sent that plus its own
+section (`reading.group_prompts`, owner decision 2026-11-05). A prompt without
+sections serves every group as it is (scenarios). A prompt with sections needs
+exactly one for each group of the spec, which the run checks at its start. In
+a list a request shows, an entry's `means` is its `gloss` where the spec has one,
+one line in the profile's language, else its English definition
+(`fields._options`); a gloss needs a definition beside it. The axis fingerprint
+holds the gloss and the parameter's the brief, so changing either moves the
+key of that question only.
 
 Every coordinate is answered: the grammar requires each coordinate of the
 group, and `out:unstated` is an answer of every kind, a year's too
@@ -302,13 +316,12 @@ check takes or the list ends. A value is what the fold would take of it
 (`surveyed.taken_values`, `verify.value_refused`): an answer the fold refuses
 ends nothing, as an AR6 probe showed, where the walk stopped on a sector
 division its quote did not hold and the fold then dropped. A reading that came
-to no reply ends nothing. The model had
-fetched none of the list's hits itself, so the run reads them. Each round's
-passage keeps the rest of the list it has not read as a hit list
-(`survey.Found.hits`, keyed by parameter, owner kind and owner id,
-`surveyed.sought_survey`), which every request of its reading for that
-parameter shows first; a reading of another parameter in the same passage
-shows none, and `surveyed.joined` keeps the lists of both surveys. The ranking searches with HyDE sentences, as a
+to no reply ends nothing. A reading there is shown its one passage and no
+rest of the list, since the reading has no tools (owner decision 2026-11-05,
+ticket 26); the run keeps the places it walked as `Found.walked`
+({(parameter uri, owner kind, owner id): place in the list, from 1}, in the
+order read, `surveyed.sought_walk`), and `surveyed.joined` keeps those of both
+surveys. The ranking searches with HyDE sentences, as a
 document would print the value (owner decision 2026-11-05,
 `runner.make_seek_probes`): a parameter the profile names as the document's
 own (`FRONT_PAGE_PARAMETERS`) with one written for this document from what

@@ -14,9 +14,9 @@ for before it can count as not stated (owner decision 2026-11-04): the
 combing's search over the whole plan ranks the passages for it, and the run
 reads it down that list, one passage a round and every such parameter in the
 same round, until a reading of it comes back with a value the check takes or
-the list ends (owner decisions 2026-11-05, `sought_walk`). Each reading
-shows the rest of the list it has not read as its hits. What a publication
-says of itself (the profile's FRONT_PAGE_PARAMETERS) is read from its first
+the list ends (owner decisions 2026-11-05, `sought_walk`). A reading sees
+only its passage (owner decision 2026-11-05: no tools in reading, the walk
+reads the list). What a publication says of itself (the profile's FRONT_PAGE_PARAMETERS) is read from its first
 page on as well, page by page, until a title came, whatever the survey
 named (owner decisions 2026-11-05, `front_walk`): the first page with a
 title is its title page, and a chapter that presents other studies comes
@@ -222,10 +222,9 @@ def sought_survey(found: Found, lists: dict, step: int) -> Found
 
 The survey of one round of the walk down *lists* ({parameter uri:
 [Source]}): each parameter named for the passage at *step* of its list,
-with the rest of its list beside it (`Found.hits`), so its reading can go
-on to the passages the walk has not read yet. What the survey of the
-whole plan (*found*) said of every passage stands beside it
-(`carried`).
+and no other passage of the list, since a reading has no tools to go on
+with (owner decision 2026-11-05). What the survey of the whole plan
+(*found*) said of every passage stands beside it (`carried`).
 
 ### sought_walk
 
@@ -244,9 +243,8 @@ ends (owner decisions 2026-11-05: the run reads the list, since the
 model fetched none of its hits itself, and an answer the fold refuses is
 no value). A reading that came to no reply ends nothing. Every passage
 walked names its parameter in the survey returned, so it is one of the
-parameter's sources (`taken_of`), and stands under `hits` with the rest
-of the list its reading showed, in the order the walk read it
-(`walks_of`).
+parameter's sources (`taken_of`), and stands under `walked` with its
+place in the list, in the order the walk read it (`walks_of`).
 *seen(uri, owner, rank)* hears of each passage before it is read,
 *rank* its place in the list, from 1. None where *halted()* stopped the
 walk.

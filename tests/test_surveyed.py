@@ -24,11 +24,11 @@ end of the list as a request shows it, a reading with no reply ending
 nothing (owner decision 2026-11-05); AND not after a survey of part of the
 plan; every passage it was read in is one of its sources, so a reading there
 that came to nothing leaves it exhausted, not unstated; AND each reading
-shows the rest of the list it has not read under that parameter, AND each
-passage walked is traced with its place in the list, AND each parameter's
-passages are kept in the order the walk read them; a reading whose answer
-the check refuses ends nothing; and two surveys joined keep the lists of
-both.
+is shown its one passage and no list, since a reading has no tools (ticket
+26), AND each passage walked is kept and traced with its place in the list,
+AND each parameter's passages are kept in the order the walk read them; a
+reading whose answer the check refuses ends nothing; and two surveys joined
+keep the walks of both.
 
 What a publication says of itself is read from its first page on, page by
 page and first page first, every passage of a page in one round, whatever
@@ -502,7 +502,7 @@ class SearchOnly:
 
 def sought_harvest(found, ranked, reads=None, halt_after=None):
     """A harvest whose reader records which passages it was asked to read
-    each parameter in and the hits each reading shows, and gives back
+    each parameter in and the walk each reading is shown, and gives back
     *reads*: {(parameter uri, owner): Read}. *halt_after* readings halt
     it."""
     asked, hits = [], []
@@ -512,8 +512,7 @@ def sought_harvest(found, ranked, reads=None, halt_after=None):
             named = {p.uri: found.passages_of(p.uri) for p in spec.parameters
                      if found.passages_of(p.uri)}
             asked.append(named)
-            hits.append({key: [(s.owner_kind, s.owner_id) for s in listed]
-                         for key, listed in found.hits.items()})
+            hits.append(dict(found.walked))
             return [(reads or {})[(uri, owner)]
                     for uri, owners in named.items() for owner in owners
                     if (uri, owner) in (reads or {})]
@@ -627,14 +626,27 @@ def test_a_reading_that_came_to_no_reply_ends_nothing():
     assert read_in == [("table", 2), ("section", 3)] and reads == [cut]
 
 
-def test_each_reading_of_the_walk_shows_the_rest_of_its_list_not_read():
-    whole, _asked, hits, _search = sought_harvest(
+def test_each_reading_of_the_walk_is_shown_its_passage_and_no_list():
+    whole, asked, shown, _search = sought_harvest(
         found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO, THREE, ONE]})
     whole(7)
-    assert hits[1:] == [{("heat_load", "table", 2): [("section", 3),
-                                                     ("section", 1)]},
-                        {("heat_load", "section", 3): [("section", 1)]},
-                        {("heat_load", "section", 1): []}]
+    assert asked[1:] == [{"heat_load": [("table", 2)]},
+                         {"heat_load": [("section", 3)]},
+                         {"heat_load": [("section", 1)]}]
+    assert shown[1:] == [{}, {}, {}]
+
+
+def test_each_passage_walked_keeps_its_place_in_its_list():
+    walked, _reads = surveyed.sought_walk(
+        survey.Found(True), {"heat_load": [TWO, THREE, ONE]}, lambda one: [])
+    assert walked.walked == {("heat_load", "table", 2): 1,
+                             ("heat_load", "section", 3): 2,
+                             ("heat_load", "section", 1): 3}
+    # the failure by construction: a value in the first passage ends the walk
+    stopped, _reads = surveyed.sought_walk(
+        survey.Found(True), {"heat_load": [TWO, THREE, ONE]},
+        lambda one: [valued(HEAT_LOAD, TWO)])
+    assert stopped.walked == {("heat_load", "table", 2): 1}
 
 
 def test_each_parameter_s_passages_are_kept_in_the_order_the_walk_read_them():
@@ -709,27 +721,28 @@ FIRST = SimpleNamespace(owner_kind="section", owner_id=5)
 NEXT = SimpleNamespace(owner_kind="table", owner_id=9)
 
 
-def test_a_passage_a_round_names_keeps_the_rest_of_its_list_for_its_parameter():
+def test_a_round_of_the_walk_names_its_passage_and_no_other_of_the_list():
     lists = surveyed.sought_lists(
         lambda document, probes, exclude: [FIRST, NEXT], 7, [EMISSION])
     out = surveyed.sought_survey(survey.Found(True), lists, 0)
     assert out.passages_of(EMISSION.uri) == [("section", 5)]
-    assert out.hits == {(EMISSION.uri, "section", 5): [NEXT]}
+    assert out.walked == {}
     later = surveyed.sought_survey(survey.Found(True), lists, 1)
     assert later.passages_of(EMISSION.uri) == [("table", 9)]
-    assert later.hits == {(EMISSION.uri, "table", 9): []}
     # By construction: a search that finds nothing names no list either.
     none = surveyed.sought_lists(lambda *a: [], 7, [EMISSION])
     assert none == {}
-    assert surveyed.sought_survey(survey.Found(True), none, 0).hits == {}
+    assert surveyed.sought_survey(survey.Found(True), none, 0) \
+        .passages_of(EMISSION.uri) == []
 
 
-def test_two_surveys_joined_keep_the_lists_of_both():
+def test_two_surveys_joined_keep_the_walks_of_both():
     found, also = survey.Found(True), survey.Found(True)
-    found.hits = {(EMISSION.uri, "section", 5): [FIRST]}
-    also.hits = {("heat_load", "table", 9): [NEXT]}
-    assert surveyed.joined(found, also).hits == {**found.hits, **also.hits}
-    assert surveyed.joined(found, survey.Found(True)).hits == found.hits
+    found.walked = {(EMISSION.uri, "section", 5): 1}
+    also.walked = {("heat_load", "table", 9): 2}
+    assert surveyed.joined(found, also).walked == {**found.walked,
+                                                   **also.walked}
+    assert surveyed.joined(found, survey.Found(True)).walked == found.walked
 
 
 # Promise: a row read for the one field its request asked carries the state of

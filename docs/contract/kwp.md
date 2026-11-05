@@ -199,19 +199,23 @@ Axis 'aggregation' of Gebäudeanzahl. A closed list; an entry beginning 'out:' i
 
 The prompt's own wording:
 
-> Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist "integral", also eine Jahressumme. "maximum" bei einer Spitzenlast oder einem Höchstwert, "arithmetic mean" bei einem Durchschnitt je Gebäude oder je Jahr, "instantaneous" bei einem Momentanwert.
+> Wie ist der Wert über Zeit oder Raum zusammengefasst?
+Normalfall "integral" (Jahressumme).
+"maximum": Spitzenlast, Höchstwert.
+"arithmetic mean": Durchschnitt je Gebäude oder Jahr.
+"instantaneous": Momentanwert.
 
 <details><summary>What it may answer (5)</summary>
 
-- **arithmetic mean** → `OEO_00140071` — average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region
+- **arithmetic mean** → `OEO_00140071` — Durchschnittswert, berechnet als arithmetisches Mittel über Datensätze.
   - also written: Mittelwert, Durchschnitt
-- **instantaneous** → `OEO_00140069` — value measured at or modelled for exactly one 0-dim temporal region, referenced by a time stamp, e.g. to represent a time step in a time series
+- **instantaneous** → `OEO_00140069` — Wert, der exakt zu einem zeitlichen Nullpunkt gemessen oder modelliert wird.
   - also written: Momentanwert zu einem Zeitpunkt
-- **integral** → `OEO_00140070` — sum or integral of values, e.g. within a time step or a spatial region
+- **integral** → `OEO_00140070` — Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets.
   - also written: Summe oder Integral über einen Zeitraum oder ein Gebiet, Jahreswert, Jahressumme
-- **maximum** → `OEO_00140073` — maximum value within a set of data values, e.g. in a time step or spatial region
+- **maximum** → `OEO_00140073` — Höchster Wert innerhalb einer Menge von Datenwerten in einem Bereich.
   - also written: Maximum, Spitzenwert, Spitzenlast
-- **minimum** → `OEO_00140072` — minimum value within a set of data values, e.g. in a time step or spatial region
+- **minimum** → `OEO_00140072` — Niedrigster Wert innerhalb einer Menge von Datenwerten in einem Bereich.
   - also written: Minimum, Tiefstwert
 
 </details>
@@ -272,11 +276,16 @@ Axis 'carrier' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a 
 
 The prompt's own wording:
 
-> Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H" und "Erdgas (netzgebunden)" meinen die Klasse Erdgas, "Nahwärme" und "Wärmenetz" die Klasse Fernwärme. Eine Summenzeile ("Summe", "Gesamt", "alle Energieträger") ist "out:total", eine Restposition ("Sonstige", "Andere") ist "out:other". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Gebäudetyp". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+> Welcher Energieträger?
+Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H", "Erdgas (netzgebunden)" = Erdgas; "Nahwärme", "Wärmenetz" = Fernwärme.
+Summenzeile ("Summe", "Gesamt", "alle Energieträger") = "Summe"; Restposition ("Sonstige", "Andere") = "Sonstige".
+Eigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Gebäudetyp".
+"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (29)</summary>
 
-- **Abfallbrennstoff** → `OEO_00000439` — A waste fuel is a fuel in which the material entity is waste.
+- **Abfallbrennstoff** → `OEO_00000439` — Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.
   - also written: Klärschlamm, EBS
 - **Abwärme** → `OEO_00010114`
   - also written: unvermeidbare Abwärme
@@ -290,7 +299,7 @@ The prompt's own wording:
   - also written: Gas
 - **Fernwärme** → `OEO_00000132`
   - also written: Wärmenetze, Wärmenetz, Nahwärme
-- **Flüssiggas** → `OEO_00320011` — Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.
+- **Flüssiggas** → `OEO_00320011` — Flüssiggasgemisch aus Propan und Butan, unterscheidet sich als fossiler Gasbrennstoff.
 - **Geothermie** → `OEO_00000191`
   - also written: Erdwärme, oberflächennahe Geothermie, Tiefengeothermie, Erdwärmesonde, Erdwärmekollektor, Oberflächengeothermie
 - **Heizöl** → `OEO_00000211`
@@ -305,26 +314,26 @@ The prompt's own wording:
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
 - **Steinkohle** → `OEO_00000204`
-- **Strom** → `OEO_00000139` — Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.
+- **Strom** → `OEO_00000139` — Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
-- **Umweltwärme** → `OEO_00000056` — Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.
+- **Umweltwärme** → `OEO_00000056` — In Luft, Erde oder Wasser gespeicherte Wärme, die durch Wärmepumpen genutzt wird.
   - also written: Umgebungswärme, Umgebungsluft
 - **Wasserstoff** → `OEO_00000220`
   - also written: H2
-- **anthropogene Umweltwärme** → `OEO_00140105` — Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.
+- **anthropogene Umweltwärme** → `OEO_00140105` — Umweltwärme mit anthropogenem Ursprung, unterscheidet sich durch menschliche Entstehung.
   - also written: Abwasserwärme, Abwasser, Abwasserwärmenutzung
-- **biogener Abfallbrennstoff** → `OEO_00010223` — A biogenic waste fuel is a waste fuel that has a biogenic origin.
+- **biogener Abfallbrennstoff** → `OEO_00010223` — Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart.
   - also written: Altholz, Altholzheizung, biogene Abfälle
 - **biogener Festbrennstoff** → `OEO_00000332`
   - also written: biogene Festbrennstoffe, sonstige biogene Festbrennstoffe
-- **biogener Siedlungsabfall** → `OEO_00000356` — A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.
+- **biogener Siedlungsabfall** → `OEO_00000356` — Siedlungsabfall mit biogenem Ursprung, unterscheidet sich durch die biologische Herkunft.
   - also written: Biogut, Gartenabfälle, Grünschnitt
 - **industrielle Abwärme** → `OEO_00310004`
 - **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — An angricultural waste fuel is waste fuel produced by agriculture.
   - also written: tierische Exkremente, Gülle, Mist
-- **natürliche Umweltwärme** → `OEO_00140104` — Natural ambient thermal energy is ambient thermal energy that has a renewable origin.
+- **natürliche Umweltwärme** → `OEO_00140104` — Umweltwärme mit erneuerbarem Ursprung, unterscheidet sich durch natürliche Herkunft.
   - also written: Oberflächengewässer, Seethermie, Flusswärme
 - **synthetische Gase** → `OEO_00010155`
   - also written: grüne Gase, E-Gas, SNG
@@ -460,7 +469,7 @@ Axis 'quantity' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a
 
 <details><summary>What it may answer (1)</summary>
 
-- **building count** → `MHPO_00030021` — A building count is a quantity value that measures the number of buildings in a building stock.
+- **building count** → `MHPO_00030021` — Gebäudeanzahl: Misst die Anzahl der Gebäude in einem Gebäudebestand.
   - also written: Gebäudeanzahl, Anzahl Gebäude, Anzahl der Gebäude
 
 </details>
@@ -594,21 +603,30 @@ Axis 'sector' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a d
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"). Eine Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist dagegen keine Summe über Sektoren. "Einfamilienhaus" und "Mehrfamilienhaus" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Energieträger". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+> Welcher Verbrauchssektor?
+Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: "Wohnen", "Wohngebäude" = Private Haushalte; "GHD/Kommune", "Gewerbe", "wirtschaftlich genutzte Gebäude" = GHD.
+GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
+Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf) = "Summe".
+Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a").
+Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
+"Einfamilienhaus", "Mehrfamilienhaus" = Private Haushalte.
+Eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Energieträger".
+"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (6)</summary>
 
-- **GHD** → `OEO_00000405` — A commercial sector is a sector that covers non-industrial commercial activities.
+- **GHD** → `OEO_00000405` — Sektor für nicht-industrielle gewerbliche Aktivitäten.
   - also written: Gewerbe, Handel, Dienstleistungen, Gewerbe/Handel/Dienstleistungen, öffentliche Gebäude, öffentliche Liegenschaften, kommunale Einrichtungen, GHD/Kommune, Gewerbe, wirtschaftlich genutzte Gebäude, kommerzieller Sektor
-- **Industrie** → `OEO_00000227` — An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.
+- **Industrie** → `OEO_00000227` — Sektor für industrielle Aktivitäten mit Energiewandlung.
   - also written: Industriesektor, verarbeitendes Gewerbe
-- **Landwirtschaft** → `OEO_00010035` — A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.
+- **Landwirtschaft** → `OEO_00010035` — Sektor für Landwirtschaft, Forstwirtschaft und Landnutzung.
   - also written: Land- und Forstwirtschaft
-- **Private Haushalte** → `OEO_00000214` — A household sector is a sector that covers households.
+- **Private Haushalte** → `OEO_00000214` — Sektor für private Haushalte und Wohngebäude.
   - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor, Einfamilienhaus, Mehrfamilienhaus
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
-- **Verkehr** → `OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
+- **Verkehr** → `OEO_00000422` — Sektor für den Transport von Personen und Gütern.
   - also written: Verkehrssektor
 
 </details>
@@ -670,7 +688,13 @@ Axis 'spatial_scope' of Gebäudeanzahl. A closed list; an entry beginning 'out:'
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Eine Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: Nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
+> Auf welches Gebiet bezieht sich der Wert?
+ZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.
+Steckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.
+Erst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.
+Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht.
+Teilgebiet: sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.
+Ganzes Gemeindegebiet: die Klasse reicht.
 
 <details><summary>What it may answer (2)</summary>
 
@@ -784,29 +808,34 @@ Axis 'technology' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is
 
 The prompt's own wording:
 
-> Welche Wärmeerzeugungstechnologie? Nur wenn die Zahl ausdrücklich einer Heiztechnik zugeordnet ist, in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, etwa "Wärmepumpen", "Gaskessel" oder "Ölheizungen". Ein Energieträger ist keine Technologie: "Erdgas" allein ist der Träger, "Gasheizung" die Technologie. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz nicht nach Technologien aufgeteilt, antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt. Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+> Welche Wärmeerzeugungstechnologie?
+Nur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa "Wärmepumpen", "Gaskessel", "Ölheizungen".
+Energieträger ist keine Technologie: "Erdgas" allein = Träger, "Gasheizung" = Technologie.
+Eigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.
+"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (10)</summary>
 
-- **Biomasseheizung** → `OEO_00020493` — A biomass powered heating technology is a combustion-based heat generation technology that describes how to combine biomass boilers, heat gain processes, biomass and energy in a specific way.
+- **Biomasseheizung** → `OEO_00020493` — Biomasseheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Biomasse.
   - also written: Holzheizung, Pelletheizung, Hackschnitzelheizung, Biomassekessel
-- **Direktelektrische Heizung** → `OEO_00020487` — An electrical heating technology is a technology that describes how to combine electrical heaters in a heat gain process with electrical energy as input in a specific way.
+- **Direktelektrische Heizung** → `OEO_00020487` — Direktelektrische Heizung: Wandelt elektrische Energie direkt in Wärme mittels elektrischer Heizelemente um.
   - also written: Stromdirektheizung, Elektroheizung, Nachtspeicherheizung
-- **Gasheizung** → `OEO_00020491` — An gas powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, natural gas and energy in a specific way.
+- **Gasheizung** → `OEO_00020491` — Gasheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Erdgas.
   - also written: Gaskessel, Gasbrennwertkessel, Gastherme
-- **Geothermie** → `OEO_00020306` — A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way.
+- **Geothermie** → `OEO_00020306` — Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung.
   - also written: Geothermieanlage, Tiefengeothermie, oberflächennahe Geothermie
-- **Solarthermie** → `OEO_00020307` — A solar thermal heat technology is a heat generation technology that describes how to combine solar heat units, solar thermal energy transformation processes, energy carriers and energy in a specific way.
+- **Solarthermie** → `OEO_00020307` — Solarthermie: Nutzt Solareinheiten und solare Umwandlungsprozesse zur Wärmeerzeugung.
   - also written: Solarthermieanlage, solarthermische Anlage
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Wärmeerzeuger
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, insgesamt, alle Technologien
-- **Wasserstoffheizung** → `OEO_00020492` — An hydrogen powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, hydrogen and energy in a specific way.
+- **Wasserstoffheizung** → `OEO_00020492` — Wasserstoffheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Wasserstoff.
   - also written: Wasserstoffkessel, H2-Kessel
-- **Wärmepumpe** → `OEO_00020486` — A heat pump technology is a heat generation technology that describes how to combine heat pumps, heat gain processes, energy carriers and energy in a specific way.
+- **Wärmepumpe** → `OEO_00020486` — Wärmepumpe: Kombiniert Wärmepumpen, Wärmegewinnungsprozesse und Energieträger zur Wärmeerzeugung.
   - also written: Wärmepumpen, Luft-Wasser-Wärmepumpe, Sole-Wasser-Wärmepumpe, Großwärmepumpe
-- **Ölheizung** → `OEO_00020490` — An oil powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, heating oil and energy in a specific way.
+- **Ölheizung** → `OEO_00020490` — Ölheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Heizöl.
   - also written: Ölkessel, Heizölkessel
 
 </details>
@@ -1003,19 +1032,23 @@ Axis 'aggregation' of Emissionen. A closed list; an entry beginning 'out:' is a 
 
 The prompt's own wording:
 
-> Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist "integral", also eine Jahressumme. "maximum" bei einer Spitzenlast oder einem Höchstwert, "arithmetic mean" bei einem Durchschnitt je Gebäude oder je Jahr, "instantaneous" bei einem Momentanwert.
+> Wie ist der Wert über Zeit oder Raum zusammengefasst?
+Normalfall "integral" (Jahressumme).
+"maximum": Spitzenlast, Höchstwert.
+"arithmetic mean": Durchschnitt je Gebäude oder Jahr.
+"instantaneous": Momentanwert.
 
 <details><summary>What it may answer (5)</summary>
 
-- **arithmetic mean** → `OEO_00140071` — average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region
+- **arithmetic mean** → `OEO_00140071` — Durchschnittswert, berechnet als arithmetisches Mittel über Datensätze.
   - also written: Mittelwert, Durchschnitt
-- **instantaneous** → `OEO_00140069` — value measured at or modelled for exactly one 0-dim temporal region, referenced by a time stamp, e.g. to represent a time step in a time series
+- **instantaneous** → `OEO_00140069` — Wert, der exakt zu einem zeitlichen Nullpunkt gemessen oder modelliert wird.
   - also written: Momentanwert zu einem Zeitpunkt
-- **integral** → `OEO_00140070` — sum or integral of values, e.g. within a time step or a spatial region
+- **integral** → `OEO_00140070` — Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets.
   - also written: Summe oder Integral über einen Zeitraum oder ein Gebiet, Jahreswert, Jahressumme
-- **maximum** → `OEO_00140073` — maximum value within a set of data values, e.g. in a time step or spatial region
+- **maximum** → `OEO_00140073` — Höchster Wert innerhalb einer Menge von Datenwerten in einem Bereich.
   - also written: Maximum, Spitzenwert, Spitzenlast
-- **minimum** → `OEO_00140072` — minimum value within a set of data values, e.g. in a time step or spatial region
+- **minimum** → `OEO_00140072` — Niedrigster Wert innerhalb einer Menge von Datenwerten in einem Bereich.
   - also written: Minimum, Tiefstwert
 
 </details>
@@ -1076,11 +1109,16 @@ Axis 'carrier' of Emissionen. A closed list; an entry beginning 'out:' is a deli
 
 The prompt's own wording:
 
-> Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H" und "Erdgas (netzgebunden)" meinen die Klasse Erdgas, "Nahwärme" und "Wärmenetz" die Klasse Fernwärme. Eine Summenzeile ("Summe", "Gesamt", "alle Energieträger") ist "out:total", eine Restposition ("Sonstige", "Andere") ist "out:other". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Gebäudetyp". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+> Welcher Energieträger?
+Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H", "Erdgas (netzgebunden)" = Erdgas; "Nahwärme", "Wärmenetz" = Fernwärme.
+Summenzeile ("Summe", "Gesamt", "alle Energieträger") = "Summe"; Restposition ("Sonstige", "Andere") = "Sonstige".
+Eigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Gebäudetyp".
+"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (29)</summary>
 
-- **Abfallbrennstoff** → `OEO_00000439` — A waste fuel is a fuel in which the material entity is waste.
+- **Abfallbrennstoff** → `OEO_00000439` — Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.
   - also written: Klärschlamm, EBS
 - **Abwärme** → `OEO_00010114`
   - also written: unvermeidbare Abwärme
@@ -1094,7 +1132,7 @@ The prompt's own wording:
   - also written: Gas
 - **Fernwärme** → `OEO_00000132`
   - also written: Wärmenetze, Wärmenetz, Nahwärme
-- **Flüssiggas** → `OEO_00320011` — Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.
+- **Flüssiggas** → `OEO_00320011` — Flüssiggasgemisch aus Propan und Butan, unterscheidet sich als fossiler Gasbrennstoff.
 - **Geothermie** → `OEO_00000191`
   - also written: Erdwärme, oberflächennahe Geothermie, Tiefengeothermie, Erdwärmesonde, Erdwärmekollektor, Oberflächengeothermie
 - **Heizöl** → `OEO_00000211`
@@ -1109,26 +1147,26 @@ The prompt's own wording:
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
 - **Steinkohle** → `OEO_00000204`
-- **Strom** → `OEO_00000139` — Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.
+- **Strom** → `OEO_00000139` — Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
-- **Umweltwärme** → `OEO_00000056` — Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.
+- **Umweltwärme** → `OEO_00000056` — In Luft, Erde oder Wasser gespeicherte Wärme, die durch Wärmepumpen genutzt wird.
   - also written: Umgebungswärme, Umgebungsluft
 - **Wasserstoff** → `OEO_00000220`
   - also written: H2
-- **anthropogene Umweltwärme** → `OEO_00140105` — Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.
+- **anthropogene Umweltwärme** → `OEO_00140105` — Umweltwärme mit anthropogenem Ursprung, unterscheidet sich durch menschliche Entstehung.
   - also written: Abwasserwärme, Abwasser, Abwasserwärmenutzung
-- **biogener Abfallbrennstoff** → `OEO_00010223` — A biogenic waste fuel is a waste fuel that has a biogenic origin.
+- **biogener Abfallbrennstoff** → `OEO_00010223` — Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart.
   - also written: Altholz, Altholzheizung, biogene Abfälle
 - **biogener Festbrennstoff** → `OEO_00000332`
   - also written: biogene Festbrennstoffe, sonstige biogene Festbrennstoffe
-- **biogener Siedlungsabfall** → `OEO_00000356` — A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.
+- **biogener Siedlungsabfall** → `OEO_00000356` — Siedlungsabfall mit biogenem Ursprung, unterscheidet sich durch die biologische Herkunft.
   - also written: Biogut, Gartenabfälle, Grünschnitt
 - **industrielle Abwärme** → `OEO_00310004`
 - **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — An angricultural waste fuel is waste fuel produced by agriculture.
   - also written: tierische Exkremente, Gülle, Mist
-- **natürliche Umweltwärme** → `OEO_00140104` — Natural ambient thermal energy is ambient thermal energy that has a renewable origin.
+- **natürliche Umweltwärme** → `OEO_00140104` — Umweltwärme mit erneuerbarem Ursprung, unterscheidet sich durch natürliche Herkunft.
   - also written: Oberflächengewässer, Seethermie, Flusswärme
 - **synthetische Gase** → `OEO_00010155`
   - also written: grüne Gase, E-Gas, SNG
@@ -1264,20 +1302,25 @@ Axis 'quantity' of Emissionen. A closed list; an entry beginning 'out:' is a del
 
 The prompt's own wording:
 
-> Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. "CO2 emission value" ist reines Kohlendioxid, "carbon dioxide equivalent quantity value" sind alle Treibhausgase, in CO2-Äquivalenten zusammengefasst. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Sagt der Plan an anderer Stelle, dass seine Emissionen in CO2-Äquivalenten angegeben sind ("Die zugehörigen Treibhausgasemissionen - angegeben in Tonnen CO2-Äquivalenten - sind gesondert aufgeführt"), dann gilt das auch für eine Tabelle, deren Kopfzeile nur "CO2-Emissionen" schreibt: der Methodiksatz schlägt die Kopfzeile. Eine kumulierte Emission über mehrere Jahre, eine vermiedene oder eingesparte Emission und eine abgeschiedene Menge sind das Gegenteil einer im Bilanzjahr ausgestoßenen und haben ihre eigenen Einträge.
+> Welche Größe ist diese Zahl? Wichtigste Entscheidung: bestimmt die Klasse im Graphen.
+Nach der Definition der Klasse entscheiden, nicht nach Wortähnlichkeit.
+"CO2 emission value" = reines Kohlendioxid; "carbon dioxide equivalent quantity value" = alle Treibhausgase in CO2-Äquivalenten.
+Einheit verrät es meist: t CO2 gegen t CO2-Äq.
+Sagt der Plan anderswo, Emissionen seien in CO2-Äquivalenten angegeben ("Die zugehörigen Treibhausgasemissionen - angegeben in Tonnen CO2-Äquivalenten - sind gesondert aufgeführt"), gilt das auch für eine Tabelle mit Kopfzeile nur "CO2-Emissionen": Methodiksatz schlägt Kopfzeile.
+Kumulierte Emission über mehrere Jahre, vermiedene oder eingesparte Emission, abgeschiedene Menge: Gegenteil einer im Bilanzjahr ausgestoßenen, eigene Einträge.
 
 <details><summary>What it may answer (9)</summary>
 
 - **Anteil in Prozent** → `out:share` — Ein Anteil in Prozent, keine Menge.
   - also written: Anteil an den Gesamtemissionen, EE-Anteil, Anteil erneuerbarer Energien
-- **CO2 emission value** → `OEO_00340066` — A CO2 emission value is a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit.
+- **CO2 emission value** → `OEO_00340066` — CO2-Emissionswert: Quantifiziert eine CO2-Emissionsrate mit Masseneinheit.
   - also written: CO2-Emissionen, Kohlendioxidemissionen, CO2-Ausstoß
 - **Emission je Kopf oder je Einwohner** → `out:specific` — Ein Wert je Fläche, Kopf, Gebäude oder Kilowattstunde, keine Gesamtmenge.
 - **Emissionsfaktor je Kilowattstunde** → `out:factor` — Emission je Kilowattstunde, eine Eigenschaft des Energieträgers und keine Menge.
   - also written: Emissionsfaktor, CO2-Faktor, spezifische Emissionen
 - **abgeschiedene oder gespeicherte Emission** → `out:captured` — Eine abgeschiedene oder gespeicherte Menge, das Gegenteil einer ausgestoßenen.
   - also written: CO2-Abscheidung, CCS, CCU, Senke
-- **carbon dioxide equivalent quantity value** → `OEO_00140083` — A carbon dioxide equivalent quantity is a greenhouse gas emission value that quantifies the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2 which would have the same effect on the climate.
+- **carbon dioxide equivalent quantity value** → `OEO_00140083` — CO2-Äquivalent: Quantifiziert die kombinierte Wirkung aller Treibhausgase als CO2-Äquivalent.
   - also written: Treibhausgasemissionen, THG-Emissionen, CO2-Äquivalente, CO2e-Emissionen, THG, CO2e, Treibhausgas
 - **etwas anderes** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
 - **kumulierte Emission über mehrere Jahre** → `out:cumulative` — Über mehrere Jahre aufsummiert, keine Jahresmenge.
@@ -1416,21 +1459,30 @@ Axis 'sector' of Emissionen. A closed list; an entry beginning 'out:' is a delib
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"). Eine Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist dagegen keine Summe über Sektoren. "Einfamilienhaus" und "Mehrfamilienhaus" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Energieträger". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+> Welcher Verbrauchssektor?
+Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: "Wohnen", "Wohngebäude" = Private Haushalte; "GHD/Kommune", "Gewerbe", "wirtschaftlich genutzte Gebäude" = GHD.
+GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
+Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf) = "Summe".
+Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a").
+Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
+"Einfamilienhaus", "Mehrfamilienhaus" = Private Haushalte.
+Eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Energieträger".
+"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (6)</summary>
 
-- **GHD** → `OEO_00000405` — A commercial sector is a sector that covers non-industrial commercial activities.
+- **GHD** → `OEO_00000405` — Sektor für nicht-industrielle gewerbliche Aktivitäten.
   - also written: Gewerbe, Handel, Dienstleistungen, Gewerbe/Handel/Dienstleistungen, öffentliche Gebäude, öffentliche Liegenschaften, kommunale Einrichtungen, GHD/Kommune, Gewerbe, wirtschaftlich genutzte Gebäude, kommerzieller Sektor
-- **Industrie** → `OEO_00000227` — An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.
+- **Industrie** → `OEO_00000227` — Sektor für industrielle Aktivitäten mit Energiewandlung.
   - also written: Industriesektor, verarbeitendes Gewerbe
-- **Landwirtschaft** → `OEO_00010035` — A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.
+- **Landwirtschaft** → `OEO_00010035` — Sektor für Landwirtschaft, Forstwirtschaft und Landnutzung.
   - also written: Land- und Forstwirtschaft
-- **Private Haushalte** → `OEO_00000214` — A household sector is a sector that covers households.
+- **Private Haushalte** → `OEO_00000214` — Sektor für private Haushalte und Wohngebäude.
   - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor, Einfamilienhaus, Mehrfamilienhaus
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
-- **Verkehr** → `OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
+- **Verkehr** → `OEO_00000422` — Sektor für den Transport von Personen und Gütern.
   - also written: Verkehrssektor
 
 </details>
@@ -1492,7 +1544,13 @@ Axis 'spatial_scope' of Emissionen. A closed list; an entry beginning 'out:' is 
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Eine Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: Nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
+> Auf welches Gebiet bezieht sich der Wert?
+ZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.
+Steckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.
+Erst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.
+Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht.
+Teilgebiet: sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.
+Ganzes Gemeindegebiet: die Klasse reicht.
 
 <details><summary>What it may answer (2)</summary>
 
@@ -1606,29 +1664,34 @@ Axis 'technology' of Emissionen. A closed list; an entry beginning 'out:' is a d
 
 The prompt's own wording:
 
-> Welche Wärmeerzeugungstechnologie? Nur wenn die Zahl ausdrücklich einer Heiztechnik zugeordnet ist, in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, etwa "Wärmepumpen", "Gaskessel" oder "Ölheizungen". Ein Energieträger ist keine Technologie: "Erdgas" allein ist der Träger, "Gasheizung" die Technologie. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz nicht nach Technologien aufgeteilt, antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt. Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+> Welche Wärmeerzeugungstechnologie?
+Nur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa "Wärmepumpen", "Gaskessel", "Ölheizungen".
+Energieträger ist keine Technologie: "Erdgas" allein = Träger, "Gasheizung" = Technologie.
+Eigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.
+"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (10)</summary>
 
-- **Biomasseheizung** → `OEO_00020493` — A biomass powered heating technology is a combustion-based heat generation technology that describes how to combine biomass boilers, heat gain processes, biomass and energy in a specific way.
+- **Biomasseheizung** → `OEO_00020493` — Biomasseheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Biomasse.
   - also written: Holzheizung, Pelletheizung, Hackschnitzelheizung, Biomassekessel
-- **Direktelektrische Heizung** → `OEO_00020487` — An electrical heating technology is a technology that describes how to combine electrical heaters in a heat gain process with electrical energy as input in a specific way.
+- **Direktelektrische Heizung** → `OEO_00020487` — Direktelektrische Heizung: Wandelt elektrische Energie direkt in Wärme mittels elektrischer Heizelemente um.
   - also written: Stromdirektheizung, Elektroheizung, Nachtspeicherheizung
-- **Gasheizung** → `OEO_00020491` — An gas powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, natural gas and energy in a specific way.
+- **Gasheizung** → `OEO_00020491` — Gasheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Erdgas.
   - also written: Gaskessel, Gasbrennwertkessel, Gastherme
-- **Geothermie** → `OEO_00020306` — A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way.
+- **Geothermie** → `OEO_00020306` — Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung.
   - also written: Geothermieanlage, Tiefengeothermie, oberflächennahe Geothermie
-- **Solarthermie** → `OEO_00020307` — A solar thermal heat technology is a heat generation technology that describes how to combine solar heat units, solar thermal energy transformation processes, energy carriers and energy in a specific way.
+- **Solarthermie** → `OEO_00020307` — Solarthermie: Nutzt Solareinheiten und solare Umwandlungsprozesse zur Wärmeerzeugung.
   - also written: Solarthermieanlage, solarthermische Anlage
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Wärmeerzeuger
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, insgesamt, alle Technologien
-- **Wasserstoffheizung** → `OEO_00020492` — An hydrogen powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, hydrogen and energy in a specific way.
+- **Wasserstoffheizung** → `OEO_00020492` — Wasserstoffheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Wasserstoff.
   - also written: Wasserstoffkessel, H2-Kessel
-- **Wärmepumpe** → `OEO_00020486` — A heat pump technology is a heat generation technology that describes how to combine heat pumps, heat gain processes, energy carriers and energy in a specific way.
+- **Wärmepumpe** → `OEO_00020486` — Wärmepumpe: Kombiniert Wärmepumpen, Wärmegewinnungsprozesse und Energieträger zur Wärmeerzeugung.
   - also written: Wärmepumpen, Luft-Wasser-Wärmepumpe, Sole-Wasser-Wärmepumpe, Großwärmepumpe
-- **Ölheizung** → `OEO_00020490` — An oil powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, heating oil and energy in a specific way.
+- **Ölheizung** → `OEO_00020490` — Ölheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Heizöl.
   - also written: Ölkessel, Heizölkessel
 
 </details>
@@ -1872,19 +1935,23 @@ Axis 'aggregation' of Energieverbrauch. A closed list; an entry beginning 'out:'
 
 The prompt's own wording:
 
-> Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist "integral", also eine Jahressumme. "maximum" bei einer Spitzenlast oder einem Höchstwert, "arithmetic mean" bei einem Durchschnitt je Gebäude oder je Jahr, "instantaneous" bei einem Momentanwert.
+> Wie ist der Wert über Zeit oder Raum zusammengefasst?
+Normalfall "integral" (Jahressumme).
+"maximum": Spitzenlast, Höchstwert.
+"arithmetic mean": Durchschnitt je Gebäude oder Jahr.
+"instantaneous": Momentanwert.
 
 <details><summary>What it may answer (5)</summary>
 
-- **arithmetic mean** → `OEO_00140071` — average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region
+- **arithmetic mean** → `OEO_00140071` — Durchschnittswert, berechnet als arithmetisches Mittel über Datensätze.
   - also written: Mittelwert, Durchschnitt
-- **instantaneous** → `OEO_00140069` — value measured at or modelled for exactly one 0-dim temporal region, referenced by a time stamp, e.g. to represent a time step in a time series
+- **instantaneous** → `OEO_00140069` — Wert, der exakt zu einem zeitlichen Nullpunkt gemessen oder modelliert wird.
   - also written: Momentanwert zu einem Zeitpunkt
-- **integral** → `OEO_00140070` — sum or integral of values, e.g. within a time step or a spatial region
+- **integral** → `OEO_00140070` — Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets.
   - also written: Summe oder Integral über einen Zeitraum oder ein Gebiet, Jahreswert, Jahressumme
-- **maximum** → `OEO_00140073` — maximum value within a set of data values, e.g. in a time step or spatial region
+- **maximum** → `OEO_00140073` — Höchster Wert innerhalb einer Menge von Datenwerten in einem Bereich.
   - also written: Maximum, Spitzenwert, Spitzenlast
-- **minimum** → `OEO_00140072` — minimum value within a set of data values, e.g. in a time step or spatial region
+- **minimum** → `OEO_00140072` — Niedrigster Wert innerhalb einer Menge von Datenwerten in einem Bereich.
   - also written: Minimum, Tiefstwert
 
 </details>
@@ -1945,11 +2012,16 @@ Axis 'carrier' of Energieverbrauch. A closed list; an entry beginning 'out:' is 
 
 The prompt's own wording:
 
-> Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H" und "Erdgas (netzgebunden)" meinen die Klasse Erdgas, "Nahwärme" und "Wärmenetz" die Klasse Fernwärme. Eine Summenzeile ("Summe", "Gesamt", "alle Energieträger") ist "out:total", eine Restposition ("Sonstige", "Andere") ist "out:other". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Gebäudetyp". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+> Welcher Energieträger?
+Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H", "Erdgas (netzgebunden)" = Erdgas; "Nahwärme", "Wärmenetz" = Fernwärme.
+Summenzeile ("Summe", "Gesamt", "alle Energieträger") = "Summe"; Restposition ("Sonstige", "Andere") = "Sonstige".
+Eigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Gebäudetyp".
+"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (29)</summary>
 
-- **Abfallbrennstoff** → `OEO_00000439` — A waste fuel is a fuel in which the material entity is waste.
+- **Abfallbrennstoff** → `OEO_00000439` — Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.
   - also written: Klärschlamm, EBS
 - **Abwärme** → `OEO_00010114`
   - also written: unvermeidbare Abwärme
@@ -1963,7 +2035,7 @@ The prompt's own wording:
   - also written: Gas
 - **Fernwärme** → `OEO_00000132`
   - also written: Wärmenetze, Wärmenetz, Nahwärme
-- **Flüssiggas** → `OEO_00320011` — Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.
+- **Flüssiggas** → `OEO_00320011` — Flüssiggasgemisch aus Propan und Butan, unterscheidet sich als fossiler Gasbrennstoff.
 - **Geothermie** → `OEO_00000191`
   - also written: Erdwärme, oberflächennahe Geothermie, Tiefengeothermie, Erdwärmesonde, Erdwärmekollektor, Oberflächengeothermie
 - **Heizöl** → `OEO_00000211`
@@ -1978,26 +2050,26 @@ The prompt's own wording:
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
 - **Steinkohle** → `OEO_00000204`
-- **Strom** → `OEO_00000139` — Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.
+- **Strom** → `OEO_00000139` — Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
-- **Umweltwärme** → `OEO_00000056` — Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.
+- **Umweltwärme** → `OEO_00000056` — In Luft, Erde oder Wasser gespeicherte Wärme, die durch Wärmepumpen genutzt wird.
   - also written: Umgebungswärme, Umgebungsluft
 - **Wasserstoff** → `OEO_00000220`
   - also written: H2
-- **anthropogene Umweltwärme** → `OEO_00140105` — Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.
+- **anthropogene Umweltwärme** → `OEO_00140105` — Umweltwärme mit anthropogenem Ursprung, unterscheidet sich durch menschliche Entstehung.
   - also written: Abwasserwärme, Abwasser, Abwasserwärmenutzung
-- **biogener Abfallbrennstoff** → `OEO_00010223` — A biogenic waste fuel is a waste fuel that has a biogenic origin.
+- **biogener Abfallbrennstoff** → `OEO_00010223` — Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart.
   - also written: Altholz, Altholzheizung, biogene Abfälle
 - **biogener Festbrennstoff** → `OEO_00000332`
   - also written: biogene Festbrennstoffe, sonstige biogene Festbrennstoffe
-- **biogener Siedlungsabfall** → `OEO_00000356` — A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.
+- **biogener Siedlungsabfall** → `OEO_00000356` — Siedlungsabfall mit biogenem Ursprung, unterscheidet sich durch die biologische Herkunft.
   - also written: Biogut, Gartenabfälle, Grünschnitt
 - **industrielle Abwärme** → `OEO_00310004`
 - **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — An angricultural waste fuel is waste fuel produced by agriculture.
   - also written: tierische Exkremente, Gülle, Mist
-- **natürliche Umweltwärme** → `OEO_00140104` — Natural ambient thermal energy is ambient thermal energy that has a renewable origin.
+- **natürliche Umweltwärme** → `OEO_00140104` — Umweltwärme mit erneuerbarem Ursprung, unterscheidet sich durch natürliche Herkunft.
   - also written: Oberflächengewässer, Seethermie, Flusswärme
 - **synthetische Gase** → `OEO_00010155`
   - also written: grüne Gase, E-Gas, SNG
@@ -2133,7 +2205,12 @@ Axis 'quantity' of Energieverbrauch. A closed list; an entry beginning 'out:' is
 
 The prompt's own wording:
 
-> Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder im Titel der eigenen Tabelle. "final energy consumption value" ist definiert als die an Endverbraucher gelieferte und dort verbrauchte Energie. Darunter fällt BEIDES, was ein Plan Verbrauch nennt und was er Bedarf nennt: in einem Szenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Endenergieverbrauch, Endenergiebedarf, Wärmebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. "primary energy consumption value" ist die Bilanz vor der Umwandlung. Nutzwärme, Heizwärme, Raumwärme und Nutzenergie sind dagegen NICHT Endenergie, sondern die Wärme hinter dem Erzeuger: "out:useful_energy", auch im Zielszenario. Ein Anteil in Prozent und ein Wert je Fläche oder Kopf sind eigene Einträge und keine Verbrauchsmenge.
+> Welche Größe ist diese Zahl? Wichtigste Entscheidung: bestimmt die Klasse im Graphen.
+Nach der Definition der Klasse entscheiden, nicht nach Wortähnlichkeit; Bezeichnung in Zeile, Spaltenkopf, Blocküberschrift oder Titel der eigenen Tabelle.
+"final energy consumption value" = an Endverbraucher gelieferte, dort verbrauchte Energie; BEIDES, Verbrauch und Bedarf (im Szenario ist alles gerechnet, die Definition spricht nicht von Messung): Endenergieverbrauch, Endenergiebedarf, Wärmebedarf, zu deckender Wärmebedarf.
+"primary energy consumption value" = Bilanz vor der Umwandlung.
+Nutzwärme, Heizwärme, Raumwärme, Nutzenergie sind NICHT Endenergie, sondern Wärme hinter dem Erzeuger: "Nutzenergie", auch im Zielszenario.
+Anteil in Prozent, Wert je Fläche oder Kopf: eigene Einträge, keine Verbrauchsmenge.
 
 <details><summary>What it may answer (21)</summary>
 
@@ -2145,31 +2222,31 @@ The prompt's own wording:
   - also written: Wärmeerzeugung, Einspeisung, Wärmebereitstellung, Absatz
 - **Nutzenergie** → `out:useful_energy` — Die Wärme hinter dem Erzeuger, nach der Umwandlung: Nutzwärme, Heizwärme, Raumwärme. Nicht die an den Endverbraucher gelieferte Endenergie.
   - also written: Nutzwärme, Heizwärme
-- **developable flow potential** → `OEO_00140060` — A developable flow potential is a type of flow potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).
+- **developable flow potential** → `OEO_00140060` — Erschließbares Flusspotenzial: Der Anteil des wirtschaftlichen Potenzials unter realistischen Rahmenbedingungen.
   - also written: erschließbares Potenzial
-- **developable stock potential** → `OEO_00140066` — A developable stock potential is a type of stock potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).
-- **economic flow potential** → `OEO_00140059` — An economic flow potential is a type of flow potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).
+- **developable stock potential** → `OEO_00140066` — Erschließbares Bestandspotenzial: Der Anteil des wirtschaftlichen Potenzials unter realistischen Rahmenbedingungen.
+- **economic flow potential** → `OEO_00140059` — Wirtschaftliches Flusspotenzial: Der Anteil des technologischen Potenzials, der wirtschaftlich nutzbar ist.
   - also written: wirtschaftliches Potenzial
-- **economic stock potential** → `OEO_00140065` — An economic stock potential is a type of stock potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).
+- **economic stock potential** → `OEO_00140065` — Wirtschaftliches Bestandspotenzial: Der Anteil des technologischen Potenzials, der wirtschaftlich nutzbar ist.
 - **etwas anderes** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
-- **final energy consumption value** → `OEO_00050016` — A final energy consumption value is an energy consumption value expressing the magnitude of the energy delivered to and consumed by end users.
+- **final energy consumption value** → `OEO_00050016` — Endenergieverbrauch: Menge der an Endverbraucher gelieferten und von ihnen verbrauchten Energie.
   - also written: Endenergieverbrauch, Endenergie, Endenergiebedarf, Wärmeverbrauch, Wärmebedarf, Fernwärmeverbrauch, Stromverbrauch, Erdgasverbrauch, zu deckender Wärmebedarf, Jahresendenergiebedarf, Endenergiebedarf für Wärme
-- **flow potential** → `OEO_00140056` — A flow potential is a potential of an input or output of a process, per time unit.
-- **potential** → `OEO_00290000` — A potential is a maximum value that describes some upper limit in a spatial region of reference.
+- **flow potential** → `OEO_00140056` — Flusspotenzial: Potenzial eines Prozessinputs oder -outputs pro Zeiteinheit.
+- **potential** → `OEO_00290000` — Potenzial: Ein Maximalwert, der eine Obergrenze in einem Referenzgebiet beschreibt.
   - also written: Potenzial, Ausbaupotenzial, Gesamtpotenzial
-- **primary energy consumption value** → `OEO_00050018` — A primary energy consumption value is an energy consumption value expressing the magnitude of the total consumption of energy in a spatial region excluding the non-energetic use of fuels.
+- **primary energy consumption value** → `OEO_00050018` — Primärenergieverbrauch: Gesamter Energieverbrauch in einer Region ohne nicht-energetische Nutzung.
   - also written: Primärenergieverbrauch, Primärenergie
 - **spezifischer Wert je Fläche, Kopf oder Einwohner** → `out:specific` — Ein Wert je Fläche, Kopf, Gebäude oder Kilowattstunde, keine Gesamtmenge.
-- **stock potential** → `OEO_00140062` — A stock potential is a potential of the stock of a source or sink.
-- **sustainable flow potential** → `OEO_00140061` — A sustainable flow potential is a type of flow potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.
+- **stock potential** → `OEO_00140062` — Bestandspotenzial: Potenzial des Bestands einer Quelle oder Senke.
+- **sustainable flow potential** → `OEO_00140061` — Nachhaltiges Flusspotenzial: Potenzial unter Berücksichtigung aller ökologischen und sozioökonomischen Aspekte.
   - also written: nachhaltiges Potenzial
-- **sustainable stock potential** → `OEO_00140067` — A sustainable stock potential is a type of stock potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.
-- **technological flow potential** → `OEO_00140058` — A technological flow potential is a type of a flow potential derived from a theoretical flow potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.
+- **sustainable stock potential** → `OEO_00140067` — Nachhaltiges Bestandspotenzial: Potenzial unter Berücksichtigung aller ökologischen und sozioökonomischen Aspekte.
+- **technological flow potential** → `OEO_00140058` — Technologisches Flusspotenzial: Theoretisches Potenzial unter Berücksichtigung von Technologieeffizienz und verfügbarer Fläche.
   - also written: technisches Potenzial
-- **technological stock potential** → `OEO_00140064` — A technological stock potential is a type of a stock potential derived from a theoretical stock potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.
-- **theoretical flow potential** → `OEO_00140057` — A theoretical flow potential is a type of flow potential that identifies the physical upper limit of an input or output of a process in a spatial region of reference per unit time.
+- **technological stock potential** → `OEO_00140064` — Technologisches Bestandspotenzial: Theoretisches Potenzial unter Berücksichtigung von Technologieeffizienz und verfügbarer Fläche.
+- **theoretical flow potential** → `OEO_00140057` — Theoretisches Flusspotenzial: Physikalische Obergrenze eines Prozessinputs oder -outputs pro Zeiteinheit.
   - also written: theoretisches Potenzial
-- **theoretical stock potential** → `OEO_00140063` — A theoretical stock potential is a type of stock potential that identifies the physical upper limit of a stock of a source or sink in a spatial region of reference.
+- **theoretical stock potential** → `OEO_00140063` — Theoretisches Bestandspotenzial: Physikalische Obergrenze eines Quellen- oder Senkenbestands.
 
 </details>
 
@@ -2302,21 +2379,30 @@ Axis 'sector' of Energieverbrauch. A closed list; an entry beginning 'out:' is a
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"). Eine Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist dagegen keine Summe über Sektoren. "Einfamilienhaus" und "Mehrfamilienhaus" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Energieträger". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+> Welcher Verbrauchssektor?
+Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: "Wohnen", "Wohngebäude" = Private Haushalte; "GHD/Kommune", "Gewerbe", "wirtschaftlich genutzte Gebäude" = GHD.
+GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
+Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf) = "Summe".
+Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a").
+Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
+"Einfamilienhaus", "Mehrfamilienhaus" = Private Haushalte.
+Eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Energieträger".
+"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (6)</summary>
 
-- **GHD** → `OEO_00000405` — A commercial sector is a sector that covers non-industrial commercial activities.
+- **GHD** → `OEO_00000405` — Sektor für nicht-industrielle gewerbliche Aktivitäten.
   - also written: Gewerbe, Handel, Dienstleistungen, Gewerbe/Handel/Dienstleistungen, öffentliche Gebäude, öffentliche Liegenschaften, kommunale Einrichtungen, GHD/Kommune, Gewerbe, wirtschaftlich genutzte Gebäude, kommerzieller Sektor
-- **Industrie** → `OEO_00000227` — An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.
+- **Industrie** → `OEO_00000227` — Sektor für industrielle Aktivitäten mit Energiewandlung.
   - also written: Industriesektor, verarbeitendes Gewerbe
-- **Landwirtschaft** → `OEO_00010035` — A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.
+- **Landwirtschaft** → `OEO_00010035` — Sektor für Landwirtschaft, Forstwirtschaft und Landnutzung.
   - also written: Land- und Forstwirtschaft
-- **Private Haushalte** → `OEO_00000214` — A household sector is a sector that covers households.
+- **Private Haushalte** → `OEO_00000214` — Sektor für private Haushalte und Wohngebäude.
   - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor, Einfamilienhaus, Mehrfamilienhaus
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
-- **Verkehr** → `OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
+- **Verkehr** → `OEO_00000422` — Sektor für den Transport von Personen und Gütern.
   - also written: Verkehrssektor
 
 </details>
@@ -2378,7 +2464,13 @@ Axis 'spatial_scope' of Energieverbrauch. A closed list; an entry beginning 'out
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Eine Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: Nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
+> Auf welches Gebiet bezieht sich der Wert?
+ZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.
+Steckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.
+Erst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.
+Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht.
+Teilgebiet: sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.
+Ganzes Gemeindegebiet: die Klasse reicht.
 
 <details><summary>What it may answer (2)</summary>
 
@@ -2492,29 +2584,34 @@ Axis 'technology' of Energieverbrauch. A closed list; an entry beginning 'out:' 
 
 The prompt's own wording:
 
-> Welche Wärmeerzeugungstechnologie? Nur wenn die Zahl ausdrücklich einer Heiztechnik zugeordnet ist, in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, etwa "Wärmepumpen", "Gaskessel" oder "Ölheizungen". Ein Energieträger ist keine Technologie: "Erdgas" allein ist der Träger, "Gasheizung" die Technologie. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz nicht nach Technologien aufgeteilt, antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt. Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+> Welche Wärmeerzeugungstechnologie?
+Nur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa "Wärmepumpen", "Gaskessel", "Ölheizungen".
+Energieträger ist keine Technologie: "Erdgas" allein = Träger, "Gasheizung" = Technologie.
+Eigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.
+"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (10)</summary>
 
-- **Biomasseheizung** → `OEO_00020493` — A biomass powered heating technology is a combustion-based heat generation technology that describes how to combine biomass boilers, heat gain processes, biomass and energy in a specific way.
+- **Biomasseheizung** → `OEO_00020493` — Biomasseheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Biomasse.
   - also written: Holzheizung, Pelletheizung, Hackschnitzelheizung, Biomassekessel
-- **Direktelektrische Heizung** → `OEO_00020487` — An electrical heating technology is a technology that describes how to combine electrical heaters in a heat gain process with electrical energy as input in a specific way.
+- **Direktelektrische Heizung** → `OEO_00020487` — Direktelektrische Heizung: Wandelt elektrische Energie direkt in Wärme mittels elektrischer Heizelemente um.
   - also written: Stromdirektheizung, Elektroheizung, Nachtspeicherheizung
-- **Gasheizung** → `OEO_00020491` — An gas powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, natural gas and energy in a specific way.
+- **Gasheizung** → `OEO_00020491` — Gasheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Erdgas.
   - also written: Gaskessel, Gasbrennwertkessel, Gastherme
-- **Geothermie** → `OEO_00020306` — A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way.
+- **Geothermie** → `OEO_00020306` — Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung.
   - also written: Geothermieanlage, Tiefengeothermie, oberflächennahe Geothermie
-- **Solarthermie** → `OEO_00020307` — A solar thermal heat technology is a heat generation technology that describes how to combine solar heat units, solar thermal energy transformation processes, energy carriers and energy in a specific way.
+- **Solarthermie** → `OEO_00020307` — Solarthermie: Nutzt Solareinheiten und solare Umwandlungsprozesse zur Wärmeerzeugung.
   - also written: Solarthermieanlage, solarthermische Anlage
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Wärmeerzeuger
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, insgesamt, alle Technologien
-- **Wasserstoffheizung** → `OEO_00020492` — An hydrogen powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, hydrogen and energy in a specific way.
+- **Wasserstoffheizung** → `OEO_00020492` — Wasserstoffheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Wasserstoff.
   - also written: Wasserstoffkessel, H2-Kessel
-- **Wärmepumpe** → `OEO_00020486` — A heat pump technology is a heat generation technology that describes how to combine heat pumps, heat gain processes, energy carriers and energy in a specific way.
+- **Wärmepumpe** → `OEO_00020486` — Wärmepumpe: Kombiniert Wärmepumpen, Wärmegewinnungsprozesse und Energieträger zur Wärmeerzeugung.
   - also written: Wärmepumpen, Luft-Wasser-Wärmepumpe, Sole-Wasser-Wärmepumpe, Großwärmepumpe
-- **Ölheizung** → `OEO_00020490` — An oil powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, heating oil and energy in a specific way.
+- **Ölheizung** → `OEO_00020490` — Ölheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Heizöl.
   - also written: Ölkessel, Heizölkessel
 
 </details>
@@ -2722,17 +2819,21 @@ Axis 'aggregation' of Leistung. A closed list; an entry beginning 'out:' is a de
 
 The prompt's own wording:
 
-> Wie ist der Wert über Zeit oder Raum zusammengefasst? Bei einer Leistung ist das eine echte Frage und keine Formsache. "maximum" bei einer Spitzenlast, einer Höchstlast oder einem Auslegungsfall. "integral" bei einer Summe über mehrere Anlagen oder über ein Gebiet, erkennbar an einer Zeile oder Spalte "Summe", "Gesamt" oder "insgesamt". "arithmetic mean" bei einem Durchschnitt ("Ø", "mittlere Leistung"). Die Leistung einer EINZELNEN Anlage ist keines davon: steht in der Quelle, in ihrem Abschnitt und in dem Satz davor nichts über die Zusammenfassung, dann ist das "out:unstated" und keine Schätzung.
+> Wie ist der Wert über Zeit oder Raum zusammengefasst? Bei Leistung eine echte Frage, keine Formsache.
+"maximum": Spitzenlast, Höchstlast, Auslegungsfall.
+"integral": Summe über mehrere Anlagen oder ein Gebiet, erkennbar an Zeile oder Spalte "Summe", "Gesamt", "insgesamt".
+"arithmetic mean": Durchschnitt ("Ø", "mittlere Leistung").
+Leistung einer EINZELNEN Anlage ist keines davon: steht in Quelle, Abschnitt und Satz davor nichts zur Zusammenfassung, "out:unstated", keine Schätzung.
 
 <details><summary>What it may answer (4)</summary>
 
-- **arithmetic mean** → `OEO_00140071` — average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region
+- **arithmetic mean** → `OEO_00140071` — Durchschnittswert, berechnet als arithmetisches Mittel über Datensätze.
   - also written: Mittelwert, Durchschnitt
-- **integral** → `OEO_00140070` — sum or integral of values, e.g. within a time step or a spatial region
+- **integral** → `OEO_00140070` — Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets.
   - also written: Summe, Gesamt, insgesamt
-- **maximum** → `OEO_00140073` — maximum value within a set of data values, e.g. in a time step or spatial region
+- **maximum** → `OEO_00140073` — Höchster Wert innerhalb einer Menge von Datenwerten in einem Bereich.
   - also written: Maximum, Spitzenwert, Spitzenlast
-- **minimum** → `OEO_00140072` — minimum value within a set of data values, e.g. in a time step or spatial region
+- **minimum** → `OEO_00140072` — Niedrigster Wert innerhalb einer Menge von Datenwerten in einem Bereich.
   - also written: Minimum, Tiefstwert
 
 </details>
@@ -2793,11 +2894,16 @@ Axis 'carrier' of Leistung. A closed list; an entry beginning 'out:' is a delibe
 
 The prompt's own wording:
 
-> Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H" und "Erdgas (netzgebunden)" meinen die Klasse Erdgas, "Nahwärme" und "Wärmenetz" die Klasse Fernwärme. Eine Summenzeile ("Summe", "Gesamt", "alle Energieträger") ist "out:total", eine Restposition ("Sonstige", "Andere") ist "out:other". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Gebäudetyp". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+> Welcher Energieträger?
+Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H", "Erdgas (netzgebunden)" = Erdgas; "Nahwärme", "Wärmenetz" = Fernwärme.
+Summenzeile ("Summe", "Gesamt", "alle Energieträger") = "Summe"; Restposition ("Sonstige", "Andere") = "Sonstige".
+Eigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Gebäudetyp".
+"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (29)</summary>
 
-- **Abfallbrennstoff** → `OEO_00000439` — A waste fuel is a fuel in which the material entity is waste.
+- **Abfallbrennstoff** → `OEO_00000439` — Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.
   - also written: Klärschlamm, EBS
 - **Abwärme** → `OEO_00010114`
   - also written: unvermeidbare Abwärme
@@ -2811,7 +2917,7 @@ The prompt's own wording:
   - also written: Gas
 - **Fernwärme** → `OEO_00000132`
   - also written: Wärmenetze, Wärmenetz, Nahwärme
-- **Flüssiggas** → `OEO_00320011` — Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.
+- **Flüssiggas** → `OEO_00320011` — Flüssiggasgemisch aus Propan und Butan, unterscheidet sich als fossiler Gasbrennstoff.
 - **Geothermie** → `OEO_00000191`
   - also written: Erdwärme, oberflächennahe Geothermie, Tiefengeothermie, Erdwärmesonde, Erdwärmekollektor, Oberflächengeothermie
 - **Heizöl** → `OEO_00000211`
@@ -2826,26 +2932,26 @@ The prompt's own wording:
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
 - **Steinkohle** → `OEO_00000204`
-- **Strom** → `OEO_00000139` — Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.
+- **Strom** → `OEO_00000139` — Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
-- **Umweltwärme** → `OEO_00000056` — Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.
+- **Umweltwärme** → `OEO_00000056` — In Luft, Erde oder Wasser gespeicherte Wärme, die durch Wärmepumpen genutzt wird.
   - also written: Umgebungswärme, Umgebungsluft
 - **Wasserstoff** → `OEO_00000220`
   - also written: H2
-- **anthropogene Umweltwärme** → `OEO_00140105` — Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.
+- **anthropogene Umweltwärme** → `OEO_00140105` — Umweltwärme mit anthropogenem Ursprung, unterscheidet sich durch menschliche Entstehung.
   - also written: Abwasserwärme, Abwasser, Abwasserwärmenutzung
-- **biogener Abfallbrennstoff** → `OEO_00010223` — A biogenic waste fuel is a waste fuel that has a biogenic origin.
+- **biogener Abfallbrennstoff** → `OEO_00010223` — Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart.
   - also written: Altholz, Altholzheizung, biogene Abfälle
 - **biogener Festbrennstoff** → `OEO_00000332`
   - also written: biogene Festbrennstoffe, sonstige biogene Festbrennstoffe
-- **biogener Siedlungsabfall** → `OEO_00000356` — A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.
+- **biogener Siedlungsabfall** → `OEO_00000356` — Siedlungsabfall mit biogenem Ursprung, unterscheidet sich durch die biologische Herkunft.
   - also written: Biogut, Gartenabfälle, Grünschnitt
 - **industrielle Abwärme** → `OEO_00310004`
 - **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — An angricultural waste fuel is waste fuel produced by agriculture.
   - also written: tierische Exkremente, Gülle, Mist
-- **natürliche Umweltwärme** → `OEO_00140104` — Natural ambient thermal energy is ambient thermal energy that has a renewable origin.
+- **natürliche Umweltwärme** → `OEO_00140104` — Umweltwärme mit erneuerbarem Ursprung, unterscheidet sich durch natürliche Herkunft.
   - also written: Oberflächengewässer, Seethermie, Flusswärme
 - **synthetische Gase** → `OEO_00010155`
   - also written: grüne Gase, E-Gas, SNG
@@ -2981,37 +3087,40 @@ Axis 'quantity' of Leistung. A closed list; an entry beginning 'out:' is a delib
 
 The prompt's own wording:
 
-> Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. "power value" ist definiert als quantity value mit einer Leistungseinheit: eine Heizlast, eine Anschlussleistung, eine Nennwärmeleistung, eine Netz- oder Erzeugerleistung. Die ABGEGEBENE ELEKTRISCHE Leistung derselben Anlage ist "out:electric" und nicht dieselbe Klasse: sie steht in einer eigenen Spalte, trägt denselben Energieträger und wäre im Graphen von der Wärmeleistung nicht zu unterscheiden. Gibt die Quelle die Leistung getrennt für Winter und Sommer an, dann ist das "out:seasonal" für BEIDE Werte.
+> Welche Größe ist diese Zahl? Wichtigste Entscheidung: bestimmt die Klasse im Graphen.
+"power value" = quantity value mit Leistungseinheit: Heizlast, Anschlussleistung, Nennwärmeleistung, Netz- oder Erzeugerleistung.
+ABGEGEBENE ELEKTRISCHE Leistung derselben Anlage ist "elektrische Leistung", nicht dieselbe Klasse: eigene Spalte, gleicher Energieträger, im Graphen nicht von der Wärmeleistung zu unterscheiden.
+Leistung getrennt für Winter und Sommer: für BEIDE Werte "getrennt für Winter und Sommer angegebene Leistung".
 
 <details><summary>What it may answer (18)</summary>
 
-- **developable flow potential** → `OEO_00140060` — A developable flow potential is a type of flow potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).
+- **developable flow potential** → `OEO_00140060` — Erschließbares Flusspotenzial: Der Anteil des wirtschaftlichen Potenzials unter realistischen Rahmenbedingungen.
   - also written: erschließbares Potenzial
-- **developable stock potential** → `OEO_00140066` — A developable stock potential is a type of stock potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).
-- **economic flow potential** → `OEO_00140059` — An economic flow potential is a type of flow potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).
+- **developable stock potential** → `OEO_00140066` — Erschließbares Bestandspotenzial: Der Anteil des wirtschaftlichen Potenzials unter realistischen Rahmenbedingungen.
+- **economic flow potential** → `OEO_00140059` — Wirtschaftliches Flusspotenzial: Der Anteil des technologischen Potenzials, der wirtschaftlich nutzbar ist.
   - also written: wirtschaftliches Potenzial
-- **economic stock potential** → `OEO_00140065` — An economic stock potential is a type of stock potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).
+- **economic stock potential** → `OEO_00140065` — Wirtschaftliches Bestandspotenzial: Der Anteil des technologischen Potenzials, der wirtschaftlich nutzbar ist.
 - **elektrische Leistung** → `out:electric` — Die abgegebene ELEKTRISCHE Leistung einer Anlage, nicht ihre Wärmeleistung. Der Graph nimmt sie nicht auf: sie trägt denselben Energieträger wie die Wärmeleistung derselben Zeile und wäre von ihr nicht zu unterscheiden.
   - also written: Elektrische Leistung, el. Leistung, Elektrische Nennleistung, kW elektrisch, Stromlastspitze, Modulleistung
 - **etwas anderes** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
-- **flow potential** → `OEO_00140056` — A flow potential is a potential of an input or output of a process, per time unit.
+- **flow potential** → `OEO_00140056` — Flusspotenzial: Potenzial eines Prozessinputs oder -outputs pro Zeiteinheit.
 - **getrennt für Winter und Sommer angegebene Leistung** → `out:seasonal` — Eine Leistung, die die Quelle getrennt für Winter und Sommer angibt. Der Graph hat keine Koordinate für die Jahreszeit, also nimmt er beide Werte nicht auf.
   - also written: Ø Winter, Ø Sommer, Winterfall, Sommerfall
-- **potential** → `OEO_00290000` — A potential is a maximum value that describes some upper limit in a spatial region of reference.
+- **potential** → `OEO_00290000` — Potenzial: Ein Maximalwert, der eine Obergrenze in einem Referenzgebiet beschreibt.
   - also written: Leistungspotenzial, Ausbaupotenzial
-- **power value** → `OEO_00010157` — A power value is a quantity value that has a power unit as unit.
+- **power value** → `OEO_00010157` — Leistungswert: Eine Größe mit einer Leistungseinheit.
   - also written: Wärmeleistung, Heizlast, Anschlussleistung, Leistungsbedarf, Netzleistung, thermische Leistung, Thermische Nutzleistung, Nennwärmeleistung, installierte Leistung, Entzugsleistung, Nennleistung, Feuerungswärmeleistung
 - **spezifischer Wert je Fläche, Kopf oder Gebäude** → `out:specific` — Ein Wert je Fläche, Kopf, Gebäude oder Meter, keine Gesamtleistung.
-- **stock potential** → `OEO_00140062` — A stock potential is a potential of the stock of a source or sink.
-- **sustainable flow potential** → `OEO_00140061` — A sustainable flow potential is a type of flow potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.
+- **stock potential** → `OEO_00140062` — Bestandspotenzial: Potenzial des Bestands einer Quelle oder Senke.
+- **sustainable flow potential** → `OEO_00140061` — Nachhaltiges Flusspotenzial: Potenzial unter Berücksichtigung aller ökologischen und sozioökonomischen Aspekte.
   - also written: nachhaltiges Potenzial
-- **sustainable stock potential** → `OEO_00140067` — A sustainable stock potential is a type of stock potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.
-- **technological flow potential** → `OEO_00140058` — A technological flow potential is a type of a flow potential derived from a theoretical flow potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.
+- **sustainable stock potential** → `OEO_00140067` — Nachhaltiges Bestandspotenzial: Potenzial unter Berücksichtigung aller ökologischen und sozioökonomischen Aspekte.
+- **technological flow potential** → `OEO_00140058` — Technologisches Flusspotenzial: Theoretisches Potenzial unter Berücksichtigung von Technologieeffizienz und verfügbarer Fläche.
   - also written: technisches Potenzial
-- **technological stock potential** → `OEO_00140064` — A technological stock potential is a type of a stock potential derived from a theoretical stock potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.
-- **theoretical flow potential** → `OEO_00140057` — A theoretical flow potential is a type of flow potential that identifies the physical upper limit of an input or output of a process in a spatial region of reference per unit time.
+- **technological stock potential** → `OEO_00140064` — Technologisches Bestandspotenzial: Theoretisches Potenzial unter Berücksichtigung von Technologieeffizienz und verfügbarer Fläche.
+- **theoretical flow potential** → `OEO_00140057` — Theoretisches Flusspotenzial: Physikalische Obergrenze eines Prozessinputs oder -outputs pro Zeiteinheit.
   - also written: theoretisches Potenzial
-- **theoretical stock potential** → `OEO_00140063` — A theoretical stock potential is a type of stock potential that identifies the physical upper limit of a stock of a source or sink in a spatial region of reference.
+- **theoretical stock potential** → `OEO_00140063` — Theoretisches Bestandspotenzial: Physikalische Obergrenze eines Quellen- oder Senkenbestands.
 
 </details>
 
@@ -3144,21 +3253,30 @@ Axis 'sector' of Leistung. A closed list; an entry beginning 'out:' is a deliber
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"). Eine Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist dagegen keine Summe über Sektoren. "Einfamilienhaus" und "Mehrfamilienhaus" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Energieträger". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+> Welcher Verbrauchssektor?
+Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: "Wohnen", "Wohngebäude" = Private Haushalte; "GHD/Kommune", "Gewerbe", "wirtschaftlich genutzte Gebäude" = GHD.
+GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
+Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf) = "Summe".
+Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a").
+Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
+"Einfamilienhaus", "Mehrfamilienhaus" = Private Haushalte.
+Eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Energieträger".
+"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (6)</summary>
 
-- **GHD** → `OEO_00000405` — A commercial sector is a sector that covers non-industrial commercial activities.
+- **GHD** → `OEO_00000405` — Sektor für nicht-industrielle gewerbliche Aktivitäten.
   - also written: Gewerbe, Handel, Dienstleistungen, Gewerbe/Handel/Dienstleistungen, öffentliche Gebäude, öffentliche Liegenschaften, kommunale Einrichtungen, GHD/Kommune, Gewerbe, wirtschaftlich genutzte Gebäude, kommerzieller Sektor
-- **Industrie** → `OEO_00000227` — An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.
+- **Industrie** → `OEO_00000227` — Sektor für industrielle Aktivitäten mit Energiewandlung.
   - also written: Industriesektor, verarbeitendes Gewerbe
-- **Landwirtschaft** → `OEO_00010035` — A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.
+- **Landwirtschaft** → `OEO_00010035` — Sektor für Landwirtschaft, Forstwirtschaft und Landnutzung.
   - also written: Land- und Forstwirtschaft
-- **Private Haushalte** → `OEO_00000214` — A household sector is a sector that covers households.
+- **Private Haushalte** → `OEO_00000214` — Sektor für private Haushalte und Wohngebäude.
   - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor, Einfamilienhaus, Mehrfamilienhaus
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
-- **Verkehr** → `OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
+- **Verkehr** → `OEO_00000422` — Sektor für den Transport von Personen und Gütern.
   - also written: Verkehrssektor
 
 </details>
@@ -3220,7 +3338,13 @@ Axis 'spatial_scope' of Leistung. A closed list; an entry beginning 'out:' is a 
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Eine Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: Nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
+> Auf welches Gebiet bezieht sich der Wert?
+ZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.
+Steckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.
+Erst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.
+Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht.
+Teilgebiet: sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.
+Ganzes Gemeindegebiet: die Klasse reicht.
 
 <details><summary>What it may answer (2)</summary>
 
@@ -3583,11 +3707,16 @@ Axis 'carrier' of Anteil. A closed list; an entry beginning 'out:' is a delibera
 
 The prompt's own wording:
 
-> Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H" und "Erdgas (netzgebunden)" meinen die Klasse Erdgas, "Nahwärme" und "Wärmenetz" die Klasse Fernwärme. Eine Summenzeile ("Summe", "Gesamt", "alle Energieträger") ist "out:total", eine Restposition ("Sonstige", "Andere") ist "out:other". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Gebäudetyp". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+> Welcher Energieträger?
+Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H", "Erdgas (netzgebunden)" = Erdgas; "Nahwärme", "Wärmenetz" = Fernwärme.
+Summenzeile ("Summe", "Gesamt", "alle Energieträger") = "Summe"; Restposition ("Sonstige", "Andere") = "Sonstige".
+Eigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Gebäudetyp".
+"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (29)</summary>
 
-- **Abfallbrennstoff** → `OEO_00000439` — A waste fuel is a fuel in which the material entity is waste.
+- **Abfallbrennstoff** → `OEO_00000439` — Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.
   - also written: Klärschlamm, EBS
 - **Abwärme** → `OEO_00010114`
   - also written: unvermeidbare Abwärme
@@ -3601,7 +3730,7 @@ The prompt's own wording:
   - also written: Gas
 - **Fernwärme** → `OEO_00000132`
   - also written: Wärmenetze, Wärmenetz, Nahwärme
-- **Flüssiggas** → `OEO_00320011` — Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.
+- **Flüssiggas** → `OEO_00320011` — Flüssiggasgemisch aus Propan und Butan, unterscheidet sich als fossiler Gasbrennstoff.
 - **Geothermie** → `OEO_00000191`
   - also written: Erdwärme, oberflächennahe Geothermie, Tiefengeothermie, Erdwärmesonde, Erdwärmekollektor, Oberflächengeothermie
 - **Heizöl** → `OEO_00000211`
@@ -3616,26 +3745,26 @@ The prompt's own wording:
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
 - **Steinkohle** → `OEO_00000204`
-- **Strom** → `OEO_00000139` — Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.
+- **Strom** → `OEO_00000139` — Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
-- **Umweltwärme** → `OEO_00000056` — Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.
+- **Umweltwärme** → `OEO_00000056` — In Luft, Erde oder Wasser gespeicherte Wärme, die durch Wärmepumpen genutzt wird.
   - also written: Umgebungswärme, Umgebungsluft
 - **Wasserstoff** → `OEO_00000220`
   - also written: H2
-- **anthropogene Umweltwärme** → `OEO_00140105` — Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.
+- **anthropogene Umweltwärme** → `OEO_00140105` — Umweltwärme mit anthropogenem Ursprung, unterscheidet sich durch menschliche Entstehung.
   - also written: Abwasserwärme, Abwasser, Abwasserwärmenutzung
-- **biogener Abfallbrennstoff** → `OEO_00010223` — A biogenic waste fuel is a waste fuel that has a biogenic origin.
+- **biogener Abfallbrennstoff** → `OEO_00010223` — Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart.
   - also written: Altholz, Altholzheizung, biogene Abfälle
 - **biogener Festbrennstoff** → `OEO_00000332`
   - also written: biogene Festbrennstoffe, sonstige biogene Festbrennstoffe
-- **biogener Siedlungsabfall** → `OEO_00000356` — A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.
+- **biogener Siedlungsabfall** → `OEO_00000356` — Siedlungsabfall mit biogenem Ursprung, unterscheidet sich durch die biologische Herkunft.
   - also written: Biogut, Gartenabfälle, Grünschnitt
 - **industrielle Abwärme** → `OEO_00310004`
 - **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — An angricultural waste fuel is waste fuel produced by agriculture.
   - also written: tierische Exkremente, Gülle, Mist
-- **natürliche Umweltwärme** → `OEO_00140104` — Natural ambient thermal energy is ambient thermal energy that has a renewable origin.
+- **natürliche Umweltwärme** → `OEO_00140104` — Umweltwärme mit erneuerbarem Ursprung, unterscheidet sich durch natürliche Herkunft.
   - also written: Oberflächengewässer, Seethermie, Flusswärme
 - **synthetische Gase** → `OEO_00010155`
   - also written: grüne Gase, E-Gas, SNG
@@ -3771,11 +3900,13 @@ Axis 'quantity' of Anteil. A closed list; an entry beginning 'out:' is a deliber
 
 The prompt's own wording:
 
-> Welche Größe ist diese Zahl? "fraction value" ist der Anteil eines Ganzen in Prozent: welcher Teil des Wärmebedarfs, des Verbrauchs oder der Erzeugung auf einen Energieträger, einen Sektor oder eine Technologie entfällt ("davon Wärmenetz 41 %", "Anteil erneuerbarer Energien 65 %"). Ein Prozentwert, der keinen Teil eines Ganzen nennt (eine Sanierungsrate pro Jahr, ein Wirkungsgrad, eine Veränderung gegenüber einem Basisjahr), und ein Anteil an etwas anderem als Energie oder Emissionen (an Gebäuden, Anlagen, Heizungen, Flächen, Kosten, Fördermitteln) ist "out:other".
+> Welche Größe ist diese Zahl?
+"fraction value" = Anteil eines Ganzen in Prozent: welcher Teil des Wärmebedarfs, Verbrauchs oder der Erzeugung auf einen Energieträger, Sektor oder eine Technologie entfällt ("davon Wärmenetz 41 %", "Anteil erneuerbarer Energien 65 %").
+"keine Anteilsangabe": Prozentwert ohne Teil eines Ganzen (Sanierungsrate pro Jahr, Wirkungsgrad, Veränderung gegenüber einem Basisjahr); Anteil an anderem als Energie oder Emissionen (Gebäude, Anlagen, Heizungen, Flächen, Kosten, Fördermittel).
 
 <details><summary>What it may answer (2)</summary>
 
-- **fraction value** → `OEO_00140127` — A fraction value is a relational quantity value that has a fraction as it's unit.
+- **fraction value** → `OEO_00140127` — Bruchwert: Eine relationale Größe mit einem Bruch als Einheit.
   - also written: Anteil, Prozentanteil, davon, %
 - **keine Anteilsangabe** → `out:other` — Ein Prozentwert, der keinen Teil von Energie oder Emissionen nennt: eine Rate pro Jahr, ein Wirkungsgrad, eine Veränderung gegenüber einem Basisjahr, oder der Anteil an etwas anderem: an Gebäuden, Anlagen, Heizungen, Flächen, Kosten oder Fördermitteln.
   - also written: Quote, Rate, Wirkungsgrad, Veränderung, Förderquote, Anteil der Gebäude
@@ -3911,21 +4042,30 @@ Axis 'sector' of Anteil. A closed list; an entry beginning 'out:' is a deliberat
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"). Eine Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist dagegen keine Summe über Sektoren. "Einfamilienhaus" und "Mehrfamilienhaus" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa "Energieträger". Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+> Welcher Verbrauchssektor?
+Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: "Wohnen", "Wohngebäude" = Private Haushalte; "GHD/Kommune", "Gewerbe", "wirtschaftlich genutzte Gebäude" = GHD.
+GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
+Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf) = "Summe".
+Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a").
+Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
+"Einfamilienhaus", "Mehrfamilienhaus" = Private Haushalte.
+Eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Energieträger".
+"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (6)</summary>
 
-- **GHD** → `OEO_00000405` — A commercial sector is a sector that covers non-industrial commercial activities.
+- **GHD** → `OEO_00000405` — Sektor für nicht-industrielle gewerbliche Aktivitäten.
   - also written: Gewerbe, Handel, Dienstleistungen, Gewerbe/Handel/Dienstleistungen, öffentliche Gebäude, öffentliche Liegenschaften, kommunale Einrichtungen, GHD/Kommune, Gewerbe, wirtschaftlich genutzte Gebäude, kommerzieller Sektor
-- **Industrie** → `OEO_00000227` — An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.
+- **Industrie** → `OEO_00000227` — Sektor für industrielle Aktivitäten mit Energiewandlung.
   - also written: Industriesektor, verarbeitendes Gewerbe
-- **Landwirtschaft** → `OEO_00010035` — A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.
+- **Landwirtschaft** → `OEO_00010035` — Sektor für Landwirtschaft, Forstwirtschaft und Landnutzung.
   - also written: Land- und Forstwirtschaft
-- **Private Haushalte** → `OEO_00000214` — A household sector is a sector that covers households.
+- **Private Haushalte** → `OEO_00000214` — Sektor für private Haushalte und Wohngebäude.
   - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor, Einfamilienhaus, Mehrfamilienhaus
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
-- **Verkehr** → `OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
+- **Verkehr** → `OEO_00000422` — Sektor für den Transport von Personen und Gütern.
   - also written: Verkehrssektor
 
 </details>
@@ -3987,7 +4127,13 @@ Axis 'spatial_scope' of Anteil. A closed list; an entry beginning 'out:' is a de
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Eine Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: Nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
+> Auf welches Gebiet bezieht sich der Wert?
+ZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.
+Steckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.
+Erst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.
+Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht.
+Teilgebiet: sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.
+Ganzes Gemeindegebiet: die Klasse reicht.
 
 <details><summary>What it may answer (2)</summary>
 
@@ -4101,29 +4247,34 @@ Axis 'technology' of Anteil. A closed list; an entry beginning 'out:' is a delib
 
 The prompt's own wording:
 
-> Welche Wärmeerzeugungstechnologie? Nur wenn die Zahl ausdrücklich einer Heiztechnik zugeordnet ist, in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, etwa "Wärmepumpen", "Gaskessel" oder "Ölheizungen". Ein Energieträger ist keine Technologie: "Erdgas" allein ist der Träger, "Gasheizung" die Technologie. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz nicht nach Technologien aufgeteilt, antworte "Summe", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und "value_raw" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt. Was unter "known" zu der Zeile steht, sagt dir, was die Zahl schon ist.
+> Welche Wärmeerzeugungstechnologie?
+Nur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa "Wärmepumpen", "Gaskessel", "Ölheizungen".
+Energieträger ist keine Technologie: "Erdgas" allein = Träger, "Gasheizung" = Technologie.
+Eigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.
+"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (10)</summary>
 
-- **Biomasseheizung** → `OEO_00020493` — A biomass powered heating technology is a combustion-based heat generation technology that describes how to combine biomass boilers, heat gain processes, biomass and energy in a specific way.
+- **Biomasseheizung** → `OEO_00020493` — Biomasseheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Biomasse.
   - also written: Holzheizung, Pelletheizung, Hackschnitzelheizung, Biomassekessel
-- **Direktelektrische Heizung** → `OEO_00020487` — An electrical heating technology is a technology that describes how to combine electrical heaters in a heat gain process with electrical energy as input in a specific way.
+- **Direktelektrische Heizung** → `OEO_00020487` — Direktelektrische Heizung: Wandelt elektrische Energie direkt in Wärme mittels elektrischer Heizelemente um.
   - also written: Stromdirektheizung, Elektroheizung, Nachtspeicherheizung
-- **Gasheizung** → `OEO_00020491` — An gas powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, natural gas and energy in a specific way.
+- **Gasheizung** → `OEO_00020491` — Gasheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Erdgas.
   - also written: Gaskessel, Gasbrennwertkessel, Gastherme
-- **Geothermie** → `OEO_00020306` — A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way.
+- **Geothermie** → `OEO_00020306` — Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung.
   - also written: Geothermieanlage, Tiefengeothermie, oberflächennahe Geothermie
-- **Solarthermie** → `OEO_00020307` — A solar thermal heat technology is a heat generation technology that describes how to combine solar heat units, solar thermal energy transformation processes, energy carriers and energy in a specific way.
+- **Solarthermie** → `OEO_00020307` — Solarthermie: Nutzt Solareinheiten und solare Umwandlungsprozesse zur Wärmeerzeugung.
   - also written: Solarthermieanlage, solarthermische Anlage
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Wärmeerzeuger
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, insgesamt, alle Technologien
-- **Wasserstoffheizung** → `OEO_00020492` — An hydrogen powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, hydrogen and energy in a specific way.
+- **Wasserstoffheizung** → `OEO_00020492` — Wasserstoffheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Wasserstoff.
   - also written: Wasserstoffkessel, H2-Kessel
-- **Wärmepumpe** → `OEO_00020486` — A heat pump technology is a heat generation technology that describes how to combine heat pumps, heat gain processes, energy carriers and energy in a specific way.
+- **Wärmepumpe** → `OEO_00020486` — Wärmepumpe: Kombiniert Wärmepumpen, Wärmegewinnungsprozesse und Energieträger zur Wärmeerzeugung.
   - also written: Wärmepumpen, Luft-Wasser-Wärmepumpe, Sole-Wasser-Wärmepumpe, Großwärmepumpe
-- **Ölheizung** → `OEO_00020490` — An oil powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, heating oil and energy in a specific way.
+- **Ölheizung** → `OEO_00020490` — Ölheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Heizöl.
   - also written: Ölkessel, Heizölkessel
 
 </details>
@@ -4251,7 +4402,9 @@ Axis 'whole' of Anteil. null unless whole_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Wovon ist diese Zahl ein Anteil? Gemeint ist das Ganze, das die Stelle selbst nennt: der Wärmebedarf, der Endenergieverbrauch, die Emissionen, die Gebäude, die Fläche. Antworte mit dem Wort des Plans. Nennt die Stelle das Ganze nicht, sagt der Plan es nicht.
+> Wovon ist diese Zahl ein Anteil? Das Ganze, das die Stelle selbst nennt: Wärmebedarf, Endenergieverbrauch, Emissionen, Gebäude, Fläche.
+Antworte mit dem Wort des Plans.
+Nennt die Stelle das Ganze nicht, sagt der Plan es nicht.
 
 ### `whole_link_quote`
 
@@ -4406,7 +4559,7 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `frame_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `review_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `compute_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
-- `read`: `asked`, `corrected`, `doc`, `failed`, `fetched`, `kind`, `missed`, `owner`, `parameter`, `searched`, `unanswered`, `unread`, `values`, `why`
+- `read`: `asked`, `corrected`, `doc`, `failed`, `kind`, `owner`, `parameter`, `unanswered`, `unread`, `values`, `why`
 - `comb`: `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `kind`, `missed`, `open`, `owner`, `parameter`, `rows`, `searched`
 - `seek`: `doc`, `kind`, `owner`, `parameter`, `rank`
 - `seek_probe`: `doc`, `parameter`, `per`, `text`

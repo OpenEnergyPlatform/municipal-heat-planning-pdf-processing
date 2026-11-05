@@ -39,6 +39,8 @@ SCENARIOS = ("status_quo", "trend", "target", "unknown")
 # The steps that read a group of coordinates: the survey of the whole plan,
 # or the reading of one parameter's passages.
 READ_IN = ("survey", "reading")
+# Which definition of a parameter a group's requests show (`Group`).
+DEFINITIONS = ("brief", "full")
 # The coordinate that names a number's entry of units_accepted.
 UNIT = "unit"
 
@@ -87,6 +89,12 @@ class Axis:
     # what each entry means, and nothing did: the model was given a class
     # identifier and a list of German words and asked to decide by meaning.
     definitions: dict = field(default_factory=dict)
+    # target URI -> one line in the profile's language saying what the entry
+    # means, shown instead of its definition (owner decision 2026-11-05,
+    # ticket 26): the ontology's English sentences were a third of every list
+    # a classification request showed. Written once by the model from the
+    # definition, which stays beside it to say when the line is due again.
+    glosses: dict = field(default_factory=dict)
     type: Optional[str] = None             # "int" for years, "text" for wording
     enum: Optional[tuple] = None
     required: bool = False
@@ -151,6 +159,13 @@ class Parameter:
     unit_names_period: dict = field(default_factory=dict)  # unit -> bool
     vocabulary: Optional[dict] = None      # category parameters: uri -> labels
     definitions: dict = field(default_factory=dict)
+    glosses: dict = field(default_factory=dict)   # as on an axis
+    # What a value of this parameter is, in one paragraph (owner decision
+    # 2026-11-05, ticket 26). The requests that find values and the groups
+    # that do not classify them show this; a group whose spec entry says
+    # "definition": "full" shows `description`, and so does every request
+    # where it is None.
+    brief: Optional[str] = None
     # A category whose closed list is real but per document, filled in by the
     # profile before the harvest. Same rule as a dynamic axis, one level up.
     vocabulary_dynamic: bool = False
@@ -212,6 +227,11 @@ class Group:
     read_in: str
     # Where a plan prints the group, in the words the prompts show.
     where: str
+    # Whether its requests show a parameter's full definition rather than
+    # its `brief` (spec: "definition": "full"): the group that classifies a
+    # value needs every distinction the definition draws, the others only
+    # what a value of the parameter is (owner decision 2026-11-05, ticket 26).
+    full_definition: bool = False
 
 
 @dataclass
@@ -242,18 +262,21 @@ class Spec:
 
 
 def _vocabulary(path: str, raw):
-    """(uri -> spellings, uri -> definition) from either spec form.
+    """(uri -> spellings, uri -> definition, uri -> gloss) from either spec
+    form.
 
     A list is the short form and still the common one: the entry is its
     spellings and the first is what the model is offered. An object adds the
     one thing the list could not carry -- what the term MEANS, in the
-    ontology's own words -- without moving the spellings anywhere else.
+    ontology's own words -- without moving the spellings anywhere else, and
+    may add that meaning in one line of the profile's language ("gloss"),
+    which a request shows instead.
     """
     if raw is None:
-        return None, {}
+        return None, {}, {}
     if not isinstance(raw, dict) or not raw:
         _fail(path, "vocabulary must be a non-empty object of uri -> labels")
-    spellings, definitions = {}, {}
+    spellings, definitions, glosses = {}, {}, {}
     for uri, entry in raw.items():
         if isinstance(entry, dict):
             label = entry.get("label")
@@ -268,15 +291,23 @@ def _vocabulary(path: str, raw):
                 if not isinstance(meaning, str) or not meaning.strip():
                     _fail(f"{path}.{uri}", "definition must be a sentence")
                 definitions[uri] = meaning.strip()
+            gloss = entry.get("gloss")
+            if gloss is not None:
+                if not isinstance(gloss, str) or not gloss.strip():
+                    _fail(f"{path}.{uri}", "gloss must be a sentence")
+                if meaning is None:
+                    _fail(f"{path}.{uri}", "a gloss says a definition in "
+                                           "short, so it needs one")
+                glosses[uri] = gloss.strip()
         else:
             spellings[uri] = entry
-    return spellings, definitions
+    return spellings, definitions, glosses
 
 
 def _validate_axis(path: str, name: str, raw) -> Axis:
     if not isinstance(raw, dict):
         _fail(path, "axis must be an object")
-    vocabulary, definitions = _vocabulary(path, raw.get("vocabulary"))
+    vocabulary, definitions, glosses = _vocabulary(path, raw.get("vocabulary"))
     axis_type = raw.get("type")
     enum = raw.get("enum")
     dynamic = bool(raw.get("dynamic", False))
@@ -346,7 +377,7 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
     return Axis(name=name, vocabulary=vocabulary, type=axis_type,
                 enum=enum, required=bool(raw.get("required", False)),
                 dynamic=dynamic, question=question, derive=derive,
-                kg=kg, definitions=definitions)
+                kg=kg, definitions=definitions, glosses=glosses)
 
 
 def _validate_example(path: str, raw, value_type: str,
@@ -433,8 +464,13 @@ def _validate_parameter(path: str, raw) -> Parameter:
     units: dict = {}
     unit_names_period: dict = {}
     unit_target = raw.get("unit_target")
-    vocabulary, value_definitions = _vocabulary(f"{path}.vocabulary", raw.get("vocabulary"))
+    vocabulary, value_definitions, value_glosses = _vocabulary(
+        f"{path}.vocabulary", raw.get("vocabulary"))
     vocabulary_dynamic = bool(raw.get("vocabulary_dynamic", False))
+    brief = raw.get("brief")
+    if brief is not None and (not isinstance(brief, str)
+                              or not brief.strip()):
+        _fail(f"{path}.brief", "a non-empty string when given")
     if value_type in NUMERIC_TYPES:
         if not isinstance(unit_target, str) or not unit_target.strip():
             _fail(f"{path}.unit_target",
@@ -507,6 +543,8 @@ def _validate_parameter(path: str, raw) -> Parameter:
                      integrated=bool(raw.get("integrated", True)),
                      unit_names_period=unit_names_period,
                      vocabulary=vocabulary, definitions=value_definitions,
+                     glosses=value_glosses,
+                     brief=brief.strip() if brief else None,
                      vocabulary_dynamic=vocabulary_dynamic,
                      axes=axes, example=example, kg=raw.get("kg"))
 
@@ -593,7 +631,11 @@ def _validate_groups(raw, parameters: list, asks_unit: bool) -> dict:
                 for parameter in parameters):
             _fail(f"{path}.coordinates",
                   "a group the survey reads must be axes of one parameter")
-        groups[name] = Group(name, tuple(coordinates), read_in, where.strip())
+        definition = entry.get("definition", "brief")
+        if definition not in DEFINITIONS:
+            _fail(f"{path}.definition", f"must be one of {DEFINITIONS}")
+        groups[name] = Group(name, tuple(coordinates), read_in, where.strip(),
+                             full_definition=definition == "full")
     missing = sorted(known - set(owner))
     if missing:
         _fail("spec.groups", f"in no group: {', '.join(missing)}")
@@ -636,7 +678,8 @@ def axis_fingerprint(axis: "Axis") -> str:
         # all three decide whether an answer is still the answer to this
         # question.
         "options": {uri: {"spellings": sorted(map(str, labels or [])),
-                          "definition": (axis.definitions or {}).get(uri)}
+                          "definition": (axis.definitions or {}).get(uri),
+                          "gloss": (axis.glosses or {}).get(uri)}
                     for uri, labels in vocabulary.items()},
     })
 
@@ -656,6 +699,7 @@ def parameter_fingerprint(parameter: "Parameter") -> str:
         "uri": parameter.uri,
         "label": parameter.label,
         "description": parameter.description,
+        "brief": parameter.brief,
         "value_type": parameter.value_type,
         "unit_target": parameter.unit_target,
         "units": sorted(parameter.units_accepted or {}),

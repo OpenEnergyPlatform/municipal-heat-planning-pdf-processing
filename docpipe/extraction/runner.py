@@ -2005,15 +2005,14 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
     return None
 
 
-def make_reader(spec: Spec, image_root: Optional[Path] = None,
-                rank: Optional[Callable] = None):
+def make_reader(spec: Spec, image_root: Optional[Path] = None):
     """The reading of one parameter's passages (`reading.Reader`), or None
     when the profile writes no prompts for it or its spec names no groups.
     Two requests, each with one task and one value (owner decisions
     2026-11-04 and 2026-11-05): the next value of a passage, and one
-    group's coordinates of one value. A figure goes with its crop.
-    *rank(document_id, probes, exclude)* is the plan ranked for a sentence,
-    which the tools' "similar" lists, `make_more_sources` in a harvest."""
+    group's coordinates of one value, each group with its own system prompt
+    (`reading.group_prompts`). A figure goes with its crop. Neither request
+    has tools (owner decision 2026-11-05, ticket 26)."""
     if not spec.groups:
         return None
     try:
@@ -2021,6 +2020,8 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None,
         text_prompt = prompts.load(reading_map.READ_TEXT_PROMPT_ID)
     except (FileNotFoundError, LookupError):
         return None
+    text_prompts = reading_map.group_prompts(text_prompt,
+                                             spec.groups.values())
     client = _client()
     frame_slots = [slot for group in spec.groups_read_in("survey")
                    for slot in fields.frame_slots(spec, group.coordinates)]
@@ -2059,9 +2060,10 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None,
                  corrections=None):
         text = json.dumps(reading_map.text_payload(
             source, parameter, slots, row, group.where, context,
-            corrections), ensure_ascii=False, indent=2)
+            corrections, full=group.full_definition),
+            ensure_ascii=False, indent=2)
         return ask_in_grammar(
-            client, text_prompt,
+            client, text_prompts[group.name],
             [{"role": "user", "content": content_of(source, text)}],
             reading_map.text_response_format(slots), document_of(source),
             "read_text", slots[0].name, parameter=parameter.uri,
@@ -2070,7 +2072,7 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None,
 
     return reading_map.Reader(
         spec, ask_values, ask_text, frame_slots,
-        shown_with=reading_map.heading_of, rank=rank,
+        shown_with=reading_map.heading_of,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
         known=row_context, pool=AHEAD, trace=trace.event)
 
@@ -6814,18 +6816,22 @@ def surveyed_flow(spec: Spec, profile=None) -> bool:
     profile, not a profile to harvest the old way with: the run stops and
     names the prompt, as `spec.load` stops at a broken group (owner decision
     2026-11-04). Switching silently harvested 100 plans one coordinate at a
-    time and said so only in a log line."""
+    time and said so only in a log line. So does a group prompt whose
+    sections are not the spec's groups (`reading.group_prompts`), before a
+    request is sent rather than at the first plan's reading."""
     if not spec.groups:
         return False
     for prompt_id in SURVEY_PROMPT_IDS:
         try:
-            prompts.load(prompt_id, profile)
+            prompt = prompts.load(prompt_id, profile)
+            if prompt_id == reading_map.READ_TEXT_PROMPT_ID:
+                reading_map.group_prompts(prompt, spec.groups.values())
         except (FileNotFoundError, LookupError) as exc:
             raise LookupError(
                 f"the spec names groups, so the profile "
                 f"{getattr(profile, 'name', None) or 'in use'!r} must write "
-                f"every prompt of the survey, and {prompt_id!r} is missing: "
-                f"{exc}") from exc
+                f"every prompt of the survey, and {prompt_id!r} is missing "
+                f"or does not fit the groups: {exc}") from exc
     return True
 
 
@@ -8552,8 +8558,7 @@ def main(argv: Optional[list] = None) -> int:
             lambda doc_spec, only, scope: make_survey(
                 args.db, narrow_spec(doc_spec, only), args.out, every=every,
                 image_root=args.image_root, scope=scope),
-            lambda doc_spec: make_reader(doc_spec, args.image_root,
-                                         rank=rank),
+            lambda doc_spec: make_reader(doc_spec, args.image_root),
             lambda doc_spec: make_comber(doc_spec, rank, seek),
             lambda document_id: every(document_id, set()), pages_of,
             spec_for=spec_for, front=own,

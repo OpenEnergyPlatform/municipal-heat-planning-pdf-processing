@@ -11,9 +11,9 @@ for before it can count as not stated (owner decision 2026-11-04): the
 combing's search over the whole plan ranks the passages for it, and the run
 reads it down that list, one passage a round and every such parameter in the
 same round, until a reading of it comes back with a value the check takes or
-the list ends (owner decisions 2026-11-05, `sought_walk`). Each reading
-shows the rest of the list it has not read as its hits. What a publication
-says of itself (the profile's FRONT_PAGE_PARAMETERS) is read from its first
+the list ends (owner decisions 2026-11-05, `sought_walk`). A reading sees
+only its passage (owner decision 2026-11-05: no tools in reading, the walk
+reads the list). What a publication says of itself (the profile's FRONT_PAGE_PARAMETERS) is read from its first
 page on as well, page by page, until a title came, whatever the survey
 named (owner decisions 2026-11-05, `front_walk`): the first page with a
 title is its title page, and a chapter that presents other studies comes
@@ -99,7 +99,7 @@ def joined(found: Found, also: Found) -> Found:
     for owner in found.unanswered + also.unanswered:
         if owner not in out.answers and owner not in out.unanswered:
             out.unanswered.append(owner)
-    out.hits = {**found.hits, **also.hits}
+    out.walked = {**found.walked, **also.walked}
     return out
 
 
@@ -177,16 +177,14 @@ def taken_values(read) -> list:
 def sought_survey(found: Found, lists: dict, step: int) -> Found:
     """The survey of one round of the walk down *lists* ({parameter uri:
     [Source]}): each parameter named for the passage at *step* of its list,
-    with the rest of its list beside it (`Found.hits`), so its reading can go
-    on to the passages the walk has not read yet. What the survey of the
-    whole plan (*found*) said of every passage stands beside it
-    (`carried`)."""
+    and no other passage of the list, since a reading has no tools to go on
+    with (owner decision 2026-11-05). What the survey of the whole plan
+    (*found*) said of every passage stands beside it (`carried`)."""
     out = carried(found)
     for uri, listed in lists.items():
         if step < len(listed):
             owner = (listed[step].owner_kind, listed[step].owner_id)
             merge(out, [Answer(owner, [uri])])
-            out.hits[(uri,) + owner] = list(listed[step + 1:])
     return out
 
 
@@ -202,9 +200,8 @@ def sought_walk(found: Found, lists: dict, read: Callable,
     model fetched none of its hits itself, and an answer the fold refuses is
     no value). A reading that came to no reply ends nothing. Every passage
     walked names its parameter in the survey returned, so it is one of the
-    parameter's sources (`taken_of`), and stands under `hits` with the rest
-    of the list its reading showed, in the order the walk read it
-    (`walks_of`).
+    parameter's sources (`taken_of`), and stands under `walked` with its
+    place in the list, in the order the walk read it (`walks_of`).
     *seen(uri, owner, rank)* hears of each passage before it is read,
     *rank* its place in the list, from 1. None where *halted()* stopped the
     walk."""
@@ -216,7 +213,7 @@ def sought_walk(found: Found, lists: dict, read: Callable,
         for uri, listed in walking.items():
             owner = (listed[step].owner_kind, listed[step].owner_id)
             merge(walked, [Answer(owner, [uri])])
-            walked.hits[(uri,) + owner] = list(listed[step + 1:])
+            walked.walked[(uri,) + owner] = step + 1
             if seen is not None:
                 seen(uri, owner, step + 1)
         got = read(sought_survey(found, walking, step))
@@ -237,7 +234,7 @@ def walks_of(sought: Found) -> dict:
     `Found.passages_of`, which is the order passages joined the survey, and a
     passage another parameter read first joined it earlier."""
     out: dict = {}
-    for uri, kind, owner in sought.hits:
+    for uri, kind, owner in sought.walked:
         out.setdefault(uri, []).append((kind, owner))
     return out
 

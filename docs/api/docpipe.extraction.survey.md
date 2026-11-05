@@ -63,7 +63,7 @@ Fields:
 - `complete: bool`
 - `answers: dict = field(default_factory=dict)`: owner -> Answer
 - `unanswered: list = field(default_factory=list)`
-- `hits: dict = field(default_factory=dict)`: (parameter uri, owner kind, owner id) -> [Source]: the ranked list a search of the whole plan for that parameter named the passage from, which every request of the passage's reading for it shows first (`reading._Job.gathered`). A list belongs to the question it was searched for: another parameter read in the same passage shows none.
+- `walked: dict = field(default_factory=dict)`: (parameter uri, owner kind, owner id) -> place from 1: each passage the walk down a search's list read a parameter in, with its place in that list, in the order read (`surveyed.sought_walk`, `walks_of`).
 
 #### Found.passages_of
 

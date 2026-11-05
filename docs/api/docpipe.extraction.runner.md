@@ -1690,17 +1690,16 @@ handed, as every request of the harvest is.
 ### make_reader
 
 ```python
-def make_reader(spec: Spec, image_root: Optional[Path] = None,
-                rank: Optional[Callable] = None)
+def make_reader(spec: Spec, image_root: Optional[Path] = None)
 ```
 
 The reading of one parameter's passages (`reading.Reader`), or None
 when the profile writes no prompts for it or its spec names no groups.
 Two requests, each with one task and one value (owner decisions
 2026-11-04 and 2026-11-05): the next value of a passage, and one
-group's coordinates of one value. A figure goes with its crop.
-*rank(document_id, probes, exclude)* is the plan ranked for a sentence,
-which the tools' "similar" lists, `make_more_sources` in a harvest.
+group's coordinates of one value, each group with its own system prompt
+(`reading.group_prompts`). A figure goes with its crop. Neither request
+has tools (owner decision 2026-11-05, ticket 26).
 
 ### make_comber
 
@@ -2364,7 +2363,9 @@ A spec with groups whose profile lacks a prompt of the survey is a broken
 profile, not a profile to harvest the old way with: the run stops and
 names the prompt, as `spec.load` stops at a broken group (owner decision
 2026-11-04). Switching silently harvested 100 plans one coordinate at a
-time and said so only in a log line.
+time and said so only in a log line. So does a group prompt whose
+sections are not the spec's groups (`reading.group_prompts`), before a
+request is sent rather than at the first plan's reading.
 
 ### producer
 

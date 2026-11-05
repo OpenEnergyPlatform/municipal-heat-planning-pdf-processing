@@ -1033,9 +1033,6 @@ def trace_schema() -> dict:
                  "asked": {"type": "integer"},
                  "corrected": {"type": "integer"}, "failed": by_field,
                  "unanswered": {"type": "integer"},
-                 "fetched": {"type": "integer"},
-                 "searched": {"type": "integer"},
-                 "missed": {"type": "integer"},
                  "unread": {"type": "boolean"},
                  "why": {"enum": ["cut_off", "no_answer"]}},
         # The comb of what a reading left open (combing.py): per value and
@@ -1104,8 +1101,7 @@ def trace_schema() -> dict:
                             "value"}
            for stage in ("phrase", "frame", "review", "compute")},
         "comb": {"group"},
-        "read": {"corrected", "failed", "unanswered", "fetched", "searched",
-                 "missed", "unread", "why"},
+        "read": {"corrected", "failed", "unanswered", "unread", "why"},
         "completion": {"filled", "id", "key", "matched"},
     }
     # Optional on every event: what the run could not always know. Requiring

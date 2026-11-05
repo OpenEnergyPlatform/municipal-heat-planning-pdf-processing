@@ -11,14 +11,15 @@ its sentence or its table row, and for a number in a table also the head of
 its column as printed, which tells two equal numbers of one row apart. Code
 reads no number by its place.
 
-A round shows the whole passage (a table with its title, its head and all its
-rows, or the survey's piece of a section), the text around a table or figure,
-the parameter, the values already read, and the reading's tools, and asks for
-the next value not yet read, until the model says there is none. A value may
-stand in any passage the round showed: the passage, the text around it, or
-one its tools fetched (owner decision 2026-11-05); it is read from the one its
-quote stands in, which joins the reading's batch, so the fold checks it there
-(`pipeline.route_claims`). A value the check refuses (its quote in no passage
+A round shows the parameter in short (its `brief`), the whole passage (a table
+with its title, its head and all its rows, or the survey's piece of a
+section), the text around a table or figure and the values already read, and
+asks for the next value not yet read, until the model says there is none. A
+value may stand in any passage the round showed: the passage, its heading or
+the text around it; it is read from the one its quote stands in, which joins
+the reading's batch, so the fold checks it there (`pipeline.route_claims`).
+The requests that read have no tools; only the combing has (owner decision
+2026-11-05, ticket 26: no reading of 2,231 in an eight-plan probe used them). A value the check refuses (its quote in no passage
 shown, its number not in its quote, whatever else the fold refuses of the
 value and its quote, such as an answer its quote does not hold or one off
 its closed list (`verify.value_refused`), a quote over several table rows
@@ -32,11 +33,15 @@ document's pairs is its year, read off the head line and not asked
 (`pipeline.with_head`, owner decision 2026-11-03); where exactly one pair has
 that year, the pair's scenario is the value's too (`pipeline.head_pair`).
 Then every group of the spec (`Spec.groups`, `groups_of`) is asked for this
-one value, its coordinates still open only: the passage first, so a server
-reads it once for all values, the value marked last, with what is already
-read of it. Each group request has its own tools and its own correction
-round, and only a group that asks a frame coordinate is shown the pairs and
-the plan's base and target years.
+one value, its coordinates still open only. A request begins with what is the
+same for every request of its parameter and group (the parameter, in full
+only where the group classifies, its questions with their lists), then what
+is the same in a plan (its base and target years), then the passage, and the
+value comes last, marked, with what is already read of it, so a server reads
+each shared beginning once (owner decision 2026-11-05, ticket 26). Each group
+has its own system prompt, its section of the prompt (`group_prompts`), and
+its own correction round, and only a group that asks a frame coordinate is
+shown the pairs and the plan's base and target years.
 
 Every coordinate asked is answered: the grammar of a group request requires
 each of them, and "the passage does not say" is one of the answers
@@ -58,9 +63,9 @@ from __future__ import annotations
 
 import collections
 import json
+import re
 import sys
 from dataclasses import dataclass, field, replace
-from functools import partial
 from typing import Callable, Optional
 
 from . import fields, lookup
@@ -88,6 +93,20 @@ NO_ANSWER = "no_answer"
 # The hits of one ranked list a request shows, per kind (owner decision
 # 2026-11-04: the best 15 sections, 20 tables and 20 figures).
 SHOWN = {"section": 15, "table": 20, "figure": 20}
+
+# How far the text around a table or figure reaches on each side of its
+# placeholder (owner decision 2026-11-05, ticket 26): at most this many
+# characters, cut at a word, and never past the placeholder of another table
+# or figure, whose numbers are not this one's.
+AROUND_CHARS = 200
+# A table's or figure's placeholder as a section's text carries it:
+# "[p153_tbl0]" or, with its caption, "[p153_tbl0: Parameter und ...]".
+ITEM_PLACEHOLDER = re.compile(r"\[(p\d+_(?:tbl|img)\d+)(?::[^\]]*)?\]")
+
+# A group's section of a prompt the groups share opens with this line; what
+# stands before the first section is every group's (`group_prompts`).
+GROUP_SECTION = re.compile(r"^<!-- group: ([A-Za-z_]+) -->[ \t]*$",
+                           re.MULTILINE)
 
 # Why the check refused a round's value, as `Read.failed` counts it: the value
 # itself, its head, or a value already read.
@@ -255,15 +274,39 @@ def heading_of(source: Source) -> list:
                    {**provenance, "owner_kind": "section"})]
 
 
-def around_of(source: Source, passages: dict,
-              budget: Optional[int]) -> Optional[Source]:
+def _words_before(text: str, limit: int) -> str:
+    """The end of *text*, at most *limit* characters, starting at a word."""
+    if len(text) <= limit:
+        return text
+    cut = text[-limit:]
+    if not text[-limit - 1].isspace() and not cut[0].isspace():
+        space = re.search(r"\s", cut)
+        cut = cut[space.end():] if space else ""
+    return cut
+
+
+def _words_after(text: str, limit: int) -> str:
+    """The start of *text*, at most *limit* characters, ending at a word."""
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    if not text[limit].isspace() and not cut[-1].isspace():
+        spaces = [m.start() for m in re.finditer(r"\s", cut)]
+        cut = cut[:spaces[-1]] if spaces else ""
+    return cut
+
+
+def around_of(source: Source, passages: dict) -> Optional[Source]:
     """The text of the section a table or figure stands in, as its request
-    shows it (owner decision 2026-11-04): the sentence that announces it,
-    the heading over it and the paragraph under it, where its year and its
-    scenario are printed. The whole section when it fits *budget*, the
-    survey's two pages, else that many characters around the table's place
-    in it. None for a section, and for a table or figure whose section is
-    not among *passages*."""
+    shows it: its placeholder with at most `AROUND_CHARS` characters on each
+    side, cut at a word, and never past another table's or figure's
+    placeholder (owner decision 2026-11-05, ticket 26; before, the whole
+    section up to two pages, which showed a neighbouring area's numbers). The
+    sentence that announces the table and the line under it, where its year
+    and its scenario are printed, stay. One stretch of the section's text, so
+    a quote from it is a quote from the section. None for a section, for a
+    table or figure whose section is not among *passages*, and for one whose
+    placeholder its section does not print: then its place is unknown."""
     provenance = source.provenance or {}
     parent = provenance.get("parent_section")
     if source.owner_kind == "section" or parent is None:
@@ -272,10 +315,18 @@ def around_of(source: Source, passages: dict,
     if section is None or not section.text:
         return None
     text = section.text
-    if budget and len(text) > budget:
-        block = provenance.get("block_id") or ""
-        text = window_around(text, f"[{block}", budget)
-    return replace(section, text=text)
+    block = provenance.get("block_id")
+    items = list(ITEM_PLACEHOLDER.finditer(text))
+    own = next((m for m in items if m.group(1) == block), None)
+    if own is None:
+        return None
+    start = max((m.end() for m in items if m.end() <= own.start()),
+                default=0)
+    end = min((m.start() for m in items if m.start() >= own.end()),
+              default=len(text))
+    before = _words_before(text[start:own.start()], AROUND_CHARS)
+    after = _words_after(text[own.end():end], AROUND_CHARS)
+    return replace(section, text=(before + own.group() + after).strip())
 
 
 # -- what a reply may ask of the rest of the plan -----------------------------
@@ -469,9 +520,14 @@ def gather(ask: Callable, reply: dict, gathered: Gathered, order: list,
 
 # -- the values of a passage, one per round -------------------------------------
 
-def parameter_shown(parameter) -> dict:
+def parameter_shown(parameter, full: bool = True) -> dict:
+    """The parameter as a request shows it: with its full definition, or,
+    without *full*, with its `brief` where the spec writes one (owner
+    decision 2026-11-05, ticket 26)."""
+    definition = parameter.description if full \
+        else (getattr(parameter, "brief", None) or parameter.description)
     return {"key": parameter.uri, "label": parameter.label,
-            "definition": parameter.description}
+            "definition": definition}
 
 
 def value_classes(parameter) -> dict:
@@ -508,22 +564,21 @@ def shown_value(claim: dict) -> dict:
 
 def values_payload(source: Source, parameter, context: dict, read: list,
                    corrections: Optional[list] = None) -> dict:
-    """One round of the values of a passage: the passage, the text around a
-    table or figure and the parameter, a category parameter with its entries
-    (`value_classes`), first, the values already read (*read*) and what the
-    round fetched with its tools after them; with *corrections* the value of
-    the round the check refused, asked once more. Nothing of the value's
-    coordinates."""
+    """One round of the values of a passage: the parameter in short, a
+    category parameter with its entries (`value_classes`), first, the same
+    in every round of the parameter; then the passage and the text around a
+    table or figure, the same in every round of the passage; the values
+    already read (*read*) last; with *corrections* the value of the round
+    the check refused, asked once more (ticket 26: what requests share
+    stands first). Nothing of the value's coordinates."""
     classes = value_classes(parameter)
-    payload = {"source": source_shown(source),
-               **({"around": context["around"]} if context.get("around")
-                  else {}),
-               "parameter": {**parameter_shown(parameter),
+    payload = {"parameter": {**parameter_shown(parameter, full=False),
                              **({"value_classes": classes} if classes
                                 else {})},
-               "read": list(read),
-               **{key: value for key, value in context.items()
-                  if key != "around"}}
+               "source": source_shown(source),
+               **({"around": context["around"]} if context.get("around")
+                  else {}),
+               "read": list(read)}
     if corrections:
         payload["corrections"] = corrections
     return payload
@@ -548,8 +603,7 @@ def values_response_format(parameter, head: bool = False) -> dict:
     entry = {"type": "object", "properties": properties,
              "required": ["value", "quote"], "additionalProperties": False}
     schema = {"type": "object",
-              "properties": {"next": {"anyOf": [entry, {"type": "null"}]},
-                             "more": more_schema()},
+              "properties": {"next": {"anyOf": [entry, {"type": "null"}]}},
               "required": ["next"], "additionalProperties": False}
     return {"type": "json_schema",
             "json_schema": {"name": "values_reply", "schema": schema}}
@@ -704,33 +758,33 @@ def round_failure(claim: dict, shown: list, read: list,
 
 def text_payload(source: Source, parameter, slots: list, row: Row,
                  where: str, context: dict,
-                 corrections: Optional[list] = None) -> dict:
-    """One group's request for one value: the passage, the text around a
-    table or figure, the parameter, the group's coordinates with the spec's
-    words for where a plan prints them (*where*) and, for a frame group, the
-    pairs and years (`group_context`) first; then the value with its quote,
-    under "passage" the passage it stands in where that is neither the
-    passage nor the text around it, and, under "read", what is already read
-    of it in the plan's words, and what the request fetched with its tools;
-    with *corrections* the same request asked once more."""
+                 corrections: Optional[list] = None,
+                 full: bool = False) -> dict:
+    """One group's request for one value, what its requests share first
+    (ticket 26): the parameter, with its full definition only where *full*
+    (the group that classifies, `Group.full_definition`), and the group's
+    coordinates with the spec's words for where a plan prints them
+    (*where*), the same for every value of the parameter; then, for a frame
+    group, the plan's base and target years, the same in a plan; then the
+    passage, the text around a table or figure and, for a frame group, the
+    survey's pairs of the passage (`group_context`); the value last, with
+    its quote and, under "read", what is already read of it in the plan's
+    words; with *corrections* the same request asked once more."""
     value = shown_value(row.claim)
-    if context.get("passage"):
-        value["passage"] = context["passage"]
     if context.get("read"):
         value["read"] = context["read"]
-    payload = {"source": source_shown(source),
-               **({"around": context["around"]} if context.get("around")
-                  else {}),
-               "parameter": parameter_shown(parameter),
+    payload = {"parameter": parameter_shown(parameter, full=full),
                "coordinates": {slot.name: coordinate_shown(slot)
                                for slot in slots},
                "where": where,
-               **{key: context[key] for key in ("known", "base_years",
-                                                 "target_years")
+               **{key: context[key] for key in ("base_years", "target_years")
                   if key in context},
-               "value": value,
-               **{key: context[key] for key in ("more", "hits", "not_found")
-                  if key in context}}
+               "source": source_shown(source),
+               **({"around": context["around"]} if context.get("around")
+                  else {}),
+               **({"known": context["known"]} if "known" in context
+                  else {}),
+               "value": value}
     if corrections:
         payload["corrections"] = corrections
     return payload
@@ -738,16 +792,49 @@ def text_payload(source: Source, parameter, slots: list, row: Row,
 
 def text_response_format(slots: list) -> dict:
     """Every coordinate of the group for the one value the request shows,
-    each with the sentence of one the passage does not state (`probe`), and
-    what the reply asks of the rest of the plan."""
+    each with the sentence of one the passage does not state (`probe`)."""
     properties = {slot.name: answer_schema(slot, probe=True)
                   for slot in slots}
-    properties["more"] = more_schema()
     schema = {"type": "object", "properties": properties,
               "required": [slot.name for slot in slots],
               "additionalProperties": False}
     return {"type": "json_schema",
             "json_schema": {"name": "text_reply", "schema": schema}}
+
+
+def group_prompts(prompt, groups) -> dict:
+    """{group name: the prompt its requests send}: what stands before the
+    first section (`GROUP_SECTION`) is every group's, then the group's own
+    section (owner decision 2026-11-05, ticket 26: one system prompt per kind
+    of request, with only its rules). A prompt without sections is every
+    group's as it is, the one prompt of a profile with one group. A prompt
+    with sections has one for each of *groups* and none for any other group:
+    a group without its rules, or rules no group reads, raises LookupError,
+    which the run raises at its start (`runner.surveyed_flow`)."""
+    marks = list(GROUP_SECTION.finditer(prompt.text))
+    names = [group.name if hasattr(group, "name") else group
+             for group in groups]
+    if not marks:
+        return {name: prompt for name in names}
+    common = prompt.text[:marks[0].start()]
+    sections: dict = {}
+    for index, mark in enumerate(marks):
+        end = marks[index + 1].start() if index + 1 < len(marks) \
+            else len(prompt.text)
+        if mark.group(1) in sections:
+            raise LookupError(f"{prompt.id}: two sections for group "
+                              f"{mark.group(1)!r}")
+        sections[mark.group(1)] = prompt.text[mark.end():end]
+    missing = [name for name in names if name not in sections]
+    extra = sorted(set(sections) - set(names))
+    if missing or extra:
+        raise LookupError(
+            f"{prompt.id}: the spec's groups and the prompt's sections "
+            f"differ: no section for {missing}, a section for no group "
+            f"{extra}")
+    return {name: replace(prompt, text=(common.rstrip() + "\n\n"
+                                        + sections[name].strip() + "\n"))
+            for name in names}
 
 
 def answer_of(entry: dict) -> dict:
@@ -844,9 +931,6 @@ class Read:
     # what the check refused of the first replies, by reason
     failed: dict = field(default_factory=dict)
     unanswered: int = 0           # coordinates no reply answered
-    fetched: int = 0              # passages shown under "more"
-    searched: int = 0             # hit lists shown under "hits"
-    missed: int = 0               # asks that found nothing
     # Per claim, in its order: the sentences its group replies wrote to the
     # coordinates they found unstated, as the plan would print them,
     # {coordinate: sentence}, which the combing ranks with. Not on the claim:
@@ -864,28 +948,21 @@ class _Job:
     slots: list
     context: dict
     bases: list
-    origin: tuple
-    parent: tuple
     fixed: list
     frames: list
     merged: Callable
     passages: dict
-    budget: Optional[int]
     result: Read
     pairs: list = field(default_factory=list)
-    hits: list = field(default_factory=list)
-    fetched: list = field(default_factory=list)
     # the piece of the passage each value was read in, by its label
     views: dict = field(default_factory=dict)
-    # the plan ranked for sentences, (probes, exclude) -> [Source]
-    rank: Optional[Callable] = None
     # the sentences of each value's unstated coordinates, by its label
     probes: dict = field(default_factory=dict)
 
-    def passages_shown(self, gathered: Gathered) -> list:
+    def passages_shown(self) -> list:
         """Every passage a request of this reading shows: the passage, its
-        heading and the text around it, and what its tools fetched."""
-        return [self.source, *self.fixed, *gathered.sources]
+        heading and the text around it."""
+        return [self.source, *self.fixed]
 
     def label_of(self, passage: Source) -> str:
         """The batch's label of *passage*, which joins the batch where it is
@@ -900,19 +977,6 @@ class _Job:
         batch.items.append(WorkItem(self.document_id, self.parameter,
                                     passage))
         return batch.label(len(batch.items) - 1)
-
-    def gathered(self) -> Gathered:
-        """The tools of one request, the ranked list a search of the whole
-        plan read this passage for (*hits*) shown first."""
-        out = Gathered(seen={self.origin, self.parent},
-                       cursor={"next": self.origin, "previous": self.parent},
-                       rank=self.rank)
-        listed = [source for source in shown_hits(self.hits)
-                  if (source.owner_kind, source.owner_id) not in out.seen]
-        if listed:
-            out.list_hits([((s.owner_kind, s.owner_id), lookup.title_of(s),
-                            first_line(s)) for s in listed])
-        return out
 
 
 class Reader:
@@ -929,17 +993,15 @@ class Reader:
     *shown_with(source)* is what a coordinate's quote may stand in besides
     the passage: the heading it stands under (`heading_of`).
     *known(claim, asked)* is what a value has read in the plan's words
-    (`runner.row_context`). *rank(document_id, probes, exclude)* is the
-    plan's passages best first for sentences, which the tools' "similar"
-    lists (`runner.make_more_sources`); None asks it of nothing. *pool*
-    reads passages side by side.
+    (`runner.row_context`). *pool* reads passages side by side. No request
+    of the reading has tools (owner decision 2026-11-05, ticket 26).
     """
 
     def __init__(self, spec, ask_values: Callable, ask_text: Callable,
                  frame_slots: list, *, shown_with: Optional[Callable] = None,
                  bases: Optional[Callable] = None,
                  known: Optional[Callable] = None,
-                 rank: Optional[Callable] = None, pool=None, trace=None):
+                 pool=None, trace=None):
         self.spec = spec
         self.ask_values = ask_values
         self.ask_text = ask_text
@@ -947,7 +1009,6 @@ class Reader:
         self.shown_with = shown_with or (lambda source: [])
         self.bases = bases or (lambda pairs: [])
         self.known = known or (lambda claim, asked: {})
-        self.rank = rank
         self.pool = pool
         self.trace = trace
 
@@ -955,9 +1016,7 @@ class Reader:
                  budget: Optional[int] = None) -> list:
         """One Read per parameter and passage the survey named for it. A
         section or figure longer than *budget* characters, the survey's two
-        pages, is read in the survey's pieces. A passage a search of the
-        whole plan named for a parameter (`Found.hits`) shows that search's
-        list in its reading for that parameter."""
+        pages, is read in the survey's pieces."""
         from .survey import pieces
 
         pairs: list = []
@@ -965,7 +1024,6 @@ class Reader:
             for one in answer.tuples.get("frame", ()):
                 if one not in pairs:
                     pairs.append(one)
-        hits = getattr(found, "hits", None) or {}
         jobs = []
         for parameter in self.spec.parameters:
             for owner in found.passages_of(parameter.uri):
@@ -986,34 +1044,29 @@ class Reader:
             owner = (source.owner_kind, source.owner_id)
             return self.read(document_id, parameter, source,
                              found.tuples_at(owner, "frame"), pairs, passages,
-                             shown=shown, budget=budget,
-                             hits=hits.get((parameter.uri,) + owner))
+                             shown=shown)
         if self.pool is None:
             return [one(job) for job in jobs]
         return list(self.pool.map(one, jobs))
 
-    def context_of(self, source: Source, tuples: list, passages: dict,
-                   budget: Optional[int]) -> tuple:
+    def context_of(self, source: Source, tuples: list,
+                   passages: dict) -> tuple:
         """(what the requests of a passage show beside it, the section it
         was cut from): the text around a table or figure (`around_of`) and
         the survey's pairs of the passage, which only a group that asks a
         frame coordinate shows (`group_context`)."""
-        around = around_of(source, passages, budget)
+        around = around_of(source, passages)
         context = {"around": around.text} if around is not None else {}
         context["known"] = known_of(tuples, self.frame_slots)
         return context, around
 
     def read(self, document_id: int, parameter, source: Source,
              tuples: list, pairs: list, passages: dict,
-             shown: Optional[Source] = None,
-             budget: Optional[int] = None,
-             hits: Optional[list] = None) -> Read:
+             shown: Optional[Source] = None) -> Read:
         """*source* is the passage a value is verified against, *shown* the
-        piece of it the requests show, *budget* the survey's two pages,
-        *hits* the ranked list a search of the whole plan read it for. The
-        values in rounds (`_values`), each placed in its table
-        (`_placed`), then each group of the spec for each value
-        (`_value_group`)."""
+        piece of it the requests show. The values in rounds (`_values`),
+        each placed in its table (`_placed`), then each group of the spec for
+        each value (`_value_group`)."""
         shown = shown or source
         slots = slots_of(self.spec, parameter)
         # The reading's spec rides on the batch, so the fold checks a value
@@ -1022,10 +1075,7 @@ class Reader:
                       [WorkItem(document_id, parameter, source)],
                       spec=self.spec)
         bases = self.bases(pairs)
-        context, around = self.context_of(source, tuples, passages, budget)
-        origin = (source.owner_kind, source.owner_id)
-        parent = (around.owner_kind, around.owner_id) \
-            if around is not None else origin
+        context, around = self.context_of(source, tuples, passages)
         result = Read(batch, [])
         # What a coordinate's quote may stand in besides what a request
         # shows of the passage: its heading, the text around it, the frame.
@@ -1048,10 +1098,8 @@ class Reader:
             return failed
 
         job = _Job(document_id, parameter, source, shown, slots, context,
-                   bases, origin, parent, fixed, frames, merged, passages,
-                   budget, result, pairs=list(pairs), hits=list(hits or ()),
-                   rank=(partial(self.rank, document_id)
-                         if self.rank is not None else None))
+                   bases, fixed, frames, merged, passages, result,
+                   pairs=list(pairs))
         rows, views = self._values(job)
         if not views:
             result.unread = True
@@ -1069,7 +1117,7 @@ class Reader:
         for row in rows:
             for group, group_slots in groups:
                 self._value_group(job, row, group, group_slots)
-        evidence = list(views) + fixed + job.fetched + frames
+        evidence = list(views) + fixed + frames
         for axis in fields.axis_slots(parameter):
             fields.apply_derived(rows, axis)
         inherit(rows, [s for s in self.frame_slots
@@ -1083,18 +1131,8 @@ class Reader:
                        kind=source.owner_kind, owner=source.owner_id,
                        values=len(rows), asked=result.asked,
                        corrected=result.corrected, failed=result.failed,
-                       unanswered=result.unanswered, fetched=result.fetched,
-                       searched=result.searched, missed=result.missed)
+                       unanswered=result.unanswered)
         return result
-
-    @staticmethod
-    def _noted(job: _Job, gathered: Gathered) -> None:
-        """What one request's tools fetched, onto the reading of the
-        passage."""
-        job.fetched.extend(gathered.sources)
-        job.result.fetched += len(gathered.sources)
-        job.result.searched += len(gathered.hits)
-        job.result.missed += len(gathered.missed)
 
     @staticmethod
     def _probed(job: _Job, row: Row, reply: dict, asked: list) -> None:
@@ -1143,19 +1181,17 @@ class Reader:
         further value; CUT or None where its first round came to nothing. A
         value the check refuses is asked once more with the reason; one
         named again is asked once more, and named again it ends the rounds
-        (owner decision 2026-11-05). The rounds of a piece share their
-        tools: what one fetched, the next one shows."""
+        (owner decision 2026-11-05)."""
         result = job.result
         head = with_head_asked(job.parameter, view)
-        gathered = job.gathered()
         shows = ({"around": job.context["around"]}
                  if job.context.get("around") else {})
+        shown = job.passages_shown()
         rows: list = []
         read: list = []
 
         def ask(corrections: Optional[list] = None):
-            return self.ask_values(view, job.parameter,
-                                   {**shows, **gathered.context()},
+            return self.ask_values(view, job.parameter, dict(shows),
                                    list(read), corrections)
         first = True
         while True:
@@ -1163,19 +1199,14 @@ class Reader:
             result.asked += 1
             if not isinstance(reply, dict):
                 if first:
-                    self._noted(job, gathered)
                     return CUT if reply == CUT else None
                 break
             first = False
-            reply, more = gather(ask, reply, gathered,
-                                 list(job.passages.values()), job.passages,
-                                 job.budget)
-            result.asked += more
             claim = claim_of(reply, head)
             if claim is None:
                 break
-            failure = round_failure(claim, job.passages_shown(gathered),
-                                    [r.claim for r in rows], job.parameter)
+            failure = round_failure(claim, shown, [r.claim for r in rows],
+                                    job.parameter)
             if failure is not None:
                 kind, reason = failure
                 result.failed = dict(collections.Counter(result.failed)
@@ -1186,7 +1217,7 @@ class Reader:
                 claim = claim_of(again, head)
                 if claim is None:
                     break
-                failure = round_failure(claim, job.passages_shown(gathered),
+                failure = round_failure(claim, shown,
                                         [r.claim for r in rows],
                                         job.parameter)
                 if failure is not None and failure[0] == REPEATED:
@@ -1195,13 +1226,12 @@ class Reader:
                     # Asked once: a head no head line prints says nothing of
                     # the column, and the number's own cell may still.
                     claim.pop("head", None)
-            passage = passage_of(claim, job.passages_shown(gathered))
+            passage = passage_of(claim, shown)
             if passage is not None:
                 claim["source"] = job.label_of(passage)
             rows.append(Row(label=row_label(start + len(rows)), item_index=0,
                             claim=claim))
             read.append(shown_value(claim))
-        self._noted(job, gathered)
         return rows
 
     def _placed(self, job: _Job, row: Row) -> None:
@@ -1243,42 +1273,27 @@ class Reader:
     def _value_group(self, job: _Job, row: Row, group,
                      group_slots: list) -> None:
         """One group's coordinates of one value, those still open only, in a
-        request with the group's own tools; what the check refuses asked
-        once more, by its coordinate."""
+        request of the group's own; what the check refuses asked once more,
+        by its coordinate."""
         asked = [slot for slot in group_slots
                  if row.claim.get(f"{slot.name}_state") != READ]
         if not asked:
             return
         result = job.result
         view = job.views.get(row.label, job.shown)
-        gathered = job.gathered()
         base = group_context(job.context, asked, self.frame_slots, job.bases)
         read = self.known(row.claim, [slot.name for slot in asked])
-        # A value read from a passage its round fetched is shown with it.
-        own = source_of(job.result.batch, row.claim)
-        apart = [] if any(own is s for s in (job.source, *job.fixed)) \
-            else [own]
-        if apart:
-            base["passage"] = {"kind": own.owner_kind,
-                               "title": lookup.title_of(own),
-                               "text": own.text}
 
         def ask(corrections: Optional[list] = None):
             return self.ask_text(view, job.parameter, group, asked, row,
-                                 {**base, **({"read": read} if read else {}),
-                                  **gathered.context()}, corrections)
+                                 {**base, **({"read": read} if read else {})},
+                                 corrections)
         reply = ask()
         result.asked += 1
         if not isinstance(reply, dict):
-            self._noted(job, gathered)
             return
-        reply, more = gather(ask, reply, gathered,
-                             list(job.passages.values()), job.passages,
-                             job.budget)
-        result.asked += more
-        self._noted(job, gathered)
         self._probed(job, row, reply, asked)
-        evidence = [view] + job.fixed + apart + gathered.sources + job.frames
+        evidence = [view] + job.fixed + job.frames
         failed = job.merged([row], {slot.name: value_replies(reply, slot,
                                                              row.label)
                                     for slot in asked}, evidence)

@@ -39,7 +39,7 @@ Fields:
 - `label: str`: what the model answers
 - `uri: str`: what the label resolves to
 - `synonyms: tuple = ()`: the other spellings the spec knows
-- `definition: str = ""`: what the ontology says the term means
+- `definition: str = ""`: What the term means, as the request shows it: the spec's gloss where it has one, else the definition (owner decision 2026-11-05, ticket 26).
 
 ### Slot
 

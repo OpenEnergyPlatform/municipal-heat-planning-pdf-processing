@@ -8416,9 +8416,6 @@
       },
       "type": "object"
      },
-     "fetched": {
-      "type": "integer"
-     },
      "kind": {
       "enum": [
        "section",
@@ -8426,17 +8423,11 @@
        "figure"
       ]
      },
-     "missed": {
-      "type": "integer"
-     },
      "owner": {
       "type": "integer"
      },
      "parameter": {
       "type": "string"
-     },
-     "searched": {
-      "type": "integer"
      },
      "t": {
       "const": "read"

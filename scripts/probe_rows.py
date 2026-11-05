@@ -266,7 +266,7 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
         return made
 
     def made_reader(doc_spec):
-        made = runner.make_reader(doc_spec, args.image_root, rank=rank)
+        made = runner.make_reader(doc_spec, args.image_root)
         if made is None:
             raise SystemExit("no reading: the profile writes no read prompts")
         made.pool = pool
@@ -360,9 +360,6 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
             "refused_first": dict(sum((Counter(r.failed) for r in reads),
                                       Counter())),
             "coordinates_unanswered": sum(r.unanswered for r in reads),
-            "fetched": sum(r.fetched for r in reads),
-            "searched": sum(r.searched for r in reads),
-            "not_found": sum(r.missed for r in reads),
             "unread": sum(1 for r in reads if r.unread),
             "holes": sum(1 for _batch, reply in taken.answered
                          for claim in reply.get("tuples") or ()

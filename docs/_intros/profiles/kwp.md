@@ -210,8 +210,9 @@ corpus_m5 run, 0 of 638 planning calls: a plan states its inventory for one
 base year and mentions a handful of others, so several pairs matched and the
 branch stood down. More than the count, it wrote a year that does not stand in
 the passage, and every value of this corpus says in the plan what it refers
-to. Where it says so is the section around the table, which is the first
-window the field sweep reads.
+to. Where it says so is the text around the table: the field sweep's first
+window is its section, and the reading shows at most 200 characters on each
+side of the table's placeholder, ending early at another table's.
 
 The slice gate decides, before any other coordinate is asked, whether a
 row belongs in this run's graph at all: `SLICE = {"quantity":
@@ -235,12 +236,24 @@ parts and the graph now serializes all three
 (`profiles/kwp/extraction.py:7` to `24`; see
 [The knowledge graph](#the-knowledge-graph)).
 
+Five parameters carry a `brief`, one paragraph on what a value of them is
+(`energy_consumption`, `emission`, `heat_load`, `share`, `building_count`); the
+rounds of the reading and every group but `context` show it, and `context`, the
+group that classifies, shows the full description (`"definition": "full"` in
+`groups`). `planning_organisation` keeps its description. The entries of the
+closed lists carry their English ontology definition, and a `gloss`, one German
+line written once from it, which a request shows as the entry's meaning instead;
+the entries that already have a short German definition keep it (owner decision
+2026-11-05). The classification questions are one line per rule, and the texts
+the model reads name an entry as the list shows it ("Summe"), not by an
+internal key such as `out:total`; `out:unstated` stays.
+
 Every question a run asks carries its own fingerprint, so a resumed run
 can tell exactly which question changed rather than treating the whole
 spec as one block (`docpipe/extraction/spec.py:649` to `674`,
 `fingerprints`): one key for the parameter-choice question itself, one
 for the unit-choice question and the entries it offers, one per
-parameter for its own question, unit list and worked example, one per
+parameter for its own question, brief, unit list and worked example, one per
 category parameter for its closed list of spellings and definitions, and
 one per axis for its question, type, derive rule and vocabulary. These are what the extraction stamp compares on a rerun,
 described in full on [extraction](../stages/extraction.md).
@@ -267,9 +280,9 @@ wording of each spec question:
 | `extraction/example` | only under `docpipe compile examples` | which values of one parameter a passage states, to propose the example a spec parameter still lacks |
 | `extraction/compute` | once per question the compute step asks | one number the plan does not print, written as Python over the numbers already read; it may read on in the plan with the reading's tools, and for a share take its whole from a passage and quote what the chosen whole is |
 | `extraction/survey` | once per document, over its passages | which passage is read for which parameter, and the coordinates a whole passage states (the groups of the spec); no value |
-| `extraction/read_values` | once per round of a passage's reading, one value per request | the next value not yet read: `value`, `value_raw`, `quote` and, for a number in a table, `head`, or `null` to end the rounds; a value is what the field asks for and the year of a number is a coordinate, not a value |
-| `extraction/read_text` | once per value and group of the spec with a coordinate open | that group's open coordinates for the one value |
-| `extraction/comb` | once per value and group with an open coordinate | the open coordinates, searched for in the rest of the plan |
+| `extraction/read_values` | once per round of a passage's reading, one value per request, without tools | the next value not yet read: `value`, `value_raw`, `quote` and, for a number in a table, `head`, or `null` to end the rounds; a value is what the field asks for and the year of a number is a coordinate, not a value |
+| `extraction/read_text` | once per value and group of the spec with a coordinate open, without tools | that group's open coordinates for the one value; one file in three sections, `frame`, `number` and `context`, each group sent the shared text and its own section |
+| `extraction/comb` | once per value and group with an open coordinate | the open coordinates, searched for in the rest of the plan with the tools (`reading.Gathered`) |
 | `kg/coordinate` | once per chat turn the graph route tries | one closed answer to one coordinate axis, for the SPARQL query |
 
 Five of these ids, `extraction/rows`, `field`, `frame`, `review` and `example`,

@@ -218,7 +218,7 @@ class Comber:
         result = Combed(parameter.uri, origin, len(rows),
                         sum(len(names) for names in opened.values()),
                         group=group.name if group is not None else None)
-        around = around_of(source, passages, budget)
+        around = around_of(source, passages)
         parent = (around.owner_kind, around.owner_id) \
             if around is not None else origin
         # The sentences of the coordinates asked here (owner decision

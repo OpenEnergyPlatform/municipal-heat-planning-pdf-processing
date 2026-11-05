@@ -116,7 +116,9 @@ class Option:
     label: str                  # what the model answers
     uri: str                    # what the label resolves to
     synonyms: tuple = ()        # the other spellings the spec knows
-    definition: str = ""        # what the ontology says the term means
+    # What the term means, as the request shows it: the spec's gloss where it
+    # has one, else the definition (owner decision 2026-11-05, ticket 26).
+    definition: str = ""
 
 
 @dataclass(frozen=True)
@@ -179,7 +181,8 @@ def value_schema(slot: Slot) -> dict:
     return {"type": "string"}
 
 
-def _options(vocabulary: dict, definitions: Optional[dict] = None) -> tuple:
+def _options(vocabulary: dict, definitions: Optional[dict] = None,
+             glosses: Optional[dict] = None) -> tuple:
     """The closed list as options, first label canonical, rest synonyms.
 
     The spec writes a vocabulary as uri -> [labels] and the first label is the
@@ -189,15 +192,18 @@ def _options(vocabulary: dict, definitions: Optional[dict] = None) -> tuple:
 
     The meaning rides along where the spec carries one, because "decide by
     the definition and not by the nearest word" is a rule that needs the
-    definition in the request to be followable.
+    definition in the request to be followable; in one line of the profile's
+    language where the spec has that (*glosses*, ticket 26).
     """
     out = []
     for uri, labels in (vocabulary or {}).items():
         labels = [l for l in labels if isinstance(l, str) and l.strip()]
         if not labels:
             continue
+        meaning = ((glosses or {}).get(uri)
+                   or (definitions or {}).get(uri, ""))
         out.append(Option(label=labels[0], uri=uri, synonyms=tuple(labels[1:]),
-                          definition=(definitions or {}).get(uri, "")))
+                          definition=meaning))
     return tuple(out)
 
 
@@ -456,7 +462,8 @@ def value_slot(parameter: Parameter) -> Slot:
     return Slot(name="value", kind=VALUE, required=True,
                 question=parameter.description,
                 options=_options(parameter.vocabulary,
-                                 getattr(parameter, "definitions", None)))
+                                 getattr(parameter, "definitions", None),
+                                 getattr(parameter, "glosses", None)))
 
 
 def value_choice(parameter: Parameter) -> Slot:
@@ -474,7 +481,8 @@ def value_choice(parameter: Parameter) -> Slot:
     return Slot(name="value", kind=CHOICE, required=True,
                 question=parameter.description,
                 options=_options(parameter.vocabulary,
-                                 getattr(parameter, "definitions", None)))
+                                 getattr(parameter, "definitions", None),
+                                 getattr(parameter, "glosses", None)))
 
 
 def axis_slots(parameter: Parameter) -> list:
@@ -489,7 +497,8 @@ def axis_slots(parameter: Parameter) -> list:
         if axis.vocabulary:
             slot = Slot(name=name, kind=CHOICE, required=axis.required,
                         question=axis.question,
-                        options=_options(axis.vocabulary, axis.definitions),
+                        options=_options(axis.vocabulary, axis.definitions,
+                                         axis.glosses),
                         derive=axis.derive)
         elif axis.enum:
             slot = Slot(name=name, kind=CHOICE, required=axis.required,

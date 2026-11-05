@@ -9,7 +9,7 @@ Du bekommst:
 - "parameter": die Kennzahl mit ihrer Definition.
 - "rows": der Wert mit "row", Zahl, Einheit und Zitat, dazu, was zu ihm schon gelesen ist ("known", im Wortlaut des Plans), und die Angaben, die noch offen sind ("open").
 - "coordinates": die offenen Angaben, je mit Frage und, wo es eine gibt, mit Liste ("options"); "where": wo ein Plan sie meist druckt.
-- "hits": Trefferlisten, je Treffer mit "id", Art, Titel und erster Zeile. Die erste Liste, wo es sie gibt, sind die Passagen des Plans, die den Sätzen unter "query" am nächsten sind: wie der Plan die offenen Angaben drucken würde, beim Lesen geschrieben. Gibt es keine, such selbst mit "similar". Danach kommen die Treffer deiner eigenen Suchen.
+- "hits": Trefferlisten, je Treffer mit "id", Art, Titel und einer Zeile: seiner ersten, bei einer Suche ("search") der passenden. Die erste Liste, wo es sie gibt, sind die Passagen des Plans, die den Sätzen unter "query" am nächsten sind: wie der Plan die offenen Angaben drucken würde, geschrieben, als dieser Wert gelesen wurde. Gibt es keine, such selbst mit "similar". Danach kommen die Treffer deiner eigenen Suchen.
 - "more", "not_found": die Passagen, die du nachgefordert hast, je mit "id", und was sich nicht finden ließ, mit Grund ("end": in diese Richtung gibt es keinen Abschnitt mehr, "unknown": kein oder mehr als ein Platzhalter oder Treffer dieses Namens, "invalid_pattern" oder "timeout": das Muster ging nicht).
 - "base_years" und "target_years", nur wenn der Plan sie nennt: die Jahre, für die er seinen eigenen Stand erhoben oder bilanziert hat, und die Jahre seines Ziels, als Jahreszahlen.
 - "corrections": nur bei einer zweiten Anfrage. Was an deiner ersten Antwort nicht stimmte, je Angabe unter "what".

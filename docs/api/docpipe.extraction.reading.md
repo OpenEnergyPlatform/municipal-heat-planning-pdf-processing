@@ -14,14 +14,15 @@ its sentence or its table row, and for a number in a table also the head of
 its column as printed, which tells two equal numbers of one row apart. Code
 reads no number by its place.
 
-A round shows the whole passage (a table with its title, its head and all its
-rows, or the survey's piece of a section), the text around a table or figure,
-the parameter, the values already read, and the reading's tools, and asks for
-the next value not yet read, until the model says there is none. A value may
-stand in any passage the round showed: the passage, the text around it, or
-one its tools fetched (owner decision 2026-11-05); it is read from the one its
-quote stands in, which joins the reading's batch, so the fold checks it there
-(`pipeline.route_claims`). A value the check refuses (its quote in no passage
+A round shows the parameter in short (its `brief`), the whole passage (a table
+with its title, its head and all its rows, or the survey's piece of a
+section), the text around a table or figure and the values already read, and
+asks for the next value not yet read, until the model says there is none. A
+value may stand in any passage the round showed: the passage, its heading or
+the text around it; it is read from the one its quote stands in, which joins
+the reading's batch, so the fold checks it there (`pipeline.route_claims`).
+The requests that read have no tools; only the combing has (owner decision
+2026-11-05, ticket 26: no reading of 2,231 in an eight-plan probe used them). A value the check refuses (its quote in no passage
 shown, its number not in its quote, whatever else the fold refuses of the
 value and its quote, such as an answer its quote does not hold or one off
 its closed list (`verify.value_refused`), a quote over several table rows
@@ -35,11 +36,15 @@ document's pairs is its year, read off the head line and not asked
 (`pipeline.with_head`, owner decision 2026-11-03); where exactly one pair has
 that year, the pair's scenario is the value's too (`pipeline.head_pair`).
 Then every group of the spec (`Spec.groups`, `groups_of`) is asked for this
-one value, its coordinates still open only: the passage first, so a server
-reads it once for all values, the value marked last, with what is already
-read of it. Each group request has its own tools and its own correction
-round, and only a group that asks a frame coordinate is shown the pairs and
-the plan's base and target years.
+one value, its coordinates still open only. A request begins with what is the
+same for every request of its parameter and group (the parameter, in full
+only where the group classifies, its questions with their lists), then what
+is the same in a plan (its base and target years), then the passage, and the
+value comes last, marked, with what is already read of it, so a server reads
+each shared beginning once (owner decision 2026-11-05, ticket 26). Each group
+has its own system prompt, its section of the prompt (`group_prompts`), and
+its own correction round, and only a group that asks a frame coordinate is
+shown the pairs and the plan's base and target years.
 
 Every coordinate asked is answered: the grammar of a group request requires
 each of them, and "the passage does not say" is one of the answers
@@ -154,9 +159,6 @@ Fields:
 - `corrected: int = 0`: corrections asked
 - `failed: dict = field(default_factory=dict)`: what the check refused of the first replies, by reason
 - `unanswered: int = 0`: coordinates no reply answered
-- `fetched: int = 0`: passages shown under "more"
-- `searched: int = 0`: hit lists shown under "hits"
-- `missed: int = 0`: asks that found nothing
 - `probes: list = field(default_factory=list)`: Per claim, in its order: the sentences its group replies wrote to the coordinates they found unstated, as the plan would print them, {coordinate: sentence}, which the combing ranks with. Not on the claim: no sentence enters the harvest.
 
 ### Reader
@@ -178,10 +180,8 @@ value. *context* is what the request shows beside its passage,
 *shown_with(source)* is what a coordinate's quote may stand in besides
 the passage: the heading it stands under (`heading_of`).
 *known(claim, asked)* is what a value has read in the plan's words
-(`runner.row_context`). *rank(document_id, probes, exclude)* is the
-plan's passages best first for sentences, which the tools' "similar"
-lists (`runner.make_more_sources`); None asks it of nothing. *pool*
-reads passages side by side.
+(`runner.row_context`). *pool* reads passages side by side. No request
+of the reading has tools (owner decision 2026-11-05, ticket 26).
 
 #### Reader.\_\_init\_\_
 
@@ -190,14 +190,14 @@ def __init__(self, spec, ask_values: Callable, ask_text: Callable,
              frame_slots: list, *, shown_with: Optional[Callable] = None,
              bases: Optional[Callable] = None,
              known: Optional[Callable] = None,
-             rank: Optional[Callable] = None, pool=None, trace=None)
+             pool=None, trace=None)
 ```
 
 #### Reader.context_of
 
 ```python
-def context_of(self, source: Source, tuples: list, passages: dict,
-               budget: Optional[int]) -> tuple
+def context_of(self, source: Source, tuples: list,
+               passages: dict) -> tuple
 ```
 
 (what the requests of a passage show beside it, the section it
@@ -210,17 +210,13 @@ frame coordinate shows (`group_context`).
 ```python
 def read(self, document_id: int, parameter, source: Source,
          tuples: list, pairs: list, passages: dict,
-         shown: Optional[Source] = None,
-         budget: Optional[int] = None,
-         hits: Optional[list] = None) -> Read
+         shown: Optional[Source] = None) -> Read
 ```
 
 *source* is the passage a value is verified against, *shown* the
-piece of it the requests show, *budget* the survey's two pages,
-*hits* the ranked list a search of the whole plan read it for. The
-values in rounds (`_values`), each placed in its table
-(`_placed`), then each group of the spec for each value
-(`_value_group`).
+piece of it the requests show. The values in rounds (`_values`),
+each placed in its table (`_placed`), then each group of the spec for
+each value (`_value_group`).
 
 ## Functions
 
@@ -344,17 +340,19 @@ passage's text carries it already or no section holds it.
 ### around_of
 
 ```python
-def around_of(source: Source, passages: dict,
-              budget: Optional[int]) -> Optional[Source]
+def around_of(source: Source, passages: dict) -> Optional[Source]
 ```
 
 The text of the section a table or figure stands in, as its request
-shows it (owner decision 2026-11-04): the sentence that announces it,
-the heading over it and the paragraph under it, where its year and its
-scenario are printed. The whole section when it fits *budget*, the
-survey's two pages, else that many characters around the table's place
-in it. None for a section, and for a table or figure whose section is
-not among *passages*.
+shows it: its placeholder with at most `AROUND_CHARS` characters on each
+side, cut at a word, and never past another table's or figure's
+placeholder (owner decision 2026-11-05, ticket 26; before, the whole
+section up to two pages, which showed a neighbouring area's numbers). The
+sentence that announces the table and the line under it, where its year
+and its scenario are printed, stay. One stretch of the section's text, so
+a quote from it is a quote from the section. None for a section, for a
+table or figure whose section is not among *passages*, and for one whose
+placeholder its section does not print: then its place is unknown.
 
 ### more_schema
 
@@ -388,8 +386,12 @@ the model's window. The reply before such a round stands.
 ### parameter_shown
 
 ```python
-def parameter_shown(parameter) -> dict
+def parameter_shown(parameter, full: bool = True) -> dict
 ```
+
+The parameter as a request shows it: with its full definition, or,
+without *full*, with its `brief` where the spec writes one (owner
+decision 2026-11-05, ticket 26).
 
 ### value_classes
 
@@ -432,12 +434,13 @@ def values_payload(source: Source, parameter, context: dict, read: list,
                    corrections: Optional[list] = None) -> dict
 ```
 
-One round of the values of a passage: the passage, the text around a
-table or figure and the parameter, a category parameter with its entries
-(`value_classes`), first, the values already read (*read*) and what the
-round fetched with its tools after them; with *corrections* the value of
-the round the check refused, asked once more. Nothing of the value's
-coordinates.
+One round of the values of a passage: the parameter in short, a
+category parameter with its entries (`value_classes`), first, the same
+in every round of the parameter; then the passage and the text around a
+table or figure, the same in every round of the passage; the values
+already read (*read*) last; with *corrections* the value of the round
+the check refused, asked once more (ticket 26: what requests share
+stands first). Nothing of the value's coordinates.
 
 ### values_response_format
 
@@ -549,17 +552,20 @@ refuses, the model hears while it can still answer (owner decision
 ```python
 def text_payload(source: Source, parameter, slots: list, row: Row,
                  where: str, context: dict,
-                 corrections: Optional[list] = None) -> dict
+                 corrections: Optional[list] = None,
+                 full: bool = False) -> dict
 ```
 
-One group's request for one value: the passage, the text around a
-table or figure, the parameter, the group's coordinates with the spec's
-words for where a plan prints them (*where*) and, for a frame group, the
-pairs and years (`group_context`) first; then the value with its quote,
-under "passage" the passage it stands in where that is neither the
-passage nor the text around it, and, under "read", what is already read
-of it in the plan's words, and what the request fetched with its tools;
-with *corrections* the same request asked once more.
+One group's request for one value, what its requests share first
+(ticket 26): the parameter, with its full definition only where *full*
+(the group that classifies, `Group.full_definition`), and the group's
+coordinates with the spec's words for where a plan prints them
+(*where*), the same for every value of the parameter; then, for a frame
+group, the plan's base and target years, the same in a plan; then the
+passage, the text around a table or figure and, for a frame group, the
+survey's pairs of the passage (`group_context`); the value last, with
+its quote and, under "read", what is already read of it in the plan's
+words; with *corrections* the same request asked once more.
 
 ### text_response_format
 
@@ -568,8 +574,22 @@ def text_response_format(slots: list) -> dict
 ```
 
 Every coordinate of the group for the one value the request shows,
-each with the sentence of one the passage does not state (`probe`), and
-what the reply asks of the rest of the plan.
+each with the sentence of one the passage does not state (`probe`).
+
+### group_prompts
+
+```python
+def group_prompts(prompt, groups) -> dict
+```
+
+{group name: the prompt its requests send}: what stands before the
+first section (`GROUP_SECTION`) is every group's, then the group's own
+section (owner decision 2026-11-05, ticket 26: one system prompt per kind
+of request, with only its rules). A prompt without sections is every
+group's as it is, the one prompt of a profile with one group. A prompt
+with sections has one for each of *groups* and none for any other group:
+a group without its rules, or rules no group reads, raises LookupError,
+which the run raises at its start (`runner.surveyed_flow`).
 
 ### answer_of
 

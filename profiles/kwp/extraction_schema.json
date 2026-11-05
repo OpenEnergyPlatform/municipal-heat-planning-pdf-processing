@@ -701,7 +701,7 @@
       },
       "x-options": {
        "arithmetic mean": {
-        "meaning": "average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region",
+        "meaning": "Durchschnittswert, berechnet als arithmetisches Mittel über Datensätze.",
         "spellings": [
          "Mittelwert",
          "Durchschnitt"
@@ -709,14 +709,14 @@
         "uri": "OEO_00140071"
        },
        "instantaneous": {
-        "meaning": "value measured at or modelled for exactly one 0-dim temporal region, referenced by a time stamp, e.g. to represent a time step in a time series",
+        "meaning": "Wert, der exakt zu einem zeitlichen Nullpunkt gemessen oder modelliert wird.",
         "spellings": [
          "Momentanwert zu einem Zeitpunkt"
         ],
         "uri": "OEO_00140069"
        },
        "integral": {
-        "meaning": "sum or integral of values, e.g. within a time step or a spatial region",
+        "meaning": "Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets.",
         "spellings": [
          "Summe oder Integral über einen Zeitraum oder ein Gebiet",
          "Jahreswert",
@@ -725,7 +725,7 @@
         "uri": "OEO_00140070"
        },
        "maximum": {
-        "meaning": "maximum value within a set of data values, e.g. in a time step or spatial region",
+        "meaning": "Höchster Wert innerhalb einer Menge von Datenwerten in einem Bereich.",
         "spellings": [
          "Maximum",
          "Spitzenwert",
@@ -734,7 +734,7 @@
         "uri": "OEO_00140073"
        },
        "minimum": {
-        "meaning": "minimum value within a set of data values, e.g. in a time step or spatial region",
+        "meaning": "Niedrigster Wert innerhalb einer Menge von Datenwerten in einem Bereich.",
         "spellings": [
          "Minimum",
          "Tiefstwert"
@@ -742,7 +742,7 @@
         "uri": "OEO_00140072"
        }
       },
-      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist \"integral\", also eine Jahressumme. \"maximum\" bei einer Spitzenlast oder einem Höchstwert, \"arithmetic mean\" bei einem Durchschnitt je Gebäude oder je Jahr, \"instantaneous\" bei einem Momentanwert."
+      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst?\nNormalfall \"integral\" (Jahressumme).\n\"maximum\": Spitzenlast, Höchstwert.\n\"arithmetic mean\": Durchschnitt je Gebäude oder Jahr.\n\"instantaneous\": Momentanwert."
      },
      "aggregation_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.",
@@ -893,7 +893,7 @@
       },
       "x-options": {
        "Abfallbrennstoff": {
-        "meaning": "A waste fuel is a fuel in which the material entity is waste.",
+        "meaning": "Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.",
         "spellings": [
          "Klärschlamm",
          "EBS"
@@ -943,7 +943,7 @@
         "uri": "OEO_00000132"
        },
        "Flüssiggas": {
-        "meaning": "Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.",
+        "meaning": "Flüssiggasgemisch aus Propan und Butan, unterscheidet sich als fossiler Gasbrennstoff.",
         "uri": "OEO_00320011"
        },
        "Geothermie": {
@@ -1004,7 +1004,7 @@
         "uri": "OEO_00000204"
        },
        "Strom": {
-        "meaning": "Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.",
+        "meaning": "Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.",
         "spellings": [
          "Elektrizität",
          "Heizungsstrom",
@@ -1026,7 +1026,7 @@
         "uri": "out:total"
        },
        "Umweltwärme": {
-        "meaning": "Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.",
+        "meaning": "In Luft, Erde oder Wasser gespeicherte Wärme, die durch Wärmepumpen genutzt wird.",
         "spellings": [
          "Umgebungswärme",
          "Umgebungsluft"
@@ -1040,7 +1040,7 @@
         "uri": "OEO_00000220"
        },
        "anthropogene Umweltwärme": {
-        "meaning": "Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.",
+        "meaning": "Umweltwärme mit anthropogenem Ursprung, unterscheidet sich durch menschliche Entstehung.",
         "spellings": [
          "Abwasserwärme",
          "Abwasser",
@@ -1049,7 +1049,7 @@
         "uri": "OEO_00140105"
        },
        "biogener Abfallbrennstoff": {
-        "meaning": "A biogenic waste fuel is a waste fuel that has a biogenic origin.",
+        "meaning": "Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart.",
         "spellings": [
          "Altholz",
          "Altholzheizung",
@@ -1065,7 +1065,7 @@
         "uri": "OEO_00000332"
        },
        "biogener Siedlungsabfall": {
-        "meaning": "A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.",
+        "meaning": "Siedlungsabfall mit biogenem Ursprung, unterscheidet sich durch die biologische Herkunft.",
         "spellings": [
          "Biogut",
          "Gartenabfälle",
@@ -1086,7 +1086,7 @@
         "uri": "OEO_00020495"
        },
        "natürliche Umweltwärme": {
-        "meaning": "Natural ambient thermal energy is ambient thermal energy that has a renewable origin.",
+        "meaning": "Umweltwärme mit erneuerbarem Ursprung, unterscheidet sich durch natürliche Herkunft.",
         "spellings": [
          "Oberflächengewässer",
          "Seethermie",
@@ -1103,7 +1103,7 @@
         "uri": "OEO_00010155"
        }
       },
-      "x-question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Gebäudetyp\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist."
+      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
@@ -1344,7 +1344,7 @@
       },
       "x-options": {
        "building count": {
-        "meaning": "A building count is a quantity value that measures the number of buildings in a building stock.",
+        "meaning": "Gebäudeanzahl: Misst die Anzahl der Gebäude in einem Gebäudebestand.",
         "spellings": [
          "Gebäudeanzahl",
          "Anzahl Gebäude",
@@ -1651,7 +1651,7 @@
       },
       "x-options": {
        "GHD": {
-        "meaning": "A commercial sector is a sector that covers non-industrial commercial activities.",
+        "meaning": "Sektor für nicht-industrielle gewerbliche Aktivitäten.",
         "spellings": [
          "Gewerbe, Handel, Dienstleistungen",
          "Gewerbe/Handel/Dienstleistungen",
@@ -1666,7 +1666,7 @@
         "uri": "OEO_00000405"
        },
        "Industrie": {
-        "meaning": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.",
+        "meaning": "Sektor für industrielle Aktivitäten mit Energiewandlung.",
         "spellings": [
          "Industriesektor",
          "verarbeitendes Gewerbe"
@@ -1674,14 +1674,14 @@
         "uri": "OEO_00000227"
        },
        "Landwirtschaft": {
-        "meaning": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.",
+        "meaning": "Sektor für Landwirtschaft, Forstwirtschaft und Landnutzung.",
         "spellings": [
          "Land- und Forstwirtschaft"
         ],
         "uri": "OEO_00010035"
        },
        "Private Haushalte": {
-        "meaning": "A household sector is a sector that covers households.",
+        "meaning": "Sektor für private Haushalte und Wohngebäude.",
         "spellings": [
          "Haushalte",
          "Privathaushalte",
@@ -1705,14 +1705,14 @@
         "uri": "out:total"
        },
        "Verkehr": {
-        "meaning": "A transport sector is a sector that covers transport of people and/or goods.",
+        "meaning": "Sektor für den Transport von Personen und Gütern.",
         "spellings": [
          "Verkehrssektor"
         ],
         "uri": "OEO_00000422"
        }
       },
-      "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"). Eine Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist dagegen keine Summe über Sektoren. \"Einfamilienhaus\" und \"Mehrfamilienhaus\" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Energieträger\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist."
+      "x-question": "Welcher Verbrauchssektor?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: \"Wohnen\", \"Wohngebäude\" = Private Haushalte; \"GHD/Kommune\", \"Gewerbe\", \"wirtschaftlich genutzte Gebäude\" = GHD.\nGEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\", \"Plangebiet\" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.\nZeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf) = \"Summe\".\nEbenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\").\nGesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist keine Summe über Sektoren.\n\"Einfamilienhaus\", \"Mehrfamilienhaus\" = Private Haushalte.\nEigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Energieträger\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "sector_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
@@ -1859,7 +1859,7 @@
         "uri": "sub_area"
        }
       },
-      "x-question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Eine Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: Nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse."
+      "x-question": "Auf welches Gebiet bezieht sich der Wert?\nZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.\nSteckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.\nErst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.\nÜberschrift ohne Ortsnamen belegt kein Gemeindegebiet: nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht.\nTeilgebiet: sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.\nGanzes Gemeindegebiet: die Klasse reicht."
      },
      "spatial_scope_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.",
@@ -2080,7 +2080,7 @@
       },
       "x-options": {
        "Biomasseheizung": {
-        "meaning": "A biomass powered heating technology is a combustion-based heat generation technology that describes how to combine biomass boilers, heat gain processes, biomass and energy in a specific way.",
+        "meaning": "Biomasseheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Biomasse.",
         "spellings": [
          "Holzheizung",
          "Pelletheizung",
@@ -2090,7 +2090,7 @@
         "uri": "OEO_00020493"
        },
        "Direktelektrische Heizung": {
-        "meaning": "An electrical heating technology is a technology that describes how to combine electrical heaters in a heat gain process with electrical energy as input in a specific way.",
+        "meaning": "Direktelektrische Heizung: Wandelt elektrische Energie direkt in Wärme mittels elektrischer Heizelemente um.",
         "spellings": [
          "Stromdirektheizung",
          "Elektroheizung",
@@ -2099,7 +2099,7 @@
         "uri": "OEO_00020487"
        },
        "Gasheizung": {
-        "meaning": "An gas powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, natural gas and energy in a specific way.",
+        "meaning": "Gasheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Erdgas.",
         "spellings": [
          "Gaskessel",
          "Gasbrennwertkessel",
@@ -2108,7 +2108,7 @@
         "uri": "OEO_00020491"
        },
        "Geothermie": {
-        "meaning": "A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way.",
+        "meaning": "Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung.",
         "spellings": [
          "Geothermieanlage",
          "Tiefengeothermie",
@@ -2117,7 +2117,7 @@
         "uri": "OEO_00020306"
        },
        "Solarthermie": {
-        "meaning": "A solar thermal heat technology is a heat generation technology that describes how to combine solar heat units, solar thermal energy transformation processes, energy carriers and energy in a specific way.",
+        "meaning": "Solarthermie: Nutzt Solareinheiten und solare Umwandlungsprozesse zur Wärmeerzeugung.",
         "spellings": [
          "Solarthermieanlage",
          "solarthermische Anlage"
@@ -2142,7 +2142,7 @@
         "uri": "out:total"
        },
        "Wasserstoffheizung": {
-        "meaning": "An hydrogen powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, hydrogen and energy in a specific way.",
+        "meaning": "Wasserstoffheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Wasserstoff.",
         "spellings": [
          "Wasserstoffkessel",
          "H2-Kessel"
@@ -2150,7 +2150,7 @@
         "uri": "OEO_00020492"
        },
        "Wärmepumpe": {
-        "meaning": "A heat pump technology is a heat generation technology that describes how to combine heat pumps, heat gain processes, energy carriers and energy in a specific way.",
+        "meaning": "Wärmepumpe: Kombiniert Wärmepumpen, Wärmegewinnungsprozesse und Energieträger zur Wärmeerzeugung.",
         "spellings": [
          "Wärmepumpen",
          "Luft-Wasser-Wärmepumpe",
@@ -2160,7 +2160,7 @@
         "uri": "OEO_00020486"
        },
        "Ölheizung": {
-        "meaning": "An oil powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, heating oil and energy in a specific way.",
+        "meaning": "Ölheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Heizöl.",
         "spellings": [
          "Ölkessel",
          "Heizölkessel"
@@ -2168,7 +2168,7 @@
         "uri": "OEO_00020490"
        }
       },
-      "x-question": "Welche Wärmeerzeugungstechnologie? Nur wenn die Zahl ausdrücklich einer Heiztechnik zugeordnet ist, in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\" oder \"Ölheizungen\". Ein Energieträger ist keine Technologie: \"Erdgas\" allein ist der Träger, \"Gasheizung\" die Technologie. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz nicht nach Technologien aufgeteilt, antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt. Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist."
+      "x-question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "technology_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('technology_raw'). 'technology_quote' is then the frame's passage that prints the number.",
@@ -2889,7 +2889,7 @@
       },
       "x-options": {
        "arithmetic mean": {
-        "meaning": "average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region",
+        "meaning": "Durchschnittswert, berechnet als arithmetisches Mittel über Datensätze.",
         "spellings": [
          "Mittelwert",
          "Durchschnitt"
@@ -2897,14 +2897,14 @@
         "uri": "OEO_00140071"
        },
        "instantaneous": {
-        "meaning": "value measured at or modelled for exactly one 0-dim temporal region, referenced by a time stamp, e.g. to represent a time step in a time series",
+        "meaning": "Wert, der exakt zu einem zeitlichen Nullpunkt gemessen oder modelliert wird.",
         "spellings": [
          "Momentanwert zu einem Zeitpunkt"
         ],
         "uri": "OEO_00140069"
        },
        "integral": {
-        "meaning": "sum or integral of values, e.g. within a time step or a spatial region",
+        "meaning": "Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets.",
         "spellings": [
          "Summe oder Integral über einen Zeitraum oder ein Gebiet",
          "Jahreswert",
@@ -2913,7 +2913,7 @@
         "uri": "OEO_00140070"
        },
        "maximum": {
-        "meaning": "maximum value within a set of data values, e.g. in a time step or spatial region",
+        "meaning": "Höchster Wert innerhalb einer Menge von Datenwerten in einem Bereich.",
         "spellings": [
          "Maximum",
          "Spitzenwert",
@@ -2922,7 +2922,7 @@
         "uri": "OEO_00140073"
        },
        "minimum": {
-        "meaning": "minimum value within a set of data values, e.g. in a time step or spatial region",
+        "meaning": "Niedrigster Wert innerhalb einer Menge von Datenwerten in einem Bereich.",
         "spellings": [
          "Minimum",
          "Tiefstwert"
@@ -2930,7 +2930,7 @@
         "uri": "OEO_00140072"
        }
       },
-      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist \"integral\", also eine Jahressumme. \"maximum\" bei einer Spitzenlast oder einem Höchstwert, \"arithmetic mean\" bei einem Durchschnitt je Gebäude oder je Jahr, \"instantaneous\" bei einem Momentanwert."
+      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst?\nNormalfall \"integral\" (Jahressumme).\n\"maximum\": Spitzenlast, Höchstwert.\n\"arithmetic mean\": Durchschnitt je Gebäude oder Jahr.\n\"instantaneous\": Momentanwert."
      },
      "aggregation_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.",
@@ -3081,7 +3081,7 @@
       },
       "x-options": {
        "Abfallbrennstoff": {
-        "meaning": "A waste fuel is a fuel in which the material entity is waste.",
+        "meaning": "Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.",
         "spellings": [
          "Klärschlamm",
          "EBS"
@@ -3131,7 +3131,7 @@
         "uri": "OEO_00000132"
        },
        "Flüssiggas": {
-        "meaning": "Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.",
+        "meaning": "Flüssiggasgemisch aus Propan und Butan, unterscheidet sich als fossiler Gasbrennstoff.",
         "uri": "OEO_00320011"
        },
        "Geothermie": {
@@ -3192,7 +3192,7 @@
         "uri": "OEO_00000204"
        },
        "Strom": {
-        "meaning": "Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.",
+        "meaning": "Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.",
         "spellings": [
          "Elektrizität",
          "Heizungsstrom",
@@ -3214,7 +3214,7 @@
         "uri": "out:total"
        },
        "Umweltwärme": {
-        "meaning": "Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.",
+        "meaning": "In Luft, Erde oder Wasser gespeicherte Wärme, die durch Wärmepumpen genutzt wird.",
         "spellings": [
          "Umgebungswärme",
          "Umgebungsluft"
@@ -3228,7 +3228,7 @@
         "uri": "OEO_00000220"
        },
        "anthropogene Umweltwärme": {
-        "meaning": "Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.",
+        "meaning": "Umweltwärme mit anthropogenem Ursprung, unterscheidet sich durch menschliche Entstehung.",
         "spellings": [
          "Abwasserwärme",
          "Abwasser",
@@ -3237,7 +3237,7 @@
         "uri": "OEO_00140105"
        },
        "biogener Abfallbrennstoff": {
-        "meaning": "A biogenic waste fuel is a waste fuel that has a biogenic origin.",
+        "meaning": "Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart.",
         "spellings": [
          "Altholz",
          "Altholzheizung",
@@ -3253,7 +3253,7 @@
         "uri": "OEO_00000332"
        },
        "biogener Siedlungsabfall": {
-        "meaning": "A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.",
+        "meaning": "Siedlungsabfall mit biogenem Ursprung, unterscheidet sich durch die biologische Herkunft.",
         "spellings": [
          "Biogut",
          "Gartenabfälle",
@@ -3274,7 +3274,7 @@
         "uri": "OEO_00020495"
        },
        "natürliche Umweltwärme": {
-        "meaning": "Natural ambient thermal energy is ambient thermal energy that has a renewable origin.",
+        "meaning": "Umweltwärme mit erneuerbarem Ursprung, unterscheidet sich durch natürliche Herkunft.",
         "spellings": [
          "Oberflächengewässer",
          "Seethermie",
@@ -3291,7 +3291,7 @@
         "uri": "OEO_00010155"
        }
       },
-      "x-question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Gebäudetyp\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist."
+      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
@@ -3418,7 +3418,7 @@
      "parameter": {
       "const": "emission",
       "description": "Spec parameter: Emissionen.",
-      "x-description-source": "Eine im Wärmeplan bilanzierte Emissionsmenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: CO2 emission value ist \"a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit\", also reines Kohlendioxid. carbon dioxide equivalent quantity value ist \"the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2\", also alle Treibhausgase in CO2-Äquivalenten. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt, etwa eine kumulierte Summe über mehrere Jahre, eine vermiedene Emission oder eine abgeschiedene Menge aus einer CCS-Anlage. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "x-description-source": "Eine im Wärmeplan bilanzierte Emissionsmenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: CO2 emission value ist \"a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit\", also reines Kohlendioxid. carbon dioxide equivalent quantity value ist \"the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2\", also alle Treibhausgase in CO2-Äquivalenten. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Die übrigen Einträge der Liste sind Größen, die der Graph NICHT aufnimmt, etwa eine kumulierte Summe über mehrere Jahre, eine vermiedene Emission oder eine abgeschiedene Menge aus einer CCS-Anlage. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
       "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil. Eine Zahl von Gebäuden ist eine Gebäudeanzahl."
      },
      "parameter_link_quote": {
@@ -3549,7 +3549,7 @@
         "uri": "out:share"
        },
        "CO2 emission value": {
-        "meaning": "A CO2 emission value is a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit.",
+        "meaning": "CO2-Emissionswert: Quantifiziert eine CO2-Emissionsrate mit Masseneinheit.",
         "spellings": [
          "CO2-Emissionen",
          "Kohlendioxidemissionen",
@@ -3581,7 +3581,7 @@
         "uri": "out:captured"
        },
        "carbon dioxide equivalent quantity value": {
-        "meaning": "A carbon dioxide equivalent quantity is a greenhouse gas emission value that quantifies the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2 which would have the same effect on the climate.",
+        "meaning": "CO2-Äquivalent: Quantifiziert die kombinierte Wirkung aller Treibhausgase als CO2-Äquivalent.",
         "spellings": [
          "Treibhausgasemissionen",
          "THG-Emissionen",
@@ -3615,7 +3615,7 @@
         "uri": "out:avoided"
        }
       },
-      "x-question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. \"CO2 emission value\" ist reines Kohlendioxid, \"carbon dioxide equivalent quantity value\" sind alle Treibhausgase, in CO2-Äquivalenten zusammengefasst. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Sagt der Plan an anderer Stelle, dass seine Emissionen in CO2-Äquivalenten angegeben sind (\"Die zugehörigen Treibhausgasemissionen - angegeben in Tonnen CO2-Äquivalenten - sind gesondert aufgeführt\"), dann gilt das auch für eine Tabelle, deren Kopfzeile nur \"CO2-Emissionen\" schreibt: der Methodiksatz schlägt die Kopfzeile. Eine kumulierte Emission über mehrere Jahre, eine vermiedene oder eingesparte Emission und eine abgeschiedene Menge sind das Gegenteil einer im Bilanzjahr ausgestoßenen und haben ihre eigenen Einträge."
+      "x-question": "Welche Größe ist diese Zahl? Wichtigste Entscheidung: bestimmt die Klasse im Graphen.\nNach der Definition der Klasse entscheiden, nicht nach Wortähnlichkeit.\n\"CO2 emission value\" = reines Kohlendioxid; \"carbon dioxide equivalent quantity value\" = alle Treibhausgase in CO2-Äquivalenten.\nEinheit verrät es meist: t CO2 gegen t CO2-Äq.\nSagt der Plan anderswo, Emissionen seien in CO2-Äquivalenten angegeben (\"Die zugehörigen Treibhausgasemissionen - angegeben in Tonnen CO2-Äquivalenten - sind gesondert aufgeführt\"), gilt das auch für eine Tabelle mit Kopfzeile nur \"CO2-Emissionen\": Methodiksatz schlägt Kopfzeile.\nKumulierte Emission über mehrere Jahre, vermiedene oder eingesparte Emission, abgeschiedene Menge: Gegenteil einer im Bilanzjahr ausgestoßenen, eigene Einträge."
      },
      "quantity_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.",
@@ -3914,7 +3914,7 @@
       },
       "x-options": {
        "GHD": {
-        "meaning": "A commercial sector is a sector that covers non-industrial commercial activities.",
+        "meaning": "Sektor für nicht-industrielle gewerbliche Aktivitäten.",
         "spellings": [
          "Gewerbe, Handel, Dienstleistungen",
          "Gewerbe/Handel/Dienstleistungen",
@@ -3929,7 +3929,7 @@
         "uri": "OEO_00000405"
        },
        "Industrie": {
-        "meaning": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.",
+        "meaning": "Sektor für industrielle Aktivitäten mit Energiewandlung.",
         "spellings": [
          "Industriesektor",
          "verarbeitendes Gewerbe"
@@ -3937,14 +3937,14 @@
         "uri": "OEO_00000227"
        },
        "Landwirtschaft": {
-        "meaning": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.",
+        "meaning": "Sektor für Landwirtschaft, Forstwirtschaft und Landnutzung.",
         "spellings": [
          "Land- und Forstwirtschaft"
         ],
         "uri": "OEO_00010035"
        },
        "Private Haushalte": {
-        "meaning": "A household sector is a sector that covers households.",
+        "meaning": "Sektor für private Haushalte und Wohngebäude.",
         "spellings": [
          "Haushalte",
          "Privathaushalte",
@@ -3968,14 +3968,14 @@
         "uri": "out:total"
        },
        "Verkehr": {
-        "meaning": "A transport sector is a sector that covers transport of people and/or goods.",
+        "meaning": "Sektor für den Transport von Personen und Gütern.",
         "spellings": [
          "Verkehrssektor"
         ],
         "uri": "OEO_00000422"
        }
       },
-      "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"). Eine Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist dagegen keine Summe über Sektoren. \"Einfamilienhaus\" und \"Mehrfamilienhaus\" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Energieträger\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist."
+      "x-question": "Welcher Verbrauchssektor?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: \"Wohnen\", \"Wohngebäude\" = Private Haushalte; \"GHD/Kommune\", \"Gewerbe\", \"wirtschaftlich genutzte Gebäude\" = GHD.\nGEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\", \"Plangebiet\" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.\nZeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf) = \"Summe\".\nEbenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\").\nGesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist keine Summe über Sektoren.\n\"Einfamilienhaus\", \"Mehrfamilienhaus\" = Private Haushalte.\nEigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Energieträger\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "sector_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
@@ -4122,7 +4122,7 @@
         "uri": "sub_area"
        }
       },
-      "x-question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Eine Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: Nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse."
+      "x-question": "Auf welches Gebiet bezieht sich der Wert?\nZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.\nSteckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.\nErst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.\nÜberschrift ohne Ortsnamen belegt kein Gemeindegebiet: nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht.\nTeilgebiet: sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.\nGanzes Gemeindegebiet: die Klasse reicht."
      },
      "spatial_scope_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.",
@@ -4343,7 +4343,7 @@
       },
       "x-options": {
        "Biomasseheizung": {
-        "meaning": "A biomass powered heating technology is a combustion-based heat generation technology that describes how to combine biomass boilers, heat gain processes, biomass and energy in a specific way.",
+        "meaning": "Biomasseheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Biomasse.",
         "spellings": [
          "Holzheizung",
          "Pelletheizung",
@@ -4353,7 +4353,7 @@
         "uri": "OEO_00020493"
        },
        "Direktelektrische Heizung": {
-        "meaning": "An electrical heating technology is a technology that describes how to combine electrical heaters in a heat gain process with electrical energy as input in a specific way.",
+        "meaning": "Direktelektrische Heizung: Wandelt elektrische Energie direkt in Wärme mittels elektrischer Heizelemente um.",
         "spellings": [
          "Stromdirektheizung",
          "Elektroheizung",
@@ -4362,7 +4362,7 @@
         "uri": "OEO_00020487"
        },
        "Gasheizung": {
-        "meaning": "An gas powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, natural gas and energy in a specific way.",
+        "meaning": "Gasheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Erdgas.",
         "spellings": [
          "Gaskessel",
          "Gasbrennwertkessel",
@@ -4371,7 +4371,7 @@
         "uri": "OEO_00020491"
        },
        "Geothermie": {
-        "meaning": "A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way.",
+        "meaning": "Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung.",
         "spellings": [
          "Geothermieanlage",
          "Tiefengeothermie",
@@ -4380,7 +4380,7 @@
         "uri": "OEO_00020306"
        },
        "Solarthermie": {
-        "meaning": "A solar thermal heat technology is a heat generation technology that describes how to combine solar heat units, solar thermal energy transformation processes, energy carriers and energy in a specific way.",
+        "meaning": "Solarthermie: Nutzt Solareinheiten und solare Umwandlungsprozesse zur Wärmeerzeugung.",
         "spellings": [
          "Solarthermieanlage",
          "solarthermische Anlage"
@@ -4405,7 +4405,7 @@
         "uri": "out:total"
        },
        "Wasserstoffheizung": {
-        "meaning": "An hydrogen powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, hydrogen and energy in a specific way.",
+        "meaning": "Wasserstoffheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Wasserstoff.",
         "spellings": [
          "Wasserstoffkessel",
          "H2-Kessel"
@@ -4413,7 +4413,7 @@
         "uri": "OEO_00020492"
        },
        "Wärmepumpe": {
-        "meaning": "A heat pump technology is a heat generation technology that describes how to combine heat pumps, heat gain processes, energy carriers and energy in a specific way.",
+        "meaning": "Wärmepumpe: Kombiniert Wärmepumpen, Wärmegewinnungsprozesse und Energieträger zur Wärmeerzeugung.",
         "spellings": [
          "Wärmepumpen",
          "Luft-Wasser-Wärmepumpe",
@@ -4423,7 +4423,7 @@
         "uri": "OEO_00020486"
        },
        "Ölheizung": {
-        "meaning": "An oil powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, heating oil and energy in a specific way.",
+        "meaning": "Ölheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Heizöl.",
         "spellings": [
          "Ölkessel",
          "Heizölkessel"
@@ -4431,7 +4431,7 @@
         "uri": "OEO_00020490"
        }
       },
-      "x-question": "Welche Wärmeerzeugungstechnologie? Nur wenn die Zahl ausdrücklich einer Heiztechnik zugeordnet ist, in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\" oder \"Ölheizungen\". Ein Energieträger ist keine Technologie: \"Erdgas\" allein ist der Träger, \"Gasheizung\" die Technologie. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz nicht nach Technologien aufgeteilt, antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt. Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist."
+      "x-question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "technology_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('technology_raw'). 'technology_quote' is then the frame's passage that prints the number.",
@@ -5387,7 +5387,7 @@
       },
       "x-options": {
        "arithmetic mean": {
-        "meaning": "average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region",
+        "meaning": "Durchschnittswert, berechnet als arithmetisches Mittel über Datensätze.",
         "spellings": [
          "Mittelwert",
          "Durchschnitt"
@@ -5395,14 +5395,14 @@
         "uri": "OEO_00140071"
        },
        "instantaneous": {
-        "meaning": "value measured at or modelled for exactly one 0-dim temporal region, referenced by a time stamp, e.g. to represent a time step in a time series",
+        "meaning": "Wert, der exakt zu einem zeitlichen Nullpunkt gemessen oder modelliert wird.",
         "spellings": [
          "Momentanwert zu einem Zeitpunkt"
         ],
         "uri": "OEO_00140069"
        },
        "integral": {
-        "meaning": "sum or integral of values, e.g. within a time step or a spatial region",
+        "meaning": "Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets.",
         "spellings": [
          "Summe oder Integral über einen Zeitraum oder ein Gebiet",
          "Jahreswert",
@@ -5411,7 +5411,7 @@
         "uri": "OEO_00140070"
        },
        "maximum": {
-        "meaning": "maximum value within a set of data values, e.g. in a time step or spatial region",
+        "meaning": "Höchster Wert innerhalb einer Menge von Datenwerten in einem Bereich.",
         "spellings": [
          "Maximum",
          "Spitzenwert",
@@ -5420,7 +5420,7 @@
         "uri": "OEO_00140073"
        },
        "minimum": {
-        "meaning": "minimum value within a set of data values, e.g. in a time step or spatial region",
+        "meaning": "Niedrigster Wert innerhalb einer Menge von Datenwerten in einem Bereich.",
         "spellings": [
          "Minimum",
          "Tiefstwert"
@@ -5428,7 +5428,7 @@
         "uri": "OEO_00140072"
        }
       },
-      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist \"integral\", also eine Jahressumme. \"maximum\" bei einer Spitzenlast oder einem Höchstwert, \"arithmetic mean\" bei einem Durchschnitt je Gebäude oder je Jahr, \"instantaneous\" bei einem Momentanwert."
+      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst?\nNormalfall \"integral\" (Jahressumme).\n\"maximum\": Spitzenlast, Höchstwert.\n\"arithmetic mean\": Durchschnitt je Gebäude oder Jahr.\n\"instantaneous\": Momentanwert."
      },
      "aggregation_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.",
@@ -5579,7 +5579,7 @@
       },
       "x-options": {
        "Abfallbrennstoff": {
-        "meaning": "A waste fuel is a fuel in which the material entity is waste.",
+        "meaning": "Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.",
         "spellings": [
          "Klärschlamm",
          "EBS"
@@ -5629,7 +5629,7 @@
         "uri": "OEO_00000132"
        },
        "Flüssiggas": {
-        "meaning": "Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.",
+        "meaning": "Flüssiggasgemisch aus Propan und Butan, unterscheidet sich als fossiler Gasbrennstoff.",
         "uri": "OEO_00320011"
        },
        "Geothermie": {
@@ -5690,7 +5690,7 @@
         "uri": "OEO_00000204"
        },
        "Strom": {
-        "meaning": "Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.",
+        "meaning": "Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.",
         "spellings": [
          "Elektrizität",
          "Heizungsstrom",
@@ -5712,7 +5712,7 @@
         "uri": "out:total"
        },
        "Umweltwärme": {
-        "meaning": "Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.",
+        "meaning": "In Luft, Erde oder Wasser gespeicherte Wärme, die durch Wärmepumpen genutzt wird.",
         "spellings": [
          "Umgebungswärme",
          "Umgebungsluft"
@@ -5726,7 +5726,7 @@
         "uri": "OEO_00000220"
        },
        "anthropogene Umweltwärme": {
-        "meaning": "Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.",
+        "meaning": "Umweltwärme mit anthropogenem Ursprung, unterscheidet sich durch menschliche Entstehung.",
         "spellings": [
          "Abwasserwärme",
          "Abwasser",
@@ -5735,7 +5735,7 @@
         "uri": "OEO_00140105"
        },
        "biogener Abfallbrennstoff": {
-        "meaning": "A biogenic waste fuel is a waste fuel that has a biogenic origin.",
+        "meaning": "Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart.",
         "spellings": [
          "Altholz",
          "Altholzheizung",
@@ -5751,7 +5751,7 @@
         "uri": "OEO_00000332"
        },
        "biogener Siedlungsabfall": {
-        "meaning": "A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.",
+        "meaning": "Siedlungsabfall mit biogenem Ursprung, unterscheidet sich durch die biologische Herkunft.",
         "spellings": [
          "Biogut",
          "Gartenabfälle",
@@ -5772,7 +5772,7 @@
         "uri": "OEO_00020495"
        },
        "natürliche Umweltwärme": {
-        "meaning": "Natural ambient thermal energy is ambient thermal energy that has a renewable origin.",
+        "meaning": "Umweltwärme mit erneuerbarem Ursprung, unterscheidet sich durch natürliche Herkunft.",
         "spellings": [
          "Oberflächengewässer",
          "Seethermie",
@@ -5789,7 +5789,7 @@
         "uri": "OEO_00010155"
        }
       },
-      "x-question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Gebäudetyp\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist."
+      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
@@ -5916,7 +5916,7 @@
      "parameter": {
       "const": "energy_consumption",
       "description": "Spec parameter: Energieverbrauch.",
-      "x-description-source": "Eine im Wärmeplan bilanzierte Energiemenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: final energy consumption value ist \"the energy delivered to and consumed by end users\". Darunter fällt BEIDES, was ein deutscher Wärmeplan Verbrauch nennt und was er Bedarf nennt: für ein Zielszenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Ein Wärmebedarf, ein Endenergiebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. primary energy consumption value ist \"the total consumption of energy in a spatial region excluding the non-energetic use of fuels\", also die Bilanz vor der Umwandlung. Ein Potenzial ist \"a maximum value that describes some upper limit in a spatial region of reference\", also ein erschließbares Maximum und keine verbrauchte Menge. Die Ontologie unterscheidet theoretisches, technisches (technological), wirtschaftliches (economic), erschließbares (developable) und nachhaltiges (sustainable) Potenzial, jeweils als flow potential (eine Menge je Zeit) oder als stock potential (ein Bestand, etwa eine Speichermenge). Wähle die Art, die die Quelle druckt; nennt sie keine Art, wähle flow potential für eine Menge je Zeit (etwa MWh/a), stock potential für einen Bestand und potential nur, wenn auch das offen ist. Die übrigen Einträge der Liste beginnen mit \"out:\": Größen, für die die Ontologie keine Klasse hat (Nutzenergie, Erzeugung, Einsparung), und Zahlen, die keine Energiemenge sind (ein Anteil, ein spezifischer Wert). Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "x-description-source": "Eine im Wärmeplan bilanzierte Energiemenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: final energy consumption value ist \"the energy delivered to and consumed by end users\". Darunter fällt BEIDES, was ein deutscher Wärmeplan Verbrauch nennt und was er Bedarf nennt: für ein Zielszenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Ein Wärmebedarf, ein Endenergiebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. primary energy consumption value ist \"the total consumption of energy in a spatial region excluding the non-energetic use of fuels\", also die Bilanz vor der Umwandlung. Ein Potenzial ist \"a maximum value that describes some upper limit in a spatial region of reference\", also ein erschließbares Maximum und keine verbrauchte Menge. Die Ontologie unterscheidet theoretisches, technisches (technological), wirtschaftliches (economic), erschließbares (developable) und nachhaltiges (sustainable) Potenzial, jeweils als flow potential (eine Menge je Zeit) oder als stock potential (ein Bestand, etwa eine Speichermenge). Wähle die Art, die die Quelle druckt; nennt sie keine Art, wähle flow potential für eine Menge je Zeit (etwa MWh/a), stock potential für einen Bestand und potential nur, wenn auch das offen ist. Die übrigen Einträge der Liste sind Größen, für die die Ontologie keine Klasse hat (Nutzenergie, Erzeugung, Einsparung), und Zahlen, die keine Energiemenge sind (ein Anteil, ein spezifischer Wert). Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
       "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil. Eine Zahl von Gebäuden ist eine Gebäudeanzahl."
      },
      "parameter_link_quote": {
@@ -6084,25 +6084,25 @@
         "uri": "out:useful_energy"
        },
        "developable flow potential": {
-        "meaning": "A developable flow potential is a type of flow potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).",
+        "meaning": "Erschließbares Flusspotenzial: Der Anteil des wirtschaftlichen Potenzials unter realistischen Rahmenbedingungen.",
         "spellings": [
          "erschließbares Potenzial"
         ],
         "uri": "OEO_00140060"
        },
        "developable stock potential": {
-        "meaning": "A developable stock potential is a type of stock potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).",
+        "meaning": "Erschließbares Bestandspotenzial: Der Anteil des wirtschaftlichen Potenzials unter realistischen Rahmenbedingungen.",
         "uri": "OEO_00140066"
        },
        "economic flow potential": {
-        "meaning": "An economic flow potential is a type of flow potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).",
+        "meaning": "Wirtschaftliches Flusspotenzial: Der Anteil des technologischen Potenzials, der wirtschaftlich nutzbar ist.",
         "spellings": [
          "wirtschaftliches Potenzial"
         ],
         "uri": "OEO_00140059"
        },
        "economic stock potential": {
-        "meaning": "An economic stock potential is a type of stock potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).",
+        "meaning": "Wirtschaftliches Bestandspotenzial: Der Anteil des technologischen Potenzials, der wirtschaftlich nutzbar ist.",
         "uri": "OEO_00140065"
        },
        "etwas anderes": {
@@ -6110,7 +6110,7 @@
         "uri": "out:other"
        },
        "final energy consumption value": {
-        "meaning": "A final energy consumption value is an energy consumption value expressing the magnitude of the energy delivered to and consumed by end users.",
+        "meaning": "Endenergieverbrauch: Menge der an Endverbraucher gelieferten und von ihnen verbrauchten Energie.",
         "spellings": [
          "Endenergieverbrauch",
          "Endenergie",
@@ -6127,11 +6127,11 @@
         "uri": "OEO_00050016"
        },
        "flow potential": {
-        "meaning": "A flow potential is a potential of an input or output of a process, per time unit.",
+        "meaning": "Flusspotenzial: Potenzial eines Prozessinputs oder -outputs pro Zeiteinheit.",
         "uri": "OEO_00140056"
        },
        "potential": {
-        "meaning": "A potential is a maximum value that describes some upper limit in a spatial region of reference.",
+        "meaning": "Potenzial: Ein Maximalwert, der eine Obergrenze in einem Referenzgebiet beschreibt.",
         "spellings": [
          "Potenzial",
          "Ausbaupotenzial",
@@ -6140,7 +6140,7 @@
         "uri": "OEO_00290000"
        },
        "primary energy consumption value": {
-        "meaning": "A primary energy consumption value is an energy consumption value expressing the magnitude of the total consumption of energy in a spatial region excluding the non-energetic use of fuels.",
+        "meaning": "Primärenergieverbrauch: Gesamter Energieverbrauch in einer Region ohne nicht-energetische Nutzung.",
         "spellings": [
          "Primärenergieverbrauch",
          "Primärenergie"
@@ -6152,44 +6152,44 @@
         "uri": "out:specific"
        },
        "stock potential": {
-        "meaning": "A stock potential is a potential of the stock of a source or sink.",
+        "meaning": "Bestandspotenzial: Potenzial des Bestands einer Quelle oder Senke.",
         "uri": "OEO_00140062"
        },
        "sustainable flow potential": {
-        "meaning": "A sustainable flow potential is a type of flow potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.",
+        "meaning": "Nachhaltiges Flusspotenzial: Potenzial unter Berücksichtigung aller ökologischen und sozioökonomischen Aspekte.",
         "spellings": [
          "nachhaltiges Potenzial"
         ],
         "uri": "OEO_00140061"
        },
        "sustainable stock potential": {
-        "meaning": "A sustainable stock potential is a type of stock potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.",
+        "meaning": "Nachhaltiges Bestandspotenzial: Potenzial unter Berücksichtigung aller ökologischen und sozioökonomischen Aspekte.",
         "uri": "OEO_00140067"
        },
        "technological flow potential": {
-        "meaning": "A technological flow potential is a type of a flow potential derived from a theoretical flow potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.",
+        "meaning": "Technologisches Flusspotenzial: Theoretisches Potenzial unter Berücksichtigung von Technologieeffizienz und verfügbarer Fläche.",
         "spellings": [
          "technisches Potenzial"
         ],
         "uri": "OEO_00140058"
        },
        "technological stock potential": {
-        "meaning": "A technological stock potential is a type of a stock potential derived from a theoretical stock potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.",
+        "meaning": "Technologisches Bestandspotenzial: Theoretisches Potenzial unter Berücksichtigung von Technologieeffizienz und verfügbarer Fläche.",
         "uri": "OEO_00140064"
        },
        "theoretical flow potential": {
-        "meaning": "A theoretical flow potential is a type of flow potential that identifies the physical upper limit of an input or output of a process in a spatial region of reference per unit time.",
+        "meaning": "Theoretisches Flusspotenzial: Physikalische Obergrenze eines Prozessinputs oder -outputs pro Zeiteinheit.",
         "spellings": [
          "theoretisches Potenzial"
         ],
         "uri": "OEO_00140057"
        },
        "theoretical stock potential": {
-        "meaning": "A theoretical stock potential is a type of stock potential that identifies the physical upper limit of a stock of a source or sink in a spatial region of reference.",
+        "meaning": "Theoretisches Bestandspotenzial: Physikalische Obergrenze eines Quellen- oder Senkenbestands.",
         "uri": "OEO_00140063"
        }
       },
-      "x-question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder im Titel der eigenen Tabelle. \"final energy consumption value\" ist definiert als die an Endverbraucher gelieferte und dort verbrauchte Energie. Darunter fällt BEIDES, was ein Plan Verbrauch nennt und was er Bedarf nennt: in einem Szenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Endenergieverbrauch, Endenergiebedarf, Wärmebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. \"primary energy consumption value\" ist die Bilanz vor der Umwandlung. Nutzwärme, Heizwärme, Raumwärme und Nutzenergie sind dagegen NICHT Endenergie, sondern die Wärme hinter dem Erzeuger: \"out:useful_energy\", auch im Zielszenario. Ein Anteil in Prozent und ein Wert je Fläche oder Kopf sind eigene Einträge und keine Verbrauchsmenge."
+      "x-question": "Welche Größe ist diese Zahl? Wichtigste Entscheidung: bestimmt die Klasse im Graphen.\nNach der Definition der Klasse entscheiden, nicht nach Wortähnlichkeit; Bezeichnung in Zeile, Spaltenkopf, Blocküberschrift oder Titel der eigenen Tabelle.\n\"final energy consumption value\" = an Endverbraucher gelieferte, dort verbrauchte Energie; BEIDES, Verbrauch und Bedarf (im Szenario ist alles gerechnet, die Definition spricht nicht von Messung): Endenergieverbrauch, Endenergiebedarf, Wärmebedarf, zu deckender Wärmebedarf.\n\"primary energy consumption value\" = Bilanz vor der Umwandlung.\nNutzwärme, Heizwärme, Raumwärme, Nutzenergie sind NICHT Endenergie, sondern Wärme hinter dem Erzeuger: \"Nutzenergie\", auch im Zielszenario.\nAnteil in Prozent, Wert je Fläche oder Kopf: eigene Einträge, keine Verbrauchsmenge."
      },
      "quantity_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.",
@@ -6488,7 +6488,7 @@
       },
       "x-options": {
        "GHD": {
-        "meaning": "A commercial sector is a sector that covers non-industrial commercial activities.",
+        "meaning": "Sektor für nicht-industrielle gewerbliche Aktivitäten.",
         "spellings": [
          "Gewerbe, Handel, Dienstleistungen",
          "Gewerbe/Handel/Dienstleistungen",
@@ -6503,7 +6503,7 @@
         "uri": "OEO_00000405"
        },
        "Industrie": {
-        "meaning": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.",
+        "meaning": "Sektor für industrielle Aktivitäten mit Energiewandlung.",
         "spellings": [
          "Industriesektor",
          "verarbeitendes Gewerbe"
@@ -6511,14 +6511,14 @@
         "uri": "OEO_00000227"
        },
        "Landwirtschaft": {
-        "meaning": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.",
+        "meaning": "Sektor für Landwirtschaft, Forstwirtschaft und Landnutzung.",
         "spellings": [
          "Land- und Forstwirtschaft"
         ],
         "uri": "OEO_00010035"
        },
        "Private Haushalte": {
-        "meaning": "A household sector is a sector that covers households.",
+        "meaning": "Sektor für private Haushalte und Wohngebäude.",
         "spellings": [
          "Haushalte",
          "Privathaushalte",
@@ -6542,14 +6542,14 @@
         "uri": "out:total"
        },
        "Verkehr": {
-        "meaning": "A transport sector is a sector that covers transport of people and/or goods.",
+        "meaning": "Sektor für den Transport von Personen und Gütern.",
         "spellings": [
          "Verkehrssektor"
         ],
         "uri": "OEO_00000422"
        }
       },
-      "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"). Eine Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist dagegen keine Summe über Sektoren. \"Einfamilienhaus\" und \"Mehrfamilienhaus\" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Energieträger\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist."
+      "x-question": "Welcher Verbrauchssektor?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: \"Wohnen\", \"Wohngebäude\" = Private Haushalte; \"GHD/Kommune\", \"Gewerbe\", \"wirtschaftlich genutzte Gebäude\" = GHD.\nGEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\", \"Plangebiet\" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.\nZeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf) = \"Summe\".\nEbenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\").\nGesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist keine Summe über Sektoren.\n\"Einfamilienhaus\", \"Mehrfamilienhaus\" = Private Haushalte.\nEigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Energieträger\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "sector_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
@@ -6696,7 +6696,7 @@
         "uri": "sub_area"
        }
       },
-      "x-question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Eine Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: Nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse."
+      "x-question": "Auf welches Gebiet bezieht sich der Wert?\nZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.\nSteckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.\nErst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.\nÜberschrift ohne Ortsnamen belegt kein Gemeindegebiet: nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht.\nTeilgebiet: sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.\nGanzes Gemeindegebiet: die Klasse reicht."
      },
      "spatial_scope_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.",
@@ -6917,7 +6917,7 @@
       },
       "x-options": {
        "Biomasseheizung": {
-        "meaning": "A biomass powered heating technology is a combustion-based heat generation technology that describes how to combine biomass boilers, heat gain processes, biomass and energy in a specific way.",
+        "meaning": "Biomasseheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Biomasse.",
         "spellings": [
          "Holzheizung",
          "Pelletheizung",
@@ -6927,7 +6927,7 @@
         "uri": "OEO_00020493"
        },
        "Direktelektrische Heizung": {
-        "meaning": "An electrical heating technology is a technology that describes how to combine electrical heaters in a heat gain process with electrical energy as input in a specific way.",
+        "meaning": "Direktelektrische Heizung: Wandelt elektrische Energie direkt in Wärme mittels elektrischer Heizelemente um.",
         "spellings": [
          "Stromdirektheizung",
          "Elektroheizung",
@@ -6936,7 +6936,7 @@
         "uri": "OEO_00020487"
        },
        "Gasheizung": {
-        "meaning": "An gas powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, natural gas and energy in a specific way.",
+        "meaning": "Gasheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Erdgas.",
         "spellings": [
          "Gaskessel",
          "Gasbrennwertkessel",
@@ -6945,7 +6945,7 @@
         "uri": "OEO_00020491"
        },
        "Geothermie": {
-        "meaning": "A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way.",
+        "meaning": "Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung.",
         "spellings": [
          "Geothermieanlage",
          "Tiefengeothermie",
@@ -6954,7 +6954,7 @@
         "uri": "OEO_00020306"
        },
        "Solarthermie": {
-        "meaning": "A solar thermal heat technology is a heat generation technology that describes how to combine solar heat units, solar thermal energy transformation processes, energy carriers and energy in a specific way.",
+        "meaning": "Solarthermie: Nutzt Solareinheiten und solare Umwandlungsprozesse zur Wärmeerzeugung.",
         "spellings": [
          "Solarthermieanlage",
          "solarthermische Anlage"
@@ -6979,7 +6979,7 @@
         "uri": "out:total"
        },
        "Wasserstoffheizung": {
-        "meaning": "An hydrogen powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, hydrogen and energy in a specific way.",
+        "meaning": "Wasserstoffheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Wasserstoff.",
         "spellings": [
          "Wasserstoffkessel",
          "H2-Kessel"
@@ -6987,7 +6987,7 @@
         "uri": "OEO_00020492"
        },
        "Wärmepumpe": {
-        "meaning": "A heat pump technology is a heat generation technology that describes how to combine heat pumps, heat gain processes, energy carriers and energy in a specific way.",
+        "meaning": "Wärmepumpe: Kombiniert Wärmepumpen, Wärmegewinnungsprozesse und Energieträger zur Wärmeerzeugung.",
         "spellings": [
          "Wärmepumpen",
          "Luft-Wasser-Wärmepumpe",
@@ -6997,7 +6997,7 @@
         "uri": "OEO_00020486"
        },
        "Ölheizung": {
-        "meaning": "An oil powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, heating oil and energy in a specific way.",
+        "meaning": "Ölheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Heizöl.",
         "spellings": [
          "Ölkessel",
          "Heizölkessel"
@@ -7005,7 +7005,7 @@
         "uri": "OEO_00020490"
        }
       },
-      "x-question": "Welche Wärmeerzeugungstechnologie? Nur wenn die Zahl ausdrücklich einer Heiztechnik zugeordnet ist, in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\" oder \"Ölheizungen\". Ein Energieträger ist keine Technologie: \"Erdgas\" allein ist der Träger, \"Gasheizung\" die Technologie. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz nicht nach Technologien aufgeteilt, antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt. Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist."
+      "x-question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "technology_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('technology_raw'). 'technology_quote' is then the frame's passage that prints the number.",
@@ -7748,7 +7748,7 @@
       },
       "x-options": {
        "arithmetic mean": {
-        "meaning": "average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region",
+        "meaning": "Durchschnittswert, berechnet als arithmetisches Mittel über Datensätze.",
         "spellings": [
          "Mittelwert",
          "Durchschnitt"
@@ -7756,7 +7756,7 @@
         "uri": "OEO_00140071"
        },
        "integral": {
-        "meaning": "sum or integral of values, e.g. within a time step or a spatial region",
+        "meaning": "Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets.",
         "spellings": [
          "Summe",
          "Gesamt",
@@ -7765,7 +7765,7 @@
         "uri": "OEO_00140070"
        },
        "maximum": {
-        "meaning": "maximum value within a set of data values, e.g. in a time step or spatial region",
+        "meaning": "Höchster Wert innerhalb einer Menge von Datenwerten in einem Bereich.",
         "spellings": [
          "Maximum",
          "Spitzenwert",
@@ -7774,7 +7774,7 @@
         "uri": "OEO_00140073"
        },
        "minimum": {
-        "meaning": "minimum value within a set of data values, e.g. in a time step or spatial region",
+        "meaning": "Niedrigster Wert innerhalb einer Menge von Datenwerten in einem Bereich.",
         "spellings": [
          "Minimum",
          "Tiefstwert"
@@ -7782,7 +7782,7 @@
         "uri": "OEO_00140072"
        }
       },
-      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Bei einer Leistung ist das eine echte Frage und keine Formsache. \"maximum\" bei einer Spitzenlast, einer Höchstlast oder einem Auslegungsfall. \"integral\" bei einer Summe über mehrere Anlagen oder über ein Gebiet, erkennbar an einer Zeile oder Spalte \"Summe\", \"Gesamt\" oder \"insgesamt\". \"arithmetic mean\" bei einem Durchschnitt (\"Ø\", \"mittlere Leistung\"). Die Leistung einer EINZELNEN Anlage ist keines davon: steht in der Quelle, in ihrem Abschnitt und in dem Satz davor nichts über die Zusammenfassung, dann ist das \"out:unstated\" und keine Schätzung."
+      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Bei Leistung eine echte Frage, keine Formsache.\n\"maximum\": Spitzenlast, Höchstlast, Auslegungsfall.\n\"integral\": Summe über mehrere Anlagen oder ein Gebiet, erkennbar an Zeile oder Spalte \"Summe\", \"Gesamt\", \"insgesamt\".\n\"arithmetic mean\": Durchschnitt (\"Ø\", \"mittlere Leistung\").\nLeistung einer EINZELNEN Anlage ist keines davon: steht in Quelle, Abschnitt und Satz davor nichts zur Zusammenfassung, \"out:unstated\", keine Schätzung."
      },
      "aggregation_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.",
@@ -7933,7 +7933,7 @@
       },
       "x-options": {
        "Abfallbrennstoff": {
-        "meaning": "A waste fuel is a fuel in which the material entity is waste.",
+        "meaning": "Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.",
         "spellings": [
          "Klärschlamm",
          "EBS"
@@ -7983,7 +7983,7 @@
         "uri": "OEO_00000132"
        },
        "Flüssiggas": {
-        "meaning": "Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.",
+        "meaning": "Flüssiggasgemisch aus Propan und Butan, unterscheidet sich als fossiler Gasbrennstoff.",
         "uri": "OEO_00320011"
        },
        "Geothermie": {
@@ -8044,7 +8044,7 @@
         "uri": "OEO_00000204"
        },
        "Strom": {
-        "meaning": "Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.",
+        "meaning": "Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.",
         "spellings": [
          "Elektrizität",
          "Heizungsstrom",
@@ -8066,7 +8066,7 @@
         "uri": "out:total"
        },
        "Umweltwärme": {
-        "meaning": "Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.",
+        "meaning": "In Luft, Erde oder Wasser gespeicherte Wärme, die durch Wärmepumpen genutzt wird.",
         "spellings": [
          "Umgebungswärme",
          "Umgebungsluft"
@@ -8080,7 +8080,7 @@
         "uri": "OEO_00000220"
        },
        "anthropogene Umweltwärme": {
-        "meaning": "Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.",
+        "meaning": "Umweltwärme mit anthropogenem Ursprung, unterscheidet sich durch menschliche Entstehung.",
         "spellings": [
          "Abwasserwärme",
          "Abwasser",
@@ -8089,7 +8089,7 @@
         "uri": "OEO_00140105"
        },
        "biogener Abfallbrennstoff": {
-        "meaning": "A biogenic waste fuel is a waste fuel that has a biogenic origin.",
+        "meaning": "Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart.",
         "spellings": [
          "Altholz",
          "Altholzheizung",
@@ -8105,7 +8105,7 @@
         "uri": "OEO_00000332"
        },
        "biogener Siedlungsabfall": {
-        "meaning": "A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.",
+        "meaning": "Siedlungsabfall mit biogenem Ursprung, unterscheidet sich durch die biologische Herkunft.",
         "spellings": [
          "Biogut",
          "Gartenabfälle",
@@ -8126,7 +8126,7 @@
         "uri": "OEO_00020495"
        },
        "natürliche Umweltwärme": {
-        "meaning": "Natural ambient thermal energy is ambient thermal energy that has a renewable origin.",
+        "meaning": "Umweltwärme mit erneuerbarem Ursprung, unterscheidet sich durch natürliche Herkunft.",
         "spellings": [
          "Oberflächengewässer",
          "Seethermie",
@@ -8143,7 +8143,7 @@
         "uri": "OEO_00010155"
        }
       },
-      "x-question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Gebäudetyp\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist."
+      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
@@ -8270,7 +8270,7 @@
      "parameter": {
       "const": "heat_load",
       "description": "Spec parameter: Leistung.",
-      "x-description-source": "Eine im Wärmeplan angegebene Leistung, also Energie je Zeit: eine Heizlast, eine Anschlussleistung, eine Netz- oder Erzeugerleistung, die Nennwärmeleistung eines Kessels oder BHKW. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die Klasse über ihre Einheit: power value ist \"a quantity value that has a power unit as unit\", also jede Angabe in kW, MW oder GW. Die Einheit trennt diesen Parameter von den anderen: kW gegen kWh. Eine Angabe in kWh, MWh oder GWh ist KEINE Leistung, sondern eine Energiemenge, auch wenn die Zeile das Wort Leistung enthält. Eine ANZAHL (Gebäude, Anlagen, Anschlüsse) ist keine Leistung und hat keine Einheit dieser Liste, auch wenn sie in derselben Zeile steht; eine Zahl von Gebäuden ist eine Gebäudeanzahl. Ein Leistungspotenzial ist ein Potenzial, \"a maximum value that describes some upper limit in a spatial region of reference\", also eine erschließbare und keine bereitgestellte Leistung. Die Ontologie unterscheidet theoretisches, technisches (technological), wirtschaftliches (economic), erschließbares (developable) und nachhaltiges (sustainable) Potenzial, jeweils als flow potential (eine Menge je Zeit) oder als stock potential (ein Bestand, etwa eine Speichermenge). Eine Leistung ist Energie je Zeit: wähle die Art, die die Quelle druckt, und nennt sie keine Art, flow potential. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "x-description-source": "Eine im Wärmeplan angegebene Leistung, also Energie je Zeit: eine Heizlast, eine Anschlussleistung, eine Netz- oder Erzeugerleistung, die Nennwärmeleistung eines Kessels oder BHKW. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die Klasse über ihre Einheit: power value ist \"a quantity value that has a power unit as unit\", also jede Angabe in kW, MW oder GW. Die Einheit trennt diesen Parameter von den anderen: kW gegen kWh. Eine Angabe in kWh, MWh oder GWh ist KEINE Leistung, sondern eine Energiemenge, auch wenn die Zeile das Wort Leistung enthält. Eine ANZAHL (Gebäude, Anlagen, Anschlüsse) ist keine Leistung und hat keine Einheit dieser Liste, auch wenn sie in derselben Zeile steht; eine Zahl von Gebäuden ist eine Gebäudeanzahl. Ein Leistungspotenzial ist ein Potenzial, \"a maximum value that describes some upper limit in a spatial region of reference\", also eine erschließbare und keine bereitgestellte Leistung. Die Ontologie unterscheidet theoretisches, technisches (technological), wirtschaftliches (economic), erschließbares (developable) und nachhaltiges (sustainable) Potenzial, jeweils als flow potential (eine Menge je Zeit) oder als stock potential (ein Bestand, etwa eine Speichermenge). Eine Leistung ist Energie je Zeit: wähle die Art, die die Quelle druckt, und nennt sie keine Art, flow potential. Die übrigen Einträge der Liste sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
       "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil. Eine Zahl von Gebäuden ist eine Gebäudeanzahl."
      },
      "parameter_link_quote": {
@@ -8401,25 +8401,25 @@
       },
       "x-options": {
        "developable flow potential": {
-        "meaning": "A developable flow potential is a type of flow potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).",
+        "meaning": "Erschließbares Flusspotenzial: Der Anteil des wirtschaftlichen Potenzials unter realistischen Rahmenbedingungen.",
         "spellings": [
          "erschließbares Potenzial"
         ],
         "uri": "OEO_00140060"
        },
        "developable stock potential": {
-        "meaning": "A developable stock potential is a type of stock potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).",
+        "meaning": "Erschließbares Bestandspotenzial: Der Anteil des wirtschaftlichen Potenzials unter realistischen Rahmenbedingungen.",
         "uri": "OEO_00140066"
        },
        "economic flow potential": {
-        "meaning": "An economic flow potential is a type of flow potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).",
+        "meaning": "Wirtschaftliches Flusspotenzial: Der Anteil des technologischen Potenzials, der wirtschaftlich nutzbar ist.",
         "spellings": [
          "wirtschaftliches Potenzial"
         ],
         "uri": "OEO_00140059"
        },
        "economic stock potential": {
-        "meaning": "An economic stock potential is a type of stock potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).",
+        "meaning": "Wirtschaftliches Bestandspotenzial: Der Anteil des technologischen Potenzials, der wirtschaftlich nutzbar ist.",
         "uri": "OEO_00140065"
        },
        "elektrische Leistung": {
@@ -8439,7 +8439,7 @@
         "uri": "out:other"
        },
        "flow potential": {
-        "meaning": "A flow potential is a potential of an input or output of a process, per time unit.",
+        "meaning": "Flusspotenzial: Potenzial eines Prozessinputs oder -outputs pro Zeiteinheit.",
         "uri": "OEO_00140056"
        },
        "getrennt für Winter und Sommer angegebene Leistung": {
@@ -8453,7 +8453,7 @@
         "uri": "out:seasonal"
        },
        "potential": {
-        "meaning": "A potential is a maximum value that describes some upper limit in a spatial region of reference.",
+        "meaning": "Potenzial: Ein Maximalwert, der eine Obergrenze in einem Referenzgebiet beschreibt.",
         "spellings": [
          "Leistungspotenzial",
          "Ausbaupotenzial"
@@ -8461,7 +8461,7 @@
         "uri": "OEO_00290000"
        },
        "power value": {
-        "meaning": "A power value is a quantity value that has a power unit as unit.",
+        "meaning": "Leistungswert: Eine Größe mit einer Leistungseinheit.",
         "spellings": [
          "Wärmeleistung",
          "Heizlast",
@@ -8483,44 +8483,44 @@
         "uri": "out:specific"
        },
        "stock potential": {
-        "meaning": "A stock potential is a potential of the stock of a source or sink.",
+        "meaning": "Bestandspotenzial: Potenzial des Bestands einer Quelle oder Senke.",
         "uri": "OEO_00140062"
        },
        "sustainable flow potential": {
-        "meaning": "A sustainable flow potential is a type of flow potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.",
+        "meaning": "Nachhaltiges Flusspotenzial: Potenzial unter Berücksichtigung aller ökologischen und sozioökonomischen Aspekte.",
         "spellings": [
          "nachhaltiges Potenzial"
         ],
         "uri": "OEO_00140061"
        },
        "sustainable stock potential": {
-        "meaning": "A sustainable stock potential is a type of stock potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.",
+        "meaning": "Nachhaltiges Bestandspotenzial: Potenzial unter Berücksichtigung aller ökologischen und sozioökonomischen Aspekte.",
         "uri": "OEO_00140067"
        },
        "technological flow potential": {
-        "meaning": "A technological flow potential is a type of a flow potential derived from a theoretical flow potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.",
+        "meaning": "Technologisches Flusspotenzial: Theoretisches Potenzial unter Berücksichtigung von Technologieeffizienz und verfügbarer Fläche.",
         "spellings": [
          "technisches Potenzial"
         ],
         "uri": "OEO_00140058"
        },
        "technological stock potential": {
-        "meaning": "A technological stock potential is a type of a stock potential derived from a theoretical stock potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.",
+        "meaning": "Technologisches Bestandspotenzial: Theoretisches Potenzial unter Berücksichtigung von Technologieeffizienz und verfügbarer Fläche.",
         "uri": "OEO_00140064"
        },
        "theoretical flow potential": {
-        "meaning": "A theoretical flow potential is a type of flow potential that identifies the physical upper limit of an input or output of a process in a spatial region of reference per unit time.",
+        "meaning": "Theoretisches Flusspotenzial: Physikalische Obergrenze eines Prozessinputs oder -outputs pro Zeiteinheit.",
         "spellings": [
          "theoretisches Potenzial"
         ],
         "uri": "OEO_00140057"
        },
        "theoretical stock potential": {
-        "meaning": "A theoretical stock potential is a type of stock potential that identifies the physical upper limit of a stock of a source or sink in a spatial region of reference.",
+        "meaning": "Theoretisches Bestandspotenzial: Physikalische Obergrenze eines Quellen- oder Senkenbestands.",
         "uri": "OEO_00140063"
        }
       },
-      "x-question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. \"power value\" ist definiert als quantity value mit einer Leistungseinheit: eine Heizlast, eine Anschlussleistung, eine Nennwärmeleistung, eine Netz- oder Erzeugerleistung. Die ABGEGEBENE ELEKTRISCHE Leistung derselben Anlage ist \"out:electric\" und nicht dieselbe Klasse: sie steht in einer eigenen Spalte, trägt denselben Energieträger und wäre im Graphen von der Wärmeleistung nicht zu unterscheiden. Gibt die Quelle die Leistung getrennt für Winter und Sommer an, dann ist das \"out:seasonal\" für BEIDE Werte."
+      "x-question": "Welche Größe ist diese Zahl? Wichtigste Entscheidung: bestimmt die Klasse im Graphen.\n\"power value\" = quantity value mit Leistungseinheit: Heizlast, Anschlussleistung, Nennwärmeleistung, Netz- oder Erzeugerleistung.\nABGEGEBENE ELEKTRISCHE Leistung derselben Anlage ist \"elektrische Leistung\", nicht dieselbe Klasse: eigene Spalte, gleicher Energieträger, im Graphen nicht von der Wärmeleistung zu unterscheiden.\nLeistung getrennt für Winter und Sommer: für BEIDE Werte \"getrennt für Winter und Sommer angegebene Leistung\"."
      },
      "quantity_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.",
@@ -8819,7 +8819,7 @@
       },
       "x-options": {
        "GHD": {
-        "meaning": "A commercial sector is a sector that covers non-industrial commercial activities.",
+        "meaning": "Sektor für nicht-industrielle gewerbliche Aktivitäten.",
         "spellings": [
          "Gewerbe, Handel, Dienstleistungen",
          "Gewerbe/Handel/Dienstleistungen",
@@ -8834,7 +8834,7 @@
         "uri": "OEO_00000405"
        },
        "Industrie": {
-        "meaning": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.",
+        "meaning": "Sektor für industrielle Aktivitäten mit Energiewandlung.",
         "spellings": [
          "Industriesektor",
          "verarbeitendes Gewerbe"
@@ -8842,14 +8842,14 @@
         "uri": "OEO_00000227"
        },
        "Landwirtschaft": {
-        "meaning": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.",
+        "meaning": "Sektor für Landwirtschaft, Forstwirtschaft und Landnutzung.",
         "spellings": [
          "Land- und Forstwirtschaft"
         ],
         "uri": "OEO_00010035"
        },
        "Private Haushalte": {
-        "meaning": "A household sector is a sector that covers households.",
+        "meaning": "Sektor für private Haushalte und Wohngebäude.",
         "spellings": [
          "Haushalte",
          "Privathaushalte",
@@ -8873,14 +8873,14 @@
         "uri": "out:total"
        },
        "Verkehr": {
-        "meaning": "A transport sector is a sector that covers transport of people and/or goods.",
+        "meaning": "Sektor für den Transport von Personen und Gütern.",
         "spellings": [
          "Verkehrssektor"
         ],
         "uri": "OEO_00000422"
        }
       },
-      "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"). Eine Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist dagegen keine Summe über Sektoren. \"Einfamilienhaus\" und \"Mehrfamilienhaus\" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Energieträger\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist."
+      "x-question": "Welcher Verbrauchssektor?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: \"Wohnen\", \"Wohngebäude\" = Private Haushalte; \"GHD/Kommune\", \"Gewerbe\", \"wirtschaftlich genutzte Gebäude\" = GHD.\nGEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\", \"Plangebiet\" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.\nZeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf) = \"Summe\".\nEbenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\").\nGesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist keine Summe über Sektoren.\n\"Einfamilienhaus\", \"Mehrfamilienhaus\" = Private Haushalte.\nEigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Energieträger\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "sector_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
@@ -9027,7 +9027,7 @@
         "uri": "sub_area"
        }
       },
-      "x-question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Eine Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: Nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse."
+      "x-question": "Auf welches Gebiet bezieht sich der Wert?\nZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.\nSteckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.\nErst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.\nÜberschrift ohne Ortsnamen belegt kein Gemeindegebiet: nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht.\nTeilgebiet: sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.\nGanzes Gemeindegebiet: die Klasse reicht."
      },
      "spatial_scope_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.",
@@ -10094,7 +10094,7 @@
       },
       "x-options": {
        "Abfallbrennstoff": {
-        "meaning": "A waste fuel is a fuel in which the material entity is waste.",
+        "meaning": "Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.",
         "spellings": [
          "Klärschlamm",
          "EBS"
@@ -10144,7 +10144,7 @@
         "uri": "OEO_00000132"
        },
        "Flüssiggas": {
-        "meaning": "Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.",
+        "meaning": "Flüssiggasgemisch aus Propan und Butan, unterscheidet sich als fossiler Gasbrennstoff.",
         "uri": "OEO_00320011"
        },
        "Geothermie": {
@@ -10205,7 +10205,7 @@
         "uri": "OEO_00000204"
        },
        "Strom": {
-        "meaning": "Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.",
+        "meaning": "Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.",
         "spellings": [
          "Elektrizität",
          "Heizungsstrom",
@@ -10227,7 +10227,7 @@
         "uri": "out:total"
        },
        "Umweltwärme": {
-        "meaning": "Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.",
+        "meaning": "In Luft, Erde oder Wasser gespeicherte Wärme, die durch Wärmepumpen genutzt wird.",
         "spellings": [
          "Umgebungswärme",
          "Umgebungsluft"
@@ -10241,7 +10241,7 @@
         "uri": "OEO_00000220"
        },
        "anthropogene Umweltwärme": {
-        "meaning": "Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.",
+        "meaning": "Umweltwärme mit anthropogenem Ursprung, unterscheidet sich durch menschliche Entstehung.",
         "spellings": [
          "Abwasserwärme",
          "Abwasser",
@@ -10250,7 +10250,7 @@
         "uri": "OEO_00140105"
        },
        "biogener Abfallbrennstoff": {
-        "meaning": "A biogenic waste fuel is a waste fuel that has a biogenic origin.",
+        "meaning": "Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart.",
         "spellings": [
          "Altholz",
          "Altholzheizung",
@@ -10266,7 +10266,7 @@
         "uri": "OEO_00000332"
        },
        "biogener Siedlungsabfall": {
-        "meaning": "A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.",
+        "meaning": "Siedlungsabfall mit biogenem Ursprung, unterscheidet sich durch die biologische Herkunft.",
         "spellings": [
          "Biogut",
          "Gartenabfälle",
@@ -10287,7 +10287,7 @@
         "uri": "OEO_00020495"
        },
        "natürliche Umweltwärme": {
-        "meaning": "Natural ambient thermal energy is ambient thermal energy that has a renewable origin.",
+        "meaning": "Umweltwärme mit erneuerbarem Ursprung, unterscheidet sich durch natürliche Herkunft.",
         "spellings": [
          "Oberflächengewässer",
          "Seethermie",
@@ -10304,7 +10304,7 @@
         "uri": "OEO_00010155"
        }
       },
-      "x-question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Energieträgern aufgeteilt, sondern nur nach etwas anderem (Gebäudetyp, Sektor, Gebiet), gilt sie für alle Energieträger zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Gebäudetyp\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist."
+      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
@@ -10431,7 +10431,7 @@
      "parameter": {
       "const": "share",
       "description": "Spec parameter: Anteil.",
-      "x-description-source": "Ein im Wärmeplan angegebener Anteil in Prozent: welcher Teil eines Ganzen auf einen Energieträger, einen Sektor oder eine Technologie entfällt, etwa \"Anteil Fernwärme 41 %\" oder \"davon Erdgas 20 %\". Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Einheit trennt diesen Parameter von den anderen: eine Angabe in % ist ein Anteil und keine Energiemenge, auch wenn die Menge daneben steht; die Menge ist ein eigenes Tupel ihres eigenen Parameters. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Prozentwerte, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "x-description-source": "Ein im Wärmeplan angegebener Anteil in Prozent: welcher Teil eines Ganzen auf einen Energieträger, einen Sektor oder eine Technologie entfällt, etwa \"Anteil Fernwärme 41 %\" oder \"davon Erdgas 20 %\". Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Einheit trennt diesen Parameter von den anderen: eine Angabe in % ist ein Anteil und keine Energiemenge, auch wenn die Menge daneben steht; die Menge ist ein eigenes Tupel ihres eigenen Parameters. Die übrigen Einträge der Liste sind Prozentwerte, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
       "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil. Eine Zahl von Gebäuden ist eine Gebäudeanzahl."
      },
      "parameter_link_quote": {
@@ -10546,7 +10546,7 @@
       },
       "x-options": {
        "fraction value": {
-        "meaning": "A fraction value is a relational quantity value that has a fraction as it's unit.",
+        "meaning": "Bruchwert: Eine relationale Größe mit einem Bruch als Einheit.",
         "spellings": [
          "Anteil",
          "Prozentanteil",
@@ -10568,7 +10568,7 @@
         "uri": "out:other"
        }
       },
-      "x-question": "Welche Größe ist diese Zahl? \"fraction value\" ist der Anteil eines Ganzen in Prozent: welcher Teil des Wärmebedarfs, des Verbrauchs oder der Erzeugung auf einen Energieträger, einen Sektor oder eine Technologie entfällt (\"davon Wärmenetz 41 %\", \"Anteil erneuerbarer Energien 65 %\"). Ein Prozentwert, der keinen Teil eines Ganzen nennt (eine Sanierungsrate pro Jahr, ein Wirkungsgrad, eine Veränderung gegenüber einem Basisjahr), und ein Anteil an etwas anderem als Energie oder Emissionen (an Gebäuden, Anlagen, Heizungen, Flächen, Kosten, Fördermitteln) ist \"out:other\"."
+      "x-question": "Welche Größe ist diese Zahl?\n\"fraction value\" = Anteil eines Ganzen in Prozent: welcher Teil des Wärmebedarfs, Verbrauchs oder der Erzeugung auf einen Energieträger, Sektor oder eine Technologie entfällt (\"davon Wärmenetz 41 %\", \"Anteil erneuerbarer Energien 65 %\").\n\"keine Anteilsangabe\": Prozentwert ohne Teil eines Ganzen (Sanierungsrate pro Jahr, Wirkungsgrad, Veränderung gegenüber einem Basisjahr); Anteil an anderem als Energie oder Emissionen (Gebäude, Anlagen, Heizungen, Flächen, Kosten, Fördermittel)."
      },
      "quantity_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.",
@@ -10867,7 +10867,7 @@
       },
       "x-options": {
        "GHD": {
-        "meaning": "A commercial sector is a sector that covers non-industrial commercial activities.",
+        "meaning": "Sektor für nicht-industrielle gewerbliche Aktivitäten.",
         "spellings": [
          "Gewerbe, Handel, Dienstleistungen",
          "Gewerbe/Handel/Dienstleistungen",
@@ -10882,7 +10882,7 @@
         "uri": "OEO_00000405"
        },
        "Industrie": {
-        "meaning": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.",
+        "meaning": "Sektor für industrielle Aktivitäten mit Energiewandlung.",
         "spellings": [
          "Industriesektor",
          "verarbeitendes Gewerbe"
@@ -10890,14 +10890,14 @@
         "uri": "OEO_00000227"
        },
        "Landwirtschaft": {
-        "meaning": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.",
+        "meaning": "Sektor für Landwirtschaft, Forstwirtschaft und Landnutzung.",
         "spellings": [
          "Land- und Forstwirtschaft"
         ],
         "uri": "OEO_00010035"
        },
        "Private Haushalte": {
-        "meaning": "A household sector is a sector that covers households.",
+        "meaning": "Sektor für private Haushalte und Wohngebäude.",
         "spellings": [
          "Haushalte",
          "Privathaushalte",
@@ -10921,14 +10921,14 @@
         "uri": "out:total"
        },
        "Verkehr": {
-        "meaning": "A transport sector is a sector that covers transport of people and/or goods.",
+        "meaning": "Sektor für den Transport von Personen und Gütern.",
         "spellings": [
          "Verkehrssektor"
         ],
         "uri": "OEO_00000422"
        }
       },
-      "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"). Eine Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist dagegen keine Summe über Sektoren. \"Einfamilienhaus\" und \"Mehrfamilienhaus\" meinen die Klasse Private Haushalte. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz gar nicht nach Sektoren aufgeteilt, sondern nur nach etwas anderem (Energieträger, Gebiet), gilt sie für alle Verbraucher zusammen: antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt, etwa \"Energieträger\". Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist."
+      "x-question": "Welcher Verbrauchssektor?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: \"Wohnen\", \"Wohngebäude\" = Private Haushalte; \"GHD/Kommune\", \"Gewerbe\", \"wirtschaftlich genutzte Gebäude\" = GHD.\nGEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\", \"Plangebiet\" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.\nZeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf) = \"Summe\".\nEbenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\").\nGesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist keine Summe über Sektoren.\n\"Einfamilienhaus\", \"Mehrfamilienhaus\" = Private Haushalte.\nEigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Energieträger\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "sector_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
@@ -11075,7 +11075,7 @@
         "uri": "sub_area"
        }
       },
-      "x-question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Eine Überschrift ohne Ortsnamen belegt kein Gemeindegebiet: Nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse."
+      "x-question": "Auf welches Gebiet bezieht sich der Wert?\nZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.\nSteckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.\nErst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.\nÜberschrift ohne Ortsnamen belegt kein Gemeindegebiet: nennt die Stelle keinen Ort und kein ganzes Gemeindegebiet, sagt sie das Gebiet nicht.\nTeilgebiet: sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.\nGanzes Gemeindegebiet: die Klasse reicht."
      },
      "spatial_scope_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.",
@@ -11296,7 +11296,7 @@
       },
       "x-options": {
        "Biomasseheizung": {
-        "meaning": "A biomass powered heating technology is a combustion-based heat generation technology that describes how to combine biomass boilers, heat gain processes, biomass and energy in a specific way.",
+        "meaning": "Biomasseheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Biomasse.",
         "spellings": [
          "Holzheizung",
          "Pelletheizung",
@@ -11306,7 +11306,7 @@
         "uri": "OEO_00020493"
        },
        "Direktelektrische Heizung": {
-        "meaning": "An electrical heating technology is a technology that describes how to combine electrical heaters in a heat gain process with electrical energy as input in a specific way.",
+        "meaning": "Direktelektrische Heizung: Wandelt elektrische Energie direkt in Wärme mittels elektrischer Heizelemente um.",
         "spellings": [
          "Stromdirektheizung",
          "Elektroheizung",
@@ -11315,7 +11315,7 @@
         "uri": "OEO_00020487"
        },
        "Gasheizung": {
-        "meaning": "An gas powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, natural gas and energy in a specific way.",
+        "meaning": "Gasheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Erdgas.",
         "spellings": [
          "Gaskessel",
          "Gasbrennwertkessel",
@@ -11324,7 +11324,7 @@
         "uri": "OEO_00020491"
        },
        "Geothermie": {
-        "meaning": "A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way.",
+        "meaning": "Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung.",
         "spellings": [
          "Geothermieanlage",
          "Tiefengeothermie",
@@ -11333,7 +11333,7 @@
         "uri": "OEO_00020306"
        },
        "Solarthermie": {
-        "meaning": "A solar thermal heat technology is a heat generation technology that describes how to combine solar heat units, solar thermal energy transformation processes, energy carriers and energy in a specific way.",
+        "meaning": "Solarthermie: Nutzt Solareinheiten und solare Umwandlungsprozesse zur Wärmeerzeugung.",
         "spellings": [
          "Solarthermieanlage",
          "solarthermische Anlage"
@@ -11358,7 +11358,7 @@
         "uri": "out:total"
        },
        "Wasserstoffheizung": {
-        "meaning": "An hydrogen powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, hydrogen and energy in a specific way.",
+        "meaning": "Wasserstoffheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Wasserstoff.",
         "spellings": [
          "Wasserstoffkessel",
          "H2-Kessel"
@@ -11366,7 +11366,7 @@
         "uri": "OEO_00020492"
        },
        "Wärmepumpe": {
-        "meaning": "A heat pump technology is a heat generation technology that describes how to combine heat pumps, heat gain processes, energy carriers and energy in a specific way.",
+        "meaning": "Wärmepumpe: Kombiniert Wärmepumpen, Wärmegewinnungsprozesse und Energieträger zur Wärmeerzeugung.",
         "spellings": [
          "Wärmepumpen",
          "Luft-Wasser-Wärmepumpe",
@@ -11376,7 +11376,7 @@
         "uri": "OEO_00020486"
        },
        "Ölheizung": {
-        "meaning": "An oil powered heating technology is a combustion-based heat generation technology that describes how to combine combustion-based heaters, heat gain processes, heating oil and energy in a specific way.",
+        "meaning": "Ölheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Heizöl.",
         "spellings": [
          "Ölkessel",
          "Heizölkessel"
@@ -11384,7 +11384,7 @@
         "uri": "OEO_00020490"
        }
       },
-      "x-question": "Welche Wärmeerzeugungstechnologie? Nur wenn die Zahl ausdrücklich einer Heiztechnik zugeordnet ist, in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\" oder \"Ölheizungen\". Ein Energieträger ist keine Technologie: \"Erdgas\" allein ist der Träger, \"Gasheizung\" die Technologie. Ist die Zahl in ihrer eigenen Tabelle oder ihrem eigenen Satz nicht nach Technologien aufgeteilt, antworte \"Summe\", zitiere die Kopfzeile oder den Titel der eigenen Tabelle, bei einem Satz den Satz selbst, und \"value_raw\" ist das Wort aus diesem Zitat, nach dem die Zahl stattdessen aufgeteilt ist oder das sie benennt. Was unter \"known\" zu der Zeile steht, sagt dir, was die Zahl schon ist."
+      "x-question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "technology_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('technology_raw'). 'technology_quote' is then the frame's passage that prints the number.",
@@ -11614,7 +11614,7 @@
        "string",
        "null"
       ],
-      "x-question": "Wovon ist diese Zahl ein Anteil? Gemeint ist das Ganze, das die Stelle selbst nennt: der Wärmebedarf, der Endenergieverbrauch, die Emissionen, die Gebäude, die Fläche. Antworte mit dem Wort des Plans. Nennt die Stelle das Ganze nicht, sagt der Plan es nicht."
+      "x-question": "Wovon ist diese Zahl ein Anteil? Das Ganze, das die Stelle selbst nennt: Wärmebedarf, Endenergieverbrauch, Emissionen, Gebäude, Fläche.\nAntworte mit dem Wort des Plans.\nNennt die Stelle das Ganze nicht, sagt der Plan es nicht."
      },
      "whole_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('whole_raw'). 'whole_quote' is then the frame's passage that prints the number.",
@@ -13667,9 +13667,6 @@
       },
       "type": "object"
      },
-     "fetched": {
-      "type": "integer"
-     },
      "kind": {
       "enum": [
        "section",
@@ -13677,17 +13674,11 @@
        "figure"
       ]
      },
-     "missed": {
-      "type": "integer"
-     },
      "owner": {
       "type": "integer"
      },
      "parameter": {
       "type": "string"
-     },
-     "searched": {
-      "type": "integer"
      },
      "t": {
       "const": "read"

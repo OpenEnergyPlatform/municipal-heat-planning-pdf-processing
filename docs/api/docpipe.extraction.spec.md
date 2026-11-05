@@ -53,6 +53,7 @@ Fields:
 - `name: str`
 - `vocabulary: Optional[dict] = None`: target URI -> corpus labels
 - `definitions: dict = field(default_factory=dict)`: target URI -> what the ontology says the term means, one sentence. The field prompt has promised since the first run that the question names what each entry means, and nothing did: the model was given a class identifier and a list of German words and asked to decide by meaning.
+- `glosses: dict = field(default_factory=dict)`: target URI -> one line in the profile's language saying what the entry means, shown instead of its definition (owner decision 2026-11-05, ticket 26): the ontology's English sentences were a third of every list a classification request showed. Written once by the model from the definition, which stays beside it to say when the line is due again.
 - `type: Optional[str] = None`: "int" for years, "text" for wording
 - `enum: Optional[tuple] = None`
 - `required: bool = False`
@@ -90,6 +91,8 @@ Fields:
 - `unit_names_period: dict = field(default_factory=dict)`: unit -> bool
 - `vocabulary: Optional[dict] = None`: category parameters: uri -> labels
 - `definitions: dict = field(default_factory=dict)`
+- `glosses: dict = field(default_factory=dict)`: as on an axis
+- `brief: Optional[str] = None`: What a value of this parameter is, in one paragraph (owner decision 2026-11-05, ticket 26). The requests that find values and the groups that do not classify them show this; a group whose spec entry says "definition": "full" shows `description`, and so does every request where it is None.
 - `vocabulary_dynamic: bool = False`: A category whose closed list is real but per document, filled in by the profile before the harvest. Same rule as a dynamic axis, one level up.
 - `kg: Optional[dict] = None`: What a row of this parameter becomes in the graph: which node, which class, which predicate carries the number and which the unit. Read by the serializer and published by the JSON schema, so neither can drift from the other.
 
@@ -154,6 +157,7 @@ Fields:
 - `coordinates: tuple`
 - `read_in: str`
 - `where: str`: Where a plan prints the group, in the words the prompts show.
+- `full_definition: bool = False`: Whether its requests show a parameter's full definition rather than its `brief` (spec: "definition": "full"): the group that classifies a value needs every distinction the definition draws, the others only what a value of the parameter is (owner decision 2026-11-05, ticket 26).
 
 ### Spec
 
