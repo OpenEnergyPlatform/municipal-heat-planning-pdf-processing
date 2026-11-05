@@ -9,6 +9,12 @@ quoted by the read value it was found with and carries its record, AND is
 graded D for its own reason, AND is a valid harvest row, AND once the
 catalogue cannot be reached the run asks it no more.
 
+A field its front pages give, or one looked up already, is not looked up,
+AND one read only elsewhere is; the record is found with the title AND the
+DOI of the front pages where they were read there, AND a record the title
+finds is matched against the authors of the front pages where it read any
+there (owner decision 2026-11-05).
+
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
 import io
@@ -320,3 +326,98 @@ def test_without_a_given_index_doi_the_run_database_is_asked(monkeypatch):
                                   db="run.db")
     assert seen == [("run.db", 4)] and asked == [DOI]
     assert outcome["key"] == completion.BY_INDEX_DOI
+
+
+# -- the front pages (owner decision 2026-11-05) ---------------------------------
+
+def on(row: dict, page: int) -> dict:
+    """*row* as read on *page*."""
+    return {**row, "provenance": {**row["provenance"], "page": page}}
+
+
+CITED = "10.1080/14693062.2020.1798734"
+
+
+def by_index(doi):
+    return RECORD if doi == DOI else None
+
+
+def test_a_field_read_only_off_the_front_pages_is_looked_up():
+    title, year = (read("publication_title", TITLE),
+                   read("publication_date", "2018", "Published 2018"))
+    cited = on(read("publication_doi", CITED, f"doi:{CITED}"), 29)
+    report = report_of(title, *AUTHORS, year, cited)
+    outcome = completion.complete(report, SPEC, fetch=no_doi,
+                                  fetch_doi=by_index, catalogue_doi=DOI)
+    assert outcome["filled"] == ["publication_doi"]
+    assert looked_up(report)["publication_doi"]["value"] == DOI
+    # the failure by construction: the same DOI on the title page is the
+    # document's own, and nothing is looked up
+    fetch, asked = looked(RECORD)
+    front = report_of(title, *AUTHORS, year, on(cited, 1))
+    assert completion.complete(front, SPEC, fetch=fetch, fetch_doi=fetch,
+                               catalogue_doi=DOI) is None
+    assert asked == []
+
+
+def test_a_field_looked_up_already_is_not_looked_up_again():
+    report = report_of(read("publication_title", TITLE), *AUTHORS)
+    completion.complete(report, SPEC, fetch=looked(RECORD)[0])
+    assert set(looked_up(report)) == {"publication_doi", "publication_date"}
+    fetch, asked = looked(RECORD)
+    assert completion.complete(report, SPEC, fetch=fetch) is None
+    assert asked == []
+    # the failure by construction: without the rows looked up it is asked
+    fresh = report_of(*[row for row in report.tuples
+                        if not row.get("catalogue")])
+    assert completion.complete(fresh, SPEC, fetch=fetch)["outcome"] == "taken"
+    assert asked == [TITLE]
+
+
+def test_the_record_is_found_by_the_title_of_the_front_pages():
+    other = on(read("publication_title", "Net Zero by 2050 (IEA)"), 12)
+    report = report_of(read("publication_title", TITLE), other, on(other, 13),
+                       *AUTHORS)
+    fetch, asked = looked(RECORD)
+    completion.complete(report, SPEC, fetch=fetch, fetch_doi=lambda doi: None)
+    assert asked == [TITLE]
+    # the failure by construction: without the title page's reading, the
+    # other work's title is the key
+    fetch, asked = looked(RECORD)
+    completion.complete(report_of(other, on(other, 13), *AUTHORS), SPEC,
+                        fetch=fetch, fetch_doi=lambda doi: None)
+    assert asked == ["Net Zero by 2050 (IEA)"]
+
+
+def test_the_record_is_found_by_the_doi_of_the_front_pages():
+    title = read("publication_title", TITLE)
+    own = read("publication_doi", DOI, f"doi:{DOI}")
+    cited = on(read("publication_doi", CITED, f"doi:{CITED}"), 20)
+    by_doi, asked = looked(RECORD)
+    completion.complete(report_of(title, own, cited, on(cited, 21), *AUTHORS),
+                        SPEC, fetch=no_doi, fetch_doi=by_doi)
+    assert asked == [DOI]
+    # the failure by construction: read twice, the cited DOI is the key
+    # where the front pages print none
+    by_doi, asked = looked(RECORD)
+    completion.complete(report_of(title, cited, on(cited, 21), *AUTHORS),
+                        SPEC, fetch=no_doi, fetch_doi=by_doi)
+    assert asked == [CITED]
+
+
+def test_a_record_the_title_finds_is_matched_against_the_front_page_authors():
+    one = read("publication_author", "A. Smith", "A. Smith, University")
+    others = [on(read("publication_author", name, f"{name} et al."), 12)
+              for name in ("Carl Weber", "Dora Lang")]
+    found = record("Alice Smith", "Xavier Roe")
+    report = report_of(read("publication_title", TITLE), one, *others)
+    completion.complete(report, SPEC, fetch=looked(found)[0],
+                        fetch_doi=lambda doi: None)
+    assert set(looked_up(report)) == {"publication_doi", "publication_date"}
+    # the failure by construction: the same three names on the front page
+    # ask for two family names, and only one of them stands in the record
+    report = report_of(read("publication_title", TITLE), one,
+                       *[on(row, 1) for row in others])
+    outcome = completion.complete(report, SPEC, fetch=looked(found)[0],
+                                  fetch_doi=lambda doi: None)
+    assert outcome["outcome"] == "authors" and looked_up(report) == {}

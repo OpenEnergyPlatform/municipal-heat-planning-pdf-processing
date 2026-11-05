@@ -280,7 +280,10 @@ database's own spelling when known, `dc:acronym` the document's own; a
 matched study region is referenced by its existing OEKG IRI, never
 minted; an unmatched wording mints nothing and is counted. `entities()`
 mints one node per distinct author, organisation or funder by
-normalised spelling, keeping each row's passage in the evidence. A row
+normalised spelling, keeping each row's passage in the evidence. The
+authors are those the front pages name, else those looked up in the
+catalogue, else those read anywhere (`profiles/scenarios/front.py`), each
+name keeping every reading of it in its evidence. A row
 whose scenario coordinate never resolves reaches no triple, comment or
 number; it is counted `unplaceable`, keyed by state, since without it
 the gap read as zero. Evidence for a triple is a flattened comment, or,

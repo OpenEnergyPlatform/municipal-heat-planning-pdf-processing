@@ -1441,7 +1441,7 @@ def make_seek_probes(own=(), context_of: Optional[Callable] = None,
                      write: Optional[Callable] = None) -> Callable:
     """probes(parameter, document_id) -> the sentences the search for a
     parameter the survey named no passage for ranks with
-    (`surveyed.sought_survey`, owner decision 2026-11-05).
+    (`surveyed.sought_lists`, owner decision 2026-11-05).
 
     A parameter about the document itself (*own*, the profile's
     `FRONT_PAGE_PARAMETERS`: its title, authors, date, DOI and abstract) gets

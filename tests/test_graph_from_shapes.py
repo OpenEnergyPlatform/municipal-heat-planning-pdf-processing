@@ -15,7 +15,7 @@ from rdflib import Graph, Literal, URIRef
 
 from docpipe.extraction import gate
 from docpipe.extraction.shapemodel import Model, SchemaError
-from profiles.scenarios import kg, vocabulary
+from profiles.scenarios import completion, kg, vocabulary
 
 OEO = "https://openenergyplatform.org/ontology/oeo/"
 HEAD = """@prefix sh: <http://www.w3.org/ns/shacl#> .
@@ -228,6 +228,85 @@ def test_a_year_on_the_first_page_goes_before_years_read_more_often_later():
 def test_behind_a_cover_the_page_the_title_was_read_on_is_a_front_page():
     rows = dated(("2019", 2), ("2017", 9), ("2017", 10), title_page=2)
     assert year_in_graph(rows) == ["2019"]
+
+
+# Promise: where no front page gives a date, a DOI or an author, the value
+# looked up in the catalogue goes before a reading anywhere else, AND a
+# reading on a front page goes before the catalogue's, though the row looked
+# up keeps the page of the reading it was found with; an author taken keeps
+# every reading of the name as its evidence (owner decisions 2026-11-05).
+def looked_up(parameter, value, page=1):
+    anchor = {"parameter": "publication_title", "value": "Net-zero EU",
+              "quote": "Net-zero EU", "provenance": {"page": page}}
+    found = {"id": "https://openalex.org/W1", "publication_date": "2020-03-01",
+             "authorships": [{"author": {"display_name": value}}]}
+    return completion.row_of(anchor, parameter, value, found,
+                             (completion.BY_TITLE, "Net-zero EU"), [])
+
+
+def test_a_looked_up_year_goes_before_years_read_off_the_front_pages():
+    review = [("2018", 11), ("2018", 12), ("2018", 13)]
+    rows = dated(*review) + [looked_up("publication_date", "2020")]
+    assert year_in_graph(rows) == ["2020"]
+    # the failure by construction: without the record the rest decides
+    assert year_in_graph(dated(*review)) == ["2018"]
+
+
+def test_a_year_a_front_page_prints_goes_before_a_looked_up_one():
+    # Two rows looked up on the title's page would outvote the one reading
+    # there, were their page taken for where their value stands.
+    record = looked_up("publication_date", "2020")
+    assert year_in_graph(dated(("2019", 1)) + [record, dict(record)]) == [
+        "2019"]
+
+
+def authors_of(text):
+    graph = Graph().parse(data=text, format="turtle")
+    label = URIRef("http://www.w3.org/2000/01/rdf-schema#label")
+    return sorted(str(graph.value(author, label)) for author in
+                  graph.objects(predicate=URIRef(OEO + "OEO_00000506")))
+
+
+def written_by(*names_on_pages):
+    rows = [{"parameter": "publication_title", "value": "Net-zero EU",
+             "quote": "Net-zero EU", "provenance": {"page": 1}}]
+    return rows + [{"parameter": "publication_author", "value": name,
+                    "quote": name,
+                    "provenance": {"page": page, "owner_kind": "section",
+                                   "owner_id": page}}
+                   for name, page in names_on_pages]
+
+
+def serialized(rows):
+    return kg.make_serializer(Path("no-such.db"), model=oekg())("doc", rows)
+
+
+def test_the_authors_a_front_page_names_go_before_those_of_other_works():
+    rows = written_by(("Ada Lovelace", 1), ("Grace Hopper", 12),
+                      ("Alan Turing", 13))
+    assert authors_of(serialized(rows)) == ["Ada Lovelace"]
+    # the failure by construction: no author on a front page, every one counts
+    rows = written_by(("Grace Hopper", 12), ("Alan Turing", 13))
+    assert authors_of(serialized(rows)) == ["Alan Turing", "Grace Hopper"]
+
+
+def test_authors_looked_up_go_before_authors_read_off_the_front_pages():
+    rows = written_by(("Grace Hopper", 12)) + [
+        looked_up("publication_author", "Ada Lovelace")]
+    assert authors_of(serialized(rows)) == ["Ada Lovelace"]
+
+
+def test_an_author_taken_keeps_every_reading_of_the_name_as_evidence():
+    mark = kg.TRUST_PROSE["corroborated"]
+
+    def confirmed(rows):
+        return sum(mark in line for line in serialized(rows).splitlines())
+    rows = written_by(("Ada Lovelace", 1), ("Ada Lovelace", 12),
+                      ("Grace Hopper", 12))
+    assert authors_of(serialized(rows)) == ["Ada Lovelace"]
+    assert confirmed(rows) == 2
+    # the failure by construction: read once, the name confirms nothing
+    assert confirmed(written_by(("Ada Lovelace", 1), ("Grace Hopper", 12))) == 0
 
 
 # Promise: a value is marked confirmed where its readings come from two

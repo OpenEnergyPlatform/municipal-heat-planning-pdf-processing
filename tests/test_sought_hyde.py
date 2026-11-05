@@ -14,8 +14,7 @@ import pytest
 
 from docpipe.extraction import runner
 from docpipe.extraction.spec import load as load_spec
-from docpipe.extraction.surveyed import sought_survey
-from docpipe.extraction.survey import Found
+from docpipe.extraction.surveyed import sought_lists
 from profiles.kwp import extraction as kwp_extraction
 from profiles.scenarios import extraction as scenarios_extraction
 
@@ -37,20 +36,19 @@ def ranking():
     return rank, asked
 
 
-def test_the_search_ranks_with_the_sentences_and_names_the_first_passage():
+def test_the_search_ranks_with_the_sentences_and_lists_what_it_found():
     rank, asked = ranking()
     sentence = "Emissions are reported by sector following the CRF."
-    out = sought_survey(Found(True), rank, 151, [DIVISION],
-                        lambda parameter, document: [sentence])
+    out = sought_lists(rank, 151, [DIVISION],
+                       lambda parameter, document: [sentence])
     assert asked == [[sentence]]
-    assert out.passages_of(DIVISION.uri) == [("section", 55052)]
+    assert out == {DIVISION.uri: [PASSAGE]}
 
 
 def test_without_a_sentence_the_search_falls_back_to_the_label():
     rank, asked = ranking()
-    sought_survey(Found(True), rank, 151, [DIVISION],
-                  lambda parameter, document: [])
-    sought_survey(Found(True), rank, 151, [DIVISION])
+    sought_lists(rank, 151, [DIVISION], lambda parameter, document: [])
+    sought_lists(rank, 151, [DIVISION])
     assert asked == [[DIVISION.label], [DIVISION.label]]
 
 

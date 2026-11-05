@@ -3208,14 +3208,14 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 
 One event per line; `t` names it and `doc` the document. Read by scripts/trace_report.py.
 
-25 record kinds, told apart by `t`:
+28 record kinds, told apart by `t`:
 
 - `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
 - `anchor`: `doc`, `parameter`, `text`
 - `frame`: `attempt`, `completion_tokens`, `doc`, `missed`, `ms`, `pairs`, `prompt_tokens`, `rejected`, `scenarios`, `sources`, `status`, `years`
 - `rows`: `attempt`, `completion_tokens`, `doc`, `ms`, `origins`, `prompt`, `prompt_tokens`, `ranks`, `rows`, `sources`, `status`
 - `code`: `attempt`, `code`, `doc`, `error`, `ok`, `stdout`
-- `compute`: `doc`, `fetched`, `kind`, `misquoted`, `numbers`, `outcome`, `runs`, `searched`, `taken`, `untaken`
+- `compute`: `doc`, `fetched`, `kind`, `misquoted`, `numbers`, `outcome`, `reason`, `rejected`, `runs`, `searched`, `taken`, `untaken`
 - `field`: `anchor`, `attempt`, `batches`, `completion_tokens`, `doc`, `filled`, `filled_by`, `ms`, `open`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `via_base`, `via_table`, `via_target`, `window`
 - `sweep`: `anchor`, `asked`, `batches`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `scope`, `slot`, `unbacked`, `unquoted`, `unstated`, `via_base`, `via_table`, `via_target`, `windows`, `withdrawn`
 - `drop`: `attempt`, `batches`, `doc`, `field`, `given`, `quote`, `raw`, `row`, `slot`, `why`, `window`
@@ -3235,5 +3235,8 @@ One event per line; `t` names it and `doc` the document. Read by scripts/trace_r
 - `compute_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `read`: `asked`, `corrected`, `doc`, `failed`, `fetched`, `kind`, `missed`, `owner`, `parameter`, `searched`, `unanswered`, `unread`, `values`, `why`
 - `comb`: `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `kind`, `missed`, `open`, `owner`, `parameter`, `rows`, `searched`
+- `seek`: `doc`, `kind`, `owner`, `parameter`, `rank`
+- `seek_probe`: `doc`, `parameter`, `per`, `text`
+- `completion`: `detail`, `doc`, `filled`, `id`, `key`, `matched`, `open`, `outcome`
 
 [Back to the index](../README.md)

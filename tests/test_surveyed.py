@@ -16,12 +16,17 @@ a parameter no earlier harvest was asked is surveyed over the rest of the plan
 too. A survey of part of a plan is kept under its scope beside the whole one's
 and taken again only for the same passages, its unanswered passages kept.
 
-A parameter the survey of the whole plan named no passage for is read once
-where a search of the whole plan ranks first for it, AND not after a survey
-of part of the plan; the passage it was read in is one of its sources, so a
-reading there that came to nothing leaves it exhausted, not unstated; AND the
-search's ranked list stays beside that passage under that parameter, so its
-reading shows it, and two surveys joined keep the lists of both.
+A parameter the survey of the whole plan named no passage for is read down
+the list a search of the whole plan ranks for it, in its order, one passage a
+round and every such parameter in the same round, AND it stops at the first
+reading that comes back with a value, AND where none does it is read to the
+end of the list as a request shows it, a reading with no reply ending
+nothing (owner decision 2026-11-05); AND not after a survey of part of the
+plan; every passage it was read in is one of its sources, so a reading there
+that came to nothing leaves it exhausted, not unstated; AND each reading
+shows the rest of the list it has not read under that parameter, AND each
+passage walked is traced with its place in the list; and two surveys joined
+keep the lists of both.
 
 A pass re-reads a coordinate by combing it, whatever its state, in its own
 passage first and with the years of the stored rows; the combing lists the
@@ -482,43 +487,139 @@ class SearchOnly:
         return []
 
 
-def sought_harvest(found, ranked, reads=None):
+def sought_harvest(found, ranked, reads=None, halt_after=None):
     """A harvest whose reader records which passages it was asked to read
-    each parameter in, and gives back *reads* for a parameter."""
-    asked = []
+    each parameter in and the hits each reading shows, and gives back
+    *reads*: {(parameter uri, owner): Read}. *halt_after* readings halt
+    it."""
+    asked, hits = [], []
 
     def make_reader(spec):
         def run(document_id, found, shown, budget):
             named = {p.uri: found.passages_of(p.uri) for p in spec.parameters
                      if found.passages_of(p.uri)}
             asked.append(named)
-            return [(reads or {})[uri] for uri in named
-                    if uri in (reads or {})]
+            hits.append({key: [(s.owner_kind, s.owner_id) for s in listed]
+                         for key, listed in found.hits.items()})
+            return [(reads or {})[(uri, owner)]
+                    for uri, owners in named.items() for owner in owners
+                    if (uri, owner) in (reads or {})]
         return run
 
     search = SearchOnly(ranked)
     whole = surveyed.SurveyedHarvest(
         SPEC, lambda spec, only, scope: (lambda document_id, passages: found),
         make_reader, lambda spec: search,
-        lambda document_id: [ONE, TWO, THREE], lambda document_id: 2)
-    return whole, asked, search
+        lambda document_id: [ONE, TWO, THREE], lambda document_id: 2,
+        halted=(lambda: len(asked) >= halt_after) if halt_after else None)
+    return whole, asked, hits, search
 
 
-def test_a_parameter_without_a_passage_is_read_where_a_search_ranks_first():
-    whole, asked, search = sought_harvest(
-        found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO]})
+def valued(parameter, source):
+    return read_of(parameter, source, claims=[{"value": 40,
+                                               "quote": "2022 | 40 MW"}])
+
+
+def test_a_parameter_without_a_passage_is_read_down_its_list_until_a_value():
+    whole, asked, _hits, search = sought_harvest(
+        found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO, THREE, ONE]},
+        reads={("heat_load", ("section", 3)): valued(HEAT_LOAD, THREE)})
     taken = whole(7)
     assert asked == [{"emission": [("section", 1)]},
-                     {"heat_load": [("table", 2)]}]
+                     {"heat_load": [("table", 2)]},
+                     {"heat_load": [("section", 3)]}]
     # Searched once for every parameter without a passage, not for one with.
     assert [EMISSION.label] not in search.searched
-    assert [HEAT_LOAD.label] in search.searched
-    assert ("table", 2) in taken.sources_of["heat_load"]
-    assert taken.sought.passages_of("heat_load") == [("table", 2)]
+    assert search.searched.count([HEAT_LOAD.label]) == 1
+    # Every passage walked is a source, the one never read is not.
+    assert taken.sought.passages_of("heat_load") == [("table", 2),
+                                                     ("section", 3)]
+    assert {("table", 2), ("section", 3)} <= taken.sources_of["heat_load"]
+    assert ("section", 1) not in taken.sources_of["heat_load"]
+    # the failure by construction: a value in the first passage ends the walk
+    whole, asked, _hits, _search = sought_harvest(
+        found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO, THREE, ONE]},
+        reads={("heat_load", ("table", 2)): valued(HEAT_LOAD, TWO)})
+    whole(7)
+    assert asked[1:] == [{"heat_load": [("table", 2)]}]
+
+
+def test_every_parameter_without_a_passage_is_read_in_the_same_round():
+    other = next(p for p in SPEC.parameters
+                 if p.uri not in ("emission", "heat_load"))
+    whole, asked, _hits, _search = sought_harvest(
+        found_of(answer(ONE, "emission")),
+        {HEAT_LOAD.label: [TWO, THREE], other.label: [THREE, TWO]},
+        reads={("heat_load", ("table", 2)): valued(HEAT_LOAD, TWO)})
+    whole(7)
+    assert asked[1:] == [{"heat_load": [("table", 2)],
+                          other.uri: [("section", 3)]},
+                         {other.uri: [("table", 2)]}]
+
+
+def test_a_list_no_reading_gives_a_value_is_read_to_the_end_a_request_shows():
+    sections = [passage("section", 100 + n, f"Teil {n}\nText", f"Teil {n}")
+                for n in range(reading.SHOWN["section"] + 2)]
+    lists = surveyed.sought_lists(lambda d, probes, exclude: sections, 7,
+                                  [HEAT_LOAD])
+    read_in = []
+
+    def read(one):
+        read_in.extend(one.passages_of("heat_load"))
+        return []
+    walked, reads = surveyed.sought_walk(survey.Found(True), lists, read)
+    # The two the hit list cuts off are never read.
+    assert read_in == [("section", 100 + n)
+                       for n in range(reading.SHOWN["section"])]
+    assert walked.passages_of("heat_load") == read_in and reads == []
+
+
+def test_a_reading_that_came_to_no_reply_ends_nothing():
+    cut = read_of(HEAT_LOAD, TWO, why=reading.CUT)
+    read_in = []
+
+    def read(one):
+        owners = one.passages_of("heat_load")
+        read_in.extend(owners)
+        return [cut] if owners == [("table", 2)] else []
+    walked, reads = surveyed.sought_walk(
+        survey.Found(True), {"heat_load": [TWO, THREE]}, read)
+    assert read_in == [("table", 2), ("section", 3)] and reads == [cut]
+
+
+def test_each_reading_of_the_walk_shows_the_rest_of_its_list_not_read():
+    whole, _asked, hits, _search = sought_harvest(
+        found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO, THREE, ONE]})
+    whole(7)
+    assert hits[1:] == [{("heat_load", "table", 2): [("section", 3),
+                                                     ("section", 1)]},
+                        {("heat_load", "section", 3): [("section", 1)]},
+                        {("heat_load", "section", 1): []}]
+
+
+def test_each_passage_walked_is_traced_with_its_place_in_the_list():
+    whole, _asked, _hits, search = sought_harvest(
+        found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO, THREE]})
+    events = []
+    search.trace = lambda event, document_id, **about: events.append(
+        (event, about))
+    whole(7)
+    assert events == [("seek", {"parameter": "heat_load", "kind": "table",
+                                "owner": 2, "rank": 1}),
+                      ("seek", {"parameter": "heat_load", "kind": "section",
+                                "owner": 3, "rank": 2})]
+
+
+def test_a_walk_halted_after_a_round_reads_no_further():
+    whole, asked, _hits, _search = sought_harvest(
+        found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO, THREE]},
+        halt_after=2)
+    assert whole(7) is None
+    assert asked[1:] == [{"heat_load": [("table", 2)]}]
 
 
 def test_a_survey_of_part_of_the_plan_searches_for_nothing():
-    whole, asked, search = sought_harvest(
+    whole, asked, _hits, search = sought_harvest(
         found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO]})
     whole(7, passages=[ONE])
     assert search.searched == [] and len(asked) == 1
@@ -526,9 +627,9 @@ def test_a_survey_of_part_of_the_plan_searches_for_nothing():
 
 def test_a_search_whose_reading_came_to_nothing_is_a_hole_not_a_silent_plan():
     cut = read_of(HEAT_LOAD, TWO, why=reading.CUT)
-    whole, _asked, _search = sought_harvest(
+    whole, _asked, _hits, _search = sought_harvest(
         found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO]},
-        reads={"heat_load": cut})
+        reads={("heat_load", ("table", 2)): cut})
     taken = whole(7)
 
     def state(taken_view):
@@ -554,17 +655,19 @@ FIRST = SimpleNamespace(owner_kind="section", owner_id=5)
 NEXT = SimpleNamespace(owner_kind="table", owner_id=9)
 
 
-def test_a_passage_a_search_named_keeps_the_search_s_list_for_its_parameter():
-    out = surveyed.sought_survey(survey.Found(True),
-                                 lambda document, probes, exclude: [FIRST,
-                                                                    NEXT],
-                                 7, [EMISSION])
+def test_a_passage_a_round_names_keeps_the_rest_of_its_list_for_its_parameter():
+    lists = surveyed.sought_lists(
+        lambda document, probes, exclude: [FIRST, NEXT], 7, [EMISSION])
+    out = surveyed.sought_survey(survey.Found(True), lists, 0)
     assert out.passages_of(EMISSION.uri) == [("section", 5)]
-    assert out.hits == {(EMISSION.uri, "section", 5): [FIRST, NEXT]}
+    assert out.hits == {(EMISSION.uri, "section", 5): [NEXT]}
+    later = surveyed.sought_survey(survey.Found(True), lists, 1)
+    assert later.passages_of(EMISSION.uri) == [("table", 9)]
+    assert later.hits == {(EMISSION.uri, "table", 9): []}
     # By construction: a search that finds nothing names no list either.
-    none = surveyed.sought_survey(survey.Found(True), lambda *a: [], 7,
-                                  [EMISSION])
-    assert none.hits == {} and none.passages_of(EMISSION.uri) == []
+    none = surveyed.sought_lists(lambda *a: [], 7, [EMISSION])
+    assert none == {}
+    assert surveyed.sought_survey(survey.Found(True), none, 0).hits == {}
 
 
 def test_two_surveys_joined_keep_the_lists_of_both():

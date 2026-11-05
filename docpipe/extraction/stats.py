@@ -143,6 +143,7 @@ def from_traces(trace_dirs: Iterable[Path],
     computed: dict = defaultdict(Counter)
     completed: Counter = Counter()
     sought: Counter = Counter()
+    walked: Counter = Counter()
     stages: dict = defaultdict(Counter)
     surveyed: Counter = Counter()
     survey_by_parameter: Counter = Counter()
@@ -188,7 +189,12 @@ def from_traces(trace_dirs: Iterable[Path],
                 elif kind == "completion":
                     completed[str(event.get("outcome"))] += 1
                 elif kind == "seek":
-                    sought[str(event.get("parameter"))] += 1
+                    # One event per passage the walk down a search's list
+                    # read; the first of a document's is `rank` 1, and a
+                    # trace from before the walk names no rank.
+                    walked[str(event.get("parameter"))] += 1
+                    if _int(event, "rank") <= 1:
+                        sought[str(event.get("parameter"))] += 1
                 elif isinstance(kind, str) and kind.endswith(ASK) \
                         and len(kind) > len(ASK):
                     stage = kind[:-len(ASK)]
@@ -241,8 +247,10 @@ def from_traces(trace_dirs: Iterable[Path],
         # lookup came to.
         "completions_by_outcome": dict(completed),
         # Parameters the survey named no passage for, searched for in the
-        # whole plan, per parameter (documents).
+        # whole plan, per parameter (documents), and the passages the walk
+        # down the search's list read them in (passages).
         "parameters_sought_by_parameter": dict(sought),
+        "passages_sought_by_parameter": dict(walked),
         # Where the plans' passages came from: a search or a found place.
         "passages_planned_by_origin": dict(planned),
         "requests_and_fills_by_axis_stage": {

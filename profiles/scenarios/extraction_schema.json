@@ -7119,6 +7119,15 @@
        "stopped"
       ]
      },
+     "reason": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "rejected": {
+      "type": "integer"
+     },
      "runs": {
       "type": "integer"
      },
@@ -7146,7 +7155,8 @@
      "searched",
      "taken",
      "untaken",
-     "misquoted"
+     "misquoted",
+     "reason"
     ],
     "type": "object"
    },
@@ -8459,6 +8469,124 @@
      "missed",
      "corrected",
      "exhausted"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "kind": {
+      "enum": [
+       "section",
+       "table",
+       "figure"
+      ]
+     },
+     "owner": {
+      "type": "integer"
+     },
+     "parameter": {
+      "type": "string"
+     },
+     "rank": {
+      "minimum": 1,
+      "type": "integer"
+     },
+     "t": {
+      "const": "seek"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "parameter",
+     "kind",
+     "rank"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "parameter": {
+      "type": "string"
+     },
+     "per": {
+      "enum": [
+       "document",
+       "run"
+      ]
+     },
+     "t": {
+      "const": "seek_probe"
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "parameter",
+     "per",
+     "text"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "detail": {
+      "type": "string"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "filled": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "key": {
+      "type": "string"
+     },
+     "matched": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "open": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "outcome": {
+      "type": "string"
+     },
+     "t": {
+      "const": "completion"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "outcome",
+     "open"
     ],
     "type": "object"
    }

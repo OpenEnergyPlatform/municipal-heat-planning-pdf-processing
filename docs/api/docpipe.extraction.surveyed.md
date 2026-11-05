@@ -10,11 +10,13 @@ open (combing.py). The run folds what they read, works out what the profile
 computes and writes the file with its stamp, as it writes every harvest.
 
 A parameter the survey of the whole plan named no passage for is searched
-for once before it can count as not stated (owner decision 2026-11-04): the
-combing's search over the whole plan ranks the passages for its label, and
-the reading reads it in the first of them with its own tools to look
-further (`sought_survey`). The passage it was read in is one of its
-sources, so a request that came to nothing there leaves a hole and not a
+for before it can count as not stated (owner decision 2026-11-04): the
+combing's search over the whole plan ranks the passages for it, and the run
+reads it down that list, one passage a round and every such parameter in the
+same round, until a reading of it comes back with a value or the list ends
+(owner decision 2026-11-05, `sought_walk`). Each reading shows the rest of
+the list it has not read as its hits. Every passage it was read in is one of
+its sources, so a request that came to nothing there leaves a hole and not a
 silent plan.
 
 What none of them could read is a hole with its reason, never a plan that
@@ -59,7 +61,7 @@ Fields:
 - `replies: int = 0`: Passages the survey answered: none of them means no reply at all.
 - `passages: int = 0`
 - `sources_of: dict = field(default_factory=dict)`: parameter uri -> the passages the survey named for it, and every passage it could not answer (`trust.parameter_states`).
-- `sought: Found = field(default_factory=lambda: Found(True))`: The parameters the survey named no passage for, each with the passage a search of the whole plan read it in (`sought_survey`).
+- `sought: Found = field(default_factory=lambda: Found(True))`: The parameters the survey named no passage for, each with every passage the walk down its search's list read it in (`sought_walk`).
 
 ### SurveyedHarvest
 
@@ -163,26 +165,56 @@ def joined(found: Found, also: Found) -> Found
 One survey of both: what *also* names is read beside what *found*
 names, a passage both answer with the parameters of both.
 
+### sought_lists
+
+```python
+def sought_lists(rank: Callable, document_id: int, parameters: list,
+                 probes: Optional[Callable] = None) -> dict
+```
+
+{parameter uri: [Source]}: for each of *parameters*, which the survey
+of the whole plan named no passage for, the passages the combing's
+search over the whole plan (*rank*) ranks for its search sentences, as
+many of each kind as a request shows (`reading.shown_hits`), best first.
+The sentences are *probes(parameter, document_id)* (owner decision
+2026-11-05: HyDE sentences, one written for the document for a field
+about the document itself, one written per run for any other,
+`runner.make_seek_probes`), its label where it has none. A parameter
+the search finds no passage for is left out.
+
 ### sought_survey
 
 ```python
-def sought_survey(found: Found, rank: Callable, document_id: int,
-                  parameters: list,
-                  probes: Optional[Callable] = None) -> Found
+def sought_survey(found: Found, lists: dict, step: int) -> Found
 ```
 
-The survey of *parameters*, which the survey of the whole plan named
-no passage for: each named for the passage the combing's search over the
-whole plan (*rank*) ranks first for its search sentences,
-*probes(parameter, document_id)* (owner decision 2026-11-05: HyDE
-sentences, one written for the document for a field about the document
-itself, one written per run for any other, `runner.make_seek_probes`),
-and for its label where it has none. What the survey said of every
-passage stands beside it without its parameters, so the reading sees the
-plan's pairs and years as it does anywhere else, and the search's ranked
-list beside the passage it named (`Found.hits`), so its reading can go
-on to the next hits. A parameter the search finds no passage for is left
-out.
+The survey of one round of the walk down *lists* ({parameter uri:
+[Source]}): each parameter named for the passage at *step* of its list,
+with the rest of its list beside it (`Found.hits`), so its reading can go
+on to the passages the walk has not read yet. What the survey of the
+whole plan (*found*) said of every passage stands beside it without its
+parameters, so the reading sees the plan's pairs and years as it does
+anywhere else.
+
+### sought_walk
+
+```python
+def sought_walk(found: Found, lists: dict, read: Callable,
+                seen: Optional[Callable] = None,
+                halted: Optional[Callable] = None) -> Optional[tuple]
+```
+
+(the passages walked, as one survey; their Reads): each parameter of
+*lists* ({uri: [Source]}, `sought_lists`) read down its list in rank
+order, one passage a round and every parameter in the same round
+(*read(survey)* -> [Read], the run's reading), until a reading of it
+comes back with a value or its list ends (owner decision 2026-11-05: the
+run reads the list, since the model fetched none of its hits itself). A
+reading that came to no reply ends nothing. Every passage walked names
+its parameter in the survey returned, so it is one of the parameter's
+sources (`taken_of`). *seen(uri, owner, rank)* hears of each passage
+before it is read, *rank* its place in the list, from 1. None where
+*halted()* stopped the walk.
 
 ### taken_of
 
@@ -193,9 +225,9 @@ def taken_of(document_id: int, spec, found: Found, reads: list,
 ```
 
 The fold's view of one document's reading, holes included. A
-parameter's sources are the passages the survey named for it, the one a
-search read it in (*sought*) and every passage the survey could not
-answer.
+parameter's sources are the passages the survey named for it, every one
+the walk down its search's list read it in (*sought*) and every passage
+the survey could not answer.
 
 ### take_found
 

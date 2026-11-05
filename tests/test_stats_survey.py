@@ -211,3 +211,46 @@ def test_the_estimate_counts_every_request_kind_once(tmp_path):
     assert {k: n[0] for k, n in counted.items() if n[0]} == {
         "phrase_ask": 1, "review_ask": 1, "compute_ask": 1, "frame": 1,
         "survey_ask": 1}
+
+
+# Promise: a document's search for a parameter the survey named no passage for
+# counts once however far the walk down its list went, AND each passage the
+# walk read counts under its parameter; a trace from before the walk, which
+# names no rank, counts once (owner decision 2026-11-05).
+def seek(parameter, rank=None, owner=1):
+    event = {"t": "seek", "parameter": parameter, "kind": "section",
+             "owner": owner}
+    return event if rank is None else {**event, "rank": rank}
+
+
+def test_a_search_counts_once_a_document_and_each_passage_walked(tmp_path):
+    out = traced(tmp_path, seek("p", 1), seek("p", 2, 2), seek("p", 3, 3),
+                 seek("q"))
+    assert out["parameters_sought_by_parameter"] == {"p": 1, "q": 1}
+    assert out["passages_sought_by_parameter"] == {"p": 3, "q": 1}
+    # the failure by construction: a walk's later passage alone is no search
+    out = traced(tmp_path, seek("p", 2, 2))
+    assert out["parameters_sought_by_parameter"] == {}
+    assert out["passages_sought_by_parameter"] == {"p": 1}
+
+
+# Promise: the trace schema takes the events of that search, its sentences
+# and the completion, AND refuses one that breaks their shape.
+def test_the_trace_schema_takes_the_search_and_the_completion():
+    trace = schema.trace_schema()
+    walked = {"t": "seek", "doc": 1, **seek("p", 2, 3)}
+    probe = {"t": "seek_probe", "doc": 1, "parameter": "p", "per": "run",
+             "text": "Emissions are reported by sector."}
+    done = {"t": "completion", "doc": 1, "outcome": "taken",
+            "filled": ["publication_doi"], "open": [], "id": "W1",
+            "key": "index_doi", "matched": ["liu"]}
+    for event in (walked, probe, done,
+                  {"t": "completion", "doc": 1, "outcome": "offline",
+                   "open": ["publication_doi"], "detail": "timed out"}):
+        jsonschema.validate(event, trace)
+    for broken in (dict(walked, rank=0),
+                   {k: v for k, v in walked.items() if k != "rank"},
+                   dict(probe, per="page"), dict(done, record={}),
+                   {k: v for k, v in done.items() if k != "open"}):
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(broken, trace)

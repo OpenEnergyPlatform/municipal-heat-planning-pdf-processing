@@ -8,9 +8,9 @@ looked up in an open catalogue (owner decisions 2026-11-04).
 A paper's PDF is often the authors' manuscript: it prints its title and its
 authors, and neither its DOI nor its year. After a document's fold a program
 asks OpenAlex, whose records are CC0, for the publication's record and fills
-the parameters no reading filled: the DOI, the year and, where the text
-yields no author at all, the authors. The year is the value, as the
-parameter defines it, and the record keeps the full date.
+the parameters its front pages do not give: the DOI, the year and, where
+they name no author, the authors. The year is the value, as the parameter
+defines it, and the record keeps the full date.
 
 The record is the first one these keys find, in this order: the DOI the
 corpus index holds for the document (`DocumentMeta.doi` in the run's
@@ -19,13 +19,19 @@ belongs to this very file, while a DOI read off the page can be one the
 paper cites, such as a dataset's. A DOI names one publication, so its
 record is taken as it is; a record the title finds counts only where at
 least two of its authors' family names stand among the authors the harvest
-read, or one where either side names one author.
+read, those of the front pages where it read any there, or one where either
+side names one author.
 
 Such a row is built like a computed one: its quote and its passage are those
 of the read value the record was found with, the printed DOI, else the
 title; the record stands beside it (`catalogue`), and the flag `catalogue`
-makes it a D (`trust.FLAG_REASONS`). A value the document prints goes
-first: a parameter that has a row is not looked up. No model is asked.
+makes it a D (`trust.FLAG_REASONS`). A value the document prints on its
+front pages goes first: a parameter read there, or looked up already, is not
+looked up. One read only elsewhere is, since a chapter on other studies and
+a reference list print other works' values, and the graph takes the record's
+value before such a reading (owner decision 2026-11-05, `front.py`). The
+title and the DOI the record is found with are those of the front pages
+where they were read there. No model is asked.
 
 The first time the catalogue cannot be reached at all, the run asks it no
 more (`OFFLINE`): each later document says so at once instead of waiting
@@ -149,10 +155,10 @@ def complete(report, spec, *, fetch: Optional[Callable] = None,
              db=None) -> Optional[dict]
 ```
 
-Fill what the document leaves open of DOI, year and authors from its
-catalogue record. *catalogue_doi* is the DOI the corpus index holds for
-the document; where it is not given, it is read from *db*, the run's
-database. What it came to, for the trace, or None where nothing was
-open.
+Fill what the document's front pages leave open of DOI, year and
+authors from its catalogue record. *catalogue_doi* is the DOI the corpus
+index holds for the document; where it is not given, it is read from
+*db*, the run's database. What it came to, for the trace, or None where
+nothing was open.
 
 [Back to the index](../README.md)

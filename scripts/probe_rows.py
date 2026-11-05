@@ -318,11 +318,12 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
         read_started = time.time()
         taken = whole(document)
         reads, combed = taken.reads, taken.combed
-        # The parameters the survey named no passage for, each with the
-        # passage a search of the whole plan read it in.
-        row["sought"] = {uri: list(owner)
-                         for owner, answer in taken.sought.answers.items()
-                         for uri in answer.parameters}
+        # The parameters the survey named no passage for, each with every
+        # passage the walk down its search's list read it in.
+        row["sought"] = {}
+        for owner, answer in taken.sought.answers.items():
+            for uri in answer.parameters:
+                row["sought"].setdefault(uri, []).append(list(owner))
         report = DocumentReport(document_id=document,
                                 owners_harvested=taken.passages,
                                 planned={surveyed.STAGE: taken.passages},

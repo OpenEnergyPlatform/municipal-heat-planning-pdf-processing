@@ -274,25 +274,34 @@ is from here on a finding about the plan. The ranking is handed in:
 `make_more_sources` in a harvest.
 
 A parameter the survey of the whole plan named no passage for is searched for
-once before it can count as not stated (owner decision 2026-11-04,
-`surveyed.sought_survey`): the same ranking names the first passage of the
-plan for it, and the reading reads it there with its tools to look
-further, before the combing. That passage keeps the ranked list of the search
-as a hit list (`survey.Found.hits`, keyed by parameter, owner kind and owner
-id), which every request of its reading for that parameter shows first, cut
-to `reading.SHOWN` (the best 15 sections, 20 tables and 20 figures); a reading
-of another parameter in the same passage shows none, and `surveyed.joined`
-keeps the lists of both surveys. The ranking searches with HyDE sentences, as a
+before it can count as not stated (owner decision 2026-11-04): the same
+ranking lists the plan's passages for it once, cut to what a request shows
+(`reading.SHOWN`, the best 15 sections, 20 tables and 20 figures,
+`surveyed.sought_lists`), and the run reads the parameter down that list in
+its order, before the combing (owner decision 2026-11-05,
+`surveyed.sought_walk`): one passage a round, every such parameter of the
+document in the same round, until a reading of it comes back with a value or
+the list ends. A reading that came to no reply ends nothing. The model had
+fetched none of the list's hits itself, so the run reads them. Each round's
+passage keeps the rest of the list it has not read as a hit list
+(`survey.Found.hits`, keyed by parameter, owner kind and owner id,
+`surveyed.sought_survey`), which every request of its reading for that
+parameter shows first; a reading of another parameter in the same passage
+shows none, and `surveyed.joined` keeps the lists of both surveys. The ranking searches with HyDE sentences, as a
 document would print the value (owner decision 2026-11-05,
 `runner.make_seek_probes`): a parameter the profile names as the document's
 own (`FRONT_PAGE_PARAMETERS`) with one written for this document from what
 it says of itself (`document_context`), any other with one written once per
 run from its label, description and the names of its list (`phrase_payload`),
 and with its label only where no sentence could be written. Each sentence is
-traced as `seek_probe`. That passage is one of the
+traced as `seek_probe`. Every passage the walk read is one of the
 parameter's sources, so a reading there that came to nothing leaves the
 parameter `exhausted` and not `unstated`. A survey of part of a plan (a pass
-over a stored harvest) searches nothing; each search is traced as `seek`.
+over a stored harvest) searches nothing. Each passage walked is traced as
+`seek` with its place in the list (`rank`, from 1); the run's statistics
+count a parameter's search once per document
+(`parameters_sought_by_parameter`) and the passages its walks read
+(`passages_sought_by_parameter`).
 
 ### The run harvests from the survey
 
@@ -1345,8 +1354,8 @@ the document (`runner.make_completer`, `profiles/<name>/completion.py:
 complete(report, spec, db=)`, with the run's database for what the profile
 looks up there), in the run and in the probe alike. Each lookup is
 traced as `completion` with what it came to, and `stats.py` counts them by
-outcome. scenarios looks up DOI and year where the paper does not print them
-(see the profile). Such a row is built like a computed one: its quote and its
+outcome. scenarios looks up DOI, year and authors where the paper's front
+pages do not print them (see the profile). Such a row is built like a computed one: its quote and its
 passage are the read value it was looked up with, the record stands beside it
 (`catalogue`), and the flag `catalogue` makes it a D.
 

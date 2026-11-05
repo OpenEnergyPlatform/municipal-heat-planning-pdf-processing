@@ -5,9 +5,9 @@ looked up in an open catalogue (owner decisions 2026-11-04).
 A paper's PDF is often the authors' manuscript: it prints its title and its
 authors, and neither its DOI nor its year. After a document's fold a program
 asks OpenAlex, whose records are CC0, for the publication's record and fills
-the parameters no reading filled: the DOI, the year and, where the text
-yields no author at all, the authors. The year is the value, as the
-parameter defines it, and the record keeps the full date.
+the parameters its front pages do not give: the DOI, the year and, where
+they name no author, the authors. The year is the value, as the parameter
+defines it, and the record keeps the full date.
 
 The record is the first one these keys find, in this order: the DOI the
 corpus index holds for the document (`DocumentMeta.doi` in the run's
@@ -16,13 +16,19 @@ belongs to this very file, while a DOI read off the page can be one the
 paper cites, such as a dataset's. A DOI names one publication, so its
 record is taken as it is; a record the title finds counts only where at
 least two of its authors' family names stand among the authors the harvest
-read, or one where either side names one author.
+read, those of the front pages where it read any there, or one where either
+side names one author.
 
 Such a row is built like a computed one: its quote and its passage are those
 of the read value the record was found with, the printed DOI, else the
 title; the record stands beside it (`catalogue`), and the flag `catalogue`
-makes it a D (`trust.FLAG_REASONS`). A value the document prints goes
-first: a parameter that has a row is not looked up. No model is asked.
+makes it a D (`trust.FLAG_REASONS`). A value the document prints on its
+front pages goes first: a parameter read there, or looked up already, is not
+looked up. One read only elsewhere is, since a chapter on other studies and
+a reference list print other works' values, and the graph takes the record's
+value before such a reading (owner decision 2026-11-05, `front.py`). The
+title and the DOI the record is found with are those of the front pages
+where they were read there. No model is asked.
 
 The first time the catalogue cannot be reached at all, the run asks it no
 more (`OFFLINE`): each later document says so at once instead of waiting
@@ -45,6 +51,8 @@ from typing import Callable, Optional
 
 from docpipe.extraction.trust import CATALOGUE
 from docpipe.store.schema import readonly_uri
+from profiles.scenarios.front import (front_pages, in_order, looked_up,
+                                      read_in_front)
 
 WORKS = "https://api.openalex.org/works"
 # A generic client name: the catalogue asks nothing more of a client.
@@ -223,14 +231,21 @@ def complete(report, spec, *, fetch: Optional[Callable] = None,
              fetch_doi: Optional[Callable] = None,
              catalogue_doi: Optional[str] = None,
              db=None) -> Optional[dict]:
-    """Fill what the document leaves open of DOI, year and authors from its
-    catalogue record. *catalogue_doi* is the DOI the corpus index holds for
-    the document; where it is not given, it is read from *db*, the run's
-    database. What it came to, for the trace, or None where nothing was
-    open."""
+    """Fill what the document's front pages leave open of DOI, year and
+    authors from its catalogue record. *catalogue_doi* is the DOI the corpus
+    index holds for the document; where it is not given, it is read from
+    *db*, the run's database. What it came to, for the trace, or None where
+    nothing was open."""
     known = {parameter.uri for parameter in spec.parameters}
-    filled = {row.get("parameter") for row in report.tuples}
-    wanted = [uri for uri in FILLED if uri in known and uri not in filled]
+    front = front_pages([row for row in report.tuples
+                         if row.get("parameter") == TITLE])
+
+    def given(uri: str) -> bool:
+        """Whether a front page gave *uri*, or the catalogue was asked."""
+        rows = [row for row in report.tuples if row.get("parameter") == uri]
+        return bool(read_in_front(rows, front)) \
+            or any(looked_up(row) for row in rows)
+    wanted = [uri for uri in FILLED if uri in known and not given(uri)]
     if not wanted:
         return None
 
@@ -238,7 +253,7 @@ def complete(report, spec, *, fetch: Optional[Callable] = None,
         return [row for row in report.tuples if row.get("parameter") == uri
                 and isinstance(row.get("value"), str) and row["value"].strip()]
 
-    title_row = _most_read(rows_of(TITLE))
+    title_row = _most_read(in_order(rows_of(TITLE), front))
     # Without a title the graph has no node to put a value on.
     if title_row is None:
         return {"outcome": "no_title", "open": wanted}
@@ -246,8 +261,8 @@ def complete(report, spec, *, fetch: Optional[Callable] = None,
         return {"outcome": "offline", "open": wanted}
     if catalogue_doi is None and db is not None:
         catalogue_doi = _index_doi_in(db, report.document_id)
-    doi_row = _most_read([row for row in rows_of(DOI)
-                          if bare_doi(row["value"])])
+    doi_row = _most_read(in_order([row for row in rows_of(DOI)
+                                   if bare_doi(row["value"])], front))
     keys = []
     index_doi = bare_doi(catalogue_doi)
     if index_doi:
@@ -257,8 +272,9 @@ def complete(report, spec, *, fetch: Optional[Callable] = None,
             for k in keys):
         keys.append((BY_READ_DOI, bare_doi(doi_row["value"]), doi_row))
     keys.append((BY_TITLE, title_row["value"], title_row))
-    read = [row.get("value") for row in report.tuples
-            if row.get("parameter") == AUTHOR]
+    read = [row.get("value") for row in in_order(
+        [row for row in report.tuples if row.get("parameter") == AUTHOR],
+        front)]
 
     record = key = anchor = None
     try:

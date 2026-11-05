@@ -1051,6 +1051,30 @@ def trace_schema() -> dict:
                  "missed": {"type": "integer"},
                  "corrected": {"type": "integer"},
                  "exhausted": {"type": "integer"}},
+        # A passage the walk down a search's list reads a parameter in that
+        # the survey named no passage for (surveyed.py), `rank` its place in
+        # the list from 1, and a sentence that search ranks with, written
+        # for the document or once per run (`per`).
+        "seek": {"parameter": {"type": "string"},
+                 "kind": {"enum": ["section", "table", "figure"]},
+                 "owner": {"type": "integer"},
+                 "rank": {"type": "integer", "minimum": 1}},
+        "seek_probe": {"parameter": {"type": "string"},
+                       "per": {"enum": ["document", "run"]},
+                       "text": {"type": "string"}},
+        # What a profile's lookup outside the document came to
+        # (`runner.make_completer`): its `outcome`, the parameters still
+        # `open` and those `filled`, the record's `id`, the `key` it was
+        # found by and the family names it `matched`.
+        "completion": {"outcome": {"type": "string"},
+                       "open": {"type": "array", "items": {"type": "string"}},
+                       "filled": {"type": "array",
+                                  "items": {"type": "string"}},
+                       "id": {"type": ["string", "null"]},
+                       "key": {"type": "string"},
+                       "matched": {"type": "array",
+                                   "items": {"type": "string"}},
+                       "detail": {"type": "string"}},
     }
     # Of the survey flow's events, the fields only some of them carry.
     optional = {
@@ -1071,6 +1095,7 @@ def trace_schema() -> dict:
         "comb": {"group"},
         "read": {"corrected", "failed", "unanswered", "fetched", "searched",
                  "missed", "unread", "why"},
+        "completion": {"filled", "id", "key", "matched"},
     }
     # Optional on every event: what the run could not always know. Requiring
     # them would refuse a legitimate record from a request that never reached

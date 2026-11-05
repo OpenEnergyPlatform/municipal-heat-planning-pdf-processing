@@ -454,12 +454,18 @@ most sources agree on: first dropping any candidate that is a strict
 substring of another (a running header would otherwise outvote a title
 on its own title page), then ranking by vote count, whether the reading
 was located on its PDF page, and length (`kg.py`, lines 393 to 421).
-For the title, the date and the DOI a reading on page 1 or on the first
-page the title was read on, the title page behind a cover, goes first
-however often other readings agree (`FRONT_FIELDS`, `_front_first`, owner
-decision 2026-11-05): a chapter that presents other studies prints their
-titles, publishers and years, and the field descriptions say that only the
-document's own count. The survey and the value reading say the same of a
+For the title, the authors, the date and the DOI a reading on page 1 or on
+the first page the title was read on, the title page behind a cover, goes
+first however often other readings agree; where no front page gives one,
+the value looked up in the catalogue (below) goes next, and only then a
+reading anywhere else (`front.py`: `FRONT_FIELDS`, `in_order`, owner
+decisions 2026-11-05). A row looked up keeps the page of the reading it was
+found with, so it is known by its flag `catalogue` and never counts as read
+on a front page. A chapter that presents other studies prints their titles,
+authors, publishers and years, a reference list the DOIs it cites, and the
+field descriptions say that only the document's own count. The authors are
+those of the first of these that names any, each name a node whose evidence
+is every reading of it, wherever it stands. The survey and the value reading say the same of a
 passage that presents, reviews or compares another work, beside a reference
 list, a footnote and a citation (`survey.md`, `read_values.md`). Runner-up spellings are counted `contested` rather
 than dropped from the log. A read-only connection then cross-checks the chosen title, date and
@@ -469,25 +475,29 @@ substituted into the graph, since a published value must carry its own
 evidence, and the crawl's copy is only the cross-check
 (`kg.py`'s module docstring; `_crosscheck`, lines 452 to 468).
 
-What the paper does not print of its DOI and year, often an authors'
-manuscript, and its authors where the text yields none at all, the run
-looks up in OpenAlex, whose records are CC0 (`completion.py`, owner
-decisions 2026-11-04). After a document's fold a program, no model, finds
+What the paper's front pages do not print of its DOI and year, often an
+authors' manuscript, and its authors where they name none, the run looks up
+in OpenAlex, whose records are CC0 (`completion.py`, owner decisions
+2026-11-04). A field read only elsewhere is looked up too, since a chapter
+on other studies and a reference list print other works' values; one read
+on a front page, or looked up already, is not (owner decision 2026-11-05). After a document's fold a program, no model, finds
 the record by the first of three keys that finds one: the DOI the corpus
 index holds for the document (`DocumentMeta.doi`, read from the run's
 database, which `runner.make_completer` hands the profile; the crawl's copy
 is the key here, never the value), the DOI the harvest read, then the title the
-harvest read. The index's DOI goes first: it belongs to this very file,
+harvest read, the DOI and the title of the front pages where they were read
+there. The index's DOI goes first: it belongs to this very file,
 while a DOI read off the page can be one the paper cites, such as a
 dataset's (one of 48 records in a measurement on run m6). A record a DOI finds is taken as it is; one the title finds
 counts only where two of its authors' family names stand among the authors
-read, one where either side names one author. The DOI, the year and the
+read, those of the front pages where it read any there, one where either
+side names one author. The DOI, the year and the
 authors then become rows of `publication_doi`, `publication_date` and
 `publication_author`, the year as the parameter defines it and the full
 date in the record. Each row quotes the read value the record was found
 with, the printed DOI, else the title, carries the record (`catalogue`) and
 is a D for the reason `catalogue`; the graph names the record and its key
-above the triple. A value the paper prints goes first. The first time the
+above the triple. A value the paper prints on a front page goes first. The first time the
 catalogue cannot be reached at all, the run asks it no more (`OFFLINE`),
 and every later document says so in its trace at once.
 

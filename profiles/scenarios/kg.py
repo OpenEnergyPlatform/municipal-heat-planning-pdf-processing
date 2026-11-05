@@ -49,6 +49,7 @@ from docpipe.extraction.shapemodel import (XSD, Model, SchemaError,
 from docpipe.extraction.spec import kg_name, load as load_spec
 from docpipe.extraction.trust import check_prose, render, trust
 from docpipe.store.schema import readonly_uri
+from profiles.scenarios.front import FRONT_FIELDS, front_pages, in_order
 
 log = logging.getLogger(__name__)
 
@@ -577,35 +578,6 @@ def _pick_one(rows: list) -> tuple:
     return ranked[0][0], len(ranked) - 1
 
 
-# What a publication says of itself stands on its first page or its title
-# page. A value read there goes before one read anywhere else, however often
-# that was read: a chapter that presents other studies prints their titles,
-# publishers and years (owner decision 2026-11-05).
-FRONT_FIELDS = ("publication_title", "publication_date", "publication_doi")
-
-
-def _page(row: dict) -> Optional[int]:
-    """The page a row was read on, None where it names none."""
-    try:
-        return int((row.get("provenance") or {}).get("page"))
-    except (TypeError, ValueError):
-        return None
-
-
-def _front_pages(by_param: dict) -> set:
-    """Page 1 and the first page the document's title was read on: its
-    title page, where a cover stands before it (owner decision 2026-11-05)."""
-    titled = [page for page in map(_page, by_param.get("publication_title", ()))
-              if page is not None]
-    return {1, min(titled)} if titled else {1}
-
-
-def _front_first(rows: list, front: set) -> list:
-    """The rows read on one of the *front* pages where there are any, else
-    all of *rows*."""
-    return [row for row in rows if _page(row) in front] or rows
-
-
 def _publication_date(year_text: str) -> str:
     """The shape asks for xsd:dateTime; a PDF gives a year.
 
@@ -618,7 +590,7 @@ def _publication_date(year_text: str) -> str:
 
 
 def _crosscheck(conn, name: str, chosen: dict) -> None:
-    """Say it out loud when the PDF and the crawl disagree."""
+    """Say it out loud when the graph's value and the crawl disagree."""
     row = conn.execute(
         "SELECT m.title, m.year, m.doi FROM DocumentMeta m "
         "JOIN Documents d ON m.document = d.id "
@@ -632,7 +604,7 @@ def _crosscheck(conn, name: str, chosen: dict) -> None:
         if not got or not crawled:
             continue
         if normalise(got) != normalise(crawled):
-            log.warning("kg: %s: %s from the PDF is %r, the crawl says %r",
+            log.warning("kg: %s: the graph's %s is %r, the crawl says %r",
                         name, key, got, crawled)
 
 
@@ -852,12 +824,16 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
 
         chosen: dict = {}
         contested: dict = {}
-        front = _front_pages(by_param)
+        # What a publication says of itself: a reading on its front pages
+        # goes first, then the catalogue's record, then any other reading,
+        # however often that was read (owner decisions 2026-11-05,
+        # `front.py`).
+        front = front_pages(by_param.get("publication_title", ()))
         for key in bound.single:
             if by_param.get(key):
                 offered = by_param[key]
                 if key in FRONT_FIELDS:
-                    offered = _front_first(offered, front)
+                    offered = in_order(offered, front)
                 chosen[key], others = _pick_one(offered)
                 if others:
                     contested[key] = others
@@ -996,15 +972,23 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
                 out.append(row)
             return out
 
-        def entities(key: str, collection: str, cls: str) -> tuple:
-            """Distinct named things of one kind, each as its own node."""
+        def entities(key: str, collection: str, cls: str,
+                     taken: Optional[list] = None) -> tuple:
+            """Distinct named things of one kind, each as its own node: the
+            names of *taken* where given, else of every row of *key*."""
             # Group by the normalised name, but keep every row: "Oeko-Institut"
             # and "Oeko-Institut e.V." are one node, and filtering the evidence
             # by the winning spelling afterwards threw the other one's passage
             # away — the page where the second spelling stands vanished from
-            # the file entirely.
+            # the file entirely. A name taken keeps every row that reads it
+            # as its evidence, its spelling the first taken row's.
+            every = by_param.get(key, ())
+            taken = list(every) if taken is None else taken
+            names = {normalise(row["value"]) for row in taken}
             groups: dict = {}
-            for row in by_param.get(key, ()):
+            for row in taken + [row for row in every
+                                if not any(row is one for one in taken)
+                                and normalise(row["value"]) in names]:
                 groups.setdefault(normalise(row["value"]),
                                   (row["value"], []))[1].append(row)
             links, nodes, labels = [], [], []
@@ -1019,8 +1003,11 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
                 nodes.append(NL.join(block) + NL)
             return links, nodes, labels
 
+        # The authors the front pages name, else the catalogue's, else those
+        # read anywhere: a chapter on other studies names their authors.
         author_links, author_nodes, author_labels = entities(
-            "publication_author", "author", bound.author)
+            "publication_author", "author", bound.author,
+            in_order(by_param.get("publication_author", ()), front))
         org_links, org_nodes, org_labels = entities(
             "study_organisation", "organisation", bound.organisation)
         funder_links, funder_nodes, funder_labels = entities(
