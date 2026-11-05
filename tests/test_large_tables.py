@@ -124,11 +124,10 @@ def test_a_section_is_not_halved_as_a_table():
     assert runner._halves(Batch([Item(Source(TABLE, "section"))]), 0) is None
 
 
-def test_time_follows_room_and_a_repeat_keeps_its_limit(monkeypatch):
+def test_time_follows_room(monkeypatch):
     monkeypatch.setattr(runner, "LLM_TIMEOUT", 1800)
-    assert runner.request_timeout(6144, 6144, False) is None
-    assert runner.request_timeout(6144, 6144, True) == runner.RETRY_TIMEOUT
-    twice = runner.request_timeout(12288, 6144, True)
+    assert runner.request_timeout(6144, 6144) is None
+    twice = runner.request_timeout(12288, 6144)
     assert twice == runner.LLM_TIMEOUT * 2 and twice > runner.RETRY_TIMEOUT
 
 

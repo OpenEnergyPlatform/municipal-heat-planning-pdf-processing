@@ -118,7 +118,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.replies](docpipe.extraction.replies.md): The reply each extraction request asks for, as a JSON schema. (6 functions)
 - [docpipe.extraction.review](docpipe.extraction.review.md): Reads again, under a narrower window, the values at the lowest trust level. (8 functions)
 - [docpipe.extraction.runner](docpipe.extraction.runner.md): Wires the pure harvest loop of `pipeline.py` to the live stack. (12 classes, 116 functions)
-- [docpipe.extraction.scheduler](docpipe.extraction.scheduler.md): One queue for every model request of a run, served oldest document first. (5 classes, 2 functions)
+- [docpipe.extraction.scheduler](docpipe.extraction.scheduler.md): One queue for every model request of a run, served oldest document first. (6 classes, 3 functions)
 - [docpipe.extraction.schema](docpipe.extraction.schema.md): Builds a JSON Schema for the harvest, the stamp and the trace. (7 functions)
 - [docpipe.extraction.scratch](docpipe.extraction.scratch.md): Where a column of one's own lives, and why its harvest stays there. (1 function)
 - [docpipe.extraction.serialize](docpipe.extraction.serialize.md): Turns a document harvest into the profile's target graph. (7 functions)

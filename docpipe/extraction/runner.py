@@ -1467,7 +1467,7 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
     retrieval" this whole stage exists to end.
     """
     prompt = prompt if prompt is not None else prompts.load(PHRASE_PROMPT_ID)
-    client = client or _client()
+    client = _repeating(client or _client())
     context = {k: v for k, v in (context or {}).items()
                if isinstance(v, str) and v.strip()}
 
@@ -1893,21 +1893,19 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
     A request whose last attempt ended on a 429, a 5xx or a timeout was
     never answered, so its document is noted (`UNSERVED`) and goes
     unstamped, as for every request of the run. One that timed out is asked
-    again with the time a repeat gets (`request_timeout`), as every request
-    of the harvest is: the eight-plan probe asked three times in the same
-    180 s and lost the replies that take longer.
+    again with the time a repeat gets (`_repeating`), whatever client it was
+    handed, as every request of the harvest is.
     """
+    client = _repeating(client)
     temperature = float(prompt.meta.get("temperature", 0))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
     faults = 0
-    timed_out = False
     for attempt in range(1, MAX_RETRIES + 1):
         limit = answer_room(prompt.text, conversation, max_tokens)
         if limit < MIN_ANSWER_TOKENS:
             return "cut_off"
         transport = False
         refused = False
-        allowed = request_timeout(limit, max_tokens, timed_out)
         started = time.time()
         try:
             with _for(document_id):
@@ -1918,8 +1916,7 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
                     response_format=shape,
-                    extra_body=request_extras(),
-                    **({"timeout": allowed} if allowed else {}))
+                    extra_body=request_extras())
             reply = response.choices[0]
             usage = getattr(response, "usage", None)
             _observe_usage(usage)
@@ -1949,7 +1946,6 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
                         attempt=attempt, detail=str(exc)[:300])
             transport = server_side(exc)
             refused = unserved(exc)
-            timed_out = _timed_out(exc)
             if not transport:
                 return None
         if attempt < MAX_RETRIES:
@@ -2619,7 +2615,7 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
                  len(out), store, len(todo))
     if not todo:
         return out
-    client = client or _client()
+    client = _repeating(client or _client())
 
     def one(target):
         anchor_id, label, description, question = target
@@ -2790,7 +2786,9 @@ def watch_server(on_dead: Callable, *, probe: Callable = probe_server,
 
 
 def _client():
-    """The one client shape this stage uses, for the provider it is set to."""
+    """The one client shape this stage uses, for the provider it is set to.
+    A request that timed out is repeated with the time of a repeat
+    (`_repeating`)."""
     client = providers.client("llm", base_url=LLM_BASE_URL,
                               api_key=LLM_API_KEY, timeout=LLM_TIMEOUT,
                               max_retries=0)
@@ -2798,8 +2796,15 @@ def _client():
         # Several model names on one endpoint share their places as the chat's
         # do. One model and one place is the plain client.
         from ..inference import pool
-        return pool.over(client)
-    return scheduler.Scheduled(client, SCHEDULER)
+        return _repeating(pool.over(client))
+    return _repeating(scheduler.Scheduled(client, SCHEDULER))
+
+
+def _repeating(client):
+    """*client*, whose repeat of a request that timed out gets
+    `RETRY_TIMEOUT` (`scheduler.Repeats`): every request of the stage, made
+    here or handed in."""
+    return scheduler.repeating(client, RETRY_TIMEOUT, LLM_TIMEOUT)
 
 
 def _for(document_id):
@@ -3153,16 +3158,17 @@ def _ask_halves(batch, halves: list, prior, harvest: Callable,
     return merged
 
 
-def request_timeout(wanted: int, usual: int, timed_out: bool) -> Optional[int]:
+def request_timeout(wanted: int, usual: int) -> Optional[int]:
     """What a harvest request may take, None for the client's own limit.
 
     The time follows the room: a reply given twice the tokens takes twice as
     long, and 12,288 tokens at the 3.7 tokens a second a long reply gets could
-    never arrive in the 600 s of a repeat.
+    never arrive in the 600 s of a repeat. A repeat after a timeout gets at
+    least `RETRY_TIMEOUT` from the client (`_repeating`).
     """
     if wanted > usual:
         return LLM_TIMEOUT * wanted // usual
-    return RETRY_TIMEOUT if timed_out else None
+    return None
 
 
 def _split_harvest(batch, prior, harvest: Callable, limit: int,
@@ -3497,7 +3503,7 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
         scheduler.serve_for(batch.document_id)
         try:
             response = send(asked, limit, temperature,
-                            request_timeout(max_tokens, max_tokens, False))
+                            request_timeout(max_tokens, max_tokens))
         except Exception as exc:
             log.warning("   harvest %s: second reading failed: %s",
                         batch.document_id, exc)
@@ -3568,7 +3574,7 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
         # the attempt budget grows with the rounds actually used.
         for attempt in range(1, MAX_RETRIES + CODE_ROUNDS + 1):
             limit = answer_room(prompt.text, conversation, wanted)
-            allowed = request_timeout(wanted, max_tokens, timed_out)
+            allowed = request_timeout(wanted, max_tokens)
             if limit < MIN_ANSWER_TOKENS:
                 log.warning("   harvest %s/%s+%d: the prompt leaves %d answer "
                             "token(s) in a window of %d -- not sent",
@@ -4075,7 +4081,6 @@ def make_field_asker(image_root: Optional[Path] = None, *,
         # malformed is one attempt three times.
         shape = field_response_format(slot)
         transport = lost = False
-        timed_out = False
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
             limit = answer_room(prompt.text, conversation, max_tokens)
@@ -4091,7 +4096,6 @@ def make_field_asker(image_root: Optional[Path] = None, *,
                                   *conversation],
                         response_format=shape,
                         extra_body=request_extras(),
-                        **({"timeout": RETRY_TIMEOUT} if timed_out else {}),
                     )
                 transport = lost = False
                 if dead is not None:
@@ -4132,7 +4136,6 @@ def make_field_asker(image_root: Optional[Path] = None, *,
                             kind="exception", slot=name, attempt=attempt,
                             status=status, detail=str(exc)[:300])
                 transport, lost = server_side(exc), unserved(exc)
-                timed_out = _timed_out(exc)
                 if not transport:
                     break
             if attempt < MAX_RETRIES:

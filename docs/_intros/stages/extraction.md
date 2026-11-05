@@ -311,8 +311,8 @@ and the document is not stamped. A request of this flow whose last attempt
 ended on a 429, a 5xx or a timeout notes its document (`UNSERVED`,
 `runner.ask_in_grammar`), which is then not stamped, so a resume redoes it. A
 request that timed out is asked again with the time of a repeat
-(`EXTRACT_RETRY_TIMEOUT`, `runner.request_timeout`), as every request of the
-harvest is: the eight-plan probe asked three times within the same 180 s and
+(`EXTRACT_RETRY_TIMEOUT`, `scheduler.Repeats`), as every request of the
+stage is: the eight-plan probe asked three times within the same 180 s and
 lost the replies that take longer.
 
 The stamp records the prompts of the flow the run harvested with, and every
@@ -1026,7 +1026,14 @@ a document's rank being the order in which it first asked; a request that
 belongs to no document, the run's anchors, goes before every document. The limit still
 decides how many requests are open. A request's timeout starts when it is sent,
 not while it waits, and a waiting request can be withdrawn (`Ticket`), after
-which it is never sent. A queue that can send no more ends every waiting and
+which it is never sent. A request that timed out is repeated with the time of
+a repeat (`EXTRACT_RETRY_TIMEOUT`), or with its own where that is longer; one
+that ended on a server error keeps its time. The rule stands in the client
+every request of the stage goes out on (`runner._client`,
+`scheduler.Repeats`), not in each retry loop, where six of nine had lacked it:
+a repeat is the calling thread's next request with the same messages, since
+every loop asks again unchanged after a failure and with one more message
+after a reply. A queue that can send no more ends every waiting and
 every later request with the reason (`Scheduler._close`): its callers wait
 without a limit, and a probe whose dispatcher had died stood two hours on a
 node doing nothing until its time limit.
@@ -2074,7 +2081,7 @@ a `*.jsonl` or `*.stamp.json` that a reader of the harvest would list.
 | Name | Kind | Default | Effect | Where read |
 |---|---|---|---|---|
 | `EXTRACT_FIELD_WINDOW` / `EXTRACT_FIELD_OVERLAP` | env var | `2` / `1` | `WINDOW`: sources per retrieval- or rest-stage window. `OVERLAP`: how many of a rest-stage window repeat in the next one; a retrieval-stage window never repeats one | `runner.main`, `runner.Sweeping` |
-| `EXTRACT_MAX_RETRIES` / `EXTRACT_RETRY_TIMEOUT` | env var | `3` / `600` | `MAX_RETRIES`: attempts every retry loop of this stage gets per request. `RETRY_TIMEOUT`: client timeout (seconds) a retry gets after a request timed out, a row or field request and a survey, reading or combing request alike; one refused at once keeps the client's own timeout instead | `runner.py`, `runner.make_harvester`, `runner.make_field_asker`, `runner.ask_in_grammar` |
+| `EXTRACT_MAX_RETRIES` / `EXTRACT_RETRY_TIMEOUT` | env var | `3` / `600` | `MAX_RETRIES`: attempts every retry loop of this stage gets per request. `RETRY_TIMEOUT`: client timeout (seconds) the repeat of a request that timed out gets, every request of the stage alike; a request's own longer time stays, and one that ended on a server error keeps its time | `runner.py`, `runner._client`, `scheduler.Repeats` |
 | `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` / `LLM_TIMEOUT` | env var | `http://localhost:8000/v1` / `EMPTY` / `Qwen/Qwen3.5-122B-A10B-FP8` / `180` | The address, the key and the model name every request of the stage goes out with (the model name is written into the stamp), and the client timeout in seconds, which starts when a request is sent and not while it waits; a retry after a timeout gets `EXTRACT_RETRY_TIMEOUT` instead | `runner.py`, `runner._client` |
 | `EXTRACT_RETRY_WAIT` / `_MAX` / `EXTRACT_TRANSPORT_WAIT` / `_MAX` | env var | `2` / `6` / `15` / `120` | Seconds before the next attempt. The short curve, `RETRY_WAIT` times the attempt up to `RETRY_WAIT_MAX`, follows the model's own mistake. The long curve, `TRANSPORT_WAIT` doubling per attempt up to `TRANSPORT_WAIT_MAX`, follows a request that never arrived or ended on a 429, a 5xx or a timeout | `runner.retry_wait` |
 | `EXTRACT_SPLIT_DEPTH` | env var | `3` | Most times a request cut off at its token ceiling is halved again: a rows request over its passages, a frame request over its sources. Three halvings are eight parts | `runner._split_harvest`, `runner.make_frame_asker` |

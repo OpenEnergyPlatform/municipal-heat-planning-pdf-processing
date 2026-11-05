@@ -31,6 +31,8 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from types import SimpleNamespace
 from typing import Callable, Optional
 
+from docpipe import providers
+
 
 class Withdrawn(Exception):
     """The request was withdrawn before it was sent."""
@@ -211,6 +213,47 @@ class Scheduled:
         return self._scheduler.submit(
             lambda: self._client.chat.completions.create(*args, **kwargs),
             document, ticket).result()
+
+
+class Repeats:
+    """A client whose repeat of a request that timed out gets *repeat*
+    seconds, or more where the request's own time is longer.
+
+    A repeat is the calling thread's next request with the same messages:
+    every retry loop asks again unchanged after a failure, and with one more
+    message (what was wrong) after a reply. The rule stands here and not in
+    each loop: three of the nine loops kept it, and the eight-plan probe lost
+    the replies that take longer, asked three times in the same 180 s.
+    """
+
+    def __init__(self, client, repeat: float, usual: float):
+        self._client = client
+        self._repeat = repeat
+        self._usual = usual
+        self._local = threading.local()
+        self.chat = SimpleNamespace(
+            completions=SimpleNamespace(create=self.create))
+
+    def create(self, *args, **kwargs):
+        messages = kwargs.get("messages")
+        if messages is not None and messages == getattr(self._local,
+                                                        "timed_out", None):
+            kwargs["timeout"] = max(kwargs.get("timeout") or self._usual,
+                                    self._repeat)
+        self._local.timed_out = None
+        try:
+            return self._client.chat.completions.create(*args, **kwargs)
+        except Exception as exc:
+            if messages is not None and providers.timed_out(exc):
+                self._local.timed_out = list(messages)
+            raise
+
+
+def repeating(client, repeat: float, usual: float):
+    """*client* as `Repeats`, once."""
+    if isinstance(client, Repeats):
+        return client
+    return Repeats(client, repeat, usual)
 
 
 def serve_for(document: Optional[int]) -> None:

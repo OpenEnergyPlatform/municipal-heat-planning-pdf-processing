@@ -1621,9 +1621,8 @@ traced as `<where>_ask` with *noted*.
 A request whose last attempt ended on a 429, a 5xx or a timeout was
 never answered, so its document is noted (`UNSERVED`) and goes
 unstamped, as for every request of the run. One that timed out is asked
-again with the time a repeat gets (`request_timeout`), as every request
-of the harvest is: the eight-plan probe asked three times in the same
-180 s and lost the replies that take longer.
+again with the time a repeat gets (`_repeating`), whatever client it was
+handed, as every request of the harvest is.
 
 ### make_reader
 
@@ -1887,14 +1886,15 @@ quote is checked against the whole of it.
 ### request_timeout
 
 ```python
-def request_timeout(wanted: int, usual: int, timed_out: bool) -> Optional[int]
+def request_timeout(wanted: int, usual: int) -> Optional[int]
 ```
 
 What a harvest request may take, None for the client's own limit.
 
 The time follows the room: a reply given twice the tokens takes twice as
 long, and 12,288 tokens at the 3.7 tokens a second a long reply gets could
-never arrive in the 600 s of a repeat.
+never arrive in the 600 s of a repeat. A repeat after a timeout gets at
+least `RETRY_TIMEOUT` from the client (`_repeating`).
 
 ### log_usage
 

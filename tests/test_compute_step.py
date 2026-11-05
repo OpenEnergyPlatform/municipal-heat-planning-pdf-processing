@@ -8,15 +8,18 @@ import re
 from pathlib import Path
 from types import SimpleNamespace
 
+import httpx
 import jsonschema
+import openai
 import pytest
 
+from docpipe import providers
 from docpipe.app import sandbox_service
 from docpipe.extraction import compute, fields, pipeline, replies, runner
 from docpipe.extraction import schema, stats, verify
 from docpipe.extraction.pipeline import Source, WorkItem
 from docpipe.extraction.spec import load as load_spec
-from docpipe.inference import code_exec
+from docpipe.inference import code_exec, pool
 from profiles.kwp import compute as rules
 
 SPEC = load_spec(json.loads(
@@ -500,6 +503,43 @@ def test_an_unreadable_reply_is_asked_again(monkeypatch):
     step, asked, _runs, _events = computing(monkeypatch, "kein json", NOTHING)
     run_step(step, share(21), amount(185200))
     assert len(asked) == 2
+
+
+def timed(monkeypatch, first):
+    """The time each request of the compute step was given, on the stage's
+    own client (`runner._client`), when its first request ends on *first*."""
+    left, times = [first, NOTHING], []
+
+    def create(**request):
+        times.append(request.get("timeout"))
+        said = left.pop(0)
+        if isinstance(said, Exception):
+            raise said
+        return SimpleNamespace(usage=None, choices=[SimpleNamespace(
+            finish_reason="stop", message=SimpleNamespace(content=said))])
+
+    client = SimpleNamespace(chat=SimpleNamespace(
+        completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(providers, "client", lambda *a, **k: client)
+    monkeypatch.setattr(runner, "SCHEDULER", None)
+    monkeypatch.setattr(pool, "wide", lambda: False)
+    monkeypatch.setattr(code_exec, "is_enabled", lambda: True)
+    monkeypatch.setattr(runner.trace, "event", lambda *a, **k: None)
+    run_step(runner.make_computer(PROFILE), share(21), amount(185200))
+    return times
+
+
+def test_a_request_that_timed_out_is_repeated_with_the_time_of_a_repeat(
+        monkeypatch):
+    slow = openai.APITimeoutError(request=httpx.Request("POST", "http://x"))
+    assert timed(monkeypatch, slow) == [None, runner.RETRY_TIMEOUT]
+
+
+def test_a_request_after_a_server_error_keeps_its_time(monkeypatch):
+    class Failed(Exception):
+        status_code = 500
+
+    assert timed(monkeypatch, Failed()) == [None, None]
 
 
 def test_a_document_with_nothing_open_asks_nothing(monkeypatch):

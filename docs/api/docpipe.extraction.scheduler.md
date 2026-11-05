@@ -162,6 +162,33 @@ def __init__(self, client, scheduler: Scheduler)
 def create(self, *args, **kwargs)
 ```
 
+### Repeats
+
+```python
+class Repeats
+```
+
+A client whose repeat of a request that timed out gets *repeat*
+seconds, or more where the request's own time is longer.
+
+A repeat is the calling thread's next request with the same messages:
+every retry loop asks again unchanged after a failure, and with one more
+message (what was wrong) after a reply. The rule stands here and not in
+each loop: three of the nine loops kept it, and the eight-plan probe lost
+the replies that take longer, asked three times in the same 180 s.
+
+#### Repeats.\_\_init\_\_
+
+```python
+def __init__(self, client, repeat: float, usual: float)
+```
+
+#### Repeats.create
+
+```python
+def create(self, *args, **kwargs)
+```
+
 ## Functions
 
 ### current
@@ -171,6 +198,14 @@ def current() -> tuple
 ```
 
 (document, ticket) the calling thread is sending for.
+
+### repeating
+
+```python
+def repeating(client, repeat: float, usual: float)
+```
+
+*client* as `Repeats`, once.
 
 ### serve_for
 
