@@ -16,3 +16,5 @@ Return exactly one line of JSON:
   - `{"get":"similar","text":"..."}`: hits nearest to a sentence as the publication would print the coordinate for this value; it may be made up.
 * `hits` gives each hit with `id`, kind, title and one line, for a `search` the matching line. The first list, where there is one, holds the passages nearest to the sentences under `query`, written when this value was read; where there is none, search with `similar`. `not_found` names what could not be fetched: "end" (no section in that direction any more), "unknown" (no or more than one placeholder or hit of that name), "invalid_pattern" or "timeout".
 * If `corrections` is present, answer in full again and fix each point under `what`.
+
+Answer with exactly one JSON object, with no text or code block before or after it.

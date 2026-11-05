@@ -9,3 +9,5 @@ Return exactly one line of JSON: `{"value":"..."}`
 * Identifiers that differ in one part only, such as EN_NPi2020_400 and EN_NPi2020_1000, are different runs. Choose a run only when these details identify exactly one.
 * "scenario family" is the answer when several runs fit, "not in AR6" when the scenario is none of them.
 * If `corrections` is present, answer again and fix the point under `what`.
+
+Answer with exactly one JSON object, with no text or code block before or after it.

@@ -11,3 +11,5 @@ Antworte mit genau einer Zeile JSON, mit einem Eintrag für jede Passage:
 * `quote` kopiert zu den Kennzahlen eine zusammenhängende Stelle aus `text` oder `section` genau dieser Passage, Zeichen für Zeichen, mindestens einige Wörter, ohne Auslassungen und ohne Stücke aus verschiedenen Zeilen. Was nur das Bild zeigt, ist kein Zitat.
 * Unter dem Namen jeder Gruppe steht jedes Tupel, das für die Werte dieser Passage gilt und dessen Angaben die gezeigten Passagen alle drucken; ein anderes lässt du weg. Eine Angabe mit Liste ist einer ihrer Schlüssel, `number` eine Jahreszahl mit vier Ziffern. Zu jeder Angabe gehört `<angabe>_quote`: eine Stelle aus den gezeigten Passagen, Zeichen für Zeichen, die die Antwort enthält, bei einer Liste den Namen des Eintrags, eine seiner Schreibweisen oder das eigene Wort des Plans, das dann in `<angabe>_raw` steht, bei einer Jahreszahl die Zahl.
 * Gibt es `corrections`, antworte für alle Passagen neu und behebe die genannten Punkte.
+
+Antworte mit genau einem JSON-Objekt, ohne Text oder Codeblock davor oder danach.

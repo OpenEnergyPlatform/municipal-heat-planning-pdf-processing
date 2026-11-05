@@ -17,10 +17,16 @@ Gefragt sind Szenario und Jahr des Werts. `known` sind die Paare aus Szenario un
 * Steht bei der Zahl statt einer Jahreszahl nur das Wort des Plans für seinen eigenen Stand ("Basisjahr", "Bilanzjahr", "Ist-Zustand", "Status quo", "IST", "Bestand", "aktuell") oder für sein Ziel ("Zieljahr", "Zielzustand", "Zielszenario", "Ziel"), nimm das Jahr aus `base_years` oder `target_years`, auf das dieses Wort verweist: `value` ist die Jahreszahl, `value_raw` das Wort, Zeichen für Zeichen, und `quote` die Stelle mit dem Wort. Bei mehreren `target_years` ist es das Jahr, das der Plan selbst Zieljahr nennt oder in dem sein Ziel erreicht ist, kein Zwischenziel. Fehlt die Liste oder passt keins ihrer Jahre, ist das Jahr "out:unstated".
 * Leite das Jahr nie aus dem Erscheinungsjahr des Plans ab.
 
+Antworte mit genau einem JSON-Objekt, ohne Text oder Codeblock davor oder danach.
+
 <!-- group: number -->
 Gefragt sind die Einheit dieser Zahl und ihr Bezug.
 `{"unit":{"value":"...","quote":"..."},"subject":{"value":"out:unstated","probe":"..."}}`
 
+Antworte mit genau einem JSON-Objekt, ohne Text oder Codeblock davor oder danach.
+
 <!-- group: context -->
 Gefragt ist die Einordnung dieser Zahl. Jeder Listeneintrag nennt, was er bedeutet (`means`), und wie Pläne ihn schreiben (`spellings`).
 `{"quantity":{"value":"...","value_raw":"...","quote":"..."},"sector":{"value":"out:unstated","probe":"..."}}`
+
+Antworte mit genau einem JSON-Objekt, ohne Text oder Codeblock davor oder danach.

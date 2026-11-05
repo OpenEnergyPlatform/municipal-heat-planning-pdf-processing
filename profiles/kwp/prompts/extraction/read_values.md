@@ -12,3 +12,5 @@ Antworte mit genau einer Zeile JSON. Steht kein weiterer Wert der Kennzahl in de
 * `value_raw` steht nur, wenn der Plan die Zahl anders schreibt als in `value`.
 * `quote` kopiert eine zusammenhängende Stelle Zeichen für Zeichen, die den Wert enthält: seinen Satz oder, in einer Tabelle, genau seine eine Zeile.
 * `head` steht nur bei einer Zahl in einer Tabelle: der Kopf ihrer Spalte, Zeichen für Zeichen. Druckt eine Zeile dieselbe Zahl in zwei Spalten, sind das zwei Werte mit verschiedenem `head`.
+
+Antworte mit genau einem JSON-Objekt, ohne Text oder Codeblock davor oder danach.

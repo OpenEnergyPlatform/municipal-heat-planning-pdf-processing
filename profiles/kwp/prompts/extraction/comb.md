@@ -17,3 +17,5 @@ Antworte mit genau einer Zeile JSON:
   - `{"get":"similar","text":"..."}`: Treffer zu einem Satz, wie der Plan die Angabe zu diesem Wert drucken würde; er darf erdacht sein.
 * `hits` nennt je Treffer `id`, Art, Titel und eine Zeile, bei einer Suche die passende. Die erste Liste, wo es sie gibt, enthält die Passagen, die den Sätzen unter `query` am nächsten sind, geschrieben, als dieser Wert gelesen wurde; gibt es keine, such mit `similar`. `not_found` nennt, was sich nicht holen ließ: "end" (in diese Richtung kein Abschnitt mehr), "unknown" (kein oder mehr als ein Platzhalter oder Treffer dieses Namens), "invalid_pattern" oder "timeout".
 * Gibt es `corrections`, antworte vollständig neu und behebe jeden Punkt unter `what`.
+
+Antworte mit genau einem JSON-Objekt, ohne Text oder Codeblock davor oder danach.

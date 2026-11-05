@@ -11,3 +11,5 @@ Return exactly one line of JSON with one entry for every passage:
 * The front page carries title, authors, publication year and DOI; a heading followed by personal names, institutes, a date of receipt or a citation note is the title. An author list with affiliations counts for authors and involved organisations, a funding or acknowledgements section for funders and projects, the abstract for the abstract and often for topics, sectors and technologies, a section on the model, the method or the scenario design for scenario names, types, descriptions, regions and years. A table or figure counts where it names the study's scenarios, regions, sectors or technologies.
 * A reference list, a footnote, a citation in running text and a passage that presents, reviews or compares another study, report or article name other works: such a place counts for no field. The front page is not such a place.
 * If `corrections` is present, answer again for all passages and fix the points named.
+
+Answer with exactly one JSON object, with no text or code block before or after it.
