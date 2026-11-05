@@ -210,6 +210,16 @@ The reply as a server grammar: one entry for EVERY passage of the
 context, its parameters from the list or NONE, a quote, and the tuples
 of each group the survey reads.
 
+### in_passage
+
+```python
+def in_passage(source, quote: str) -> bool
+```
+
+Does *quote* stand in what the survey shows of *source*: its text or
+the title of its section? Whatever a request shows of a document may be
+quoted (owner decision 2026-11-05).
+
 ### read_reply
 
 ```python
@@ -219,9 +229,9 @@ def read_reply(reply: dict, context: list, parameters: dict, slots: dict,
 
 ([Answer], passages unanswered) of one context's reply.
 
-A passage's parameters are taken when their quote stands in that passage
-and is long enough to name a place there; NONE beside a parameter says
-nothing. A tuple is taken when *pairs_of* (`runner.frame_pairs`) takes
+A passage's parameters are taken when their quote stands in that
+passage, its text or the title of its section (`in_passage`), and is long
+enough to name a place there; NONE beside a parameter says nothing. A tuple is taken when *pairs_of* (`runner.frame_pairs`) takes
 it over the passages shown. Nothing else is checked.
 
 ### merge

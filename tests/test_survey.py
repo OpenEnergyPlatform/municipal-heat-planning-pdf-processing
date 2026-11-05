@@ -144,6 +144,25 @@ def test_a_parameter_quoted_from_another_passage_or_too_short_is_not():
         "quote not in its passage", "quote too short"]
 
 
+def test_a_quote_may_come_from_the_title_of_its_own_section_only():
+    # What the survey shows of a passage may be quoted, its section title
+    # too; a title shown with another passage is not this passage's.
+    def titled(number, text, title):
+        return Source("section", number, text, {"document_id": 7, "page": 1,
+                                                "section_title": title})
+    context = [titled(1, "Die Werte stehen in der Tabelle darunter.",
+                      "Treibhausgasemissionen 2022"),
+               titled(2, "Die Stadt liegt an einem Kanal.", "Lage der Stadt")]
+    title = {"parameters": ["emission"], "quote": "Treibhausgasemissionen 2022"}
+    answers, _ = survey.read_reply({"passages": {"P1": title, "P2": title}},
+                                   context, PARAMETERS, SLOTS,
+                                   runner.frame_pairs)
+    assert answers[0].parameters == ["emission"]
+    assert answers[1].parameters == []
+    assert [d["why"] for d in answers[1].dropped] == [
+        "quote not in its passage"]
+
+
 def frame(year, year_quote):
     return [{"scenario": "Bestand", "scenario_quote": "im Jahr 2022",
              "scenario_raw": "im Jahr 2022", "year": year,

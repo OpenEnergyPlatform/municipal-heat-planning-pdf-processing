@@ -250,13 +250,21 @@ class Answer:
     dropped: list = field(default_factory=list)    # why something was not taken
 
 
+def in_passage(source, quote: str) -> bool:
+    """Does *quote* stand in what the survey shows of *source*: its text or
+    the title of its section? Whatever a request shows of a document may be
+    quoted (owner decision 2026-11-05)."""
+    title = (source.provenance or {}).get("section_title") or ""
+    return quote_in(source.text or "", quote) or quote_in(title, quote)
+
+
 def read_reply(reply: dict, context: list, parameters: dict, slots: dict,
                pairs_of: Callable) -> tuple:
     """([Answer], passages unanswered) of one context's reply.
 
-    A passage's parameters are taken when their quote stands in that passage
-    and is long enough to name a place there; NONE beside a parameter says
-    nothing. A tuple is taken when *pairs_of* (`runner.frame_pairs`) takes
+    A passage's parameters are taken when their quote stands in that
+    passage, its text or the title of its section (`in_passage`), and is long
+    enough to name a place there; NONE beside a parameter says nothing. A tuple is taken when *pairs_of* (`runner.frame_pairs`) takes
     it over the passages shown. Nothing else is checked.
     """
     answers, unanswered = [], []
@@ -280,7 +288,7 @@ def read_reply(reply: dict, context: list, parameters: dict, slots: dict,
                 answer.dropped.append({"parameters": named,
                                        "why": "quote too short",
                                        "quote": quote})
-            elif not quote_in(source.text or "", quote):
+            elif not in_passage(source, quote):
                 answer.dropped.append({"parameters": named,
                                        "why": "quote not in its passage",
                                        "quote": quote})

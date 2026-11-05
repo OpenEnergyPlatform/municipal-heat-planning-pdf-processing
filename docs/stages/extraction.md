@@ -116,8 +116,10 @@ descriptions not counted); a longer passage goes in pieces of its own that keep
 its owner. The reply has an entry for every passage of the context, which the
 grammar requires: the parameters whose values stand there, with a quote, or
 `out:none`, and the tuples of each group the survey reads, each coordinate with
-its own quote. A parameter is taken on a quote that stands in its own passage
-and has the minimum length; a tuple is held to `frame_pairs`. A reply with
+its own quote. A parameter is taken on a quote that stands in its own passage,
+its text or the title of its section (`survey.in_passage`; whatever a request
+shows of a document may be quoted, owner decision 2026-11-05), and has the
+minimum length; a tuple is held to `frame_pairs`. A reply with
 something not taken is asked once more, with what was wrong per passage
 (`survey.corrections_of`), and what either reply backs is taken: on Rendsburg
 15 assignments were refused, nearly all of them right and quoted with elisions,
