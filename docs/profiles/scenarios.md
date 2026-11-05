@@ -461,7 +461,9 @@ page the title was read on, the title page behind a cover, goes first
 however often other readings agree (`FRONT_FIELDS`, `_front_first`, owner
 decision 2026-11-05): a chapter that presents other studies prints their
 titles, publishers and years, and the field descriptions say that only the
-document's own count. Runner-up spellings are counted `contested` rather
+document's own count. The survey and the value reading say the same of a
+passage that presents, reviews or compares another work, beside a reference
+list, a footnote and a citation (`survey.md`, `read_values.md`). Runner-up spellings are counted `contested` rather
 than dropped from the log. A read-only connection then cross-checks the chosen title, date and
 DOI against `DocumentMeta`, filled in by the crawl, not this profile's
 own extraction; a disagreement is logged and the crawled value is never
