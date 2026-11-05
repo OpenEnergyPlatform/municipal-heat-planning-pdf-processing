@@ -19,6 +19,7 @@ import pytest
 from docpipe.extraction import (combing, fields, places, reading, replies,
                                 runner, survey)
 from docpipe.extraction.spec import load as load_spec
+from profiles.kwp import compute as kwp_compute
 
 ROOT = Path(__file__).resolve().parent.parent
 PROFILES = ("kwp", "scenarios")
@@ -75,7 +76,9 @@ def schemas(spec) -> dict:
             [None] * 9, {name: "" for name in slots},
             {p.uri: "" for p in spec.parameters}),
         "field": field,
-        "compute": lambda example: replies.compute(["N1", "N2", "N3"]),
+        "compute": lambda example: replies.compute(
+            ["N1", "N2", "N3"], more=reading.more_schema(),
+            take=kwp_compute.taking(spec), quote=True),
         "rows": lambda example: replies.rows(sandbox=True),
         "review": lambda example: replies.review([value, *listed]),
         "anchors": lambda example: replies.anchors(),

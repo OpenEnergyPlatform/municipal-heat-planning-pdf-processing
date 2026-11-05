@@ -6,9 +6,11 @@ compute.py: What a heat plan leaves to be worked out from its printed numbers.
 
 Two kinds of open question (`docpipe/extraction/compute.py` asks them):
 
-- A share whose absolute number stands nowhere in its frame, where a total
-  does: "Heizöl 21 %" and "Wärmeverbrauch 185.200 MWh". Which total is the
-  whole of the share is the model's reading, so all of them are offered.
+- A share whose absolute number stands nowhere in its frame: "Heizöl 21 %"
+  and "Wärmeverbrauch 185.200 MWh". Which total is the whole of the share is
+  the model's reading, by what it means and not by its word, so all of them
+  are offered, and where none is, the request may take one from the plan
+  (`take_whole`).
 - Parts of an amount without their sum: a sum closes exactly one axis, so the
   parts agree on everything but that axis and none of them says it is the
   total. Parts may stand in several passages.
@@ -119,6 +121,51 @@ The row as a question shows it, in *unit* if it names one.
 ```python
 def label_of(row: dict, axis: str, spec) -> Optional[str]
 ```
+
+### amounts
+
+```python
+def amounts(spec) -> list
+```
+
+The parameters a whole can be one of: an amount over a span.
+
+### quantity_slot
+
+```python
+def quantity_slot(parameter)
+```
+
+### choices
+
+```python
+def choices(spec) -> dict
+```
+
+What a whole the request takes may be, as the request shows it.
+
+### taking
+
+```python
+def taking(spec) -> dict
+```
+
+The schema of a whole the request takes.
+
+### take_whole
+
+```python
+def take_whole(share: dict, claim: dict, source, spec)
+```
+
+A whole the request found in a passage no row of it holds, as a
+Number, or why it is not one. *source* is the passage its quote stands
+in, of all the request showed. Read like any number (`verify_tuple`: its
+quote in the passage, its value in the quote, its unit one the parameter
+accepts), its quantity like any coordinate (`answer_in_quote`), and its
+year, scenario and area the share's, since a whole has to have them. It
+stands only in the request, as an input, and is no row of its own (owner
+decision 2026-11-05).
 
 ### share_question
 

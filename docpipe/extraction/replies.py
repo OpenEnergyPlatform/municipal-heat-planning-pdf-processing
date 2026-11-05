@@ -20,6 +20,8 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+from typing import Optional
+
 from . import fields
 
 TEXT = {"type": "string"}
@@ -84,13 +86,21 @@ def review(slots) -> dict:
             "additionalProperties": False}
 
 
-def compute(labels: list) -> dict:
+def compute(labels: list, *, more: Optional[dict] = None,
+            take: Optional[dict] = None, quote: bool = False) -> dict:
     """The reply of a compute request: a sandbox action, or the number with
-    the numbers it came from."""
-    return {"type": "object",
-            "properties": {**ACTION, "value": {"type": ["number", "null"]},
-                           "used": {"type": "array",
-                                    "items": {"enum": list(labels)}}},
+    the numbers it came from. *more* is what it may ask of the plan, *take*
+    a number it may take from a passage, *quote* whether the answer quotes
+    what the number it chose is."""
+    properties = {**ACTION, "value": {"type": ["number", "null"]},
+                  "used": {"type": "array", "items": {"enum": list(labels)}}}
+    if more is not None:
+        properties["more"] = more
+    if take is not None:
+        properties["take"] = take
+    if quote:
+        properties["quote"] = TEXT
+    return {"type": "object", "properties": properties,
             "additionalProperties": False}
 
 

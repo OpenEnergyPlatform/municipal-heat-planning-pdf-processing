@@ -7096,8 +7096,14 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "kind": {
       "type": "string"
+     },
+     "misquoted": {
+      "type": "integer"
      },
      "numbers": {
       "type": "integer"
@@ -7116,8 +7122,17 @@
      "runs": {
       "type": "integer"
      },
+     "searched": {
+      "type": "integer"
+     },
      "t": {
       "const": "compute"
+     },
+     "taken": {
+      "type": "integer"
+     },
+     "untaken": {
+      "type": "integer"
      }
     },
     "required": [
@@ -7126,7 +7141,12 @@
      "kind",
      "numbers",
      "outcome",
-     "runs"
+     "runs",
+     "fetched",
+     "searched",
+     "taken",
+     "untaken",
+     "misquoted"
     ],
     "type": "object"
    },

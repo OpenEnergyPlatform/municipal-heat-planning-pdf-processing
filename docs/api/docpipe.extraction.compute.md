@@ -55,6 +55,12 @@ row's coordinates from the rows the answer used, None where they do not
 yield one. *makes* is what the numbers the answer used make, in the new
 row's unit: the number the answer has to be, None where they make none.
 
+*cites*: the answer quotes, from the passage of a number it chose besides
+the anchor, what that number is (owner decision 2026-11-04, the model
+chooses with evidence). *take* is what the request may add a number with
+that no row holds, from a passage it was shown: (claim, source) -> a
+Number, or why not; *taking* is the schema of such a claim.
+
 Fields:
 
 - `kind: str`
@@ -63,6 +69,9 @@ Fields:
 - `anchor: dict`
 - `row: Callable`
 - `makes: Callable`
+- `cites: bool = False`
+- `take: Optional[Callable] = None`
+- `taking: Optional[dict] = None`
 
 ## Functions
 
@@ -101,10 +110,20 @@ def passages(question: Question, items: dict) -> list
 
 The passages the numbers stand in, each once, in the numbers' order.
 
+### ids_of
+
+```python
+def ids_of(shown: list, fetched: list = ()) -> dict
+```
+
+owner -> the id a request names a passage by: Q1, Q2, ... for the
+passages of its numbers, M1, M2, ... for those it asked for (`Gathered`
+names them so).
+
 ### payload
 
 ```python
-def payload(question: Question, shown: list) -> dict
+def payload(question: Question, shown: list, fetched: list = ()) -> dict
 ```
 
 The request: what is wanted, the numbers and their passages.
@@ -112,11 +131,22 @@ The request: what is wanted, the numbers and their passages.
 ### context
 
 ```python
-def context(question: Question, shown: list) -> dict
+def context(question: Question, shown: list, fetched: list = ()) -> dict
 ```
 
 What the sandbox is handed: the numbers, every passage as the rows
 request hands them, and the tables as the chat hands them.
+
+### unquoted
+
+```python
+def unquoted(question: Question, answer: dict, used: list,
+             passage_of: Callable) -> Optional[str]
+```
+
+The label of the chosen number whose passage the answer's quote does
+not stand in, or None where it stands in one of them, or the question
+asks no quote. *passage_of(number)* is the text the number stands in.
 
 ### used_numbers
 
@@ -129,13 +159,14 @@ The numbers the answer says it used, all of them if it names none.
 ### claim_of
 
 ```python
-def claim_of(question: Question, value, used: list,
-             runs: list) -> Optional[dict]
+def claim_of(question: Question, value, used: list, runs: list,
+             cited: Optional[str] = None) -> Optional[dict]
 ```
 
 The new row: coordinates from its numbers, the code and its output as
 evidence, and the numbers it was worked out from with their passages and
-what they make. The last run is the one the answer stands on.
+what they make. The last run is the one the answer stands on, and holds
+the quote that says what the chosen number is (*cited*).
 
 ### keys_of
 

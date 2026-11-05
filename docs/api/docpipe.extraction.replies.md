@@ -56,11 +56,14 @@ with its wording and its quote; the value also with its unit.
 ### compute
 
 ```python
-def compute(labels: list) -> dict
+def compute(labels: list, *, more: Optional[dict] = None,
+            take: Optional[dict] = None, quote: bool = False) -> dict
 ```
 
 The reply of a compute request: a sandbox action, or the number with
-the numbers it came from.
+the numbers it came from. *more* is what it may ask of the plan, *take*
+a number it may take from a passage, *quote* whether the answer quotes
+what the number it chose is.
 
 ### rows
 

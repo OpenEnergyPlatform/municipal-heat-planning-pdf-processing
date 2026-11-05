@@ -119,6 +119,16 @@ PHRASES = {
     "compute_needs_code": (
         'A number without code has no evidence. Work it out with the action '
         'object, or answer with "value": null.'),
+    "compute_taken": (
+        '{label} now stands under "numbers", and in the code as '
+        'numbers["{label}"].'),
+    "compute_not_taken": (
+        'The number under "take" was not taken: {reason}. Copy its quote '
+        'character for character from the passage shown that holds it, '
+        'with the number in it.'),
+    "compute_quote": (
+        'Your "quote" does not stand in the passage of {label}. Copy from '
+        'that passage, character for character, what {label} is.'),
     "value_in_several_rows": (
         'The "quote" of these numbers runs over several table rows and '
         'prints the number on more than one of them: {values}. Give only '

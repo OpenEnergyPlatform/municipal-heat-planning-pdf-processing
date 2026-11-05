@@ -3,9 +3,11 @@ compute.py: What a heat plan leaves to be worked out from its printed numbers.
 
 Two kinds of open question (`docpipe/extraction/compute.py` asks them):
 
-- A share whose absolute number stands nowhere in its frame, where a total
-  does: "Heizöl 21 %" and "Wärmeverbrauch 185.200 MWh". Which total is the
-  whole of the share is the model's reading, so all of them are offered.
+- A share whose absolute number stands nowhere in its frame: "Heizöl 21 %"
+  and "Wärmeverbrauch 185.200 MWh". Which total is the whole of the share is
+  the model's reading, by what it means and not by its word, so all of them
+  are offered, and where none is, the request may take one from the plan
+  (`take_whole`).
 - Parts of an amount without their sum: a sum closes exactly one axis, so the
   parts agree on everything but that axis and none of them says it is the
   total. Parts may stand in several passages.
@@ -34,6 +36,8 @@ from typing import Optional
 from docpipe.extraction import fields
 from docpipe.extraction.compute import (Number, Question, inherited, keys_of,
                                         owner_of)
+from docpipe.extraction.pipeline import answer_in_quote
+from docpipe.extraction.verify import Refusal, verify_tuple
 from profiles.kwp.kg import ROUNDING_TOLERANCE, _precision
 
 SHARE = "share"
@@ -140,6 +144,87 @@ def label_of(row: dict, axis: str, spec) -> Optional[str]:
     return known(row, spec).get(axis)
 
 
+def amounts(spec) -> list:
+    """The parameters a whole can be one of: an amount over a span."""
+    return [parameter for parameter in spec.parameters
+            if parameter.is_numeric and parameter.integrated]
+
+
+def quantity_slot(parameter):
+    return next((slot for slot in fields.axis_slots(parameter)
+                 if slot.name == "quantity"), None)
+
+
+def choices(spec) -> dict:
+    """What a whole the request takes may be, as the request shows it."""
+    out = {}
+    for parameter in amounts(spec):
+        slot = quantity_slot(parameter)
+        out[parameter.uri] = {
+            "label": parameter.label, "units": list(parameter.units_accepted),
+            "quantity": {option.uri: option.label
+                         for option in (slot.options if slot else ())}}
+    return out
+
+
+def taking(spec) -> dict:
+    """The schema of a whole the request takes."""
+    every = amounts(spec)
+    return {"type": "object",
+            "properties": {
+                "parameter": {"enum": [p.uri for p in every]},
+                "value": {"type": "number"},
+                "unit": {"enum": sorted({unit for p in every
+                                         for unit in p.units_accepted})},
+                "quantity": {"enum": sorted({
+                    option.uri for p in every
+                    for option in (quantity_slot(p).options
+                                   if quantity_slot(p) else ())})},
+                "quantity_raw": {"type": "string"},
+                "quote": {"type": "string"}},
+            "required": ["parameter", "value", "unit", "quote"],
+            "additionalProperties": False}
+
+
+def take_whole(share: dict, claim: dict, source, spec):
+    """A whole the request found in a passage no row of it holds, as a
+    Number, or why it is not one. *source* is the passage its quote stands
+    in, of all the request showed. Read like any number (`verify_tuple`: its
+    quote in the passage, its value in the quote, its unit one the parameter
+    accepts), its quantity like any coordinate (`answer_in_quote`), and its
+    year, scenario and area the share's, since a whole has to have them. It
+    stands only in the request, as an input, and is no row of its own (owner
+    decision 2026-11-05)."""
+    parameter = spec.by_uri.get(str(claim.get("parameter") or ""))
+    if parameter not in amounts(spec):
+        return f"parameter {claim.get('parameter')!r} is no amount"
+    raw = {**keys_of(share, "year", "scenario", AREA),
+           "parameter": parameter.uri, "value": claim.get("value"),
+           "unit": claim.get("unit"), "quote": claim.get("quote"),
+           "quantity": claim.get("quantity")}
+    outcome = verify_tuple(raw, parameter, source.text or "",
+                           owner_kind=source.owner_kind,
+                           repair_text=source.body)
+    if isinstance(outcome, Refusal):
+        return outcome.reason
+    row = dict(outcome.tuple)
+    slot = quantity_slot(parameter)
+    if row.get("quantity") is not None and slot is not None and answer_in_quote(
+            slot, row["quantity"], claim.get("quantity_raw"), row["quote"]):
+        row["quantity_state"] = fields.READ
+        row["quantity_quote"] = row["quote"]
+        row["quantity_source"] = [source.owner_kind, source.owner_id]
+    else:
+        row["quantity"] = None
+        row["quantity_state"] = fields.UNBACKED
+    for each in fields.axis_slots(parameter):
+        row.setdefault(f"{each.name}_state", fields.SAID_UNSTATED)
+    row["provenance"] = {**(source.provenance or {}),
+                         "owner_kind": source.owner_kind,
+                         "owner_id": source.owner_id}
+    return number(row, spec)
+
+
 def share_question(share: dict, bases: list, spec) -> Question:
     def row(used: list) -> Optional[dict]:
         totals = [other for other in used if other is not share]
@@ -159,9 +244,12 @@ def share_question(share: dict, bases: list, spec) -> Question:
         kind="share",
         wanted={"kind": "share", "share": "N1", "whole": share.get("whole"),
                 "year": share.get("year"),
-                "scenario": label_of(share, "scenario", spec)},
+                "scenario": label_of(share, "scenario", spec),
+                "take": choices(spec)},
         numbers=[number(share, spec), *(number(base, spec) for base in bases)],
-        anchor=share, row=row, makes=makes)
+        anchor=share, row=row, makes=makes, cites=True,
+        take=lambda claim, source: take_whole(share, claim, source, spec),
+        taking=taking(spec))
 
 
 def split_of(row: dict) -> tuple:
@@ -186,9 +274,10 @@ def open_shares(rows: list, spec) -> list:
         bases = [row for row in near
                  if all(said in (part, PARTS[axis]) for axis, said, part
                         in zip(SPLIT, split_of(row), own))]
-        bases = distinct(bases, split_of)
-        if bases:
-            questions.append(share_question(share, bases, spec))
+        # Asked with no total offered, too: the request may find its whole
+        # in the plan and take it (owner decision 2026-11-05).
+        questions.append(share_question(share, distinct(bases, split_of),
+                                        spec))
     return questions
 
 

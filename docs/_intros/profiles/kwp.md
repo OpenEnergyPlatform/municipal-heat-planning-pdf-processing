@@ -265,7 +265,7 @@ wording of each spec question:
 | `extraction/field` | once per row per coordinate | one axis's own answer, from its closed list or its type |
 | `extraction/review` | only under `--review`; excluded from the extraction stamp | a second reading of one value, over a window narrowed to its own passage and the section it stands in |
 | `extraction/example` | only under `docpipe compile examples` | which values of one parameter a passage states, to propose the example a spec parameter still lacks |
-| `extraction/compute` | once per question the compute step asks | one number the plan does not print, written as Python over the numbers already read |
+| `extraction/compute` | once per question the compute step asks | one number the plan does not print, written as Python over the numbers already read; it may read on in the plan with the reading's tools, and for a share take its whole from a passage and quote what the chosen whole is |
 | `extraction/survey` | once per document, over its passages | which passage is read for which parameter, and the coordinates a whole passage states (the groups of the spec); no value |
 | `extraction/read_values` | once per round of a passage's reading, one value per request | the next value not yet read: `value`, `value_raw`, `quote` and, for a number in a table, `head`, or `null` to end the rounds; a value is what the field asks for and the year of a number is a coordinate, not a value |
 | `extraction/read_text` | once per value and group of the spec with a coordinate open | that group's open coordinates for the one value |

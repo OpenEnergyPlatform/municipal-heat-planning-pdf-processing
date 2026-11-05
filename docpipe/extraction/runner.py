@@ -6013,7 +6013,8 @@ def make_completer(profile, db: Optional[Path] = None) -> Optional[Callable]:
     return completed
 
 
-def make_computer(profile) -> Optional[Callable]:
+def make_computer(profile, passages_of: Optional[Callable] = None,
+                  pages_of: Optional[Callable] = None) -> Optional[Callable]:
     """The step that works out what a document's verified rows leave open
     (`compute.py`): `compute(answered, report, locate=, spec=, stop=)`, which
     folds what it computed into the report and says False if a stop ended it.
@@ -6024,6 +6025,13 @@ def make_computer(profile) -> Optional[Callable]:
 
     Two questions that come to one statement leave one row: the profile's
     `same` says when two worked-out rows are (owner decision 2026-11-03).
+
+    *passages_of(document_id)* is the plan's passages in their order. With it
+    a request has the reading's tools (`reading.Gathered`: the next or the
+    previous section, a table or figure by its placeholder, a search by
+    pattern), each passage cut to the survey's two pages (*pages_of*), and a
+    question that takes a number (`Question.take`) may take it from a passage
+    they fetched (owner decision 2026-11-05).
     """
     from docpipe.inference import code_exec
 
@@ -6042,26 +6050,62 @@ def make_computer(profile) -> Optional[Callable]:
                               thread_name_prefix="compute")
 
     def ask(question, items: dict, document_id: int, stop) -> tuple:
-        """(how it ended, the new row or None, code runs). The conversation
-        of one question: code, its output, the number."""
+        """(how it ended, the new row or None, code runs, what it fetched and
+        took). The conversation of one question: what it reads of the plan,
+        a number it takes, code, its output, the number."""
         shown = computing.passages(question, items)
-        conversation = [{"role": "user", "content": json.dumps(
-            computing.payload(question, shown), ensure_ascii=False, indent=2)}]
-        handed = computing.context(question, shown)
-        shape = replies.compute(computing.labels(question))
+        order = list(passages_of(document_id)) if passages_of else []
+        passages = {(s.owner_kind, s.owner_id): s for s in order}
+        anchor = computing.owner_of(question.anchor)
+        gathered = reading_map.Gathered(
+            seen={(s.owner_kind, s.owner_id) for s in shown},
+            cursor={"next": anchor, "previous": anchor})
+        budget = (survey_map.budget_of(order, pages_of(document_id)
+                                       if pages_of else None)
+                  if order else None)
         runs: list = []
+        noted = {"taken": 0, "untaken": 0, "misquoted": 0}
         faults = 0
+
+        def request() -> dict:
+            # What it asked of the plan stands in the first message, so a
+            # request asked again with more is the same request grown.
+            return {"role": "user", "content": json.dumps(
+                {**computing.payload(question, shown, gathered.sources),
+                 **gathered.context()}, ensure_ascii=False, indent=2)}
+
+        conversation = [request()]
 
         def told(said: Optional[str], text: str) -> None:
             conversation.extend(({"role": "assistant", "content": said or ""},
                                  {"role": "user", "content": text}))
 
-        for attempt in range(1, MAX_RETRIES + CODE_ROUNDS + 1):
+        def passage_of(number) -> str:
+            source = passages.get(computing.owner_of(number.row))
+            if source is None:
+                item = computing.item_of(items, number.row)
+                source = item.source if item is not None else None
+            return (source.text or "") if source is not None else ""
+
+        def ended(outcome: str, claim=None) -> tuple:
+            return outcome, claim, runs, {
+                "fetched": len(gathered.sources),
+                "searched": sum(1 for hit in gathered.hits
+                                if hit.get("pattern")), **noted}
+
+        attempt = 0
+        while attempt < MAX_RETRIES + CODE_ROUNDS + 1:
+            attempt += 1
             if stop is not None and stop.is_set():
-                return "stopped", None, runs
+                return ended("stopped")
             limit = answer_room(prompt.text, conversation, max_tokens)
             if limit < MIN_ANSWER_TOKENS:
-                return "too_long", None, runs
+                return ended("too_long")
+            shape = replies.compute(
+                computing.labels(question),
+                more=reading_map.more_schema() if order else None,
+                take=question.taking if question.take else None,
+                quote=question.cites)
             try:
                 with _for(document_id):
                     response = client.chat.completions.create(
@@ -6086,7 +6130,8 @@ def make_computer(profile) -> Optional[Callable]:
             code = _parse_action(said)
             if code and len(runs) < CODE_ROUNDS:
                 with SANDBOX_SLOTS:
-                    out = code_exec.run_code(code, context=handed)
+                    out = code_exec.run_code(code, context=computing.context(
+                        question, shown, gathered.sources))
                 runs.append({"code": code,
                              "stdout": (out.get("stdout") or "")[:2000],
                              "ok": bool(out.get("ok")),
@@ -6095,6 +6140,34 @@ def make_computer(profile) -> Optional[Callable]:
                 told(said, _compute_reply(runs[-1], "compute_output"))
                 continue
             answer = _loads_object(said)
+            if isinstance(answer, dict) and order and gathered.fetch(
+                    answer.get("more"), order, passages, budget):
+                # Asked again with what it fetched, as the reading is: a
+                # round that brings something new is no attempt, and the
+                # window bounds how many there are.
+                attempt -= 1
+                conversation[0] = request()
+                continue
+            taken = answer.get("take") if isinstance(answer, dict) else None
+            if isinstance(taken, dict) and question.take is not None:
+                # Read from the passage its quote stands in, of all the
+                # request showed, as a value round's value is (owner
+                # decision 2026-11-05).
+                source = reading_map.passage_of(taken,
+                                                [*shown, *gathered.sources])
+                made = (question.take(taken, source) if source is not None
+                        else "quote not found in any passage shown")
+                if isinstance(made, computing.Number):
+                    question.numbers.append(made)
+                    noted["taken"] += 1
+                    conversation[0] = request()
+                    told(said, say("compute_taken", label=computing.label(
+                        len(question.numbers) - 1)))
+                else:
+                    faults += 1
+                    noted["untaken"] += 1
+                    told(said, say("compute_not_taken", reason=made))
+                continue
             if not isinstance(answer, dict) or "value" not in answer:
                 faults += 1
                 cause, correction = _reply_fault(reply, limit)
@@ -6104,16 +6177,26 @@ def make_computer(profile) -> Optional[Callable]:
                 told(said, correction)
                 continue
             if answer["value"] is None:
-                return "none", None, runs
+                return ended("none")
             if not any(run["ok"] for run in runs):
                 faults += 1
                 told(said, say("compute_needs_code"))
                 continue
-            claim = computing.claim_of(
-                question, answer["value"],
-                computing.used_numbers(question, answer), runs)
-            return ("read", claim, runs) if claim else ("none", None, runs)
-        return "unanswered", None, runs
+            used = computing.used_numbers(question, answer)
+            # The quote that says what the chosen number is has to stand in
+            # its passage, as every quote does; one that does not is told,
+            # not taken (owner decision 2026-11-04, the model chooses with
+            # evidence).
+            missing = computing.unquoted(question, answer, used, passage_of)
+            if missing is not None:
+                faults += 1
+                noted["misquoted"] += 1
+                told(said, say("compute_quote", label=missing))
+                continue
+            claim = computing.claim_of(question, answer["value"], used, runs,
+                                       cited=answer.get("quote"))
+            return ended("read", claim) if claim else ended("none")
+        return ended("unanswered")
 
     def compute(answered: list, report, *, locate: Optional[Callable] = None,
                 spec=None, stop=None) -> bool:
@@ -6135,7 +6218,7 @@ def make_computer(profile) -> Optional[Callable]:
                  for question in questions]
         made: list = []
         for question, future in asked:
-            outcome, claim, runs = future.result()
+            outcome, claim, runs, noted = future.result()
             if claim is not None:
                 before = len(report.tuples)
                 # The row's parameter is its own, whatever its anchor's is.
@@ -6153,7 +6236,7 @@ def make_computer(profile) -> Optional[Callable]:
                     made.append(report.tuples[-1])
             trace.event("compute", report.document_id, kind=question.kind,
                         numbers=len(question.numbers), outcome=outcome,
-                        runs=len(runs))
+                        runs=len(runs), **noted)
         log.info("   compute %s: %d question(s) in %.0f s",
                  report.document_id, len(questions), time.time() - started)
         return stop is None or not stop.is_set()
@@ -8530,7 +8613,9 @@ def main(argv: Optional[list] = None) -> int:
     # far, with the run's spec for a batch that carries none of its own.
     prior_rows = functools.partial(accepted_rows, spec=spec)
 
-    computer = make_computer(profile)
+    computer = make_computer(profile,
+                             lambda document_id: every(document_id, set()),
+                             pages_of)
     completer = make_completer(profile, args.db)
 
     def verify(entry: tuple, replies: Optional[int] = None) -> bool:

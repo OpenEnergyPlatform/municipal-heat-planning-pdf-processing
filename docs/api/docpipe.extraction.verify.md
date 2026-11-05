@@ -91,8 +91,12 @@ the ambient profile's (`decimal_mark`).
 ### numbers_in
 
 ```python
-def numbers_in(text: str) -> set
+def numbers_in(text: str, decimal: Optional[str] = None) -> set
 ```
+
+The numbers *text* prints, each in `canonical_number`'s spelling.
+*decimal* is the mark the text writes the decimal with: the documents'
+by default.
 
 ### flat
 

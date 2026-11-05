@@ -80,8 +80,10 @@ def test_a_share_with_its_absolute_number_is_not_asked():
     assert kinds(share(21), amount(185200), amount(38000, OIL)) == []
 
 
-def test_a_share_without_a_total_in_its_frame_is_not_asked():
-    assert kinds(share(21), amount(185200, year=2030)) == []
+def test_a_share_without_a_total_in_its_frame_is_asked_to_find_its_whole():
+    # A total of another year is no whole of it, and is not offered.
+    question = only(share(21), amount(185200, year=2030))
+    assert shown(question) == [21] and question.take is not None
 
 
 def test_a_row_saying_nothing_on_an_axis_is_the_same_part():
@@ -236,7 +238,7 @@ def test_zero_is_no_part():
 
 def test_zero_is_no_share_and_no_total():
     assert kinds(share(0), amount(185200)) == []
-    assert kinds(share(21), amount(0)) == []
+    assert shown(only(share(21), amount(0))) == [21]
 
 
 def test_a_row_without_a_year_is_no_part():
@@ -386,10 +388,11 @@ def printed(number):
     return {"ok": True, "stdout": f"{number}\n", "error": None}
 
 
-def computing(monkeypatch, *said, ran=None):
+def computing(monkeypatch, *said, ran=None, plan=None):
     """A compute step whose model says *said* in turn. Its requests, the code
     runs with what they were handed, and the trace. *ran* is what every run
-    prints, or a list of what each prints in turn."""
+    prints, or a list of what each prints in turn. *plan* is the plan's
+    passages, which give the request its tools."""
     told = iter(said)
     asked, runs, events = [], [], []
 
@@ -411,11 +414,27 @@ def computing(monkeypatch, *said, ran=None):
     monkeypatch.setattr(code_exec, "run_code", run_code)
     monkeypatch.setattr(runner.trace, "event", lambda kind, doc=None, /, **f:
                         events.append({"t": kind, "doc": doc, **f}))
-    return runner.make_computer(PROFILE), asked, runs, events
+    # A plan of one page: what a search lists and a fetch shows is cut to
+    # two pages of it.
+    step = (runner.make_computer(PROFILE, lambda document_id: plan,
+                                 lambda document_id: 1)
+            if plan is not None else runner.make_computer(PROFILE))
+    return step, asked, runs, events
 
 
 CODE = json.dumps({"action": "python", "code": "print(185200 * 0.21)"})
-ANSWER = json.dumps({"value": 38892.0, "used": ["N1", "N2"]})
+# What a total's passage says it is: every amount's passage here prints it.
+WHOLE = "Der Wert lautet"
+
+
+def answered(value, *used, quote=WHOLE) -> str:
+    """The model's answer: *value* worked out from N1 and N2, or from
+    *used*, quoting from the passage of the total what it is."""
+    return json.dumps({"value": value, "used": list(used or ("N1", "N2")),
+                       "quote": quote})
+
+
+ANSWER = answered(38892.0)
 NOTHING = json.dumps({"value": None, "used": []})
 
 
@@ -465,7 +484,7 @@ def test_a_row_stands_under_the_quote_of_its_anchor(monkeypatch):
 
 
 def test_a_number_the_code_did_not_print_is_refused(monkeypatch):
-    wrong = json.dumps({"value": 40000.0, "used": ["N1", "N2"]})
+    wrong = answered(40000.0)
     step, _asked, _runs, events = computing(monkeypatch, CODE, wrong)
     report, _done = run_step(step, share(21), amount(185200))
     assert len(report.tuples) == 2
@@ -542,6 +561,147 @@ def test_a_request_after_a_server_error_keeps_its_time(monkeypatch):
     assert timed(monkeypatch, Failed()) == [None, None]
 
 
+# -- the whole of a share, chosen with evidence -------------------------------
+
+SHARE_SAYS = "Der Anteil beträgt 21 %"
+
+
+def told_in(request: dict) -> str:
+    """What the stage told the model last in this request."""
+    return request["messages"][-1]["content"]
+
+
+def test_the_answer_quotes_from_its_whole_what_the_whole_is(monkeypatch):
+    # A quote from the share's own passage says nothing of the whole: told,
+    # and asked again. One from the whole's passage stands.
+    step, asked, _runs, events = computing(
+        monkeypatch, CODE, answered(38892.0, quote=SHARE_SAYS), ANSWER)
+    report, _done = run_step(step, share(21), amount(185200))
+    assert len(asked) == 3
+    assert "N2" in told_in(asked[2])
+    row = report.tuples[-1]
+    assert row["computed"] and row["compute"][-1]["cited"] == WHOLE
+    assert events[-1]["misquoted"] == 1
+
+
+def test_a_whole_never_quoted_leaves_no_row(monkeypatch):
+    wrong = answered(38892.0, quote=SHARE_SAYS)
+    step, asked, _runs, events = computing(monkeypatch, CODE, *[wrong] * 5)
+    report, _done = run_step(step, share(21), amount(185200))
+    assert len(report.tuples) == 2 and not report.refusals
+    assert events[-1]["outcome"] == "unanswered"
+
+
+def plan_of(*passages):
+    """The plan: the passages of the rows, then *passages* as sections."""
+    return [Source("table", 9, f"Abschnitt\n{SHARE_SAYS}",
+                   {"document_id": 7, "title": "Tabelle 3"}),
+            *(Source("section", 20 + index, text,
+                     {"document_id": 7, "title": "Wärmebilanz"})
+              for index, text in enumerate(passages))]
+
+
+BALANCE = "Der Wärmeverbrauch der Stadt beträgt 185.200 MWh im Jahr 2023."
+
+
+def take(quote="Der Wärmeverbrauch der Stadt beträgt 185.200 MWh",
+         **more) -> str:
+    return json.dumps({"take": {
+        "parameter": "energy_consumption", "value": 185200, "unit": "MWh/a",
+        "quantity": "OEO_00050016", "quantity_raw": "Wärmeverbrauch",
+        "quote": quote, **more}})
+
+
+def test_a_share_takes_its_whole_from_a_passage_it_fetched(monkeypatch):
+    found = json.dumps({"more": [{"get": "search",
+                                  "pattern": "Wärmeverbrauch"}]})
+    fetch = json.dumps({"more": [{"get": "hit", "id": "H1"}]})
+    step, asked, runs, events = computing(
+        monkeypatch, found, fetch, take(), CODE,
+        answered(38892.0, quote="Der Wärmeverbrauch der Stadt"),
+        plan=plan_of(BALANCE))
+    report, done = run_step(step, share(21), amount(185200, year=2030))
+    assert done
+    shown_now = json.loads(asked[2]["messages"][1]["content"])
+    assert shown_now["more"][0]["id"] == "M1"
+    numbers = json.loads(asked[3]["messages"][1]["content"])["numbers"]
+    assert [n["id"] for n in numbers] == ["N1", "N2"]
+    assert numbers[1]["source"] == "M1"
+    assert runs[0][1]["numbers"]["N2"] == {"value": 185200,
+                                           "unit": "MWh/a"}
+    row = report.tuples[-1]
+    assert row["computed"] and row["value"] == 38892.0
+    assert row["year"] == 2023 and row["carrier"] == OIL
+    assert row["quantity"] == "OEO_00050016"
+    assert row["quantity_source"] == ["section", 20]
+    assert row["compute"][-1]["inputs"][1]["source"] == ["section", 20]
+    assert {key: events[-1][key] for key in ("fetched", "searched", "taken")
+            } == {"fetched": 1, "searched": 1, "taken": 1}
+
+
+def test_a_whole_is_read_from_the_passage_its_quote_stands_in(monkeypatch):
+    # No passage to name: of all the request showed, the one that carries
+    # the quote is the one the whole is read from (owner decision
+    # 2026-11-05), here the first of two it fetched.
+    onward = json.dumps({"more": [{"get": "next"}]})
+    step, _asked, _runs, _events = computing(
+        monkeypatch, onward, onward, take(), CODE,
+        answered(38892.0, quote="Der Wärmeverbrauch der Stadt"),
+        plan=plan_of(BALANCE, "Abschnitt danach."))
+    report, _done = run_step(step, share(21))
+    row = report.tuples[-1]
+    assert row["computed"] and row["quantity_source"] == ["section", 20]
+
+
+def test_a_whole_not_read_like_a_number_is_not_taken(monkeypatch):
+    # Its number not in its quote, a unit its parameter does not take, a
+    # quote in no passage shown: each is told, and no number is added.
+    for bad in (take(quote="Der Wärmeverbrauch der Stadt beträgt"),
+                take(unit="Tonnen"),
+                take(quote="Der Wärmeverbrauch des Landes beträgt 185.200")):
+        step, asked, _runs, events = computing(
+            monkeypatch, json.dumps({"more": [{"get": "next"}]}), bad,
+            NOTHING, plan=plan_of(BALANCE))
+        report, _done = run_step(step, share(21))
+        assert len(report.tuples) == 1
+        assert "take" in told_in(asked[2])
+        assert events[-1]["untaken"] == 1 and events[-1]["taken"] == 0
+
+
+def test_a_whole_whose_quantity_its_quote_does_not_say_leaves_it_open(
+        monkeypatch):
+    step, _asked, _runs, _events = computing(
+        monkeypatch, json.dumps({"more": [{"get": "next"}]}),
+        take(quantity_raw="Endenergiebedarf"), CODE,
+        answered(38892.0, quote="Der Wärmeverbrauch der Stadt"),
+        plan=plan_of(BALANCE))
+    report, _done = run_step(step, share(21))
+    row = report.tuples[-1]
+    assert row["computed"] and row["quantity_state"] == fields.UNBACKED
+
+
+def test_a_round_that_fetches_something_new_is_no_attempt(monkeypatch):
+    # Six sections read one after another, more than the attempts a request
+    # has, and the answer after them still counts.
+    onward = json.dumps({"more": [{"get": "next"}]})
+    step, _asked, _runs, events = computing(
+        monkeypatch, *[onward] * 6, CODE, ANSWER,
+        plan=plan_of(*(f"Abschnitt {n} des Plans." for n in range(6))))
+    report, _done = run_step(step, share(21), amount(185200))
+    assert report.tuples[-1]["computed"]
+    assert events[-1]["fetched"] == 6 and events[-1]["outcome"] == "read"
+
+
+def test_the_request_offers_the_search_only_with_the_plan(monkeypatch):
+    for plan, offered in ((None, False), (plan_of(BALANCE), True)):
+        step, asked, _runs, _events = computing(monkeypatch, NOTHING,
+                                                plan=plan)
+        run_step(step, share(21), amount(185200))
+        reply = json.dumps(asked[0]["response_format"])
+        assert ('"more"' in reply) is offered
+        assert '"take"' in reply and '"quote"' in reply
+
+
 def test_a_document_with_nothing_open_asks_nothing(monkeypatch):
     step, asked, _runs, _events = computing(monkeypatch)
     _report, done = run_step(step, amount(200))
@@ -549,7 +709,7 @@ def test_a_document_with_nothing_open_asks_nothing(monkeypatch):
 
 
 def test_the_inputs_are_the_numbers_the_answer_names(monkeypatch):
-    named = json.dumps({"value": 38892.0, "used": ["N1", "N2"]})
+    named = answered(38892.0)
     step, _asked, _runs, _events = computing(monkeypatch, CODE, named)
     report, _done = run_step(step, amount(30000, GAS), amount(8892, OIL),
                              amount(500, HEAT))
@@ -641,7 +801,7 @@ def test_the_row_carries_what_its_inputs_make(monkeypatch):
 
 
 def test_a_printed_number_its_inputs_do_not_make_is_refused(monkeypatch):
-    other = json.dumps({"value": 40000.0, "used": ["N1", "N2"]})
+    other = answered(40000.0)
     step, _asked, _runs, events = computing(monkeypatch, CODE, other,
                                             ran=printed(40000.0))
     report, _done = run_step(step, share(21), amount(185200))
@@ -654,7 +814,7 @@ def test_a_printed_number_its_inputs_do_not_make_is_refused(monkeypatch):
 
 def test_a_sum_of_other_numbers_than_it_names_is_refused(monkeypatch):
     for total, kept in ((200.0, 3), (210.0, 2)):
-        said = json.dumps({"value": total, "used": ["N1", "N2"]})
+        said = answered(total)
         step, _asked, _runs, _events = computing(monkeypatch, CODE, said,
                                                  ran=printed(total))
         report, _done = run_step(step, amount(120, GAS), amount(80, OIL))
@@ -664,7 +824,7 @@ def test_a_sum_of_other_numbers_than_it_names_is_refused(monkeypatch):
 def test_a_number_follows_to_the_rounding_it_is_written_with(monkeypatch):
     # 21 % of 185,201 is 38,892.21.
     for written, kept in ((38892.2, 3), (38892.21, 3), (38893.0, 2)):
-        said = json.dumps({"value": written, "used": ["N1", "N2"]})
+        said = answered(written)
         step, _asked, _runs, _events = computing(monkeypatch, CODE, said,
                                                  ran=printed(written))
         report, _done = run_step(step, share(21), amount(185201))
@@ -680,7 +840,7 @@ def worked_twice(monkeypatch, first, second, values=(38892.0, 38892.0)):
     for index, value in enumerate(values):
         said += [json.dumps({"action": "python",
                              "code": f"print({value})  # {index}"}),
-                 json.dumps({"value": value, "used": ["N1", "N2"]})]
+                 answered(value)]
     step, _asked, _runs, events = computing(
         monkeypatch, *said, ran=[printed(value) for value in values])
     report, _done = run_step(step, first, second, amount(185200))

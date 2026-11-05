@@ -2130,7 +2130,8 @@ or None where nothing was open. None where the profile has no such step.
 ### make_computer
 
 ```python
-def make_computer(profile) -> Optional[Callable]
+def make_computer(profile, passages_of: Optional[Callable] = None,
+                  pages_of: Optional[Callable] = None) -> Optional[Callable]
 ```
 
 The step that works out what a document's verified rows leave open
@@ -2143,6 +2144,13 @@ itself has no evidence.
 
 Two questions that come to one statement leave one row: the profile's
 `same` says when two worked-out rows are (owner decision 2026-11-03).
+
+*passages_of(document_id)* is the plan's passages in their order. With it
+a request has the reading's tools (`reading.Gathered`: the next or the
+previous section, a table or figure by its placeholder, a search by
+pattern), each passage cut to the survey's two pages (*pages_of*), and a
+question that takes a number (`Question.take`) may take it from a passage
+they fetched (owner decision 2026-11-05).
 
 ### split_long_sources
 

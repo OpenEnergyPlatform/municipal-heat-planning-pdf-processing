@@ -36,6 +36,9 @@ UNIT = next(iter(PARAMETER.units_accepted))
     ("126 656 132", ",", "126656132"),
     (126656132, ",", "126656132"),
     (0.5, ",", "0.5"),
+    (52678423.38, ",", "52678423.38"),
+    (0.1 + 0.2, ",", "0.3"),
+    (1e20, ",", "100000000000000000000"),
     ("12a", ",", None),
     ("-1.155", ",", "-1155"),
     ("\u22121.155", ",", "-1155"),
@@ -142,6 +145,18 @@ def test_a_computed_value_needs_the_run_that_printed_it():
                                    owner_kind="table"), Refusal)
     said = dict(computed, computed="ja")
     assert isinstance(verify_tuple(said, PARAMETER, SOURCE,
+                                   owner_kind="table"), Refusal)
+
+
+def test_the_run_is_read_as_python_prints_a_number():
+    """The point is the decimal mark of the sandbox's output, whatever the
+    plan writes: the 0.974 that round(x, 3) prints is no 974."""
+    computed = claim(value=0.974, computed=True,
+                     compute=[{"stdout": "0.974\n"}])
+    assert isinstance(verify_tuple(computed, PARAMETER, SOURCE,
+                                   owner_kind="table"), Verified)
+    grouped = dict(computed, value=974)
+    assert isinstance(verify_tuple(grouped, PARAMETER, SOURCE,
                                    owner_kind="table"), Refusal)
 
 

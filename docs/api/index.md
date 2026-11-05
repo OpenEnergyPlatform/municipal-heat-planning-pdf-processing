@@ -96,7 +96,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.archive](docpipe.extraction.archive.md): A harvest or stamp file is never overwritten. (3 functions)
 - [docpipe.extraction.benchmark](docpipe.extraction.benchmark.md): One harvest, recorded once and made again without a model. (7 functions)
 - [docpipe.extraction.combing](docpipe.extraction.combing.md): The coordinates the reading left open, looked for in the rest of the plan. (2 classes, 2 functions)
-- [docpipe.extraction.compute](docpipe.extraction.compute.md): The numbers a plan does not print and its printed numbers yield. (2 classes, 11 functions)
+- [docpipe.extraction.compute](docpipe.extraction.compute.md): The numbers a plan does not print and its printed numbers yield. (2 classes, 13 functions)
 - [docpipe.extraction.contract](docpipe.extraction.contract.md): The core's half of the extraction prompts: where its templates are, which languages they come in and the facts the code fills into them. (8 functions)
 - [docpipe.extraction.evaluate](docpipe.extraction.evaluate.md): Holds a harvest against what people decided about it. (1 class, 11 functions)
 - [docpipe.extraction.fields](docpipe.extraction.fields.md): Computes the deterministic skeleton of a tuple from the spec. (2 classes, 16 functions)
@@ -243,7 +243,7 @@ is for and what it hands to what; this is the reference.
 ## profiles.kwp
 
 - [profiles.kwp.catalog](profiles.kwp.catalog.md): How heat plans present themselves in the picker. (1 class, 2 functions)
-- [profiles.kwp.compute](profiles.kwp.compute.md): What a heat plan leaves to be worked out from its printed numbers. (18 functions)
+- [profiles.kwp.compute](profiles.kwp.compute.md): What a heat plan leaves to be worked out from its printed numbers. (23 functions)
 - [profiles.kwp.config](profiles.kwp.config.md): Constants for the fileprocessing module. (1 function)
 - [profiles.kwp.extraction](profiles.kwp.extraction.md): Extraction stage wiring: the kwp spec, the slice gate, the frame, and what a plan says about itself. (2 functions)
 - [profiles.kwp.inference](profiles.kwp.inference.md): What the answer loop says around the kwp prompts.

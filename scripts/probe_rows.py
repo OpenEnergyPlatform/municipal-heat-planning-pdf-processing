@@ -370,13 +370,17 @@ def compute_over(stored: Path, hits: list, spec, args) -> list:
     from docpipe.extraction.pipeline import Batch, DocumentReport, WorkItem
     from docpipe.profile import active_profile
 
-    computer = runner.make_computer(active_profile())
-    if computer is None:
-        raise SystemExit("no compute step: is CODE_EXEC_URL set?")
     documents: dict = {}
     for hit in hits:
         documents.setdefault(hit.get("document_id") or 0, []).append(
             WorkItem(hit.get("document_id") or 0, None, source_of(hit, args)))
+    # The passages given are the plan the request's tools read, in their
+    # order, as a run's are.
+    computer = runner.make_computer(
+        active_profile(), lambda document: [item.source for item in
+                                            documents.get(document, ())])
+    if computer is None:
+        raise SystemExit("no compute step: is CODE_EXEC_URL set?")
     rows = []
     for path in sorted(stored.glob("doc*.json")):
         probe = json.loads(path.read_text(encoding="utf-8"))

@@ -50,6 +50,12 @@ class Question:
     row's coordinates from the rows the answer used, None where they do not
     yield one. *makes* is what the numbers the answer used make, in the new
     row's unit: the number the answer has to be, None where they make none.
+
+    *cites*: the answer quotes, from the passage of a number it chose besides
+    the anchor, what that number is (owner decision 2026-11-04, the model
+    chooses with evidence). *take* is what the request may add a number with
+    that no row holds, from a passage it was shown: (claim, source) -> a
+    Number, or why not; *taking* is the schema of such a claim.
     """
     kind: str
     wanted: dict
@@ -57,6 +63,9 @@ class Question:
     anchor: dict
     row: Callable
     makes: Callable
+    cites: bool = False
+    take: Optional[Callable] = None
+    taking: Optional[dict] = None
 
 
 def label(index: int) -> str:
@@ -94,10 +103,20 @@ def passages(question: Question, items: dict) -> list:
     return list(shown.values())
 
 
-def payload(question: Question, shown: list) -> dict:
-    """The request: what is wanted, the numbers and their passages."""
+def ids_of(shown: list, fetched: list = ()) -> dict:
+    """owner -> the id a request names a passage by: Q1, Q2, ... for the
+    passages of its numbers, M1, M2, ... for those it asked for (`Gathered`
+    names them so)."""
     ids = {(source.owner_kind, source.owner_id): f"Q{index + 1}"
            for index, source in enumerate(shown)}
+    for index, source in enumerate(fetched):
+        ids.setdefault((source.owner_kind, source.owner_id), f"M{index + 1}")
+    return ids
+
+
+def payload(question: Question, shown: list, fetched: list = ()) -> dict:
+    """The request: what is wanted, the numbers and their passages."""
+    ids = ids_of(shown, fetched)
     numbers = []
     for index, number in enumerate(question.numbers):
         entry = {"id": label(index), "value": number.value,
@@ -115,17 +134,36 @@ def payload(question: Question, shown: list) -> dict:
                         for index, source in enumerate(shown)]}
 
 
-def context(question: Question, shown: list) -> dict:
+def context(question: Question, shown: list, fetched: list = ()) -> dict:
     """What the sandbox is handed: the numbers, every passage as the rows
     request hands them, and the tables as the chat hands them."""
+    ids = ids_of(shown, fetched)
+    every = [*shown, *fetched]
     return {"numbers": {label(index): {"value": number.value,
                                        "unit": number.unit}
                         for index, number in enumerate(question.numbers)},
-            "sources": {f"Q{index + 1}": source.text
-                        for index, source in enumerate(shown)},
+            "sources": {ids[(source.owner_kind, source.owner_id)]:
+                        source.text for source in every},
             "tables": [{"caption": source.provenance.get("title") or "",
                         "markdown": source.body or source.text}
-                       for source in shown if source.owner_kind == "table"]}
+                       for source in every if source.owner_kind == "table"]}
+
+
+def unquoted(question: Question, answer: dict, used: list,
+             passage_of: Callable) -> Optional[str]:
+    """The label of the chosen number whose passage the answer's quote does
+    not stand in, or None where it stands in one of them, or the question
+    asks no quote. *passage_of(number)* is the text the number stands in."""
+    if not question.cites:
+        return None
+    chosen = [number for number in used if number.row is not question.anchor]
+    quote = answer.get("quote")
+    if isinstance(quote, str) and any(quote_in(passage_of(number) or "", quote)
+                                      for number in chosen):
+        return None
+    by_number = {id(number): name
+                 for name, number in zip(labels(question), question.numbers)}
+    return by_number.get(id(chosen[0])) if chosen else None
 
 
 def used_numbers(question: Question, answer: dict) -> list:
@@ -136,22 +174,25 @@ def used_numbers(question: Question, answer: dict) -> list:
     return chosen or list(question.numbers)
 
 
-def claim_of(question: Question, value, used: list,
-             runs: list) -> Optional[dict]:
+def claim_of(question: Question, value, used: list, runs: list,
+             cited: Optional[str] = None) -> Optional[dict]:
     """The new row: coordinates from its numbers, the code and its output as
     evidence, and the numbers it was worked out from with their passages and
-    what they make. The last run is the one the answer stands on."""
+    what they make. The last run is the one the answer stands on, and holds
+    the quote that says what the chosen number is (*cited*)."""
     coordinates = question.row([number.row for number in used])
     if coordinates is None:
         return None
     inputs = [{"value": number.value, "unit": number.unit,
                "quote": number.row.get("quote"),
                "source": list(owner_of(number.row))} for number in used]
+    last = {**runs[-1], "inputs": inputs, "expected": question.makes(used)}
+    if cited:
+        last["cited"] = cited
     return {**coordinates, "value": value,
             "quote": question.anchor.get("quote"),
             "source": question.anchor.get("source"), "computed": True,
-            "compute": [*runs[:-1], {**runs[-1], "inputs": inputs,
-                                     "expected": question.makes(used)}]}
+            "compute": [*runs[:-1], last]}
 
 
 def keys_of(row: dict, *axes: str) -> dict:

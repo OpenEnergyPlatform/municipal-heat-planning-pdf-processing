@@ -871,12 +871,20 @@ def trace_schema() -> dict:
         # new row, `refused` a number the check did not take, `same` a number
         # another question already came to with the same coordinates, `none`
         # the model saying there is nothing to compute. `runs` counts its
-        # sandbox rounds.
+        # sandbox rounds, `fetched` and `searched` the passages and searches
+        # it asked of the plan, `taken` and `untaken` the numbers it took
+        # from a passage and those not taken, `misquoted` its answers whose
+        # quote stood in no passage of the number it chose.
         "compute": {"kind": {"type": "string"},
                     "numbers": {"type": "integer"},
                     "outcome": {"enum": ["read", "refused", "same", "none",
                                          "too_long", "unanswered", "stopped"]},
-                    "runs": {"type": "integer"}},
+                    "runs": {"type": "integer"},
+                    "fetched": {"type": "integer"},
+                    "searched": {"type": "integer"},
+                    "taken": {"type": "integer"},
+                    "untaken": {"type": "integer"},
+                    "misquoted": {"type": "integer"}},
         "field": {"slot": {"type": "string"}, "anchor": {"type": "string"},
                   "window": {"type": "integer"},
                   "stage": {"enum": ["own", "found", "retrieval", "rest",

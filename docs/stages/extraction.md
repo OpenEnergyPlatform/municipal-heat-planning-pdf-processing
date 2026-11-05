@@ -676,6 +676,15 @@ backed by a quote that prints `1.155`. A dash after a letter, a digit or a
 separator is no sign. The magnitude stays readable, so a positive answer still
 stands in a quote that prints the number with a minus.
 
+A number is compared in one spelling (`canonical_number`), read in the
+convention of whoever wrote it. A plan writes the profile's decimal mark, the
+sandbox writes as Python prints: the point is its decimal mark and it never
+groups, so the `0.974` that `round(x, 3)` prints is no 974 (`numbers_in` with
+`decimal="."`). Read as the plan, it refused 17 of 26 computed shares on one
+plan. A number the model answers is spelled with the fifteen significant digits
+a double holds: ten fixed places showed the binary noise of a large one, and
+52678423.38 was never in its quote.
+
 A profile may close a choice list per document (`document_axes`; the AR6
 profile closes its scenarios and its regions). `runner.fill_dynamic_axes`
 copies the spec with those lists filled in, parameter and unit questions
@@ -1184,11 +1193,16 @@ like one half read.
 kwp names two kinds of question (`profiles/kwp/compute.py`):
 
 - **A share without its absolute number:** a `share` with its year, scenario and
-  `whole` read, no amount of the same carrier, sector and technology in that
-  frame, and an amount in that frame that covers it. All such totals are offered
-  and the model says which one is the whole, or none. On eight plans 71 percent
-  of 3,323 shares had their absolute number printed and 13 percent had a total
-  but no absolute number; in a sample of 12 of those, about 7 totals fitted.
+  `whole` read and no amount of the same carrier, sector and technology in that
+  frame. Every amount in that frame that covers it is offered, and the share is
+  asked with none offered too: the model says which number is the whole, takes
+  it from a passage of the plan (see below), or says there is none (owner
+  decision 2026-11-05). On eight plans 71 percent of 3,323 shares had their
+  absolute number printed and 13 percent had a total but no absolute number; in
+  a sample of 12 of those, about 7 totals fitted. In the probe of 2026-11-03
+  every wrong whole was a total of another scope, all final energy for a share
+  of the heat only or the heat consumption for a share of the district heating's
+  generation, and the right one had not been offered.
 - **Parts without their sum:** a sum closes exactly one axis (`carrier`, `sector`,
   `technology`, or the area, where sub-areas are told apart by name), so the parts
   agree on everything else and none says it is the total. Parts may stand in
@@ -1211,11 +1225,32 @@ taken from a table instead: the sum would not follow from the numbers it names.
 
 Each question is a conversation of its own. The request names the number wanted,
 the numbers with their quotes and what was read about them, and their passages;
-parts in different units are shown in the unit of the first. The model answers
-with `{"action": "python", "code": ...}`, the sandbox runs the code with `numbers`,
-`sources` as in the rows request and `tables` as in the chat, and the output goes
-back. Then the model answers `{"value": ..., "used": [...]}`, or `{"value": null}`
-where there is nothing to compute. A number without a code run that succeeded is
+parts in different units are shown in the unit of the first. It has the
+reading's tools (`reading.Gathered`, owner decision 2026-11-05): under `more` the
+model asks for the next or the previous section, a table or figure by its
+placeholder, a list of the passages matching a pattern, or a passage of such a
+list, each cut to the survey's two pages, and the request is asked again with
+what came of it. A round that fetched something new is no attempt; the window
+bounds how many there are. For a share the model may take its whole from a
+passage it was shown, `{"take": {...}}` with the parameter, the number, one of
+its units, a quantity from its list with the plan's word for it, and a quote.
+It names no passage: the number is read from the passage its quote stands in, of
+all the request showed (`reading.passage_of`), as a value round's is (owner
+decision 2026-11-05). It is read like any other (`verify_tuple`: the quote
+in the passage, the number in the quote, the unit one the parameter accepts),
+its quantity like any coordinate (`answer_in_quote`), and year, scenario and area
+are the share's (`take_whole`). A number taken is told back as the next `N` and
+stands in `numbers`; one not taken is told why. It is an input of the computed
+row and no row of its own. The model answers with `{"action": "python", "code":
+...}`, the sandbox runs the code with `numbers`, `sources` (the passages shown
+and fetched) and `tables` as in the chat, and the output goes back. Then the
+model answers `{"value": ..., "used": [...]}`, or `{"value": null}` where there
+is nothing to compute. For a share the answer also quotes, from the passage of
+the whole it chose, what that whole is (`quote`). The quote is checked like any
+other, that it stands in that passage, and one that does not is told and asked
+again (`unquoted`); no wording of the share is compared with it, since a whole
+named in other words is the same whole (owner decision 2026-11-05). The quote is
+kept on the last run as `cited`. A number without a code run that succeeded is
 asked for again, told why. At most `EXTRACT_CODE_ROUNDS` runs; a share answered
 from anything but one total makes no row.
 
@@ -1245,7 +1280,8 @@ within `ROUNDING_TOLERANCE`. One plan printed 27 % twice in one table row, and
 both shares came to 116.1 GWh.
 
 The trace has a `code` event per run and a `compute` event per question with how
-it ended: `read`, `refused`, `same`, `none`, `too_long`, `unanswered` or `stopped`. The
+it ended: `read`, `refused`, `same`, `none`, `too_long`, `unanswered` or `stopped`,
+and what it fetched, searched, took, was refused to take and misquoted. The
 stats count them as `computed_questions_by_kind_outcome`. The sandbox takes one
 container at a time by default; `KWP_SANDBOX_PARALLEL` on the service and
 `CODE_EXEC_PARALLEL` in the run widen that for a machine that has the cores.

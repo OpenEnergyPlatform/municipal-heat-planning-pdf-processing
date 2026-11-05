@@ -32,6 +32,7 @@ import os
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Callable, Optional
 
 from ..profile import ENV_VAR, active_profile
@@ -100,9 +101,14 @@ def canonical_number(raw, decimal: Optional[str] = None) -> Optional[str]:
     *decimal* is the mark the documents write the decimal with; without it,
     the ambient profile's (`decimal_mark`).
     """
-    if isinstance(raw, (int, float)):
-        raw = f"{raw:.10f}".rstrip("0").rstrip(".") if isinstance(raw, float) else str(raw)
-        return raw
+    if isinstance(raw, float):
+        # Fifteen significant digits, what a double holds of any number
+        # written: ten fixed places showed the binary noise of a large one,
+        # 52678423.38 was 52678423.3800000027 and never in its quote.
+        text = format(Decimal(format(raw, ".15g")), "f")
+        return text.rstrip("0").rstrip(".") if "." in text else text
+    if isinstance(raw, int):
+        return str(raw)
     if not isinstance(raw, str):
         return None
     s = raw.strip().replace(" ", "").replace(" ", "").replace(" ", "")
@@ -139,9 +145,13 @@ def canonical_number(raw, decimal: Optional[str] = None) -> Optional[str]:
     return re.sub(r"[.,]", "", s)
 
 
-def numbers_in(text: str) -> set:
-    found = {canonical_number(m.group(0)) for m in _NUMBER.finditer(text or "")}
-    found.update(canonical_number(m.group(0))
+def numbers_in(text: str, decimal: Optional[str] = None) -> set:
+    """The numbers *text* prints, each in `canonical_number`'s spelling.
+    *decimal* is the mark the text writes the decimal with: the documents'
+    by default."""
+    found = {canonical_number(m.group(0), decimal)
+             for m in _NUMBER.finditer(text or "")}
+    found.update(canonical_number(m.group(0), decimal)
                  for m in _SPACE_GROUPED.finditer(text or ""))
     # The year of a dotted date. "Stand 09.12.2025" is one token to _NUMBER
     # and reads as the grouped number 09122025, so the 2025 it plainly prints
@@ -150,7 +160,7 @@ def numbers_in(text: str) -> set:
     # A printed sign is part of the number: "-1.155" holds -1155, and a table
     # of savings lost all its values while the sign stayed outside this set.
     # The magnitude stays in too: the dash of "2020 - 2030" may be no sign.
-    found.update("-" + canonical_number(m.group(1))
+    found.update("-" + canonical_number(m.group(1), decimal)
                  for m in _SIGNED.finditer(text or ""))
     return found
 
@@ -290,8 +300,12 @@ def computed_in_output(raw: dict, parameter: Parameter) -> bool:
     wanted = canonical_number(raw.get("value"))
     if wanted is None:
         return False
+    # The output is read as Python prints, the point the decimal mark and no
+    # grouping, whatever the plan writes: read as the plan, the "0.974" that
+    # round(x, 3) printed was 974, and on one plan 17 of 26 shares were lost.
     for run in raw.get("compute") or ():
-        if isinstance(run, dict) and wanted in numbers_in(run.get("stdout") or ""):
+        if isinstance(run, dict) and wanted in numbers_in(
+                run.get("stdout") or "", decimal="."):
             return True
     return False
 

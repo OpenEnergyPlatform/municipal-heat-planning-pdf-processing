@@ -257,6 +257,16 @@ PHRASES = {
     "compute_needs_code": (
         'Eine Zahl ohne Code ist nicht belegt. Rechne sie mit dem '
         'Aktions-Objekt aus, oder antworte mit "value": null.'),
+    "compute_taken": (
+        '{label} steht jetzt unter "numbers", im Code als '
+        'numbers["{label}"].'),
+    "compute_not_taken": (
+        'Die Zahl unter "take" ist nicht übernommen: {reason}. Schreibe ihr '
+        'Zitat Zeichen für Zeichen aus der gezeigten Passage ab, in der sie '
+        'steht, mit der Zahl darin.'),
+    "compute_quote": (
+        'Dein "quote" steht nicht in der Passage von {label}. Schreibe aus '
+        'dieser Passage Zeichen für Zeichen ab, was {label} ist.'),
     "value_in_several_rows": (
         'Das "quote" dieser Zahlen läuft über mehrere Tabellenzeilen, und '
         'mehr als eine davon druckt die Zahl: {values}. Gib nur diese '
