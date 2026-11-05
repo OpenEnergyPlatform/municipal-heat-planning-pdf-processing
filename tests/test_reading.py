@@ -355,6 +355,30 @@ def test_a_head_with_a_year_of_the_pairs_dates_the_number_and_its_pair():
         == [{"scenario", "year"}]
 
 
+def test_a_coordinate_may_quote_what_its_value_has_read():
+    # The scenario its pair gave it, shown under "read" in a wording the
+    # table does not print: quoted, the coordinate cites where the scenario
+    # was read (owner decision 2026-11-05: whatever a request shows of a
+    # plan may be quoted).
+    def known(claim, asked):
+        return ({"scenario": "Szenario Bestand 2022"}
+                if claim.get("scenario_state") == "read" else {})
+    subject = {"number": [{"unit": {"value": UNSTATED}, "subject": {
+        "value": "Szenario Bestand", "quote": "Szenario Bestand 2022"}}]}
+    read, calls = read_of(years(), values=({"next": UNDER_2022},
+                                           {"next": None}),
+                          groups=subject, pairs=PAIRS, known=known)
+    assert [p["value"]["read"] for task, p in calls if task == "number"] \
+        == [{"scenario": "Szenario Bestand 2022"}]
+    claim = read.claims[0]
+    assert claim["subject_state"] == "read"
+    assert claim["subject_source"] == ["table", 4]
+    # Not shown, the same quote stands nowhere.
+    alone, _ = read_of(years(), values=({"next": UNDER_2022}, {"next": None}),
+                       groups=subject, pairs=PAIRS)
+    assert alone.claims[0]["subject_state"] == "unbacked"
+
+
 # -- one request per value and group -------------------------------------------
 
 # The order of a group's request (ticket 26): the parameter's, the plan's,

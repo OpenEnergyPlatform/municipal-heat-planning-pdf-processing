@@ -6,7 +6,7 @@ Find, in other passages of the publication, every coordinate under `coordinates`
 Return exactly one line of JSON:
 `{"rows":[{"row":"R1","scenario":{"value":"...","value_raw":"...","quote":"..."}}],"more":[{"get":"hit","id":"H2"}]}`
 
-* `rows` holds one entry with the value's `row` and every coordinate of `coordinates`. `value` is exactly one key of its `options`, `value_raw` the publication's own wording where it is not the key, and `quote` one contiguous place from `more` or from the value's quote, copied verbatim, that contains the answer and speaks about this value.
+* `rows` holds one entry with the value's `row` and every coordinate of `coordinates`. `value` is exactly one key of its `options`, `value_raw` the publication's own wording where it is not the key, and `quote` one contiguous place, copied verbatim, that contains the answer and speaks about this value.
 * A coordinate that no place shown states, or that is not under `open`, is `{"value":"out:unstated"}` without `quote`. Do not guess: what you have not read is "out:unstated".
 * `more` lists what you want to read before you answer. You then get the same question again, with it under `more` and `hits`. Always send your whole answer with what you know so far; without a new request in `more`, it stands.
   - `{"get":"hit","id":"..."}`: the passage of a hit;

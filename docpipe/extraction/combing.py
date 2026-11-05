@@ -21,7 +21,12 @@ sentence of its own ("similar"). It answers each open coordinate of the
 value with its quote, or that the plan does not state it.
 
 Nothing is checked here. Every answer goes through `merge_field`, and what it
-refuses is asked once more with the reason. A coordinate this request leaves
+refuses is asked once more with the reason. Its quote may stand in whatever
+the request showed of the plan (owner decision 2026-11-05): a passage the
+model fetched, a hit's line or title, the title or heading of a passage, the
+value's passage and its section, a wording the value has read. The
+coordinate then cites the passage that piece was shown with. A coordinate
+this request leaves
 without an answer ends `unanswered`; one whose request no longer fits the
 model's window ends `exhausted`; `unstated` is now a finding about the plan.
 
@@ -49,8 +54,8 @@ from .fields import EXHAUSTED, READ, SAID_UNSTATED, UNANSWERED, UNBACKED
 from .pipeline import Row, mark_unanswered, merge_field, row_label
 from .reading import (SHOWN, Gathered, answer_of, answer_schema, around_of,
                       coordinate_shown, first_line, gather, groups_of,
-                      more_schema, shown_hits, slots_of, source_of,
-                      years_of)
+                      heading_of, known_shown, more_schema, shown_as,
+                      shown_hits, slots_of, source_of, years_of)
 from .wording import say
 
 COMB_PROMPT_ID = "extraction/comb"
@@ -249,6 +254,7 @@ class Comber:
               first_line(hit)) for hit in listed],
             **({"query": " | ".join(sentences)} if sentences else {}))
         bases = list(bases) if bases is not None else self.bases(pairs)
+        knowns = {row.label: self.known(row.claim, names) for row in rows}
         base = {
             "passage": {"kind": source.owner_kind,
                         "title": lookup.title_of(source),
@@ -259,7 +265,7 @@ class Comber:
             "rows": [{"row": row.label, "value": row.claim.get("value"),
                       "unit": row.claim.get("unit"),
                       "quote": row.claim.get("quote"),
-                      "known": self.known(row.claim, names),
+                      "known": knowns[row.label],
                       "open": opened[row.label]} for row in rows],
             "coordinates": {slot.name: coordinate_shown(slot)
                             for slot in asked},
@@ -290,8 +296,17 @@ class Comber:
         result.fetched = len(gathered.sources)
         result.searched = len(gathered.hits) - (1 if result.hits else 0)
         result.missed = len(gathered.missed)
+        # Whatever the request showed of the plan may be quoted (owner
+        # decision 2026-11-05), each piece under the passage it was shown
+        # with: the value's passage and its section, their heading and
+        # title, what the model fetched, the hits' lines and titles, and the
+        # wordings the value has read.
         evidence = [source] + ([around] if around is not None else []) \
-            + gathered.sources
+            + heading_of(source) + shown_as(source, lookup.title_of(source)) \
+            + gathered.evidence(passages) + [
+                one for row in rows
+                for one in known_shown(row.claim, knowns[row.label],
+                                       passages)]
         # This request answers the open coordinates afresh: what it leaves
         # without an answer is unanswered, not what the reading said.
         for row in rows:

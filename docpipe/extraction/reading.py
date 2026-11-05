@@ -265,6 +265,40 @@ def heading_of(source: Source) -> list:
                    {**provenance, "owner_kind": "section"})]
 
 
+def shown_as(source: Optional[Source], text) -> list:
+    """*text*, which a request shows with *source*, as a passage a quote may
+    stand in (owner decision 2026-11-05: whatever a request shows of a
+    document may be quoted): a hit's line, a title, a wording a value has
+    read. A coordinate quoting it cites *source*. Only the text shown
+    counts, not the rest of *source*. [] for no text."""
+    if source is None or not isinstance(text, str) or not text.strip():
+        return []
+    return [replace(source, text=text, body=None)]
+
+
+def passage_at(passages: dict, owner) -> Optional[Source]:
+    """The passage *owner*, [kind, id], names: the one among *passages*, else
+    a bare one of that name. None for no owner."""
+    if not isinstance(owner, (list, tuple)) or len(owner) != 2:
+        return None
+    try:
+        at = (owner[0], int(owner[1]))
+    except (TypeError, ValueError):
+        return None
+    return passages.get(at) or Source(at[0], at[1], "")
+
+
+def known_shown(claim: dict, known: dict, passages: dict) -> list:
+    """What a request shows of what a value has read (*known*, {coordinate:
+    the plan's wording}, `runner.row_context`), each wording a passage a
+    quote may stand in under the passage its coordinate was read in
+    (`shown_as`)."""
+    return [one for name, wording in (known or {}).items()
+            for one in shown_as(passage_at(passages,
+                                           claim.get(f"{name}_source")),
+                                wording)]
+
+
 def around_of(source: Source, passages: dict,
               budget: Optional[int]) -> Optional[Source]:
     """The text of the section a table or figure stands in, as its request
@@ -340,6 +374,23 @@ class Gathered:
             out["hits"] = self.hits
         if self.missed:
             out["not_found"] = self.missed
+        return out
+
+    def evidence(self, passages: dict) -> list:
+        """What the request showed of the plan, as passages a quote may stand
+        in (owner decision 2026-11-05: whatever a request shows of a document
+        may be quoted): each passage it fetched as shown, then each one's
+        title, and the line and title of each hit, under the passage it was
+        shown with (`shown_as`)."""
+        out = list(self.sources)
+        for source, entry in zip(self.sources, self.shown):
+            out += shown_as(source, entry.get("title"))
+        for listed in self.hits:
+            for hit in listed.get("hits") or ():
+                owner = self.by_hit.get(hit.get("id"), (None,))[0]
+                source = passage_at(passages, owner)
+                out += shown_as(source, hit.get("line"))
+                out += shown_as(source, hit.get("title"))
         return out
 
     def _show(self, source: Source, text: str) -> bool:
@@ -951,7 +1002,8 @@ class Reader:
     value. *context* is what the request shows beside its passage,
     *corrections* None the first time and what was wrong the second.
     *shown_with(source)* is what a coordinate's quote may stand in besides
-    the passage: the heading it stands under (`heading_of`).
+    the passage: the heading it stands under (`heading_of`); so may what
+    the value has read, as its request shows it (`known_shown`).
     *known(claim, asked)* is what a value has read in the plan's words
     (`runner.row_context`). *pool* reads passages side by side. No request
     of the reading has tools (owner decision 2026-11-05, ticket 26).
@@ -1255,7 +1307,10 @@ class Reader:
         if not isinstance(reply, dict):
             return
         self._probed(job, row, reply, asked)
-        evidence = [view] + job.fixed + job.frames
+        # What the value has read is shown too, and may be quoted (owner
+        # decision 2026-11-05).
+        evidence = [view] + job.fixed + job.frames \
+            + known_shown(row.claim, read, job.passages)
         failed = job.merged([row], {slot.name: value_replies(reply, slot,
                                                              row.label)
                                     for slot in asked}, evidence)

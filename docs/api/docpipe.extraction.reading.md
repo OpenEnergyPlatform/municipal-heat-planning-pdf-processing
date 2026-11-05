@@ -118,6 +118,18 @@ Fields:
 def context(self) -> dict
 ```
 
+#### Gathered.evidence
+
+```python
+def evidence(self, passages: dict) -> list
+```
+
+What the request showed of the plan, as passages a quote may stand
+in (owner decision 2026-11-05: whatever a request shows of a document
+may be quoted): each passage it fetched as shown, then each one's
+title, and the line and title of each hit, under the passage it was
+shown with (`shown_as`).
+
 #### Gathered.list_hits
 
 ```python
@@ -178,7 +190,8 @@ slots, row, context, corrections)* one group's coordinates of that
 value. *context* is what the request shows beside its passage,
 *corrections* None the first time and what was wrong the second.
 *shown_with(source)* is what a coordinate's quote may stand in besides
-the passage: the heading it stands under (`heading_of`).
+the passage: the heading it stands under (`heading_of`); so may what
+the value has read, as its request shows it (`known_shown`).
 *known(claim, asked)* is what a value has read in the plan's words
 (`runner.row_context`). *pool* reads passages side by side. No request
 of the reading has tools (owner decision 2026-11-05, ticket 26).
@@ -338,6 +351,38 @@ The heading a request shows with *source* under "section", as a
 passage a quote may stand in (owner decision 2026-11-05): a table's or
 figure's the heading of its section, a section's its own. None where the
 passage's text carries it already or no section holds it.
+
+### shown_as
+
+```python
+def shown_as(source: Optional[Source], text) -> list
+```
+
+*text*, which a request shows with *source*, as a passage a quote may
+stand in (owner decision 2026-11-05: whatever a request shows of a
+document may be quoted): a hit's line, a title, a wording a value has
+read. A coordinate quoting it cites *source*. Only the text shown
+counts, not the rest of *source*. [] for no text.
+
+### passage_at
+
+```python
+def passage_at(passages: dict, owner) -> Optional[Source]
+```
+
+The passage *owner*, [kind, id], names: the one among *passages*, else
+a bare one of that name. None for no owner.
+
+### known_shown
+
+```python
+def known_shown(claim: dict, known: dict, passages: dict) -> list
+```
+
+What a request shows of what a value has read (*known*, {coordinate:
+the plan's wording}, `runner.row_context`), each wording a passage a
+quote may stand in under the passage its coordinate was read in
+(`shown_as`).
 
 ### around_of
 

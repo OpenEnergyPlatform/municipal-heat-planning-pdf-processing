@@ -227,15 +227,18 @@ shows the heading its passage stands under, a table's or figure's that of its
 section, a section's its own (`reading.heading_of`, owner decision
 2026-11-05): where the passage's text does not carry it, a quote may stand in
 it, and the prompts name it among the places a quote is copied from, every
-one a text the request showed.
+one a text the request showed. So may a wording under `read`, under the
+passage its coordinate was read in (`reading.known_shown`): whatever a request
+shows of a plan may be quoted (owner decision 2026-11-05).
 
 The reading has no tools (owner decision 2026-11-05, ticket 26). Its requests
 used to offer `more` (the next or the previous section, a table or figure by
 its placeholder, a pattern, a sentence to rank the plan with, a hit by its id)
 and to show what came of it under `hits` and `not_found`; of 2,231 readings of a
 probe none used them, while 146 of 259 combing tasks did. So a value or
-coordinate can only come from the passage, the heading of its section or the
-text around a table or figure, and the group request has no `passage` key. The
+coordinate can only come from the passage, the heading of its section, the
+text around a table or figure or what the value has read, and the group
+request has no `passage` key. The
 tools stay (`reading.Gathered`, `reading.gather`, `lookup.py`) for the combing
 and the compute step, which are the requests that look beyond what they are
 shown.
@@ -300,7 +303,14 @@ coordinate of the group for each row with its
 quote, or that the plan does not state it. The answers go through
 `merge_field` in window `retrieval`, a coordinate read before is never
 touched, and what the check refuses or the reply leaves out is asked once
-more. A coordinate the request leaves without an answer ends `unanswered`; one
+more. A quote may stand in whatever the request showed of the plan (owner
+decision 2026-11-05): a passage the model fetched, a hit's line or title, the
+title or heading of a passage, the value's passage and its section, a wording
+the value has read (`reading.Gathered.evidence`, `reading.shown_as`,
+`reading.known_shown`). The coordinate cites the passage that piece was shown
+with, so a quote from a hit's line cites the hit's passage; the rest of a
+listed passage was not shown and does not count. The prompt names no place a
+quote has to come from. A coordinate the request leaves without an answer ends `unanswered`; one
 whose request no longer fits the model's window ends `exhausted`; `unstated`
 is from here on a finding about the plan. The ranking is handed in:
 `make_more_sources` in a harvest.
@@ -1330,7 +1340,9 @@ passage it was shown, `{"take": {...}}` with the parameter, the number, one of
 its units, a quantity from its list with the plan's word for it, and a quote.
 It names no passage: the number is read from the passage its quote stands in, of
 all the request showed (`reading.passage_of`), as a value round's is (owner
-decision 2026-11-05). It is read like any other (`verify_tuple`: the quote
+decision 2026-11-05): a passage, its title, a hit's line or title, each under
+the passage it was shown with (`reading.Gathered.evidence`), so a whole may
+come from the line of a hit the model never fetched. It is read like any other (`verify_tuple`: the quote
 in the passage, the number in the quote, the unit one the parameter accepts),
 its quantity like any coordinate (`answer_in_quote`), and year, scenario and area
 are the share's (`take_whole`). A number taken is told back as the next `N` and

@@ -24,7 +24,12 @@ sentence of its own ("similar"). It answers each open coordinate of the
 value with its quote, or that the plan does not state it.
 
 Nothing is checked here. Every answer goes through `merge_field`, and what it
-refuses is asked once more with the reason. A coordinate this request leaves
+refuses is asked once more with the reason. Its quote may stand in whatever
+the request showed of the plan (owner decision 2026-11-05): a passage the
+model fetched, a hit's line or title, the title or heading of a passage, the
+value's passage and its section, a wording the value has read. The
+coordinate then cites the passage that piece was shown with. A coordinate
+this request leaves
 without an answer ends `unanswered`; one whose request no longer fits the
 model's window ends `exhausted`; `unstated` is now a finding about the plan.
 

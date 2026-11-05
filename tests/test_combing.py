@@ -7,8 +7,10 @@ tables and 20 figures of that ranking as a list of hits, the passage itself
 and its section left out; without a sentence no list is shown and the model
 searches itself with "similar", AND that search lists the plan's passages
 nearest to its own sentence. A coordinate answered
-from a fetched hit is read and cites that passage in window `retrieval`; one
-answered as not stated ends unstated; one left without an answer is asked for
+from anything the request showed of the plan (a fetched hit, a hit's line or
+title, a wording the value has read) is read and cites the passage it was
+shown with in window `retrieval`, AND one quoting what the request never
+showed is not read; one answered as not stated ends unstated; one left without an answer is asked for
 by name once more and ends unanswered; a coordinate read before is never
 touched; and a request that does not fit leaves every open coordinate
 exhausted.
@@ -58,7 +60,7 @@ def reads(*claims, probes=()):
     return [reading.Read(batch, list(claims), probes=list(probes))]
 
 
-def comber(*replies, ranked=(HIT,), ranking=True):
+def comber(*replies, ranked=(HIT,), ranking=True, known=None):
     asked, searched = [], []
 
     def ask(payload, shape, document_id, source, group=None):
@@ -71,7 +73,7 @@ def comber(*replies, ranked=(HIT,), ranking=True):
                 if (s.owner_kind, s.owner_id) not in exclude]
 
     made = combing.Comber(SPEC, ask, rank if ranking else None,
-                          lambda claim, names: {})
+                          known or (lambda claim, names: {}))
     return made, asked, searched
 
 
@@ -135,9 +137,75 @@ def test_a_coordinate_answered_from_a_fetched_hit_is_read_and_cites_it():
     assert [m["text"] for m in asked[1]["more"]] == [HIT.text]
 
 
-def test_a_quote_from_a_passage_never_fetched_is_not_read():
+def test_a_quote_from_nothing_the_request_showed_is_not_read():
+    # Without a sentence no list is shown: the passage that prints the year
+    # is in the plan, but the request never showed it.
     made, _, _ = comber({"rows": [dict(row="R1", **everything(year=YEAR))]})
     read = reads(claim())
+    made(7, read, PASSAGES, [])
+    assert read[0].claims[0]["year_state"] == fields.UNBACKED
+
+
+def test_a_quote_from_a_hit_s_line_is_read_and_cites_the_hit():
+    # Not fetched: the line the list shows is enough (owner decision
+    # 2026-11-05: whatever a request shows of a plan may be quoted).
+    made, _, _ = comber({"rows": [dict(row="R1", **everything(year=YEAR))]})
+    read = reads(claim(), probes=[SAID])
+    done = made(7, read, PASSAGES, [])
+    value = read[0].claims[0]
+    assert value["year"] == 2030 and value["year_state"] == fields.READ
+    assert value["year_source"] == ["section", 8]
+    assert list(value["year_window"]) == ["retrieval", 1]
+    assert sum(d.fetched for d in done) == 0
+    # The rest of the hit's passage was not shown and does not count.
+    later = Source("section", 8, "Ausblick\nDie Werte gelten ab sofort.\n"
+                   "Sie gelten für das Jahr 2030.", HIT.provenance)
+    made, asked, _ = comber({"rows": [dict(row="R1", **everything(year=YEAR))]},
+                            ranked=(later,))
+    read = reads(claim(), probes=[SAID])
+    made(7, read, {**PASSAGES, ("section", 8): later}, [])
+    assert asked[0]["hits"][0]["hits"][0]["line"] == "Die Werte gelten ab sofort."
+    assert read[0].claims[0]["year_state"] == fields.UNBACKED
+
+
+def test_a_quote_from_a_hit_s_title_is_read_and_cites_the_hit():
+    titled = Source("table", 9, "| Erdgas | 300 |",
+                    {"document_id": 7, "title": "Tabelle 4: Emissionen 2030"})
+    made, _, _ = comber(
+        {"rows": [dict(row="R1", **everything(year={
+            "value": 2030, "quote": "Tabelle 4: Emissionen 2030"}))]},
+        ranked=(titled,))
+    read = reads(claim(), probes=[SAID])
+    made(7, read, {**PASSAGES, ("table", 9): titled}, [])
+    value = read[0].claims[0]
+    assert value["year_state"] == fields.READ
+    assert value["year_source"] == ["table", 9]
+
+
+def read_elsewhere():
+    """A value whose scenario was read in a passage the combing does not
+    show."""
+    out = claim(scenario=fields.READ)
+    out.update(scenario_raw="Szenario Trend 2030",
+               scenario_source=["section", 8])
+    return out
+
+
+def test_a_quote_from_a_wording_the_value_has_read_cites_where_it_was_read():
+    # Its wording is shown under "known" and may be quoted.
+    reply = {"rows": [dict(row="R1", **everything(year={
+        "value": 2030, "quote": "Szenario Trend 2030"}))]}
+    made, asked, _ = comber(reply, known=lambda claim, names: {
+        "scenario": claim["scenario_raw"]})
+    read = reads(read_elsewhere())
+    made(7, read, PASSAGES, [])
+    value = read[0].claims[0]
+    assert asked[0]["rows"][0]["known"] == {"scenario": "Szenario Trend 2030"}
+    assert value["year_state"] == fields.READ
+    assert value["year_source"] == ["section", 8]
+    # Not shown, it does not count.
+    made, _, _ = comber(reply)
+    read = reads(read_elsewhere())
     made(7, read, PASSAGES, [])
     assert read[0].claims[0]["year_state"] == fields.UNBACKED
 

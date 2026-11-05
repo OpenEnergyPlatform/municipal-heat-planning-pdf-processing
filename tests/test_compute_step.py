@@ -755,6 +755,32 @@ def test_a_whole_is_read_from_the_passage_its_quote_stands_in(monkeypatch):
     assert row["computed"] and row["quantity_source"] == ["section", 20]
 
 
+def test_a_whole_may_be_taken_from_a_hit_s_line_and_only_from_what_it_shows(
+        monkeypatch):
+    # Listed, not fetched: the line the search shows is enough (owner
+    # decision 2026-11-05: whatever a request shows of a plan may be
+    # quoted), and the whole cites the hit's passage.
+    found = json.dumps({"more": [{"get": "search",
+                                  "pattern": "Wärmeverbrauch"}]})
+    step, _asked, _runs, events = computing(
+        monkeypatch, found, take(), CODE,
+        answered(38892.0, quote="Der Wärmeverbrauch der Stadt"),
+        plan=plan_of(BALANCE))
+    report, _done = run_step(step, share(21))
+    row = report.tuples[-1]
+    assert row["computed"] and row["quantity_source"] == ["section", 20]
+    assert events[-1]["fetched"] == 0 and events[-1]["taken"] == 1
+    # A line of that passage the search did not show does not count.
+    gas = "Der Gasverbrauch der Stadt beträgt 90.000 MWh."
+    step, _asked, _runs, events = computing(
+        monkeypatch, found,
+        take(quote=gas, value=90000, quantity_raw="Gasverbrauch"), NOTHING,
+        plan=plan_of(f"{BALANCE}\n{gas}"))
+    report, _done = run_step(step, share(21))
+    assert len(report.tuples) == 1
+    assert events[-1]["untaken"] == 1 and events[-1]["taken"] == 0
+
+
 def test_a_whole_not_read_like_a_number_is_not_taken(monkeypatch):
     # Its number not in its quote, a unit its parameter does not take, a
     # quote in no passage shown: each is told, and no number is added.

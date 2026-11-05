@@ -6098,7 +6098,8 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
     previous section, a table or figure by its placeholder, a search by
     pattern or by a sentence), each passage cut to the survey's two pages
     (*pages_of*), and a question that takes a number (`Question.take`) may
-    take it from a passage they fetched (owner decision 2026-11-05).
+    take it from whatever the request showed: a passage, its title, a hit's
+    line or title (owner decision 2026-11-05).
     *rank(document_id, probes, exclude)* is the plan ranked for a sentence,
     which "similar" lists (`make_more_sources` in a run); without it that
     search finds nothing.
@@ -6240,9 +6241,13 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
             if isinstance(taken, dict) and question.take is not None:
                 # Read from the passage its quote stands in, of all the
                 # request showed, as a value round's value is (owner
-                # decision 2026-11-05).
-                source = reading_map.passage_of(taken,
-                                                [*shown, *gathered.sources])
+                # decision 2026-11-05): a passage, its title, a hit's line
+                # or title, each under the passage it was shown with.
+                source = reading_map.passage_of(taken, [
+                    *shown, *(one for each in shown
+                              for one in reading_map.shown_as(
+                                  each, (each.provenance or {}).get("title"))),
+                    *gathered.evidence(passages)])
                 made = (question.take(taken, source) if source is not None
                         else "quote not found in any passage shown")
                 if isinstance(made, computing.Number):
