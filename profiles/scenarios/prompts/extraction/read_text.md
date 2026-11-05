@@ -3,7 +3,7 @@ temperature: 0
 max_tokens: 6144
 ---
 For the value under `value`, give every coordinate in `coordinates` as the publication states it for THIS value.
-Use only text from `source`, its section heading or `around`; from `around`, only what speaks about THIS table or figure. What only a figure's image shows is no text. If `corrections` is present, answer in full again and fix each point under `what`.
+Use only text from `source`, its section heading or `around`. What only a figure's image shows is no text. If `corrections` is present, answer in full again and fix each point under `what`.
 Return exactly one line of JSON with one entry per coordinate:
 `{"scenario":{"value":"...","value_raw":"...","quote":"..."}}`
 
