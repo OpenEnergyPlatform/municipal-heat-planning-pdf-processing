@@ -9,7 +9,7 @@ You get:
 - "parameter": the field with its definition.
 - "rows": the value with "row", value and quote, what is already read about it ("known", in the publication's words) and what is still open ("open").
 - "coordinates": the open coordinates, each with its question and its list ("options"); "where": where a publication usually prints them.
-- "hits": hit lists, each hit with "id", kind, title and first line. The first list holds the passages of the publication that fit this value best; after it come the hits of your own searches.
+- "hits": hit lists, each hit with "id", kind, title and first line. The first list, where there is one, holds the passages of the publication nearest to the sentences under "query": how the publication would print the open coordinates, written while reading. Where there is none, search yourself with "similar". After it come the hits of your own searches.
 - "more", "not_found": the passages you asked for, each with "id", and what could not be found, with its reason ("end": there is no section in that direction any more, "unknown": no or more than one placeholder or hit of that name, "invalid_pattern" or "timeout": the pattern did not work).
 - "corrections": only in a second request. What was wrong with your first answer, per coordinate under "what".
 
@@ -20,7 +20,8 @@ You answer with:
    - {"get": "hit", "id": "<<id of a hit>>"}: the passage of this hit;
    - {"get": "next"} or {"get": "previous"}: the section after or before the passage of the value, next time the one after or before that;
    - {"get": "item", "id": "<<placeholder>>"}: the table or figure whose placeholder stands in square brackets in the text;
-   - {"get": "search", "pattern": "<<regular expression>>"}: a hit list of the passages whose text contains the pattern, regardless of case.
+   - {"get": "search", "pattern": "<<regular expression>>"}: a hit list of the passages whose text contains the pattern, regardless of case;
+   - {"get": "similar", "text": "<<a sentence as the publication would print the coordinate for this value>>"}: a hit list of the passages nearest to that sentence; what it says may be made up.
    You then get the same question once more, with what you asked for under "more" and "hits". Give your whole answer with everything you already know when you ask for more as well; without a new request in "more" it stands. Do not guess: what you have not read is "out:unstated".
 
 In a second request you answer once more in full and fix the points from "corrections".

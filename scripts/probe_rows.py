@@ -256,7 +256,7 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
         return made
 
     def made_reader(doc_spec):
-        made = runner.make_reader(doc_spec, args.image_root)
+        made = runner.make_reader(doc_spec, args.image_root, rank=rank)
         if made is None:
             raise SystemExit("no reading: the profile writes no read prompts")
         made.pool = pool

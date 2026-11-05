@@ -8,14 +8,17 @@ around it, and may fetch more of the plan itself. What is still open after it
 no reply answered) is looked for here, per value and group of the spec that
 still has an open coordinate (owner decisions 2026-11-04 and 2026-11-05:
 every request one task and one value), the group's words for where a plan
-prints it shown: one search with the value's context (owner decision
-2026-10-22: its passage's title, what it has read in the plan's words, what
-is asked). The best
-sections, tables and figures of that search are shown as a list of titles
-and first lines, and the model fetches what it wants to read with the
-reading's own tools: a hit by its id, the next or the previous section, a
-table or figure by its placeholder, a pattern. It answers each open
-coordinate of the value with its quote, or that the plan does not state it.
+prints it shown. The search ranks the plan with the sentences the reading
+wrote to the coordinates it found unstated, as the plan would print them
+(owner decision 2026-11-05: HyDE, `Read.probes`), those of the coordinates
+asked here; the best sections, tables and figures of that ranking are shown
+as a list of titles and first lines. Where no coordinate asked has a
+sentence, one whose answer did not hold or that no reply answered, the
+request shows no list and the model searches itself (owner decision
+2026-11-05), with the reading's own tools: a hit by its id, the next or the
+previous section, a table or figure by its placeholder, a pattern, a
+sentence of its own ("similar"). It answers each open coordinate of the
+value with its quote, or that the plan does not state it.
 
 Nothing is checked here. Every answer goes through `merge_field`, and what it
 refuses is asked once more with the reason. A coordinate this request leaves
@@ -29,7 +32,8 @@ its section
 shown first (*own*), since the reading that asked them there ran under an
 older question, the years of the stored rows
 (*bases*), and the passages a harvest before read the coordinate in listed
-before the search's hits (*first*).
+(*first*). A stored row carries no sentence, so the model searches the rest
+of the plan itself.
 
 Author: Felix Vossel
 """
@@ -37,6 +41,7 @@ from __future__ import annotations
 
 import collections
 from dataclasses import dataclass
+from functools import partial
 from typing import Callable, Optional
 
 from . import lookup
@@ -108,18 +113,17 @@ class Comber:
     reply as a dict, CUT, or None, *group* the name of the group of the spec
     it asks, for its trace. *rank(document_id, probes, exclude)* is the plan's
     passages best first for the search sentences *probes*
-    (`runner.make_more_sources`), *probes(rows, asked, owner_of, label)* the
-    sentence of a passage (`runner.context_probes`), *known(claim, asked)*
-    what a row has read in the plan's words (`runner.row_context`).
+    (`runner.make_more_sources`): the reading's sentences, and the model's
+    own under "similar". *known(claim, asked)* is what a row has read in the
+    plan's words (`runner.row_context`).
     """
 
-    def __init__(self, spec, ask: Callable, rank: Callable,
-                 probes: Callable, known: Callable, *,
-                 bases: Optional[Callable] = None, pool=None, trace=None):
+    def __init__(self, spec, ask: Callable, rank: Optional[Callable],
+                 known: Callable, *, bases: Optional[Callable] = None,
+                 pool=None, trace=None):
         self.spec = spec
         self.ask = ask
         self.rank = rank
-        self.probes = probes
         self.known = known
         self.bases = bases or (lambda pairs: [])
         self.pool = pool
@@ -134,19 +138,23 @@ class Comber:
         for read in reads:
             parameter = read.batch.parameter
             slots = slots_of(self.spec, parameter)
-            for claim in read.claims:
+            for index, claim in enumerate(read.claims):
                 # The passage the value is read from, which may be one its
-                # round fetched (`reading.source_of`).
+                # round fetched (`reading.source_of`), and the sentences its
+                # reading wrote to what it found unstated.
                 source = source_of(read.batch, claim)
+                probes = read.probes[index] \
+                    if index < len(read.probes) else {}
                 for group, group_slots in groups_of(self.spec, slots):
                     if open_of(claim, group_slots):
                         jobs.append((parameter, source, group, group_slots,
-                                     claim))
+                                     claim, probes))
 
         def one(job):
-            parameter, source, group, group_slots, claim = job
+            parameter, source, group, group_slots, claim, probes = job
             return self.comb(document_id, parameter, source, group_slots,
-                             [claim], passages, pairs, budget, group=group)
+                             [claim], passages, pairs, budget, group=group,
+                             probes=probes)
         if self.pool is None:
             return [one(job) for job in jobs]
         return list(self.pool.map(one, jobs))
@@ -184,14 +192,17 @@ class Comber:
              budget: Optional[int] = None, *,
              coordinates: Optional[list] = None, own: bool = False,
              bases: Optional[tuple] = None,
-             first: Optional[list] = None, group=None) -> Combed:
+             first: Optional[list] = None, group=None,
+             probes: Optional[dict] = None) -> Combed:
         """The open coordinates of *claims*, values of *parameter* read in
         *source*, answered in place; with *coordinates* those of every row,
         open or not. *own* shows *source* and its section before the first
         request, *bases* are the years a row may name by a word (instead of
         those of *pairs*), *first* passages listed before the search's
         hits, *group* the group of the spec *slots* belong to, whose words
-        for where a plan prints them the request shows."""
+        for where a plan prints them the request shows, *probes* the
+        sentences the reading wrote to coordinates it found unstated
+        ({coordinate: sentence}), which the search ranks with."""
         rows = [Row(label=row_label(i), item_index=0, claim=claim)
                 for i, claim in enumerate(claims)]
         if coordinates is not None:
@@ -210,12 +221,18 @@ class Comber:
         around = around_of(source, passages, budget)
         parent = (around.owner_kind, around.owner_id) \
             if around is not None else origin
-        probes = self.probes(rows, names, {row.label: source for row in rows},
-                             parameter.label)
-        ranked = self.rank(document_id, probes, {origin, parent}) \
-            if probes else []
+        # The sentences of the coordinates asked here (owner decision
+        # 2026-11-05: HyDE); without one no list is ranked and the model
+        # searches itself.
+        sentences = list(dict.fromkeys(
+            (probes or {})[name] for name in names
+            if (probes or {}).get(name)))
+        ranked = self.rank(document_id, sentences, {origin, parent}) \
+            if sentences else []
         gathered = Gathered(seen={origin, parent},
-                            cursor={"next": origin, "previous": parent})
+                            cursor={"next": origin, "previous": parent},
+                            rank=(partial(self.rank, document_id)
+                                  if self.rank is not None else None))
         if own:
             # Shown, not listed: the request reads the passage it asks for
             # again, and its section with it.
@@ -230,7 +247,7 @@ class Comber:
         result.hits = gathered.list_hits(
             [((hit.owner_kind, hit.owner_id), lookup.title_of(hit),
               first_line(hit)) for hit in listed],
-            query=" | ".join(probes))
+            **({"query": " | ".join(sentences)} if sentences else {}))
         bases = list(bases) if bases is not None else self.bases(pairs)
         base = {
             "passage": {"kind": source.owner_kind,

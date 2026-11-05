@@ -205,8 +205,12 @@ the survey), and the rounds of one piece share what their tools fetched. Where
 what a request needs is in neither the passage nor the text around it, the
 reply may ask for more of the plan under `more`: the next or the previous
 section, a table or figure by its placeholder (`item`), a list of the passages
-matching a regular expression (`search`), and a passage of such a list by its
-id (`hit`; `lookup.py`, a pattern given up after `PATTERN_TIMEOUT_S`). The
+matching a regular expression (`search`), a list of the passages nearest to a
+sentence the model writes as the plan would print it (`similar`, owner
+decision 2026-11-05: HyDE; ranked by `make_more_sources` as the combing ranks,
+cut to `reading.SHOWN`, title and first line each), and a passage of such a
+list by its id (`hit`; `lookup.py`, a pattern given up after
+`PATTERN_TIMEOUT_S`). A run that ranks nothing finds nothing for `similar`. The
 request goes out again with what was fetched under `more`, each passage cut to
 the survey's two pages, the lists under `hits`, and what could not be found
 under `not_found`; a value or coordinate quoted from it cites that passage.
@@ -247,14 +251,19 @@ after the reading, one the passage does not state, one whose answer did not
 hold or one no reply answered, is looked for in the rest of the plan, one
 request per value and group of the spec that still has an open coordinate
 (a value's own passage is the one it was read from, `reading.source_of`); each
-shows the group's `where`. Its search sentence is the passage's
-context (`runner.context_probes`, owner decision 2026-10-22: its title, what
-its rows have read in the plan's words, what is asked), and the best 15
-sections, 20 tables and 20 figures of the ranking are shown as a list of
-titles and first lines, the passage and its section left out. The model
-fetches what it wants to read with the reading's tools (`reading.Gathered`: a
-hit by its id, the next or the previous section, a table or figure by its
-placeholder, a pattern), each group with its own, and answers each open
+shows the group's `where`. It searches with HyDE (owner decisions
+2026-11-05): a group request of the reading that answers a coordinate
+`out:unstated` writes a sentence to it as the plan would print it (`probe`),
+kept beside the value and never on its row (`reading.Read.probes`), and the
+combing ranks the plan with the sentences of the coordinates it asks. The best
+15 sections, 20 tables and 20 figures of the ranking are shown as a list of
+titles and first lines, the passage and its section left out. Where no
+coordinate asked has a sentence, one whose answer did not hold, one no reply
+answered, a coordinate of a stored row, the request shows no list and the
+model searches itself with `similar`. The model fetches what it wants to read
+with the reading's tools (`reading.Gathered`: a hit by its id, the next or the
+previous section, a table or figure by its placeholder, a pattern, a sentence
+of its own), each group with its own, and answers each open
 coordinate of the group for each row with its
 quote, or that the plan does not state it. The answers go through
 `merge_field` in window `retrieval`, a coordinate read before is never

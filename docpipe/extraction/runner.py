@@ -1955,12 +1955,15 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
     return None
 
 
-def make_reader(spec: Spec, image_root: Optional[Path] = None):
+def make_reader(spec: Spec, image_root: Optional[Path] = None,
+                rank: Optional[Callable] = None):
     """The reading of one parameter's passages (`reading.Reader`), or None
     when the profile writes no prompts for it or its spec names no groups.
     Two requests, each with one task and one value (owner decisions
     2026-11-04 and 2026-11-05): the next value of a passage, and one
-    group's coordinates of one value. A figure goes with its crop."""
+    group's coordinates of one value. A figure goes with its crop.
+    *rank(document_id, probes, exclude)* is the plan ranked for a sentence,
+    which the tools' "similar" lists, `make_more_sources` in a harvest."""
     if not spec.groups:
         return None
     try:
@@ -2017,7 +2020,7 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
 
     return reading_map.Reader(
         spec, ask_values, ask_text, frame_slots,
-        shown_with=reading_map.heading_of,
+        shown_with=reading_map.heading_of, rank=rank,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
         known=row_context, pool=AHEAD, trace=trace.event)
 
@@ -2050,7 +2053,7 @@ def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
             corrections=len(payload.get("corrections") or ()))
 
     comber = combing_map.Comber(
-        spec, ask, rank, context_probes, row_context,
+        spec, ask, rank, row_context,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
         pool=AHEAD, trace=trace.event)
     # The sentences the search for a parameter the survey named no passage
@@ -8423,7 +8426,8 @@ def main(argv: Optional[list] = None) -> int:
             lambda doc_spec, only, scope: make_survey(
                 args.db, narrow_spec(doc_spec, only), args.out, every=every,
                 image_root=args.image_root, scope=scope),
-            lambda doc_spec: make_reader(doc_spec, args.image_root),
+            lambda doc_spec: make_reader(doc_spec, args.image_root,
+                                         rank=rank),
             lambda doc_spec: make_comber(doc_spec, rank, seek),
             lambda document_id: every(document_id, set()), pages_of,
             spec_for=spec_for)

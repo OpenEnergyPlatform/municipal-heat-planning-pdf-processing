@@ -57,6 +57,7 @@ import collections
 import json
 import sys
 from dataclasses import dataclass, field, replace
+from functools import partial
 from typing import Callable, Optional
 
 from . import fields, lookup
@@ -201,12 +202,17 @@ def coordinate_shown(slot) -> dict:
     return shown
 
 
-def answer_schema(slot) -> dict:
-    """One coordinate's answer as the grammar takes it."""
-    return {"type": "object",
-            "properties": {"value": fields.value_schema(slot),
-                           "value_raw": {"type": "string"},
-                           "quote": {"type": "string"}},
+def answer_schema(slot, probe: bool = False) -> dict:
+    """One coordinate's answer as the grammar takes it; with *probe* also
+    the sentence a reply writes to a coordinate its passage does not state,
+    as the plan would print it, which the combing searches with (owner
+    decision 2026-11-05: HyDE)."""
+    properties = {"value": fields.value_schema(slot),
+                  "value_raw": {"type": "string"},
+                  "quote": {"type": "string"}}
+    if probe:
+        properties["probe"] = {"type": "string"}
+    return {"type": "object", "properties": properties,
             "required": ["value"], "additionalProperties": False}
 
 
@@ -271,10 +277,12 @@ def around_of(source: Source, passages: dict,
 
 # -- what a reply may ask of the rest of the plan -----------------------------
 
-# What a reply may ask for under "more" (owner decision 2026-11-04): the next
-# or the previous section, a table or figure by its placeholder, the passages
-# of the plan matching a pattern as a list, a passage of such a list by its id.
-GETS = ("next", "previous", "item", "search", "hit")
+# What a reply may ask for under "more" (owner decisions 2026-11-04 and
+# 2026-11-05): the next or the previous section, a table or figure by its
+# placeholder, the passages of the plan matching a pattern as a list, the
+# passages nearest to a sentence the model wrote as the plan would print it
+# as a list ("similar", HyDE), a passage of such a list by its id.
+GETS = ("next", "previous", "item", "search", "similar", "hit")
 # Why an ask found nothing, as the reply's "not_found" says it: past the end
 # of the plan, or a name that fits no passage or more than one. A pattern
 # that does not compile or does not finish says `lookup.matching`'s fault.
@@ -287,7 +295,8 @@ def more_schema() -> dict:
         "type": "object",
         "properties": {"get": {"enum": list(GETS)},
                        "id": {"type": "string"},
-                       "pattern": {"type": "string"}},
+                       "pattern": {"type": "string"},
+                       "text": {"type": "string"}},
         "required": ["get"], "additionalProperties": False}}
 
 
@@ -297,7 +306,9 @@ class Gathered:
     asked for it: the passages its request shows under "more", the hit lists
     of its searches under "hits", and what could not be found, with why,
     under "not_found". *seen* are the passages the request already shows,
-    *cursor* where "next" and "previous" go on from."""
+    *cursor* where "next" and "previous" go on from, *rank(probes, exclude)*
+    the plan's passages best first for sentences, which "similar" lists
+    (`runner.make_more_sources`); None where the run ranks nothing."""
     seen: set = field(default_factory=set)
     cursor: dict = field(default_factory=dict)
     sources: list = field(default_factory=list)
@@ -305,6 +316,7 @@ class Gathered:
     hits: list = field(default_factory=list)
     missed: list = field(default_factory=list)
     by_hit: dict = field(default_factory=dict)
+    rank: Optional[Callable] = None
 
     def context(self) -> dict:
         out = {}
@@ -329,7 +341,7 @@ class Gathered:
 
     def _miss(self, ask: dict, why: str, detail: str = "") -> None:
         entry = {"get": ask.get("get"),
-                 **{key: ask[key] for key in ("id", "pattern")
+                 **{key: ask[key] for key in ("id", "pattern", "text")
                     if ask.get(key)}, "why": why}
         if detail:
             entry["detail"] = detail
@@ -395,6 +407,23 @@ class Gathered:
                 if not matches.hits:
                     self.hits.append({"pattern": pattern,
                                       "total": matches.total, "hits": []})
+                new = True
+            elif get == "similar":
+                text = ask.get("text")
+                if not isinstance(text, str) or not text.strip() \
+                        or any(h.get("similar") == text for h in self.hits):
+                    continue
+                if self.rank is None:
+                    self._miss(ask, UNKNOWN)
+                    continue
+                # The best of each kind, as the combing's list shows them
+                # (owner decision 2026-11-05: `SHOWN`), the passages the
+                # request shows left out.
+                ranked = shown_hits(self.rank([text], set(self.seen)))
+                if not self.list_hits(
+                        [((s.owner_kind, s.owner_id), lookup.title_of(s),
+                          first_line(s)) for s in ranked], similar=text):
+                    self.hits.append({"similar": text, "hits": []})
                 new = True
             elif get == "hit":
                 ref = self.by_hit.get(ask.get("id") or "")
@@ -699,8 +728,10 @@ def text_payload(source: Source, parameter, slots: list, row: Row,
 
 def text_response_format(slots: list) -> dict:
     """Every coordinate of the group for the one value the request shows,
-    and what the reply asks of the rest of the plan."""
-    properties = {slot.name: answer_schema(slot) for slot in slots}
+    each with the sentence of one the passage does not state (`probe`), and
+    what the reply asks of the rest of the plan."""
+    properties = {slot.name: answer_schema(slot, probe=True)
+                  for slot in slots}
     properties["more"] = more_schema()
     schema = {"type": "object", "properties": properties,
               "required": [slot.name for slot in slots],
@@ -806,6 +837,11 @@ class Read:
     fetched: int = 0              # passages shown under "more"
     searched: int = 0             # hit lists shown under "hits"
     missed: int = 0               # asks that found nothing
+    # Per claim, in its order: the sentences its group replies wrote to the
+    # coordinates they found unstated, as the plan would print them,
+    # {coordinate: sentence}, which the combing ranks with. Not on the claim:
+    # no sentence enters the harvest.
+    probes: list = field(default_factory=list)
 
 
 @dataclass
@@ -831,6 +867,10 @@ class _Job:
     fetched: list = field(default_factory=list)
     # the piece of the passage each value was read in, by its label
     views: dict = field(default_factory=dict)
+    # the plan ranked for sentences, (probes, exclude) -> [Source]
+    rank: Optional[Callable] = None
+    # the sentences of each value's unstated coordinates, by its label
+    probes: dict = field(default_factory=dict)
 
     def passages_shown(self, gathered: Gathered) -> list:
         """Every passage a request of this reading shows: the passage, its
@@ -855,7 +895,8 @@ class _Job:
         """The tools of one request, the ranked list a search of the whole
         plan read this passage for (*hits*) shown first."""
         out = Gathered(seen={self.origin, self.parent},
-                       cursor={"next": self.origin, "previous": self.parent})
+                       cursor={"next": self.origin, "previous": self.parent},
+                       rank=self.rank)
         listed = [source for source in shown_hits(self.hits)
                   if (source.owner_kind, source.owner_id) not in out.seen]
         if listed:
@@ -878,13 +919,17 @@ class Reader:
     *shown_with(source)* is what a coordinate's quote may stand in besides
     the passage: the heading it stands under (`heading_of`).
     *known(claim, asked)* is what a value has read in the plan's words
-    (`runner.row_context`). *pool* reads passages side by side.
+    (`runner.row_context`). *rank(document_id, probes, exclude)* is the
+    plan's passages best first for sentences, which the tools' "similar"
+    lists (`runner.make_more_sources`); None asks it of nothing. *pool*
+    reads passages side by side.
     """
 
     def __init__(self, spec, ask_values: Callable, ask_text: Callable,
                  frame_slots: list, *, shown_with: Optional[Callable] = None,
                  bases: Optional[Callable] = None,
-                 known: Optional[Callable] = None, pool=None, trace=None):
+                 known: Optional[Callable] = None,
+                 rank: Optional[Callable] = None, pool=None, trace=None):
         self.spec = spec
         self.ask_values = ask_values
         self.ask_text = ask_text
@@ -892,6 +937,7 @@ class Reader:
         self.shown_with = shown_with or (lambda source: [])
         self.bases = bases or (lambda pairs: [])
         self.known = known or (lambda claim, asked: {})
+        self.rank = rank
         self.pool = pool
         self.trace = trace
 
@@ -993,7 +1039,9 @@ class Reader:
 
         job = _Job(document_id, parameter, source, shown, slots, context,
                    bases, origin, parent, fixed, frames, merged, passages,
-                   budget, result, pairs=list(pairs), hits=list(hits or ()))
+                   budget, result, pairs=list(pairs), hits=list(hits or ()),
+                   rank=(partial(self.rank, document_id)
+                         if self.rank is not None else None))
         rows, views = self._values(job)
         if not views:
             result.unread = True
@@ -1019,6 +1067,7 @@ class Reader:
                 tuples, pairs, evidence)
         result.unanswered = mark_unanswered(rows, slots)
         result.claims = [row.claim for row in rows]
+        result.probes = [job.probes.get(row.label, {}) for row in rows]
         if self.trace is not None:
             self.trace("read", document_id, parameter=parameter.uri,
                        kind=source.owner_kind, owner=source.owner_id,
@@ -1036,6 +1085,19 @@ class Reader:
         job.result.fetched += len(gathered.sources)
         job.result.searched += len(gathered.hits)
         job.result.missed += len(gathered.missed)
+
+    @staticmethod
+    def _probed(job: _Job, row: Row, reply: dict, asked: list) -> None:
+        """The sentences *reply* wrote to coordinates of *row*'s value as
+        the plan would print them (`probe`, owner decision 2026-11-05:
+        HyDE), kept for the combing; a later reply's sentence replaces an
+        earlier one."""
+        for slot in asked:
+            entry = reply.get(slot.name)
+            probe = entry.get("probe") if isinstance(entry, dict) else None
+            if isinstance(probe, str) and probe.strip():
+                job.probes.setdefault(row.label, {})[slot.name] = \
+                    probe.strip()
 
     def _values(self, job: _Job) -> tuple:
         """(rows, [each piece shown]) of the passage, its values read in
@@ -1205,6 +1267,7 @@ class Reader:
                              job.budget)
         result.asked += more
         self._noted(job, gathered)
+        self._probed(job, row, reply, asked)
         evidence = [view] + job.fixed + apart + gathered.sources + job.frames
         failed = job.merged([row], {slot.name: value_replies(reply, slot,
                                                              row.label)
@@ -1217,6 +1280,7 @@ class Reader:
             result.asked += 1
             again = ask(corrections)
             if isinstance(again, dict):
+                self._probed(job, row, again, asked)
                 job.merged([row], {slot.name: value_replies(again, slot,
                                                             row.label)
                                    for slot in asked}, evidence)

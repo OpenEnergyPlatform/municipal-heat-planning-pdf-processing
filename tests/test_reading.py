@@ -33,6 +33,12 @@ shown with the heading it stands under, a table's or figure's that of its
 section, a section's its own, AND a quote may stand in that heading where the
 passage's text does not carry it.
 
+A group reply writes to a coordinate it finds unstated a sentence as the plan
+would print it, AND that sentence is kept beside its value for the combing,
+never on the claim. The tools' "similar" lists the passages of the plan
+nearest to the model's own sentence, the best of each kind, AND without a
+ranking it finds nothing and says so.
+
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
 import json
@@ -798,6 +804,96 @@ def test_a_search_after_a_list_no_search_made_is_searched_once():
     ask = [{"get": "search", "pattern": r"Jahr 20\d\d"}]
     assert gathered.fetch(ask, list(PLAN.values()), PLAN, None)
     assert not gathered.fetch(ask, list(PLAN.values()), PLAN, None)
+
+
+PROBE = "Die Emissionen gelten für das Bilanzjahr 2022."
+NEAREST = [Source("section", 100 + i, f"S{i}\nText {i}", {})
+           for i in range(20)]
+
+
+def ranking(found):
+    """A ranking of the plan that returns *found* without what it excludes,
+    and the calls it got."""
+    calls = []
+
+    def rank(probes, exclude):
+        calls.append((list(probes), set(exclude)))
+        return [s for s in found if (s.owner_kind, s.owner_id) not in exclude]
+    return rank, calls
+
+
+def test_similar_lists_the_passages_nearest_to_its_sentence_best_of_each_kind():
+    rank, calls = ranking(NEAREST)
+    gathered = reading.Gathered(seen={("section", 6)}, rank=rank)
+    ask = [{"get": "similar", "text": PROBE}]
+    assert gathered.fetch(ask, list(PLAN.values()), PLAN, None)
+    assert calls == [([PROBE], {("section", 6)})]
+    (listed,) = gathered.context()["hits"]
+    assert listed["similar"] == PROBE
+    assert [hit["title"] for hit in listed["hits"]] \
+        == [f"S{i}" for i in range(reading.SHOWN["section"])]
+    # The same sentence again asks nothing and brings nothing new.
+    assert not gathered.fetch(ask, list(PLAN.values()), PLAN, None)
+    assert len(calls) == 1
+
+
+def test_similar_without_a_ranking_finds_nothing_and_says_so():
+    gathered = reading.Gathered()
+    assert not gathered.fetch([{"get": "similar", "text": PROBE}],
+                              list(PLAN.values()), PLAN, None)
+    assert gathered.missed == [{"get": "similar", "text": PROBE,
+                                "why": reading.UNKNOWN}]
+
+
+def test_a_reading_lists_and_fetches_the_passages_nearest_to_a_sentence():
+    asked = []
+
+    def rank(document_id, probes, exclude):
+        asked.append((document_id, list(probes)))
+        return [AFTER]
+    replies = {"frame": [frame([{"get": "similar", "text": PROBE}]),
+                         frame([{"get": "hit", "id": "H1"}]),
+                         frame(year=YEAR_AFTER)]}
+    read, calls = read_of(BARE, values=({"next": BARE_300}, {"next": None}),
+                          groups=replies, passages=PLAN, budget=4000,
+                          rank=rank)
+    shows = [payload for task, payload in calls if task == "frame"]
+    assert asked == [(7, [PROBE])]
+    assert shows[1]["hits"][0]["similar"] == PROBE
+    claim = read.claims[0]
+    assert claim["year_state"] == "read" and claim["year_source"] == [
+        "section", 8]
+    alone, _ = read_of(BARE, values=({"next": BARE_300}, {"next": None}),
+                       groups=replies, passages=PLAN, budget=4000)
+    assert alone.claims[0]["year_state"] == "unstated"
+
+
+def test_a_group_reply_keeps_the_sentence_of_what_it_found_unstated_apart():
+    read, _ = read_of(BARE, values=({"next": BARE_300}, {"next": None}),
+                      groups={"frame": [frame(year={"value": UNSTATED,
+                                                    "probe": PROBE})]})
+    assert read.probes == [{"year": PROBE}]
+    assert not any("probe" in key for key in read.claims[0])
+    assert read.claims[0]["year_state"] == "unstated"
+    plain, _ = read_of(BARE, values=({"next": BARE_300}, {"next": None}),
+                       groups={"frame": [frame()]})
+    assert plain.probes == [{}]
+
+
+def valid(instance, schema) -> bool:
+    return jsonschema.validators.validator_for(schema)(schema).is_valid(
+        instance)
+
+
+def test_a_group_reply_may_write_a_sentence_and_a_tool_a_sentence_to_search():
+    text = reading.text_response_format(FRAME)["json_schema"]["schema"]
+    assert valid({"scenario": {"value": UNSTATED},
+                  "year": {"value": UNSTATED, "probe": PROBE}}, text)
+    assert not valid({"scenario": {"value": UNSTATED},
+                      "year": {"value": UNSTATED, "sentence": PROBE}}, text)
+    more = reading.more_schema()
+    assert valid([{"get": "similar", "text": PROBE}], more)
+    assert not valid([{"get": "similar", "sentence": PROBE}], more)
 
 
 def test_gathering_ends_when_a_round_brings_nothing_new():

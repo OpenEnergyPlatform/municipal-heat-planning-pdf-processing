@@ -89,7 +89,9 @@ What one read fetched of the rest of the plan, in the order the model
 asked for it: the passages its request shows under "more", the hit lists
 of its searches under "hits", and what could not be found, with why,
 under "not_found". *seen* are the passages the request already shows,
-*cursor* where "next" and "previous" go on from.
+*cursor* where "next" and "previous" go on from, *rank(probes, exclude)*
+the plan's passages best first for sentences, which "similar" lists
+(`runner.make_more_sources`); None where the run ranks nothing.
 
 Fields:
 
@@ -100,6 +102,7 @@ Fields:
 - `hits: list = field(default_factory=list)`
 - `missed: list = field(default_factory=list)`
 - `by_hit: dict = field(default_factory=dict)`
+- `rank: Optional[Callable] = None`
 
 #### Gathered.context
 
@@ -151,6 +154,7 @@ Fields:
 - `fetched: int = 0`: passages shown under "more"
 - `searched: int = 0`: hit lists shown under "hits"
 - `missed: int = 0`: asks that found nothing
+- `probes: list = field(default_factory=list)`: Per claim, in its order: the sentences its group replies wrote to the coordinates they found unstated, as the plan would print them, {coordinate: sentence}, which the combing ranks with. Not on the claim: no sentence enters the harvest.
 
 ### Reader
 
@@ -171,7 +175,10 @@ value. *context* is what the request shows beside its passage,
 *shown_with(source)* is what a coordinate's quote may stand in besides
 the passage: the heading it stands under (`heading_of`).
 *known(claim, asked)* is what a value has read in the plan's words
-(`runner.row_context`). *pool* reads passages side by side.
+(`runner.row_context`). *rank(document_id, probes, exclude)* is the
+plan's passages best first for sentences, which the tools' "similar"
+lists (`runner.make_more_sources`); None asks it of nothing. *pool*
+reads passages side by side.
 
 #### Reader.\_\_init\_\_
 
@@ -179,7 +186,8 @@ the passage: the heading it stands under (`heading_of`).
 def __init__(self, spec, ask_values: Callable, ask_text: Callable,
              frame_slots: list, *, shown_with: Optional[Callable] = None,
              bases: Optional[Callable] = None,
-             known: Optional[Callable] = None, pool=None, trace=None)
+             known: Optional[Callable] = None,
+             rank: Optional[Callable] = None, pool=None, trace=None)
 ```
 
 #### Reader.context_of
@@ -293,10 +301,13 @@ def coordinate_shown(slot) -> dict
 ### answer_schema
 
 ```python
-def answer_schema(slot) -> dict
+def answer_schema(slot, probe: bool = False) -> dict
 ```
 
-One coordinate's answer as the grammar takes it.
+One coordinate's answer as the grammar takes it; with *probe* also
+the sentence a reply writes to a coordinate its passage does not state,
+as the plan would print it, which the combing searches with (owner
+decision 2026-11-05: HyDE).
 
 ### known_of
 
@@ -550,7 +561,8 @@ def text_response_format(slots: list) -> dict
 ```
 
 Every coordinate of the group for the one value the request shows,
-and what the reply asks of the rest of the plan.
+each with the sentence of one the passage does not state (`probe`), and
+what the reply asks of the rest of the plan.
 
 ### answer_of
 

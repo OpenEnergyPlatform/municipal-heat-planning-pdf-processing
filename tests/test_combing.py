@@ -1,9 +1,12 @@
 """Only values with a coordinate still open are combed, one request per
 passage, parameter and group of the spec with an open coordinate, which
 shows the group's words for where a plan prints it and asks only the
-group's open coordinates; the search is asked with the passage's sentence and
-shows the best 15 sections, 20 tables and 20 figures of its ranking as a list
-of hits, the passage itself and its section left out. A coordinate answered
+group's open coordinates; the search ranks the plan with the sentences the
+reading wrote to the coordinates asked, AND it shows the best 15 sections, 20
+tables and 20 figures of that ranking as a list of hits, the passage itself
+and its section left out; without a sentence no list is shown and the model
+searches itself with "similar", AND that search lists the plan's passages
+nearest to its own sentence. A coordinate answered
 from a fetched hit is read and cites that passage in window `retrieval`; one
 answered as not stated ends unstated; one left without an answer is asked for
 by name once more and ends unanswered; a coordinate read before is never
@@ -48,12 +51,14 @@ def claim(**states):
     return out
 
 
-def reads(*claims):
+def reads(*claims, probes=()):
+    """The reading of OWN with *claims*, each with the sentences its group
+    replies wrote to what they found unstated, in *probes* by its order."""
     batch = Batch(7, EMISSION, [WorkItem(7, EMISSION, OWN)])
-    return [reading.Read(batch, list(claims))]
+    return [reading.Read(batch, list(claims), probes=list(probes))]
 
 
-def comber(*replies, ranked=(HIT,)):
+def comber(*replies, ranked=(HIT,), ranking=True):
     asked, searched = [], []
 
     def ask(payload, shape, document_id, source, group=None):
@@ -65,8 +70,7 @@ def comber(*replies, ranked=(HIT,)):
         return [s for s in ranked
                 if (s.owner_kind, s.owner_id) not in exclude]
 
-    made = combing.Comber(SPEC, ask, rank,
-                          lambda rows, names, owner_of, label: ["Bilanz"],
+    made = combing.Comber(SPEC, ask, rank if ranking else None,
                           lambda claim, names: {})
     return made, asked, searched
 
@@ -78,6 +82,8 @@ def everything(**given):
 
 
 YEAR = {"value": 2030, "quote": "gelten für das Jahr 2030"}
+# What a reading that found the year unstated wrote to it.
+SAID = {"year": "Die Emissionen gelten für das Jahr 2022."}
 
 
 def test_only_values_with_an_open_coordinate_are_combed_once_per_group():
@@ -107,7 +113,7 @@ def test_the_search_shows_the_best_of_each_kind_as_a_list_without_its_own():
     assert kinds.count("figure") == 3
     assert shown == [s for s in ranked if s in shown]
     made, asked, searched = comber({"rows": []}, ranked=(OWN, HIT))
-    made(7, reads(claim()), PASSAGES, [])
+    made(7, reads(claim(), probes=[SAID]), PASSAGES, [])
     assert searched[0][1] == {("section", 6)}
     listed = asked[0]["hits"][0]["hits"]
     assert [(hit["id"], hit["title"]) for hit in listed] == [("H1", "Ausblick")]
@@ -119,7 +125,7 @@ def test_a_coordinate_answered_from_a_fetched_hit_is_read_and_cites_it():
         {"rows": [dict(row="R1", **everything())],
          "more": [{"get": "hit", "id": "H1"}]},
         {"rows": [dict(row="R1", **everything(year=YEAR))]})
-    read = reads(claim())
+    read = reads(claim(), probes=[SAID])
     done = made(7, read, PASSAGES, [])[0]
     value = read[0].claims[0]
     assert value["year"] == 2030 and value["year_state"] == fields.READ
@@ -168,3 +174,42 @@ def test_a_request_that_does_not_fit_leaves_every_open_coordinate_exhausted():
     assert value["year_state"] == fields.EXHAUSTED
     assert value["carrier_state"] == fields.READ
     assert done.exhausted == done.open
+
+
+def test_the_search_ranks_with_the_sentences_of_the_coordinates_asked():
+    made, asked, searched = comber({"rows": []})
+    made(7, reads(claim(), probes=[dict(SAID, unit="In t CO2 je Jahr.")]),
+         PASSAGES, [])
+    # The year group alone has a sentence; the unit is read, not asked.
+    assert [probes for probes, _ in searched] == [[SAID["year"]]]
+    framed = next(p for p in asked if "year" in p["coordinates"])
+    (listed,) = framed["hits"]
+    assert listed["query"] == SAID["year"]
+    assert all("hits" not in payload for payload in asked
+               if "year" not in payload["coordinates"])
+
+
+def test_without_a_sentence_the_model_searches_itself_with_its_own():
+    made, asked, searched = comber(
+        {"rows": [dict(row="R1", **everything())],
+         "more": [{"get": "similar", "text": "Werte für das Jahr 2030"}]},
+        {"rows": [dict(row="R1", **everything())],
+         "more": [{"get": "hit", "id": "H1"}]},
+        {"rows": [dict(row="R1", **everything(year=YEAR))]})
+    read = reads(claim())
+    made(7, read, PASSAGES, [])
+    assert "hits" not in asked[0]
+    assert searched[0] == (["Werte für das Jahr 2030"], {("section", 6)})
+    (listed,) = asked[1]["hits"]
+    assert listed["similar"] == "Werte für das Jahr 2030"
+    assert [hit["title"] for hit in listed["hits"]] == ["Ausblick"]
+    value = read[0].claims[0]
+    assert value["year"] == 2030 and value["year_state"] == fields.READ
+    # Where the run ranks nothing, the search finds nothing and the reply
+    # stands.
+    made, asked, _ = comber(
+        {"rows": [dict(row="R1", **everything())],
+         "more": [{"get": "similar", "text": "Werte für das Jahr 2030"}]},
+        ranking=False)
+    done = made(7, reads(claim()), PASSAGES, [])
+    assert all(d.missed == 1 and d.asked == 1 and d.hits == 0 for d in done)

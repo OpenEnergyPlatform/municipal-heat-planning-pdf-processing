@@ -1627,7 +1627,8 @@ handed, as every request of the harvest is.
 ### make_reader
 
 ```python
-def make_reader(spec: Spec, image_root: Optional[Path] = None)
+def make_reader(spec: Spec, image_root: Optional[Path] = None,
+                rank: Optional[Callable] = None)
 ```
 
 The reading of one parameter's passages (`reading.Reader`), or None
@@ -1635,6 +1636,8 @@ when the profile writes no prompts for it or its spec names no groups.
 Two requests, each with one task and one value (owner decisions
 2026-11-04 and 2026-11-05): the next value of a passage, and one
 group's coordinates of one value. A figure goes with its crop.
+*rank(document_id, probes, exclude)* is the plan ranked for a sentence,
+which the tools' "similar" lists, `make_more_sources` in a harvest.
 
 ### make_comber
 

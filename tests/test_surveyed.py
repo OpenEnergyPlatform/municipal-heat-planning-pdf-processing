@@ -25,7 +25,8 @@ reading shows it, and two surveys joined keep the lists of both.
 
 A pass re-reads a coordinate by combing it, whatever its state, in its own
 passage first and with the years of the stored rows; the combing lists the
-passages an earlier harvest read it in before the search's hits. A request
+passages an earlier harvest read it in, AND a stored row, which carries no
+sentence of the reading, ranks no search of its own. A request
 whose last attempt ended on a 429 leaves its document unserved, and one that
 timed out is asked again with the time of a repeat, one refused by the
 server with the time it had.
@@ -267,7 +268,7 @@ def test_a_pass_combs_a_coordinate_in_its_own_passage_first():
             calls.append((source, [s.name for s in slots], claims, given))
 
     sweep = surveyed.comb_sweep(
-        lambda spec: Comber(SPEC, None, None, None, None), lambda d: SPEC,
+        lambda spec: Comber(SPEC, None, None, None), lambda d: SPEC,
         lambda d, exclude: [ONE, TWO, THREE], lambda d: 2)
     slots = {s.name: s for s in reading.slots_of(SPEC, EMISSION)}
     batch = Batch(7, EMISSION, [WorkItem(7, EMISSION, ONE),
@@ -301,7 +302,6 @@ def comber(*replies, ranked=()):
                           lambda d, probes, exclude: [
                               s for s in ranked
                               if (s.owner_kind, s.owner_id) not in exclude],
-                          lambda rows, names, owner_of, label: ["Bilanz"],
                           lambda claim, names: {})
     return made, asked
 
@@ -336,18 +336,18 @@ def test_a_named_coordinate_is_asked_whatever_its_state_in_its_own_passage():
     assert asked[0]["rows"][0]["open"] == [] and "more" not in asked[0]
 
 
-def test_the_passages_read_before_are_listed_before_the_search():
+def test_the_passages_read_before_are_listed_and_a_stored_row_ranks_none():
     year = next(s for s in reading.slots_of(SPEC, EMISSION)
                 if s.name == "year")
     made, asked = comber({"rows": []}, ranked=(TWO, THREE))
     made.comb(7, EMISSION, ONE, [year], [stored_row()], SHOWN, [], None,
               first=[THREE])
-    listed = [hit["title"] for hit in asked[0]["hits"][0]["hits"]]
-    assert listed[0] == "Ausblick" and listed.count("Ausblick") == 1
+    assert [hit["title"] for hit in asked[0]["hits"][0]["hits"]] \
+        == ["Ausblick"]
+    # A stored row carries no sentence: no list, the model searches itself.
     made, asked = comber({"rows": []}, ranked=(TWO, THREE))
     made.comb(7, EMISSION, ONE, [year], [stored_row()], SHOWN, [], None)
-    assert [hit["title"] for hit in asked[0]["hits"][0]["hits"]][0] \
-        != "Ausblick"
+    assert "hits" not in asked[0]
 
 
 def test_a_request_whose_last_attempt_hit_a_429_leaves_its_document_unserved(
