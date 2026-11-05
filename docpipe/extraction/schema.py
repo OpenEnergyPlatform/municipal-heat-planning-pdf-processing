@@ -117,7 +117,7 @@ FLAG_PATTERN = (
     r"^(mapped:[a-z_]+:[\s\S]*->[\s\S]*|unmapped:[a-z_]+:[\s\S]*"
     r"|period:unstated"
     r"|review:(agree|disagree|unbacked)"
-    r"|quote_repaired|computed|catalogue|not_located)$")
+    r"|computed|catalogue|not_located)$")
 
 # The fifteen families a refusal reason belongs to. Every one is raised in
 # verify.py or pipeline.py and none is composed at runtime from user text.
@@ -326,10 +326,8 @@ def _tuple_schema(spec, parameter) -> dict:
         "kind": {"const": "tuple"},
         "quote": {"type": "string", "minLength": MIN_QUOTE_CHARS,
                   "description": "The passage of the owner source that "
-                                 "contains the value. Whitespace-collapsed "
-                                 "containment; a retyped table row may be "
-                                 "repaired, which sets the flag "
-                                 "quote_repaired."},
+                                 "contains the value, checked by "
+                                 "whitespace-collapsed containment."},
         "head": {"type": "string",
                  "description": "The head of the table column the number "
                                 "stands in, as the plan prints it. Taken from "

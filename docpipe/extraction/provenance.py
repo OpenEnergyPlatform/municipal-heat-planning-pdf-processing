@@ -133,8 +133,6 @@ CONCEPTS = {
     "other": "A remainder with no class of its own.",
     "period_unstated": "The unit names no period although the quantity "
                        "needs one.",
-    "quote_repaired": "The quote differed from the wording of the source "
-                      "and was brought into line with it.",
     trust.LEVEL_A: "Stated in the document's own text, every coordinate "
                    "read or derived.",
     trust.LEVEL_B: "As A, but read from an image a model transcribed, or "
@@ -145,8 +143,6 @@ CONCEPTS = {
                    "what.",
     "page_transcribed": "The document had no text layer; a model "
                         "transcribed its pages.",
-    "repaired": "The value's quote had to be brought into line with the "
-                "source.",
     "computed": "The value does not stand in the document; it was computed "
                 "from values that do.",
     trust.CATALOGUE: "The value does not stand in the document; it was "
@@ -162,22 +158,21 @@ SCHEMES = {
     "ReadingState": (fields.READ, fields.DERIVED, fields.SAID_UNSTATED,
                      fields.UNANSWERED, fields.EXHAUSTED, fields.UNBACKED),
     "OutsideVocabulary": ("total", "other"),
-    "ReadingNote": ("period_unstated", "quote_repaired"),
+    "ReadingNote": ("period_unstated",),
     "TrustLevel": trust.LEVELS,
     "TrustReason": ("page_transcribed", fields.EXHAUSTED, fields.UNBACKED,
-                    fields.UNANSWERED, "repaired", "computed",
-                    trust.CATALOGUE, "not_located", "disagree", "conflict"),
+                    fields.UNANSWERED, "computed", trust.CATALOGUE,
+                    "not_located", "disagree", "conflict"),
     "ReviewOutcome": ("agree", "disagree", fields.UNBACKED),
 }
-_REASON = {"repaired": "repaired", "computed": "computed",
+_REASON = {"computed": "computed",
            trust.CATALOGUE: trust.CATALOGUE,
            "not_located": "not_located", "conflict": "conflict",
            "page_transcribed": "page_transcribed",
            trust.REVIEW_DISAGREE: "disagree"}
 _REVIEW = {trust.REVIEW_AGREE: "agree", trust.REVIEW_DISAGREE: "disagree",
            trust.REVIEW_UNBACKED: fields.UNBACKED}
-_NOTE = {"quote_repaired": "quote_repaired",
-         "period:unstated": "period_unstated"}
+_NOTE = {"period:unstated": "period_unstated"}
 OUT = NOT_IN_GRAPH
 # What xsd:dateTime spells; a time a person typed that is none stays a string.
 _DATE_TIME = re.compile(r"-?\d{4,}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?"

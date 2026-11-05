@@ -92,7 +92,7 @@ def disputed(verdict: dict) -> list:
     """The coordinates this row's reasons actually name, in order, once each.
 
     A row whose reasons name none is asked for its value alone. That is the
-    common case for `repaired` and `computed`, and asking such a row for all
+    common case for `computed`, and asking such a row for all
     seven of its coordinates would spend the whole review budget re-reading
     what nothing is wrong with.
     """

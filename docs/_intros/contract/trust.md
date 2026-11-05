@@ -32,7 +32,7 @@ not a warning (`trust.py:44-46`).
 A value falls below `B` in one of two ways. It is a `C` when a coordinate
 was not read, `exhausted` or `unanswered`, and nothing speaks against what
 was read: a gap to fill. It is a `D` when something speaks against the
-reading: an `unbacked` coordinate, a repaired quote, a computed number, a
+reading: an `unbacked` coordinate, a computed number, a
 second reading that came to something else, or a contested identity
 (`reasons`, `trust.py:89-121`; the split is in `trust`, `trust.py:135-138`).
 A value that is both is a `D`. A passage outside the row's own
@@ -47,7 +47,7 @@ closed list: a reason nobody can enumerate is a reason nobody can count
 (`trust.py:27-31`). A coordinate contributes `exhausted:<axis>`,
 `unbacked:<axis>` or `unanswered:<axis>` (`trust.py:106-107`); `exhausted`
 and `unanswered` make a `C`, `unbacked` a `D`. A row's own `flags`
-contribute `repaired`, `computed`, `catalogue`, `not_located` or
+contribute `computed`, `catalogue`, `not_located` or
 `review:disagree` (`FLAG_REASONS`, `trust.py`), each of them a `D`;
 `catalogue` marks a value a profile looked up in an open catalogue record
 that values read from the document found (owner decision 2026-11-04). `conflict`, a `D`

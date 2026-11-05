@@ -206,8 +206,7 @@ Why the fold refuses a value its quote does not hold.
 ```python
 def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                  owner_kind: str = "section",
-                 locate: Optional[Callable[[str], Optional[list]]] = None,
-                 repair_text: Optional[str] = None)
+                 locate: Optional[Callable[[str], Optional[list]]] = None)
 ```
 
 One claimed tuple against everything the model does not control.
@@ -218,10 +217,8 @@ that maps the quote to highlight rectangles in the source PDF — lazy
 because opening the PDF is the expensive step and a claim refused earlier
 never needs it.
 
-*repair_text* is what a missing quote is rebuilt from, when the heading
-prefixed into *source_text* is not part of it. The repair rests on the
-value occurring exactly once, and 1.9% of this corpus's table numbers
-also stand in their own caption.
+A quote that does not stand in *source_text* is refused, and nothing
+rebuilds it from the source (owner decision 2026-11-05).
 
 ### value_refused
 
@@ -235,8 +232,7 @@ None: what `verify_tuple` checks of the value itself (its type, its
 entry of a closed list) and of its quote (long enough, standing in
 *source_text*, holding the value), in its words. Not the unit and not
 the axes, which a reading asks after the value and checks as it reads
-them (`pipeline.merge_field`), and no repair of a quote, since the model
-that wrote it can still quote it. A reading asks it of each value while
+them (`pipeline.merge_field`). A reading asks it of each value while
 the model can still answer (`reading.round_failure`), and the walk down
 a search's list of what it read (`surveyed.sought_walk`), so both hold a
 value to the check the fold applies (owner decisions 2026-11-05).

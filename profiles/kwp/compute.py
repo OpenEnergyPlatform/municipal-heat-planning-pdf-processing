@@ -203,8 +203,7 @@ def take_whole(share: dict, claim: dict, source, spec):
            "unit": claim.get("unit"), "quote": claim.get("quote"),
            "quantity": claim.get("quantity")}
     outcome = verify_tuple(raw, parameter, source.text or "",
-                           owner_kind=source.owner_kind,
-                           repair_text=source.body)
+                           owner_kind=source.owner_kind)
     if isinstance(outcome, Refusal):
         return outcome.reason
     row = dict(outcome.tuple)

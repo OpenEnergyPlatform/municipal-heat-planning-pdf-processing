@@ -65,7 +65,7 @@ AUTHOR = "publication_author"
 DOI = "publication_doi"
 # The flags of the anchor row that speak about its quote, which a looked-up
 # row shares with it. The others are about the anchor's own reading.
-QUOTE_FLAGS = ("quote_repaired", "not_located")
+QUOTE_FLAGS = ("not_located",)
 SOURCE = "OpenAlex"
 
 # The keys a record is found by; tried index DOI, read DOI, title.

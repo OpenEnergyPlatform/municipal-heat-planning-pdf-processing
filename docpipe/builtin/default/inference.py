@@ -166,7 +166,6 @@ UI = {
     "reason_unbacked": "{axis}: the quote does not carry it",
     "reason_unanswered": "{axis}: the model gave no answer",
     "reason_conflict": "another reading of the same value differs",
-    "reason_repaired": "the quote was adjusted afterwards",
     "reason_computed": "computed, not read",
     "reason_catalogue": "looked up in a catalogue, not read",
     "reason_not_located": "the quote was not found on its page",

@@ -163,7 +163,7 @@ field
 
 flag
 : A non-fatal finding `verify.verify_tuple` appends to a tuple, such as
-  `quote_repaired`, `period:unstated`, or an `unmapped:<axis>:<wording>`
+  `computed`, `period:unstated`, or an `unmapped:<axis>:<wording>`
   mapping gap. `docpipe/extraction/trust.py`'s `FLAG_REASONS` turns a
   handful of these into trust reasons; see [trust](contract/trust.md).
 
@@ -286,10 +286,9 @@ parts file
 
 passage
 : The stretch of source text a coordinate's or a value's quote is checked
-  against, cut at sentence boundaries when a quote has to be rebuilt
-  (`docpipe/extraction/verify.py`'s `_sentence_around`). At least
-  `MIN_QUOTE_CHARS` characters, 8 in `docpipe/extraction/verify.py`, so
-  it identifies a specific place rather than a recurring token. See
+  against. A quote has at least `MIN_QUOTE_CHARS` characters, 8 in
+  `docpipe/extraction/verify.py`, so it identifies a specific place rather
+  than a recurring token. See
   [extraction](stages/extraction.md).
 
 plan (the retrieval plan)
@@ -342,9 +341,9 @@ provider
 quote
 : The verbatim passage a claim or a coordinate cites as its evidence,
   checked with whitespace collapsed against the source it names.
-  `docpipe/extraction/verify.py`'s `quote_in` performs the check, and
-  `_repair_quote` rebuilds an abridged quote when the value occurs exactly
-  once in its source. See [extraction](stages/extraction.md).
+  `docpipe/extraction/verify.py`'s `quote_in` performs the check; a quote
+  that does not stand in its source is refused, never rebuilt. See
+  [extraction](stages/extraction.md).
 
 recheck
 : The `--recheck` pass that reapplies the answer-in-quote rule to an
@@ -535,7 +534,7 @@ trust level
 
 trust reason
 : One token in a verdict's `reasons` list, naming why a tuple is not
-  level A: `repaired`, `computed`, `catalogue`, `not_located`, `review:disagree`,
+  level A: `computed`, `catalogue`, `not_located`, `review:disagree`,
   `conflict`, `page_transcribed`, or an `exhausted:<axis>`,
   `unanswered:<axis>` or `unbacked:<axis>` pointer at the axis at fault.
   `exhausted` and `unanswered` make a C, `page_transcribed` caps a tuple at B,

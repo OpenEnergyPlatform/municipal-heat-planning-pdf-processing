@@ -36,7 +36,7 @@ not a warning (`trust.py:44-46`).
 A value falls below `B` in one of two ways. It is a `C` when a coordinate
 was not read, `exhausted` or `unanswered`, and nothing speaks against what
 was read: a gap to fill. It is a `D` when something speaks against the
-reading: an `unbacked` coordinate, a repaired quote, a computed number, a
+reading: an `unbacked` coordinate, a computed number, a
 second reading that came to something else, or a contested identity
 (`reasons`, `trust.py:89-121`; the split is in `trust`, `trust.py:135-138`).
 A value that is both is a `D`. A passage outside the row's own
@@ -51,7 +51,7 @@ closed list: a reason nobody can enumerate is a reason nobody can count
 (`trust.py:27-31`). A coordinate contributes `exhausted:<axis>`,
 `unbacked:<axis>` or `unanswered:<axis>` (`trust.py:106-107`); `exhausted`
 and `unanswered` make a `C`, `unbacked` a `D`. A row's own `flags`
-contribute `repaired`, `computed`, `catalogue`, `not_located` or
+contribute `computed`, `catalogue`, `not_located` or
 `review:disagree` (`FLAG_REASONS`, `trust.py`), each of them a `D`;
 `catalogue` marks a value a profile looked up in an open catalogue record
 that values read from the document found (owner decision 2026-11-04). `conflict`, a `D`
@@ -150,9 +150,9 @@ threshold anybody tuned.
      by page
   C  open: a coordinate nobody read, and nothing speaks against what
      was read
-  D  in doubt: a coordinate that could not be backed, a repaired quote,
-     a computed number, a value looked up in a catalogue, a contested
-     identity, a second reading that came to something else
+  D  in doubt: a coordinate that could not be backed, a computed
+     number, a value looked up in a catalogue, a contested identity, a
+     second reading that came to something else
 
 The reasons form a closed list, because a reason nobody can enumerate
 is a reason nobody can count. C and D are told apart because they ask
@@ -197,7 +197,6 @@ A closed list, because a reason nobody can enumerate is a reason nobody can coun
 - `^catalogue$`
 - `^computed$`
 - `^not_located$`
-- `^repaired$`
 - `^review:disagree$`
 - `^conflict$`
 - `^page_transcribed$`
@@ -210,7 +209,6 @@ A closed list, because a reason nobody can enumerate is a reason nobody can coun
 | `catalogue` | `catalogue` |
 | `computed` | `computed` |
 | `not_located` | `not_located` |
-| `quote_repaired` | `repaired` |
 | `review:disagree` | `review:disagree` |
 
 ## The marks of a trust line

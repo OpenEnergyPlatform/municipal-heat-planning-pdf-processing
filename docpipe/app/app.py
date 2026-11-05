@@ -820,7 +820,6 @@ def reason_words() -> dict:
             "unbacked": T["reason_unbacked"],
             "unanswered": T["reason_unanswered"],
             "conflict": T["reason_conflict"],
-            "repaired": T["reason_repaired"],
             "computed": T["reason_computed"],
             "catalogue": T["reason_catalogue"],
             "not_located": T["reason_not_located"],

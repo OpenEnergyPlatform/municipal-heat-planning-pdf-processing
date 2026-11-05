@@ -1251,18 +1251,17 @@ existed: 1,458 claims were refused as `quote not found in the source it
 cites` and 17,422 values were downgraded to `unbacked` for exactly this
 gap between two encoders.
 
-Where a quote is
-not verbatim in its source but the value occurs there
-exactly once, the quote is rebuilt around that occurrence rather than the
-claim refused: on the 16-document pilot, 303 of 377 such refusals were
-repaired this way, against 8 where the value truly was absent
-(`verify.py`). A verified tuple's tier comes from its source
+A quote that is not in its source is refused: the reading asks the model
+again with the reason while it can still answer (`reading.round_failure`),
+and nothing rebuilds a quote from the source (owner decision 2026-11-05:
+the check is only whether the quote the model gave stands in the text it
+was shown). A verified tuple's tier comes from its source
 alone, not whether the quote could be placed on the page:
 `text_located` for prose, `visual_source` for a table transcription or
 figure description, an uncheckable model reading of a picture. A prose
 quote that could not be placed on the PDF page still keeps the
 `text_located` tier; it only gains a `not_located` flag (`verify.py`).
-Non-fatal findings are carried as flags: `quote_repaired`, `computed`
+Non-fatal findings are carried as flags: `computed`
 (a sandbox result checked against its own printed output), `catalogue` (a
 value a profile looked up outside the document, below),
 `not_located`, `unmapped:<axis>:<wording>`, and, for an amount over a
@@ -1421,7 +1420,7 @@ Level B: the same, from an image transcription or a model-transcribed
 page. Level C: open, a coordinate nobody read (`exhausted` or
 `unanswered`) and nothing that speaks against what was read. Level D: in
 doubt, one of the following holds: a coordinate the sweep could not back, a
-repaired quote, a computed number, a second reading that came to something
+computed number, a second reading that came to something
 else, or a contested identity decided at graph build time; a value that is
 both open and in doubt is a D. A C wants its gap filled, a D wants a person
 to look at what was read. Where a coordinate's
@@ -2802,9 +2801,9 @@ threshold anybody tuned.
      by page
   C  open: a coordinate nobody read, and nothing speaks against what
      was read
-  D  in doubt: a coordinate that could not be backed, a repaired quote,
-     a computed number, a value looked up in a catalogue, a contested
-     identity, a second reading that came to something else
+  D  in doubt: a coordinate that could not be backed, a computed
+     number, a value looked up in a catalogue, a contested identity, a
+     second reading that came to something else
 
 The reasons form a closed list, because a reason nobody can enumerate
 is a reason nobody can count. C and D are told apart because they ask

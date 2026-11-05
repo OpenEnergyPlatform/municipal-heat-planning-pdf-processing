@@ -524,7 +524,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
 
 ### `scenario`
 
@@ -1380,7 +1380,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
 
 ### `scenario`
 
@@ -2300,7 +2300,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
 
 ### `scenario`
 
@@ -3174,7 +3174,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
 
 ### `scenario`
 
@@ -3666,7 +3666,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
 
 ### `tier`
 
@@ -3963,7 +3963,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
 
 ### `scenario`
 

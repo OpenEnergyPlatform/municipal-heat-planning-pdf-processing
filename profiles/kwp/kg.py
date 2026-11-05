@@ -787,7 +787,7 @@ def evidence_comment(row: dict, document: str, *,
     # How much of this value the run can stand behind, in the one place a
     # reader of the graph looks. Every accepted tuple is verified, and that
     # is a floor and not a grade: the level adds what else is known, an
-    # image origin, a repaired quote, a contested identity.
+    # image origin, a computed number, a contested identity.
     verdict = trust(row, transcribed=transcribed, conflict=conflict,
                     corroborated=corroborated)
     prov = row.get("provenance") or {}

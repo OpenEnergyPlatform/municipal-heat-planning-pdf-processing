@@ -45,7 +45,6 @@ def test_a_coordinate_the_document_does_not_say_is_no_doubt():
 
 def test_what_speaks_against_the_reading_makes_a_d():
     assert level(row(carrier="unbacked")) == "D"
-    assert level(row(flags=["quote_repaired"])) == "D"
     assert level(row(flags=["computed"])) == "D"
     assert level(row(flags=["not_located"])) == "D"
     assert level(row(flags=["review:disagree"])) == "D"
@@ -62,7 +61,7 @@ def test_the_reviews_agreement_confirms_nothing():
 
 
 def test_open_and_in_doubt_at_once_is_a_d():
-    assert level(row(carrier="exhausted", flags=["quote_repaired"])) == "D"
+    assert level(row(carrier="exhausted", flags=["computed"])) == "D"
 
 
 def test_every_level_is_counted_in_the_summary_line():

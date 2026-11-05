@@ -312,8 +312,7 @@ def _reverify(row: dict, claim: dict, parameter, source,
     finder = ((lambda quote, s=source: locate(s, quote))
               if locate is not None else None)
     outcome = verify_tuple(claim, parameter, source.text,
-                           owner_kind=source.owner_kind, locate=finder,
-                           repair_text=source.body)
+                           owner_kind=source.owner_kind, locate=finder)
     if isinstance(outcome, Refusal):
         return outcome
     out = dict(outcome.tuple)

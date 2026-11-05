@@ -6,8 +6,9 @@ and the base year read by the plan's word for it.
 A value read before its coordinates is checked as the fold will check it
 (`verify.value_refused`): what the fold refuses of the value and its quote it
 refuses for the same reason, AND it takes what the fold takes, AND a number
-is not refused for its unit, which is read after it; a quote the fold could
-rebuild from the passage is refused, since the model can still quote it."""
+is not refused for its unit, which is read after it. A quote that does not
+stand in its passage is refused by both, AND never rebuilt from the passage
+(owner decision 2026-11-05)."""
 import json
 from pathlib import Path
 
@@ -363,8 +364,14 @@ def test_a_number_is_not_refused_for_the_unit_read_after_it():
     assert value_refused(wrong, PARAMETER, text) == not_in_quote(wrong)
 
 
-def test_a_quote_the_fold_could_rebuild_is_refused_while_it_can_be_quoted():
-    moved = {"value": "industry sector", "value_raw": "industry",
-             "quote": "covers the industry"}
-    assert value_refused(moved, SECTOR, SCOPE) == QUOTE_NOT_FOUND
-    assert value_refused(dict(moved, quote=NAMED), SECTOR, SCOPE) is None
+def test_a_quote_not_in_its_passage_is_refused_and_never_rebuilt():
+    # The number stands in the source exactly once, so a quote rebuilt
+    # around it would have had no choice; none is rebuilt.
+    abridged = claim(quote="Erdgas: 126.656.132 kWh")
+    refused = verify_tuple(abridged, PARAMETER, SOURCE, owner_kind="table")
+    assert isinstance(refused, Refusal) and refused.reason == QUOTE_NOT_FOUND
+    assert value_refused(abridged, PARAMETER, SOURCE) == QUOTE_NOT_FOUND
+    # the failure by construction: the same value quoted as printed is kept
+    assert isinstance(verify_tuple(claim(), PARAMETER, SOURCE,
+                                   owner_kind="table"), Verified)
+    assert value_refused(claim(), PARAMETER, SOURCE) is None

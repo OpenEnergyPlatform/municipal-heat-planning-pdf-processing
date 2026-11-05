@@ -318,9 +318,6 @@
          "pattern": "^not_located$"
         },
         {
-         "pattern": "^repaired$"
-        },
-        {
          "pattern": "^review:disagree$"
         },
         {
@@ -1215,7 +1212,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -1447,7 +1444,7 @@
       "type": "array"
      },
      "quote": {
-      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
      },
@@ -3403,7 +3400,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -3710,7 +3707,7 @@
       "type": "array"
      },
      "quote": {
-      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
      },
@@ -5901,7 +5898,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -6284,7 +6281,7 @@
       "type": "array"
      },
      "quote": {
-      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
      },
@@ -8255,7 +8252,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -8615,7 +8612,7 @@
       "type": "array"
      },
      "quote": {
-      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
      },
@@ -9540,7 +9537,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -9654,7 +9651,7 @@
       "$ref": "#/$defs/provenance"
      },
      "quote": {
-      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
      },
@@ -10416,7 +10413,7 @@
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|quote_repaired|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -10663,7 +10660,7 @@
       "type": "array"
      },
      "quote": {
-      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
      },

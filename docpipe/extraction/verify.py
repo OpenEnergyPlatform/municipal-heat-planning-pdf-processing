@@ -380,57 +380,6 @@ def number_outside_quote(claim: dict) -> bool:
     return wanted is not None and wanted not in numbers_in(quote)
 
 
-# A full stop, not a list separator. Figure descriptions separate items with
-# semicolons and colons ("EWS: 41; EWK: 20"), and cutting the passage there
-# leaves a fragment that proves nothing.
-_TERMINATOR = re.compile(r"[.!?\n]")
-# Below this a passage is not evidence. A table cell and a figure description
-# are each one long sentence, so falling back to the plain window is right.
-_MIN_PASSAGE = 40
-
-
-def _occurrences(raw: dict, parameter: Parameter, source: str) -> list:
-    """Every place in the source this value could be read, as (start, end)."""
-    if parameter.is_numeric:
-        wanted = canonical_number(raw.get("value"))
-        if wanted is None:
-            return []
-        magnitude = wanted.lstrip("-")
-        spans = [m.span() for m in _NUMBER.finditer(source)
-                 if canonical_number(m.group(0)) == magnitude]
-        spans += [m.span() for m in _SPACE_GROUPED.finditer(source)
-                  if canonical_number(m.group(0)) == magnitude]
-        return sorted(set(spans))
-    wording = wording_of(raw, parameter)
-    if not isinstance(wording, str) or len(wording.strip()) < 2:
-        return []
-    needle, hay = wording.strip().casefold(), source.casefold()
-    spans, at = [], hay.find(needle)
-    while at != -1:
-        spans.append((at, at + len(needle)))
-        at = hay.find(needle, at + 1)
-    return spans
-
-
-def _sentence_around(source: str, start: int, end: int, span: int = 320) -> str:
-    """The passage the value stands in, cut at sentence ends where there are any.
-
-    A cut that leaves less than _MIN_PASSAGE characters is no evidence, so the
-    window is kept instead: a table cell is a whole "sentence" and a figure
-    description is one long one.
-    """
-    lo, hi = max(0, start - span), min(len(source), end + span)
-    cut_lo, cut_hi = lo, hi
-    before = list(_TERMINATOR.finditer(source, lo, start))
-    if before:
-        cut_lo = before[-1].end()
-    after = _TERMINATOR.search(source, end, hi)
-    if after:
-        cut_hi = after.end()
-    passage = source[cut_lo:cut_hi].strip()
-    return passage if len(passage) >= _MIN_PASSAGE else source[lo:hi].strip()
-
-
 # A passage shorter than this identifies nothing. "2030" sits in every plan
 # a hundred times over, so it proves that the model can read a number and
 # nothing about where it read THIS one. The value quote has been held to it
@@ -450,29 +399,9 @@ def not_in_quote(raw: dict) -> str:
     return f"value {raw.get('value')!r} does not occur in the quote"
 
 
-def _repair_quote(raw: dict, parameter: Parameter, source: str) -> Optional[str]:
-    """The passage the source itself gives for this value, or None.
-
-    A model that abridges its quote — "...zeigen sukzessive sinkende Werte:
-    79.499.951 kWh (2035)" for a sentence that also lists 2030 and 2040 — has
-    stated something true and cited it wrongly. Refusing that loses the
-    finding; taking the model's wording on trust loses the guarantee that the
-    evidence is literally in the document. So the quote is rebuilt from the
-    source, and only where the source leaves no choice: the value has to occur
-    in it exactly once. Measured on the 16-document pilot, that is 303 of 377
-    such refusals, against 8 where the value was not in the source at all.
-    """
-    spans = _occurrences(raw, parameter, source)
-    if len(spans) != 1:
-        return None
-    passage = _sentence_around(source, *spans[0])
-    return passage if len(passage) >= MIN_QUOTE_CHARS else None
-
-
 def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                  owner_kind: str = "section",
-                 locate: Optional[Callable[[str], Optional[list]]] = None,
-                 repair_text: Optional[str] = None):
+                 locate: Optional[Callable[[str], Optional[list]]] = None):
     """One claimed tuple against everything the model does not control.
 
     Returns Verified or Refusal. *owner_kind* decides the tier: prose gets
@@ -481,10 +410,8 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
     because opening the PDF is the expensive step and a claim refused earlier
     never needs it.
 
-    *repair_text* is what a missing quote is rebuilt from, when the heading
-    prefixed into *source_text* is not part of it. The repair rests on the
-    value occurring exactly once, and 1.9% of this corpus's table numbers
-    also stand in their own caption.
+    A quote that does not stand in *source_text* is refused, and nothing
+    rebuilds it from the source (owner decision 2026-11-05).
     """
     if not isinstance(raw, dict):
         return Refusal(raw={}, reason="tuple is not an object")
@@ -590,14 +517,7 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
     if not isinstance(quote, str) or len(quote) < MIN_QUOTE_CHARS:
         return Refusal(raw, QUOTE_TOO_SHORT)
     if not quote_in(source_text, quote):
-        repaired = _repair_quote(
-            raw, parameter,
-            repair_text if repair_text is not None else source_text)
-        if repaired is None:
-            return Refusal(raw, QUOTE_NOT_FOUND)
-        raw = dict(raw, quote=repaired)
-        quote = repaired
-        flags.append("quote_repaired")
+        return Refusal(raw, QUOTE_NOT_FOUND)
     if not value_in_quote(raw, parameter, quote):
         # `is True`, not truthy: "computed" is a switch that decides WHICH
         # evidence check applies, and the string "nein" would have opened the
@@ -668,8 +588,7 @@ def value_refused(raw: dict, parameter: Parameter,
     entry of a closed list) and of its quote (long enough, standing in
     *source_text*, holding the value), in its words. Not the unit and not
     the axes, which a reading asks after the value and checks as it reads
-    them (`pipeline.merge_field`), and no repair of a quote, since the model
-    that wrote it can still quote it. A reading asks it of each value while
+    them (`pipeline.merge_field`). A reading asks it of each value while
     the model can still answer (`reading.round_failure`), and the walk down
     a search's list of what it read (`surveyed.sought_walk`), so both hold a
     value to the check the fold applies (owner decisions 2026-11-05)."""

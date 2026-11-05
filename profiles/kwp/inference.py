@@ -209,7 +209,6 @@ UI = {
     "reason_unbacked": "{axis}: das Zitat trägt die Angabe nicht",
     "reason_unanswered": "{axis}: das Modell hat nicht geantwortet",
     "reason_conflict": "eine andere Lesung desselben Werts weicht ab",
-    "reason_repaired": "das Zitat wurde nachträglich angeglichen",
     "reason_computed": "berechnet, nicht gelesen",
     "reason_catalogue": "aus einem Katalog nachgeschlagen, nicht gelesen",
     "reason_not_located": "das Zitat wurde auf seiner Seite nicht gefunden",

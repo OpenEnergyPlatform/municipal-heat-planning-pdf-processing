@@ -1784,8 +1784,7 @@ def fold_claims(item: WorkItem, claims: Optional[list],
         finder = ((lambda quote, s=source: locate(s, quote))
                   if locate is not None else None)
         outcome = verify_tuple(claim, parameter, source.text,
-                               owner_kind=source.owner_kind, locate=finder,
-                               repair_text=source.body)
+                               owner_kind=source.owner_kind, locate=finder)
         if isinstance(outcome, Refusal):
             report.refusals.append(
                 {"parameter": parameter.uri, "reason": outcome.reason,
