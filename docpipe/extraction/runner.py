@@ -6113,10 +6113,13 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
     pool = ThreadPoolExecutor(max_workers=FIELD_PARALLEL,
                               thread_name_prefix="compute")
 
-    def ask(question, items: dict, document_id: int, stop) -> tuple:
+    def ask(question, items: dict, document_id: int, stop,
+            check: Optional[Callable] = None) -> tuple:
         """(how it ended, the new row or None, code runs, what it fetched and
         took). The conversation of one question: what it reads of the plan,
-        a number it takes, code, its output, the number."""
+        a number it takes, code, its output, the number. *check(question,
+        claim)* is why the row's own check refuses a claim, None where it
+        takes it."""
         shown = computing.passages(question, items)
         order = list(passages_of(document_id)) if passages_of else []
         passages = {(s.owner_kind, s.owner_id): s for s in order}
@@ -6128,7 +6131,8 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
                                        if pages_of else None)
                   if order else None)
         runs: list = []
-        noted = {"taken": 0, "untaken": 0, "misquoted": 0}
+        noted = {"taken": 0, "untaken": 0, "misquoted": 0, "rejected": 0,
+                 "reason": None}
         faults = 0
 
         def request() -> dict:
@@ -6272,7 +6276,20 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
                 continue
             claim = computing.claim_of(question, answer["value"], used, runs,
                                        cited=answer.get("quote"))
-            return ended("read", claim) if claim else ended("none")
+            if not claim:
+                return ended("none")
+            # The row's own check, while the model can still answer it
+            # (owner decision 2026-11-05): checked only once the conversation
+            # had ended, 68 shares and 30 sums of a probe were refused without
+            # the model ever hearing why.
+            reason = check(question, claim) if check is not None else None
+            if reason is not None:
+                faults += 1
+                noted["rejected"] += 1
+                noted["reason"] = reason
+                told(said, say("compute_rejected", reason=reason))
+                continue
+            return ended("read", claim)
         failures.given_up()
         return ended("unanswered")
 
@@ -6290,20 +6307,30 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
                 source = item.source
                 items.setdefault((source.owner_kind, source.owner_id),
                                  []).append(item)
+
+        def item_for(question):
+            # The row's parameter is its own, whatever its anchor's is.
+            return replace(computing.item_of(items, question.anchor),
+                           parameter=None)
+
+        def check(question, claim) -> Optional[str]:
+            """Why the fold refuses *claim*: the same check, into a report of
+            its own. Locating its quote only marks a row, never refuses one."""
+            tried = DocumentReport(document_id=report.document_id)
+            fold_claims(item_for(question), [claim], tried, spec=doc_spec)
+            return tried.refusals[0]["reason"] if tried.refusals else None
+
         started = time.time()
         asked = [(question, pool.submit(ask, question, items,
-                                        report.document_id, stop))
+                                        report.document_id, stop, check))
                  for question in questions]
         made: list = []
         for question, future in asked:
             outcome, claim, runs, noted = future.result()
             if claim is not None:
                 before = len(report.tuples)
-                # The row's parameter is its own, whatever its anchor's is.
-                item = replace(computing.item_of(items, question.anchor),
-                               parameter=None)
-                fold_claims(item, [claim], report, locate=locate,
-                            spec=doc_spec)
+                fold_claims(item_for(question), [claim], report,
+                            locate=locate, spec=doc_spec)
                 if len(report.tuples) == before:
                     outcome = "refused"
                 elif same is not None and any(

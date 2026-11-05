@@ -1300,6 +1300,16 @@ its table printed 1,948 t/a beside inputs of 20,345 and 1,399 t/a. A number the 
 request worked out in its own sandbox rounds names no inputs and is held to its
 output alone.
 
+The request runs these checks before it takes an answer, while the model can
+still answer them (owner decision 2026-11-05). It folds the claim the same way
+(`pipeline.fold_claims`) into a report of its own. A refusal goes back to the
+model with its reason (`compute_rejected`), and the question is asked again, as
+for any other fault. Run only once the conversation had ended, the checks refused
+68 computed shares and 30 sums of an eight-plan probe, and the model never heard
+why: a number not in the code's output, not what its inputs make, or no number
+at all. Locating the quote only marks a row and refuses none, so the trial fold
+goes without it. A question whose every answer is refused ends `unanswered`.
+
 Two questions of one document that come to the same number with the same
 coordinates are one statement, and the second row goes (profile `same`, owner
 decision 2026-11-03). kwp compares every axis but `subject`, whose wording tells
@@ -1309,7 +1319,8 @@ both shares came to 116.1 GWh.
 
 The trace has a `code` event per run and a `compute` event per question with how
 it ended: `read`, `refused`, `same`, `none`, `too_long`, `unanswered` or `stopped`,
-and what it fetched, searched, took, was refused to take and misquoted. The
+and what it fetched, searched, took, was refused to take and misquoted, and how
+many answers the row's check refused (`rejected`) with the last one's `reason`. The
 stats count them as `computed_questions_by_kind_outcome`. The sandbox takes one
 container at a time by default; `KWP_SANDBOX_PARALLEL` on the service and
 `CODE_EXEC_PARALLEL` in the run widen that for a machine that has the cores.

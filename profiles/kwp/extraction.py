@@ -267,6 +267,10 @@ PHRASES = {
     "compute_quote": (
         'Dein "quote" steht nicht in der Passage von {label}. Schreibe aus '
         'dieser Passage Zeichen für Zeichen ab, was {label} ist.'),
+    "compute_rejected": (
+        'Die Zahl unter "value" ist nicht übernommen: {reason}. Gib sie als '
+        'Zahl an, genau so, wie der Code sie ausgegeben hat, und unter '
+        '"used" die Zahlen, aus denen der Code sie gerechnet hat.'),
     "value_in_several_rows": (
         'Das "quote" dieser Zahlen läuft über mehrere Tabellenzeilen, und '
         'mehr als eine davon druckt die Zahl: {values}. Gib nur diese '

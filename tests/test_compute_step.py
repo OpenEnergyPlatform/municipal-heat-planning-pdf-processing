@@ -439,6 +439,14 @@ def answered(value, *used, quote=WHOLE) -> str:
 
 ANSWER = answered(38892.0)
 NOTHING = json.dumps({"value": None, "used": []})
+# Every request one question may make: its code, then the answers.
+TRIES = runner.MAX_RETRIES + runner.CODE_ROUNDS + 1
+
+
+def insisting(said) -> list:
+    """The model answers *said* again each time it is told why it was not
+    taken, until the question has no request left."""
+    return [said] * (TRIES - 1)
 
 
 def run_step(step, *rows, stop=None):
@@ -487,12 +495,47 @@ def test_a_row_stands_under_the_quote_of_its_anchor(monkeypatch):
 
 
 def test_a_number_the_code_did_not_print_is_refused(monkeypatch):
-    wrong = answered(40000.0)
-    step, _asked, _runs, events = computing(monkeypatch, CODE, wrong)
+    # Told every time, it is never taken: the request ends unanswered.
+    step, asked, _runs, events = computing(monkeypatch, CODE,
+                                           *insisting(answered(40000.0)))
     report, _done = run_step(step, share(21), amount(185200))
+    assert len(asked) == TRIES
     assert len(report.tuples) == 2
-    assert report.refusals
-    assert events[-1]["outcome"] == "refused"
+    assert events[-1]["outcome"] == "unanswered"
+    assert events[-1]["rejected"] == TRIES - 1
+    assert "40000" in events[-1]["reason"]
+
+
+# -- the row's own check, in the conversation (owner decision 2026-11-05) ----
+
+def test_a_number_the_check_refuses_is_told_and_asked_again(monkeypatch):
+    step, asked, _runs, events = computing(monkeypatch, CODE,
+                                           answered(40000.0), ANSWER)
+    report, _done = run_step(step, share(21), amount(185200))
+    assert len(asked) == 3
+    told = asked[2]["messages"][-1]["content"]
+    assert "40000" in told and '"used"' in told
+    assert report.tuples[-1]["value"] == 38892.0
+    assert events[-1]["outcome"] == "read"
+    assert events[-1]["rejected"] == 1
+
+
+def test_a_number_written_as_text_is_told_and_asked_again(monkeypatch):
+    step, asked, _runs, events = computing(monkeypatch, CODE,
+                                           answered("38892.0"), ANSWER)
+    report, _done = run_step(step, share(21), amount(185200))
+    assert len(asked) == 3
+    assert "not a number" in asked[2]["messages"][-1]["content"]
+    assert report.tuples[-1]["value"] == 38892.0
+    assert events[-1]["rejected"] == 1
+
+
+def test_a_number_the_check_takes_is_not_told(monkeypatch):
+    step, asked, _runs, events = computing(monkeypatch, CODE, ANSWER)
+    report, _done = run_step(step, share(21), amount(185200))
+    assert len(asked) == 2
+    assert report.tuples[-1]["computed"] is True
+    assert events[-1]["rejected"] == 0 and events[-1]["reason"] is None
 
 
 def test_nothing_to_compute_adds_no_row_and_runs_no_code(monkeypatch):
@@ -862,20 +905,22 @@ def test_the_row_carries_what_its_inputs_make(monkeypatch):
 
 def test_a_printed_number_its_inputs_do_not_make_is_refused(monkeypatch):
     other = answered(40000.0)
-    step, _asked, _runs, events = computing(monkeypatch, CODE, other,
+    step, _asked, _runs, events = computing(monkeypatch, CODE,
+                                            *insisting(other),
                                             ran=printed(40000.0))
     report, _done = run_step(step, share(21), amount(185200))
     assert len(report.tuples) == 2
-    reason = report.refusals[-1]["reason"]
+    reason = events[-1]["reason"]
     assert reason == "value 40000.0 does not follow from its inputs"
     assert any(re.match(p, reason) for p in schema.REFUSAL_REASONS)
-    assert events[-1]["outcome"] == "refused"
+    assert events[-1]["outcome"] == "unanswered"
 
 
 def test_a_sum_of_other_numbers_than_it_names_is_refused(monkeypatch):
     for total, kept in ((200.0, 3), (210.0, 2)):
         said = answered(total)
-        step, _asked, _runs, _events = computing(monkeypatch, CODE, said,
+        step, _asked, _runs, _events = computing(monkeypatch, CODE,
+                                                 *insisting(said),
                                                  ran=printed(total))
         report, _done = run_step(step, amount(120, GAS), amount(80, OIL))
         assert len(report.tuples) == kept, total
@@ -885,7 +930,8 @@ def test_a_number_follows_to_the_rounding_it_is_written_with(monkeypatch):
     # 21 % of 185,201 is 38,892.21.
     for written, kept in ((38892.2, 3), (38892.21, 3), (38893.0, 2)):
         said = answered(written)
-        step, _asked, _runs, _events = computing(monkeypatch, CODE, said,
+        step, _asked, _runs, _events = computing(monkeypatch, CODE,
+                                                 *insisting(said),
                                                  ran=printed(written))
         report, _done = run_step(step, share(21), amount(185201))
         assert len(report.tuples) == kept, written

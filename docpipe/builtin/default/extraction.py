@@ -129,6 +129,10 @@ PHRASES = {
     "compute_quote": (
         'Your "quote" does not stand in the passage of {label}. Copy from '
         'that passage, character for character, what {label} is.'),
+    "compute_rejected": (
+        'The number under "value" was not taken: {reason}. Give it as a '
+        'number, exactly as the code printed it, and under "used" the '
+        'numbers the code worked it out from.'),
     "value_in_several_rows": (
         'The "quote" of these numbers runs over several table rows and '
         'prints the number on more than one of them: {values}. Give only '

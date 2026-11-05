@@ -883,7 +883,9 @@ def trace_schema() -> dict:
         # sandbox rounds, `fetched` and `searched` the passages and searches
         # it asked of the plan, `taken` and `untaken` the numbers it took
         # from a passage and those not taken, `misquoted` its answers whose
-        # quote stood in no passage of the number it chose.
+        # quote stood in no passage of the number it chose, `rejected` its
+        # answers the row's own check refused and the model was told, and
+        # `reason` the last such refusal.
         "compute": {"kind": {"type": "string"},
                     "numbers": {"type": "integer"},
                     "outcome": {"enum": ["read", "refused", "same", "none",
@@ -893,7 +895,9 @@ def trace_schema() -> dict:
                     "searched": {"type": "integer"},
                     "taken": {"type": "integer"},
                     "untaken": {"type": "integer"},
-                    "misquoted": {"type": "integer"}},
+                    "misquoted": {"type": "integer"},
+                    "rejected": {"type": "integer"},
+                    "reason": {"type": ["string", "null"]}},
         "field": {"slot": {"type": "string"}, "anchor": {"type": "string"},
                   "window": {"type": "integer"},
                   "stage": {"enum": ["own", "found", "retrieval", "rest",
