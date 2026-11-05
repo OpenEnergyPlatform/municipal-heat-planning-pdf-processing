@@ -279,6 +279,20 @@ to the model under. They are `means` and `spellings` in the built-in profile,
 `kwp` and `scenarios` alike; kwp said them in German before, and
 a profile that extends one of them has no reason to word them differently.
 
+## How a prompt is written
+
+Every prompt is compact, precise and unambiguous (owner decision 2026-11-05).
+It starts with the result a request returns, and it keeps every rule that
+decides which answer is correct, the field names, the reply format and what a
+missing or unsure value means, and nothing else. An example stays only where it
+settles a concrete ambiguity. A prompt is split into two requests where it
+holds two decisions that can be checked apart and the split gains something
+concrete: the second decision comes only with a hit, needs reference data of
+its own or is asked again on its own. Otherwise it stays one request. The
+prompts only the fieldwise flow sends (`anchors`, `queries`, `places`, `frame`,
+`rows`, `field`, `review`, `example` and the core's contract templates) were
+left as they are.
+
 ## The extraction prompts: the core's template and a profile's parts
 
 Five prompts of the extraction stage, `rows`, `field`, `frame`, `review` and

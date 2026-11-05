@@ -9,20 +9,6 @@ Existing caption: {existing_caption}
 {section_content}
 </section_text>
 
-<task>
-Step 1 — Identify the figure type:
-  What kind of visualization is this? (chart, multi-panel grid, map, diagram, photo, etc.)
+Describe the figure in the image. {caption_instruction}
 
-Step 2 — Produce a comprehensive English-language description:
-  Follow the structure defined in your instructions:
-  a) Figure type and panel layout
-  b) Axes and scales (if applicable)
-  c) Data series and legend
-  d) Key data points (ALL readable numbers and labels)
-  e) Trends and patterns
-  f) Additional elements (titles, sources, annotations)
-
-Step 3 — {caption_instruction}
-</task>
-
-Respond with ONLY the JSON object as specified in your instructions.
+Reply with only the JSON object specified in your instructions.

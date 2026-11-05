@@ -6,5 +6,5 @@ Choose ALL entries that belong to the answer: the values the task asks for, and 
 
 If no entry meets the task, choose none. Do not choose an entry because it is the next best one: a value for 2030 does not answer a question about 2050.
 
-Answer with ONLY one JSON object, no Markdown, no text before or after it:
+Reply with ONLY one JSON object, no markdown, no text before or after it:
 {"chosen": ["<id>", "<id>"]}

@@ -70,8 +70,8 @@ see [extraction](../stages/extraction.md)): the spec names one group,
 about itself, its study or its own scenarios. `extraction/read_values`
 names the values one per request, with `value`, `value_raw` and quote, and
 `extraction/read_text` answers for each value the scenario
-it refers to, matched to a run identifier of the document's own list. Its
-example shows both answers, a scenario named and one the passage does not
+it refers to, matched to a run identifier of the document's own list. It
+shows both forms of an answer, a scenario named and one the passage does not
 name with the sentence the combing searches with (`probe`); with the first
 alone, 7 of 123 comb tasks of a four-paper probe had such a sentence. A
 value is what its field asks for and never the answer of a coordinate, so

@@ -2,21 +2,10 @@
 temperature: 0
 max_tokens: 300
 ---
-You support semantic search in scientific publications on climate and energy scenarios.
-
-You receive the description of a parameter, as it is defined in an ontology, and with it what is already known about THIS document. Write ONE short, factual sentence, such as might stand in exactly this form in this publication and that SPECIFICALLY contains the parameter.
-
-The sentence is a search anchor, not information. It is embedded and held against the sections, tables and figures of this publication. So it has to sound like the publication, not like the ontology.
-
-Rules:
-
-1. No question, no meta sentences, no form of address. Write as if the information ALREADY stood there. WRONG: "The scenario names are listed in Section 2."
-2. Insert a plausible value with its unit. RIGHT: "Global CO2 emissions fall to 12.4 GtCO2/yr by 2050 in the NDC pathway."
-3. Write in English, because these publications are in English. Use the words that actually appear in them: scenario, pathway, mitigation, carbon budget, Integrated Assessment Model, funded by, corresponding author.
-4. If the object contains a field "document", use it. "name" is the title of the publication, "caption" the heading of what a first search in exactly this document returned. Both tell you how THIS publication writes, so take over its words and structural terms. Invent nothing from them that is not in the parameter. If the object contains a field "names", they are the entries of the parameter's closed list: write the sentence the way a publication names one or two of them, without listing them.
-5. If the information sought is a proper name (institution, person, grant number), invent NONE. Such information almost always stands in a terse block of role labels and contact fields. Then write the anchor in exactly that style, with the role words instead of names.
-6. 12 to 35 words. One sentence, two at most.
-7. NEVER use words such as "not reported", "not available". An anchor is always worded positively.
-
-Answer with ONLY one JSON object, no Markdown, no text before or after:
-{"phrase": "<the sentence>"}
+Write ONE short sentence as it might stand in exactly this form in this publication, naming the described parameter with a plausible value and unit. It is embedded and held as a search anchor against the publication's sections, tables and figures, so it must sound like the publication, not like the ontology.
+* Write as if the information already stood there: no question, no meta sentence ("The scenario names are listed in Section 2."), no form of address, no negation ("not reported", "not available").
+* Write in English with the words these publications use: scenario, pathway, mitigation, carbon budget, Integrated Assessment Model, funded by, corresponding author. For example: "Global CO2 emissions fall to 12.4 GtCO2/yr by 2050 in the NDC pathway."
+* If `document` is given, take this publication's words and structural terms from `name` (its title) and `caption` (the heading of what a first search in it returned), but invent nothing from them that is not in the parameter. If `names` is given (the entries of the parameter's list), name one or two of them as a publication would, without listing them.
+* If the information sought is a proper name (institution, person, grant number), invent none: write in the terse style of a block of role labels and contact fields, with the role words instead of names.
+* 12 to 35 words, one sentence, two at most.
+Answer with exactly one JSON object, no Markdown, no text before or after it: `{"phrase":"..."}`

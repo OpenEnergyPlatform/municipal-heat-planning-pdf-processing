@@ -2,30 +2,18 @@
 temperature: 0
 max_tokens: 6144
 ---
-Du suchst in einem deutschen kommunalen Wärmeplan ("Kommunale Wärmeplanung") Angaben zu EINEM Wert EINER Kennzahl, die in der Passage des Werts selbst nicht stehen.
+Finde in anderen Passagen des Plans jede Angabe unter `coordinates`, die dem Wert in `rows` in seiner eigenen Passage fehlt, und antworte aus den Passagen, die dir gezeigt wurden.
+Antworte mit genau einer Zeile JSON:
+`{"rows":[{"row":"R1","year":{"value":2022,"quote":"..."},"scenario":{"value":"out:unstated"}}],"more":[{"get":"hit","id":"H2"}]}`
 
-Du bekommst:
-- "passage": woher der Wert stammt, mit Art, Titel und Abschnitt.
-- "parameter": die Kennzahl mit ihrer Definition.
-- "rows": der Wert mit "row", Zahl, Einheit und Zitat, dazu, was zu ihm schon gelesen ist ("known", im Wortlaut des Plans), und die Angaben, die noch offen sind ("open").
-- "coordinates": die offenen Angaben, je mit Frage und, wo es eine gibt, mit Liste ("options"); "where": wo ein Plan sie meist druckt.
-- "hits": Trefferlisten, je Treffer mit "id", Art, Titel und einer Zeile: seiner ersten, bei einer Suche ("search") der passenden. Die erste Liste, wo es sie gibt, sind die Passagen des Plans, die den Sätzen unter "query" am nächsten sind: wie der Plan die offenen Angaben drucken würde, geschrieben, als dieser Wert gelesen wurde. Gibt es keine, such selbst mit "similar". Danach kommen die Treffer deiner eigenen Suchen.
-- "more", "not_found": die Passagen, die du nachgefordert hast, je mit "id", und was sich nicht finden ließ, mit Grund ("end": in diese Richtung gibt es keinen Abschnitt mehr, "unknown": kein oder mehr als ein Platzhalter oder Treffer dieses Namens, "invalid_pattern" oder "timeout": das Muster ging nicht).
-- "base_years" und "target_years", nur wenn der Plan sie nennt: die Jahre, für die er seinen eigenen Stand erhoben oder bilanziert hat, und die Jahre seines Ziels, als Jahreszahlen.
-- "corrections": nur bei einer zweiten Anfrage. Was an deiner ersten Antwort nicht stimmte, je Angabe unter "what".
-
-Du antwortest mit:
-1. "rows": für den Wert aus "rows" ein Eintrag mit seiner "row" und JEDER Angabe aus "coordinates", je mit "value" (bei einer Liste genau einer ihrer Schlüssel, sonst die Angabe selbst), "value_raw" (das Wort des Plans, wo es nicht der Schlüssel ist) und "quote": EINE zusammenhängende Stelle aus "more" oder aus dem Zitat des Werts, Zeichen für Zeichen abgeschrieben, die die Angabe enthält und über DIESEN Wert spricht. Steht sie in keiner gezeigten Stelle, ist ihr Eintrag "out:unstated", ohne "quote". Eine Angabe, die nicht unter "open" steht, ist schon gelesen: ihr Eintrag ist "out:unstated".
-   Steht beim Wert statt einer Jahreszahl nur das Wort des Plans für seinen eigenen Stand ("Basisjahr", "Bilanzjahr", "Ist-Zustand", "Status quo", "IST", "Bestand", "aktuell") oder für sein Ziel ("Zieljahr", "Zielzustand", "Zielszenario", "Ziel"), wähl das Jahr aus "base_years" oder "target_years", auf das dieses Wort verweist: "value" ist die Jahreszahl, "value_raw" das Wort des Plans, Zeichen für Zeichen, und "quote" die Stelle, an der das Wort steht. Nennt "target_years" mehrere Jahre, ist das Zieljahr das, das der Plan selbst so nennt oder in dem sein Ziel erreicht ist, kein Zwischenziel.
-2. "more": was du lesen willst, bevor du antwortest. Eine Liste von Anfragen:
-   - {"get": "hit", "id": "<<id eines Treffers>>"}: die Passage dieses Treffers;
-   - {"get": "next"} oder {"get": "previous"}: den Abschnitt nach oder vor der Passage des Werts, beim nächsten Mal den danach oder davor;
-   - {"get": "item", "id": "<<Platzhalter>>"}: die Tabelle oder Abbildung, deren Platzhalter in eckigen Klammern im Text steht;
-   - {"get": "search", "pattern": "<<regulärer Ausdruck>>"}: eine Trefferliste der Passagen des Plans, deren Text das Muster enthält, ohne Unterschied von Groß- und Kleinschreibung;
-   - {"get": "similar", "text": "<<Satz, wie der Plan die Angabe zu diesem Wert drucken würde>>"}: eine Trefferliste der Passagen des Plans, die diesem Satz am nächsten sind; was er nennt, darf erdacht sein.
-   Du bekommst dann dieselbe Frage noch einmal, das Nachgeforderte unter "more" und "hits". Gib auch beim Nachfordern deine ganze Antwort mit allem, was du schon weißt; ohne neue Anfrage in "more" gilt sie. Rate nicht: was du nicht gelesen hast, ist "out:unstated".
-
-Bei einer zweiten Anfrage antwortest du noch einmal vollständig und behebst die Punkte aus "corrections".
-
-Antworte mit genau einem JSON-Objekt, in einer Zeile, ohne Text davor oder danach. Die Zitate unten sind Beschreibungen in << >> und stehen in keinem Plan:
-{"rows": [{"row": "R1", "year": {"value": 2022, "quote": "<<Satz aus einer nachgeforderten Passage, der das Jahr dieses Werts nennt>>"}, "scenario": {"value": "out:unstated"}}], "more": [{"get": "hit", "id": "H2"}]}
+* `rows` enthält einen Eintrag mit der `row` des Werts und jeder Angabe aus `coordinates`. `value` ist bei einer Liste (`options`) genau einer ihrer Schlüssel, sonst die Angabe selbst, `value_raw` das Wort des Plans, wo es nicht der Schlüssel ist, und `quote` eine zusammenhängende Stelle aus `more` oder aus dem Zitat des Werts, Zeichen für Zeichen, die die Angabe enthält und über diesen Wert spricht.
+* Eine Angabe, die keine gezeigte Stelle nennt oder die nicht unter `open` steht, ist `{"value":"out:unstated"}` ohne `quote`. Rate nicht: Was du nicht gelesen hast, ist "out:unstated".
+* Steht beim Wert statt einer Jahreszahl nur das Wort des Plans für seinen eigenen Stand ("Basisjahr", "Bilanzjahr", "Ist-Zustand", "Status quo", "IST", "Bestand", "aktuell") oder für sein Ziel ("Zieljahr", "Zielzustand", "Zielszenario", "Ziel"), nimm das Jahr aus `base_years` oder `target_years`, auf das dieses Wort verweist: `value` ist die Jahreszahl, `value_raw` das Wort, Zeichen für Zeichen, und `quote` die Stelle mit dem Wort. Bei mehreren `target_years` ist es das Jahr, das der Plan selbst Zieljahr nennt oder in dem sein Ziel erreicht ist, kein Zwischenziel.
+* `more` nennt, was du lesen willst, bevor du antwortest. Du bekommst dann dieselbe Frage noch einmal, das Nachgeforderte unter `more` und `hits`. Schick immer deine ganze Antwort mit allem, was du schon weißt; ohne neue Anfrage in `more` gilt sie.
+  - `{"get":"hit","id":"..."}`: die Passage eines Treffers;
+  - `{"get":"next"}` oder `{"get":"previous"}`: der Abschnitt nach oder vor der Passage des Werts, beim nächsten Mal der danach oder davor;
+  - `{"get":"item","id":"..."}`: die Tabelle oder Abbildung, deren Platzhalter in eckigen Klammern in einem Text steht;
+  - `{"get":"search","pattern":"..."}`: Treffer für einen regulären Ausdruck, ohne Unterschied von Groß- und Kleinschreibung;
+  - `{"get":"similar","text":"..."}`: Treffer zu einem Satz, wie der Plan die Angabe zu diesem Wert drucken würde; er darf erdacht sein.
+* `hits` nennt je Treffer `id`, Art, Titel und eine Zeile, bei einer Suche die passende. Die erste Liste, wo es sie gibt, enthält die Passagen, die den Sätzen unter `query` am nächsten sind, geschrieben, als dieser Wert gelesen wurde; gibt es keine, such mit `similar`. `not_found` nennt, was sich nicht holen ließ: "end" (in diese Richtung kein Abschnitt mehr), "unknown" (kein oder mehr als ein Platzhalter oder Treffer dieses Namens), "invalid_pattern" oder "timeout".
+* Gibt es `corrections`, antworte vollständig neu und behebe jeden Punkt unter `what`.

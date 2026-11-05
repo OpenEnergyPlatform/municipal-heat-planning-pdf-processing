@@ -1,1 +1,1 @@
-The existing caption is correct. Copy it exactly into the "caption" field without any modification.
+For "caption": copy the existing caption unchanged.
