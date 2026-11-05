@@ -192,7 +192,12 @@ the sentence that announces it, the heading over it and the paragraph under
 it print its year and its scenario: the whole section when it fits the
 survey's two pages, else that many characters around its placeholder
 (`pipeline.window_around`, the cut the field request makes of a parent
-section). A coordinate quoted from it cites the section.
+section). A coordinate quoted from it cites the section. Every request also
+shows the heading its passage stands under, a table's or figure's that of its
+section, a section's its own (`reading.heading_of`, owner decision
+2026-11-05): where the passage's text does not carry it, a quote may stand in
+it, and the prompts name it among the places a quote is copied from, every
+one a text the request showed.
 
 The tools are in every reading request, the rounds of `read_values` and the
 group requests of `read_text` (owner decision 2026-11-05: every request but

@@ -169,9 +169,9 @@ slots, row, context, corrections)* one group's coordinates of that
 value. *context* is what the request shows beside its passage,
 *corrections* None the first time and what was wrong the second.
 *shown_with(source)* is what a coordinate's quote may stand in besides
-the passage: its section's heading. *known(claim, asked)* is what a
-value has read in the plan's words (`runner.row_context`). *pool* reads
-passages side by side.
+the passage: the heading it stands under (`heading_of`).
+*known(claim, asked)* is what a value has read in the plan's words
+(`runner.row_context`). *pool* reads passages side by side.
 
 #### Reader.\_\_init\_\_
 
@@ -315,6 +315,17 @@ coordinate asked is the one they date: what the field request shows
 (`runner._field_payload`), so a value whose passage names its state by
 the plan's word and prints no year can answer one of them
 (`pipeline.named_year`).
+
+### heading_of
+
+```python
+def heading_of(source: Source) -> list
+```
+
+The heading a request shows with *source* under "section", as a
+passage a quote may stand in (owner decision 2026-11-05): a table's or
+figure's the heading of its section, a section's its own. None where the
+passage's text carries it already or no section holds it.
 
 ### around_of
 

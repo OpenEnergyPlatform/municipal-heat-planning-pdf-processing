@@ -231,6 +231,21 @@ def years_of(bases: list, slots: list) -> dict:
     return out
 
 
+def heading_of(source: Source) -> list:
+    """The heading a request shows with *source* under "section", as a
+    passage a quote may stand in (owner decision 2026-11-05): a table's or
+    figure's the heading of its section, a section's its own. None where the
+    passage's text carries it already or no section holds it."""
+    provenance = source.provenance or {}
+    title = provenance.get("section_title")
+    at = source.owner_id if source.owner_kind == "section" \
+        else provenance.get("parent_section")
+    if not title or not at or title in (source.text or ""):
+        return []
+    return [Source("section", int(at), title,
+                   {**provenance, "owner_kind": "section"})]
+
+
 def around_of(source: Source, passages: dict,
               budget: Optional[int]) -> Optional[Source]:
     """The text of the section a table or figure stands in, as its request
@@ -861,9 +876,9 @@ class Reader:
     value. *context* is what the request shows beside its passage,
     *corrections* None the first time and what was wrong the second.
     *shown_with(source)* is what a coordinate's quote may stand in besides
-    the passage: its section's heading. *known(claim, asked)* is what a
-    value has read in the plan's words (`runner.row_context`). *pool* reads
-    passages side by side.
+    the passage: the heading it stands under (`heading_of`).
+    *known(claim, asked)* is what a value has read in the plan's words
+    (`runner.row_context`). *pool* reads passages side by side.
     """
 
     def __init__(self, spec, ask_values: Callable, ask_text: Callable,

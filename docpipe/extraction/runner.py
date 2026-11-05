@@ -2015,18 +2015,9 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
             kind=source.owner_kind, owner=source.owner_id, group=group.name,
             value=row.label, corrections=len(corrections or ()))
 
-    def shown_with(source) -> list:
-        provenance = source.provenance or {}
-        title = provenance.get("section_title")
-        parent = provenance.get("parent_section")
-        if source.owner_kind == "section" or not title or not parent \
-                or title in (source.text or ""):
-            return []
-        return [Source("section", int(parent), title,
-                       {**provenance, "owner_kind": "section"})]
-
     return reading_map.Reader(
-        spec, ask_values, ask_text, frame_slots, shown_with=shown_with,
+        spec, ask_values, ask_text, frame_slots,
+        shown_with=reading_map.heading_of,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
         known=row_context, pool=AHEAD, trace=trace.event)
 

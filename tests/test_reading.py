@@ -28,7 +28,10 @@ a single row that does not fit, or a piece no round answered, is a hole of
 its own while the others are read. A passage a search of the whole plan
 named for a parameter shows that search's list first, AND only in its
 reading for that parameter. A table or figure is shown with the text of its
-section, and a coordinate quoted from there cites the section.
+section, and a coordinate quoted from there cites the section. A passage is
+shown with the heading it stands under, a table's or figure's that of its
+section, a section's its own, AND a quote may stand in that heading where the
+passage's text does not carry it.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -681,6 +684,40 @@ def test_a_year_printed_in_the_text_around_a_table_is_read_from_there():
     assert claim["year_source"] == ["section", 9]
     alone, _ = read_of(placed(), values=({"next": GAS}, {"next": None}),
                        groups=FROM_AROUND, budget=4000)
+    assert alone.claims[0]["year_state"] == "unbacked"
+
+
+# -- the heading a passage stands under ------------------------------------------
+
+HEADED = Source("section", 12, "Es fallen dann noch 80 t CO2 an.",
+                {"document_id": 7, "section_title": "Zielszenario 2045"})
+V80 = {"value": 80, "quote": "noch 80 t CO2"}
+FROM_HEADING = {"frame": [{"scenario": {"value": UNSTATED}, "year": {
+    "value": 2045, "quote": "Zielszenario 2045"}}]}
+
+
+def shown_heading(source):
+    return [(s.owner_kind, s.owner_id, s.text)
+            for s in reading.heading_of(source)]
+
+
+def test_a_passage_is_shown_with_its_heading_where_its_text_lacks_it():
+    assert shown_heading(HEADED) == [("section", 12, "Zielszenario 2045")]
+    assert shown_heading(placed()) == [("section", 9, "Bilanz")]
+    assert shown_heading(BARE) == []           # its text carries "Bilanz"
+    assert shown_heading(table()) == []        # no section holds the table
+    assert shown_heading(replace(HEADED, provenance={"document_id": 7})) == []
+
+
+def test_a_year_printed_only_in_a_section_s_own_heading_is_read_from_it():
+    read, _ = read_of(HEADED, values=({"next": V80}, {"next": None}),
+                      groups=FROM_HEADING, shown_with=reading.heading_of)
+    claim = read.claims[0]
+    assert claim["year"] == 2045 and claim["year_state"] == "read"
+    assert claim["year_quote"] == "Zielszenario 2045"
+    assert claim["year_source"] == ["section", 12]
+    alone, _ = read_of(HEADED, values=({"next": V80}, {"next": None}),
+                       groups=FROM_HEADING)
     assert alone.claims[0]["year_state"] == "unbacked"
 
 
