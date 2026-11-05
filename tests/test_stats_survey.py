@@ -29,10 +29,11 @@ def ask(t, **fields):
 
 
 def test_requests_and_tokens_are_counted_per_stage(tmp_path):
-    out = traced(tmp_path, ask("survey_ask"), ask("read_table_ask"),
-                 ask("read_table_ask", prompt_tokens=50))["requests_by_stage"]
-    assert out["read_table"]["requests"] == 2
-    assert out["read_table"]["prompt_tokens"] == 150
+    out = traced(tmp_path, ask("survey_ask"), ask("read_values_ask", round=1),
+                 ask("read_values_ask", round=2, prompt_tokens=50))[
+        "requests_by_stage"]
+    assert out["read_values"]["requests"] == 2
+    assert out["read_values"]["prompt_tokens"] == 150
     assert out["survey"]["requests"] == 1
     # By construction: a stage that asked nothing counts nothing.
     assert out["comb"] == {"requests": 0, "prompt_tokens": 0,
@@ -57,23 +58,20 @@ def test_a_missing_token_count_adds_nothing(tmp_path):
 def test_an_unread_reading_counts_under_its_reason_and_adds_no_values(
         tmp_path):
     base = {"t": "read", "parameter": "p", "kind": "table", "owner": 4,
-            "table": True, "asked": 1}
+            "asked": 1}
     out = traced(tmp_path,
                  {**base, "values": 0, "unread": True, "why": "cut_off"},
                  {**base, "values": 0, "unread": True, "why": "cut_off"},
                  {**base, "values": 0, "unread": True, "why": "no_answer"},
-                 {**base, "values": 5, "skipped": 2, "faulty": None,
-                  "failed": {"unquoted": 1}, "unanswered": 1})["reading"]
+                 {**base, "values": 5, "failed": {"unquoted": 1},
+                  "unanswered": 1})["reading"]
     assert out["readings"] == 4
     assert out["unread_by_reason"] == {"cut_off": 2, "no_answer": 1}
     assert out["values"] == 5
-    assert out["cells_not_read"] == 2
     assert out["refused_first_by_reason"] == {"unquoted": 1}
-    assert out["faulty_tables"] == 0
-    # By construction: only the read passage with a fault is a faulty table.
-    faulty = traced(tmp_path, {**base, "values": 3, "faulty": "mixed"})
-    assert faulty["reading"]["faulty_tables"] == 1
-    assert faulty["reading"]["unread_by_reason"] == {}
+    # By construction: a passage read counts its values and no reason.
+    read = traced(tmp_path, {**base, "values": 3})["reading"]
+    assert read["values"] == 3 and read["unread_by_reason"] == {}
 
 
 def test_comb_events_add_up_open_filled_and_exhausted_coordinates(tmp_path):
@@ -124,14 +122,15 @@ def producer(**more):
 
 
 def test_a_stamp_of_the_survey_flow_validates():
-    flow = {"extraction/survey": SHA, "extraction/read_table": SHA,
+    flow = {"extraction/survey": SHA, "extraction/read_values": SHA,
             "extraction/read_text": SHA, "extraction/comb": SHA}
     jsonschema.validate(
         stamp(**flow, producers=[producer(flow="survey")]),
         schema.stamp_schema())
-    with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(stamp(**{"extraction/other": SHA}),
-                            schema.stamp_schema())
+    for gone in ("extraction/other", "extraction/read_cells",
+                 "extraction/read_table"):
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(stamp(**{gone: SHA}), schema.stamp_schema())
 
 
 def test_a_producer_flow_off_the_list_is_refused():
@@ -149,13 +148,20 @@ def test_the_trace_schema_takes_the_new_kinds_and_refuses_a_broken_one():
                          "filled": 0, "asked": 1, "hits": 0, "fetched": 0,
                          "searched": 0, "missed": 0, "corrected": 0,
                          "exhausted": 1}, trace)
-    jsonschema.validate({"t": "read", "doc": 1, "parameter": "p",
-                         "kind": "table", "owner": 2, "table": True,
-                         "values": 0, "unread": True, "why": "cut_off",
-                         "asked": 1}, trace)
+    read = {"t": "read", "doc": 1, "parameter": "p", "kind": "table",
+            "owner": 2, "values": 0, "unread": True, "why": "cut_off",
+            "asked": 1}
+    jsonschema.validate(read, trace)
     jsonschema.validate({"t": "comb_ask", "doc": 1, "attempt": 1}, trace)
-    with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate({"t": "read", "doc": 1, "parameter": "p",
-                             "kind": "table", "owner": 2, "table": True,
-                             "values": 0, "unread": True, "why": "bored",
-                             "asked": 1}, trace)
+    # A values request counts its round, a group request names its value.
+    jsonschema.validate({"t": "read_values_ask", "doc": 1, "attempt": 1,
+                         "round": 2}, trace)
+    jsonschema.validate({"t": "read_text_ask", "doc": 1, "attempt": 1,
+                         "group": "frame", "value": "R1"}, trace)
+    for broken in (dict(read, why="bored"), dict(read, skipped=2),
+                   dict(read, table=True),
+                   {"t": "read_values_ask", "doc": 1, "attempt": 1},
+                   {"t": "read_text_ask", "doc": 1, "attempt": 1},
+                   {"t": "read_table_ask", "doc": 1, "attempt": 1}):
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(broken, trace)

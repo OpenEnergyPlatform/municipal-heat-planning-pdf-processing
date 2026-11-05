@@ -75,7 +75,7 @@ table gives kwp's own answer.
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object, in English like the prompts of the first three (`reading.REQUIRED`), laid over the built-in profile's |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | plan-centric labels and names (a name opens each line of the values index), convoy membership, three filters |
 | Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `BASE_YEAR`, `TARGET_YEAR`, `document_context`, `FRONT_PAGE_PARAMETERS` (empty), `PHRASES`, `PROMPT_CHECKS`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE` | the spec, the slice gate, the frame axes, the frame pairs that are the plan's own state and its target, the German sentences the stage writes to the model (the frame request's list of a closed coordinate stands under `"scenarios"`), the passages the preflight holds its prompts to, and the language (`"de"`) of the core's templates its parts files are put together with |
-| Extraction | `prompts/extraction/*.md` | 16 prompt ids | phrase, anchors and queries as plain files; frame, rows, field, review and example as parts files that name a template of the core; `compute`; and the six prompts of the survey flow, `survey`, `read_cells`, `read_table`, `read_values`, `read_text` and `comb` (see The prompts) |
+| Extraction | `prompts/extraction/*.md` | 14 prompt ids | phrase, anchors and queries as plain files; frame, rows, field, review and example as parts files that name a template of the core; `compute`; and the four prompts of the survey flow, `survey`, `read_values`, `read_text` and `comb` (see The prompts) |
 | The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
 | The answer app | `inference.py` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |
 | The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 12 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
@@ -253,7 +253,7 @@ that same file.
 
 ## The prompts
 
-17 prompt ids belong to extraction and the graph route, kwp's own
+15 prompt ids belong to extraction and the graph route, kwp's own
 wording of each spec question:
 
 | id | loaded | asks for |
@@ -269,11 +269,9 @@ wording of each spec question:
 | `extraction/example` | only under `docpipe compile examples` | which values of one parameter a passage states, to propose the example a spec parameter still lacks |
 | `extraction/compute` | once per question the compute step asks | one number the plan does not print, written as Python over the numbers already read |
 | `extraction/survey` | once per document, over its passages | which passage is read for which parameter, and the coordinates a whole passage states (the groups of the spec); no value |
-| `extraction/read_cells` | once per table or part of a table, per numeric parameter | the cells that hold the parameter's values: `row`, `column`, and for a cell with several numbers `parts` and `part`; in the first part `head_rows`, and `faulty` where the Markdown looks broken |
-| `extraction/read_table` | once per cells reading and group of the spec | one group's coordinates for those cells, per `rows`, `columns`, `cells` and `table` |
-| `extraction/read_values` | once per section, figure or table of a parameter without numbers | each value with `value`, `value_raw` and `quote`; a value is what the field asks for and the year of a number is a coordinate, not a value |
-| `extraction/read_text` | once per `read_values` reading and group of the spec | every value, by its label, with every coordinate of the group |
-| `extraction/comb` | once per passage, parameter and group with an open coordinate | the open coordinates, searched for in the rest of the plan |
+| `extraction/read_values` | once per round of a passage's reading, one value per request | the next value not yet read: `value`, `value_raw`, `quote` and, for a number in a table, `head`, or `null` to end the rounds; a value is what the field asks for and the year of a number is a coordinate, not a value |
+| `extraction/read_text` | once per value and group of the spec with a coordinate open | that group's open coordinates for the one value |
+| `extraction/comb` | once per value and group with an open coordinate | the open coordinates, searched for in the rest of the plan |
 | `kg/coordinate` | once per chat turn the graph route tries | one closed answer to one coordinate axis, for the SPARQL query |
 
 Five of these ids, `extraction/rows`, `field`, `frame`, `review` and `example`,

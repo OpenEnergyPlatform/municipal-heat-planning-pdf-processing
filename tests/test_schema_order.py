@@ -66,12 +66,9 @@ def schemas(spec) -> dict:
     return {
         "survey": lambda example: survey.response_format(
             [None] * 9, survey.parameters_of(spec), survey.tuple_slots(spec)),
-        "read_cells": lambda example: reading.cells_response_format(),
-        "read_table": lambda example: reading.table_response_format(listed),
         "read_values": lambda example: reading.values_response_format(
-            parameter),
-        "read_text": lambda example: reading.text_response_format(
-            listed, ["R1", "R2"]),
+            parameter, True),
+        "read_text": lambda example: reading.text_response_format(listed),
         "comb": lambda example: combing.comb_response_format(
             listed, ["R1", "R2"]),
         "places": lambda example: places.response_format(
@@ -194,20 +191,21 @@ def test_every_prompt_of_the_new_flow_is_held_to_its_schema():
         assert names <= {name for p, name in CASES if p == profile}, profile
 
 
-CELL = {"row": 2, "column": 2, "parts": 2, "part": 1}
+ENTRY = {"value": 12.5, "quote": "q", "head": "h"}
 
 
 def test_a_key_listed_after_one_the_example_names_later_is_found():
-    cells = unwrapped(reading.cells_response_format())
-    value = cells["properties"]["values"]["items"]
-    assert disorder({"values": [CELL]}, cells) == []
-    swapped = dict(value, properties={key: value["properties"][key] for key
-                                      in ("row", "column", "part", "parts")})
-    broken = dict(cells, properties=dict(cells["properties"],
-                                         values={"type": "array",
-                                                 "items": swapped}))
-    assert disorder({"values": [CELL]}, broken) == [
-        ("$.values[]", "parts before part")]
+    numeric = next(p for p in spec_of("kwp").parameters if p.is_numeric)
+    shape = unwrapped(reading.values_response_format(numeric, True))
+    entry = shape["properties"]["next"]["anyOf"][0]
+    assert disorder({"next": ENTRY}, shape) == []
+    swapped = dict(entry, properties={key: entry["properties"][key] for key
+                                      in ("value", "value_raw", "head",
+                                          "quote")})
+    broken = dict(shape, properties=dict(shape["properties"], next={
+        "anyOf": [swapped, {"type": "null"}]}))
+    assert disorder({"next": ENTRY}, broken) == [
+        ("$.next", "quote before head")]
 
 
 def test_a_coordinate_s_own_keys_keep_their_order_and_two_coordinates_any():

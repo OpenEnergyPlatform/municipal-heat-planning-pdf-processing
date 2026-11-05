@@ -348,8 +348,6 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
             "holes": sum(1 for _batch, reply in taken.answered
                          for claim in reply.get("tuples") or ()
                          if claim.get("_harvest_failed")),
-            "faulty": [r.faulty for r in reads if r.faulty],
-            "cells_not_read": sum(r.skipped for r in reads),
             "claims": sum(len(r.claims) for r in reads),
             "verified": report.tuples, "refusals": len(report.refusals),
             "refused_for": dict(Counter(refusal.get("reason")

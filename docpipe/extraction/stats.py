@@ -42,8 +42,7 @@ log = logging.getLogger(__name__)
 STATS = "stats"
 OPEN = ("exhausted", "unanswered", "unbacked")
 # Trace event kind -> the stage of the survey flow that asked.
-ASK_STAGES = {"survey_ask": "survey", "read_cells_ask": "read_cells",
-              "read_table_ask": "read_table",
+ASK_STAGES = {"survey_ask": "survey",
               "read_values_ask": "read_values",
               "read_text_ask": "read_text", "comb_ask": "comb"}
 
@@ -212,10 +211,9 @@ def from_traces(trace_dirs: Iterable[Path],
                     readings["readings"] += 1
                     if event.get("unread"):
                         unread_why[str(event.get("why"))] += 1
-                    for key in ("values", "skipped", "unanswered", "fetched",
+                    for key in ("values", "unanswered", "fetched",
                                 "searched", "missed"):
                         readings[key] += _int(event, key)
-                    readings["faulty_tables"] += bool(event.get("faulty"))
                     refused_first.update(
                         {str(w): n for w, n in
                          (event.get("failed") or {}).items()
@@ -276,16 +274,14 @@ def from_traces(trace_dirs: Iterable[Path],
             "answers_not_taken": surveyed["dropped"],
             "passages_by_parameter": dict(survey_by_parameter)},
         # Readings (one passage for one parameter), the readings that came to
-        # no reply per reason, values read, tables the model called faulty,
-        # table cells not read, coordinates left unanswered, the check's
-        # refusals of the first answer per reason, passages fetched by a
-        # search, hit lists shown, and asks for a passage that was not found.
+        # no reply per reason, values read, coordinates left unanswered, the
+        # check's refusals of the first answer per reason, passages fetched
+        # by a search, hit lists shown, and asks for a passage that was not
+        # found.
         "reading": {
             "readings": readings["readings"],
             "unread_by_reason": dict(unread_why),
             "values": readings["values"],
-            "faulty_tables": readings["faulty_tables"],
-            "cells_not_read": readings["skipped"],
             "coordinates_unanswered": readings["unanswered"],
             "refused_first_by_reason": dict(refused_first),
             "passages_fetched": readings["fetched"],

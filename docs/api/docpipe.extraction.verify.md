@@ -94,18 +94,6 @@ the ambient profile's (`decimal_mark`).
 def numbers_in(text: str) -> set
 ```
 
-### numbers_in_order
-
-```python
-def numbers_in_order(text: str, grouped: bool = False) -> list
-```
-
-The numbers *text* prints, in the order it prints them, each in its
-one spelling (`canonical_number`) with its printed sign. *grouped* reads
-digits grouped by a space as one number ("1 234"), else each group as a
-number of its own ("967 168%" is 967 and 168): which of the two a text
-means, its digits cannot tell.
-
 ### flat
 
 ```python

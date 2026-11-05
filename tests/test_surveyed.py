@@ -19,7 +19,9 @@ and taken again only for the same passages, its unanswered passages kept.
 A parameter the survey of the whole plan named no passage for is read once
 where a search of the whole plan ranks first for it, AND not after a survey
 of part of the plan; the passage it was read in is one of its sources, so a
-reading there that came to nothing leaves it exhausted, not unstated.
+reading there that came to nothing leaves it exhausted, not unstated; AND the
+search's ranked list stays beside that passage under that parameter, so its
+reading shows it, and two surveys joined keep the lists of both.
 
 A pass re-reads a coordinate by combing it, whatever its state, in its own
 passage first and with the years of the stored rows; the combing lists the
@@ -134,13 +136,13 @@ def test_a_reading_says_why_it_came_to_nothing():
     def reader(reply):
         def ask(*args, **kwargs):
             return reply
-        return reading.Reader(SPEC, ask, ask, ask, ask, [])
+        return reading.Reader(SPEC, ask, ask, [])
 
     cut = reader(reading.CUT).read(7, EMISSION, ONE, [], [], SHOWN)
     silent = reader(None).read(7, EMISSION, ONE, [], [], SHOWN)
     assert cut.unread and cut.why == reading.CUT
     assert silent.unread and silent.why == reading.NO_ANSWER
-    answered = reader({"values": []}).read(7, EMISSION, ONE, [], [], SHOWN)
+    answered = reader({"next": None}).read(7, EMISSION, ONE, [], [], SHOWN)
     assert not answered.unread and answered.why is None
 
 
@@ -524,3 +526,30 @@ def test_a_search_whose_reading_came_to_nothing_is_a_hole_not_a_silent_plan():
     # the plan would read as silent.
     blind = surveyed.taken_of(7, SPEC, taken.found, taken.reads, [], SHOWN)
     assert state(blind) == fields.SAID_UNSTATED
+
+
+# -- the list of a search of the whole plan ----------------------------------
+
+FIRST = SimpleNamespace(owner_kind="section", owner_id=5)
+NEXT = SimpleNamespace(owner_kind="table", owner_id=9)
+
+
+def test_a_passage_a_search_named_keeps_the_search_s_list_for_its_parameter():
+    out = surveyed.sought_survey(survey.Found(True),
+                                 lambda document, probes, exclude: [FIRST,
+                                                                    NEXT],
+                                 7, [EMISSION])
+    assert out.passages_of(EMISSION.uri) == [("section", 5)]
+    assert out.hits == {(EMISSION.uri, "section", 5): [FIRST, NEXT]}
+    # By construction: a search that finds nothing names no list either.
+    none = surveyed.sought_survey(survey.Found(True), lambda *a: [], 7,
+                                  [EMISSION])
+    assert none.hits == {} and none.passages_of(EMISSION.uri) == []
+
+
+def test_two_surveys_joined_keep_the_lists_of_both():
+    found, also = survey.Found(True), survey.Found(True)
+    found.hits = {(EMISSION.uri, "section", 5): [FIRST]}
+    also.hits = {("heat_load", "table", 9): [NEXT]}
+    assert surveyed.joined(found, also).hits == {**found.hits, **also.hits}
+    assert surveyed.joined(found, survey.Found(True)).hits == found.hits

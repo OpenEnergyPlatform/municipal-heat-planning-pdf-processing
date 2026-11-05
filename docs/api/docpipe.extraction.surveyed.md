@@ -179,8 +179,10 @@ sentences, one written for the document for a field about the document
 itself, one written per run for any other, `runner.make_seek_probes`),
 and for its label where it has none. What the survey said of every
 passage stands beside it without its parameters, so the reading sees the
-plan's pairs and years as it does anywhere else. A parameter the search
-finds no passage for is left out.
+plan's pairs and years as it does anywhere else, and the search's ranked
+list beside the passage it named (`Found.hits`), so its reading can go
+on to the next hits. A parameter the search finds no passage for is left
+out.
 
 ### taken_of
 

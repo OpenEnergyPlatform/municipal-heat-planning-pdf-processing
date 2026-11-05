@@ -124,6 +124,15 @@ PHRASES = {
         'prints the number on more than one of them: {values}. Give only '
         'these entries again, each with the one row it stands in as its '
         '"quote".'),
+    # a round of the values of a passage, one value each
+    "value_already_read": (
+        'You named this value already: {value} with the quote {quote!r}. '
+        'Name the next value that is not yet under "read", or answer with '
+        '"next": null.'),
+    "head_not_in_table": (
+        'The head {head!r} stands on no head line of the table. Write the '
+        'head of the value\'s column character for character as it stands '
+        'there.'),
     "shorter_field": (
         'Put rows with the same answer together in "groups" and quote '
         'only the short place where the field stands.'),

@@ -8,16 +8,17 @@ the plan. Step 4 of the rebuilt harvest (owner decisions 2026-11-04).
 The reading asks a value's coordinates in its own passage and the text
 around it, and may fetch more of the plan itself. What is still open after it
 (a coordinate the passage does not state, one whose answer did not hold, one
-no reply answered) is looked for here, per passage, parameter and group of
-the spec that still has an open coordinate (owner decision 2026-11-04: every
-request one task), the group's words for where a plan prints it shown: one
-search with the passage's context (owner decision 2026-10-22: its title,
-what its rows have read in the plan's words, what is asked). The best
+no reply answered) is looked for here, per value and group of the spec that
+still has an open coordinate (owner decisions 2026-11-04 and 2026-11-05:
+every request one task and one value), the group's words for where a plan
+prints it shown: one search with the value's context (owner decision
+2026-10-22: its passage's title, what it has read in the plan's words, what
+is asked). The best
 sections, tables and figures of that search are shown as a list of titles
 and first lines, and the model fetches what it wants to read with the
 reading's own tools: a hit by its id, the next or the previous section, a
 table or figure by its placeholder, a pattern. It answers each open
-coordinate of each row with its quote, or that the plan does not state it.
+coordinate of the value with its quote, or that the plan does not state it.
 
 Nothing is checked here. Every answer goes through `merge_field`, and what it
 refuses is asked once more with the reason. A coordinate this request leaves
@@ -26,13 +27,23 @@ model's window ends `exhausted`; `unstated` is now a finding about the plan.
 
 A pass over a stored harvest combs with the same requests
 (`Comber.comb_groups`): the coordinates it names (*coordinates*) whatever
-their state, one request per group, the value's own passage and its section
+their state, one request per value and group, the value's own passage and
+its section
 shown first (*own*), since the reading that asked them there ran under an
 older question, the years of the stored rows
 (*bases*), and the passages a harvest before read the coordinate in listed
 before the search's hits (*first*).
 
 Author: Felix Vossel
+
+## Exports
+
+What `__all__` names, and where each name is defined:
+
+- `COMB_PROMPT_ID`
+- `OPEN`
+- `SHOWN` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
+- `shown_hits` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
 
 ## Classes
 
@@ -43,7 +54,7 @@ Author: Felix Vossel
 class Combed
 ```
 
-What combing the open coordinates of one passage came to.
+What combing the open coordinates of one value came to.
 
 Fields:
 
@@ -68,7 +79,7 @@ class Comber
 ```
 
 (document_id, reads, passages, pairs, budget) -> [Combed], one per
-passage and parameter whose read values have an open coordinate.
+read value and group of the spec with an open coordinate.
 
 *ask(payload, shape, document_id, source, group)* is one request: the
 reply as a dict, CUT, or None, *group* the name of the group of the spec
@@ -97,9 +108,10 @@ def comb_groups(self, document_id: int, parameter, source, slots: list,
                 first: Optional[list] = None) -> list
 ```
 
-`comb` once per group of the spec that has something to ask: with
-*coordinates* the group's share of them, else a coordinate open on
-one of *claims*. [Combed], one per group asked.
+`comb` once per value of *claims* and group of the spec that has
+something to ask of it: with *coordinates* the group's share of
+them, else a coordinate open on the value. [Combed], one per value
+and group asked.
 
 #### Comber.comb
 
@@ -129,14 +141,6 @@ def open_of(claim: dict, slots: list) -> list
 ```
 
 The coordinates of a value still open after its reading.
-
-### shown_hits
-
-```python
-def shown_hits(ranked: list) -> list
-```
-
-The best of each kind of a ranked search, in its order (`SHOWN`).
 
 ### comb_response_format
 

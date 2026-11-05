@@ -751,11 +751,10 @@ def stamp_schema() -> dict:
         },
         "patternProperties": {
             "^extraction/(harvest|queries|anchors|rows|field|phrase|frame"
-            "|survey|read_cells|read_table|read_values|read_text|comb)$":
+            "|survey|read_values|read_text|comb)$":
                 {**sha, "description": "sha256 of the prompt file; `harvest` "
                                        "is in stamps of an older release; "
-                                       "`survey`, `read_cells`, "
-                                       "`read_table`, `read_values`, "
+                                       "`survey`, `read_values`, "
                                        "`read_text` and `comb` are the "
                                        "prompts of the survey flow"},
             "^question_text/[^/]+$": {
@@ -989,25 +988,27 @@ def trace_schema() -> dict:
         # One request of the survey flow that got a reply, per stage; a
         # `corrections` above zero is a second round. Which of `parameter`,
         # `owner`, `kind`, `rows`, `passages`, `figure` it carries depends on
-        # the stage.
+        # the stage; a values request counts its `round`, a group request
+        # names its `group` and the `value` it asks for.
         **{f"{stage}_ask": {"attempt": {"type": "integer"},
                             "corrections": {"type": "integer"},
                             "parameter": {"type": ["string", "null"]},
                             "owner": {}, "kind": {}, "rows": {},
                             "passages": {}, "figure": {},
                             "group": {"type": ["string", "null"]},
+                            "round": {"type": "integer"},
+                            "value": {"type": "string"},
                             "prompt_tokens": {"type": ["integer", "null"]},
                             "completion_tokens": {"type": ["integer", "null"]},
                             "ms": {"type": "integer"}}
-           for stage in ("survey", "read_cells", "read_table",
-                         "read_values", "read_text", "comb")},
-        # One passage read for one parameter (reading.py). A passage that
-        # came to no readable reply is `unread` with `why` and no values.
+           for stage in ("survey", "read_values", "read_text", "comb")},
+        # One passage read for one parameter (reading.py), its values one per
+        # round. A passage that came to no readable reply is `unread` with
+        # `why` and no values.
         "read": {"parameter": {"type": "string"},
                  "kind": {"enum": ["section", "table", "figure"]},
-                 "owner": {"type": "integer"}, "table": {"type": "boolean"},
-                 "values": {"type": "integer"}, "skipped": {"type": "integer"},
-                 "faulty": {"type": ["string", "null"]},
+                 "owner": {"type": "integer"},
+                 "values": {"type": "integer"},
                  "asked": {"type": "integer"},
                  "corrected": {"type": "integer"}, "failed": by_field,
                  "unanswered": {"type": "integer"},
@@ -1016,9 +1017,8 @@ def trace_schema() -> dict:
                  "missed": {"type": "integer"},
                  "unread": {"type": "boolean"},
                  "why": {"enum": ["cut_off", "no_answer"]}},
-        # The comb of what a reading left open (combing.py): per passage,
-        # parameter and group, the coordinates open and how many the
-        # requests filled.
+        # The comb of what a reading left open (combing.py): per value and
+        # group, the coordinates open and how many the requests filled.
         "comb": {"parameter": {"type": "string"},
                  "group": {"type": ["string", "null"]},
                  "kind": {"enum": ["section", "table", "figure"]},
@@ -1034,20 +1034,16 @@ def trace_schema() -> dict:
     # Of the survey flow's events, the fields only some of them carry.
     optional = {
         "survey_ask": {"corrections", "parameter", "owner", "kind", "rows",
-                       "passages", "figure", "group"},
-        "read_cells_ask": {"corrections", "parameter", "owner", "kind",
-                           "rows", "passages", "figure", "group"},
-        "read_table_ask": {"corrections", "parameter", "owner", "kind",
-                           "rows", "passages", "figure", "group"},
+                       "passages", "figure", "group", "round", "value"},
         "read_values_ask": {"corrections", "parameter", "owner", "kind",
-                            "rows", "passages", "figure", "group"},
+                            "rows", "passages", "figure", "group", "value"},
         "read_text_ask": {"corrections", "parameter", "owner", "kind",
-                          "rows", "passages", "figure", "group"},
+                          "rows", "passages", "figure", "group", "round"},
         "comb_ask": {"corrections", "parameter", "owner", "kind", "rows",
-                     "passages", "figure", "group"},
+                     "passages", "figure", "group", "round", "value"},
         "comb": {"group"},
-        "read": {"skipped", "faulty", "corrected", "failed", "unanswered",
-                 "fetched", "searched", "missed", "unread", "why"},
+        "read": {"corrected", "failed", "unanswered", "fetched", "searched",
+                 "missed", "unread", "why"},
     }
     # Optional on every event: what the run could not always know. Requiring
     # them would refuse a legitimate record from a request that never reached

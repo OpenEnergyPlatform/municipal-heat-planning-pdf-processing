@@ -262,6 +262,15 @@ PHRASES = {
         'mehr als eine davon druckt die Zahl: {values}. Gib nur diese '
         'Einträge noch einmal an, jeden mit genau der einen Zeile, in der '
         'er steht, als "quote".'),
+    # eine Runde der Werte einer Passage, je ein Wert
+    "value_already_read": (
+        'Diesen Wert hast du schon genannt: {value} mit dem Zitat {quote!r}. '
+        'Nenne den nächsten Wert, der noch nicht unter "read" steht, oder '
+        'antworte mit "next": null.'),
+    "head_not_in_table": (
+        'Der Kopf {head!r} steht in keiner Kopfzeile der Tabelle. Schreib '
+        'den Kopf der Spalte des Werts Zeichen für Zeichen, wie er dort '
+        'steht.'),
     "shorter_field": (
         'Fasse Zeilen mit derselben Antwort in "groups" zusammen und '
         'zitiere nur die kurze Stelle, an der die Angabe steht.'),

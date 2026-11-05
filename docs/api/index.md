@@ -95,7 +95,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.\_\_main\_\_](docpipe.extraction.__main__.md): Allow execution via: python -m docpipe.extraction
 - [docpipe.extraction.archive](docpipe.extraction.archive.md): A harvest or stamp file is never overwritten. (3 functions)
 - [docpipe.extraction.benchmark](docpipe.extraction.benchmark.md): One harvest, recorded once and made again without a model. (7 functions)
-- [docpipe.extraction.combing](docpipe.extraction.combing.md): The coordinates the reading left open, looked for in the rest of the plan. (2 classes, 3 functions)
+- [docpipe.extraction.combing](docpipe.extraction.combing.md): The coordinates the reading left open, looked for in the rest of the plan. (2 classes, 2 functions)
 - [docpipe.extraction.compute](docpipe.extraction.compute.md): The numbers a plan does not print and its printed numbers yield. (2 classes, 11 functions)
 - [docpipe.extraction.contract](docpipe.extraction.contract.md): The core's half of the extraction prompts: where its templates are, which languages they come in and the facts the code fills into them. (8 functions)
 - [docpipe.extraction.evaluate](docpipe.extraction.evaluate.md): Holds a harvest against what people decided about it. (1 class, 11 functions)
@@ -112,7 +112,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.preflight](docpipe.extraction.preflight.md): A profile, everything a corpus run rests on. (11 functions)
 - [docpipe.extraction.provenance](docpipe.extraction.provenance.md): Where every value of a graph comes from, as a graph. (1 class, 3 functions)
 - [docpipe.extraction.queries](docpipe.extraction.queries.md): Expands a profile's query templates into retrieval probes drawn from the spec. (1 function)
-- [docpipe.extraction.reading](docpipe.extraction.reading.md): The values of one parameter in the passages the survey named for it: one request names the values, then one request per group of the spec names where that group's coordinates stand. (4 classes, 48 functions)
+- [docpipe.extraction.reading](docpipe.extraction.reading.md): The values of one parameter in the passages the survey named for it, one value per request: rounds name the values of a passage one by one, then each value is asked once per group of the spec for that group's coordinates. (4 classes, 40 functions)
 - [docpipe.extraction.recheck](docpipe.extraction.recheck.md): Reapplies the answer-in-quote rule to a harvest written before the rule existed. (3 functions)
 - [docpipe.extraction.remap](docpipe.extraction.remap.md): Re-resolves a moved or grown vocabulary against a harvest already on disk. (10 functions)
 - [docpipe.extraction.replies](docpipe.extraction.replies.md): The reply each extraction request asks for, as a JSON schema. (6 functions)
@@ -133,7 +133,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.topup_rest](docpipe.extraction.topup_rest.md): Reads the passages of a stored harvest that were never asked for values, and appends what they hold. (1 class, 4 functions)
 - [docpipe.extraction.trace](docpipe.extraction.trace.md): Records what the harvest did as one JSON event per line, so it can be counted after the run. (4 functions)
 - [docpipe.extraction.trust](docpipe.extraction.trust.md): Grades every harvested value by how far the run can stand behind it. (8 functions)
-- [docpipe.extraction.verify](docpipe.extraction.verify.md): Checks a claimed tuple against the spec and the source text before it is written to the harvest. (2 classes, 13 functions)
+- [docpipe.extraction.verify](docpipe.extraction.verify.md): Checks a claimed tuple against the spec and the source text before it is written to the harvest. (2 classes, 12 functions)
 - [docpipe.extraction.wording](docpipe.extraction.wording.md): What the extraction stage says to the model outside its prompts. (2 functions)
 
 ## docpipe.inference

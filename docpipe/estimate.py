@@ -58,8 +58,8 @@ COMMANDS = ("ingest", "preprocess", "refine", "visuals", "chunk", "extract")
 # frame search and no request.
 # The answered requests of either flow: field by field, and from the
 # survey (survey, the four readings, the combing).
-TRACED = ("frame", "rows", "field", "survey_ask", "read_cells_ask",
-          "read_table_ask", "read_values_ask", "read_text_ask", "comb_ask")
+TRACED = ("frame", "rows", "field", "survey_ask", "read_values_ask",
+          "read_text_ask", "comb_ask")
 TRACE_DIR = "trace"
 
 

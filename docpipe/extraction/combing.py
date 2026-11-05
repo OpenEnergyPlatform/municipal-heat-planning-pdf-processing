@@ -5,16 +5,17 @@ the plan. Step 4 of the rebuilt harvest (owner decisions 2026-11-04).
 The reading asks a value's coordinates in its own passage and the text
 around it, and may fetch more of the plan itself. What is still open after it
 (a coordinate the passage does not state, one whose answer did not hold, one
-no reply answered) is looked for here, per passage, parameter and group of
-the spec that still has an open coordinate (owner decision 2026-11-04: every
-request one task), the group's words for where a plan prints it shown: one
-search with the passage's context (owner decision 2026-10-22: its title,
-what its rows have read in the plan's words, what is asked). The best
+no reply answered) is looked for here, per value and group of the spec that
+still has an open coordinate (owner decisions 2026-11-04 and 2026-11-05:
+every request one task and one value), the group's words for where a plan
+prints it shown: one search with the value's context (owner decision
+2026-10-22: its passage's title, what it has read in the plan's words, what
+is asked). The best
 sections, tables and figures of that search are shown as a list of titles
 and first lines, and the model fetches what it wants to read with the
 reading's own tools: a hit by its id, the next or the previous section, a
 table or figure by its placeholder, a pattern. It answers each open
-coordinate of each row with its quote, or that the plan does not state it.
+coordinate of the value with its quote, or that the plan does not state it.
 
 Nothing is checked here. Every answer goes through `merge_field`, and what it
 refuses is asked once more with the reason. A coordinate this request leaves
@@ -23,7 +24,8 @@ model's window ends `exhausted`; `unstated` is now a finding about the plan.
 
 A pass over a stored harvest combs with the same requests
 (`Comber.comb_groups`): the coordinates it names (*coordinates*) whatever
-their state, one request per group, the value's own passage and its section
+their state, one request per value and group, the value's own passage and
+its section
 shown first (*own*), since the reading that asked them there ran under an
 older question, the years of the stored rows
 (*bases*), and the passages a harvest before read the coordinate in listed
@@ -40,9 +42,10 @@ from typing import Callable, Optional
 from . import lookup
 from .fields import EXHAUSTED, READ, SAID_UNSTATED, UNANSWERED, UNBACKED
 from .pipeline import Row, mark_unanswered, merge_field, row_label
-from .reading import (Gathered, answer_of, answer_schema, around_of,
+from .reading import (SHOWN, Gathered, answer_of, answer_schema, around_of,
                       coordinate_shown, first_line, gather, groups_of,
-                      more_schema, slots_of, years_of)
+                      more_schema, shown_hits, slots_of, source_of,
+                      years_of)
 from .wording import say
 
 COMB_PROMPT_ID = "extraction/comb"
@@ -50,26 +53,17 @@ COMB_PROMPT_ID = "extraction/comb"
 # What the reading leaves for this step.
 OPEN = (SAID_UNSTATED, UNBACKED, UNANSWERED)
 
-# The hits of one search the request shows, per kind (owner decision
-# 2026-11-04: the best 15 sections, 20 tables and 20 figures).
-SHOWN = {"section": 15, "table": 20, "figure": 20}
+# The hits of one search the request shows, per kind, are `reading.SHOWN`
+# (owner decision 2026-11-04: the best 15 sections, 20 tables and 20
+# figures), cut by `reading.shown_hits`; both are named here as before.
+__all__ = ["COMB_PROMPT_ID", "OPEN", "SHOWN", "Comber", "Combed",
+           "comb_response_format", "open_of", "shown_hits"]
 
 
 def open_of(claim: dict, slots: list) -> list:
     """The coordinates of a value still open after its reading."""
     return [slot.name for slot in slots
             if claim.get(f"{slot.name}_state") in OPEN]
-
-
-def shown_hits(ranked: list) -> list:
-    """The best of each kind of a ranked search, in its order (`SHOWN`)."""
-    left = dict(SHOWN)
-    out = []
-    for source in ranked:
-        if left.get(source.owner_kind, 0) > 0:
-            left[source.owner_kind] -= 1
-            out.append(source)
-    return out
 
 
 def comb_response_format(slots: list, labels: list) -> dict:
@@ -90,7 +84,7 @@ def comb_response_format(slots: list, labels: list) -> dict:
 
 @dataclass
 class Combed:
-    """What combing the open coordinates of one passage came to."""
+    """What combing the open coordinates of one value came to."""
     parameter: str
     owner: tuple
     rows: int
@@ -108,7 +102,7 @@ class Combed:
 
 class Comber:
     """(document_id, reads, passages, pairs, budget) -> [Combed], one per
-    passage and parameter whose read values have an open coordinate.
+    read value and group of the spec with an open coordinate.
 
     *ask(payload, shape, document_id, source, group)* is one request: the
     reply as a dict, CUT, or None, *group* the name of the group of the spec
@@ -133,30 +127,29 @@ class Comber:
 
     def __call__(self, document_id: int, reads: list, passages: dict,
                  pairs: list, budget: Optional[int] = None) -> list:
-        """One Combed per passage, parameter and group of the spec with a
-        coordinate still open on one of its values (owner decision
-        2026-11-04)."""
-        jobs: dict = collections.OrderedDict()
+        """One Combed per read value and group of the spec with a
+        coordinate still open on it (owner decisions 2026-11-04 and
+        2026-11-05: one value per request)."""
+        jobs: list = []
         for read in reads:
-            source = read.batch.items[0].source
             parameter = read.batch.parameter
             slots = slots_of(self.spec, parameter)
-            for group, group_slots in groups_of(self.spec, slots):
-                for claim in read.claims:
+            for claim in read.claims:
+                # The passage the value is read from, which may be one its
+                # round fetched (`reading.source_of`).
+                source = source_of(read.batch, claim)
+                for group, group_slots in groups_of(self.spec, slots):
                     if open_of(claim, group_slots):
-                        key = (parameter.uri, source.owner_kind,
-                               source.owner_id, group.name)
-                        jobs.setdefault(key, (parameter, source, group,
-                                              group_slots, []))[4].append(
-                                                  claim)
+                        jobs.append((parameter, source, group, group_slots,
+                                     claim))
 
         def one(job):
-            parameter, source, group, group_slots, claims = job
+            parameter, source, group, group_slots, claim = job
             return self.comb(document_id, parameter, source, group_slots,
-                             claims, passages, pairs, budget, group=group)
+                             [claim], passages, pairs, budget, group=group)
         if self.pool is None:
-            return [one(job) for job in jobs.values()]
-        return list(self.pool.map(one, jobs.values()))
+            return [one(job) for job in jobs]
+        return list(self.pool.map(one, jobs))
 
     def comb_groups(self, document_id: int, parameter, source, slots: list,
                     claims: list, passages: dict, pairs: list,
@@ -164,25 +157,26 @@ class Comber:
                     coordinates: Optional[list] = None, own: bool = False,
                     bases: Optional[tuple] = None,
                     first: Optional[list] = None) -> list:
-        """`comb` once per group of the spec that has something to ask: with
-        *coordinates* the group's share of them, else a coordinate open on
-        one of *claims*. [Combed], one per group asked."""
+        """`comb` once per value of *claims* and group of the spec that has
+        something to ask of it: with *coordinates* the group's share of
+        them, else a coordinate open on the value. [Combed], one per value
+        and group asked."""
         out = []
-        for group, group_slots in groups_of(self.spec, slots):
-            names = {slot.name for slot in group_slots}
-            if coordinates is not None:
-                asked = [name for name in coordinates if name in names]
-                mine = list(claims) if asked else []
-            else:
-                asked = None
-                mine = [claim for claim in claims
-                        if open_of(claim, group_slots)]
-            if not mine:
-                continue
-            out.append(self.comb(document_id, parameter, source, group_slots,
-                                 mine, passages, pairs, budget,
-                                 coordinates=asked, own=own, bases=bases,
-                                 first=first, group=group))
+        for claim in claims:
+            for group, group_slots in groups_of(self.spec, slots):
+                names = {slot.name for slot in group_slots}
+                if coordinates is not None:
+                    asked = [name for name in coordinates if name in names]
+                    if not asked:
+                        continue
+                else:
+                    asked = None
+                    if not open_of(claim, group_slots):
+                        continue
+                out.append(self.comb(document_id, parameter, source,
+                                     group_slots, [claim], passages, pairs,
+                                     budget, coordinates=asked, own=own,
+                                     bases=bases, first=first, group=group))
         return out
 
     def comb(self, document_id: int, parameter, source, slots: list,

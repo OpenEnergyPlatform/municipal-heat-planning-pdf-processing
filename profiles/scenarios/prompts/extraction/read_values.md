@@ -2,26 +2,31 @@
 temperature: 0
 max_tokens: 8192
 ---
-You read ONE passage of a scientific publication on climate and energy scenarios and name every value of ONE field of its metadata that stands in it. What belongs to each value, such as the scenario it refers to, later requests ask.
+You read ONE passage of a scientific publication on climate and energy scenarios and name the next value of ONE field of its metadata that you have not named yet. What belongs to the value, such as the scenario it refers to, later requests ask.
 
 You get:
-- "source": the passage, the "text" of a section or a table or the description of a figure (a figure comes with its image), and the section it stands in.
+- "source": the passage, the "text" of a section, of a whole table with its title, head and all its rows, or the description of a figure (a figure comes with its image), and the section it stands in.
 - "around", only for a table or a figure: the text of its section around it. The table or figure stands in it as a placeholder in square brackets.
 - "parameter": the field with its definition; a field with a list carries it as "value_classes", each entry with its meaning and the other spellings the list knows.
-- "corrections", only in a second request: the values of your first answer the check refused, each with "row", "value", "quote" and the reason ("what").
+- "read": the values you have named already, each with "value", "quote" and, for a number in a table, "head".
+- "more", "hits" and "not_found", only after you asked for more (see below). "hits" may stand in the first request already: the passages a search of the whole publication for this field found right after this one.
+- "corrections", only in a second request: the value of your first answer the check refused, with the reason ("what").
 
-For each value one entry in "values":
+Under "next" you name ONE value of the field that is not under "read", in the order in which the publication prints its values. It may stand in "text", in "around" or in a passage under "more". If no further value of the field stands there, "next" is null.
 - "value": the value as the publication prints it, character for character: the whole title, one author's name (a person, or the institution where the publication names no person), the year with its four digits, the DOI without "doi:" and without the URL before it, the abstract word for word and complete. The value is always what the field asks for by its definition and never what a coordinate asks: the description of a scenario is what the publication says the scenario assumes or depicts, not the scenario's name. Complete, spell out and translate nothing: "JRC" stays "JRC", "Keramidas K." stays "Keramidas K.". For a field with "value_classes", "value" is exactly one key of that list, the entry whose meaning the passage states, or "" if you are unsure which entry it is; the publication's own words then go into "value_raw".
-- "value_raw": for a field with "value_classes", the words of the publication you took the entry from, character for character as they stand in the quote; for any other field only where the passage writes the value differently from "value".
-- "quote": ONE contiguous place from "text", copied character for character, that contains the value: its clause, its line or its table row. For a title, a name or an abstract the quote may be exactly as long as the value; that is right and not a mistake.
+- "value_raw": for a field with "value_classes", the words of the publication you took the entry from, character for character as they stand in the quote; for any other field only where the publication writes the value differently from "value".
+- "quote": ONE contiguous place, copied character for character, that contains the value: its clause, its line or, in a table, exactly its one row. For a title, a name or an abstract the quote may be exactly as long as the value; that is right and not a mistake.
+- "head", only for a number in a table: the head of its column, character for character as it stands in the head line.
 
 Where "value_classes" are scenarios, they are run identifiers of the AR6 database, such as "EN_INDCi2030_300f". They almost never stand in the text; there the same scenario is called "Current Policies", "the NDC scenario" or "our 1.5-degree pathway". Matching the text's name with the identifier is your task: clues are the level of ambition, the target year, the climate target, the budget and the order in which the publication introduces its scenarios. Identifiers that differ in one part only, such as EN_NPi2020_400 and EN_NPi2020_1000, are different runs. Pick an identifier only where the text's name, with what the passage says about it, fits exactly one run of the list. A name that fits several runs and none of them exactly names a family, and the answer is "scenario family", whatever the runs share: their beginning ("NPi", "the NDC scenarios"), their climate target ("the 1.5 °C scenarios", where several runs carry that target) or their variant alone ("the reference case", where the list holds it with several targets). A scenario the list does not hold at all is "not in AR6".
 
-One entry per value. An author list with six names gives six entries, each with its own short quote: the name as it stands there, with the characters attached to it, so "Keywan Riahi1,2*" and not the whole line of names. The same holds for institutes, funders, projects, keywords, sectors and technologies. A publication has exactly one title, one year of publication and at most one DOI: if the passage states more than one, take the one of THIS publication.
+A list holds one value per entry, named one per request. An author list with six names gives six values, each with its own short quote: the name as it stands there, with the characters attached to it, so "Keywan Riahi1,2*" and not the whole line of names. The same holds for institutes, funders, projects, keywords, sectors and technologies. A publication has exactly one title, one year of publication and at most one DOI: if the passage states more than one, take the one of THIS publication.
 
-A reference list, a footnote and a citation in running text ("as shown by Riahi et al. (2017)") name OTHER works: no value is taken from them. What only the image of a figure shows is no quote: quotes come from "text". Name every value once.
+A reference list, a footnote and a citation in running text ("as shown by Riahi et al. (2017)") name OTHER works: no value is taken from them. What only the image of a figure shows is no quote: quotes come from "text". A value under "read" is named: do not name it again.
 
-In a second request you answer only for the values in "corrections": one entry each with its "row", the points named fixed.
+If you need something to recognise the values that stands neither in the passage nor in "around", such as the front page a title belongs to, you may ask for more under "more": {"get": "next"} or {"get": "previous"} (the next or the previous section), {"get": "item", "id": "<<placeholder>>"} (the table or figure whose placeholder stands in square brackets in the text), {"get": "search", "pattern": "<<regular expression>>"} (a hit list of the passages whose text contains the pattern, regardless of case, each with "id", title and matching line) or {"get": "hit", "id": "<<id of a hit>>"} (the passage of this hit). You then get the same question once more, with what you asked for under "more" and "hits" and under "not_found" what could not be found, with its reason. Give your whole answer when you ask for more as well; without a new request in "more" it stands.
+
+In a second request you name the value from "corrections" once more, the point named fixed. If it is no value of the field, you name the next value that is not under "read" instead, or null if none is left.
 
 Answer with exactly one JSON object, on one line, with no text before or after it. The quotes below are descriptions in << >> and stand in no publication:
-{"values": [{"value": "<<one entry of value_classes>>", "value_raw": "<<the publication's words for it>>", "quote": "<<the clause that names it>>"}]}
+{"next": {"value": "<<one entry of value_classes>>", "value_raw": "<<the publication's words for it>>", "quote": "<<the clause that names it>>"}}

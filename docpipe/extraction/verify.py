@@ -155,30 +155,6 @@ def numbers_in(text: str) -> set:
     return found
 
 
-# A number with the sign printed in front of it, as `_SIGNED` takes a sign.
-_SIGN = rf"(?:(?<![\w.,])([{''.join(_MINUS)}])\s?)?"
-_IN_ORDER = re.compile(rf"{_SIGN}({_NUMBER.pattern})")
-_IN_ORDER_GROUPED = re.compile(
-    rf"{_SIGN}({_SPACE_GROUPED.pattern}|{_NUMBER.pattern})")
-
-
-def numbers_in_order(text: str, grouped: bool = False) -> list:
-    """The numbers *text* prints, in the order it prints them, each in its
-    one spelling (`canonical_number`) with its printed sign. *grouped* reads
-    digits grouped by a space as one number ("1 234"), else each group as a
-    number of its own ("967 168%" is 967 and 168): which of the two a text
-    means, its digits cannot tell."""
-    out = []
-    for m in (_IN_ORDER_GROUPED if grouped else _IN_ORDER).finditer(
-            text or ""):
-        number = canonical_number(m.group(2))
-        if number is None:
-            continue
-        out.append("-" + number if m.group(1) and not number.startswith("-")
-                   else number)
-    return out
-
-
 # A table transcription breaks a long cell label with <br>: "holzige<br>
 # Festbrennstoffe". It is a line break like the whitespace collapsed here,
 # and read as text it kept "holzige Festbrennstoffe" out of its own quote:

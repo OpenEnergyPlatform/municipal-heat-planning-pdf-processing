@@ -61,7 +61,7 @@ table gives this profile's own answer.
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 6 prompt ids of its own | page transcription, English artefact repair, table and figure captioning; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object (`reading.REQUIRED`), in English, the language of the prompts of the first three; the extraction prompts are German and `extraction.PHRASES` is another table, the harvest's own |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and names (a name opens each line of the values index) and three filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `FRONT_PAGE_PARAMETERS`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 15 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
+| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `FRONT_PAGE_PARAMETERS`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 13 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
 | The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 11 prompt ids of its own | the English chat wording and the answer loop's own prompts; the twelfth, `json_format`, is the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copy gave |
 
@@ -70,8 +70,8 @@ see [extraction](../stages/extraction.md)): the spec names one group,
 `scenario`, read with the value, and English prompts serve it.
 `extraction/survey` names per passage the fields the publication states
 about itself, its study or its own scenarios. `extraction/read_values`
-names each value with its `value`, `value_raw` and quote, and
-`extraction/read_text` answers for every value, by its label, the scenario
+names the values one per request, with `value`, `value_raw` and quote, and
+`extraction/read_text` answers for each value the scenario
 it refers to, matched to a run identifier of the document's own list. A
 value is what its field asks for and never the answer of a coordinate, so
 a scenario's description is what the publication says the scenario assumes,
@@ -79,11 +79,9 @@ not the scenario's name (owner decision 2026-11-04), and an author value is
 one author's name: a person, or the institution where the publication names
 no person. `extraction/comb` looks for a scenario still open in the rest of
 the publication. No field of this profile holds numbers, so a table is read
-by `read_values` and `read_text` too, and a field with a list is shown it
-and answers one entry, or `""` with its wording in `value_raw`.
-`extraction/read_cells` and `extraction/read_table` exist because the flow
-needs all six prompts (`runner.SURVEY_PROMPT_IDS`), and no request of this
-profile sends them.
+by `read_values` and `read_text` too, as a table is in every profile, and a
+field with a list is shown it and answers one entry, or `""` with its wording
+in `value_raw`.
 
 Field by field, `extraction/places` asks once per publication which passages
 answer which fact and question, with a quote and no value; the search then
@@ -108,7 +106,7 @@ harvest (a heading with no body, or the heading of a section the model
 removed; see [refinement](../stages/refinement.md)), and one because the
 model left it out of a crowded request.
 
-Five of the 15 extraction prompts, `rows`, `field`, `frame`, `review` and
+Five of the 13 extraction prompts, `rows`, `field`, `frame`, `review` and
 `example`, are parts files (see [profiles](../profiles.md), The extraction
 prompts): each names its template of the core in its front matter, and
 `CONTRACT_LANGUAGE = "en"` in `profiles/scenarios/extraction.py` says that the

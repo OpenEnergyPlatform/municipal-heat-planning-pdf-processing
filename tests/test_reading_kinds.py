@@ -1,13 +1,12 @@
-"""Numbers are read by their cell, everything else is named with a quote: a
-table is read cell by cell for a parameter whose values are numbers, AND for
-any other parameter the values request names its values, quoted from the
-table and asked again with the reason where the table does not hold the
-quote. A category
-parameter's request shows its entries, without the answer that the passage
-does not say it, AND its grammar takes for a value exactly one entry, or ""
-where the model is unsure and writes the wording into value_raw, never a
-spelling of an entry, another word or that answer; a text parameter is shown
-no list and takes any wording.
+"""Every parameter is read like text, a table too: its rounds name each value
+with a quote, a name in a table as a number in a section, AND only a number
+in a table writes the head of its column; a value quoted where no passage
+shown prints it is asked again with the reason. A category parameter's
+request shows its entries, without the answer that the passage does not say
+it, AND its grammar takes for a value exactly one entry, or "" where the
+model is unsure and writes the wording into value_raw, never a spelling of
+an entry, another word or that answer; a text parameter is shown no list and
+takes any wording.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -18,7 +17,7 @@ import jsonschema
 import pytest
 
 from docpipe.extraction import fields, reading
-from docpipe.extraction.pipeline import Source, row_label
+from docpipe.extraction.pipeline import Source
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.wording import say
 
@@ -54,41 +53,40 @@ ELSEWHERE = dict(NAMED, quote="Die Klimaschutzagentur Nord hat erstellt")
 
 
 def asked_for(parameter, *replies):
-    """Which request read *parameter* in TABLE, each values request with the
-    corrections it carried, and what the reading came to: the n-th values
-    request answered by the n-th of *replies*."""
+    """Each values request reading *parameter* in TABLE, as (whether its
+    grammar asks a head, the corrections it carried), and what the reading
+    came to: the n-th request answered by the n-th of *replies*, the last
+    one again after that."""
     asked = []
 
-    def ask_cells(view, part, parameter, context):
-        asked.append(("cells", None))
-        return {"values": []}
+    def ask_values(source, parameter, context, read, corrections=None):
+        asked.append((reading.with_head_asked(parameter, source),
+                      corrections))
+        return replies[min(len(asked), len(replies)) - 1]
 
-    def ask_values(shown, parameter, context, corrections):
-        asked.append(("values", corrections))
-        n = sum(1 for task, _ in asked if task == "values")
-        return replies[min(n, len(replies)) - 1]
-
-    read = reading.Reader(KWP, ask_cells, lambda *a: {"coordinates": {}},
-                          ask_values, lambda *a: {"values": []}, FRAME).read(
+    read = reading.Reader(KWP, ask_values, lambda *a, **k: {}, FRAME).read(
         7, parameter, TABLE, [], [], {("table", 5): TABLE})
     return asked, read
 
 
-def test_a_table_is_read_by_its_cells_for_numbers_and_by_name_otherwise():
-    assert [kind for kind, _ in asked_for(EMISSION)[0]] == ["cells"]
-    assert [kind for kind, _ in asked_for(PLANNER, {"values": []})[0]] \
-        == ["values"]
+def test_a_table_is_read_by_name_and_only_a_number_writes_its_head():
+    asked, read = asked_for(EMISSION, {"next": {
+        "value": 27, "quote": "| Heizöl | 27 |", "head": "t CO2"}},
+        {"next": None})
+    assert [head for head, _ in asked] == [True, True]
+    assert [c["value"] for c in read.claims] == [27]
+    asked, read = asked_for(PLANNER, {"next": NAMED}, {"next": None})
+    assert [head for head, _ in asked] == [False, False]
+    assert [c["value"] for c in read.claims] == [NAMED["value"]]
 
 
 def test_a_wording_in_a_table_is_quoted_from_the_table_or_asked_again():
-    asked, read = asked_for(PLANNER, {"values": [NAMED]})
-    assert len(asked) == 1
+    asked, read = asked_for(PLANNER, {"next": NAMED}, {"next": None})
+    assert [corrections for _, corrections in asked] == [None, None]
     assert [claim["quote"] for claim in read.claims] == [NAMED["quote"]]
-    asked, read = asked_for(PLANNER, {"values": [ELSEWHERE]},
-                            {"values": [dict(NAMED, row=row_label(0))]})
-    assert asked[1][1] == [{"row": row_label(0), "value": NAMED["value"],
-                            "quote": ELSEWHERE["quote"],
-                            "what": say("quote_not_in_source")}]
+    asked, read = asked_for(PLANNER, {"next": ELSEWHERE}, {"next": NAMED},
+                            {"next": None})
+    assert asked[1][1] == [dict(ELSEWHERE, what=say("quote_not_in_source"))]
     assert [claim["quote"] for claim in read.claims] == [NAMED["quote"]]
 
 
@@ -97,10 +95,10 @@ PASSAGE = Source("section", 2, "Emissions follow the common reporting format.",
 
 
 def test_a_category_request_shows_its_entries_and_a_text_request_no_list():
-    shown = reading.values_payload(PASSAGE, DIVISION, {})["parameter"]
+    shown = reading.values_payload(PASSAGE, DIVISION, {}, [])["parameter"]
     assert set(shown["value_classes"]) == ENTRIES
     assert "value_classes" not in reading.values_payload(
-        PASSAGE, TITLE, {})["parameter"]
+        PASSAGE, TITLE, {}, [])["parameter"]
 
 
 def grammar(parameter):
@@ -109,7 +107,7 @@ def grammar(parameter):
 
 
 def one(value, **given):
-    return {"values": [{"value": value, "quote": PASSAGE.text, **given}]}
+    return {"next": {"value": value, "quote": PASSAGE.text, **given}}
 
 
 def test_a_category_value_is_one_entry_or_left_open_and_nothing_else():

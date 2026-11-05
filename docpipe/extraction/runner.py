@@ -1958,15 +1958,12 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
 def make_reader(spec: Spec, image_root: Optional[Path] = None):
     """The reading of one parameter's passages (`reading.Reader`), or None
     when the profile writes no prompts for it or its spec names no groups.
-    Four requests, each with one task (owner decision 2026-11-04): the
-    cells of a table, one group's coordinates in it, the values of a
-    passage, one group's coordinates of them. A figure goes with its
-    crop."""
+    Two requests, each with one task and one value (owner decisions
+    2026-11-04 and 2026-11-05): the next value of a passage, and one
+    group's coordinates of one value. A figure goes with its crop."""
     if not spec.groups:
         return None
     try:
-        cells_prompt = prompts.load(reading_map.READ_CELLS_PROMPT_ID)
-        table_prompt = prompts.load(reading_map.READ_TABLE_PROMPT_ID)
         values_prompt = prompts.load(reading_map.READ_VALUES_PROMPT_ID)
         text_prompt = prompts.load(reading_map.READ_TEXT_PROMPT_ID)
     except (FileNotFoundError, LookupError):
@@ -1991,54 +1988,32 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
                 return [{"type": "text", "text": text}, part]
         return text
 
-    def ask_cells(source, grid, parameter, context):
-        text = json.dumps(reading_map.cells_payload(
-            source, grid, parameter, context), ensure_ascii=False, indent=2)
-        return ask_in_grammar(
-            client, cells_prompt, [{"role": "user", "content": text}],
-            reading_map.cells_response_format(), document_of(source),
-            "read_cells", "values", parameter=parameter.uri,
-            owner=source.owner_id, rows=len(grid.body))
-
-    def ask_table(source, grid, parameter, group, slots, cells, context,
-                  corrections=None):
-        text = json.dumps(reading_map.table_payload(
-            source, grid, parameter, slots, cells, group.where, context,
-            corrections), ensure_ascii=False, indent=2)
-        return ask_in_grammar(
-            client, table_prompt, [{"role": "user", "content": text}],
-            reading_map.table_response_format(slots), document_of(source),
-            "read_table", "coordinates", parameter=parameter.uri,
-            owner=source.owner_id, group=group.name, rows=len(grid.body),
-            corrections=len(corrections or ()))
-
-    def ask_values(source, parameter, context, corrections=None):
+    def ask_values(source, parameter, context, read, corrections=None):
         text = json.dumps(reading_map.values_payload(
-            source, parameter, context, corrections),
+            source, parameter, context, read, corrections),
             ensure_ascii=False, indent=2)
         return ask_in_grammar(
             client, values_prompt,
             [{"role": "user", "content": content_of(source, text)}],
             reading_map.values_response_format(
-                parameter, [c["row"] for c in corrections or ()] or None),
-            document_of(source), "read_values", "values",
+                parameter, reading_map.with_head_asked(parameter, source)),
+            document_of(source), "read_values", "next",
             parameter=parameter.uri, kind=source.owner_kind,
-            owner=source.owner_id, corrections=len(corrections or ()))
+            owner=source.owner_id, round=len(read) + 1,
+            corrections=len(corrections or ()))
 
-    def ask_text(source, parameter, group, slots, rows, context,
+    def ask_text(source, parameter, group, slots, row, context,
                  corrections=None):
         text = json.dumps(reading_map.text_payload(
-            source, parameter, slots, rows, group.where, context,
+            source, parameter, slots, row, group.where, context,
             corrections), ensure_ascii=False, indent=2)
         return ask_in_grammar(
             client, text_prompt,
             [{"role": "user", "content": content_of(source, text)}],
-            reading_map.text_response_format(slots,
-                                             [row.label for row in rows]),
-            document_of(source), "read_text", "values",
-            parameter=parameter.uri, kind=source.owner_kind,
-            owner=source.owner_id, group=group.name,
-            corrections=len(corrections or ()))
+            reading_map.text_response_format(slots), document_of(source),
+            "read_text", slots[0].name, parameter=parameter.uri,
+            kind=source.owner_kind, owner=source.owner_id, group=group.name,
+            value=row.label, corrections=len(corrections or ()))
 
     def shown_with(source) -> list:
         provenance = source.provenance or {}
@@ -2051,10 +2026,9 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
                        {**provenance, "owner_kind": "section"})]
 
     return reading_map.Reader(
-        spec, ask_cells, ask_table, ask_values, ask_text, frame_slots,
-        shown_with=shown_with,
+        spec, ask_values, ask_text, frame_slots, shown_with=shown_with,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
-        pool=AHEAD, trace=trace.event)
+        known=row_context, pool=AHEAD, trace=trace.event)
 
 
 def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):

@@ -92,6 +92,7 @@ def joined(found: Found, also: Found) -> Found:
     for owner in found.unanswered + also.unanswered:
         if owner not in out.answers and owner not in out.unanswered:
             out.unanswered.append(owner)
+    out.hits = {**found.hits, **also.hits}
     return out
 
 
@@ -126,8 +127,10 @@ def sought_survey(found: Found, rank: Callable, document_id: int,
     itself, one written per run for any other, `runner.make_seek_probes`),
     and for its label where it has none. What the survey said of every
     passage stands beside it without its parameters, so the reading sees the
-    plan's pairs and years as it does anywhere else. A parameter the search
-    finds no passage for is left out."""
+    plan's pairs and years as it does anywhere else, and the search's ranked
+    list beside the passage it named (`Found.hits`), so its reading can go
+    on to the next hits. A parameter the search finds no passage for is left
+    out."""
     out = Found(True)
     merge(out, [Answer(owner, [], answer.quote,
                        {k: list(v) for k, v in answer.tuples.items()}, [])
@@ -137,8 +140,9 @@ def sought_survey(found: Found, rank: Callable, document_id: int,
                      or [parameter.label])
         ranked = rank(document_id, sentences, set())
         if ranked:
-            merge(out, [Answer((ranked[0].owner_kind, ranked[0].owner_id),
-                               [parameter.uri])])
+            owner = (ranked[0].owner_kind, ranked[0].owner_id)
+            merge(out, [Answer(owner, [parameter.uri])])
+            out.hits[(parameter.uri,) + owner] = list(ranked)
     return out
 
 

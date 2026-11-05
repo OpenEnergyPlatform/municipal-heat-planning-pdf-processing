@@ -1,7 +1,7 @@
 """A reply that parses but lacks a key its schema requires at the top is not
 the object that was asked for: it is asked again as missing_key, the retry
 naming the key, in every request of the stage that goes out with a schema
-(the four reading requests, the places and the field requests). A
+(the two reading requests, the places and the field requests). A
 reply that has every key the top requires is taken as it is, whatever it
 leaves out below. Each promise has a case that breaks it by construction
 beside the one that keeps it."""
@@ -54,15 +54,10 @@ def told(conversation) -> str:
     return conversation[-1]["content"]
 
 
-TABLE = reading.table_response_format(SLOTS)
-CELLS = reading.cells_response_format()
-LABELS = ["R1"]
-REQUESTS = ((CELLS, "read_cells", "values", {"values": []}),
-            (TABLE, "read_table", "coordinates", {"coordinates": {}}),
-            (reading.values_response_format(EMISSION), "read_values",
-             "values", {"values": []}),
-            (reading.text_response_format(SLOTS, LABELS), "read_text",
-             "values", {"values": []}))
+REQUESTS = ((reading.values_response_format(EMISSION, True), "read_values",
+             "next", {"next": None}),
+            (reading.text_response_format(SLOTS), "read_text", SLOTS[0].name,
+             {slot.name: {"value": "out:unstated"} for slot in SLOTS}))
 
 
 def test_a_reply_without_its_keys_is_asked_again_naming_the_key(faults):
@@ -76,8 +71,8 @@ def test_a_reply_without_its_keys_is_asked_again_naming_the_key(faults):
 
 
 def test_a_reply_with_every_key_the_top_requires_is_taken_as_it_is(faults):
-    # Its coordinates name none of the slots the schema requires below the
-    # top: the reading asks for those by name, the request does not.
+    # Below the top it may leave out what the schema asks there: the
+    # reading asks for that by name, the request does not.
     for shape, where, key, whole in REQUESTS:
         client, sent = replying(json.dumps(whole))
         assert runner.ask_in_grammar(client, PROMPT, [], shape, 7, where,
