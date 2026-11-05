@@ -10,6 +10,8 @@ import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from docpipe.extraction import runner
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.surveyed import sought_survey
@@ -94,3 +96,51 @@ def test_a_publication_says_its_title_from_the_index():
     assert scenarios_extraction.document_context(conn, 6) == {}
     assert scenarios_extraction.document_context(
         sqlite3.connect(":memory:"), 4) == {}
+
+
+# Promise: the run's database is opened by its path, read-only, for what a
+# document says of itself, AND without a database or without the profile's
+# function the context is {}.
+def test_the_document_context_is_read_from_the_run_database_file(tmp_path):
+    db = tmp_path / "run.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE DocumentMeta (document INTEGER, title TEXT)")
+    conn.execute("INSERT INTO DocumentMeta VALUES (4, 'Net zero by 2050')")
+    conn.commit()
+    conn.close()
+    context_of = runner.document_context_of(
+        db, scenarios_extraction.document_context)
+    assert context_of(4) == {"name": "Net zero by 2050"}
+    assert context_of(6) == {}
+
+    def writes(conn, document_id):
+        conn.execute("CREATE TABLE written (x)")
+    with pytest.raises(sqlite3.OperationalError):
+        runner.document_context_of(db, writes)(4)
+    # the failure by construction: no database, no function of the profile
+    assert runner.document_context_of(
+        None, scenarios_extraction.document_context)(4) == {}
+    assert runner.document_context_of(db, None)(4) == {}
+
+
+# Promise: the request that writes a search sentence goes into the trace of
+# the document that asked for it, as `phrase_ask` with its tokens, AND a
+# sentence kept for the run is asked once.
+def test_a_search_sentence_request_is_traced_for_its_document(monkeypatch):
+    events = []
+    monkeypatch.setattr(
+        runner.trace, "event",
+        lambda kind, document=None, /, **fields: events.append(
+            (kind, document, fields.get("prompt_tokens"))))
+    said = "Emissions are reported by CRF sector."
+    reply = SimpleNamespace(
+        choices=[SimpleNamespace(finish_reason="stop", message=SimpleNamespace(
+            content=json.dumps({"phrase": said})))],
+        usage=SimpleNamespace(prompt_tokens=11, completion_tokens=3))
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+        create=lambda **kwargs: reply)))
+    monkeypatch.setattr(runner, "_client", lambda: client)
+    probes = runner.make_seek_probes()
+    assert probes(DIVISION, 4) == probes(DIVISION, 28) == [said]
+    assert [e for e in events if e[0].endswith("_ask")] == [
+        ("phrase_ask", 4, 11)]

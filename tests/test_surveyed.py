@@ -553,3 +553,31 @@ def test_two_surveys_joined_keep_the_lists_of_both():
     also.hits = {("heat_load", "table", 9): [NEXT]}
     assert surveyed.joined(found, also).hits == {**found.hits, **also.hits}
     assert surveyed.joined(found, survey.Found(True)).hits == found.hits
+
+
+# Promise: a row read for the one field its request asked carries the state of
+# its parameter coordinate, derived, since nobody asked it per row, AND such a
+# row matches the published harvest schema (owner decision 2026-11-05).
+AR6 = load_spec(json.loads((Path(__file__).resolve().parent.parent
+                            / "profiles" / "scenarios" / "extraction_spec.json")
+                           .read_text(encoding="utf-8")))
+
+
+def test_a_row_read_for_one_field_has_its_parameter_derived():
+    title = AR6.by_uri["publication_title"]
+    front = passage("section", 1, "Net zero by 2050\nAda Lovelace",
+                    "Net zero by 2050")
+    read = reading.Read(Batch(7, title, [WorkItem(7, title, front)]),
+                        [{"source": "Q1", "value": "Net zero by 2050",
+                          "quote": "Net zero by 2050"}])
+    taken = surveyed.taken_of(7, AR6,
+                              found_of(answer(front, "publication_title")),
+                              [read], [], {("section", 1): front})
+    report = DocumentReport(document_id=7, owners_harvested=taken.passages,
+                            sources_of=taken.sources_of)
+    runner.fold_answers(taken.answered, report, locate=None, spec=AR6)
+    assert [r.get("parameter_state") for r in report.tuples] == [fields.DERIVED]
+    assert runner.check_against_schema(report, "doc", AR6) == 0
+    # the failure by construction: the same row without the state
+    report.tuples[0].pop("parameter_state")
+    assert runner.check_against_schema(report, "doc", AR6) == 1

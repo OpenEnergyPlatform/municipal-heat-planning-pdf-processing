@@ -1414,21 +1414,22 @@ def make_seek_probes(own=(), context_of: Optional[Callable] = None,
     lock = threading.Lock()
     made: dict = {}
 
-    def phrase(parameter, context):
+    def phrase(parameter, context, document_id):
         if write is not None:
             return list(write(parameter, context) or [])
         return document_anchor(SimpleNamespace(parameters=[parameter]),
-                               context).get(parameter.uri, [])
+                               context, document_id=document_id
+                               ).get(parameter.uri, [])
 
     def probes(parameter, document_id) -> list:
         if parameter.uri in own:
             context = dict(context_of(document_id) if context_of else {})
-            sentences = phrase(parameter, context)
+            sentences = phrase(parameter, context, document_id)
             per = "document"
         else:
             with lock:
                 if parameter.uri not in made:
-                    made[parameter.uri] = phrase(parameter, None)
+                    made[parameter.uri] = phrase(parameter, None, document_id)
                 sentences = made[parameter.uri]
             per = "run"
         for text in sentences:
@@ -1479,6 +1480,7 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
         limit = int(prompt.meta.get("max_tokens", 300))
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
+            started = time.time()
             try:
                 response = client.chat.completions.create(
                     model=LLM_MODEL,
@@ -1492,6 +1494,8 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                                           replies.phrase()),
                 )
                 token_usage.reply(response, LLM_MODEL)
+                _asked("phrase", document_id, response, attempt=attempt,
+                       started=started, parameter=parameter.uri)
                 reply = response.choices[0]
                 phrase = ((_loads_object(reply.message.content) or {})
                           .get("phrase") or "")
@@ -2188,6 +2192,8 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                 )
                 transport = lost = False
                 _observe_usage(getattr(completion, "usage", None))
+                _asked("frame", document_id, completion, attempt=attempt,
+                       started=started)
                 if usage_out is not None:
                     usage = getattr(completion, "usage", None)
                     usage_out["prompt_tokens"] = getattr(
@@ -3372,6 +3378,21 @@ def _observe_usage(usage) -> None:
             _USAGE["completion_max"] = max(_USAGE["completion_max"], completion)
 
 
+def _asked(stage: str, document_id, response, *, attempt: int,
+           started: float, **noted) -> None:
+    """One request that got a reply, in its document's trace as
+    `<stage>_ask` with its attempt, time and tokens. Every request kind
+    writes one, and the run's stats count each kind by its stage
+    (`stats.from_traces`), so no kind of request goes uncounted (owner
+    decision 2026-11-05)."""
+    usage = getattr(response, "usage", None)
+    trace.event(f"{stage}_ask", document_id, attempt=attempt,
+                ms=int((time.time() - started) * 1000),
+                prompt_tokens=getattr(usage, "prompt_tokens", None),
+                completion_tokens=getattr(usage, "completion_tokens", None),
+                **noted)
+
+
 def log_usage(budget: Optional[int] = None) -> None:
     """One line at the end of a run: what the window was really asked for."""
     with _USAGE_LOCK:
@@ -4242,6 +4263,7 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                             "in a window of %d -- not sent", limit,
                             MAX_MODEL_LEN)
                 break
+            started = time.time()
             try:
                 response = client.chat.completions.create(
                     model=LLM_MODEL,
@@ -4256,6 +4278,9 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                 transport = False
                 reply = response.choices[0]
                 _observe_usage(getattr(response, "usage", None))
+                _asked("review", (row.get("provenance") or {}).get(
+                    "document_id"), response, attempt=attempt,
+                    started=started, parameter=getattr(parameter, "uri", None))
                 answer = _loads_object(reply.message.content)
                 if isinstance(answer, dict):
                     return answer
@@ -6100,6 +6125,7 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
                 more=reading_map.more_schema() if order else None,
                 take=question.taking if question.take else None,
                 quote=question.cites)
+            started = time.time()
             try:
                 with _for(document_id):
                     response = client.chat.completions.create(
@@ -6120,6 +6146,8 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
                 continue
             reply = response.choices[0]
             _observe_usage(getattr(response, "usage", None))
+            _asked("compute", document_id, response, attempt=attempt,
+                   started=started)
             said = reply.message.content
             code = _parse_action(said)
             if code and len(runs) < CODE_ROUNDS:

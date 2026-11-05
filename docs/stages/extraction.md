@@ -361,10 +361,14 @@ The server's window is measured over the four prompts of this flow
 its kind, `read_values_ask`, `read_text_ask` and `comb_ask`, each with its
 `group` where the request has one: `read_values_ask` carries `round`,
 `read_text_ask` carries `group` and `value`, and the `comb` event carries
-`group` too. `stats.py` writes per run the requests per stage (survey,
-`read_values`, `read_text` and `comb`) and the survey, reading and combing
-counts (`stats.from_traces`), and the cost estimate counts the requests of
-both flows (`estimate.TRACED`).
+`group` too. The requests for a search sentence, the frame, the review and
+the compute step write `phrase_ask`, `frame_ask`, `review_ask` and
+`compute_ask` (`runner._asked`, one per reply, with its tokens). `stats.py`
+writes per run the requests per stage, every `<stage>_ask` kind under its
+stage and the known stages (`schema.ASK_STAGES`) even when they asked
+nothing, and the survey, reading and combing counts (`stats.from_traces`);
+the cost estimate counts the requests of both flows (`estimate.TRACED`),
+a frame request once, by its `frame` event (owner decision 2026-11-05).
 
 ### The retrieval plan
 

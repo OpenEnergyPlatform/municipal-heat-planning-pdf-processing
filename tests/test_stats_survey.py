@@ -165,3 +165,49 @@ def test_the_trace_schema_takes_the_new_kinds_and_refuses_a_broken_one():
                    {"t": "read_table_ask", "doc": 1, "attempt": 1}):
         with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(broken, trace)
+
+
+# Promise: every `<stage>_ask` kind is counted under its stage, one no list
+# names as well, AND a known stage that asked nothing counts zero, AND an
+# event that is no request counts as none (owner decision 2026-11-05).
+def test_every_ask_kind_is_counted_under_its_stage(tmp_path):
+    out = traced(tmp_path, ask("phrase_ask", parameter="p"),
+                 ask("compute_ask"), ask("compute_ask", prompt_tokens=7),
+                 ask("novel_ask"), {"t": "_ask", "attempt": 1},
+                 {"t": "rows", "attempt": 1, "prompt_tokens": 100})[
+        "requests_by_stage"]
+    assert out["phrase"]["requests"] == 1
+    assert out["compute"] == {"requests": 2, "prompt_tokens": 107,
+                              "completion_tokens": 20, "second_rounds": 0}
+    assert out["novel"]["requests"] == 1
+    assert out["review"]["requests"] == 0
+    assert "rows" not in out and "" not in out
+
+
+def test_the_trace_schema_takes_the_ask_of_every_stage():
+    trace = schema.trace_schema()
+    for stage in ("phrase", "frame", "review", "compute"):
+        jsonschema.validate({"t": f"{stage}_ask", "doc": 1, "attempt": 1,
+                             "ms": 3, "prompt_tokens": 10,
+                             "completion_tokens": 2}, trace)
+    # by construction: a kind the schema does not name is refused
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({"t": "novel_ask", "doc": 1, "attempt": 1}, trace)
+
+
+# Promise: the cost estimate counts every answered request kind, the search
+# sentences, the review and the compute step too, AND a frame request once,
+# by its frame event and not again by its ask.
+def test_the_estimate_counts_every_request_kind_once(tmp_path):
+    from docpipe import estimate
+    (tmp_path / estimate.TRACE_DIR).mkdir()
+    (tmp_path / estimate.TRACE_DIR / "plan.trace.jsonl").write_text("\n".join(
+        json.dumps({"doc": 1, **ask(kind)}) for kind in (
+            "phrase_ask", "review_ask", "compute_ask", "frame", "frame_ask",
+            "survey_ask")), encoding="utf-8")
+    documents, sections, counted = estimate._trace_of(
+        tmp_path, [("plan", 1)], {1: 10})
+    assert (documents, sections) == (1, 10)
+    assert {k: n[0] for k, n in counted.items() if n[0]} == {
+        "phrase_ask": 1, "review_ask": 1, "compute_ask": 1, "frame": 1,
+        "survey_ask": 1}

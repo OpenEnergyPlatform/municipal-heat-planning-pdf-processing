@@ -755,7 +755,9 @@ def test_the_reply_names_only_the_numbers_of_its_question():
 def test_the_trace_of_the_step_fits_its_schema(monkeypatch):
     step, _asked, _runs, events = computing(monkeypatch, CODE, ANSWER)
     run_step(step, share(21), amount(185200))
-    assert [e["t"] for e in events] == ["code", "compute"]
+    # each of the two requests (the code, then the answer) writes its ask
+    assert [e["t"] for e in events] == ["compute_ask", "code", "compute_ask",
+                                        "compute"]
     for event in events:
         jsonschema.validate(event, schema.trace_schema())
 

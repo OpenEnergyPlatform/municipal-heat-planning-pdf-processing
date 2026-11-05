@@ -33,7 +33,10 @@ decides, such as kwp's `aggregation` coordinate on `energy_consumption` and
 either profile (`profiles/kwp/extraction_spec.json:173,920`). Which
 parameter a row belongs to is a separate decision, `derive_parameter`
 (`fields.py:337-364`), written directly by `Turn.settle_parameter` in
-`docpipe/extraction/runner.py`, not through `apply_derived`. `out_of_slice` is
+`docpipe/extraction/runner.py`, not through `apply_derived`. In the survey
+flow nobody asks it: a row is read for the one field its request names, and
+the fold writes its `parameter_state` as `derived` (`pipeline.fold_claims`,
+owner decision 2026-11-05). `out_of_slice` is
 written the same way: a gate coordinate the profile's `SLICE` names has put
 the row outside what this
 run serializes, or no parameter of the spec could hold it (a number with

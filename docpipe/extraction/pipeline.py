@@ -47,7 +47,7 @@ from . import archive
 from . import queries as queries_mod
 from .wording import say
 from .spec import Spec, fold_label
-from .fields import (CHOICE, NUMBER, READ, SAID_UNSTATED, TEXT,
+from .fields import (CHOICE, DERIVED, NUMBER, READ, SAID_UNSTATED, TEXT,
                      UNANSWERED, UNBACKED, UNSTATED)
 from .verify import (MIN_QUOTE_CHARS, Refusal, Verified, canonical_number,
                      flat, numbers_in, quote_in, verify_tuple, wording_of)
@@ -1793,6 +1793,11 @@ def fold_claims(item: WorkItem, claims: Optional[list],
                  "owner": [source.owner_kind, source.owner_id]})
             continue
         row = dict(outcome.tuple)
+        # The parameter coordinate ends in a state like every other. Nobody
+        # asks it where the request was for one field (`item.parameter`) or
+        # a computed row's question named it: derived (owner decision
+        # 2026-11-05). A row whose sweep asked it keeps that answer's state.
+        row.setdefault("parameter_state", DERIVED)
         row["tier"] = outcome.tier
         if outcome.flags:
             # The flags ride on the row itself: a vocabulary review works

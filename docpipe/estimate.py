@@ -57,9 +57,12 @@ COMMANDS = ("ingest", "preprocess", "refine", "visuals", "chunk", "extract")
 # runner.py writes them; a frame event without tokens is the summary of a
 # frame search and no request.
 # The answered requests of either flow: field by field, and from the
-# survey (survey, the four readings, the combing).
+# survey (survey, the four readings, the combing), and the search sentences,
+# the review and the compute step. `frame_ask` is not here: the frame event
+# counts the same requests, and a trace written before `frame_ask` alike.
 TRACED = ("frame", "rows", "field", "survey_ask", "read_values_ask",
-          "read_text_ask", "comb_ask")
+          "read_text_ask", "comb_ask", "phrase_ask", "review_ask",
+          "compute_ask")
 TRACE_DIR = "trace"
 
 

@@ -247,7 +247,7 @@
      "out_of_slice"
     ],
     "x-doc": {
-     "derived": "not asked: the spec decides this coordinate from something already on the row (the unit)",
+     "derived": "not asked: the spec decides this coordinate from something already on the row (the unit), or the request names it (the parameter of a row read for one field)",
      "exhausted": "still open when the window budget ended with the document unread. A finding about the run",
      "out_of_slice": "never asked: a gate coordinate (the profile's SLICE) had already put the row outside what this run serializes",
      "read": "answered, and the cited passage carries the answer",
@@ -8060,6 +8060,250 @@
      "rows": {},
      "t": {
       "const": "comb_ask"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "round": {
+      "type": "integer"
+     },
+     "rows": {},
+     "t": {
+      "const": "phrase_ask"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "round": {
+      "type": "integer"
+     },
+     "rows": {},
+     "t": {
+      "const": "frame_ask"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "round": {
+      "type": "integer"
+     },
+     "rows": {},
+     "t": {
+      "const": "review_ask"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "round": {
+      "type": "integer"
+     },
+     "rows": {},
+     "t": {
+      "const": "compute_ask"
      },
      "value": {
       "type": "string"

@@ -280,6 +280,23 @@ def test_the_index_doi_is_the_one_the_index_holds_for_this_document():
     assert completion.index_doi(other, 4) is None
 
 
+# Promise: the run's database is opened by its path, read-only, for the index
+# DOI of one document, AND a database that is not there gives none.
+def test_the_index_doi_is_read_from_the_run_database_file(tmp_path):
+    db = tmp_path / "run.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE DocumentMeta (document INTEGER, doi TEXT)")
+    conn.executemany("INSERT INTO DocumentMeta VALUES (?, ?)",
+                     [(5, "10.1000/other"), (4, f"https://doi.org/{DOI}")])
+    conn.commit()
+    conn.close()
+    assert completion._index_doi_in(db, 4) == DOI
+    assert completion._index_doi_in(db, 6) is None
+    # the failure by construction: no database where the run says it is
+    assert completion._index_doi_in(tmp_path / "missing.db", 4) is None
+    assert not (tmp_path / "missing.db").exists()
+
+
 def test_the_completer_hands_the_run_database_to_the_profile():
     got = {}
 

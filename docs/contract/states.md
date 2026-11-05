@@ -37,7 +37,10 @@ decides, such as kwp's `aggregation` coordinate on `energy_consumption` and
 either profile (`profiles/kwp/extraction_spec.json:173,920`). Which
 parameter a row belongs to is a separate decision, `derive_parameter`
 (`fields.py:337-364`), written directly by `Turn.settle_parameter` in
-`docpipe/extraction/runner.py`, not through `apply_derived`. `out_of_slice` is
+`docpipe/extraction/runner.py`, not through `apply_derived`. In the survey
+flow nobody asks it: a row is read for the one field its request names, and
+the fold writes its `parameter_state` as `derived` (`pipeline.fold_claims`,
+owner decision 2026-11-05). `out_of_slice` is
 written the same way: a gate coordinate the profile's `SLICE` names has put
 the row outside what this
 run serializes, or no parameter of the spec could hold it (a number with
@@ -109,7 +112,7 @@ backed, `unbacked`, a `D`.
 | constant | value | what it says |
 |---|---|---|
 | `READ` | `read` | answered, and the cited passage carries the answer |
-| `DERIVED` | `derived` | not asked: the spec decides this coordinate from something already on the row (the unit) |
+| `DERIVED` | `derived` | not asked: the spec decides this coordinate from something already on the row (the unit), or the request names it (the parameter of a row read for one field) |
 | `SAID_UNSTATED` | `unstated` | answered: the passages shown do not state it. A finding about the document, and only final once the sweep ran out of it |
 | `UNANSWERED` | `unanswered` | the field reply never mentioned this row. A finding about the model |
 | `EXHAUSTED` | `exhausted` | still open when the window budget ended with the document unread. A finding about the run |

@@ -1,6 +1,7 @@
 """Stage 4 never removes a section of the front matter of the first page or of
 the title page, whatever action the model returns; a section elsewhere that
 the model removes goes."""
+from docpipe.refinement import refine
 from docpipe.refinement.refine import _apply_actions, _front_pages, _page_of
 
 
@@ -73,3 +74,23 @@ def test_a_section_starting_on_the_title_page_survives_though_it_runs_on():
                "segments": [{"page": 2}, {"page": 3}], "pages": [2, 3]}
     applied, _ = _apply_actions([remove(running)], None, {1, 2})
     assert [s["content"] for s in applied] == ["a Institute, Tokyo"]
+
+
+# Promise: run_refine hands the title page Stage 3 wrote beside the sections
+# (`title_page`) to the pass, so a section starting on it survives a remove
+# the model returns, AND without it the same remove takes that section.
+def refined(monkeypatch, tmp_path, data):
+    monkeypatch.setattr(refine.providers, "client", lambda *a, **k: object())
+    monkeypatch.setattr(refine, "_ask_window",
+                        lambda window, client, prev: [remove(s) for s in window])
+    out = refine.run_refine(tmp_path, data=data, force=True)
+    return [s["content"] for s in out["sections"]]
+
+
+def test_run_refine_keeps_the_title_page_stage_3_names(monkeypatch, tmp_path):
+    data = {"sections": [dict(s) for s in COVERED], "title_page": 2}
+    assert refined(monkeypatch, tmp_path, data) == ["Open access archive",
+                                                    "a Institute, Tokyo"]
+    # the failure by construction: no title page beside the sections
+    data = {"sections": [dict(s) for s in COVERED]}
+    assert refined(monkeypatch, tmp_path, data) == ["Open access archive"]

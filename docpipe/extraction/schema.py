@@ -73,7 +73,9 @@ TRUST_REASONS = tuple(
 STATE_DOC = {
     fields.READ: "answered, and the cited passage carries the answer",
     fields.DERIVED: ("not asked: the spec decides this coordinate from "
-                     "something already on the row (the unit)"),
+                     "something already on the row (the unit), or the "
+                     "request names it (the parameter of a row read for "
+                     "one field)"),
     fields.SAID_UNSTATED: ("answered: the passages shown do not state it. A "
                            "finding about the document, and only final once "
                            "the sweep ran out of it"),
@@ -814,6 +816,13 @@ def stamp_schema() -> dict:
     }
 
 
+# The stages whose every request writes `<stage>_ask` to the trace: the
+# survey flow's own (`runner.ask_in_grammar`) and the search sentences, the
+# frame, the review and the compute step (`runner._asked`).
+ASK_STAGES = ("survey", "read_values", "read_text", "comb", "phrase",
+              "frame", "review", "compute")
+
+
 def trace_schema() -> dict:
     """One line of <name>.trace.jsonl: one event, never an aggregate."""
     owner = _owner()
@@ -993,7 +1002,7 @@ def trace_schema() -> dict:
                    "complete": {"type": "boolean"},
                    "by_parameter": by_field,
                    "tuples": {"type": "integer"}},
-        # One request of the survey flow that got a reply, per stage; a
+        # One request that got a reply, per stage (`ASK_STAGES`); a
         # `corrections` above zero is a second round. Which of `parameter`,
         # `owner`, `kind`, `rows`, `passages`, `figure` it carries depends on
         # the stage; a values request counts its `round`, a group request
@@ -1009,7 +1018,7 @@ def trace_schema() -> dict:
                             "prompt_tokens": {"type": ["integer", "null"]},
                             "completion_tokens": {"type": ["integer", "null"]},
                             "ms": {"type": "integer"}}
-           for stage in ("survey", "read_values", "read_text", "comb")},
+           for stage in ASK_STAGES},
         # One passage read for one parameter (reading.py), its values one per
         # round. A passage that came to no readable reply is `unread` with
         # `why` and no values.
@@ -1049,6 +1058,12 @@ def trace_schema() -> dict:
                           "rows", "passages", "figure", "group", "round"},
         "comb_ask": {"corrections", "parameter", "owner", "kind", "rows",
                      "passages", "figure", "group", "round", "value"},
+        # A search sentence, the frame, the review and the compute step say
+        # their attempt and what it cost; a parameter where they have one.
+        **{f"{stage}_ask": {"corrections", "parameter", "owner", "kind",
+                            "rows", "passages", "figure", "group", "round",
+                            "value"}
+           for stage in ("phrase", "frame", "review", "compute")},
         "comb": {"group"},
         "read": {"corrected", "failed", "unanswered", "fetched", "searched",
                  "missed", "unread", "why"},

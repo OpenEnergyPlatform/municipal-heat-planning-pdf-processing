@@ -36,15 +36,16 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from . import archive
+from .schema import ASK_STAGES
 
 log = logging.getLogger(__name__)
 
 STATS = "stats"
 OPEN = ("exhausted", "unanswered", "unbacked")
-# Trace event kind -> the stage of the survey flow that asked.
-ASK_STAGES = {"survey_ask": "survey",
-              "read_values_ask": "read_values",
-              "read_text_ask": "read_text", "comb_ask": "comb"}
+# Every request writes `<stage>_ask`; each such kind is counted under its
+# stage, a stage no list names as well, and the known stages count even
+# when they asked nothing (owner decision 2026-11-05).
+ASK = "_ask"
 
 
 def _int(event: dict, key: str) -> int:
@@ -188,8 +189,9 @@ def from_traces(trace_dirs: Iterable[Path],
                     completed[str(event.get("outcome"))] += 1
                 elif kind == "seek":
                     sought[str(event.get("parameter"))] += 1
-                elif kind in ASK_STAGES:
-                    stage = ASK_STAGES[kind]
+                elif isinstance(kind, str) and kind.endswith(ASK) \
+                        and len(kind) > len(ASK):
+                    stage = kind[:-len(ASK)]
                     stages[stage]["requests"] += 1
                     stages[stage]["prompt_tokens"] += _int(event,
                                                            "prompt_tokens")
@@ -254,13 +256,13 @@ def from_traces(trace_dirs: Iterable[Path],
             axis: [{"given": g, "wording": w, "answers": n}
                    for (g, w), n in c.most_common()]
             for axis, c in outside.items()},
-        # The survey flow. Per stage: requests that got a reply, their
-        # tokens, and those that were a second round (corrections sent).
+        # Per stage: requests that got a reply, their tokens, and those
+        # that were a second round (corrections sent).
         "requests_by_stage": {
             stage: {k: stages[stage][k] for k in (
                 "requests", "prompt_tokens", "completion_tokens",
                 "second_rounds")}
-            for stage in ASK_STAGES.values()},
+            for stage in dict.fromkeys((*ASK_STAGES, *sorted(stages)))},
         # Documents surveyed and completely, passages found, contexts sent,
         # passages carrying no parameter, passages without an answer,
         # answers not taken, and passages per parameter.

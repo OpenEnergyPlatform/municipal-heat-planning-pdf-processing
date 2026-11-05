@@ -3208,7 +3208,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 
 One event per line; `t` names it and `doc` the document. Read by scripts/trace_report.py.
 
-21 record kinds, told apart by `t`:
+25 record kinds, told apart by `t`:
 
 - `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
 - `anchor`: `doc`, `parameter`, `text`
@@ -3229,6 +3229,10 @@ One event per line; `t` names it and `doc` the document. Read by scripts/trace_r
 - `read_values_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `read_text_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `comb_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
+- `phrase_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
+- `frame_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
+- `review_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
+- `compute_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `read`: `asked`, `corrected`, `doc`, `failed`, `fetched`, `kind`, `missed`, `owner`, `parameter`, `searched`, `unanswered`, `unread`, `values`, `why`
 - `comb`: `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `kind`, `missed`, `open`, `owner`, `parameter`, `rows`, `searched`
 
