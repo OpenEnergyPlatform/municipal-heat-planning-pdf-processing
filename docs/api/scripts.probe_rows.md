@@ -39,7 +39,8 @@ own lists from it as the run does (the profile's `document_axes`).
 
 `--compute` takes the verified rows of such a stored probe and asks only what
 the compute step leaves open, so its prompt can be tried without reading the
-plans again. With the database and `--index` its search by a sentence ranks
+plans again. The plans' passages come from `--hits` or, with the database,
+from `--documents`. With the database and `--index` its search by a sentence ranks
 the plan as a run does; without them that search finds nothing.
 
 `--survey --read` runs the rebuilt harvest's survey and its reading of each
@@ -125,7 +126,7 @@ per document, as the run makes them.
 ### compute_over
 
 ```python
-def compute_over(stored: Path, hits: list, spec, args) -> list
+def compute_over(stored: Path, hits: list, spec, args, passages=None) -> list
 ```
 
 The compute step over the verified rows of a stored `--whole` probe.

@@ -37,7 +37,8 @@ own lists from it as the run does (the profile's `document_axes`).
 
 `--compute` takes the verified rows of such a stored probe and asks only what
 the compute step leaves open, so its prompt can be tried without reading the
-plans again. With the database and `--index` its search by a sentence ranks
+plans again. The plans' passages come from `--hits` or, with the database,
+from `--documents`. With the database and `--index` its search by a sentence ranks
 the plan as a run does; without them that search finds nothing.
 
 `--survey --read` runs the rebuilt harvest's survey and its reading of each
@@ -378,7 +379,7 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
         return list(documents.map(one, passages))
 
 
-def compute_over(stored: Path, hits: list, spec, args) -> list:
+def compute_over(stored: Path, hits: list, spec, args, passages=None) -> list:
     """The compute step over the verified rows of a stored `--whole` probe.
     The raw claims cannot be folded again: their source is a label of the batch
     they were read in, and the batches are not stored."""
@@ -386,7 +387,9 @@ def compute_over(stored: Path, hits: list, spec, args) -> list:
     from docpipe.extraction.pipeline import Batch, DocumentReport, WorkItem
     from docpipe.profile import active_profile
 
-    documents: dict = {}
+    documents: dict = {
+        document: [WorkItem(document, None, source) for source in sources]
+        for document, sources in (passages or {}).items()}
     for hit in hits:
         documents.setdefault(hit.get("document_id") or 0, []).append(
             WorkItem(hit.get("document_id") or 0, None, source_of(hit, args)))
@@ -497,7 +500,7 @@ def main() -> int:
             print(json.dumps(row, ensure_ascii=False))
         return write_report(args.out, report)
     if args.compute:
-        report = compute_over(args.compute, hits, spec, args)
+        report = compute_over(args.compute, hits, spec, args, passages)
         trace.close()
         for row in report:
             print(json.dumps({k: v for k, v in row.items() if k != "tuples"}))
