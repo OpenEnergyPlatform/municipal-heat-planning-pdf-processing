@@ -49,7 +49,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Collection, Optional
 
 from docpipe import prompts, providers, reading, usage
 from docpipe.profile import profile_value
@@ -527,12 +527,13 @@ def _coerce_section(sec: dict) -> dict:
 def _apply_actions(
     processed_sections: list[dict],
     previous_kept: Optional[dict],
-    first_page: Optional[int] = None,
+    front_pages: Collection[int] = (),
 ) -> tuple[list[dict], Optional[dict]]:
     """
     Applies the _action directives returned by the LLM. A section that starts
-    on *first_page*, the title page, is its front matter (title,
-    authors, affiliations, journal line, dates) and is never removed.
+    on one of *front_pages*, the first page and the title page
+    (`_front_pages`), is front matter (title, authors, affiliations, journal
+    line, dates) and is never removed.
 
     Returns:
         (result_sections, last_kept_section)
@@ -563,12 +564,12 @@ def _apply_actions(
                 # as a running head, it took a scenario document's title along.
                 log.info("  Refusing to remove the text before the first "
                          "heading: the title may stand in it")
-            elif _on_page(sec, first_page):
+            elif _starts_on(sec, front_pages):
                 # Authors often come out of layout detection as a one-line
                 # heading; removed as a running head, 19 of 85 author lines
                 # were gone from the AR6 corpus.
-                log.info("  Refusing to remove '%s': it is on the first page",
-                         sec.get("title", "?"))
+                log.info("  Refusing to remove '%s': it is front matter (first "
+                         "or title page)", sec.get("title", "?"))
             else:
                 log.debug(f"  Removing section: {sec.get('title', '?')}")
                 # Its text goes, its heading does not: a contents page or an
@@ -893,10 +894,19 @@ def _section_pages(sec: dict) -> list:
     return pages
 
 
-def _on_page(sec: dict, page: Optional[int]) -> bool:
-    """Whether *sec* starts on *page*."""
-    pages = _section_pages(sec)
-    return page is not None and bool(pages) and min(pages) == page
+def _starts_on(sec: dict, pages: Collection[int]) -> bool:
+    """Whether *sec* starts on one of *pages*."""
+    own = _section_pages(sec)
+    return bool(own) and min(own) in pages
+
+
+def _front_pages(sections: list[dict], title_page: Optional[int]) -> set:
+    """The pages whose sections are front matter: the lowest page any of
+    *sections* carries, and Stage 3's title page where the file names one.
+    A cover before the title page and a title detected further in both leave
+    the first page among them."""
+    return {page for page in (_page_of(sections), title_page)
+            if page is not None}
 
 
 def _synthetic_heading(title: str) -> bool:
@@ -1214,8 +1224,9 @@ def refine_sections(sections: list[dict],
     # ── Sequential assembly (order matters for merge_into_previous) ──────
     refined: list[dict] = []
     previous_kept: Optional[dict] = None
-    # Stage 3's title page; an older sections.json has none: the lowest page.
-    first_page = title_page if title_page is not None else _page_of(sections)
+    # The first page and Stage 3's title page; an older sections.json names
+    # no title page and leaves the first page alone.
+    front_pages = _front_pages(sections, title_page)
     # A window (or the part of one) that is a hole keeps its original text,
     # which is indistinguishable in the output from a window that needed no
     # change, so the only place this can be recorded is here, while it
@@ -1264,7 +1275,7 @@ def refine_sections(sections: list[dict],
             else:
                 _thread_provenance(part, result)
                 applied, previous_kept = _apply_actions(result, previous_kept,
-                                                         first_page)
+                                                         front_pages)
                 refined.extend(applied)
 
     log.info(f"Stage 4: {len(refined)} sections after LLM refinement")

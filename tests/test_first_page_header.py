@@ -52,7 +52,8 @@ def test_first_page_is_smallest_page_number_not_index():
 
 
 # Promise: the title page is the page of the detected document title, else the
-# first page; Stage 3 keeps its blocks.
+# first page; Stage 3 keeps the blocks of the first page AND of the title page,
+# AND strips the running head everywhere else.
 def _titled(pages, page):
     pg = next(p for p in pages if p.page_number == page)
     pg.blocks.append(Block(id="t", type="text", bbox=[50, 100, 400, 120],
@@ -65,14 +66,25 @@ def test_title_page_is_the_page_of_the_doc_title():
     assert title_page_of(pages) == 2
 
 
-def test_cover_page_one_loses_its_header_title_page_two_keeps_it():
+def _heads(pages):
+    return [pg.page_number for pg in pages
+            if any(b.id.startswith("h") for b in pg.blocks)]
+
+
+def test_a_cover_page_one_and_title_page_two_both_keep_their_head():
     pages = _pages(6)
     _titled(pages, 2)
     strip_running_headers(pages)
-    assert [b.id for b in pages[0].blocks] == ["b1"]
-    assert "h2" in [b.id for b in pages[1].blocks]
-    for pg in pages[2:]:
-        assert not any(b.id.startswith("h") for b in pg.blocks)
+    assert _heads(pages) == [1, 2]
+
+
+def test_a_title_detected_far_in_costs_the_first_page_nothing():
+    pages = _pages(8)
+    _titled(pages, 6)
+    assert title_page_of(pages) == 6
+    strip_running_headers(pages)
+    # the failure by construction: pages 2-5, 7, 8 lose their running head
+    assert _heads(pages) == [1, 6]
 
 
 def test_without_a_doc_title_the_first_page_is_the_title_page():

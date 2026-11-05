@@ -17,7 +17,7 @@ example, a preprint's line numbers landing inside a sentence: a number
 counting up line after line is removed, one the sentence itself states
 stays.
 
-The front matter of the title page (title, authors, affiliations, the journal line with volume and year, the DOI, dates and the copyright line) is never refinement's to remove: the prompts say so, and `_apply_actions` refuses a `remove` for any section that starts on the title page. That is the page of the detected document title, which stage 3 hands on as `title_page` in `sections.json`; a `sections.json` without it gives the lowest page any section carries.
+The front matter of the first page and of the title page (title, authors, affiliations, the journal line with volume and year, the DOI, dates and the copyright line) is never refinement's to remove: the prompts say so, and `_apply_actions` refuses a `remove` for any section that starts on either. The first page is the lowest page any section carries; the title page is the page of the detected document title, which stage 3 hands on as `title_page` in `sections.json` (`_front_pages`). Both count because a cover can stand before the title page, and because the layout detection marks a heading far into a report as its title in 8 of the 164 AR6 documents; a `sections.json` without the key protects the first page alone.
 
 Stage 4 also enforces the size limit the embedding step needs: a
 retrieval chunk is one section and one vector, so a section long enough
