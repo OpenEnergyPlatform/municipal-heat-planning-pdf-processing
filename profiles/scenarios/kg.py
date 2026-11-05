@@ -41,6 +41,7 @@ from types import SimpleNamespace
 from typing import Optional
 
 from docpipe.extraction import graphkit
+from docpipe.extraction.compute import owner_of
 from docpipe.extraction.graphkit import NOT_IN_GRAPH, ttl_comment, ttl_literal
 from docpipe.extraction.identity import tuple_ids
 from docpipe.extraction.shapemodel import (XSD, Model, SchemaError,
@@ -919,8 +920,12 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
 
             One line per source, like the passage above it. A value three
             passages agree on is three readings and each has its own level.
+            Each line is marked confirmed where a second passage prints the
+            value; one passage read twice is one statement, whatever its
+            quotes (owner decision 2026-11-05, as kwp's settle).
             """
             lines = []
+            confirmed = len({owner_of(row) for row in sources}) > 1
             for row in sources:
                 if EVIDENCE:
                     link, node = _evidence(subject, predicate, row, name)
@@ -934,7 +939,8 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
                 # rivals; without this the winner is graded as if it had been
                 # the only reading.
                 verdict = trust(row, transcribed=PAGE_TRANSCRIBED,
-                                conflict=bool(contested.get(row.get("parameter"))))
+                                conflict=bool(contested.get(row.get("parameter"))),
+                                corroborated=confirmed)
                 lines.append(_ttl_comment(render(verdict, TRUST_PROSE,
                                                  join=TRUST_JOIN, row=row)))
                 # A value looked up outside the document names its record on

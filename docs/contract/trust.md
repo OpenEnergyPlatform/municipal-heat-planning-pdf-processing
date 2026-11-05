@@ -82,7 +82,8 @@ None of the three raises the level, and an agreement marks nothing: the
 second reading checks self-consistency at the same place, not that it is
 right, and one place counts once (owner decision 2026-11-05). `corroborated`
 comes only from the graph, where a second passage prints the same number on
-one node (`profiles/kwp/kg.py`, `settle`). A disagreement becomes a
+one node (`profiles/kwp/kg.py`, `settle`) or the same value of one triple
+(`profiles/scenarios/kg.py`, `evidence_for`). A disagreement becomes a
 `review:disagree` reason instead, a fact a curator can count, and it makes the
 value a `D`.
 

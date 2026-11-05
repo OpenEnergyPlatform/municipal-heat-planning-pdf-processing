@@ -509,7 +509,9 @@ to anything other than `"0"` switches to a linked
 module's own docstring as provisional and ahead of the shapes, so it
 stays off by default (`kg.py`, line 459 and the module docstring). Either
 branch is followed by one rendered trust line, worded in English
-throughout `TRUST_PROSE` (`kg.py`, lines 464 to 471); the full
+throughout `TRUST_PROSE` (`kg.py`, lines 464 to 471). The line carries
+`corroborated` where a second passage prints the same value; one passage
+read twice counts once, whatever its quotes (owner decision 2026-11-05). The full
 trust-level and reason vocabulary is published at
 [../contract/trust.md](../contract/trust.md). The state vocabulary a coordinate ends in,
 `read`, `derived`, `unstated` and the rest, is published in full at

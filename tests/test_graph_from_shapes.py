@@ -230,6 +230,31 @@ def test_behind_a_cover_the_page_the_title_was_read_on_is_a_front_page():
     assert year_in_graph(rows) == ["2019"]
 
 
+# Promise: a value is marked confirmed where its readings come from two
+# different passages, AND two readings of one passage confirm nothing,
+# whatever their quotes (owner decision 2026-11-05, as kwp's settle).
+def confirmed_lines(*readings):
+    rows = [{"parameter": "publication_title", "value": "Net-zero EU",
+             "quote": quote,
+             "provenance": {"page": 1, "owner_kind": kind, "owner_id": owner}}
+            for kind, owner, quote in readings]
+    rows.append({"parameter": "publication_author",
+                 "value": "Ioannis Tsiropoulos", "quote": "Ioannis Tsiropoulos",
+                 "provenance": {"page": 1, "owner_kind": "section",
+                                "owner_id": 1}})
+    serializer = kg.make_serializer(Path("no-such.db"), model=oekg())
+    mark = kg.TRUST_PROSE["corroborated"]
+    return sum(mark in line for line in serializer("doc", rows).splitlines())
+
+
+def test_a_value_two_passages_print_is_confirmed_one_passage_read_twice_not():
+    assert confirmed_lines(("section", 1, "Net-zero EU"),
+                           ("table", 7, "Net-zero EU")) == 2
+    # the failure by construction: one passage, two different quotes of it
+    assert confirmed_lines(("section", 1, "Net-zero EU"),
+                           ("section", 1, "Net-zero EU by 2050")) == 0
+
+
 def test_a_referenced_node_is_checked_as_the_target_graph_holds_it():
     from docpipe.ontology import with_context
     oekg_ = "https://openenergyplatform.org/ontology/oekg/"
