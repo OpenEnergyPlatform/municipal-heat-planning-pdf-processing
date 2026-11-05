@@ -37,7 +37,8 @@ own lists from it as the run does (the profile's `document_axes`).
 
 `--compute` takes the verified rows of such a stored probe and asks only what
 the compute step leaves open, so its prompt can be tried without reading the
-plans again.
+plans again. With the database and `--index` its search by a sentence ranks
+the plan as a run does; without them that search finds nothing.
 
 `--survey --read` runs the rebuilt harvest's survey and its reading of each
 parameter; `--comb` adds the search for what the reading left open, ranked as
@@ -207,6 +208,22 @@ def whole(hits: list, spec, args, passages=None, document_spec=None) -> list:
         return list(pool.map(one, documents))
 
 
+def ranking(args):
+    """rank(document_id, probes, exclude): the plan ranked for sentences as a
+    run ranks it, over the global index named by `--index`."""
+    from docpipe.extraction import runner
+    from docpipe.inference import faiss_store, query_cache
+    index, id_to_pos = faiss_store.load_global_index(args.index)
+    cache_path = args.out / "query_cache.db"
+    query_cache.connect(cache_path).close()
+    more = runner.make_more_sources(args.db, index, id_to_pos, cache_path)
+
+    def rank(document_id: int, probes: list, exclude: set) -> list:
+        return more(document_id, probes, set(exclude), limit=0)
+
+    return rank
+
+
 def survey_over(passages: dict, spec, args, document_spec=None) -> list:
     """The survey of each document's whole plan, as the run asks it, and
     with --read the reading of each parameter after it and with --comb the
@@ -228,17 +245,9 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
     pool = ThreadPoolExecutor(args.parallel)
     rank = seek = None
     if args.comb:
-        from docpipe.inference import faiss_store, query_cache
         if not args.read or args.index is None:
             raise SystemExit("--comb needs --read and --index")
-        index, id_to_pos = faiss_store.load_global_index(args.index)
-        cache_path = args.out / "query_cache.db"
-        query_cache.connect(cache_path).close()
-        more = runner.make_more_sources(args.db, index, id_to_pos, cache_path)
-
-        def rank(document_id: int, probes: list, exclude: set) -> list:
-            return more(document_id, probes, set(exclude), limit=0)
-
+        rank = ranking(args)
         profile = active_profile()
         seek = runner.make_seek_probes(
             profile.component("extraction", "FRONT_PAGE_PARAMETERS") or (),
@@ -375,10 +384,11 @@ def compute_over(stored: Path, hits: list, spec, args) -> list:
         documents.setdefault(hit.get("document_id") or 0, []).append(
             WorkItem(hit.get("document_id") or 0, None, source_of(hit, args)))
     # The passages given are the plan the request's tools read, in their
-    # order, as a run's are.
+    # order, as a run's are, and with an index it ranks the plan as one.
     computer = runner.make_computer(
         active_profile(), lambda document: [item.source for item in
-                                            documents.get(document, ())])
+                                            documents.get(document, ())],
+        rank=ranking(args) if args.index is not None else None)
     if computer is None:
         raise SystemExit("no compute step: is CODE_EXEC_URL set?")
     rows = []
@@ -435,7 +445,8 @@ def main() -> int:
                         help="with --read: search for what the reading left "
                              "open (needs --index)")
     parser.add_argument("--index", type=Path, default=None,
-                        help="with --comb: the global FAISS index")
+                        help="with --comb or --compute: the global FAISS "
+                             "index")
     args = parser.parse_args()
 
     from docpipe.extraction import runner, trace

@@ -6078,7 +6078,8 @@ def make_completer(profile, db: Optional[Path] = None) -> Optional[Callable]:
 
 
 def make_computer(profile, passages_of: Optional[Callable] = None,
-                  pages_of: Optional[Callable] = None) -> Optional[Callable]:
+                  pages_of: Optional[Callable] = None,
+                  rank: Optional[Callable] = None) -> Optional[Callable]:
     """The step that works out what a document's verified rows leave open
     (`compute.py`): `compute(answered, report, locate=, spec=, stop=)`, which
     folds what it computed into the report and says False if a stop ended it.
@@ -6093,9 +6094,12 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
     *passages_of(document_id)* is the plan's passages in their order. With it
     a request has the reading's tools (`reading.Gathered`: the next or the
     previous section, a table or figure by its placeholder, a search by
-    pattern), each passage cut to the survey's two pages (*pages_of*), and a
-    question that takes a number (`Question.take`) may take it from a passage
-    they fetched (owner decision 2026-11-05).
+    pattern or by a sentence), each passage cut to the survey's two pages
+    (*pages_of*), and a question that takes a number (`Question.take`) may
+    take it from a passage they fetched (owner decision 2026-11-05).
+    *rank(document_id, probes, exclude)* is the plan ranked for a sentence,
+    which "similar" lists (`make_more_sources` in a run); without it that
+    search finds nothing.
     """
     from docpipe.inference import code_exec
 
@@ -6126,7 +6130,9 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
         anchor = computing.owner_of(question.anchor)
         gathered = reading_map.Gathered(
             seen={(s.owner_kind, s.owner_id) for s in shown},
-            cursor={"next": anchor, "previous": anchor})
+            cursor={"next": anchor, "previous": anchor},
+            rank=(functools.partial(rank, document_id)
+                  if rank is not None else None))
         budget = (survey_map.budget_of(order, pages_of(document_id)
                                        if pages_of else None)
                   if order else None)
@@ -6158,8 +6164,7 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
         def ended(outcome: str, claim=None) -> tuple:
             return outcome, claim, runs, {
                 "fetched": len(gathered.sources),
-                "searched": sum(1 for hit in gathered.hits
-                                if hit.get("pattern")), **noted}
+                "searched": len(gathered.hits), **noted}
 
         failures = Failures(document_id)
         # The wait follows the failures, not the rounds: a round of code, of
@@ -8721,7 +8726,7 @@ def main(argv: Optional[list] = None) -> int:
 
     computer = make_computer(profile,
                              lambda document_id: every(document_id, set()),
-                             pages_of)
+                             pages_of, rank)
     completer = make_completer(profile, args.db)
 
     def verify(entry: tuple, replies: Optional[int] = None) -> bool:

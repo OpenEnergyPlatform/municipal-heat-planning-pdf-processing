@@ -1256,8 +1256,10 @@ the numbers with their quotes and what was read about them, and their passages;
 parts in different units are shown in the unit of the first. It has the
 reading's tools (`reading.Gathered`, owner decision 2026-11-05): under `more` the
 model asks for the next or the previous section, a table or figure by its
-placeholder, a list of the passages matching a pattern, or a passage of such a
-list, each cut to the survey's two pages, and the request is asked again with
+placeholder, a list of the passages matching a pattern, a list of those nearest
+a sentence it writes as the plan would print it (`similar`, ranked as the
+combing ranks the plan), or a passage of such a list, each cut to the survey's
+two pages, and the request is asked again with
 what came of it. A round that fetched something new is no attempt; the window
 bounds how many there are. For a share the model may take its whole from a
 passage it was shown, `{"take": {...}}` with the parameter, the number, one of

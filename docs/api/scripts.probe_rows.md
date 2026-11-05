@@ -39,7 +39,8 @@ own lists from it as the run does (the profile's `document_axes`).
 
 `--compute` takes the verified rows of such a stored probe and asks only what
 the compute step leaves open, so its prompt can be tried without reading the
-plans again.
+plans again. With the database and `--index` its search by a sentence ranks
+the plan as a run does; without them that search finds nothing.
 
 `--survey --read` runs the rebuilt harvest's survey and its reading of each
 parameter; `--comb` adds the search for what the reading left open, ranked as
@@ -99,6 +100,15 @@ The frame, the rows and the coordinates of each document's passages.
 
 *passages* are {document: sources} in place of *hits*, and
 *document_spec* gives each document the spec its own lists close.
+
+### ranking
+
+```python
+def ranking(args)
+```
+
+rank(document_id, probes, exclude): the plan ranked for sentences as a
+run ranks it, over the global index named by `--index`.
 
 ### survey_over
 

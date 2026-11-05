@@ -388,11 +388,12 @@ def printed(number):
     return {"ok": True, "stdout": f"{number}\n", "error": None}
 
 
-def computing(monkeypatch, *said, ran=None, plan=None):
+def computing(monkeypatch, *said, ran=None, plan=None, rank=None):
     """A compute step whose model says *said* in turn. Its requests, the code
     runs with what they were handed, and the trace. *ran* is what every run
     prints, or a list of what each prints in turn. *plan* is the plan's
-    passages, which give the request its tools."""
+    passages, which give the request its tools, and *rank* how the run ranks
+    them for a sentence."""
     told = iter(said)
     asked, runs, events = [], [], []
 
@@ -420,7 +421,7 @@ def computing(monkeypatch, *said, ran=None, plan=None):
     # A plan of one page: what a search lists and a fetch shows is cut to
     # two pages of it.
     step = (runner.make_computer(PROFILE, lambda document_id: plan,
-                                 lambda document_id: 1)
+                                 lambda document_id: 1, rank)
             if plan is not None else runner.make_computer(PROFILE))
     return step, asked, runs, events
 
@@ -800,7 +801,48 @@ def test_the_request_offers_the_search_only_with_the_plan(monkeypatch):
         run_step(step, share(21), amount(185200))
         reply = json.dumps(asked[0]["response_format"])
         assert ('"more"' in reply) is offered
+        assert ('"similar"' in reply) is offered
         assert '"take"' in reply and '"quote"' in reply
+
+
+SENTENCE = "Der Wärmeverbrauch der Stadt beträgt 200.000 MWh im Jahr 2023."
+
+
+def test_a_sentence_lists_the_passages_of_the_plan_nearest_it(monkeypatch):
+    # Every tool set searches by a sentence the model writes as the plan
+    # would print it (owner decision 2026-11-05), ranked as the run ranks
+    # the plan, the passages the request shows left out.
+    plan = plan_of("Abschnitt davor.", BALANCE)
+    ranked = []
+
+    def rank(document_id, probes, exclude):
+        ranked.append((document_id, probes, set(exclude)))
+        return [s for s in reversed(plan)
+                if (s.owner_kind, s.owner_id) not in exclude]
+
+    near = json.dumps({"more": [{"get": "similar", "text": SENTENCE}]})
+    fetch = json.dumps({"more": [{"get": "hit", "id": "H1"}]})
+    step, asked, _runs, events = computing(
+        monkeypatch, near, fetch, take(), CODE,
+        answered(38892.0, quote="Der Wärmeverbrauch der Stadt"),
+        plan=plan, rank=rank)
+    report, _done = run_step(step, share(21))
+    assert ranked == [(7, [SENTENCE], {("table", 9)})]
+    listed = json.loads(asked[1]["messages"][1]["content"])["hits"]
+    assert listed[0]["similar"] == SENTENCE
+    assert [hit["line"] for hit in listed[0]["hits"]] == [
+        BALANCE, "Abschnitt davor."]
+    assert report.tuples[-1]["quantity_source"] == ["section", 21]
+    assert events[-1]["searched"] == 1 and events[-1]["fetched"] == 1
+
+
+def test_a_sentence_finds_nothing_where_the_run_ranks_nothing(monkeypatch):
+    near = json.dumps({"more": [{"get": "similar", "text": SENTENCE}]})
+    step, asked, _runs, events = computing(monkeypatch, near, NOTHING,
+                                           plan=plan_of(BALANCE))
+    report, _done = run_step(step, share(21))
+    assert len(report.tuples) == 1
+    assert events[-1]["searched"] == 0 and events[-1]["fetched"] == 0
 
 
 def test_a_document_with_nothing_open_asks_nothing(monkeypatch):

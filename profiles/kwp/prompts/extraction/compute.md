@@ -28,6 +28,7 @@ Im Plan nachsehen kannst du mit "more", einer Liste von Anfragen:
 - {"get": "next"} oder {"get": "previous"}: den Abschnitt nach oder vor der Passage des Anteils oder der ersten Zahl, beim nächsten Mal den danach oder davor;
 - {"get": "item", "id": "<<Platzhalter>>"}: die Tabelle oder Abbildung, deren Platzhalter in eckigen Klammern im Text steht;
 - {"get": "search", "pattern": "<<regulärer Ausdruck>>"}: eine Trefferliste der Passagen des Plans, deren Text das Muster enthält, ohne Unterschied von Groß- und Kleinschreibung;
+- {"get": "similar", "text": "<<Satz, wie der Plan die gesuchte Angabe drucken würde>>"}: eine Trefferliste der Passagen des Plans, die diesem Satz am nächsten sind; was er nennt, darf erdacht sein;
 - {"get": "hit", "id": "<<id eines Treffers>>"}: die Passage dieses Treffers.
 Du bekommst dann dieselbe Frage noch einmal, das Nachgeforderte unter "more" und "hits".
 

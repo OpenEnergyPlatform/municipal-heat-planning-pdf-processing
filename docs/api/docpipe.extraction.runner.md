@@ -2197,7 +2197,8 @@ or None where nothing was open. None where the profile has no such step.
 
 ```python
 def make_computer(profile, passages_of: Optional[Callable] = None,
-                  pages_of: Optional[Callable] = None) -> Optional[Callable]
+                  pages_of: Optional[Callable] = None,
+                  rank: Optional[Callable] = None) -> Optional[Callable]
 ```
 
 The step that works out what a document's verified rows leave open
@@ -2214,9 +2215,12 @@ Two questions that come to one statement leave one row: the profile's
 *passages_of(document_id)* is the plan's passages in their order. With it
 a request has the reading's tools (`reading.Gathered`: the next or the
 previous section, a table or figure by its placeholder, a search by
-pattern), each passage cut to the survey's two pages (*pages_of*), and a
-question that takes a number (`Question.take`) may take it from a passage
-they fetched (owner decision 2026-11-05).
+pattern or by a sentence), each passage cut to the survey's two pages
+(*pages_of*), and a question that takes a number (`Question.take`) may
+take it from a passage they fetched (owner decision 2026-11-05).
+*rank(document_id, probes, exclude)* is the plan ranked for a sentence,
+which "similar" lists (`make_more_sources` in a run); without it that
+search finds nothing.
 
 ### split_long_sources
 
