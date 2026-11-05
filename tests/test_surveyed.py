@@ -38,6 +38,8 @@ from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from docpipe.extraction import (combing, fields, reading, runner, survey,
                                 surveyed)
 from docpipe.extraction.pipeline import (Batch, DocumentReport, Row, Source,
@@ -441,6 +443,24 @@ def test_a_spec_with_groups_and_every_prompt_harvests_from_the_survey(
     assert entry["flow"] == runner.FIELDWISE
     assert runner.FIELD_PROMPT_ID in entry["prompts"]
     assert runner.SURVEY_PROMPT_IDS[0] not in runner.sent_prompt_ids(False)
+
+
+def test_a_spec_with_groups_and_a_missing_prompt_stops_and_names_it(
+        monkeypatch):
+    real = runner.prompts.load
+    for missing in runner.SURVEY_PROMPT_IDS:
+        def load(prompt_id, profile=None, _missing=missing):
+            if prompt_id == _missing:
+                raise FileNotFoundError(prompt_id)
+            return real(prompt_id, profile)
+
+        monkeypatch.setattr(runner.prompts, "load", load)
+        with pytest.raises(LookupError) as stopped:
+            runner.surveyed_flow(SPEC)
+        assert missing in str(stopped.value)
+        # A spec without groups never asked for the survey, so the same
+        # profile harvests it the old way.
+        assert not runner.surveyed_flow(replace(SPEC, groups={}))
 
 
 # -- a parameter the survey named no passage for --------------------------------

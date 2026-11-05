@@ -298,12 +298,15 @@ over a stored harvest) searches nothing; each search is traced as `seek`.
 
 ### The run harvests from the survey
 
-A run harvests from the survey of each plan wherever its profile can
-(`runner.surveyed_flow`): the spec names groups and the profile writes the four
-prompts `extraction/survey`, `read_values`, `read_text` and `comb`
-(`runner.SURVEY_PROMPT_IDS`). kwp and
-scenarios do; a profile without them is harvested field by field as before,
-so the two flows stand side by side until every profile has moved. Per document
+A run harvests from the survey of each plan wherever its spec names groups
+(`runner.surveyed_flow`), and then the profile must write the four prompts
+`extraction/survey`, `read_values`, `read_text` and `comb`
+(`runner.SURVEY_PROMPT_IDS`). kwp and scenarios do. A profile whose spec names
+groups and lacks one of them is broken, and the run stops at the start and names
+the prompt, for every run and every probe, as `spec.load` stops at a broken group
+(owner decision 2026-11-04). It used to harvest field by field instead, saying
+so only in a log line. A spec without groups is harvested field by field as
+before, so the two flows stand side by side until every profile has moved. Per document
 the run surveys, reads and combs (`surveyed.SurveyedHarvest`), then folds, runs
 the compute step and writes the file with its stamp as for any harvest. This
 flow writes no anchors, sends no frame request, builds no map of places and has
@@ -2537,12 +2540,12 @@ Author: Felix Vossel
 
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
-A run harvests from the survey of each plan wherever its profile can
-(`surveyed_flow`: the spec names groups and the profile writes the survey,
-reading and combing prompts): survey, reading and combing per document
-(`surveyed.py`), then the fold, the compute step and the file with its stamp
-as below. A profile that cannot yet is harvested field by field, the flow the
-rest of this note describes; the passes over a stored harvest run on the
+A run harvests from the survey of each plan wherever its spec names groups
+(`surveyed_flow`, which stops the run where the profile lacks a prompt of
+the survey): survey, reading and combing per document (`surveyed.py`), then
+the fold, the compute step and the file with its stamp as below. A spec
+without groups is harvested field by field, the flow the rest of this note
+describes; the passes over a stored harvest run on the
 steps of whichever flow the run has.
 
 This module supplies the loop's expensive dependencies from the real world:

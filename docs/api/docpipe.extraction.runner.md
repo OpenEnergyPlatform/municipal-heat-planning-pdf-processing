@@ -4,12 +4,12 @@
 
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
-A run harvests from the survey of each plan wherever its profile can
-(`surveyed_flow`: the spec names groups and the profile writes the survey,
-reading and combing prompts): survey, reading and combing per document
-(`surveyed.py`), then the fold, the compute step and the file with its stamp
-as below. A profile that cannot yet is harvested field by field, the flow the
-rest of this note describes; the passes over a stored harvest run on the
+A run harvests from the survey of each plan wherever its spec names groups
+(`surveyed_flow`, which stops the run where the profile lacks a prompt of
+the survey): survey, reading and combing per document (`surveyed.py`), then
+the fold, the compute step and the file with its stamp as below. A spec
+without groups is harvested field by field, the flow the rest of this note
+describes; the passes over a stored harvest run on the
 steps of whichever flow the run has.
 
 This module supplies the loop's expensive dependencies from the real world:
@@ -2356,9 +2356,15 @@ The prompts a harvest of *flow* (this run's when None) sends.
 def surveyed_flow(spec: Spec, profile=None) -> bool
 ```
 
-Whether a run harvests from the survey: its spec names groups and the
-profile writes every prompt of it. Otherwise it harvests field by field
-as before, which is where a profile not yet moved over stays.
+Whether a run harvests from the survey: its spec names groups. A spec
+without groups harvests field by field, which is where a profile not yet
+moved over stays.
+
+A spec with groups whose profile lacks a prompt of the survey is a broken
+profile, not a profile to harvest the old way with: the run stops and
+names the prompt, as `spec.load` stops at a broken group (owner decision
+2026-11-04). Switching silently harvested 100 plans one coordinate at a
+time and said so only in a log line.
 
 ### producer
 
