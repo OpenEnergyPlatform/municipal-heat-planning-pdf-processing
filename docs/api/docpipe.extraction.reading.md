@@ -196,8 +196,8 @@ def __init__(self, spec, ask_values: Callable, ask_text: Callable,
 #### Reader.context_of
 
 ```python
-def context_of(self, source: Source, tuples: list,
-               passages: dict) -> tuple
+def context_of(self, source: Source, tuples: list, passages: dict,
+               budget: Optional[int] = None) -> tuple
 ```
 
 (what the requests of a passage show beside it, the section it
@@ -210,13 +210,15 @@ frame coordinate shows (`group_context`).
 ```python
 def read(self, document_id: int, parameter, source: Source,
          tuples: list, pairs: list, passages: dict,
-         shown: Optional[Source] = None) -> Read
+         shown: Optional[Source] = None,
+         budget: Optional[int] = None) -> Read
 ```
 
 *source* is the passage a value is verified against, *shown* the
-piece of it the requests show. The values in rounds (`_values`),
-each placed in its table (`_placed`), then each group of the spec for
-each value (`_value_group`).
+piece of it the requests show, *budget* the survey's two pages, which
+the text around a table or figure fits (`around_of`). The values in
+rounds (`_values`), each placed in its table (`_placed`), then each
+group of the spec for each value (`_value_group`).
 
 ## Functions
 
@@ -340,19 +342,18 @@ passage's text carries it already or no section holds it.
 ### around_of
 
 ```python
-def around_of(source: Source, passages: dict) -> Optional[Source]
+def around_of(source: Source, passages: dict,
+              budget: Optional[int]) -> Optional[Source]
 ```
 
 The text of the section a table or figure stands in, as its request
-shows it: its placeholder with at most `AROUND_CHARS` characters on each
-side, cut at a word, and never past another table's or figure's
-placeholder (owner decision 2026-11-05, ticket 26; before, the whole
-section up to two pages, which showed a neighbouring area's numbers). The
-sentence that announces the table and the line under it, where its year
-and its scenario are printed, stay. One stretch of the section's text, so
-a quote from it is a quote from the section. None for a section, for a
-table or figure whose section is not among *passages*, and for one whose
-placeholder its section does not print: then its place is unknown.
+shows it (owner decisions 2026-11-04 and 2026-11-05): the whole section,
+other tables and figures of it included, when it fits *budget*, the
+survey's two pages, else that many characters around the table's place
+in it. The model reads from it what it needs: a cut to 200 characters on
+each side would have hidden the text of 72 % of the quotes the m8 run
+took from a table's section. None for a section, and for a table or
+figure whose section is not among *passages*.
 
 ### more_schema
 

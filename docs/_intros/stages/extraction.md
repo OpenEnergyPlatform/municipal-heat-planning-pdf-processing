@@ -214,13 +214,13 @@ for a group whose spec entry says `"definition": "full"`, which shows the full
 description (kwp: `context`, the group that classifies; a parameter without a
 brief shows its description everywhere). A table or a figure is shown with the
 text around it (`reading.around_of`, owner decisions 2026-11-04 and
-2026-11-05), where the sentence that announces it and the line under it print
-its year and its scenario: at most `AROUND_CHARS` (200) characters before and
-after its placeholder in its section, cut at the last word inside the limit,
-and ending early at the placeholder of any other table or figure
-(`[p3_tbl0]` or `[p3_tbl0: caption]`). It was the whole section up to the
-survey's two pages, which showed the numbers of a neighbouring area. A
-coordinate quoted from it cites the section. Every request also
+2026-11-05): the whole section it stands in, other tables and figures of it
+included, where the sentence that announces it and the line under it print
+its year, its scenario and its area. A section longer than the survey's two
+pages is shown as that many characters around the table's placeholder
+(`[p3_tbl0]` or `[p3_tbl0: caption]`). A cut to 200 characters on each side
+would have hidden the text of 72 % of the quotes the m8 run took from a
+table's section. A coordinate quoted from it cites the section. Every request also
 shows the heading its passage stands under, a table's or figure's that of its
 section, a section's its own (`reading.heading_of`, owner decision
 2026-11-05): where the passage's text does not carry it, a quote may stand in

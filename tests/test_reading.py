@@ -27,10 +27,11 @@ against a year the value read under its own head.
 
 A table too long for the model's window is read in halves of its rows, AND
 a single row that does not fit, or a piece no round answered, is a hole of
-its own while the others are read. A table or figure is shown with at most
-200 characters of its section on each side, cut at a word, AND never past
-another table's or figure's placeholder, and a coordinate quoted from there
-cites the section. A passage is
+its own while the others are read. A table or figure is shown with its
+whole section, other tables and figures of it included, AND with the part
+around its placeholder where the section is longer than the survey's two
+pages (owner decision 2026-11-05); a coordinate quoted from there cites the
+section. A passage is
 shown with the heading it stands under, a table's or figure's that of its
 section, a section's its own, AND a quote may stand in that heading where the
 passage's text does not carry it.
@@ -653,37 +654,25 @@ def test_a_year_named_by_the_word_but_not_of_the_plan_is_not_read():
 
 def test_a_table_is_shown_with_its_section_or_the_part_around_its_place():
     passages = {("section", 9): SECTION}
-    assert reading.around_of(placed(), passages).text == SECTION.text
-    assert reading.around_of(table(), passages) is None        # no section
-    assert reading.around_of(SECTION, passages) is None        # a section
-    assert reading.around_of(placed(), {}) is None             # not shown
+    assert reading.around_of(placed(), passages, 4000).text == SECTION.text
+    long = replace(SECTION, text="x" * 5000 + "[p2_tbl5: Tabelle 3]"
+                   + "y" * 5000)
+    cut = reading.around_of(placed(), {("section", 9): long}, 1000).text
+    assert len(cut) == 1000 and "[p2_tbl5" in cut
+    assert reading.around_of(table(), passages, 4000) is None    # no section
+    assert reading.around_of(SECTION, passages, 4000) is None    # a section
+    assert reading.around_of(placed(), {}, 4000) is None         # not shown
 
 
-WORDS = " ".join(f"Wort{n}" for n in range(200))
-
-
-def test_the_text_around_a_table_is_cut_at_a_word_on_each_side():
-    long = replace(SECTION, text=WORDS + " [p2_tbl5: Tabelle 3] " + WORDS)
-    around = reading.around_of(placed(), {("section", 9): long}).text
-    before, after = around.split("[p2_tbl5: Tabelle 3]")
-    assert 0 < len(before) <= reading.AROUND_CHARS
-    assert 0 < len(after) <= reading.AROUND_CHARS
-    # Whole words only: each side starts and ends where a word does.
-    assert all(word in WORDS.split() for word in before.split() + after.split())
-    assert before.split()[-1] == "Wort199" and after.split()[0] == "Wort0"
-
-
-def test_the_text_around_a_table_ends_at_another_table_or_figure():
+def test_the_text_around_a_table_keeps_the_other_tables_of_its_section():
     text = ("Vorher [p2_tbl1: Tabelle 2] Danach kommt die Tabelle. "
-            "[p2_tbl5: Tabelle 3] Sie zeigt 2022. [p4_img2] Fremde 999 t CO2.")
-    around = reading.around_of(
-        placed(), {("section", 9): replace(SECTION, text=text)}).text
-    assert around == "Danach kommt die Tabelle. [p2_tbl5: Tabelle 3] Sie zeigt 2022."
-    # the failure by construction: without the other places it all shows
-    plain = text.replace("[p2_tbl1: Tabelle 2] ", "").replace("[p4_img2] ", "")
-    whole = reading.around_of(
-        placed(), {("section", 9): replace(SECTION, text=plain)}).text
-    assert "Fremde 999 t CO2." in whole and "Vorher" in whole
+            "[p2_tbl5: Tabelle 3] Sie zeigt 2022. [p4_img2] Weiter 999 t CO2.")
+    whole = replace(SECTION, text=text)
+    assert reading.around_of(placed(), {("section", 9): whole},
+                             4000).text == text
+    # the failure by construction: past the survey's two pages it is cut
+    assert len(reading.around_of(placed(), {("section", 9): whole},
+                                 40).text) == 40
 
 
 GAS = {"value": 1200, "quote": "| Erdgas | 1.200 | 800 | 2.000 |",

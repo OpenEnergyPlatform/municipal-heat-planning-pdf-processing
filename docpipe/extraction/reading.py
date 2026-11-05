@@ -94,15 +94,6 @@ NO_ANSWER = "no_answer"
 # 2026-11-04: the best 15 sections, 20 tables and 20 figures).
 SHOWN = {"section": 15, "table": 20, "figure": 20}
 
-# How far the text around a table or figure reaches on each side of its
-# placeholder (owner decision 2026-11-05, ticket 26): at most this many
-# characters, cut at a word, and never past the placeholder of another table
-# or figure, whose numbers are not this one's.
-AROUND_CHARS = 200
-# A table's or figure's placeholder as a section's text carries it:
-# "[p153_tbl0]" or, with its caption, "[p153_tbl0: Parameter und ...]".
-ITEM_PLACEHOLDER = re.compile(r"\[(p\d+_(?:tbl|img)\d+)(?::[^\]]*)?\]")
-
 # A group's section of a prompt the groups share opens with this line; what
 # stands before the first section is every group's (`group_prompts`).
 GROUP_SECTION = re.compile(r"^<!-- group: ([A-Za-z_]+) -->[ \t]*$",
@@ -274,39 +265,16 @@ def heading_of(source: Source) -> list:
                    {**provenance, "owner_kind": "section"})]
 
 
-def _words_before(text: str, limit: int) -> str:
-    """The end of *text*, at most *limit* characters, starting at a word."""
-    if len(text) <= limit:
-        return text
-    cut = text[-limit:]
-    if not text[-limit - 1].isspace() and not cut[0].isspace():
-        space = re.search(r"\s", cut)
-        cut = cut[space.end():] if space else ""
-    return cut
-
-
-def _words_after(text: str, limit: int) -> str:
-    """The start of *text*, at most *limit* characters, ending at a word."""
-    if len(text) <= limit:
-        return text
-    cut = text[:limit]
-    if not text[limit].isspace() and not cut[-1].isspace():
-        spaces = [m.start() for m in re.finditer(r"\s", cut)]
-        cut = cut[:spaces[-1]] if spaces else ""
-    return cut
-
-
-def around_of(source: Source, passages: dict) -> Optional[Source]:
+def around_of(source: Source, passages: dict,
+              budget: Optional[int]) -> Optional[Source]:
     """The text of the section a table or figure stands in, as its request
-    shows it: its placeholder with at most `AROUND_CHARS` characters on each
-    side, cut at a word, and never past another table's or figure's
-    placeholder (owner decision 2026-11-05, ticket 26; before, the whole
-    section up to two pages, which showed a neighbouring area's numbers). The
-    sentence that announces the table and the line under it, where its year
-    and its scenario are printed, stay. One stretch of the section's text, so
-    a quote from it is a quote from the section. None for a section, for a
-    table or figure whose section is not among *passages*, and for one whose
-    placeholder its section does not print: then its place is unknown."""
+    shows it (owner decisions 2026-11-04 and 2026-11-05): the whole section,
+    other tables and figures of it included, when it fits *budget*, the
+    survey's two pages, else that many characters around the table's place
+    in it. The model reads from it what it needs: a cut to 200 characters on
+    each side would have hidden the text of 72 % of the quotes the m8 run
+    took from a table's section. None for a section, and for a table or
+    figure whose section is not among *passages*."""
     provenance = source.provenance or {}
     parent = provenance.get("parent_section")
     if source.owner_kind == "section" or parent is None:
@@ -315,18 +283,10 @@ def around_of(source: Source, passages: dict) -> Optional[Source]:
     if section is None or not section.text:
         return None
     text = section.text
-    block = provenance.get("block_id")
-    items = list(ITEM_PLACEHOLDER.finditer(text))
-    own = next((m for m in items if m.group(1) == block), None)
-    if own is None:
-        return None
-    start = max((m.end() for m in items if m.end() <= own.start()),
-                default=0)
-    end = min((m.start() for m in items if m.start() >= own.end()),
-              default=len(text))
-    before = _words_before(text[start:own.start()], AROUND_CHARS)
-    after = _words_after(text[own.end():end], AROUND_CHARS)
-    return replace(section, text=(before + own.group() + after).strip())
+    if budget and len(text) > budget:
+        block = provenance.get("block_id") or ""
+        text = window_around(text, f"[{block}", budget)
+    return replace(section, text=text)
 
 
 # -- what a reply may ask of the rest of the plan -----------------------------
@@ -1044,29 +1004,31 @@ class Reader:
             owner = (source.owner_kind, source.owner_id)
             return self.read(document_id, parameter, source,
                              found.tuples_at(owner, "frame"), pairs, passages,
-                             shown=shown)
+                             shown=shown, budget=budget)
         if self.pool is None:
             return [one(job) for job in jobs]
         return list(self.pool.map(one, jobs))
 
-    def context_of(self, source: Source, tuples: list,
-                   passages: dict) -> tuple:
+    def context_of(self, source: Source, tuples: list, passages: dict,
+                   budget: Optional[int] = None) -> tuple:
         """(what the requests of a passage show beside it, the section it
         was cut from): the text around a table or figure (`around_of`) and
         the survey's pairs of the passage, which only a group that asks a
         frame coordinate shows (`group_context`)."""
-        around = around_of(source, passages)
+        around = around_of(source, passages, budget)
         context = {"around": around.text} if around is not None else {}
         context["known"] = known_of(tuples, self.frame_slots)
         return context, around
 
     def read(self, document_id: int, parameter, source: Source,
              tuples: list, pairs: list, passages: dict,
-             shown: Optional[Source] = None) -> Read:
+             shown: Optional[Source] = None,
+             budget: Optional[int] = None) -> Read:
         """*source* is the passage a value is verified against, *shown* the
-        piece of it the requests show. The values in rounds (`_values`),
-        each placed in its table (`_placed`), then each group of the spec for
-        each value (`_value_group`)."""
+        piece of it the requests show, *budget* the survey's two pages, which
+        the text around a table or figure fits (`around_of`). The values in
+        rounds (`_values`), each placed in its table (`_placed`), then each
+        group of the spec for each value (`_value_group`)."""
         shown = shown or source
         slots = slots_of(self.spec, parameter)
         # The reading's spec rides on the batch, so the fold checks a value
@@ -1075,7 +1037,7 @@ class Reader:
                       [WorkItem(document_id, parameter, source)],
                       spec=self.spec)
         bases = self.bases(pairs)
-        context, around = self.context_of(source, tuples, passages)
+        context, around = self.context_of(source, tuples, passages, budget)
         result = Read(batch, [])
         # What a coordinate's quote may stand in besides what a request
         # shows of the passage: its heading, the text around it, the frame.

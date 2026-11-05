@@ -213,8 +213,8 @@ base year and mentions a handful of others, so several pairs matched and the
 branch stood down. More than the count, it wrote a year that does not stand in
 the passage, and every value of this corpus says in the plan what it refers
 to. Where it says so is the text around the table: the field sweep's first
-window is its section, and the reading shows at most 200 characters on each
-side of the table's placeholder, ending early at another table's.
+window is its section, and the reading shows the whole section, up to the
+survey's two pages around the table's placeholder.
 
 The slice gate decides, before any other coordinate is asked, whether a
 row belongs in this run's graph at all: `SLICE = {"quantity":
