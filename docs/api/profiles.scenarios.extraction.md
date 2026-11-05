@@ -114,4 +114,15 @@ The OEKG shapes of the last `vocabulary --refresh`, or none.
 Where the preflight finds the file `NOT_EXTRACTED` is held against: the
 same one the serializer reads its paths from.
 
+### document_context
+
+```python
+def document_context(conn, document_id: int) -> dict
+```
+
+What a publication says of itself, for the sentence it is searched
+with: its title as the corpus index holds it (`DocumentMeta.title`).
+Missing metadata is no error: the sentence is then written from the
+parameter alone.
+
 [Back to the index](../README.md)

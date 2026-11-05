@@ -167,15 +167,20 @@ names, a passage both answer with the parameters of both.
 
 ```python
 def sought_survey(found: Found, rank: Callable, document_id: int,
-                  parameters: list) -> Found
+                  parameters: list,
+                  probes: Optional[Callable] = None) -> Found
 ```
 
 The survey of *parameters*, which the survey of the whole plan named
 no passage for: each named for the passage the combing's search over the
-whole plan (*rank*) ranks first for its label. What the survey said of
-every passage stands beside it without its parameters, so the reading
-sees the plan's pairs and years as it does anywhere else. A parameter
-the search finds no passage for is left out.
+whole plan (*rank*) ranks first for its search sentences,
+*probes(parameter, document_id)* (owner decision 2026-11-05: HyDE
+sentences, one written for the document for a field about the document
+itself, one written per run for any other, `runner.make_seek_probes`),
+and for its label where it has none. What the survey said of every
+passage stands beside it without its parameters, so the reading sees the
+plan's pairs and years as it does anywhere else. A parameter the search
+finds no passage for is left out.
 
 ### taken_of
 

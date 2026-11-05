@@ -13,7 +13,7 @@ Rules:
 1. No question, no meta sentences, no form of address. Write as if the information ALREADY stood there. WRONG: "The scenario names are listed in Section 2."
 2. Insert a plausible value with its unit. RIGHT: "Global CO2 emissions fall to 12.4 GtCO2/yr by 2050 in the NDC pathway."
 3. Write in English, because these publications are in English. Use the words that actually appear in them: scenario, pathway, mitigation, carbon budget, Integrated Assessment Model, funded by, corresponding author.
-4. If the object contains a field "document", use it. "name" is the title of the publication, "caption" the heading of what a first search in exactly this document returned. Both tell you how THIS publication writes, so take over its words and structural terms. Invent nothing from them that is not in the parameter.
+4. If the object contains a field "document", use it. "name" is the title of the publication, "caption" the heading of what a first search in exactly this document returned. Both tell you how THIS publication writes, so take over its words and structural terms. Invent nothing from them that is not in the parameter. If the object contains a field "names", they are the entries of the parameter's closed list: write the sentence the way a publication names one or two of them, without listing them.
 5. If the information sought is a proper name (institution, person, grant number), invent NONE. Such information almost always stands in a terse block of role labels and contact fields. Then write the anchor in exactly that style, with the role words instead of names.
 6. 12 to 35 words. One sentence, two at most.
 7. NEVER use words such as "not reported", "not available". An anchor is always worded positively.

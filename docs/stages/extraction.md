@@ -268,9 +268,16 @@ is from here on a finding about the plan. The ranking is handed in:
 
 A parameter the survey of the whole plan named no passage for is searched for
 once before it can count as not stated (owner decision 2026-11-04,
-`surveyed.sought_survey`): the same ranking, for the parameter's label, names
-the first passage of the plan for it, and the reading reads it there with its
-own tools to look further, before the combing. That passage is one of the
+`surveyed.sought_survey`): the same ranking names the first passage of the
+plan for it, and the reading reads it there with its own tools to look
+further, before the combing. The ranking searches with HyDE sentences, as a
+document would print the value (owner decision 2026-11-05,
+`runner.make_seek_probes`): a parameter the profile names as the document's
+own (`FRONT_PAGE_PARAMETERS`) with one written for this document from what
+it says of itself (`document_context`), any other with one written once per
+run from its label, description and the names of its list (`phrase_payload`),
+and with its label only where no sentence could be written. Each sentence is
+traced as `seek_probe`. That passage is one of the
 parameter's sources, so a reading there that came to nothing leaves the
 parameter `exhausted` and not `unstated`. A survey of part of a plan (a pass
 over a stored harvest) searches nothing; each search is traced as `seek`.

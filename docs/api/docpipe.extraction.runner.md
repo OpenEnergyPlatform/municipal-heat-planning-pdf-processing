@@ -1431,6 +1431,53 @@ The value itself has no set here. The plan searches with the one short
 sentence `document_anchor` writes for the document it plans, and a set
 written once for the whole corpus was never searched with.
 
+### phrase_payload
+
+```python
+def phrase_payload(parameter, context: Optional[dict] = None,
+                   frame: Optional[dict] = None) -> dict
+```
+
+What a phrase request is written from: the parameter's label and
+description, the names of its list where it has one, what the document
+says of itself (*context*) and the pair the sentence searches for
+(*frame*).
+
+### document_context_of
+
+```python
+def document_context_of(db_path: Optional[Path],
+                        document_context: Optional[Callable]) -> Callable
+```
+
+context_of(document_id): what the document says of itself (the
+profile's `document_context`), each call on its own read-only
+connection; {} where the profile has none.
+
+### make_seek_probes
+
+```python
+def make_seek_probes(own=(), context_of: Optional[Callable] = None,
+                     write: Optional[Callable] = None) -> Callable
+```
+
+probes(parameter, document_id) -> the sentences the search for a
+parameter the survey named no passage for ranks with
+(`surveyed.sought_survey`, owner decision 2026-11-05).
+
+A parameter about the document itself (*own*, the profile's
+`FRONT_PAGE_PARAMETERS`: its title, authors, date, DOI and abstract) gets
+a sentence written for this document from what it says of itself
+(*context_of(document_id)*, the profile's `document_context`), since the
+document's own name finds its title page. Any other gets one sentence per
+run, written once from
+its label, description and list names and kept: the document's name
+pulls such a sentence toward the title page and away from the passage
+that states the value. *write(parameter, context)* writes the sentences,
+one phrase request (`document_anchor`) where not given. A parameter no
+sentence could be written for gets none, and the search falls back to
+its label.
+
 ### document_anchor
 
 ```python
@@ -1594,13 +1641,14 @@ crop.
 ### make_comber
 
 ```python
-def make_comber(spec: Spec, rank: Callable)
+def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None)
 ```
 
 The search for what the reading left open (`combing.Comber`), or None
 when the profile writes no prompt for it or its spec names no groups.
 *rank(document_id, probes, exclude)* is the plan's passages best first
-for the search sentences, `make_more_sources` in a harvest.
+for the search sentences, `make_more_sources` in a harvest. *seek* is
+the sought search's sentences (`make_seek_probes`).
 
 ### make_survey
 

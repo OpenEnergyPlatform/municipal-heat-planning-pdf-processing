@@ -117,7 +117,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.remap](docpipe.extraction.remap.md): Re-resolves a moved or grown vocabulary against a harvest already on disk. (10 functions)
 - [docpipe.extraction.replies](docpipe.extraction.replies.md): The reply each extraction request asks for, as a JSON schema. (6 functions)
 - [docpipe.extraction.review](docpipe.extraction.review.md): Reads again, under a narrower window, the values at the lowest trust level. (8 functions)
-- [docpipe.extraction.runner](docpipe.extraction.runner.md): Wires the pure harvest loop of `pipeline.py` to the live stack. (12 classes, 113 functions)
+- [docpipe.extraction.runner](docpipe.extraction.runner.md): Wires the pure harvest loop of `pipeline.py` to the live stack. (12 classes, 116 functions)
 - [docpipe.extraction.scheduler](docpipe.extraction.scheduler.md): One queue for every model request of a run, served oldest document first. (5 classes, 2 functions)
 - [docpipe.extraction.schema](docpipe.extraction.schema.md): Builds a JSON Schema for the harvest, the stamp and the trace. (7 functions)
 - [docpipe.extraction.scratch](docpipe.extraction.scratch.md): Where a column of one's own lives, and why its harvest stays there. (1 function)
@@ -263,7 +263,7 @@ is for and what it hands to what; this is the reference.
 - [profiles.scenarios.catalog](profiles.scenarios.catalog.md): How AR6 publications present themselves in the picker: by title and year, filtered by year, venue and the scenarios they document. (1 class)
 - [profiles.scenarios.completion](profiles.scenarios.completion.md): What a publication's own text leaves open of its identity, looked up in an open catalogue (owner decisions 2026-11-04). (14 functions)
 - [profiles.scenarios.config](profiles.scenarios.config.md): Constants for the AR6 profile.
-- [profiles.scenarios.extraction](profiles.scenarios.extraction.md): Extraction stage wiring: where the ar6 spec lives, and the lists that are only closed once a document is named. (6 functions)
+- [profiles.scenarios.extraction](profiles.scenarios.extraction.md): Extraction stage wiring: where the ar6 spec lives, and the lists that are only closed once a document is named. (7 functions)
 - [profiles.scenarios.inference](profiles.scenarios.inference.md): What the answer loop says around the ar6 prompts.
 - [profiles.scenarios.kg](profiles.scenarios.kg.md): Harvested publication metadata to OEKG Turtle. (16 functions)
 - [profiles.scenarios.oekg_api](profiles.scenarios.oekg_api.md): What the OEKG scenario-bundle API would be asked, and what it would answer. (1 class, 14 functions)

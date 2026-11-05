@@ -52,6 +52,15 @@ def kept_quantities() -> tuple:
 SLICE = {"quantity": kept_quantities(), "year": None}
 
 
+# What a plan says about itself: asked once more over the opening of the
+# document in a harvest field by field, and searched with a sentence written
+# for this plan where the survey named no passage for it
+# (`runner.make_seek_probes`, owner decision 2026-11-05). The spec asks for no
+# such field of a heat plan, so every parameter is searched with a sentence
+# written once per run.
+FRONT_PAGE_PARAMETERS: tuple = ()
+
+
 def document_context(conn, document_id: int) -> dict:
     """What this plan says about itself, for the sentence it is searched with.
 

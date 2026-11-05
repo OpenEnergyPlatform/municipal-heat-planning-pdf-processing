@@ -226,7 +226,7 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
                 if (source.owner_kind, source.owner_id) not in exclude]
 
     pool = ThreadPoolExecutor(args.parallel)
-    rank = None
+    rank = seek = None
     if args.comb:
         from docpipe.inference import faiss_store, query_cache
         if not args.read or args.index is None:
@@ -238,6 +238,12 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
 
         def rank(document_id: int, probes: list, exclude: set) -> list:
             return more(document_id, probes, set(exclude), limit=0)
+
+        profile = active_profile()
+        seek = runner.make_seek_probes(
+            profile.component("extraction", "FRONT_PAGE_PARAMETERS") or (),
+            runner.document_context_of(
+                args.db, profile.component("extraction", "document_context")))
 
     def made_survey(doc_spec, only, scope):
         made = runner.make_survey(args.db, runner.narrow_spec(doc_spec, only),
@@ -259,7 +265,7 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
     def made_comber(doc_spec):
         if rank is None:
             return None
-        made = runner.make_comber(doc_spec, rank)
+        made = runner.make_comber(doc_spec, rank, seek)
         if made is None:
             raise SystemExit("no combing: the profile writes no comb prompt")
         made.pool = pool

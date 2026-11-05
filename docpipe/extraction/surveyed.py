@@ -116,19 +116,26 @@ class Taken:
 
 
 def sought_survey(found: Found, rank: Callable, document_id: int,
-                  parameters: list) -> Found:
+                  parameters: list,
+                  probes: Optional[Callable] = None) -> Found:
     """The survey of *parameters*, which the survey of the whole plan named
     no passage for: each named for the passage the combing's search over the
-    whole plan (*rank*) ranks first for its label. What the survey said of
-    every passage stands beside it without its parameters, so the reading
-    sees the plan's pairs and years as it does anywhere else. A parameter
-    the search finds no passage for is left out."""
+    whole plan (*rank*) ranks first for its search sentences,
+    *probes(parameter, document_id)* (owner decision 2026-11-05: HyDE
+    sentences, one written for the document for a field about the document
+    itself, one written per run for any other, `runner.make_seek_probes`),
+    and for its label where it has none. What the survey said of every
+    passage stands beside it without its parameters, so the reading sees the
+    plan's pairs and years as it does anywhere else. A parameter the search
+    finds no passage for is left out."""
     out = Found(True)
     merge(out, [Answer(owner, [], answer.quote,
                        {k: list(v) for k, v in answer.tuples.items()}, [])
                 for owner, answer in found.answers.items()])
     for parameter in parameters:
-        ranked = rank(document_id, [parameter.label], set())
+        sentences = ((probes(parameter, document_id) if probes else None)
+                     or [parameter.label])
+        ranked = rank(document_id, sentences, set())
         if ranked:
             merge(out, [Answer((ranked[0].owner_kind, ranked[0].owner_id),
                                [parameter.uri])])
@@ -245,7 +252,8 @@ class SurveyedHarvest:
             missing = [parameter for parameter in spec.parameters
                        if (not only or parameter.uri in only)
                        and not found.passages_of(parameter.uri)]
-            sought = sought_survey(found, comber.rank, document_id, missing)
+            sought = sought_survey(found, comber.rank, document_id, missing,
+                                   getattr(comber, "seek", None))
             if comber.trace is not None:
                 for owner, answer in sought.answers.items():
                     for uri in answer.parameters:

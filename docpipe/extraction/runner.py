@@ -73,6 +73,7 @@ from datetime import datetime, timezone
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Callable, Optional
 
 from docpipe import prompts
@@ -1348,6 +1349,95 @@ def anchor_targets(spec: Spec) -> list:
             if t[0] not in (PARAMETER_ANCHOR, UNIT_ANCHOR) or t[3]]
 
 
+def phrase_payload(parameter, context: Optional[dict] = None,
+                   frame: Optional[dict] = None) -> dict:
+    """What a phrase request is written from: the parameter's label and
+    description, the names of its list where it has one, what the document
+    says of itself (*context*) and the pair the sentence searches for
+    (*frame*)."""
+    body = {"label": parameter.label, "description": parameter.description}
+    if parameter.vocabulary:
+        # The entries a document names, which the label alone never does
+        # (owner decision 2026-11-05: the sentence is written from label,
+        # description and list names).
+        body["names"] = [labels[0] for labels in parameter.vocabulary.values()
+                         if labels]
+    if context:
+        body["document"] = context
+    if frame:
+        # The pair this sentence searches for, in the document's own
+        # wording where the frame read one. "Nutzwaermebedarf 2040 im
+        # Zielszenario" finds the table for 2040; the parameter alone
+        # finds the first table of the chapter, whatever its year.
+        body["frame"] = {k: frame.get(f"{k}_raw") or v
+                         for k, v in frame.items()
+                         if not k.endswith(("_raw", "_quote", "_source"))}
+    return body
+
+
+def document_context_of(db_path: Optional[Path],
+                        document_context: Optional[Callable]) -> Callable:
+    """context_of(document_id): what the document says of itself (the
+    profile's `document_context`), each call on its own read-only
+    connection; {} where the profile has none."""
+    def context_of(document_id) -> dict:
+        if document_context is None or db_path is None:
+            return {}
+        conn = sqlite3.connect(readonly_uri(db_path), uri=True)
+        try:
+            return dict(document_context(conn, document_id) or {})
+        finally:
+            conn.close()
+    return context_of
+
+
+def make_seek_probes(own=(), context_of: Optional[Callable] = None,
+                     write: Optional[Callable] = None) -> Callable:
+    """probes(parameter, document_id) -> the sentences the search for a
+    parameter the survey named no passage for ranks with
+    (`surveyed.sought_survey`, owner decision 2026-11-05).
+
+    A parameter about the document itself (*own*, the profile's
+    `FRONT_PAGE_PARAMETERS`: its title, authors, date, DOI and abstract) gets
+    a sentence written for this document from what it says of itself
+    (*context_of(document_id)*, the profile's `document_context`), since the
+    document's own name finds its title page. Any other gets one sentence per
+    run, written once from
+    its label, description and list names and kept: the document's name
+    pulls such a sentence toward the title page and away from the passage
+    that states the value. *write(parameter, context)* writes the sentences,
+    one phrase request (`document_anchor`) where not given. A parameter no
+    sentence could be written for gets none, and the search falls back to
+    its label.
+    """
+    own = set(own or ())
+    lock = threading.Lock()
+    made: dict = {}
+
+    def phrase(parameter, context):
+        if write is not None:
+            return list(write(parameter, context) or [])
+        return document_anchor(SimpleNamespace(parameters=[parameter]),
+                               context).get(parameter.uri, [])
+
+    def probes(parameter, document_id) -> list:
+        if parameter.uri in own:
+            context = dict(context_of(document_id) if context_of else {})
+            sentences = phrase(parameter, context)
+            per = "document"
+        else:
+            with lock:
+                if parameter.uri not in made:
+                    made[parameter.uri] = phrase(parameter, None)
+                sentences = made[parameter.uri]
+            per = "run"
+        for text in sentences:
+            trace.event("seek_probe", document_id, parameter=parameter.uri,
+                        per=per, text=text)
+        return list(sentences)
+    return probes
+
+
 def document_anchor(spec: Spec, context: Optional[dict] = None,
                     client=None, prompt=None,
                     frame: Optional[dict] = None,
@@ -1382,19 +1472,8 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                if isinstance(v, str) and v.strip()}
 
     def one(parameter):
-        body = {"label": parameter.label,
-                "description": parameter.description}
-        if context:
-            body["document"] = context
-        if frame:
-            # The pair this sentence searches for, in the document's own
-            # wording where the frame read one. "Nutzwaermebedarf 2040 im
-            # Zielszenario" finds the table for 2040; the parameter alone
-            # finds the first table of the chapter, whatever its year.
-            body["frame"] = {k: frame.get(f"{k}_raw") or v
-                             for k, v in frame.items()
-                             if not k.endswith(("_raw", "_quote", "_source"))}
-        payload = json.dumps(body, ensure_ascii=False, indent=2)
+        payload = json.dumps(phrase_payload(parameter, context, frame),
+                             ensure_ascii=False, indent=2)
         transport = lost = False
         conversation: list = [{"role": "user", "content": payload}]
         limit = int(prompt.meta.get("max_tokens", 300))
@@ -1982,11 +2061,12 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
         pool=AHEAD, trace=trace.event)
 
 
-def make_comber(spec: Spec, rank: Callable):
+def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
     """The search for what the reading left open (`combing.Comber`), or None
     when the profile writes no prompt for it or its spec names no groups.
     *rank(document_id, probes, exclude)* is the plan's passages best first
-    for the search sentences, `make_more_sources` in a harvest."""
+    for the search sentences, `make_more_sources` in a harvest. *seek* is
+    the sought search's sentences (`make_seek_probes`)."""
     if not spec.groups:
         return None
     try:
@@ -2008,10 +2088,14 @@ def make_comber(spec: Spec, rank: Callable):
             owner=source.owner_id, group=group,
             corrections=len(payload.get("corrections") or ()))
 
-    return combing_map.Comber(
+    comber = combing_map.Comber(
         spec, ask, rank, context_probes, row_context,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
         pool=AHEAD, trace=trace.event)
+    # The sentences the search for a parameter the survey named no passage
+    # for ranks with (`make_seek_probes`); None searches with its label.
+    comber.seek = seek
+    return comber
 
 
 def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
@@ -8280,13 +8364,16 @@ def main(argv: Optional[list] = None) -> int:
 
     whole = None
     if from_survey:
+        seek = make_seek_probes(
+            profile.component("extraction", "FRONT_PAGE_PARAMETERS") or (),
+            document_context_of(args.db, document_context))
         whole = surveyed_map.SurveyedHarvest(
             spec,
             lambda doc_spec, only, scope: make_survey(
                 args.db, narrow_spec(doc_spec, only), args.out, every=every,
                 image_root=args.image_root, scope=scope),
             lambda doc_spec: make_reader(doc_spec, args.image_root),
-            lambda doc_spec: make_comber(doc_spec, rank),
+            lambda doc_spec: make_comber(doc_spec, rank, seek),
             lambda document_id: every(document_id, set()), pages_of,
             spec_for=spec_for)
 
