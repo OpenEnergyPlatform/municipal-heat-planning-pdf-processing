@@ -36,6 +36,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from docpipe import jsonl                                   # noqa: E402
+from docpipe.extraction import trace                        # noqa: E402
 from docpipe.extraction.spec import load as load_spec       # noqa: E402
 from docpipe.profile import active_profile                  # noqa: E402
 
@@ -83,7 +84,7 @@ def organisation_normaliser(spec_path: Path):
 def harvest_files(directory: Path) -> list:
     """One file per plan, newest-glob order excluded: sorted for stable output."""
     return sorted(p for p in directory.glob("*.jsonl")
-                  if not p.name.endswith(".trace.jsonl"))
+                  if not trace.is_trace(p))
 
 
 def read_rows(path: Path) -> list:

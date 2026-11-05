@@ -17,7 +17,7 @@ rather than a stale document. Three schemas come out:
   harvest  one line of <name>.jsonl: an accepted tuple or a refused
            claim
   stamp    <name>.stamp.json, what produced that harvest
-  trace    one line of <name>.trace.jsonl, one event of the run
+  trace    one line of <name>.trace.jsonl.gz, one event of the run
 
 Every property carries a `description`, and every coordinate
 additionally carries `x-question` (the German question the model was
@@ -824,7 +824,7 @@ ASK_STAGES = ("survey", "read_values", "read_text", "comb", "phrase",
 
 
 def trace_schema() -> dict:
-    """One line of <name>.trace.jsonl: one event, never an aggregate."""
+    """One line of <name>.trace.jsonl.gz: one event, never an aggregate."""
     owner = _owner()
     # `via_base`: of `filled`, the years read as one of the plan's base years
     # by the word the row's passage uses for its state. `via_target`: the
@@ -1075,7 +1075,18 @@ def trace_schema() -> dict:
                        "matched": {"type": "array",
                                    "items": {"type": "string"}},
                        "detail": {"type": "string"}},
+        # A text the requests of a document repeat (a system prompt, a reply
+        # format, a passage, a list of options, a picture), written once
+        # before the first event that refers to it by `id` (trace.py).
+        "piece": {"id": {"type": "string"}, "text": {"type": "string"}},
     }
+    # An event that reports a model request carries the request as it was
+    # sent and what came back, the reply or the error (`trace.sent` puts the
+    # request back together); one that reports no request carries neither.
+    exchange = {"input": {"type": "object"}, "output": {"type": "object"}}
+    for kind, props in kinds.items():
+        if "prompt_tokens" in props or kind == "error":
+            props.update(exchange)
     # Of the survey flow's events, the fields only some of them carry.
     optional = {
         "survey_ask": {"corrections", "parameter", "owner", "kind", "rows",
@@ -1105,13 +1116,16 @@ def trace_schema() -> dict:
              "field", "raw_missing", "raw_foreign", "cause", "owner",
              "rejected", "given", "raw", "quote", "via_base", "via_target",
              "via_table", "scope", "withdrawn",
-             "batches"}
+             "batches", "input", "output"}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"{BASE_ID}/trace-record",
         "title": "docpipe extraction trace record",
         "description": "One event per line; `t` names it and `doc` the "
-                       "document. Read by scripts/trace_report.py.",
+                       "document. An event that reports a model request "
+                       "carries it as sent (`input`) and what came back "
+                       "(`output`); a text the requests repeat is a `piece` "
+                       "they refer to. Read by scripts/trace_report.py.",
         "oneOf": [{"type": "object",
                    "properties": {"t": {"const": t},
                                   "doc": {"type": "integer"}, **props},

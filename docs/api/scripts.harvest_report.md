@@ -5,7 +5,7 @@
 harvest_report.py - The numbers a curator pulls by hand after every run.
 
 Reads every plan of a harvest directory (one \<plan>.jsonl per document, e.g.
-data/extraction/corpus_m5; *.trace.jsonl and *.stamp.json are not a plan and
+data/extraction/corpus_m5; a trace and *.stamp.json are not a plan and
 are skipped) and prints the distributions a corpus run is judged by: how many
 tuples a plan carries, how many of them came off an image, how trustworthy
 they are, why a claim was refused, what state every coordinate and every

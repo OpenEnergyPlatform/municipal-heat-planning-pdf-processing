@@ -53,19 +53,20 @@ def report(self) -> None
 ### owners_in
 
 ```python
-def owners_in(lines) -> set
+def owners_in(events) -> set
 ```
 
-{(owner_kind, owner_id)} the rows requests among these trace lines were
-shown.
+{(owner_kind, owner_id)} the rows requests among these trace events
+were shown.
 
 ### read_owners
 
 ```python
-def read_owners(trace_path: Path) -> set
+def read_owners(directory: Path, name: str) -> set
 ```
 
-`owners_in` over a trace file; empty when there is none.
+`owners_in` over the trace of *name* in *directory*, read for its rows
+requests alone; empty when there is none.
 
 ### read_to_end
 

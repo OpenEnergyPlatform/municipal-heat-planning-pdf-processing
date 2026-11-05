@@ -58,12 +58,12 @@ def test_reading_to_the_end_lifts_only_the_rest_budget(monkeypatch):
 
 
 def test_what_was_read_is_every_source_of_a_rows_request():
-    lines = [json.dumps({"t": "rows", "sources": [["table", 1], ["section", 2]]}),
-             json.dumps({"t": "plan", "kind": "figure", "owner": 3}),
-             json.dumps({"t": "field", "shown": [["figure", 4]]}),
-             json.dumps({"t": "rows", "sources": [["figure", 5], "broken"]}),
-             "not json \"rows\""]
-    assert owners_in(lines) == {("table", 1), ("section", 2), ("figure", 5)}
+    events = [{"t": "rows", "sources": [["table", 1], ["section", 2]]},
+              {"t": "plan", "kind": "figure", "owner": 3},
+              {"t": "field", "shown": [["figure", 4]]},
+              {"t": "rows", "sources": [["figure", 5], "broken"]},
+              "not an event"]
+    assert owners_in(events) == {("table", 1), ("section", 2), ("figure", 5)}
 
 
 def source(owner, text):

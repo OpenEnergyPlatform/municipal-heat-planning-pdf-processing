@@ -6951,7 +6951,7 @@ COARSE = ("spec",)
 QUESTION_KEYS = ("parameter/", "value/", "axis/", "slot/")
 
 # Where a top-up writes its trace: beside the harvest's `trace/`, never into
-# it. trace._handle opens "w", so the harvest's own file would be truncated,
+# it. trace._handle starts its file anew, so the harvest's own would be lost,
 # and scripts/harvest_compare.py reads `trace/` alone, so a top-up's requests
 # are not counted into the harvest's cost.
 TOPUP_TRACE_DIR = "trace-topup"

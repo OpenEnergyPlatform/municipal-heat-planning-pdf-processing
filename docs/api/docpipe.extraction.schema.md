@@ -20,7 +20,7 @@ rather than a stale document. Three schemas come out:
   harvest  one line of \<name>.jsonl: an accepted tuple or a refused
            claim
   stamp    \<name>.stamp.json, what produced that harvest
-  trace    one line of \<name>.trace.jsonl, one event of the run
+  trace    one line of \<name>.trace.jsonl.gz, one event of the run
 
 Every property carries a `description`, and every coordinate
 additionally carries `x-question` (the German question the model was
@@ -58,7 +58,7 @@ def stamp_schema() -> dict
 def trace_schema() -> dict
 ```
 
-One line of \<name>.trace.jsonl: one event, never an aggregate.
+One line of \<name>.trace.jsonl.gz: one event, never an aggregate.
 
 ### build
 

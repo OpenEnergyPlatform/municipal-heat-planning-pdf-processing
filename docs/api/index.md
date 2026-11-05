@@ -131,7 +131,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.topup](docpipe.extraction.topup.md): Re-reads the one coordinate a stamp names as moved, instead of the whole document. (1 class, 17 functions)
 - [docpipe.extraction.topup_parameter](docpipe.extraction.topup_parameter.md): Appends the rows of a parameter the spec has gained to a harvest that is already on disk, instead of harvesting the document again. (3 classes, 13 functions)
 - [docpipe.extraction.topup_rest](docpipe.extraction.topup_rest.md): Reads the passages of a stored harvest that were never asked for values, and appends what they hold. (1 class, 4 functions)
-- [docpipe.extraction.trace](docpipe.extraction.trace.md): Records what the harvest did as one JSON event per line, so it can be counted after the run. (4 functions)
+- [docpipe.extraction.trace](docpipe.extraction.trace.md): Records what the harvest did as one JSON event per line, so it can be counted after the run. (12 functions)
 - [docpipe.extraction.trust](docpipe.extraction.trust.md): Grades every harvested value by how far the run can stand behind it. (8 functions)
 - [docpipe.extraction.verify](docpipe.extraction.verify.md): Checks a claimed tuple against the spec and the source text before it is written to the harvest. (2 classes, 14 functions)
 - [docpipe.extraction.wording](docpipe.extraction.wording.md): What the extraction stage says to the model outside its prompts. (2 functions)

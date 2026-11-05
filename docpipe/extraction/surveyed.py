@@ -751,8 +751,8 @@ def append_unread(document_id: int, filename: str, out_dir: Path,
         stats["documents already read to their end (documents)"] += 1
         return False, 0, stats
     answers, unanswered = surveyed_owners(out_dir, document_id)
-    read = set(answers) | read_owners(Path(out_dir) / HARVEST_TRACE_DIR
-                                      / f"{name}.trace.jsonl")
+    read = set(answers) | read_owners(Path(out_dir) / HARVEST_TRACE_DIR,
+                                      name)
     if not read and not unanswered:
         stats["documents without a trace of what was read (documents)"] += 1
         return False, 0, stats

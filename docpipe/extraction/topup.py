@@ -50,7 +50,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .. import jsonl
-from . import archive
+from . import archive, trace
 from . import fields
 from .pipeline import (Row, WorkItem, group_items, mark_unanswered,
                        named_years, row_label)
@@ -638,7 +638,7 @@ def run_open(harvest_dir: Path, spec: Spec, deps: dict,
     """
     from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
     paths = [path for path in sorted(Path(harvest_dir).glob("*.jsonl"))
-             if not path.name.endswith(".trace.jsonl")
+             if not trace.is_trace(path)
              and (names is None or path.stem in names)]
     stats: Counter = Counter()
     workers = max(1, workers)
@@ -781,7 +781,7 @@ def run(harvest_dir: Path, spec: Spec, current: dict, deps: dict, *,
     stats: Counter = Counter()
     harvest_dir = Path(harvest_dir)
     for path in sorted(harvest_dir.glob("*.jsonl")):
-        if path.name.endswith(".trace.jsonl"):
+        if trace.is_trace(path):
             continue
         stats.update(top_up_file(path, spec, current, deps, only=only))
         stats["documents"] += 1

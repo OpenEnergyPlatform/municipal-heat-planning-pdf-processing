@@ -17,9 +17,26 @@ object per event and nothing aggregated. Aggregation is left to the report
 script, which can be rewritten when the question changes; the trace itself
 cannot be rewritten after the fact.
 
-The cost is a few hundred bytes per model request, about half a megabyte per
-document. Setting `EXTRACT_TRACE=0` turns tracing off, and every call to record
-an event then returns immediately.
+Every event that reports a model request also carries the request as it was
+sent (`input`) and what came back (`output`: the reply, or the error the
+request ended in), so that a run can be read back request by request (owner
+decision 2026-11-05). The request is taken where every request of the stage
+passes (`scheduler.Repeats`, `exchanged`) and goes into the next event of the
+same thread that reports it: one that carries `prompt_tokens`, or an error of
+kind `exception`.
+
+Nothing repeated is written twice. A text longer than a reference to it -- a
+system prompt, a reply format, a passage, a parameter's description, a list of
+options, a picture -- is written once per document as a `piece` event and
+referenced by its hash; a payload that is a JSON object is split at its
+top-level keys first, and put back with the writing that made it, so `sent`
+returns each message character for character. The file is compressed
+(`<name>.trace.jsonl.gz`). `lines` reads it, and a trace an earlier run wrote
+uncompressed (`<name>.trace.jsonl`), and ends quietly where a killed run left
+it.
+
+Setting `EXTRACT_TRACE=0` turns tracing off, and every call to record an event
+then returns immediately.
 
 Author: Felix Vossel
 
@@ -32,6 +49,16 @@ def open_trace(directory, name_of: Callable) -> None
 ```
 
 Start writing traces under `directory`, naming files via `name_of(id)`.
+
+### exchanged
+
+```python
+def exchanged(request: dict, response=None, error=None) -> None
+```
+
+The request the calling thread has just sent, with the reply that came
+back or the error it ended in, for the event that reports it (`event`).
+A thread's next request takes the place of one no event reported.
 
 ### event
 
@@ -60,5 +87,69 @@ def close() -> None
 ```
 
 Close every open trace. Safe to call twice.
+
+### is_trace
+
+```python
+def is_trace(path) -> bool
+```
+
+### name_of
+
+```python
+def name_of(path) -> str
+```
+
+The document name a trace file is written under.
+
+### path_of
+
+```python
+def path_of(directory, name: str) -> Optional[Path]
+```
+
+The trace of *name* in *directory*, or None where there is none.
+
+### files
+
+```python
+def files(directory) -> list
+```
+
+Every trace in *directory*, one per name in name order; where a name
+has both files, the compressed one, which is the later run's.
+
+### lines
+
+```python
+def lines(path, kinds: Optional[Iterable[str]] = None) -> Iterator[dict]
+```
+
+The events of a trace file of either kind, pieces among them; none for
+a file that is not there. A run that was killed leaves a last line cut
+short or a compressed stream without its end: reading stops there, with
+everything before it.
+
+*kinds*, where given, are the only events read. A line that does not name
+one of them anywhere is passed over without being parsed, which spares
+the requests and pieces that make most of a trace; the order of an
+event's keys decides nothing.
+
+### pieces_of
+
+```python
+def pieces_of(events) -> dict
+```
+
+{reference: text} of the pieces among *events*.
+
+### sent
+
+```python
+def sent(record: dict, pieces: dict) -> Optional[dict]
+```
+
+The request *record* reports, as it was sent, or None where it carries
+none. *pieces* are the pieces of its file (`pieces_of`).
 
 [Back to the index](../README.md)

@@ -97,9 +97,11 @@ Two sections close the page: `## The stamp`, the schema of
 `docpipe`, `document` (the sha256 and size of the PDF) and `producers`,
 plus per-question patterns,
 `docpipe/extraction/schema.py:603` to `765`), and `## The trace`, the
-schema of `<publication>.trace.jsonl`, one `oneOf` branch per event
-kind: eleven, fixed by the schema for every profile rather than drawn
-from this one's spec (`docpipe/extraction/schema.py:768` to `902`). A
+schema of `<publication>.trace.jsonl.gz`, one `oneOf` branch per event
+kind, fixed by the schema for every profile rather than drawn from this
+one's spec (`schema.trace_schema`); an event that reports a model request
+carries it as it was sent and what came back, and a text the requests
+repeat is a `piece` they refer to. A
 `parameter/`, `value/`, `axis/` or `slot/` key differing from today's
 run, or another sha256 of the PDF in `document` than the database now
 names, makes the document eligible for a full re-harvest under
@@ -122,4 +124,4 @@ parameter the spec has gained without reading the document again
 (`docpipe/extraction/topup_parameter.py:336` to `462`); `already_done` names
 it in a second warning for such a document. The trace is read by
 `scripts/trace_report.py` and, for cost, by `trace_costs`
-(`scripts/harvest_compare.py:135` to `155`), never by a resume.
+(`scripts/harvest_compare.py`), never by a resume.

@@ -109,8 +109,9 @@ to `4533`); redoing only the changed question is
 reading a parameter the spec has gained, without reading the document again,
 `append_document`'s (`docpipe/extraction/topup_parameter.py:336` to `462`),
 which `already_done` names in a second warning for such a document. The
-trace is `<document>.trace.jsonl`: eleven event kinds told apart by
-`t`, `plan` through `invalid` in source order
-(`docpipe/extraction/schema.py:778` to `880`), read by
+trace is `<document>.trace.jsonl.gz`: its event kinds are told apart by
+`t` (`schema.trace_schema`). An event that reports a model request carries
+the request as it was sent (`input`) and what came back (`output`), and a
+text the requests repeat is a `piece` they refer to. It is read by
 `scripts/trace_report.py` and, for a cost report, by `trace_costs` in
-`scripts/harvest_compare.py:135` to `155`, never by a resume.
+`scripts/harvest_compare.py`, never by a resume.

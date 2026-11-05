@@ -113,11 +113,12 @@ to `4533`); redoing only the changed question is
 reading a parameter the spec has gained, without reading the document again,
 `append_document`'s (`docpipe/extraction/topup_parameter.py:336` to `462`),
 which `already_done` names in a second warning for such a document. The
-trace is `<document>.trace.jsonl`: eleven event kinds told apart by
-`t`, `plan` through `invalid` in source order
-(`docpipe/extraction/schema.py:778` to `880`), read by
+trace is `<document>.trace.jsonl.gz`: its event kinds are told apart by
+`t` (`schema.trace_schema`). An event that reports a model request carries
+the request as it was sent (`input`) and what came back (`output`), and a
+text the requests repeat is a `piece` they refer to. It is read by
 `scripts/trace_report.py` and, for a cost report, by `trace_costs` in
-`scripts/harvest_compare.py:135` to `155`, never by a resume.
+`scripts/harvest_compare.py`, never by a resume.
 
 One JSON object per line of a harvest file. Every line is one of the kinds below and nothing else, and each of them is closed (`additionalProperties: false`). A new record kind costs a branch in `docpipe/extraction/schema.py`, a regeneration of both checked-in schemas, and a branch in `read_harvest` in `scripts/harvest_compare.py`.
 
@@ -4378,37 +4379,38 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 
 ## The trace
 
-One event per line; `t` names it and `doc` the document. Read by scripts/trace_report.py.
+One event per line; `t` names it and `doc` the document. An event that reports a model request carries it as sent (`input`) and what came back (`output`); a text the requests repeat is a `piece` they refer to. Read by scripts/trace_report.py.
 
-28 record kinds, told apart by `t`:
+29 record kinds, told apart by `t`:
 
 - `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
 - `anchor`: `doc`, `parameter`, `text`
-- `frame`: `attempt`, `completion_tokens`, `doc`, `missed`, `ms`, `pairs`, `prompt_tokens`, `rejected`, `scenarios`, `sources`, `status`, `years`
-- `rows`: `attempt`, `completion_tokens`, `doc`, `ms`, `origins`, `prompt`, `prompt_tokens`, `ranks`, `rows`, `sources`, `status`
+- `frame`: `attempt`, `completion_tokens`, `doc`, `input`, `missed`, `ms`, `output`, `pairs`, `prompt_tokens`, `rejected`, `scenarios`, `sources`, `status`, `years`
+- `rows`: `attempt`, `completion_tokens`, `doc`, `input`, `ms`, `origins`, `output`, `prompt`, `prompt_tokens`, `ranks`, `rows`, `sources`, `status`
 - `code`: `attempt`, `code`, `doc`, `error`, `ok`, `stdout`
 - `compute`: `doc`, `fetched`, `kind`, `misquoted`, `numbers`, `outcome`, `reason`, `rejected`, `runs`, `searched`, `taken`, `untaken`
-- `field`: `anchor`, `attempt`, `batches`, `completion_tokens`, `doc`, `filled`, `filled_by`, `ms`, `open`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `via_base`, `via_table`, `via_target`, `window`
+- `field`: `anchor`, `attempt`, `batches`, `completion_tokens`, `doc`, `filled`, `filled_by`, `input`, `ms`, `open`, `output`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `via_base`, `via_table`, `via_target`, `window`
 - `sweep`: `anchor`, `asked`, `batches`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `scope`, `slot`, `unbacked`, `unquoted`, `unstated`, `via_base`, `via_table`, `via_target`, `windows`, `withdrawn`
 - `drop`: `attempt`, `batches`, `doc`, `field`, `given`, `quote`, `raw`, `row`, `slot`, `why`, `window`
-- `error`: `attempt`, `cause`, `detail`, `doc`, `finish`, `head`, `kind`, `ms`, `owner`, `slot`, `sources`, `status`, `tail`, `where`, `why`
+- `error`: `attempt`, `cause`, `detail`, `doc`, `finish`, `head`, `input`, `kind`, `ms`, `output`, `owner`, `slot`, `sources`, `status`, `tail`, `where`, `why`
 - `coord`: `doc`, `kind`, `owner`, `parameter`, `states`, `tier`, `unit`, `value`
 - `refusal`: `doc`, `owner`, `parameter`, `reason`
 - `places`: `by_axis`, `by_parameter`, `complete`, `doc`, `dropped`, `passages`, `places`, `unread`, `windows`
 - `invalid`: `detail`, `doc`, `kind`, `where`, `why`
 - `survey`: `budget`, `by_parameter`, `complete`, `contexts`, `doc`, `dropped`, `none`, `passages`, `scope`, `tuples`, `unanswered`
-- `survey_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
-- `read_values_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
-- `read_text_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
-- `comb_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
-- `phrase_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
-- `frame_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
-- `review_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
-- `compute_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `kind`, `ms`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
+- `survey_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
+- `read_values_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
+- `read_text_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
+- `comb_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
+- `phrase_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
+- `frame_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
+- `review_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
+- `compute_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `read`: `asked`, `corrected`, `doc`, `failed`, `fetched`, `kind`, `missed`, `owner`, `parameter`, `searched`, `unanswered`, `unread`, `values`, `why`
 - `comb`: `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `kind`, `missed`, `open`, `owner`, `parameter`, `rows`, `searched`
 - `seek`: `doc`, `kind`, `owner`, `parameter`, `rank`
 - `seek_probe`: `doc`, `parameter`, `per`, `text`
 - `completion`: `detail`, `doc`, `filled`, `id`, `key`, `matched`, `open`, `outcome`
+- `piece`: `doc`, `id`, `text`
 
 [Back to the index](../README.md)

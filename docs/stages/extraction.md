@@ -1475,8 +1475,19 @@ in place. A top-up and a remap never read a PDF, so they neither earn nor lose
 the key; the pass that appends a parameter holds the stamp against it, leaves a
 document whose PDF moved stale as a whole, and never writes it. `docpipe
 estimate` counts such a document as stale the way the run does. Beside every harvest sits
-`trace/<document>.trace.jsonl`, on by default and disabled with
-`EXTRACT_TRACE=0`.
+`trace/<document>.trace.jsonl.gz`, on by default and disabled with
+`EXTRACT_TRACE=0`. Every event that reports a model request carries the
+request as it was sent (`input`) and what came back (`output`: the reply, or
+the error the request ended in), taken where every request of the stage
+passes (`scheduler.Repeats`, `trace.exchanged`) and put into the next event
+of the same thread that reports it (owner decision 2026-11-05). A text the
+requests of a document repeat, such as a system prompt, a reply format, a
+passage, a list of options or a picture, stands once in its trace as a
+`piece` event that the requests refer to by hash; a JSON payload is split at
+its top-level keys first, and `trace.sent` puts each request back together
+character for character. The readers (`trace.lines`, `trace.files`,
+`trace.path_of`) also read a trace an earlier run wrote uncompressed as
+`<document>.trace.jsonl`, and stop where a killed run left the file.
 
 Every tuple, refusal, parameter state and summary line is checked
 against the published schema before it is written:
@@ -1776,8 +1787,9 @@ requests one after the other. Its trace goes to `trace-open`. Every file it
 replaces is archived first, under the pass name `top-up-open`.
 
 Then `topup_rest` reads the passages the harvest never asked for values.
-Which ones were asked is in the harvest's trace (`trace/<name>.trace.jsonl`,
-every `rows` event's sources, `topup_rest.owners_in`); `plan_batches` is
+Which ones were asked is in the harvest's trace (`trace/<name>.trace.jsonl.gz`,
+or `.trace.jsonl` from an earlier run, every `rows` event's sources,
+`topup_rest.owners_in`); `plan_batches` is
 given them as `already_read`, finds the frame over every planned passage
 with the stored pairs as its start, so the pairs keep their indices, and
 reads only the rest, the document's unplanned passages included. The rows
@@ -2179,26 +2191,31 @@ stays valid and stays as it is. A coordinate a top-up read again, and every
 coordinate of a row the pass for a new parameter appended, carries `<name>_producer`, the position of
 that pass in `producers`; the harvest writes none. An entry of the second
 pass also carries `parameters` (their uris) and `frame`. A trace event is one JSON
-line, `{"t": kind, "doc": document_id, ...}`, of one of twelve kinds
-(`schema.py`'s `trace_schema`): `plan`, `anchor`, `frame`, `rows`, `code`,
+line, `{"t": kind, "doc": document_id, ...}`, of one of the kinds
+`schema.py`'s `trace_schema` lists: `plan`, `anchor`, `frame`, `rows`, `code`,
 `field`, `sweep`, `drop` and `error` from the harvest loop, `compute` once per
 open question of the compute step, `places` once for
 every document whose map of places was built (`passages`, `windows`, `places`,
 `dropped`, `unread`, `complete`, `by_axis` and `by_parameter`), `coord` and
-`refusal` per folded tuple or refusal, and `invalid` from the schema
-self-check described under Method. `field`, `sweep` and `drop` carry the
+`refusal` per folded tuple or refusal, `invalid` from the schema
+self-check described under Method, the survey flow's `survey`, `read`,
+`comb`, `seek`, `seek_probe` and `completion`, one `<stage>_ask` per answered
+request of each stage (`ASK_STAGES`), and `piece`, a text the requests of the
+document repeat. An event that reports a model request (`frame`, `rows`,
+`field`, every `<stage>_ask`, and an `error` of kind `exception`) carries the
+request as sent (`input`) and what came back (`output`). `field`, `sweep` and `drop` carry the
 optional key `batches`, and `sweep` the optional key `scope`, which tell a
 batch's own stage from a document's search (see The field sweep).
 `review.csv` carries one line per
 field a review asked about, named by `review.COLUMNS`.
 
 A harvest directory (`out`) holds, per document,
-`<name>.jsonl`, `<name>.stamp.json` and `trace/<name>.trace.jsonl`, and, where
+`<name>.jsonl`, `<name>.stamp.json` and `trace/<name>.trace.jsonl.gz`, and, where
 the map of places was asked, `places/<document id>.json`; per run,
 `anchors.json` and `query_cache.db`; and, only after a pass over a stored
 harvest, a trace directory of its own beside `trace/`: `trace-topup/` after
 `--top-up` or `--top-up-parameters`, `trace-open/` and `trace-rest/` after
-`--top-up-open`, each holding `<name>.trace.jsonl`. `--review` also writes
+`--top-up-open`, each holding `<name>.trace.jsonl.gz`. `--review` also writes
 `review.csv` at the top. Every run adds `stats/<pass>-<run start>.json`, and
 every run that replaces a harvest, stamp or trace file keeps the old one under
 `archive/<pass>-<run start>/` (see Archive and stats). Neither directory holds
@@ -2818,7 +2835,7 @@ rather than a stale document. Three schemas come out:
   harvest  one line of <name>.jsonl: an accepted tuple or a refused
            claim
   stamp    <name>.stamp.json, what produced that harvest
-  trace    one line of <name>.trace.jsonl, one event of the run
+  trace    one line of <name>.trace.jsonl.gz, one event of the run
 
 Every property carries a `description`, and every coordinate
 additionally carries `x-question` (the German question the model was
@@ -2852,9 +2869,26 @@ object per event and nothing aggregated. Aggregation is left to the report
 script, which can be rewritten when the question changes; the trace itself
 cannot be rewritten after the fact.
 
-The cost is a few hundred bytes per model request, about half a megabyte per
-document. Setting `EXTRACT_TRACE=0` turns tracing off, and every call to record
-an event then returns immediately.
+Every event that reports a model request also carries the request as it was
+sent (`input`) and what came back (`output`: the reply, or the error the
+request ended in), so that a run can be read back request by request (owner
+decision 2026-11-05). The request is taken where every request of the stage
+passes (`scheduler.Repeats`, `exchanged`) and goes into the next event of the
+same thread that reports it: one that carries `prompt_tokens`, or an error of
+kind `exception`.
+
+Nothing repeated is written twice. A text longer than a reference to it -- a
+system prompt, a reply format, a passage, a parameter's description, a list of
+options, a picture -- is written once per document as a `piece` event and
+referenced by its hash; a payload that is a JSON object is split at its
+top-level keys first, and put back with the writing that made it, so `sent`
+returns each message character for character. The file is compressed
+(`<name>.trace.jsonl.gz`). `lines` reads it, and a trace an earlier run wrote
+uncompressed (`<name>.trace.jsonl`), and ends quietly where a killed run left
+it.
+
+Setting `EXTRACT_TRACE=0` turns tracing off, and every call to record an event
+then returns immediately.
 
 Author: Felix Vossel
 

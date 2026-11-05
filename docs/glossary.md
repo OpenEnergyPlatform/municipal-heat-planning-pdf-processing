@@ -518,9 +518,11 @@ top-up-parameters
   [extraction](stages/extraction.md).
 
 trace
-: The per-document, per-event JSONL log (`<document>.trace.jsonl`)
-  recording every plan, anchor, frame, rows, field, sweep, drop, error and
-  coord event, written by `docpipe/extraction/trace.py` and never
+: The per-document, per-event JSONL log, compressed
+  (`<document>.trace.jsonl.gz`; an earlier run's `<document>.trace.jsonl`
+  is still read), recording every event of the run, each model request
+  with what was sent and what came back, and every text the requests
+  repeat once, written by `docpipe/extraction/trace.py` and never
   aggregated by the writer itself. Turned off by setting
   `EXTRACT_TRACE=0`. See [extraction](stages/extraction.md).
 

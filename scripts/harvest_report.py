@@ -3,7 +3,7 @@
 harvest_report.py - The numbers a curator pulls by hand after every run.
 
 Reads every plan of a harvest directory (one <plan>.jsonl per document, e.g.
-data/extraction/corpus_m5; *.trace.jsonl and *.stamp.json are not a plan and
+data/extraction/corpus_m5; a trace and *.stamp.json are not a plan and
 are skipped) and prints the distributions a corpus run is judged by: how many
 tuples a plan carries, how many of them came off an image, how trustworthy
 they are, why a claim was refused, what state every coordinate and every
@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from docpipe import usage                                     # noqa: E402
-from docpipe.extraction import fields                          # noqa: E402
+from docpipe.extraction import fields, trace                   # noqa: E402
 from docpipe.extraction.schema import REFUSAL_REASONS           # noqa: E402
 from docpipe.extraction.trust import (LEVELS,  # noqa: E402
                                       PARAMETER_STATES)
@@ -75,7 +75,7 @@ def refusal_family(reason: str) -> str:
 def harvest_files(directory: Path) -> list:
     """Every plan of the harvest, sorted; a trace file is not a plan."""
     return sorted(p for p in directory.glob("*.jsonl")
-                  if not p.name.endswith(".trace.jsonl"))
+                  if not trace.is_trace(p))
 
 
 def read_plan(path: Path):

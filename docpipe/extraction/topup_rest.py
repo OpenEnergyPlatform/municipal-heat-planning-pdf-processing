@@ -24,12 +24,12 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
-import json
 import logging
 import threading
 from collections import Counter
 from pathlib import Path
 
+from . import trace
 from .pipeline import drop_repeats
 from .remap import _read_stamp as read_stamp
 from .remap import enter_producer, next_producer, stamp_path_of
@@ -44,17 +44,11 @@ TRACE_DIR = "trace-rest"
 HARVEST_TRACE_DIR = "trace"
 
 
-def owners_in(lines) -> set:
-    """{(owner_kind, owner_id)} the rows requests among these trace lines were
-    shown."""
+def owners_in(events) -> set:
+    """{(owner_kind, owner_id)} the rows requests among these trace events
+    were shown."""
     owners: set = set()
-    for line in lines:
-        if '"rows"' not in line:
-            continue
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+    for event in events:
         if not isinstance(event, dict) or event.get("t") != "rows":
             continue
         for source in event.get("sources") or ():
@@ -63,13 +57,11 @@ def owners_in(lines) -> set:
     return owners
 
 
-def read_owners(trace_path: Path) -> set:
-    """`owners_in` over a trace file; empty when there is none."""
-    try:
-        with open(trace_path, encoding="utf-8") as handle:
-            return owners_in(handle)
-    except OSError:
-        return set()
+def read_owners(directory: Path, name: str) -> set:
+    """`owners_in` over the trace of *name* in *directory*, read for its rows
+    requests alone; empty when there is none."""
+    path = trace.path_of(directory, name)
+    return owners_in(trace.lines(path, kinds=("rows",))) if path else set()
 
 
 def read_to_end(stamp_path: Path) -> bool:
@@ -99,8 +91,7 @@ def append_rest(document_id: int, filename: str, out_dir: Path,
     if read_to_end(stamp_path):
         stats["documents already read to their end (documents)"] += 1
         return False, 0, stats
-    read = read_owners(Path(out_dir) / HARVEST_TRACE_DIR
-                       / f"{name}.trace.jsonl")
+    read = read_owners(Path(out_dir) / HARVEST_TRACE_DIR, name)
     if not read:
         stats["documents without a trace of what was read (documents)"] += 1
         return False, 0, stats

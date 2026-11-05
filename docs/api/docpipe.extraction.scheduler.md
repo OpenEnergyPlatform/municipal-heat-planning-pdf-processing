@@ -177,6 +177,10 @@ message (what was wrong) after a reply. The rule stands here and not in
 each loop: three of the nine loops kept it, and the eight-plan probe lost
 the replies that take longer, asked three times in the same 180 s.
 
+Every request of the stage passes here, so here it is also taken for the
+trace: what was sent and what came back (`trace.exchanged`), for the
+event that reports it.
+
 #### Repeats.\_\_init\_\_
 
 ```python

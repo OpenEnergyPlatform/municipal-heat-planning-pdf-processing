@@ -44,6 +44,7 @@ from typing import Optional, Sequence
 from . import settings, usage
 from .artifacts import (REFINEMENT_PARTIAL_JSON, SECTIONS_JSON,
                         SECTIONS_REFINED_JSON, VISUALS_JSON, DOCUMENT_JSON)
+from .extraction import trace
 from .profile import (add_profile_argument, bind_command_line, program,
                       require_profile)
 from .store.schema import readonly_uri
@@ -515,26 +516,20 @@ def _trace_of(out: Path, harvested: list, sections_of: dict) -> tuple:
     documents = sections = 0
     counted = {kind: [0, 0, 0] for kind in TRACED}
     for name, doc_id in harvested:
-        path = out / TRACE_DIR / f"{name}.trace.jsonl"
-        if not path.is_file():
+        path = trace.path_of(out / TRACE_DIR, name)
+        if path is None:
             continue
         documents += 1
         sections += sections_of.get(doc_id, 0)
-        with open(path, encoding="utf-8") as handle:
-            for line in handle:
-                try:
-                    record = json.loads(line)
-                except ValueError:
-                    continue            # the last line of a run that was killed
-                kind = record.get("t") if isinstance(record, dict) else None
-                tokens = record.get("prompt_tokens") if kind in TRACED \
-                    else None
-                if not isinstance(tokens, int) or isinstance(tokens, bool):
-                    continue
-                done = record.get("completion_tokens")
-                counted[kind][0] += 1
-                counted[kind][1] += tokens
-                counted[kind][2] += done if isinstance(done, int) else 0
+        for record in trace.lines(path, kinds=TRACED):
+            kind = record.get("t")
+            tokens = record.get("prompt_tokens")
+            if not isinstance(tokens, int) or isinstance(tokens, bool):
+                continue
+            done = record.get("completion_tokens")
+            counted[kind][0] += 1
+            counted[kind][1] += tokens
+            counted[kind][2] += done if isinstance(done, int) else 0
     return documents, sections, counted
 
 

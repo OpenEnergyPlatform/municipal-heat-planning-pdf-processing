@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .. import jsonl
-from . import archive
+from . import archive, trace
 from . import fields
 from .pipeline import answer_in_quote
 from .remap import enter_producer, stamp_path_of
@@ -364,7 +364,7 @@ def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
     read: list = []
     changed: list = []
     for path in sorted(harvest_dir.glob("*.jsonl")):
-        if path.name.endswith(".trace.jsonl"):
+        if trace.is_trace(path):
             continue
         if wanted is not None and path.stem not in wanted:
             continue

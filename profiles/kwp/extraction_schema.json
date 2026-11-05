@@ -12056,7 +12056,7 @@
  "trace": {
   "$id": "https://openenergyplatform.org/schema/mhpkg/extraction/trace-record",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "One event per line; `t` names it and `doc` the document. Read by scripts/trace_report.py.",
+  "description": "One event per line; `t` names it and `doc` the document. An event that reports a model request carries it as sent (`input`) and what came back (`output`); a text the requests repeat is a `piece` they refer to. Read by scripts/trace_report.py.",
   "oneOf": [
    {
     "additionalProperties": false,
@@ -12149,6 +12149,9 @@
      "doc": {
       "type": "integer"
      },
+     "input": {
+      "type": "object"
+     },
      "missed": {
       "items": {
        "type": "integer"
@@ -12157,6 +12160,9 @@
      },
      "ms": {
       "type": "integer"
+     },
+     "output": {
+      "type": "object"
      },
      "pairs": {
       "type": "integer"
@@ -12239,11 +12245,17 @@
      "doc": {
       "type": "integer"
      },
+     "input": {
+      "type": "object"
+     },
      "ms": {
       "type": "integer"
      },
      "origins": {
       "type": "array"
+     },
+     "output": {
+      "type": "object"
      },
      "prompt": {
       "type": "string"
@@ -12441,11 +12453,17 @@
       },
       "type": "object"
      },
+     "input": {
+      "type": "object"
+     },
      "ms": {
       "type": "integer"
      },
      "open": {
       "type": "integer"
+     },
+     "output": {
+      "type": "object"
      },
      "parameter": {
       "type": [
@@ -12736,6 +12754,9 @@
      "head": {
       "type": "string"
      },
+     "input": {
+      "type": "object"
+     },
      "kind": {
       "enum": [
        "unreadable",
@@ -12746,6 +12767,9 @@
      },
      "ms": {
       "type": "integer"
+     },
+     "output": {
+      "type": "object"
      },
      "owner": {
       "description": "[owner_kind, owner_id]",
@@ -13112,9 +13136,15 @@
        "null"
       ]
      },
+     "input": {
+      "type": "object"
+     },
      "kind": {},
      "ms": {
       "type": "integer"
+     },
+     "output": {
+      "type": "object"
      },
      "owner": {},
      "parameter": {
@@ -13173,9 +13203,15 @@
        "null"
       ]
      },
+     "input": {
+      "type": "object"
+     },
      "kind": {},
      "ms": {
       "type": "integer"
+     },
+     "output": {
+      "type": "object"
      },
      "owner": {},
      "parameter": {
@@ -13235,9 +13271,15 @@
        "null"
       ]
      },
+     "input": {
+      "type": "object"
+     },
      "kind": {},
      "ms": {
       "type": "integer"
+     },
+     "output": {
+      "type": "object"
      },
      "owner": {},
      "parameter": {
@@ -13297,9 +13339,15 @@
        "null"
       ]
      },
+     "input": {
+      "type": "object"
+     },
      "kind": {},
      "ms": {
       "type": "integer"
+     },
+     "output": {
+      "type": "object"
      },
      "owner": {},
      "parameter": {
@@ -13358,9 +13406,15 @@
        "null"
       ]
      },
+     "input": {
+      "type": "object"
+     },
      "kind": {},
      "ms": {
       "type": "integer"
+     },
+     "output": {
+      "type": "object"
      },
      "owner": {},
      "parameter": {
@@ -13419,9 +13473,15 @@
        "null"
       ]
      },
+     "input": {
+      "type": "object"
+     },
      "kind": {},
      "ms": {
       "type": "integer"
+     },
+     "output": {
+      "type": "object"
      },
      "owner": {},
      "parameter": {
@@ -13480,9 +13540,15 @@
        "null"
       ]
      },
+     "input": {
+      "type": "object"
+     },
      "kind": {},
      "ms": {
       "type": "integer"
+     },
+     "output": {
+      "type": "object"
      },
      "owner": {},
      "parameter": {
@@ -13541,9 +13607,15 @@
        "null"
       ]
      },
+     "input": {
+      "type": "object"
+     },
      "kind": {},
      "ms": {
       "type": "integer"
+     },
+     "output": {
+      "type": "object"
      },
      "owner": {},
      "parameter": {
@@ -13838,6 +13910,30 @@
      "doc",
      "outcome",
      "open"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "id": {
+      "type": "string"
+     },
+     "t": {
+      "const": "piece"
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "id",
+     "text"
     ],
     "type": "object"
    }

@@ -32,6 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from docpipe import jsonl  # noqa: E402
+from docpipe.extraction import trace  # noqa: E402
 from docpipe.extraction.trust import (  # noqa: E402
     LEVEL_A, LEVEL_B, LEVEL_C, LEVEL_D, LEVELS, trust)
 
@@ -145,7 +146,7 @@ def main(argv=None) -> int:
     levels = set(order[order.index(args.level):])
 
     files = sorted(p for p in args.directory.glob("*.jsonl")
-                   if not p.name.endswith(".trace.jsonl"))
+                   if not trace.is_trace(p))
     if args.document:
         wanted = set(args.document)
         files = [f for f in files if f.stem in wanted]

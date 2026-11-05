@@ -35,7 +35,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Iterable, Optional
 
-from . import archive
+from . import archive, trace
 from .schema import ASK_STAGES
 
 log = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ def from_harvest(harvest_dir: Path, names: Optional[set] = None) -> dict:
     hardest = []
     documents = tuples = 0
     for path in sorted(Path(harvest_dir).glob("*.jsonl")):
-        if path.name.endswith(".trace.jsonl") or (
+        if trace.is_trace(path) or (
                 names is not None and path.stem not in names):
             continue
         documents += 1
@@ -152,12 +152,10 @@ def from_traces(trace_dirs: Iterable[Path],
     refused_first: Counter = Counter()
     combed: Counter = Counter()
     for directory in trace_dirs:
-        for path in sorted(Path(directory).glob("*.jsonl")):
-            stem = path.name[:-len(".trace.jsonl")] \
-                if path.name.endswith(".trace.jsonl") else path.stem
-            if names is not None and stem not in names:
+        for path in trace.files(directory):
+            if names is not None and trace.name_of(path) not in names:
                 continue
-            for event in _lines(path):
+            for event in trace.lines(path):
                 kind = event.get("t")
                 if kind == "field":
                     axis = str(event.get("slot"))

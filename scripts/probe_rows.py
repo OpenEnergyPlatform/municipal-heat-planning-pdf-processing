@@ -111,8 +111,9 @@ def states_of(tuples: list, names) -> dict:
 
 
 def trace_events(out: Path) -> list:
-    return [json.loads(line) for path in out.glob("*.trace.jsonl")
-            for line in path.read_text(encoding="utf-8").splitlines()]
+    from docpipe.extraction import trace
+    return [event for path in trace.files(out)
+            for event in trace.lines(path)]
 
 
 def source_of(hit: dict, args):

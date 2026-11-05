@@ -58,7 +58,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from .. import jsonl
-from ..extraction import identity, trust
+from ..extraction import identity, trace, trust
 from ..extraction.fields import OUT_OF_SLICE
 from ..extraction.gold import UNIT
 from ..extraction.gold import coordinates as coordinate_names
@@ -83,7 +83,6 @@ MEANINGS = {
                   "so nothing is known about what was asked. Values and "
                   "refusals of it are served",
 }
-TRACE_SUFFIX = ".trace.jsonl"
 # A coordinate in one of these was not read.
 UNREAD = trust.OPEN_STATES + (OUT_OF_SLICE,)
 
@@ -117,7 +116,7 @@ def read_harvest(harvest_dir) -> Harvest:
         raise FileNotFoundError(f"{harvest_dir} is not a directory")
     found = Harvest()
     for path in sorted(harvest_dir.glob("*.jsonl")):
-        if path.name.endswith(TRACE_SUFFIX):
+        if trace.is_trace(path):
             continue                    # events of the run, not a document
         name = path.stem
         found.tuples[name], found.refusals[name] = [], []

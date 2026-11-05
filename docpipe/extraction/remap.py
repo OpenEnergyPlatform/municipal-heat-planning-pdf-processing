@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .. import jsonl
-from . import archive
+from . import archive, trace
 from .fields import CHOICE, LISTS_UNREADABLE, axis_slots
 from .spec import Spec, fold_label
 from .trust import document_summary
@@ -367,7 +367,7 @@ def run(harvest_dir: Path, spec: Spec, current: dict,
     stats: Counter = Counter()
     harvest_dir = Path(harvest_dir)
     for path in sorted(harvest_dir.glob("*.jsonl")):
-        if path.name.endswith(".trace.jsonl"):
+        if trace.is_trace(path):
             continue
         got = remap_file(path, spec, current, spec_for)
         stats.update(got)

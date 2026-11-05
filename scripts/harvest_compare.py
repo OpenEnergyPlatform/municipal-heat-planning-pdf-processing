@@ -45,7 +45,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from docpipe import jsonl                                   # noqa: E402
-from docpipe.extraction import fields                       # noqa: E402
+from docpipe.extraction import fields, trace                # noqa: E402
 from docpipe.profile import load_profile                    # noqa: E402
 
 log = logging.getLogger("harvest_compare")
@@ -136,17 +136,11 @@ def trace_costs(directory: Path, name: str) -> dict:
     """Requests, milliseconds and windows of one document's trace."""
     out = {"rows": 0, "field": 0, "ms": 0, "unparsable": 0, "drops": 0}
     # Where a run writes it, and where a hand-copied set of files has it.
-    path = next((p for p in (directory / "trace" / f"{name}.trace.jsonl",
-                             directory / f"{name}.trace.jsonl")
-                 if p.is_file()), None)
+    path = trace.path_of(directory / "trace", name) \
+        or trace.path_of(directory, name)
     if path is None:
         return out
-    for line in jsonl.lines(path.read_text(encoding="utf-8",
-                                           errors="replace")):
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+    for event in trace.lines(path):
         kind = event.get("t")
         if kind in ("rows", "field"):
             out[kind] += 1
@@ -251,7 +245,7 @@ def main(argv=None) -> int:
     # A trace sits next to its harvest in a hand-copied set, and it is not a
     # document: counting it as one halves every per-document average.
     files = sorted(p for p in args.directory.glob("*.jsonl")
-                   if not p.name.endswith(".trace.jsonl"))
+                   if not trace.is_trace(p))
     if args.document:
         wanted = set(args.document)
         files = [f for f in files if f.stem in wanted]

@@ -33,6 +33,8 @@ from typing import Callable, Optional
 
 from docpipe import providers
 
+from . import trace
+
 
 class Withdrawn(Exception):
     """The request was withdrawn before it was sent."""
@@ -224,6 +226,10 @@ class Repeats:
     message (what was wrong) after a reply. The rule stands here and not in
     each loop: three of the nine loops kept it, and the eight-plan probe lost
     the replies that take longer, asked three times in the same 180 s.
+
+    Every request of the stage passes here, so here it is also taken for the
+    trace: what was sent and what came back (`trace.exchanged`), for the
+    event that reports it.
     """
 
     def __init__(self, client, repeat: float, usual: float):
@@ -242,11 +248,16 @@ class Repeats:
                                     self._repeat)
         self._local.timed_out = None
         try:
-            return self._client.chat.completions.create(*args, **kwargs)
+            response = self._client.chat.completions.create(*args, **kwargs)
         except Exception as exc:
+            # What was sent and how it ended, for the trace event that
+            # reports the request (owner decision 2026-11-05).
+            trace.exchanged(kwargs, error=exc)
             if messages is not None and providers.timed_out(exc):
                 self._local.timed_out = list(messages)
             raise
+        trace.exchanged(kwargs, response)
+        return response
 
 
 def repeating(client, repeat: float, usual: float):
