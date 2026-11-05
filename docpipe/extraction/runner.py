@@ -8544,9 +8544,9 @@ def main(argv: Optional[list] = None) -> int:
 
     whole = None
     if from_survey:
-        seek = make_seek_probes(
-            profile.component("extraction", "FRONT_PAGE_PARAMETERS") or (),
-            document_context_of(args.db, document_context))
+        own = profile.component("extraction", "FRONT_PAGE_PARAMETERS") or ()
+        seek = make_seek_probes(own, document_context_of(args.db,
+                                                         document_context))
         whole = surveyed_map.SurveyedHarvest(
             spec,
             lambda doc_spec, only, scope: make_survey(
@@ -8556,7 +8556,8 @@ def main(argv: Optional[list] = None) -> int:
                                          rank=rank),
             lambda doc_spec: make_comber(doc_spec, rank, seek),
             lambda document_id: every(document_id, set()), pages_of,
-            spec_for=spec_for)
+            spec_for=spec_for, front=own,
+            title=profile.component("extraction", "FRONT_PAGE_TITLE"))
 
     def pass_sweep():
         """What a pass over a stored harvest re-reads a coordinate with: the

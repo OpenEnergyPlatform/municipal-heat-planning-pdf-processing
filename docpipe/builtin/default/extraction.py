@@ -143,6 +143,13 @@ PHRASES = {
         'You named this value already: {value} with the quote {quote!r}. '
         'Name the next value that is not yet under "read", or answer with '
         '"next": null.'),
+    "value_rejected": (
+        'This value was not taken: {reason}. Name it again with a "quote" '
+        'copied character for character from the passage that prints it. '
+        'For a parameter with a list, "value" is one of its entries, or "" '
+        'where none fits, and the passage\'s own words for it go under '
+        '"value_raw". If the passage holds no such value, answer with '
+        '"next": null.'),
     "head_not_in_table": (
         'The head {head!r} stands on no head line of the table. Write the '
         'head of the value\'s column character for character as it stands '

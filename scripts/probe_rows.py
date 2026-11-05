@@ -244,14 +244,14 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
 
     pool = ThreadPoolExecutor(args.parallel)
     rank = seek = None
+    profile = active_profile()
+    own = profile.component("extraction", "FRONT_PAGE_PARAMETERS") or ()
     if args.comb:
         if not args.read or args.index is None:
             raise SystemExit("--comb needs --read and --index")
         rank = ranking(args)
-        profile = active_profile()
         seek = runner.make_seek_probes(
-            profile.component("extraction", "FRONT_PAGE_PARAMETERS") or (),
-            runner.document_context_of(
+            own, runner.document_context_of(
                 args.db, profile.component("extraction", "document_context")))
 
     def made_survey(doc_spec, only, scope):
@@ -283,7 +283,9 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
     whole = surveyed.SurveyedHarvest(
         spec, made_survey, made_reader, made_comber,
         lambda document: every(document, set()),
-        runner.make_page_count(args.db), spec_for=specs.__getitem__)
+        runner.make_page_count(args.db), spec_for=specs.__getitem__,
+        front=own,
+        title=profile.component("extraction", "FRONT_PAGE_TITLE"))
     names = sorted({slot.name for parameter in spec.parameters
                     for slot in fields.axis_slots(parameter)}
                    | {"unit", "parameter", "value"})
@@ -323,6 +325,13 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
         row["sought"] = {uri: [list(owner) for owner in owners]
                          for uri, owners
                          in surveyed.walks_of(taken.sought).items()}
+        # What a publication says of itself, each with the passages of its
+        # first pages read for it besides those the survey named, page by
+        # page.
+        row["front"] = {uri: [list(owner) for owner
+                              in taken.front.passages_of(uri)]
+                        for uri in whole.front
+                        if taken.front.passages_of(uri)}
         report = DocumentReport(document_id=document,
                                 owners_harvested=taken.passages,
                                 planned={surveyed.STAGE: taken.passages},

@@ -43,7 +43,7 @@ REQUIRED = frozenset({
     "code_failed", "code_error_unknown", "code_silent", "code_output",
     "image_for", "anchor_parameter", "anchor_unit", "value_outside_quote",
     "value_in_several_rows", "compute_output", "compute_needs_code",
-    "value_already_read", "head_not_in_table",
+    "value_already_read", "value_rejected", "head_not_in_table",
     "compute_taken", "compute_not_taken", "compute_quote", "compute_rejected",
 })
 

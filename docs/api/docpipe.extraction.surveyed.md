@@ -13,11 +13,15 @@ A parameter the survey of the whole plan named no passage for is searched
 for before it can count as not stated (owner decision 2026-11-04): the
 combing's search over the whole plan ranks the passages for it, and the run
 reads it down that list, one passage a round and every such parameter in the
-same round, until a reading of it comes back with a value or the list ends
-(owner decision 2026-11-05, `sought_walk`). Each reading shows the rest of
-the list it has not read as its hits. Every passage it was read in is one of
-its sources, so a request that came to nothing there leaves a hole and not a
-silent plan.
+same round, until a reading of it comes back with a value the check takes or
+the list ends (owner decisions 2026-11-05, `sought_walk`). Each reading
+shows the rest of the list it has not read as its hits. What a publication
+says of itself (the profile's FRONT_PAGE_PARAMETERS) is read from its first
+page on as well, page by page, until a title came, whatever the survey
+named (owner decisions 2026-11-05, `front_walk`): the first page with a
+title is its title page, and a chapter that presents other studies comes
+after it. Every passage a parameter was read in is one of its sources, so a
+request that came to nothing there leaves a hole and not a silent plan.
 
 What none of them could read is a hole with its reason, never a plan that
 seems silent: a passage the survey left unanswered, and a passage a parameter
@@ -62,6 +66,7 @@ Fields:
 - `passages: int = 0`
 - `sources_of: dict = field(default_factory=dict)`: parameter uri -> the passages the survey named for it, and every passage it could not answer (`trust.parameter_states`).
 - `sought: Found = field(default_factory=lambda: Found(True))`: The parameters the survey named no passage for, each with every passage the walk down its search's list read it in (`sought_walk`), in the order read (`walks_of`).
+- `front: Found = field(default_factory=lambda: Found(True))`: What a publication says of itself, each with the passages of the first pages it was read in besides those the survey named (`front_walk`).
 
 ### SurveyedHarvest
 
@@ -78,6 +83,10 @@ nothing is combed), each made once per spec. *spec_for(document_id)* is
 the document's spec, its lists closed (`runner.closed_spec`),
 *passages_of(document_id)* every passage of the document in its order,
 *pages_of(document_id)* its page count, *halted()* whether the run stops.
+*front* are the parameters a publication states of itself, read from
+its first page until a reading of *title* comes back (`front_walk`),
+the profile's FRONT_PAGE_PARAMETERS and FRONT_PAGE_TITLE; none without a
+title among them.
 
 #### SurveyedHarvest.\_\_init\_\_
 
@@ -85,7 +94,8 @@ the document's spec, its lists closed (`runner.closed_spec`),
 def __init__(self, spec, make_survey: Callable, make_reader: Callable,
              make_comber: Callable, passages_of: Callable,
              pages_of: Callable, *, spec_for: Optional[Callable] = None,
-             halted: Optional[Callable] = None)
+             halted: Optional[Callable] = None, front=(),
+             title: Optional[str] = None)
 ```
 
 #### SurveyedHarvest.survey_of
@@ -182,6 +192,28 @@ about the document itself, one written per run for any other,
 `runner.make_seek_probes`), its label where it has none. A parameter
 the search finds no passage for is left out.
 
+### carried
+
+```python
+def carried(found: Found) -> Found
+```
+
+A survey of one round of reading that names no parameter yet: what
+the survey of the whole plan (*found*) said of every passage, without
+its parameters, so the reading sees the plan's pairs and years as it
+does anywhere else.
+
+### taken_values
+
+```python
+def taken_values(read) -> list
+```
+
+The passages a reading's values are read from, one per value the
+check of a value takes (`verify.value_refused`: its quote in that
+passage, its answer in its quote). An answer the fold refuses is no
+value (owner decision 2026-11-05).
+
 ### sought_survey
 
 ```python
@@ -192,9 +224,8 @@ The survey of one round of the walk down *lists* ({parameter uri:
 [Source]}): each parameter named for the passage at *step* of its list,
 with the rest of its list beside it (`Found.hits`), so its reading can go
 on to the passages the walk has not read yet. What the survey of the
-whole plan (*found*) said of every passage stands beside it without its
-parameters, so the reading sees the plan's pairs and years as it does
-anywhere else.
+whole plan (*found*) said of every passage stands beside it
+(`carried`).
 
 ### sought_walk
 
@@ -208,12 +239,14 @@ def sought_walk(found: Found, lists: dict, read: Callable,
 *lists* ({uri: [Source]}, `sought_lists`) read down its list in rank
 order, one passage a round and every parameter in the same round
 (*read(survey)* -> [Read], the run's reading), until a reading of it
-comes back with a value or its list ends (owner decision 2026-11-05: the
-run reads the list, since the model fetched none of its hits itself). A
-reading that came to no reply ends nothing. Every passage walked names
-its parameter in the survey returned, so it is one of the parameter's
-sources (`taken_of`), and stands under `hits` with the rest of the list
-its reading showed, in the order the walk read it (`walks_of`).
+comes back with a value the check takes (`taken_values`) or its list
+ends (owner decisions 2026-11-05: the run reads the list, since the
+model fetched none of its hits itself, and an answer the fold refuses is
+no value). A reading that came to no reply ends nothing. Every passage
+walked names its parameter in the survey returned, so it is one of the
+parameter's sources (`taken_of`), and stands under `hits` with the rest
+of the list its reading showed, in the order the walk read it
+(`walks_of`).
 *seen(uri, owner, rank)* hears of each passage before it is read,
 *rank* its place in the list, from 1. None where *halted()* stopped the
 walk.
@@ -229,17 +262,68 @@ in, in the order it read them (`sought_walk`). Not the order of
 `Found.passages_of`, which is the order passages joined the survey, and a
 passage another parameter read first joined it earlier.
 
+### source_page
+
+```python
+def source_page(source) -> Optional[int]
+```
+
+The page a passage starts on, None where it names none.
+
+### by_page
+
+```python
+def by_page(sources: list) -> list
+```
+
+[(page, [Source])]: the passages of a document by the page they start
+on, first page first, each page's in the document's order. A passage
+that names no page stands on none.
+
+### titled_page
+
+```python
+def titled_page(reads: list, title: str) -> Optional[int]
+```
+
+The first page a reading of *title* in *reads* came back with a value
+on that the check takes (`taken_values`), None where none did.
+
+### front_walk
+
+```python
+def front_walk(found: Found, reads: list, sources: list, uris: list,
+               title: str, read: Callable,
+               halted: Optional[Callable] = None) -> Optional[tuple]
+```
+
+(the passages read from the front, as one survey; their Reads): what
+a publication says of itself (*uris*, the profile's
+FRONT_PAGE_PARAMETERS) read from its first page on, page by page, every
+passage of a page in one round (*sources*, every passage of the
+document; *read(survey)* -> [Read]), until a title came: a reading of
+*title* with a value the check takes, on the page just read or before
+it, by the survey's reading (*reads*) or by this one. A passage the
+survey named for a field is not read for it again. Owner decisions
+2026-11-05: a publication prints its own title, authors, date, DOI and
+abstract on its first pages, and a chapter that presents other studies
+prints theirs, so these pages are read whatever the survey named, and
+the first page with a title is the title page
+(`profiles/scenarios/front.py`). None where *halted()* stopped it.
+
 ### taken_of
 
 ```python
 def taken_of(document_id: int, spec, found: Found, reads: list,
              combed: list, shown: dict,
-             sought: Optional[Found] = None) -> Taken
+             sought: Optional[Found] = None,
+             front: Optional[Found] = None) -> Taken
 ```
 
 The fold's view of one document's reading, holes included. A
 parameter's sources are the passages the survey named for it, every one
-the walk down its search's list read it in (*sought*) and every passage
+the walk down its search's list read it in (*sought*), every one the
+read from the front read it in (*front*, `front_walk`) and every passage
 the survey could not answer.
 
 ### take_found

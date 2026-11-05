@@ -1,7 +1,13 @@
 """The owner's two checks, for a value and for every coordinate: the quote
 stands in a passage that was shown, and the answer stands in the quote; and a
 quote long enough to name a place. Plus the closed-list rule (`not_an_option`)
-and the base year read by the plan's word for it."""
+and the base year read by the plan's word for it.
+
+A value read before its coordinates is checked as the fold will check it
+(`verify.value_refused`): what the fold refuses of the value and its quote it
+refuses for the same reason, AND it takes what the fold takes, AND a number
+is not refused for its unit, which is read after it; a quote the fold could
+rebuild from the passage is refused, since the model can still quote it."""
 import json
 from pathlib import Path
 
@@ -11,8 +17,10 @@ from docpipe.extraction import fields
 from docpipe.extraction.pipeline import Row, Source, answer_in_quote, merge_field
 from docpipe.extraction.runner import _field_payload
 from docpipe.extraction.spec import load as load_spec
-from docpipe.extraction.verify import (Refusal, Verified, canonical_number,
-                                       numbers_in, quote_in, verify_tuple)
+from docpipe.extraction.verify import (QUOTE_NOT_FOUND, Refusal, Verified,
+                                       canonical_number, not_in_quote,
+                                       numbers_in, quote_in, value_refused,
+                                       verify_tuple)
 
 SPEC = load_spec(json.loads(
     (Path(__file__).resolve().parent.parent / "profiles" / "kwp"
@@ -311,3 +319,52 @@ def test_a_year_named_by_the_plans_word_is_read_from_the_frame():
         "value": 2019, "value_raw": "Basisjahr",
         "quote": "Wärmebedarf im Basisjahr"}}}, bases=base)
     assert state(other[0], YEAR) == fields.UNBACKED, "2019 is no base year"
+
+
+# ---------------------------------------------------------------------------
+# A value checked while the model can still answer
+# ---------------------------------------------------------------------------
+
+AR6 = load_spec(json.loads(
+    (Path(__file__).resolve().parent.parent / "profiles" / "scenarios"
+     / "extraction_spec.json").read_text(encoding="utf-8")))
+SECTOR, TITLE = AR6.by_uri["study_sector"], AR6.by_uri["publication_title"]
+SCOPE = "Scope\nThe model covers the building, transport and industry sectors."
+NAMED = "covers the building, transport and industry"
+
+
+def test_a_value_is_checked_before_its_coordinates_as_the_fold_checks_it():
+    for given, parameter in (
+            ({"value": "bioenergy", "quote": NAMED}, SECTOR),     # off its list
+            ({"value": "industry sector", "quote": NAMED}, SECTOR),  # unquoted
+            ({"value": "industry sector", "value_raw": "industry",
+              "quote": "covers"}, SECTOR),                          # too short
+            ({"value": "", "quote": NAMED}, TITLE),                 # no text
+            ({"value": "Net zero", "quote": NAMED}, TITLE)):        # unquoted
+        refusal = verify_tuple(given, parameter, SCOPE)
+        assert isinstance(refusal, Refusal)
+        assert value_refused(given, parameter, SCOPE) == refusal.reason
+    # the failure by construction: what the fold takes is taken here too
+    for given, parameter in (
+            ({"value": "industry sector", "value_raw": "industry",
+              "quote": NAMED}, SECTOR),
+            ({"value": "covers the building", "quote": NAMED}, TITLE)):
+        assert isinstance(verify_tuple(given, parameter, SCOPE), Verified)
+        assert value_refused(given, parameter, SCOPE) is None
+
+
+def test_a_number_is_not_refused_for_the_unit_read_after_it():
+    text = "Im Jahr 2022 wurden rund 300 GWh Erdgas verbraucht."
+    number = {"value": 300, "quote": "rund 300 GWh Erdgas"}
+    assert isinstance(verify_tuple(number, PARAMETER, text), Refusal)
+    assert value_refused(number, PARAMETER, text) is None
+    # the failure by construction: a number its quote does not print
+    wrong = dict(number, value=301)
+    assert value_refused(wrong, PARAMETER, text) == not_in_quote(wrong)
+
+
+def test_a_quote_the_fold_could_rebuild_is_refused_while_it_can_be_quoted():
+    moved = {"value": "industry sector", "value_raw": "industry",
+             "quote": "covers the industry"}
+    assert value_refused(moved, SECTOR, SCOPE) == QUOTE_NOT_FOUND
+    assert value_refused(dict(moved, quote=NAMED), SECTOR, SCOPE) is None

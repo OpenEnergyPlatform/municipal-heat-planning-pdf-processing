@@ -53,11 +53,13 @@ SLICE = {"quantity": kept_quantities(), "year": None}
 
 
 # What a plan says about itself: asked once more over the opening of the
-# document in a harvest field by field, and searched with a sentence written
-# for this plan where the survey named no passage for it
-# (`runner.make_seek_probes`, owner decision 2026-11-05). The spec asks for no
-# such field of a heat plan, so every parameter is searched with a sentence
-# written once per run.
+# document in a harvest field by field, read from the first page on until a
+# title came in a harvest from the survey (`surveyed.front_walk`, with
+# FRONT_PAGE_TITLE), and searched with a sentence written for this plan
+# where the survey named no passage for it (`runner.make_seek_probes`, owner
+# decisions 2026-11-05). The spec asks for no such field of a heat plan, so
+# nothing is read from the front and every parameter is searched with a
+# sentence written once per run.
 FRONT_PAGE_PARAMETERS: tuple = ()
 
 
@@ -281,6 +283,13 @@ PHRASES = {
         'Diesen Wert hast du schon genannt: {value} mit dem Zitat {quote!r}. '
         'Nenne den nächsten Wert, der noch nicht unter "read" steht, oder '
         'antworte mit "next": null.'),
+    "value_rejected": (
+        'Dieser Wert ist nicht übernommen: {reason}. Nenne ihn noch einmal, '
+        'mit einem "quote", das Zeichen für Zeichen aus der Passage '
+        'abgeschrieben ist, die ihn druckt. Bei einem Parameter mit Liste ist '
+        '"value" einer ihrer Einträge, oder "", wo keiner passt, und das Wort '
+        'der Passage dafür steht in "value_raw". Steht kein solcher Wert in '
+        'der Passage, antworte mit "next": null.'),
     "head_not_in_table": (
         'Der Kopf {head!r} steht in keiner Kopfzeile der Tabelle. Schreib '
         'den Kopf der Spalte des Werts Zeichen für Zeichen, wie er dort '

@@ -153,12 +153,22 @@ value. `head` is asked only for a number in a table: the head of its column as
 printed, which tells two equal numbers of one row apart.
 
 Per round the check is the harvest's own: the quote stands in a passage the
-round showed, and the number stands in the quote. A number quoted over several
-table rows that print it, and a head printed on no head line, are asked again
-too. Each refusal gets one correction with its reason; a head still on no head
-line after it is dropped. A value named again (same value, wording, quote and
-head) is asked once more, and named again after that it ends the rounds. The
-reasons are `value_already_read` and `head_not_in_table`.
+round showed, and the number stands in the quote. Whatever else the fold
+refuses of the value and its quote is asked in the round too, while the model
+can still answer (owner decision 2026-11-05, `verify.value_refused`, the same
+code `verify_tuple` runs): an answer off its closed list, one its quote does
+not hold, a quote too short to name a place, an empty text. The unit and the
+axes are not checked there, since they are read after the value and checked
+as they are read. A number quoted over several table rows that print it, and
+a head printed on no head line, are asked again too. Each refusal gets one
+correction with its reason; a head still on no head line after it is dropped.
+A value named again (same value, wording, quote and head) is asked once more,
+and named again after that it ends the rounds. The reasons are
+`value_already_read`, `head_not_in_table` and `value_rejected`, the last with
+the fold's own reason in it. Before, the round checked only the quote and the
+number, and the fold dropped without a word what the model could have
+corrected: 115 of the 222 refusals of an AR6 probe of four papers, such as an
+entry its quote did not hold or an answer off the list.
 
 A value may stand in any passage the round showed: the passage itself, the
 text around it, or a passage its tools fetched (owner decision 2026-11-05). It
@@ -280,8 +290,12 @@ ranking lists the plan's passages for it once, cut to what a request shows
 `surveyed.sought_lists`), and the run reads the parameter down that list in
 its order, before the combing (owner decision 2026-11-05,
 `surveyed.sought_walk`): one passage a round, every such parameter of the
-document in the same round, until a reading of it comes back with a value or
-the list ends. A reading that came to no reply ends nothing. The model had
+document in the same round, until a reading of it comes back with a value the
+check takes or the list ends. A value is what the fold would take of it
+(`surveyed.taken_values`, `verify.value_refused`): an answer the fold refuses
+ends nothing, as an AR6 probe showed, where the walk stopped on a sector
+division its quote did not hold and the fold then dropped. A reading that came
+to no reply ends nothing. The model had
 fetched none of the list's hits itself, so the run reads them. Each round's
 passage keeps the rest of the list it has not read as a hit list
 (`survey.Found.hits`, keyed by parameter, owner kind and owner id,
@@ -304,6 +318,22 @@ lists under `sought`. Each passage walked is traced as
 count a parameter's search once per document
 (`parameters_sought_by_parameter`) and the passages its walks read
 (`passages_sought_by_parameter`).
+
+What a publication says of itself, the profile's `FRONT_PAGE_PARAMETERS`, is
+read from its first page on as well, whatever the survey named (owner
+decisions 2026-11-05, `surveyed.front_walk`): page by page, first page first
+(`surveyed.by_page`), every passage of a page in one round, until a title
+came, a reading of the profile's `FRONT_PAGE_TITLE` that the check takes, on
+the page just read or before it, by the survey's reading or by this one
+(`surveyed.titled_page`). A passage the survey named for a field is not read
+for it again, and every passage read is one of the field's sources. The
+first page with a title is so the title page the graph and the completion
+take a publication's own fields from (`profiles/scenarios/front.py`). In an
+AR6 probe the survey of a review named only its chapters on other studies
+for title, authors and date, and the graph took the title, year and authors
+of a cited report. A profile without a title among them, kwp, reads nothing
+from the front, and neither does a survey of part of a plan. A probe lists
+the passages read so under `front`.
 
 ### The run harvests from the survey
 

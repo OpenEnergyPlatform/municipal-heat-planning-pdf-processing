@@ -193,6 +193,14 @@ def number_outside_quote(claim: dict) -> bool
 A number the quote it stands under does not print. What
 `value_in_quote` refuses, asked before the parameter of a row is known.
 
+### not_in_quote
+
+```python
+def not_in_quote(raw: dict) -> str
+```
+
+Why the fold refuses a value its quote does not hold.
+
 ### verify_tuple
 
 ```python
@@ -214,5 +222,23 @@ never needs it.
 prefixed into *source_text* is not part of it. The repair rests on the
 value occurring exactly once, and 1.9% of this corpus's table numbers
 also stand in their own caption.
+
+### value_refused
+
+```python
+def value_refused(raw: dict, parameter: Parameter,
+                  source_text: str) -> Optional[str]
+```
+
+Why the fold would refuse a value read before its coordinates, or
+None: what `verify_tuple` checks of the value itself (its type, its
+entry of a closed list) and of its quote (long enough, standing in
+*source_text*, holding the value), in its words. Not the unit and not
+the axes, which a reading asks after the value and checks as it reads
+them (`pipeline.merge_field`), and no repair of a quote, since the model
+that wrote it can still quote it. A reading asks it of each value while
+the model can still answer (`reading.round_failure`), and the walk down
+a search's list of what it read (`surveyed.sought_walk`), so both hold a
+value to the check the fold applies (owner decisions 2026-11-05).
 
 [Back to the index](../README.md)

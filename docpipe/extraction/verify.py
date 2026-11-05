@@ -223,14 +223,18 @@ class Refusal:
     reason: str
 
 
-def _check_value(raw: dict, parameter: Parameter, flags: list):
-    """The value itself: type, unit, vocabulary. Returns (resolved, refusal)."""
+def _check_value(raw: dict, parameter: Parameter, flags: list, *,
+                 with_unit: bool = True):
+    """The value itself: type, unit, vocabulary. Returns (resolved, refusal).
+    Without *with_unit* not the unit, which a reading asks after the value."""
     value = raw.get("value")
     out: dict = {}
 
     if parameter.is_numeric:
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             return None, Refusal(raw, "value is not a number")
+        if not with_unit:
+            return out, None
         # units_accepted is a closed list, so the unit is a choice: one entry,
         # read by the unit question with its own passage, and the document's
         # own spelling beside it. The spelling is evidence and is never
@@ -435,6 +439,16 @@ def _sentence_around(source: str, start: int, end: int, span: int = 320) -> str:
 # the bare year.
 MIN_QUOTE_CHARS = 8
 
+# Why the fold refuses a value's quote, said once for `verify_tuple` and for
+# `value_refused`, which asks the same while the model can still answer.
+QUOTE_TOO_SHORT = "quote missing or too short to identify anything"
+QUOTE_NOT_FOUND = "quote not found in the source it cites"
+
+
+def not_in_quote(raw: dict) -> str:
+    """Why the fold refuses a value its quote does not hold."""
+    return f"value {raw.get('value')!r} does not occur in the quote"
+
 
 def _repair_quote(raw: dict, parameter: Parameter, source: str) -> Optional[str]:
     """The passage the source itself gives for this value, or None.
@@ -574,13 +588,13 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
 
     quote = raw.get("quote")
     if not isinstance(quote, str) or len(quote) < MIN_QUOTE_CHARS:
-        return Refusal(raw, "quote missing or too short to identify anything")
+        return Refusal(raw, QUOTE_TOO_SHORT)
     if not quote_in(source_text, quote):
         repaired = _repair_quote(
             raw, parameter,
             repair_text if repair_text is not None else source_text)
         if repaired is None:
-            return Refusal(raw, "quote not found in the source it cites")
+            return Refusal(raw, QUOTE_NOT_FOUND)
         raw = dict(raw, quote=repaired)
         quote = repaired
         flags.append("quote_repaired")
@@ -596,8 +610,7 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                                     f"follow from its inputs")
             flags.append("computed")
         else:
-            return Refusal(raw, f"value {raw.get('value')!r} does not occur "
-                                f"in the quote")
+            return Refusal(raw, not_in_quote(raw))
 
     if (parameter.is_numeric and parameter.integrated
             and not parameter.names_period(value_fields.get("unit"))):
@@ -646,3 +659,30 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
     out.update(value_fields)
     out["parameter"] = parameter.uri
     return Verified(tuple=out, tier=tier, flags=flags, rects=rects)
+
+
+def value_refused(raw: dict, parameter: Parameter,
+                  source_text: str) -> Optional[str]:
+    """Why the fold would refuse a value read before its coordinates, or
+    None: what `verify_tuple` checks of the value itself (its type, its
+    entry of a closed list) and of its quote (long enough, standing in
+    *source_text*, holding the value), in its words. Not the unit and not
+    the axes, which a reading asks after the value and checks as it reads
+    them (`pipeline.merge_field`), and no repair of a quote, since the model
+    that wrote it can still quote it. A reading asks it of each value while
+    the model can still answer (`reading.round_failure`), and the walk down
+    a search's list of what it read (`surveyed.sought_walk`), so both hold a
+    value to the check the fold applies (owner decisions 2026-11-05)."""
+    if not isinstance(raw, dict):
+        return "tuple is not an object"
+    _resolved, refusal = _check_value(raw, parameter, [], with_unit=False)
+    if refusal is not None:
+        return refusal.reason
+    quote = raw.get("quote")
+    if not isinstance(quote, str) or len(quote) < MIN_QUOTE_CHARS:
+        return QUOTE_TOO_SHORT
+    if not quote_in(source_text or "", quote):
+        return QUOTE_NOT_FOUND
+    if not value_in_quote(raw, parameter, quote):
+        return not_in_quote(raw)
+    return None

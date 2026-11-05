@@ -22,9 +22,12 @@ stand in any passage the round showed: the passage, the text around it, or
 one its tools fetched (owner decision 2026-11-05); it is read from the one its
 quote stands in, which joins the reading's batch, so the fold checks it there
 (`pipeline.route_claims`). A value the check refuses (its quote in no passage
-shown, its number not in its quote, a quote over several table rows that
-print it, a head no head line prints) is asked once more with the reason; one
-named again is asked once more, and named again it ends the rounds.
+shown, its number not in its quote, whatever else the fold refuses of the
+value and its quote, such as an answer its quote does not hold or one off
+its closed list (`verify.value_refused`), a quote over several table rows
+that print it, a head no head line prints) is asked once more with the
+reason; one named again is asked once more, and named again it ends the
+rounds.
 
 A number in a table takes its column from its head, else from the one cell of
 its row that prints it, and a head that prints exactly one year of the
@@ -528,14 +531,18 @@ passage, a number its quote does not print (the harvest's own
 
 ```python
 def round_failure(claim: dict, shown: list, read: list,
-                  numeric: bool = False) -> Optional[tuple]
+                  parameter) -> Optional[tuple]
 ```
 
-(kind, reason) of what the check refuses of a round's value, or None:
-a value already read (`REPEATED`), the value itself (`VALUE`: its quote
-in no passage of *shown*, its number not in its quote, a number quoted
-over several rows of its table that print it), or a head no head line of
-its table prints (`HEAD`).
+(kind, reason) of what the check refuses of a round's value of
+*parameter*, or None: a value already read (`REPEATED`), the value
+itself (`VALUE`: its quote in no passage of *shown*, its number not in
+its quote, what the fold refuses of the value and its quote
+(`verify.value_refused`), a number quoted over several rows of its
+table that print it), or a head no head line of its table prints
+(`HEAD`). The fold's refusal is told in its own words: what the fold
+refuses, the model hears while it can still answer (owner decision
+2026-11-05).
 
 ### text_payload
 

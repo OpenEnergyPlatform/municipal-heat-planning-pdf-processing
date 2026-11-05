@@ -26,8 +26,19 @@ plan; every passage it was read in is one of its sources, so a reading there
 that came to nothing leaves it exhausted, not unstated; AND each reading
 shows the rest of the list it has not read under that parameter, AND each
 passage walked is traced with its place in the list, AND each parameter's
-passages are kept in the order the walk read them; and two surveys joined
-keep the lists of both.
+passages are kept in the order the walk read them; a reading whose answer
+the check refuses ends nothing; and two surveys joined keep the lists of
+both.
+
+What a publication says of itself is read from its first page on, page by
+page and first page first, every passage of a page in one round, whatever
+the survey named (owner decisions 2026-11-05), AND until a title came, on
+the page just read or before it, by the survey's reading or by this one,
+AND a title the check refuses ends nothing; a passage the survey named for
+a field is not read for it again; every passage it was read in is one of its
+sources; AND nothing is read from the front where the profile names no
+title among them, nor after a survey of part of the plan, nor once the run
+halted. The profile's title is one of its front parameters.
 
 A pass re-reads a coordinate by combing it, whatever its state, in its own
 passage first and with the years of the stored rows; the combing lists the
@@ -52,6 +63,7 @@ from docpipe.extraction.pipeline import (Batch, DocumentReport, Row, Source,
                                          WorkItem)
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.trust import parameter_states
+from profiles.scenarios import extraction as scenarios_extraction
 
 SPEC = load_spec(json.loads((Path(__file__).resolve().parent.parent
                              / "profiles" / "kwp" / "extraction_spec.json")
@@ -516,9 +528,18 @@ def sought_harvest(found, ranked, reads=None, halt_after=None):
     return whole, asked, hits, search
 
 
+# A value each passage prints, with the quote it stands in.
+BACKED = {("section", 1): {"value": 300, "quote": "Es fielen rund 300 t CO2"},
+          ("table", 2): {"value": 40, "quote": "2022 | 40 MW"},
+          ("section", 3): {"value": 2030,
+                           "quote": "Die Werte gelten für 2030"}}
+
+
 def valued(parameter, source):
-    return read_of(parameter, source, claims=[{"value": 40,
-                                               "quote": "2022 | 40 MW"}])
+    """A reading of *parameter* in *source* that came back with a value the
+    check takes there."""
+    return read_of(parameter, source, claims=[
+        dict(BACKED[(source.owner_kind, source.owner_id)])])
 
 
 def test_a_parameter_without_a_passage_is_read_down_its_list_until_a_value():
@@ -543,6 +564,24 @@ def test_a_parameter_without_a_passage_is_read_down_its_list_until_a_value():
         reads={("heat_load", ("table", 2)): valued(HEAT_LOAD, TWO)})
     whole(7)
     assert asked[1:] == [{"heat_load": [("table", 2)]}]
+
+
+def test_an_answer_the_check_refuses_does_not_end_the_walk():
+    for refused in ({"value": 40, "quote": "2022 | 40 MW"},      # not in THREE
+                    {"value": 999, "quote": "Die Werte gelten für 2030"}):
+        whole, asked, _hits, _search = sought_harvest(
+            found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [THREE, ONE]},
+            reads={("heat_load", ("section", 3)):
+                   read_of(HEAT_LOAD, THREE, claims=[refused])})
+        whole(7)
+        assert asked[1:] == [{"heat_load": [("section", 3)]},
+                             {"heat_load": [("section", 1)]}]
+    # the failure by construction: an answer its passage backs ends the walk
+    whole, asked, _hits, _search = sought_harvest(
+        found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [THREE, ONE]},
+        reads={("heat_load", ("section", 3)): valued(HEAT_LOAD, THREE)})
+    whole(7)
+    assert asked[1:] == [{"heat_load": [("section", 3)]}]
 
 
 def test_every_parameter_without_a_passage_is_read_in_the_same_round():
@@ -719,3 +758,161 @@ def test_a_row_read_for_one_field_has_its_parameter_derived():
     # the failure by construction: the same row without the state
     report.tuples[0].pop("parameter_state")
     assert runner.check_against_schema(report, "doc", AR6) == 1
+
+
+# -- what a publication says of itself, read from the front -------------------
+
+OWN = tuple(scenarios_extraction.FRONT_PAGE_PARAMETERS)
+TITLE = scenarios_extraction.FRONT_PAGE_TITLE
+
+
+def on_page(kind, number, text, page):
+    return Source(kind, number, text, {"document_id": 7, "page": page,
+                                       "section_title": text.split("\n")[0]})
+
+
+COVER = on_page("figure", 20, "A wind farm at dusk", 1)
+TITLE_PAGE = on_page("section", 21, "Net zero by 2050\nAda Lovelace, 2020", 2)
+IMPRINT = on_page("section", 22, "Imprint\ndoi:10.2760/081488", 2)
+BODY = on_page("section", 23, "Results\nThe scenarios reach net zero.", 3)
+OTHER = on_page("section", 24, "Gas for Climate, 2019\nNavigant", 11)
+PLAN = [COVER, TITLE_PAGE, IMPRINT, BODY, OTHER]
+
+
+def owner(source):
+    return (source.owner_kind, source.owner_id)
+
+
+def titled(source, quote="Net zero by 2050"):
+    """A reading of the title in *source* answered with *quote*."""
+    title = AR6.by_uri[TITLE]
+    return reading.Read(Batch(7, title, [WorkItem(7, title, source)]),
+                        [{"value": "Net zero by 2050", "quote": quote}])
+
+
+def front_harvest(found, reads=None, *, title=TITLE, halt_after=None):
+    """A harvest of PLAN whose reader records, round by round, the passages
+    it was asked to read each parameter in, and gives back *reads*:
+    {(parameter uri, owner): Read}. Nothing is combed or searched."""
+    asked = []
+
+    def make_reader(spec):
+        def run(document_id, named_by, shown, budget):
+            named = {p.uri: set(named_by.passages_of(p.uri))
+                     for p in spec.parameters if named_by.passages_of(p.uri)}
+            asked.append(named)
+            return [(reads or {})[(uri, one)]
+                    for uri, owners in named.items() for one in owners
+                    if (uri, one) in (reads or {})]
+        return run
+
+    whole = surveyed.SurveyedHarvest(
+        AR6, lambda spec, only, scope: (lambda document_id, passages: found),
+        make_reader, lambda spec: None, lambda document_id: list(PLAN),
+        lambda document_id: 11,
+        halted=(lambda: len(asked) >= halt_after) if halt_after else None,
+        front=OWN, title=title)
+    return whole, asked
+
+
+def every_field(*sources):
+    return {uri: {owner(s) for s in sources} for uri in OWN}
+
+
+def test_a_publication_s_own_fields_are_read_from_its_first_page_on():
+    # The review: the survey named only a chapter on another study.
+    named = found_of(answer(OTHER, TITLE, "publication_author",
+                            "publication_date"))
+    whole, asked = front_harvest(
+        named, {(TITLE, owner(TITLE_PAGE)): titled(TITLE_PAGE)})
+    taken = whole(7)
+    assert asked == [{TITLE: {owner(OTHER)},
+                      "publication_author": {owner(OTHER)},
+                      "publication_date": {owner(OTHER)}},
+                     every_field(COVER),
+                     every_field(TITLE_PAGE, IMPRINT)]
+    # What it read goes to the fold.
+    report = DocumentReport(document_id=7, owners_harvested=taken.passages,
+                            sources_of=taken.sources_of)
+    runner.fold_answers(taken.answered, report, locate=None, spec=AR6)
+    assert [(row["value"], row["provenance"]["owner_id"])
+            for row in report.tuples] == [("Net zero by 2050", 21)]
+    # Every passage read from the front is a source of its field, in page
+    # order.
+    assert taken.front.passages_of("publication_doi") == [
+        owner(COVER), owner(TITLE_PAGE), owner(IMPRINT)]
+    assert owner(IMPRINT) in taken.sources_of["publication_doi"]
+    blind = surveyed.taken_of(7, AR6, taken.found, taken.reads, [],
+                              {owner(s): s for s in PLAN})
+    assert owner(IMPRINT) not in blind.sources_of["publication_doi"]
+    # the failure by construction: a profile that names no title reads
+    # nothing from the front
+    whole, asked = front_harvest(
+        named, {(TITLE, owner(TITLE_PAGE)): titled(TITLE_PAGE)}, title=None)
+    whole(7)
+    assert asked == [{TITLE: {owner(OTHER)},
+                      "publication_author": {owner(OTHER)},
+                      "publication_date": {owner(OTHER)}}]
+
+
+def test_a_title_the_check_refuses_does_not_end_the_read_from_the_front():
+    whole, asked = front_harvest(
+        found_of(), {(TITLE, owner(TITLE_PAGE)):
+                     titled(TITLE_PAGE, quote="Net zero by 2060")})
+    whole(7)
+    assert asked[1:] == [every_field(COVER), every_field(TITLE_PAGE, IMPRINT),
+                         every_field(BODY), every_field(OTHER)]
+    # the failure by construction: the title its page prints ends it there
+    whole, asked = front_harvest(
+        found_of(), {(TITLE, owner(TITLE_PAGE)): titled(TITLE_PAGE)})
+    whole(7)
+    assert asked[1:] == [every_field(COVER), every_field(TITLE_PAGE, IMPRINT)]
+
+
+def test_a_title_the_survey_read_ends_the_read_at_its_page():
+    named = found_of(answer(TITLE_PAGE, TITLE))
+    whole, asked = front_harvest(
+        named, {(TITLE, owner(TITLE_PAGE)): titled(TITLE_PAGE)})
+    whole(7)
+    # A passage the survey named for a field is not read for it again.
+    assert asked == [{TITLE: {owner(TITLE_PAGE)}}, every_field(COVER),
+                     {**every_field(TITLE_PAGE, IMPRINT),
+                      TITLE: {owner(IMPRINT)}}]
+    # the failure by construction: the survey's title the check refuses
+    whole, asked = front_harvest(
+        named, {(TITLE, owner(TITLE_PAGE)):
+                titled(TITLE_PAGE, quote="Net zero by 2060")})
+    whole(7)
+    assert every_field(BODY) in asked
+
+
+def test_nothing_is_read_from_the_front_after_a_survey_of_part_of_the_plan():
+    whole, asked = front_harvest(found_of())
+    whole(7, passages=[TITLE_PAGE])
+    assert asked == [{}]
+    whole, asked = front_harvest(found_of())
+    whole(7)
+    assert asked[1] == every_field(COVER)
+
+
+def test_a_read_from_the_front_halted_after_a_round_reads_no_further():
+    whole, asked = front_harvest(found_of(), halt_after=2)
+    assert whole(7) is None
+    assert asked == [{}, every_field(COVER)]
+
+
+def test_the_front_is_read_first_page_first_each_page_in_document_order():
+    unpaged = Source("section", 25, "Annex", {"document_id": 7})
+    assert surveyed.by_page([OTHER, BODY, unpaged, IMPRINT, COVER,
+                             TITLE_PAGE]) == [(1, [COVER]),
+                                              (2, [IMPRINT, TITLE_PAGE]),
+                                              (3, [BODY]), (11, [OTHER])]
+
+
+def test_the_profile_s_title_is_one_of_its_front_parameters():
+    assert TITLE in OWN and all(uri in AR6.by_uri for uri in OWN)
+    # the failure by construction: a title the spec does not hold reads
+    # nothing from the front
+    whole, asked = front_harvest(found_of(), title="publication_titel")
+    whole(7)
+    assert asked == [{}]

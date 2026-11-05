@@ -1,11 +1,14 @@
 """A passage is read one value per request (owner decisions 2026-11-04 and
 2026-11-05): rounds name its values one by one, each round shown the values
 read, until the model names none; a value the check refuses is asked once
-more with its reason, AND one named again is asked once more and, named
-again, ends the rounds. A value may stand in any passage a round showed, the
-passage, the text around it or one its tools fetched, AND it is read from the
-one its quote stands in, which joins the batch the fold checks it in; a quote
-in no passage shown is refused.
+more with its reason, AND what the fold refuses of a value and its quote, an
+answer off its closed list or one its quote does not hold, is asked once
+more with the fold's own reason while a value the fold takes is not, AND one
+named again is asked once more and, named again, ends the rounds. A value
+may stand in any passage a round showed, the passage, the text around it or
+one its tools fetched, AND it is read from the one its quote stands in, which
+joins the batch the fold checks it in; a quote in no passage shown is
+refused.
 
 A number in a table takes its column from the head the model wrote, so two
 equal numbers of one row are two values, AND a head no head line prints is
@@ -50,6 +53,7 @@ import jsonschema
 from docpipe.extraction import fields, reading
 from docpipe.extraction.pipeline import Row, Source, route_claims
 from docpipe.extraction.spec import load as load_spec
+from docpipe.extraction.verify import verify_tuple
 from docpipe.extraction.wording import say
 
 SPEC = load_spec(json.loads((Path(__file__).resolve().parent.parent
@@ -99,7 +103,8 @@ def nth(given, calls, task):
     return given[min(n, len(given)) - 1]
 
 
-def asking(values=({"next": None},), groups=None, **kw):
+def asking(values=({"next": None},), groups=None, spec=SPEC, frame=FRAME,
+           **kw):
     """A Reader whose values requests are answered by *values* in turn and
     the requests of each group by *groups[name]* in turn, any other group
     with every coordinate not printed; and each request as (task, payload),
@@ -121,7 +126,7 @@ def asking(values=({"next": None},), groups=None, **kw):
             return {slot.name: {"value": UNSTATED} for slot in slots}
         return nth(given, calls, group.name)
 
-    return reading.Reader(SPEC, ask_values, ask_text, FRAME, **kw), calls
+    return reading.Reader(spec, ask_values, ask_text, frame, **kw), calls
 
 
 def read_of(source, *, values=({"next": None},), groups=None, pairs=(),
@@ -176,6 +181,41 @@ def test_a_value_the_check_refuses_is_asked_once_more_with_its_reason():
         assert read.corrected == 1 and read.failed == {reading.VALUE: 1}
     _read, calls = read_of(TEXT, values=({"next": V300}, {"next": None}))
     assert corrections_of(calls) == []
+
+
+AR6 = load_spec(json.loads((Path(__file__).resolve().parent.parent
+                            / "profiles" / "scenarios" / "extraction_spec.json")
+                           .read_text(encoding="utf-8")))
+SECTOR = AR6.by_uri["study_sector"]
+COVERS = Source("section", 8, "Scope\nThe model covers the building, "
+                "transport and industry sectors.",
+                {"document_id": 7, "section_title": "Scope"})
+NAMED = "covers the building, transport and industry"
+
+
+def sector_read(*values):
+    reader, calls = asking(values, spec=AR6, frame=[])
+    read = reader.read(7, SECTOR, COVERS, [], [],
+                       {(COVERS.owner_kind, COVERS.owner_id): COVERS})
+    return read, calls
+
+
+def test_what_the_fold_refuses_of_a_value_is_asked_with_the_fold_s_reason():
+    right = {"value": "industry sector", "value_raw": "industry",
+             "quote": NAMED}
+    for wrong in ({"value": "bioenergy", "quote": NAMED},       # off its list
+                  {"value": "industry sector", "quote": NAMED}):  # not quoted
+        read, calls = sector_read({"next": wrong}, {"next": right},
+                                  {"next": None})
+        why = verify_tuple(wrong, SECTOR, COVERS.text).reason
+        assert corrections_of(calls) == [("values", [dict(
+            wrong, what=say("value_rejected", reason=why))])]
+        assert [(c["value"], c.get("value_raw"))
+                for c in read.claims] == [("industry sector", "industry")]
+        assert read.corrected == 1 and read.failed == {reading.VALUE: 1}
+    # the failure by construction: a value the fold takes is not asked again
+    read, calls = sector_read({"next": right}, {"next": None})
+    assert corrections_of(calls) == [] and len(read.claims) == 1
 
 
 def test_a_value_named_again_is_asked_once_more_and_then_ends_the_rounds():

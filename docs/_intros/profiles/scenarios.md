@@ -59,7 +59,7 @@ table gives this profile's own answer.
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 6 prompt ids of its own | page transcription, English artefact repair, table and figure captioning; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object (`reading.REQUIRED`), in English, the language of the prompts of the first three; the extraction prompts are German and `extraction.PHRASES` is another table, the harvest's own |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and names (a name opens each line of the values index) and three filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `FRONT_PAGE_PARAMETERS`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 13 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
+| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `FRONT_PAGE_PARAMETERS`, `FRONT_PAGE_TITLE`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 13 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
 | The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 11 prompt ids of its own | the English chat wording and the answer loop's own prompts; the twelfth, `json_format`, is the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copy gave |
 
@@ -88,8 +88,12 @@ reads from that map.
 `FRONT_PAGE_PARAMETERS` in `extraction.py` has what a publication says
 about itself (title, authors, date, DOI, abstract) asked once more on its
 own over the opening of the document, besides wherever else it is read, in
-a harvest field by field; a harvest from the survey sends no such request
-until a probe has measured whether its survey finds them by itself. Where the
+a harvest field by field. A harvest from the survey reads them from the first
+page on, page by page, until a title came, `FRONT_PAGE_TITLE` read with a
+value the check takes (owner decisions 2026-11-05, `surveyed.front_walk`): a
+probe showed that the survey of a review named only the chapters on other
+studies for them, and the graph took a cited report's title, year and
+authors. Where the
 survey named no passage for one of them, the search for it ranks with a
 sentence written for this publication from its title as the corpus index
 holds it (`document_context`, `DocumentMeta.title`), which finds the title

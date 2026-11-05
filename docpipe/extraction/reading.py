@@ -19,9 +19,12 @@ stand in any passage the round showed: the passage, the text around it, or
 one its tools fetched (owner decision 2026-11-05); it is read from the one its
 quote stands in, which joins the reading's batch, so the fold checks it there
 (`pipeline.route_claims`). A value the check refuses (its quote in no passage
-shown, its number not in its quote, a quote over several table rows that
-print it, a head no head line prints) is asked once more with the reason; one
-named again is asked once more, and named again it ends the rounds.
+shown, its number not in its quote, whatever else the fold refuses of the
+value and its quote, such as an answer its quote does not hold or one off
+its closed list (`verify.value_refused`), a quote over several table rows
+that print it, a head no head line prints) is asked once more with the
+reason; one named again is asked once more, and named again it ends the
+rounds.
 
 A number in a table takes its column from its head, else from the one cell of
 its row that prints it, and a head that prints exactly one year of the
@@ -67,7 +70,7 @@ from .pipeline import (CELL, READ, YEAR_STATES, Batch, Row, Source, WorkItem,
                        narrow_quote, option_named, printed_lines, row_label,
                        window_around, with_head)
 from .verify import (canonical_number, flat, number_outside_quote, numbers_in,
-                     quote_in)
+                     quote_in, value_refused)
 from .wording import say
 
 # The values of a passage, one per round; one group's coordinates of one of
@@ -662,12 +665,16 @@ def value_failure(claim: dict, source: Source) -> Optional[str]:
 
 
 def round_failure(claim: dict, shown: list, read: list,
-                  numeric: bool = False) -> Optional[tuple]:
-    """(kind, reason) of what the check refuses of a round's value, or None:
-    a value already read (`REPEATED`), the value itself (`VALUE`: its quote
-    in no passage of *shown*, its number not in its quote, a number quoted
-    over several rows of its table that print it), or a head no head line of
-    its table prints (`HEAD`)."""
+                  parameter) -> Optional[tuple]:
+    """(kind, reason) of what the check refuses of a round's value of
+    *parameter*, or None: a value already read (`REPEATED`), the value
+    itself (`VALUE`: its quote in no passage of *shown*, its number not in
+    its quote, what the fold refuses of the value and its quote
+    (`verify.value_refused`), a number quoted over several rows of its
+    table that print it), or a head no head line of its table prints
+    (`HEAD`). The fold's refusal is told in its own words: what the fold
+    refuses, the model hears while it can still answer (owner decision
+    2026-11-05)."""
     if any(same_value(claim, other) for other in read):
         return REPEATED, say("value_already_read",
                              value=json.dumps(claim.get("value"),
@@ -679,7 +686,10 @@ def round_failure(claim: dict, shown: list, read: list,
     reason = value_failure(claim, passage)
     if reason:
         return VALUE, reason
-    table = numeric and passage.owner_kind == "table"
+    refused = value_refused(claim, parameter, passage.text or "")
+    if refused:
+        return VALUE, say("value_rejected", reason=refused)
+    table = bool(parameter.is_numeric) and passage.owner_kind == "table"
     if table and in_several_rows(claim):
         return VALUE, say("value_in_several_rows", values=json.dumps(
             [{"value": claim.get("value"), "quote": claim.get("quote")}],
@@ -1137,7 +1147,6 @@ class Reader:
         tools: what one fetched, the next one shows."""
         result = job.result
         head = with_head_asked(job.parameter, view)
-        numeric = bool(job.parameter.is_numeric)
         gathered = job.gathered()
         shows = ({"around": job.context["around"]}
                  if job.context.get("around") else {})
@@ -1166,7 +1175,7 @@ class Reader:
             if claim is None:
                 break
             failure = round_failure(claim, job.passages_shown(gathered),
-                                    [r.claim for r in rows], numeric)
+                                    [r.claim for r in rows], job.parameter)
             if failure is not None:
                 kind, reason = failure
                 result.failed = dict(collections.Counter(result.failed)
@@ -1178,7 +1187,8 @@ class Reader:
                 if claim is None:
                     break
                 failure = round_failure(claim, job.passages_shown(gathered),
-                                        [r.claim for r in rows], numeric)
+                                        [r.claim for r in rows],
+                                        job.parameter)
                 if failure is not None and failure[0] == REPEATED:
                     break
                 if failure is not None and failure[0] == HEAD:
