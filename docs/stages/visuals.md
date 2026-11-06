@@ -155,9 +155,12 @@ passed; so has a table of a `visuals.json` written before this, whose failures c
 A table the layout cut in parts, over a page break or within a page, used to
 come out as parts with a caption and head of their own, invented where the
 part prints none (`continuation.py`, owner decision 2026-11-06). A table may
-continue the table before it in reading order when that table stands on its
-page or the page before and no section starts between them on its page
-(`continuation.links`, `runs`). Such a table is asked after the table before
+continue the table right before it in reading order when that table stands on
+its page or the page before (`continuation.links`, `runs`) and has a
+transcribed head (`head_lines`); whatever stands between them, a heading
+included, is shown and the model decides (owner decision 2026-11-07). The
+survey and the reading take the same tables by the same rule (see
+[extraction](extraction.md)). Such a table is asked after the table before
 it with prompt `visuals/table_continued`: that table's caption and head and
 the text between the two (`BETWEEN_CHARS`), and the reply says whether it
 `continues` it; where it does, its rows are written under that head and it

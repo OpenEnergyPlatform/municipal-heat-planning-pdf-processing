@@ -427,9 +427,9 @@ class SurveyedHarvest:
         *only*, of the *passages* given, under *scope*. *also* is read with
         it: what another survey named (`take_found`, `append_unread`)."""
         spec = self.spec_for(document_id)
-        # A table at the top of a page shows the title and head of the one
-        # it may continue, in the survey and in the reading (owner decision
-        # 2026-11-06).
+        # A table shows the title and head of the table right before it,
+        # which it may continue, in the survey and in the reading (owner
+        # decisions 2026-11-06 and 2026-11-07).
         sources = continued(self.passages_of(document_id))
         shown = {(s.owner_kind, s.owner_id): s for s in sources}
         budget = budget_of(sources, self.pages_of(document_id))

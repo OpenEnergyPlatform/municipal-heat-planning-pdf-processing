@@ -225,12 +225,12 @@ again; a single row that still does not fit is a hole of its own (`Read.lost`,
 `cut_off`), as is a piece no round answered (`no_answer`), and the other
 pieces are read (`surveyed.taken_of`).
 
-A table that may continue the table before it (that table stands on its page
-or the page before and no passage between them starts on its page,
-`lookup.continued`) is shown with that table's title and head right before it,
-`table_before` (owner decision 2026-11-06), in the survey and in the reading;
-stage 5 finds the same tables by the same rule (see
-[visuals](visuals.md)). Every reading request also shows the title-page line
+A table that may continue the table right before it (that table stands on its
+page or the page before and has a transcribed head, whatever stands between
+them, a heading included; `lookup.continued`, owner decisions 2026-11-06 and
+2026-11-07) is shown with that table's title and head, `table_before`, in the
+survey and in the reading; stage 5 asks and joins by the same rule, so both
+take the same tables (see [visuals](visuals.md)). Every reading request also shows the title-page line
 that names the plan's municipality, `title_page` (`runner.title_line`; the
 profile constant `TITLE_PAGE_LINE` turns it on).
 

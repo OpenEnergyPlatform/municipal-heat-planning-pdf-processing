@@ -66,7 +66,10 @@ key, joins each table that stage 5 found to continue the table before it to the
 table its run started with (`docpipe.visuals.continuation.join`, owner decision
 2026-11-06: its rows are appended, its id, page, crop, bbox and `qa` go into the
 table's `parts`, it leaves its section, and its own transcription stays in
-`visuals.json`; the log counts the joined parts), writing the result to `document.json` through a `.part` file and
+`visuals.json`; the log counts the joined parts; a plan already in the
+database gets its joined tables only through a db step with `--force`,
+which deletes and reinserts every plan under the root, so a root holding only
+that plan's directory keeps it to that plan), writing the result to `document.json` through a `.part` file and
 `os.replace` so a killed write leaves no truncated file for the cache to
 accept (`merge.py:71`). `merge_batch` runs this over every candidate and
 reports one success or failure per directory (`merge.py:160`). A

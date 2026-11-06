@@ -173,7 +173,7 @@ def key_of(prompt_text: str, parameters: dict, groups: dict,
 def payload(context: list, parameters: dict, groups: dict,
             corrections: Optional[list] = None) -> dict:
     """One request: its one passage under "source", without an id, the
-    title and head of the table a table at the top of a page may continue
+    title and head of the table right before it, which a table may continue
     ("table_before", `lookup.continued`, owner decision 2026-11-06), the
     parameters and the groups; with *corrections* the same request asked
     once more."""

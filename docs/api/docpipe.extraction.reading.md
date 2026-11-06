@@ -498,11 +498,11 @@ where the plan has neither.
 def table_before_of(source: Source) -> Optional[Source]
 ```
 
-The title and head of the last table on the page before, which a
-table at the top of a page may continue (`lookup.continued`), as a
-passage a quote may stand in; whether the table continues it is the
-model's reading (owner decision 2026-11-06). None for any other
-passage.
+The title and head of the table right before *source*, on its page
+or the page before, which *source* may continue (`lookup.continued`), as
+a passage a quote may stand in; whether the table continues it is the
+model's reading (owner decisions 2026-11-06 and 2026-11-07). None for
+any other passage.
 
 ### beside_of
 

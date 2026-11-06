@@ -70,15 +70,15 @@ def continued(passages: list[Source]) -> list[Source]
 ```
 
 *passages*, a document's in reading order, each table that may
-continue the table before it marked with that table's title and head
-(provenance "table_before": {"owner", "text"}). Owner decision
-2026-11-06: a table the layout cut in parts, at a page break or within a
-page, loses its title, head and unit in its later parts, and whether it
-is the same table is the model's reading. A table may continue the table
-before it when that table stands on its page or the page before, with no
-passage between them that starts on its own page; the transcription
-joins the parts it finds by the same rule (`docpipe.visuals
-.continuation`).
+continue the table right before it marked with that table's title and
+head (provenance "table_before": {"owner", "text"}). Owner decisions
+2026-11-06 and 2026-11-07: a table the layout cut in parts, at a page
+break or within a page, loses its title, head and unit in its later
+parts, and whether it is the same table is the model's reading. A table
+may continue the table right before it when that table stands on its
+page or the page before and has a transcribed head; what stands between
+them, a heading included, does not part them. The transcription asks
+and joins by the same rule (`docpipe.visuals.continuation`).
 
 ### item
 

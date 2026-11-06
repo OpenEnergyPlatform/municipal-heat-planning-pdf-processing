@@ -1,8 +1,10 @@
-"""A table the layout cut in parts is one table (owner decision 2026-11-06):
-a table may continue the table before it when that one stands on its page or
-the page before and no section starts between them on its page; it is asked
-after that table, shown its caption and head and what stands between them,
-and the merge joins each part the model found to continue it.
+"""A table the layout cut in parts is one table (owner decisions 2026-11-06
+and 2026-11-07): a table may continue the table right before it when that one
+stands on its page or the page before and has a transcribed head, whatever
+stands between them, a heading included; it is asked after that table, shown
+its caption and head and what stands between them, and the merge joins each
+part the model found to continue it. The survey and the reading pick the same
+tables.
 
 Built on the shape of a real case: a table of municipal buildings in three
 parts on two pages, the second part on the page of the first, after the end
@@ -10,6 +12,8 @@ of another table on the page before. Each promise has a case that breaks it
 by construction beside the one that keeps it."""
 import copy
 
+from docpipe.extraction import lookup
+from docpipe.extraction.pipeline import Source
 from docpipe.visuals import continuation
 
 HEAD = "| Liegenschaft | Wärmeverbrauch |\n| --- | --- |"
@@ -49,14 +53,15 @@ def test_a_table_may_continue_the_table_before_on_its_page_or_the_one_before():
         "p114_tbl0": {"after": "p113_tbl0", "between": "Anhang | Seite 114"}}
     assert continuation.runs(sections, found) == [
         [(0, 0), (0, 1), (0, 2), (0, 3)]]
-    # A section that starts on its page stands between, and so does a page:
-    # each starts a run of its own.
+    # A heading on its page does not part them: it is shown with the rest.
     later = section(START, segments=[{"page": 114, "kind": "table",
                                       "ref": "p113_tbl1"}])
-    later["page_number"] = 114
+    later.update(page_number=114, title="Kommunale Liegenschaften")
     sections = [section(END, segments=[{"page": 113, "kind": "table",
                                         "ref": "p112_tbl0"}]), later]
-    assert continuation.links(sections) == {}
+    assert continuation.links(sections) == {"p113_tbl1": {
+        "after": "p112_tbl0", "between": "# Kommunale Liegenschaften"}}
+    # A page between them does: each starts a run of its own.
     far = section(END, dict(START, page_number=115), segments=[
         {"page": 113, "kind": "table", "ref": "p112_tbl0"},
         {"page": 115, "kind": "table", "ref": "p113_tbl1"}])
@@ -142,3 +147,66 @@ def test_the_merge_joins_each_part_to_the_table_it_continues():
         "p112_tbl0", "p113_tbl1", "p113_tbl0"]
     sections = [section(END, dict(start, markdown=None), second)]
     assert continuation.join(sections) == 0
+
+
+def passages_of(sections):
+    """The document as the survey and the reading take it from the database:
+    each section, then its tables by page in their order, then its figures;
+    a table's text is its caption over its transcription."""
+    out = []
+    for number, one in enumerate(sections):
+        out.append(Source("section", number, one.get("title") or "",
+                          {"page": one.get("page_number")}))
+        for table in sorted(one.get("tables") or [],
+                            key=lambda t: t["page_number"]):
+            text = "\n".join(filter(None, (table.get("caption"),
+                                           table.get("markdown"))))
+            out.append(Source("table", table["id"], text,
+                              {"page": table["page_number"]}))
+        for figure in one.get("figures") or []:
+            out.append(Source("figure", figure["id"],
+                              figure.get("caption") or "",
+                              {"page": figure.get("page_number")}))
+    return out
+
+
+def test_the_transcription_and_the_reading_pick_the_same_tables():
+    # After the three parts: a heading and a table on the same page, one two
+    # pages later, one after a table without a head, and one after a figure.
+    fourth = {"id": "p114_tbl1", "page_number": 115,
+              "caption": "Tabelle 6: Straßenbeleuchtung",
+              "markdown": "| Straße | Leuchten |\n| --- | --- |\n"
+                          "| Ringweg | 40 |"}
+    fifth = {"id": "p116_tbl0", "page_number": 117,
+             "markdown": "Weitere Liegenschaften folgen."}
+    sixth = {"id": "p116_tbl1", "page_number": 117,
+             "markdown": HEAD + "\n| Rathaus | 120.000 |"}
+    seventh = {"id": "p117_tbl0", "page_number": 118,
+               "markdown": HEAD + "\n| Bauhof | 35.000 |"}
+    other = section(fourth, fifth, sixth, seventh, segments=[
+        {"page": 115, "kind": "text", "text": "Die Beleuchtung der Straßen."},
+        {"page": 115, "kind": "table", "ref": "p114_tbl1"},
+        {"page": 117, "kind": "table", "ref": "p116_tbl0"},
+        {"page": 117, "kind": "table", "ref": "p116_tbl1"},
+        {"page": 118, "kind": "figure", "ref": "p117_img0"},
+        {"page": 118, "kind": "table", "ref": "p117_tbl0"}])
+    other.update(title="Straßenbeleuchtung", page_number=115,
+                 figures=[{"id": "p117_img0", "page_number": 118,
+                           "caption": "Abbildung 3: Bauhof"}])
+    sections = [section(END, START, SECOND, THIRD), other]
+    found = continuation.links(sections)
+    transcribed = {}
+    for run in continuation.runs(sections, found):
+        transcribe, asked = asker({})
+        continuation.transcribe_run(
+            [sections[si]["tables"][ti] for si, ti in run], found, {},
+            transcribe)
+        transcribed.update({one: before["after"] for one, before in asked
+                            if before is not None})
+    read = {p.owner_id: p.provenance["table_before"]["owner"][1]
+            for p in lookup.continued(passages_of(sections))
+            if "table_before" in p.provenance}
+    assert transcribed == read == {
+        "p113_tbl1": "p112_tbl0", "p113_tbl0": "p113_tbl1",
+        "p114_tbl0": "p113_tbl0", "p114_tbl1": "p114_tbl0",
+        "p117_tbl0": "p116_tbl1"}

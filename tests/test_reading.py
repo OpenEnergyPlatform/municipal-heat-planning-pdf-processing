@@ -1072,8 +1072,9 @@ def test_a_group_reply_may_write_a_sentence_and_a_tool_a_sentence_to_search():
 # it is asked once more with the sections before and after the value's place,
 # its open coordinates only and never a word printed with the number itself;
 # a table's frame open on every value is asked once and taken by all; a table
-# at the top of a page shows the title and head it may continue; the two ends
-# of a range are linked.
+# shows the title and head of the table right before it, which it may continue
+# (and 2026-11-07: a heading between them does not part them); the two ends of
+# a range are linked.
 
 BEFORE = Source("section", 5, "Einleitung\nDie Werte gelten für das Jahr 2022.",
                 {"document_id": 7, "section_title": "Einleitung"})
@@ -1147,7 +1148,7 @@ REST = Source("table", 2, "| Kita | 61.400 |\n| Halle | 12 |",
               {"document_id": 7, "page": 115})
 
 
-def test_a_table_at_the_top_of_a_page_shows_the_head_it_may_continue():
+def test_a_table_shows_the_head_of_the_table_right_before_it():
     marked = lookup.continued([START, REST])
     assert marked[1].provenance["table_before"] == {
         "owner": ["table", 1],
@@ -1156,10 +1157,10 @@ def test_a_table_at_the_top_of_a_page_shows_the_head_it_may_continue():
     same = replace(REST, provenance={"page": 114})
     assert lookup.continued([START, same])[1].provenance["table_before"] \
         == marked[1].provenance["table_before"]
-    # A passage that starts on its page stands between, or a page between.
+    # A heading on its page between them does not part them; a page does.
     section = Source("section", 3, "Neuer Abschnitt", {"page": 115})
-    assert "table_before" not in lookup.continued(
-        [START, section, REST])[2].provenance
+    assert lookup.continued([START, section, REST])[2].provenance[
+        "table_before"] == marked[1].provenance["table_before"]
     assert "table_before" not in lookup.continued(
         [START, replace(REST, provenance={"page": 116})])[1].provenance
     # The reading shows it, and the head of the table before is a head.

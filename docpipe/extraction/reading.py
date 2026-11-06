@@ -395,8 +395,8 @@ def around_of(source: Source, passages: dict,
 # What the second reading of a value shows beside its passage, the sections
 # before and after its place (owner decision 2026-11-06), and what any reading
 # request shows beside it: the line of the title page that names the plan's
-# own place, and the title and head of the table a table at the top of a page
-# may continue.
+# own place, and the title and head of the table right before a table, which
+# it may continue.
 NEAR = ("before", "after")
 BESIDE = ("title_page", "table_before")
 
@@ -435,11 +435,11 @@ def near_of(source: Source, order: list,
 
 
 def table_before_of(source: Source) -> Optional[Source]:
-    """The title and head of the last table on the page before, which a
-    table at the top of a page may continue (`lookup.continued`), as a
-    passage a quote may stand in; whether the table continues it is the
-    model's reading (owner decision 2026-11-06). None for any other
-    passage."""
+    """The title and head of the table right before *source*, on its page
+    or the page before, which *source* may continue (`lookup.continued`), as
+    a passage a quote may stand in; whether the table continues it is the
+    model's reading (owner decisions 2026-11-06 and 2026-11-07). None for
+    any other passage."""
     before = (source.provenance or {}).get("table_before")
     if not isinstance(before, dict) or not before.get("text"):
         return None

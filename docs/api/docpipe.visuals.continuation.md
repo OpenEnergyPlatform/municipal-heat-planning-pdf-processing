@@ -16,10 +16,12 @@ that head and gives no caption. The merge before the database joins each such
 part to the table it continues: one table, its parts' pages, crops and frames
 kept beside it.
 
-A table may continue the table before it in reading order when that table
-stands on its page or the page before and no section starts between them on
-its page. What else stands between them (a page footer, a caption, a
-paragraph, a figure) is shown to the model, which decides.
+A table may continue the table right before it in reading order when that
+table stands on its page or the page before and has a transcribed head.
+Whatever stands between them (a heading, a page footer, a caption, a
+paragraph, a figure) is shown to the model, which decides (owner decision
+2026-11-07: also after a heading). The survey and the reading pick the same
+tables by the same rule (`docpipe.extraction.lookup.continued`).
 
 Author: Felix Vossel
 
@@ -41,7 +43,8 @@ def head_lines(markdown: Optional[str]) -> str
 ```
 
 A transcribed table's head: its lines down to the rule, the rule
-included; "" where it has none.
+included, where a row of cells stands above the rule; "" where it has
+none. A head as `docpipe.extraction.lookup.head_of` takes one.
 
 ### body_rows
 
@@ -59,8 +62,10 @@ def links(sections: list) -> dict
 ```
 
 {table id: {"after": the id of the table before it, "between": the
-text between them}} for each table that may continue the table before it
-(see the module); "" where nothing stands between them.
+text between them}} for each table whose page lets it continue the table
+right before it (see the module; whether that table has a head is known
+once it is transcribed, `transcribe_run`); "" where nothing stands
+between them.
 
 ### runs
 
@@ -96,10 +101,11 @@ taken from *cached* (by id): [result].
 *transcribe(item, before)* is one request; *before* is what it is shown
 of the table the item may continue (`before_of`), None for a table asked
 on its own. The table a run starts with is shown to each later one until
-one of them does not continue it, which is then shown to those after it.
-A cached table stands, unless it may continue a table that has a
-transcription and was not asked against the table right before it (a
-transcription from before this was asked, or of another table).
+one of them does not continue it, which is then shown to those after it;
+one without a transcribed head (`head_lines`) is shown to none. A cached
+table stands, unless it may continue a table that has a transcribed head
+and was not asked against the table right before it (a transcription
+from before this was asked, or of another table).
 
 ### join
 
