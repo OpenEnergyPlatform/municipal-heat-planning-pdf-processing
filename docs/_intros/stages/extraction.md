@@ -179,7 +179,7 @@ and named again after that it ends the rounds. The reasons are
 `value_already_read`, `head_not_in_table` and `value_rejected`, the last with
 the fold's own reason in it. Before, the round checked only the quote and the
 number, and the fold dropped without a word what the model could have
-corrected: 115 of the 222 refusals of an AR6 probe of four papers, such as an
+corrected: 115 of the 222 refusals of a probe of four papers, such as an
 entry its quote did not hold or an answer off the list. A correction asks for
 the value again or, where the passage holds no such value, for the next value
 not yet read; only a null after it ends the rounds, as the prompt's second
@@ -246,37 +246,25 @@ tools stay (`reading.Gathered`, `reading.gather`, `lookup.py`) for the combing
 and the compute step, which are the requests that look beyond what they are
 shown.
 
-A list the spec marks `matched_apart` (a dynamic list only, a parameter's own
-or an axis') is matched in a request of its own (`matching.py`, prompt
-`extraction/match`, owner decision 2026-11-05): no reading or combing request
-shows it, and they ask the wording the document prints instead, with its
-quote, as for a free-text coordinate. Each wording read is then matched on its
-own, shown the document's list, the passage, the text around a table or
-figure, the wording and its quote; the combing shows the passage the quote
-stands in. The entry it chooses becomes the answer and the wording its
-`value_raw`, and the check runs as on any closed list. A reply that is no
-entry is asked once more with the reason (`not_an_option`); one still none
-leaves the entry empty with the wording kept, as an answer whose entry the
-model is unsure of: a value unmapped (`verify._check_value`), a coordinate
-`unstated` with the wording seen, which the combing looks for again. No
-answer is kept for the next wording of the same name. scenarios matches the
-AR6 runs of a publication so (`scenario_label` and the `scenario` axis); the
-run list and the rule for choosing a run went out of every reading request.
+A free-text coordinate or value the spec marks `merged` (`"merged": "<kind>"`,
+owner decisions 2026-11-06; scenarios marks the `scenario` axis and the
+value of `scenario_label` `"merged": "scenario"`) is read as the document
+prints it, the name with its quote, as any free-text coordinate. The spec
+refuses `merged` on anything but a free-text axis or a free-text value, and a
+merged coordinate is never read in the survey (`survey.md` names no field of
+it). A value its passage states for several names of such a coordinate, as
+`"scenario": [{...}, {...}]`, is one row per name, each checked on its own
+(`reading.answers_each`; `reading.several` follows `merged`); a row the check
+refuses is asked once more alone, and the correction names the name and quote
+it was given (`reading.named_corrections`, `combing.named_rows`). The rows the
+combing makes join their value's reading (`Combed.made`). A pass over a
+stored harvest re-reads each stored row in place and takes the first name.
+Asked for one name, a value of several scenarios was left without one: on one
+paper the scenario of a year was read 48 times instead of 129.
 
-A request that reads such a list shows only the wording, never the entry
-the match chose: in a round's `read`, as a value's own wording and in a
-correction (`reading.printed`, owner decision 2026-11-06). Shown both, the
-model of an AR6 probe gave an entry ("scenario family") as the name of 15
-values. A value its passage states for several wordings of such a list,
-as `"scenario": [{...}, {...}]`, is one row per wording, each matched and
-checked on its own (`reading.answers_each`, owner decision 2026-11-06); a
-row the check refuses is asked once more alone, and the correction names
-the wording and quote it was given (`reading.named_corrections`,
-`combing.named_rows`). The rows the combing makes join their value's
-reading (`Combed.made`). A pass over a stored harvest re-reads each stored
-row in place and takes the first wording. Asked for one name, a value of
-several scenarios had been left without one: on paper 86 the scenario of a
-year was read 48 times instead of 129.
+Which of a document's names mean the same thing is not asked while it is
+read. Once the document is folded, the naming step (`naming.py`, prompt
+`extraction/naming`, below) shows the model every name read.
 
 The prompt of `read_text` may be split by lines `<!-- group: NAME -->`: the text
 before the first is every group's, and each group is sent that plus its own
@@ -360,7 +348,7 @@ its order, before the combing (owner decision 2026-11-05,
 document in the same round, until a reading of it comes back with a value the
 check takes or the list ends. A value is what the fold would take of it
 (`surveyed.taken_values`, `verify.value_refused`): an answer the fold refuses
-ends nothing, as an AR6 probe showed, where the walk stopped on a sector
+ends nothing, as a probe showed, where the walk stopped on a sector
 division its quote did not hold and the fold then dropped. A reading that came
 to no reply ends nothing. A reading there is shown its one passage and no
 rest of the list, since the reading has no tools (owner decision 2026-11-05,
@@ -394,8 +382,8 @@ the page just read or before it, by the survey's reading or by this one
 (`surveyed.titled_page`). A passage the survey named for a field is not read
 for it again, and every passage read is one of the field's sources. The
 first page with a title is so the title page the graph and the completion
-take a publication's own fields from (`profiles/scenarios/front.py`). In an
-AR6 probe the survey of a review named only its chapters on other studies
+take a publication's own fields from (`profiles/scenarios/front.py`). In a
+probe the survey of a review named only its chapters on other studies
 for title, authors and date, and the graph took the title, year and authors
 of a cited report. A profile without a title among them, kwp, reads nothing
 from the front, and neither does a survey of part of a plan. A probe lists
@@ -406,8 +394,8 @@ the passages read so under `front`.
 A run harvests from the survey of each plan wherever its spec names groups
 (`runner.surveyed_flow`), and then the profile must write the four prompts
 `extraction/survey`, `read_values`, `read_text` and `comb`
-(`runner.SURVEY_PROMPT_IDS`), and `extraction/match` where its spec matches a
-list apart (`matching.MATCH_PROMPT_ID`, below). kwp and scenarios do. A profile whose spec names
+(`runner.SURVEY_PROMPT_IDS`), and `extraction/naming` where its spec merges names
+(`naming.NAMING_PROMPT_ID`, below). kwp and scenarios do. A profile whose spec names
 groups and lacks one of them is broken, and the run stops at the start and names
 the prompt, for every run and every probe, as `spec.load` stops at a broken group
 (owner decision 2026-11-04). It used to harvest field by field instead, saying
@@ -467,7 +455,7 @@ rows requests were shown counts as read. `--top-up-parameters`
 
 The server's window is measured over the prompts of this flow
 (`runner.sent_prompt_ids`, see Configuration). The trace names each request by
-its kind, `read_values_ask`, `read_text_ask`, `comb_ask` and `match_ask`, each with its
+its kind, `read_values_ask`, `read_text_ask`, `comb_ask` and `naming_ask`, each with its
 `group` where the request has one: `read_values_ask` carries `round`,
 `read_text_ask` carries `group` and `value`, and the `comb` event carries
 `group` too. The requests for a search sentence, the frame, the review and
@@ -812,8 +800,8 @@ plan. A number the model answers is spelled with the fifteen significant digits
 a double holds: ten fixed places showed the binary noise of a large one, and
 52678423.38 was never in its quote.
 
-A profile may close a choice list per document (`document_axes`; the AR6
-profile closes its scenarios and its regions). `runner.fill_dynamic_axes`
+A profile may close a choice list per document (`document_axes`; the scenarios
+profile closes its regions). `runner.fill_dynamic_axes`
 copies the spec with those lists filled in, parameter and unit questions
 kept, and every batch of the document carries the copy (`Batch.spec`, read
 through `runner.spec_of`): the value request, the field slots, the rows
@@ -1447,6 +1435,46 @@ service answers only once every container stands, which takes about half a
 minute each, one after the other (`KWP_SANDBOX_READY_TIMEOUT`): a run that came
 earlier made a container of its own while podman was still starting, and failed.
 
+### Naming: which names are one thing
+
+A coordinate or value the spec marks `merged` is read under the name the
+document prints (see Reading a parameter in its passages), and one thing has
+several names: "the Zero Carbon scenario" in a sentence, "LCEO Zero Carbon" in a
+table; one name can also stand for several things ("the EC LTS scenarios"). The
+naming step asks what they mean (`naming.py`, prompt `extraction/naming`, owner
+decisions 2026-11-06). It runs inside the run, in `runner.verify` right after
+the compute step and before the file is written (`runner.make_namer`), and only
+for a spec that merges names (`naming.merges`).
+
+One request per kind of thing, the word `merged` names (`scenario`), shows the
+model every name read for it in the document. Each name comes with its places:
+its quote and 500 characters before and after it in the passage it stands in
+(`naming.CONTEXT_CHARS`, owner decision 2026-11-06), a stretch of one passage
+shown once as one place however many names stand in it. For each name the
+model answers the names of what it means: itself, another name of the same
+thing, or several names where it stands for several things
+(`naming.meanings`). Names of one thing become one thing, called by the name
+the others point to; a name of several things stands for each of them. The
+answer quotes nothing, since each name keeps the quote it was read with (owner
+decision 2026-11-06).
+
+Nothing is checked beyond the list. An answer with a name the request did not
+show is asked once more with its reason (`name_not_listed`), and a name still
+answered so means itself. A request that does not fit its room is asked in two
+halves of the names, and the things the halves found are asked once more
+together, each by the places of the name it is called by. The trace writes
+`naming_ask` per answered request and `naming` per document and kind, with the
+names asked.
+
+Each row keeps its name and gets what it means under `<coordinate>_means`
+(`scenario_means`), `value_means` for a merged value. The harvest schema
+declares `_means` for merged slots only, and the key travels with its
+coordinate wherever one is carried: the evidence keys of a row
+(`runner._EVIDENCE`), the slot keys a top-up replaces (`topup.SLOT_KEYS`), and
+the keys `verify` drops with an unbacked coordinate. A top-up pass does not run
+the naming again, as it does not run the compute step again; the graph reads
+a row without `_means` as the thing of its own name.
+
 ### Completing a document from outside it
 
 After the compute step a profile may complete a document's rows from outside
@@ -2009,9 +2037,9 @@ says so in a warning and goes on. Other limits of a column:
   has not. The run still logs `slice gate on quantity`. The prompts are the
   profile's, German for kwp. A column that is given axes named `scenario`,
   `year` or `quantity` does get the frame and the gate.
-- Under scenarios the `document_axes` hook asks the corpus database's scenario
-  tables for every document, so the run needs the database layout that profile
-  expects.
+- Under scenarios the `document_axes` hook reads the corpus database's section,
+  table and image texts of every document, so the run needs the database layout
+  that profile expects.
 - `docpipe export` has no `--spec`. The values table is right, with the
   identifier in `parameter` and an empty `label`; `export --what states` under
   kwp lists every kwp parameter as `never_asked` for each document and the
@@ -2345,7 +2373,7 @@ a `*.jsonl` or `*.stamp.json` that a reader of the harvest would list.
 | `BASE_YEAR` / `TARGET_YEAR` | profile hook | none (the state has no years) | Which frame pairs are the plan's own state and which are its target: a mapping from a frame coordinate to its entry, kwp's `{"scenario": "status_quo"}` and `{"scenario": "target"}`. Their years date a row that names the state by its word and prints no year (see Base years) | `runner.year_states_of`, `pipeline.state_years` |
 | `FRONT_PAGE_PARAMETERS` | profile hook | none | The uris of the parameters asked once more on their own in one request over the document's opening sections, with origin `front`, field by field only; scenarios names title, authors, date, DOI and abstract | `runner.make_front_page`, `runner.plan_batches` |
 | `DECIMAL_MARK` | profile hook | `,` | `,` or `.`: how the profile's documents write the decimal, which decides what the digits alone leave open ("3,251" is 3.251 or 3251); any other value is an error | `verify.decimal_mark` |
-| `document_axes` | profile hook | none | A callable `(connection, document_id)` that returns `{axis name: {uri: [labels]}}`, the closed lists of the spec's dynamic axes for that document (AR6 closes its scenarios and regions); every batch of the document carries the spec with them | `runner.fill_dynamic_axes`, `runner.make_document_spec` |
+| `document_axes` | profile hook | none | A callable `(connection, document_id)` that returns `{axis name: {uri: [labels]}}`, the closed lists of the spec's dynamic axes for that document (scenarios closes its regions); every batch of the document carries the spec with them | `runner.fill_dynamic_axes`, `runner.make_document_spec` |
 | `document_context` | profile hook | none | A callable `(connection, document_id)` that returns `{"name": ...}`, what the document itself contributes to its own search anchor (the municipality); the caption of the first passage found is added to it | `runner.document_anchor` |
 
 The context budget (`runner.context_budget`) is the tokens one request of
@@ -2532,7 +2560,7 @@ calls it to recompute a rewritten file's summary.
 `scheduler.py` is the one request queue of a run, oldest document first (both
 described under The field sweep and The adaptive request limit). `compute.py`
 holds what every open question of the compute step has (see The compute step).
-`found.py` reads where earlier harvests found something (see Starting at what
+`naming.py` asks which names of a document mean the same thing (see Naming). `found.py` reads where earlier harvests found something (see Starting at what
 was found). `archive.py` copies a harvest, stamp or trace file aside before any pass
 replaces it, and `stats.py` counts where a run's harvest is hard; both are
 described under Archive and stats. `trace.py` writes the per-event trace files this stage, `--top-up`,

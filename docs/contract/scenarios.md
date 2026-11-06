@@ -32,7 +32,12 @@ the pass that appended its row (`--top-up-parameters`); a missing key means
 the harvest read it (`docpipe/extraction/schema.py:212` to `293`). Four parameters carry
 the same `scenario` axis, `scenario_type`, `scenario_abstract`,
 `scenario_region` and `scenario_year`, each stating which of the
-publication's AR6 scenarios the row belongs to.
+publication's scenarios the row belongs to, by the name the publication
+prints. A coordinate or value the spec marks `merged` (the `scenario` axis
+and the value of `scenario_label`) also carries `<name>_means` (`value_means`
+for the value): the names of the scenarios that name means, written once the
+document is folded (`docpipe/extraction/naming.py`), absent from a row read
+before that or by a top-up pass.
 
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` always present, the rest, page and
@@ -52,8 +57,8 @@ coordinate is `null` unless its own `<name>_state` says `read` or
 
 ## The lists this page cannot publish
 
-Seven parameters answer from a list rather than write a wording:
-`scenario_label`, `scenario_type` and `scenario_region`
+Six parameters answer from a list rather than write a wording:
+`scenario_type` and `scenario_region`
 (`profiles/scenarios/extraction_spec.json`), and
 the four tags of a bundle, `study_descriptor`, `study_sector_division`,
 `study_sector` and `study_technology`. Five publish their list as
@@ -62,31 +67,23 @@ one `out:` entry for a type none of them cover, and each tag the
 shapes' own list (31, 17, 153 and 43 entries) plus such an entry, for
 every document, so the spec states each list once.
 
-The other two are marked `vocabulary_dynamic` in the spec: their value
-resolves through `_value_uri`, which for a dynamic list types it as a
-plain nullable string with no `x-options`, stating in the
+The other one, `scenario_region`, is marked `vocabulary_dynamic` in the
+spec: its value resolves through `_value_uri`, which for a dynamic list types
+it as a plain nullable string with no `x-options`, stating in the
 `description` that a list exists but is not published here
-(`docpipe/extraction/schema.py:174` to `209`). The `scenario` axis on
-the same four parameters takes a different path: the spec marks it
-`dynamic`, not `vocabulary_dynamic`, and `axis_slots` types it as
-plain text through a path that never calls `_value_uri` at all; that
-call runs earlier in the same function, for the parameter's own
-`value` key (`docpipe/extraction/fields.py:433` to `458`;
-`docpipe/extraction/schema.py:383`, `:402` to `413`).
+(`docpipe/extraction/schema.py`). The scenario is no list: `scenario_label`
+and the `scenario` axis on the four parameters above are free text marked
+`merged`, typed as plain text, the name as the publication prints it with its
+quote.
 
 What the list holds is decided once, before harvest starts, by
-`document_axes` in `profiles/scenarios/extraction.py:172`. It reads
-the AR6 runs the publication documents in the `Scenarios` and
-`DocumentScenarios` tables (`document_scenarios`,
-`profiles/scenarios/extraction.py:149`), and narrows the 249 study
-regions of `profiles/scenarios/regions.json` and the groups of
+`document_axes` in `profiles/scenarios/extraction.py`. It narrows the 249
+study regions of `profiles/scenarios/regions.json` and the groups of
 countries of `profiles/scenarios/region_aggregates.json` to the ones the
 publication's own text names (`document_regions`); the world is always
 offered. A group's key starts with `aggregate:` and the graph writes its
-member countries. Both lists always carry
-fixed `out:` entries, two for the region list and two for the
-scenario list (`REGION_OUT`, `SCENARIO_OUT`,
-`profiles/scenarios/extraction.py:69` to `91`). `value_raw` and
+member countries. The list always carries two
+fixed `out:` entries (`REGION_OUT`). `value_raw` and
 `<axis>_raw` keep the publication's own wording beside the resolved
 entry on every tuple, recording what the list held at harvest time.
 No parameter of this spec is numeric, so a bare year or a dotted date is
@@ -854,7 +851,7 @@ The prompt's own wording:
 
 <details><summary>Why</summary>
 
-Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.
+Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py).
 
 </details>
 
@@ -865,6 +862,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_means`
+
+The names of the things 'scenario' means, among the document's names for that kind of thing: its own name or another name of the same thing, or several names where it stands for several things. The graph writes the row to each of them.
 
 ### `scenario_producer`
 
@@ -935,7 +936,7 @@ How the row becomes a node:
 
 <details><summary>Why</summary>
 
-The AR6 run name labels the factsheet; the document's own wording is the acronym beside it. With no long name known for a run both carry the same string, which is the usual case in this corpus.
+The name the publication prints labels the factsheet, and the acronym beside it carries the same string. Names of one scenario are one factsheet, labelled by the name the others mean (`value_means`, docpipe/extraction/naming.py).
 
 </details>
 
@@ -1031,49 +1032,17 @@ Empty, as unit.
 
 The wording as the document writes it.
 
-### `value_link_quote`
+### `value_means`
 
-Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.
-
-### `value_link_source`
-
-Which source 'value_link_quote' was found in.
-
-### `value_producer`
-
-Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
-
-### `value_quote`
-
-The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.
+The names of the things 'value' means, among the document's names for that kind of thing: its own name or another name of the same thing, or several names where it stands for several things. The graph writes the row to each of them.
 
 ### `value_raw`
 
 The wording before any tidying (an organisation's legal form, a title's line break).
 
-### `value_raw_foreign`
-
-The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
-
-### `value_seen`
-
-A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
-
-### `value_source`
-
-Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).
-
-### `value_state`
-
-How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike.
-
 ### `value_uri`
 
-The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is per document. The profile supplies it before the harvest, so it is not in this schema.
-
-### `value_window`
-
-[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
 ## `scenario_region`
 
@@ -1179,7 +1148,7 @@ The prompt's own wording:
 
 <details><summary>Why</summary>
 
-Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.
+Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py).
 
 </details>
 
@@ -1190,6 +1159,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_means`
+
+The names of the things 'scenario' means, among the document's names for that kind of thing: its own name or another name of the same thing, or several names where it stands for several things. The graph writes the row to each of them.
 
 ### `scenario_producer`
 
@@ -1389,7 +1362,7 @@ The prompt's own wording:
 
 <details><summary>Why</summary>
 
-Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.
+Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py).
 
 </details>
 
@@ -1400,6 +1373,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_means`
+
+The names of the things 'scenario' means, among the document's names for that kind of thing: its own name or another name of the same thing, or several names where it stands for several things. The graph writes the row to each of them.
 
 ### `scenario_producer`
 
@@ -1633,7 +1610,7 @@ The prompt's own wording:
 
 <details><summary>Why</summary>
 
-Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.
+Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py).
 
 </details>
 
@@ -1644,6 +1621,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_means`
+
+The names of the things 'scenario' means, among the document's names for that kind of thing: its own name or another name of the same thing, or several names where it stands for several things. The graph writes the row to each of them.
 
 ### `scenario_producer`
 
@@ -3210,7 +3191,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 
 One event per line; `t` names it and `doc` the document. An event that reports a model request carries it as sent (`input`) and what came back (`output`); a text the requests repeat is a `piece` they refer to. Read by scripts/trace_report.py.
 
-30 record kinds, told apart by `t`:
+31 record kinds, told apart by `t`:
 
 - `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
 - `anchor`: `doc`, `parameter`, `text`
@@ -3231,11 +3212,12 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `read_values_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `read_text_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `comb_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
-- `match_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
+- `naming_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `output`, `places`, `prompt_tokens`
 - `phrase_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `frame_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `review_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `compute_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
+- `naming`: `doc`, `kind`, `names`, `several`, `things`, `why`
 - `read`: `asked`, `corrected`, `doc`, `failed`, `kind`, `owner`, `parameter`, `unanswered`, `unread`, `values`, `why`
 - `comb`: `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `kind`, `missed`, `open`, `owner`, `parameter`, `rows`, `searched`
 - `seek`: `doc`, `kind`, `owner`, `parameter`, `rank`

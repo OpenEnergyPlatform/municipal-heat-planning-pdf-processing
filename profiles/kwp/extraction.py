@@ -195,6 +195,10 @@ PHRASES = {
         'abgeschrieben, auch einen mit "out:". Passt keiner, obwohl die '
         'Passage die Angabe nennt, dann lass "value" weg und gib die '
         'Bezeichnung in "value_raw".'),
+    "name_not_listed": (
+        'Für {name!r} hast du {given} angegeben, und nicht jeder davon ist '
+        'ein Name unter "names". Antworte dafür nur mit Namen unter '
+        '"names", jeden Zeichen für Zeichen abgeschrieben.'),
     "wrong_type": (
         'Dein "value" {given!r} ist nicht {wrong}. Antworte mit {wrong}, '
         'genau wie die Passage es schreibt.'),

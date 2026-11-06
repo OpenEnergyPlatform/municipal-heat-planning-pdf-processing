@@ -1,49 +1,38 @@
-## The AR6 literature corpus
+## The scenario literature corpus
 
 The scenarios profile targets a different corpus than the kwp profile: not
-municipal heat plans but the publications the IPCC AR6 scenario database
-cites, staged from a crawl over that citation list, each entry's PDF
-placed by hand and the AR6 scenarios it documents becoming the
-`DocumentScenarios` link table described next
-(`profiles/scenarios/source.py`'s module docstring).
+municipal heat plans but publications on climate and energy scenarios,
+staged from a crawl over a list of publications, each entry's PDF placed by
+hand (`profiles/scenarios/source.py`'s module docstring). Nothing is taken
+from outside the papers about the scenarios a publication documents: what a
+publication says about its scenarios is read from the publication alone.
 `profiles/scenarios/profile.py` sets `document_noun` to `publication`
-and three catalog facets a reader can filter by: publication year, venue,
-and the AR6 scenarios a publication documents. It declares no language:
+and two catalog facets a reader can filter by: publication year and venue.
+It declares no language:
 the language of a request and of an answer is that of the profile's
 prompts and phrase tables, which is English throughout, as are the
 publications. `extraction_spec.json`'s `parameter_question` and every
 parameter's label and description are English sentences, the spellings of
 its closed lists are the ontology's English alternative labels
 (`ALT_LABEL_LANGUAGE = "en"`), and the spec's `_comment` states
-that `out:not_in_list`'s meaning is worded in the language of its prompts
-(`extraction_spec.json`, lines 40 to 41). The labels are English because
+that `out:not_in_list`'s meaning is worded in the language of its prompts.
+The labels are English because
 the model copies a label it is offered as the document's wording, and a
 German label never stands in an English quote.
 
-The corpus's own schema carries this identity in three tables, applied by
+The corpus's own schema carries this identity in one table, applied by
 `profiles/scenarios/schema.sql` after the core schema. `DocumentMeta` holds
-one row per document with `doi`, `title`, `year`, `venue`, `is_oa` and
-`scenario_count`, filled from the crawl rather than from this profile's
-own extraction; the graph stage's cross-check against these columns is
-covered below. `Scenarios` holds one row per AR6 scenario run known to
-the database, keyed by that database's own `ar6_id` and its `name`.
-`DocumentScenarios` links the two tables many to many: a comment above it
-in the schema states that one publication documents as many as 146
-scenarios, and one scenario is in turn documented by as many as three
-publications. `profiles/scenarios/extraction.py`'s module docstring puts
-the database's own scale at 1,389 scenario runs in total.
+one row per document with `doi`, `title`, `year`, `venue` and `is_oa`,
+filled from the crawl rather than from this profile's own extraction; the
+graph stage's cross-check against these columns is covered below.
 
 Trust computation for this profile also has to account for one
-corpus-wide fact: `ar6.db`'s `Documents` table carries no
+corpus-wide fact: the corpus database carries no
 `page_text_transcribed` column, so `PAGE_TRANSCRIBED` is fixed `False`
 for every value this profile serializes, never read per document the
-way an axis coordinate is (`profiles/scenarios/kg.py`, lines 479 to
-483). Over the 164-document ar6 harvest the module calls its own, 298 of
-11,129 scenario-scope tuples could not be attached to any scenario: 289
-because the run's window budget was exhausted, 9 because the paper
-itself never states which scenario the value belongs to
-(`profiles/scenarios/kg.py`, lines 811 to 819; the full account is at
-[../stages/graph.md](../stages/graph.md)).
+way an axis coordinate is (`profiles/scenarios/kg.py`). The graph stage's
+account of scenario-scope tuples that could not be attached to any scenario
+is at [../stages/graph.md](../stages/graph.md).
 
 ## What the profile contributes to each stage
 
@@ -53,13 +42,13 @@ table gives this profile's own answer.
 
 | Stage | Module | Attribute | Contributes |
 |---|---|---|---|
-| File processing | `source.py`, `schema.sql`, `store.py` | `SOURCE`, `DocumentMeta`, `Scenarios`, `DocumentScenarios` | the ar6 crawl as a `Source`, and the profile's tables and upsert helpers |
+| File processing | `source.py`, `schema.sql`, `store.py` | `SOURCE`, `DocumentMeta` | the crawl as a `Source`, and the profile's table and upsert helper |
 | Layout detection | `profile.py` | `column_layout` | `"auto"`, a two-column journal or report page read column by column |
 | Structure assembly | `preprocessing.py` | `HYPHEN_EXCEPTIONS`, `CAPTION_MAX_WORDS`, `CAPTION_START`, `TITLE_EXCLUDE_PREFIXES`, `DIRECTORY_FIGTAB_WORDS`, `DIRECTORY_TITLE_WORDS`, `BIBLIOGRAPHY_TITLE_WORDS` | English hyphenation, caption length, what opens a caption (a word, a number and a colon), heading and bibliography rules; `DIRECTORY_TITLE_WORDS` is the same four words as the other profiles ("inhalt", "verzeichnis", "contents", "directory"), so no verdict moved |
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 6 prompt ids of its own | page transcription, English artefact repair, table and figure captioning; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object (`reading.REQUIRED`), in English, the language of the prompts of the first three; the extraction prompts are German and `extraction.PHRASES` is another table, the harvest's own |
-| The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and names (a name opens each line of the values index) and three filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `FRONT_PAGE_PARAMETERS`, `FRONT_PAGE_TITLE`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 14 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
+| The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and names (a name opens each line of the values index) and two filters |
+| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `FRONT_PAGE_PARAMETERS`, `FRONT_PAGE_TITLE`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 14 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document region list, the sentences the stage writes to the model and the passages the preflight holds its prompts to, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
 | The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 11 prompt ids of its own | the English chat wording and the answer loop's own prompts; the twelfth, `json_format`, is the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copy gave |
 
@@ -70,17 +59,15 @@ see [extraction](../stages/extraction.md)): the spec names one group,
 about itself, its study or its own scenarios. `extraction/read_values`
 names the values one per request, with `value`, `value_raw` and quote, and
 `extraction/read_text` answers for each value the scenario
-it refers to by the name the publication prints. `extraction/match` then
-maps each name read onto a run identifier of the document's own list, in a
-request of its own with the list, the passage and the name's quote (owner
-decision 2026-11-05: `scenario_label` and the `scenario` axis are
-`matched_apart`, see [extraction](../stages/extraction.md)). No reading
-request shows the run a name was matched to, only the name, and a value
-the publication states for several scenarios is one row per scenario, each
-matched on its own (owner decisions 2026-11-06). `read_text`
+it refers to by the name the publication prints, with its quote. The value
+of `scenario_label` and the `scenario` axis are `merged: "scenario"` in the
+spec (owner decisions 2026-11-06, see [extraction](../stages/extraction.md)):
+a scenario is read as free text, the name as the publication prints it, and a
+value the publication states for several scenarios is one row per name. Once
+the document is folded, `extraction/naming` shows the model every name read
+and asks which of them mean the same scenario (below). `read_text`
 shows both forms of an answer, a scenario named and one the passage does not
-name with the sentence the combing searches with (`probe`); with the first
-alone, 7 of 123 comb tasks of a four-paper probe had such a sentence. A
+name with the sentence the combing searches with (`probe`). A
 value is what its field asks for and never the answer of a coordinate, so
 a scenario's description is what the publication says the scenario assumes,
 not the scenario's name (owner decision 2026-11-04), and an author value is
@@ -89,7 +76,7 @@ no person. `extraction/comb` looks for a scenario still open in the rest of
 the publication. No field of this profile holds numbers, so a table is read
 by `read_values` and `read_text` too, as a table is in every profile, and a
 field with a list is shown it and answers one entry, or `""` with its wording
-in `value_raw`; the scenario's list alone is matched apart.
+in `value_raw`.
 
 Field by field, `extraction/places` asks once per publication which passages
 answer which fact and question, with a quote and no value; the search then
@@ -118,7 +105,7 @@ harvest (a heading with no body, or the heading of a section the model
 removed; see [refinement](../stages/refinement.md)), and one because the
 model left it out of a crowded request.
 
-Five of the 13 extraction prompts, `rows`, `field`, `frame`, `review` and
+Five of the 14 extraction prompts, `rows`, `field`, `frame`, `review` and
 `example`, are parts files (see [profiles](../profiles.md), The extraction
 prompts): each names its template of the core in its front matter, and
 `CONTRACT_LANGUAGE = "en"` in `profiles/scenarios/extraction.py` says that the
@@ -162,35 +149,26 @@ stays out of `extraction_spec.json` and a profile hook fills it in before
 the harvest runs; where no hook fills it, the coordinate degrades to a
 plain wording, the glossary's definition of a dynamic list.
 
-This profile uses both mechanisms across the five parameters that carry
-a scenario coordinate: each uses at least one, and `scenario_region`
-uses both. `scenario_label`'s value is `vocabulary_dynamic`
-(`extraction_spec.json`, the `scenario_label` parameter): the model
-picks the AR6 run this document documents, from that document's own
-list, not from all 1,389. `scenario_region`'s value is
-`vocabulary_dynamic` too, picking from a narrowed slice of the OEKG's
-249 study regions. A `scenario` axis, carried by the other four
-parameters (`scenario_type`, `scenario_abstract`, `scenario_region`,
-`scenario_year`, together `SCENARIO_FIELDS` in `kg.py`), is `Axis.dynamic`
-instead: it lets each of those rows say which of the document's own
-scenarios the value belongs to.
+This profile uses the second mechanism once: `scenario_region`'s value is
+`vocabulary_dynamic` (`extraction_spec.json`, the `scenario_region`
+parameter), picking from a narrowed slice of the OEKG's 249 study regions.
+A scenario is not a list at all: the value of `scenario_label` and the
+`scenario` axis of the other four parameters (`scenario_type`,
+`scenario_abstract`, `scenario_region`, `scenario_year`, together
+`SCENARIO_FIELDS` in `kg.py`) are free text marked `merged: "scenario"`,
+the name as the publication prints it, with its quote. `Axis.merged` and
+`Parameter.merged` are allowed on a free-text axis or a free-text value
+only (`spec.py`, `_validate_parameter` and the axis parser refuse them
+anywhere else), and a merged coordinate is never read in the survey. Which
+of a publication's names mean the same scenario is asked once the publication
+is read, by `docpipe/extraction/naming.py` (below).
 
-Both lists for one document are computed once, before the harvest starts,
+The list for one document is computed once, before the harvest starts,
 by `profiles/scenarios/extraction.py`'s `document_axes(conn, document_id)`,
-which returns a dict keyed `scenario`, `scenario_label` and
-`scenario_region` (`extraction.py`, lines 172 to 189). Two builders feed
-it. `document_scenarios` reads `Scenarios` joined through
-`DocumentScenarios` for this document's id, keyed by the AR6 name itself
-rather than by an invented IRI, since that name is the identity the
-corpus links against and `kg.py` resolves it the same way
-(`extraction.py`, lines 149 to 161); the same dict backs both the
-`scenario` axis and the `scenario_label` parameter, so one run identifier
-resolves the same way whichever field asks about it. `document_regions`
+which returns a dict keyed `scenario_region`. `document_regions`
 reads the 249 entries of `regions.json` and keeps only the ones whose
 label is mentioned somewhere in this document's own text, and does the
-same with the groups of countries in `region_aggregates.json`; a region of
-the AR6 database also counts as named by its bare name ("Europe") where the
-document names its family ("R10"). A model's own region ("Other Asia",
+same with the groups of countries in `region_aggregates.json`. A model's own region ("Other Asia",
 "OAS" of REMIND) is offered where the document names the model with its
 capitals ("REMIND", not "remind") and the region (`_named`). Two offered
 groups never share a label (`_one_meaning`): the region of the paper's
@@ -219,17 +197,16 @@ adjective ("Chilean") no longer offers that country as a choice, and the
 model falls back to an `out:` sentinel, a visible, counted outcome rather
 than a wrong class chosen silently.
 
-Neither list is ever left empty. `document_axes` appends the profile's
-`out:` entries to both lists unconditionally, so a publication naming no
-scenario, or no country its own text narrows a region list to, still
-gets a complete list; otherwise the field reverts to open text, exactly
-what a closed list exists to avoid (`extraction.py`, lines 172 to 184).
+The list is never left empty. `document_axes` appends the profile's
+`out:` entries to it unconditionally, so a publication naming no
+country its own text narrows the region list to still gets a complete list; otherwise the field reverts to open text, exactly
+what a closed list exists to avoid (`extraction.py`).
 
-The copy of the spec these lists fill in goes with every batch of the
+The copy of the spec this list fills in goes with every batch of the
 document, so the value request, the field requests, the reading and their
-checks offer and hold an answer to the same lists the search used. `--review` and
-`--recheck` read a harvest file against its own document's lists, and leave
-alone, stamp included, a document whose lists cannot be closed.
+checks offer and hold an answer to the same list the search used. `--review` and
+`--recheck` read a harvest file against its own document's list, and leave
+alone, stamp included, a document whose list cannot be closed.
 
 The fixed kind carries the rest of the list-valued fields: `scenario_type`,
 and the four tags the OEKG shapes demand of every bundle,
@@ -259,20 +236,15 @@ another copy; `kg.in_graph()` in `profiles/scenarios/kg.py` (line 257) is the
 one guard every later mint, link and type decision runs through, and it refuses
 whatever starts with it.
 
-Three families of sentinel exist, plus the last entry of each fixed
-vocabulary, which behaves the same way. `SCENARIO_OUT` offers
-`out:family`, for a wording that names a group of runs (a policy
-family, for example) rather than one identified run: the prompts give it to
-any name that fits several runs and none of them exactly, whatever the runs
-share, their beginning, their climate target or their variant alone (owner
-decision 2026-11-04), and `out:not_documented`, for a scenario the paper names
-that this document's own AR6 list does not carry (`extraction.py`, lines
-83 to 91). `REGION_OUT` offers `out:multiregion` (a named grouping,
+One family of sentinel exists, plus the last entry of each fixed
+vocabulary, which behaves the same way. A scenario has none: it is read as
+the name the publication prints, so there is no list for it to fall outside.
+`REGION_OUT` offers `out:multiregion` (a named grouping,
 such as a trade bloc, that neither the countries nor the groups carry) and
 `out:other` (a spatial statement fitting neither). The world and the
 groups of countries are entries of the list (`region_aggregates.json`),
-since the OEKG's own region list holds only individual countries and an
-AR6 scenario is global far more often than national.
+since the OEKG's own region list holds only individual countries and a
+scenario is global far more often than national.
 Finally, the fixed vocabularies are corpus-wide rather than per-document,
 but carry the same idea as their last entry, `out:not_in_list`. In
 `scenario_type` it is the eighteenth: the passage names a kind of
@@ -304,20 +276,42 @@ class, an IRI or a link; only the document's own wording, carried
 separately as `value_raw`, stands in for it, since the sentinel's own
 label describes why nothing fit, not what the document states (`kg.py`,
 lines 257 to 272). Every chosen sentinel, together with every
-`scenario_label`, `scenario_region`, `scenario_type` or bundle tag row
+`scenario_region`, `scenario_type` or bundle tag row
 that resolved no `value_uri`, is counted once into an `out_of_graph`
-tally, logged per document and never written as a triple (`kg.py`, lines 602 to 620).
-Measured over a corpus run, the model answered with a sentinel 1,171
-times for a wording its own document-scoped AR6 list could resolve
-without a guess, 347 of those a character-for-character spelling match;
-on one document, the wording matched the list's only entry exactly and
-the model still answered `out:not_documented` (`kg.py`, lines 320 to 323,
-`resolve_wording`'s own docstring; the sentinel is named by). Those readings
-are not lost: `resolve_wording()` rescues a link the document's own list
-settles unambiguously even where the model gave up, logged on its own
-line, separate from the sentinel tally (`kg.py`, lines 716 to 727).
+tally, logged per document and never written as a triple (`kg.py`).
 
-## The graph: one report, one bundle, a factsheet per run
+## Naming: which names are one scenario
+
+A publication calls one scenario by several names ("the Zero Carbon
+scenario" in a sentence, "LCEO Zero Carbon" in a table, an abbreviation in a
+figure), and one name can stand for several ("the EC LTS scenarios"). The
+reading takes each as printed (`merged`, above); `docpipe/extraction/naming.py`
+asks what they mean once the document is folded (`runner.verify`, right after
+the compute step, built by `runner.make_namer`). One request per kind the
+spec's `merged` names (here `scenario`, prompt `extraction/naming`, trace
+events `naming_ask` and `naming`) shows the model every name read for the
+document. Each name comes with its places: the quote it was read with and 500
+characters of the passage before and after it (`CONTEXT_CHARS`, owner
+decision 2026-11-06), overlapping stretches of one passage shown once as one
+place. For each name the model answers the names of what it means: itself,
+another name of the same scenario, or several names where it stands for
+several scenarios (`naming.meanings`). Names of one scenario become one thing,
+called by the name the others point to.
+
+The answer quotes nothing: each name keeps its own quote. An answer with a
+name the request did not show is asked once more with the reason
+`name_not_listed`; a name still answered so means itself. A request that does
+not fit is asked in two halves of the names, then once more over the things
+the halves found. Each row keeps the name it was read as and gets the names
+of what it means under `<coordinate>_means` (`scenario_means`), or
+`value_means` for its own value (`scenario_label`). The harvest schema declares
+`_means` only for merged slots, and the keys join the evidence and slot key
+lists that carry a coordinate with the row (`runner._EVIDENCE`,
+`topup.SLOT_KEYS`, and the keys `verify` drops with an unbacked coordinate). A
+top-up pass does not run the naming again, as it does not run the compute step
+again.
+
+## The graph: one report, one bundle, a factsheet per scenario
 
 The target is OEKG, on the Open Energy Platform, built by
 `profiles/scenarios/kg.py`'s `make_serializer`, called the same way as the
@@ -331,8 +325,8 @@ half of that audit, `profiles/scenarios/vocabulary.py`, pins 280 ontology
 identifiers named in the spec, plus the 249 OEKG study regions, against
 the OEO release of its last refresh (2.14.0 since 2026-11-04).
 `python -m profiles.scenarios.vocabulary --refresh` pulls the OEO
-closure, the live study regions and the groups of countries (the AR6
-database's R5, R9 and R10 regions and each model's own regions, with the
+closure, the live study regions and the groups of countries (the R5, R9 and R10
+regions and each model's own regions, with the
 codes the model's mapping gives them, from IAMconsortium/common-definitions;
 the UN's M49 regions from the SDG API; the World Bank's groups of economies,
 the European Union and the OECD among them, from its classification
@@ -433,19 +427,18 @@ list did not hold writes no triple and is counted in `out_of_graph`, as
 for a scenario type (`kg.py`, lines 948 to 960). The
 picked IRIs travel on in the study dict as `bundle["tags"]`.
 
-One factsheet is minted per resolved scenario identity. For every
-scenario-scope row, `scenario_key()` decides which run, if any, the row
-belongs to, against the document's own known-scenario list and a synonym
-dict built from whichever rows of the same document already resolved a
-run (`kg.py`, lines 341 to 390, 729 to 739); a wording that resolves to
-no run still gets its own factsheet, keyed by the wording alone. A
-factsheet's `rdfs:label` is the AR6 database's own spelling where a run
-was resolved, and the document's own wording is kept alongside as
-`dc:acronym`; with no long name known for a run, both carry the same
-string, the usual case in this corpus (`kg.py`, lines 866 to 869). Every
-factsheet also carries a fixed `OEO_00020517` annotation on top of
-whatever `scenario_type` classes the model read off the text
-(`IAM_SCENARIO`, `kg.py`, lines 199, 882).
+One factsheet is minted per scenario. For every row of a scenario-scope
+parameter, `scenario_names()` in `kg.py` gives the scenarios the row belongs
+to: those its name means (`value_means` for a `scenario_label` row,
+`scenario_means` for any other), else the scenario of its own name as
+printed. A name that does not stand in its own quote mints nothing, and the
+row contributes no factsheet, comment or number. A name of several scenarios
+stands for each of them, so one row lands on several factsheets. A
+factsheet's `rdfs:label` and `dc:acronym` are both the name the scenario is
+called by (`kg.py`, the factsheet block of `_make_builder`). Every factsheet
+also carries a fixed `OEO_00020517` annotation (`IAM_SCENARIO`; owner
+decision 2026-11-06: kept) on top of whatever `scenario_type` classes the
+model read off the text.
 
 A study region is referenced, never minted. A region the model matched
 against the document's own narrowed OEKG list is written as a link to
@@ -609,8 +602,8 @@ python -m profiles.scenarios.oekg_api OUT DB --live
 `--shapes` name local copies instead. Exit 0 is a report, whatever it
 says. Exit 2 is a run that could not be made: no harvest, no database,
 no API description or no shapes. The
-database is required because the reading falls back to an empty AR6 list
-without it, and the bodies then name other scenarios.
+database is required because the study reader opens it, for the cross-check
+against `DocumentMeta`.
 
 The shape verdict is a model of the server, built from its documentation
 and not from its code. It assumes that the server mints a uuid on every
@@ -694,24 +687,19 @@ named in the per-document summary line as a missing required field
 (`bind`, `required`); the bundle's label never is, since it falls back to
 the title (`FALLBACK`).
 
-A scenario wording absent from its own quoted passage is refused as an
-identity for every scenario-scope parameter alike: `scenario_key()`
-returns no identity and no label, and the row contributes no factsheet,
-comment or number (`kg.py`, lines 295 to 309, 385 to 389); it used to
-mint a factsheet anyway, carrying the invented wording as a stable label
-of its own, which this check exists to prevent. A wording that fits more
-than one run of the document's own known-scenario list, with none
-matching it exactly, is refused as an identity rather than guessed: the
-link is dropped, the wording alone becomes the factsheet's key, and rows
-the model assigned to different runs land together on that one shared
-factsheet, a conflation the module accepts and logs by name rather than
-hides (`ambiguous()`, `kg.py`, lines 276 to 292; the merge report, lines
-837 to 851).
+A scenario name absent from its own quoted passage is refused as an
+identity for every scenario-scope parameter alike: `scenario_names()`
+returns no name, and the row contributes no factsheet, comment or number
+(`kg.py`); it used to mint a factsheet anyway, which this check exists to
+prevent. Rows whose names the naming step answered with one name land on that
+scenario's factsheet, and a name of several scenarios on each of theirs, so
+two names the model took for one scenario are one factsheet and a wrong answer
+there is the model's, written under the names it was shown.
 
-Every `out:` choice, and every unresolved `scenario_label`,
-`scenario_region`, `scenario_type` or bundle tag row, is refused a place
+Every `out:` choice, and every unresolved `scenario_region`,
+`scenario_type` or bundle tag row, is refused a place
 in the graph the same way: no class, no IRI, no link, only a count and a log
-line (`kg.py`, lines 602 to 620). A region wording the document's own
+line (`kg.py`). A region wording the document's own
 narrowed list did not hold is refused identically rather than minted as
 a new individual.
 

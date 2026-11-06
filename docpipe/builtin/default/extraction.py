@@ -53,6 +53,10 @@ PHRASES = {
         'character, including one that starts with "out:". If none fits '
         'although the passage states the field, leave "value" out and '
         'give the wording in "value_raw".'),
+    "name_not_listed": (
+        'For {name!r} you gave {given}, and not every one of them is a '
+        'name under "names". Answer for it with names under "names" only, '
+        'each copied character for character.'),
     "wrong_type": (
         'Your "value" {given!r} is not {wrong}. Answer with {wrong}, '
         'exactly as the passage writes it.'),

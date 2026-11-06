@@ -31,8 +31,8 @@ QUOTE = "In climate policy dimension, there are three; baseline, 2.6 W and 2.0 W
 
 
 def test_a_text_value_stands_in_its_quote_itself():
-    # The 14 descriptions of the AR6 probe that read "not in AR6".
-    written = {"value": "not in AR6", "value_raw": "baseline"}
+    # A description the model wrote, with the passage's word beside it.
+    written = {"value": "a scenario of another study", "value_raw": "baseline"}
     assert not value_in_quote(written, ABSTRACT, QUOTE)
     assert value_in_quote({"value": "baseline, 2.6 W and 2.0 W",
                            "value_raw": "anything"}, ABSTRACT, QUOTE)
@@ -61,7 +61,7 @@ def test_a_text_coordinate_stands_in_its_quote_itself():
 
 def test_the_early_filter_holds_a_text_value_to_itself():
     claim = {"parameter": "scenario_abstract", "quote": QUOTE,
-             "value": "not in AR6", "value_raw": "baseline"}
+             "value": "a scenario of another study", "value_raw": "baseline"}
     assert _invented_wording(claim, SCENARIOS)
     assert not _invented_wording(dict(claim, value="2.6 W and 2.0 W"),
                                  SCENARIOS)
@@ -71,14 +71,25 @@ def test_the_early_filter_holds_a_text_value_to_itself():
 
 def test_an_example_of_a_list_closed_per_document_is_read_as_a_choice():
     from docpipe.extraction.preflight import reads_back
+    # A spec whose scenario is a list each document closes, as a profile
+    # with such a list would write it.
+    raw = json.loads((Path(__file__).resolve().parent.parent / "profiles"
+                      / "scenarios" / "extraction_spec.json").read_text(
+        encoding="utf-8"))
+    for parameter in raw["parameters"]:
+        axis = (parameter.get("axes") or {}).get("scenario")
+        if axis is not None:
+            axis.pop("type")
+            axis.pop("merged")
+            axis["dynamic"] = True
+    closed = load_spec(raw)
     quote = "In the NDC scenario, emissions peak before 2030."
     line = json.dumps({"fields": {"scenario": {"groups": [
-        {"rows": ["R1"], "value": "EN_NPi2020_400",
+        {"rows": ["R1"], "value": "NDC_2030",
          "value_raw": "the NDC scenario", "quote": quote}]}}})
-    ok, detail = reads_back(line, SCENARIOS)
+    ok, detail = reads_back(line, closed)
     assert ok, detail
-    # Read as free text, as the open list would have it, the run identifier
-    # does not stand in its quote.
+    # Read as free text, as the open list would have it, the entry does not
+    # stand in its quote.
     free = fields.Slot(name="scenario", kind=fields.TEXT)
-    assert not answer_in_quote(free, "EN_NPi2020_400", "the NDC scenario",
-                               quote)
+    assert not answer_in_quote(free, "NDC_2030", "the NDC scenario", quote)

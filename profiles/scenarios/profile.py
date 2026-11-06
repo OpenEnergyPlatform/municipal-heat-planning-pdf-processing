@@ -1,4 +1,4 @@
-"""AR6 scenario literature: the publications the IIASA AR6 scenario database cites."""
+"""Scenario literature: publications on climate and energy scenarios."""
 from docpipe.profile import Facet, Profile
 
 PROFILE = Profile(
@@ -8,7 +8,7 @@ PROFILE = Profile(
     # not copied. A test holds that list, so no other prompt ever stands in
     # for a missing one.
     extends="default",
-    title="IPCC AR6 scenario literature – research",
+    title="Scenario literature – research",
     document_noun="publication",
     # Journal articles and agency reports are typeset in two columns far more
     # often than heat plans are, and a two-column page read line by line is
@@ -19,6 +19,5 @@ PROFILE = Profile(
     facets=(
         Facet("year", "Year"),
         Facet("venue", "Journal / publisher"),
-        Facet("scenario", "AR6 scenario"),
     ),
 )

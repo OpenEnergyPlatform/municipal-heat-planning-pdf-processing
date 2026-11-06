@@ -214,6 +214,19 @@ def _value_uri(parameter) -> dict:
     return out
 
 
+def _means(name: str) -> dict:
+    """The things a name means, as the naming asked them once the document
+    was read (`naming.py`)."""
+    return {
+        "type": "array", "items": {"type": "string", "minLength": 1},
+        "minItems": 1,
+        "description": f"The names of the things '{name}' means, among the "
+                       f"document's names for that kind of thing: its own "
+                       f"name or another name of the same thing, or several "
+                       f"names where it stands for several things. The "
+                       f"graph writes the row to each of them."}
+
+
 def _slot_properties(name: str, slot, doc: str) -> dict:
     """Every key one coordinate writes.
 
@@ -221,9 +234,10 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
     value re-checkable without the run that produced it: which state it ended
     in, the document's own wording, the passage, the source that passage came
     from and the window it was found in, and for a year read as a base year
-    or a target year the row's own passage that names the state.
+    or a target year the row's own passage that names the state; for a name
+    merged with the document's other names, the things it means.
     """
-    return {
+    out = {
         name: _slot_value(slot, doc),
         f"{name}_state": {
             "$ref": "#/$defs/state",
@@ -302,6 +316,9 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"deleted) means nobody can say. Recorded and "
                            f"never compared."},
     }
+    if getattr(slot, "merged", None):
+        out[f"{name}_means"] = _means(name)
+    return out
 
 
 def _slot_rules(name: str, slot) -> dict:
@@ -408,6 +425,8 @@ def _tuple_schema(spec, parameter) -> dict:
                            "organisation's legal form, a title's line "
                            "break)."}
         props["value_uri"] = _value_uri(parameter)
+        if getattr(parameter, "merged", None):
+            props["value_means"] = _means("value")
         if parameter.value_type == "category":
             # Where the rows request wrote a wording the list does not hold,
             # the value was asked again as one of its entries, a coordinate
@@ -816,10 +835,10 @@ def stamp_schema() -> dict:
 
 
 # The stages whose every request writes `<stage>_ask` to the trace: the
-# survey flow's own (`runner.ask_in_grammar`), the match among them, and the
+# survey flow's own (`runner.ask_in_grammar`), the naming among them, and the
 # search sentences, the frame, the review and the compute step
 # (`runner._asked`).
-ASK_STAGES = ("survey", "read_values", "read_text", "comb", "match",
+ASK_STAGES = ("survey", "read_values", "read_text", "comb", "naming",
               "phrase", "frame", "review", "compute")
 
 
@@ -1023,6 +1042,26 @@ def trace_schema() -> dict:
                             "completion_tokens": {"type": ["integer", "null"]},
                             "ms": {"type": "integer"}}
            for stage in ASK_STAGES},
+        # The naming's request (naming.py) carries none of those but the
+        # `kind` of thing it names and how many `names` it shows in how many
+        # `places`; it replaces the declaration above.
+        "naming_ask": {"attempt": {"type": "integer"},
+                       "corrections": {"type": "integer"},
+                       "kind": {"type": "string"},
+                       "names": {"type": "integer"},
+                       "places": {"type": "integer"},
+                       "prompt_tokens": {"type": ["integer", "null"]},
+                       "completion_tokens": {"type": ["integer", "null"]},
+                       "ms": {"type": "integer"}},
+        # What the naming of one kind came to: the `names` read, the `things`
+        # they mean, and how many names mean `several`. A request over all
+        # names that did not fit and whose halves joined none is `why`
+        # cut_off, with neither count.
+        "naming": {"kind": {"type": "string"},
+                   "names": {"type": "integer"},
+                   "things": {"type": "integer"},
+                   "several": {"type": "integer"},
+                   "why": {"enum": ["cut_off"]}},
         # One passage read for one parameter (reading.py), its values one per
         # round. A passage that came to no readable reply is `unread` with
         # `why` and no values.
@@ -1094,9 +1133,7 @@ def trace_schema() -> dict:
                           "rows", "passages", "figure", "group", "round"},
         "comb_ask": {"corrections", "parameter", "owner", "kind", "rows",
                      "passages", "figure", "group", "round", "value"},
-        # The match names its parameter and the passage it shows.
-        "match_ask": {"rows", "passages", "figure", "group", "round",
-                      "value"},
+        "naming": {"things", "several"},
         # A search sentence, the frame, the review and the compute step say
         # their attempt and what it cost; a parameter where they have one.
         **{f"{stage}_ask": {"corrections", "parameter", "owner", "kind",

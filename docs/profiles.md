@@ -43,10 +43,10 @@ extend it and write every part of their prompts themselves.
 `kwp` covers German municipal heat plans, a corpus of
 801 documents at the point its `column_layout` comment was written
 (`profiles/kwp/profile.py:15`), and answers in German; its accepted
-values go into MHPKG on the Open Energy Platform. `scenarios` covers the
-literature the IIASA AR6 scenario database cites
-(`profiles/scenarios/profile.py:1`), a 164-document harvest
-(`profiles/scenarios/kg.py:815`), and answers in English; its values go
+values go into MHPKG on the Open Energy Platform. `scenarios` covers
+publications on climate and energy scenarios
+(`profiles/scenarios/profile.py`), a 164-document harvest,
+and answers in English; its values go
 into OEKG on the same platform. Each has its own
 page, [kwp](profiles/kwp.md) and [scenarios](profiles/scenarios.md), for
 what its own modules do beyond the interface points here.
@@ -230,7 +230,7 @@ shipped profile provides.
 | Reading the page | `preprocessing.BIBLIOGRAPHY_TITLE_WORDS` | required (`profile_value`, `docpipe/preprocessing/stage3_structure.py:214`) | "literatur", "quellen", ... | "references", "bibliography", ... |
 | Repairing the text | `refinement.WINDOW_SIZE` | optional (`component`, `docpipe/refinement/config.py:41`) | not set, falls back to 3 | not set, falls back to 3 |
 | Repairing the text, the visuals, page transcription, the answer app | `reading.PHRASES` | required, laid over the extended profile's entry by entry (`profile.require`, `profile.layers`, `docpipe/reading.py:87-105`); checked as a set against `reading.REQUIRED`, ten names, before the first request of refinement, of the visuals stage and of page transcription, and in the chat when a reply was not the one object asked for | the ten sentences said to a model whose reply was not the one JSON object, in English, the language of the profile's prompts for these stages | the same ten, in English; its extraction prompts are German and `extraction.PHRASES` is another table |
-| The answer app | `catalog.CATALOG` | optional (`component`, `docpipe/inference/catalog.py:158`) | `KwpCatalog`: municipality, Land, year | `Ar6Catalog`: year, venue, AR6 scenario |
+| The answer app | `catalog.CATALOG` | optional (`component`, `docpipe/inference/catalog.py:158`) | `KwpCatalog`: municipality, Land, year | `ScenarioCatalog`: year, venue |
 | The answer app | `inference.PHRASES`, `READOFF_MARKER`, `READOFF_NOTE` | required at first use (`profile.require`, variable `attr`, `docpipe/inference/wording.py:120`) | German phrasing, 32 keys checked against `wording.REQUIRED` | English phrasing, same 32 keys |
 | Reading the values out | `extraction.PHRASES` | required, laid over the extended profile's (`profile.layers`, `docpipe/extraction/wording.py`) | German sentences the stage writes to the model | German sentences, the language of its extraction prompts |
 | Reading the values out | `extraction.PROMPT_CHECKS` | optional, read by `docpipe preflight` (`component`); a profile that declares none has the extended profile's | two entries: the field prompt says `GENAU EIN Feld`, the rows prompt no longer fixes one parameter | the same two entries |
@@ -242,7 +242,7 @@ shipped profile provides.
 | Reading the values out | `extraction.SLICE` | optional (`component`, `docpipe/extraction/runner.py:5494`) | `{"quantity": None}`, gates a row on its quantity class alone | not provided; no gate |
 | Reading the values out | `extraction.FRAME` | optional (`component`, `docpipe/extraction/runner.py:5517-5518`) | `("scenario", "year")`, found once per document | not provided; nothing repeats that way |
 | Reading the values out | `extraction.BASE_YEAR`, `extraction.TARGET_YEAR` | optional (`component`, `docpipe/extraction/runner.py:5643-5649`): which frame pairs are the plan's own state and its target, so that a year answer naming only the plan's word for one of them ("Basisjahr", "Zieljahr") is read when its number is a year the frame found for those pairs | `{"scenario": "status_quo"}` and `{"scenario": "target"}` | not provided; no state has years |
-| Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:5505`) | not provided | this publication's AR6 scenarios and the study regions it names, out of 249 (`profiles/scenarios/regions.json`) |
+| Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:5505`) | not provided | the study regions this publication names, out of 249 (`profiles/scenarios/regions.json`) |
 | Reading the values out | `extraction.document_context` | optional (`component`, `docpipe/extraction/runner.py:5510`) | the plan's own municipality name | not provided |
 | The knowledge graph | `kg.make_serializer` | optional for `--serialize` (`component`, `docpipe/extraction/runner.py:5371`); without one the generic writer built from the spec's `graph` block is used, and a profile with neither is refused with `SystemExit` (`docpipe/extraction/runner.py:5379-5383`) | tuples to MHPKG Turtle | tuples to OEKG Turtle |
 | The answer app | `kg.VALUE_QUERY` plus six more attributes, and `inference.ROUTE_NOTES` | optional; absent returns `None` (`component`, `docpipe/inference/kg_route.py:104-106`), present but missing any of the other seven raises `LookupError` instead (`111-114`), all eight present builds the route | provided; the app can answer a coordinate question straight from the graph | not provided; the app never queries a graph |
@@ -398,16 +398,16 @@ word" (see [Running the pipeline](running.md)).
 
 | | `kwp` | `scenarios` |
 |---|---|---|
-| Corpus | German municipal heat plans, 801 documents (`profiles/kwp/profile.py:15`) | the AR6 scenario literature, a 164-document harvest (`profiles/scenarios/kg.py:815`) |
+| Corpus | German municipal heat plans, 801 documents (`profiles/kwp/profile.py:15`) | publications on climate and energy scenarios, a 164-document harvest |
 | Target graph | MHPKG, Open Energy Platform | OEKG, Open Energy Platform |
 | `document_noun` | "Wärmeplan" | "Publikation" |
 | `column_layout` | `"auto"`; 184 of 801 documents carry multi-column pages, 44 throughout (`profiles/kwp/profile.py:15-17`) | `"auto"`; journal and agency layouts run two columns more often still |
-| Facets in the answer app | `gemeinde`, `bundesland_lang`, `jahr` | `year`, `venue`, `scenario` |
-| `catalog.CATALOG` | `KwpCatalog` | `Ar6Catalog` |
+| Facets in the answer app | `gemeinde`, `bundesland_lang`, `jahr` | `year`, `venue` |
+| `catalog.CATALOG` | `KwpCatalog` | `ScenarioCatalog` |
 | `--backfill-meta` | provided, refreshes `MunicipalityMeta` from a re-read KWW sheet | not provided |
 | `SLICE` / `FRAME` | gates on quantity; frames on scenario and year | neither set |
 | `BASE_YEAR` / `TARGET_YEAR` | the frame pairs `{"scenario": "status_quo"}` and `{"scenario": "target"}` | neither set |
-| Per-document choice lists (`document_axes`) | not used | the AR6 scenarios and study regions a publication names, out of 1389 scenarios and 249 regions in `regions.json` (`profiles/scenarios/extraction.py:7-12`) |
+| Per-document choice lists (`document_axes`) | not used | the study regions a publication names, out of 249 in `regions.json` (`profiles/scenarios/extraction.py`) |
 | Answer app's graph route (`kg_route`) | wired; a coordinate question can be answered straight from MHPKG | not wired; every answer comes from retrieval |
 
 ## Adding a profile

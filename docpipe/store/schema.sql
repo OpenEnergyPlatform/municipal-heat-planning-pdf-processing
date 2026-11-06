@@ -18,12 +18,12 @@
 CREATE TABLE IF NOT EXISTS "Documents" (
     "id"          INTEGER PRIMARY KEY AUTOINCREMENT,
     -- The profile's stable identity for this document (KWP: the file name,
-    -- AR6: the DOI). Distinct from `filename`, which is where the bytes live.
+    -- scenarios: the DOI). Distinct from `filename`, which is where the bytes live.
     "external_id" TEXT UNIQUE,
     -- Documents sharing a `group_key` are versions of the same work; the newest
     -- `published` is the current one (`is_current`=1) and every older one points
     -- at its predecessor via `supersedes`. The profile decides what groups
-    -- (KWP: the municipality key, AR6: the DOI).
+    -- (KWP: the municipality key, scenarios: the DOI).
     "group_key"   TEXT,
     "filename"    TEXT NOT NULL UNIQUE,
     "published"   TEXT,

@@ -58,7 +58,7 @@ Fields:
 - `question: Optional[str] = None`
 - `options: tuple = ()`
 - `derive: Optional[dict] = None`: {"from": "unit", "value": uri} when the spec decides this coordinate.
-- `matched_apart: bool = False`: A list a request of its own chooses from (`spec.Axis.matched_apart`): the reading asks the wording the document prints, not the list.
+- `merged: Optional[str] = None`: The kind of thing whose name the document gives here, such as "scenario" (`spec.Axis.merged`): a value stated for several of them is one row per name, and which of the document's names mean the same thing is asked once the document is read (`naming.py`).
 
 #### Slot.is_closed
 
@@ -106,8 +106,7 @@ def value_schema(slot: Slot) -> dict
 The answers a coordinate can take in a grammar: one entry of its list,
 UNSTATED included; for a number an integer or UNSTATED; else a wording.
 UNSTATED is an answer of every kind: a grammar that takes only an integer
-for a year leaves the model no way to say the passage prints none. A
-list matched apart is answered by its wording (`Slot.matched_apart`).
+for a year leaves the model no way to say the passage prints none.
 
 ### parameter_slot
 
@@ -309,12 +308,12 @@ def value_choice(parameter: Parameter) -> Slot
 The value of a category parameter, asked again as one of its entries.
 
 The rows request reads a value before its parameter, so what it writes is
-the wording the passage prints: "New Policies Scenario" where the list
-holds the AR6 runs and `out:not_documented`. Once the parameter is read,
-which entry that wording is becomes a question of its own, with a quote
-like every coordinate, and the wording stays in value_raw. Asking the
-parameter again instead left the model no answer that could pass: on the
-AR6 run 8,810 rows were asked it in every window to the end of their
+the wording the passage prints: "includes only adopted policies" where
+the list holds the types of a scenario. Once the parameter is read, which
+entry that wording is becomes a question of its own, with a quote like
+every coordinate, and the wording stays in value_raw. Asking the
+parameter again instead left the model no answer that could pass: on one
+corpus run 8,810 rows were asked it in every window to the end of their
 document, and 5,636,615 answers were refused.
 
 ### axis_slots

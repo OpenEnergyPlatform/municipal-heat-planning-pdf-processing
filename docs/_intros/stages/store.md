@@ -301,9 +301,7 @@ key.
 | `kwp` | `Municipalities` | `id`, `name`, `ags`, `organisation_unit` (FK) | one municipality, keyed by its official `ags` |
 | `kwp` | `DocumentMeta` | `document` (PK, FK), `organisation_unit` (FK), `municipality_ags` | the plan's per-document fields |
 | `kwp` | `MunicipalityMeta` | `ags` (PK, FK), 29 further columns | the KWW sheet's fields, copied verbatim (`profiles/kwp/config.py`, `MUNICIPALITY_META_COLUMNS`, counted) |
-| `scenarios` | `DocumentMeta` | `document` (PK, FK), `doi`, `title`, `year`, `venue`, `is_oa`, `scenario_count` | the publication's per-document fields |
-| `scenarios` | `Scenarios` | `id`, `ar6_id` (`UNIQUE`), `name` | one AR6 scenario |
-| `scenarios` | `DocumentScenarios` | `document` (FK), `scenario` (FK) | publication-to-scenario link, many to many; up to 146 scenarios per publication, up to 3 publications per scenario (`profiles/scenarios/schema.sql:27` to `29`, comment) |
+| `scenarios` | `DocumentMeta` | `document` (PK, FK), `doi`, `title`, `year`, `venue`, `is_oa` | the publication's per-document fields |
 | `default` | `DocumentMeta` | `document` (PK, FK), `title`, `folder`, `created` | what the folder source knows about a document: the title in the PDF's own information dictionary, else the file name without its ending; the subfolder it was read from; and the PDF's creation date as far as it gives one (`YYYY`, `YYYY-MM` or `YYYY-MM-DD`, `NULL` without one) (`docpipe/builtin/default/schema.sql`) |
 
 Each of the three names its own per-document table `DocumentMeta`, keyed one

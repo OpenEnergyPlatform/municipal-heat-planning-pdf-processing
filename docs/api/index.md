@@ -108,13 +108,13 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.graphkit](docpipe.extraction.graphkit.md): The small tools the graph writers share. (7 functions)
 - [docpipe.extraction.identity](docpipe.extraction.identity.md): Which value a harvested row is, and where its passage is now. (7 functions)
 - [docpipe.extraction.lookup](docpipe.extraction.lookup.md): What the model may ask of the rest of one document, resolved by code. (1 class, 4 functions)
-- [docpipe.extraction.matching](docpipe.extraction.matching.md): The entry of a list that a wording the document prints is, asked in a request of its own (owner decision 2026-11-05). (1 class, 5 functions)
+- [docpipe.extraction.naming](docpipe.extraction.naming.md): Which of a document's names mean the same thing, asked once the document is read (owner decisions 2026-11-06). (1 class, 10 functions)
 - [docpipe.extraction.pipeline](docpipe.extraction.pipeline.md): The harvest loop that turns a document's retrieved passages into verified value tuples. (6 classes, 49 functions)
 - [docpipe.extraction.places](docpipe.extraction.places.md): Where a document says something to each axis, read once per document before its coordinates are searched. (2 classes, 8 functions)
 - [docpipe.extraction.preflight](docpipe.extraction.preflight.md): A profile, everything a corpus run rests on. (11 functions)
 - [docpipe.extraction.provenance](docpipe.extraction.provenance.md): Where every value of a graph comes from, as a graph. (1 class, 3 functions)
 - [docpipe.extraction.queries](docpipe.extraction.queries.md): Expands a profile's query templates into retrieval probes drawn from the spec. (1 function)
-- [docpipe.extraction.reading](docpipe.extraction.reading.md): The values of one parameter in the passages the survey named for it, one value per request: rounds name the values of a passage one by one, then each value is asked once per group of the spec for that group's coordinates. (4 classes, 49 functions)
+- [docpipe.extraction.reading](docpipe.extraction.reading.md): The values of one parameter in the passages the survey named for it, one value per request: rounds name the values of a passage one by one, then each value is asked once per group of the spec for that group's coordinates. (4 classes, 48 functions)
 - [docpipe.extraction.recheck](docpipe.extraction.recheck.md): Reapplies the answer-in-quote rule to a harvest written before the rule existed. (3 functions)
 - [docpipe.extraction.remap](docpipe.extraction.remap.md): Re-resolves a moved or grown vocabulary against a harvest already on disk. (10 functions)
 - [docpipe.extraction.replies](docpipe.extraction.replies.md): The reply each extraction request asks for, as a JSON schema. (6 functions)
@@ -262,19 +262,19 @@ is for and what it hands to what; this is the reference.
 
 ## profiles.scenarios
 
-- [profiles.scenarios.catalog](profiles.scenarios.catalog.md): How AR6 publications present themselves in the picker: by title and year, filtered by year, venue and the scenarios they document. (1 class)
+- [profiles.scenarios.catalog](profiles.scenarios.catalog.md): How the publications present themselves in the picker: by title and year, filtered by year and venue. (1 class)
 - [profiles.scenarios.completion](profiles.scenarios.completion.md): What a publication's own text leaves open of its identity, looked up in an open catalogue (owner decisions 2026-11-04). (14 functions)
-- [profiles.scenarios.config](profiles.scenarios.config.md): Constants for the AR6 profile.
-- [profiles.scenarios.extraction](profiles.scenarios.extraction.md): Extraction stage wiring: where the ar6 spec lives, and the lists that are only closed once a document is named. (7 functions)
+- [profiles.scenarios.config](profiles.scenarios.config.md): Constants for the scenarios profile.
+- [profiles.scenarios.extraction](profiles.scenarios.extraction.md): Extraction stage wiring: where the scenarios spec lives, and the list that is only closed once a document is named. (6 functions)
 - [profiles.scenarios.front](profiles.scenarios.front.md): What a publication says of itself, and which reading of it goes first (owner decisions 2026-11-05). (5 functions)
-- [profiles.scenarios.inference](profiles.scenarios.inference.md): What the answer loop says around the ar6 prompts.
-- [profiles.scenarios.kg](profiles.scenarios.kg.md): Harvested publication metadata to OEKG Turtle. (16 functions)
+- [profiles.scenarios.inference](profiles.scenarios.inference.md): What the answer loop says around the scenarios prompts.
+- [profiles.scenarios.kg](profiles.scenarios.kg.md): Harvested publication metadata to OEKG Turtle. (14 functions)
 - [profiles.scenarios.oekg_api](profiles.scenarios.oekg_api.md): What the OEKG scenario-bundle API would be asked, and what it would answer. (1 class, 14 functions)
 - [profiles.scenarios.preprocessing](profiles.scenarios.preprocessing.md): What text extraction has to know about English.
-- [profiles.scenarios.profile](profiles.scenarios.profile.md): AR6 scenario literature: the publications the IIASA AR6 scenario database cites.
+- [profiles.scenarios.profile](profiles.scenarios.profile.md): Scenario literature: publications on climate and energy scenarios.
 - [profiles.scenarios.reading](profiles.scenarios.reading.md): What the refinement, visuals and page-transcription stages say to the model when its reply was not the one JSON object that was asked for.
-- [profiles.scenarios.source](profiles.scenarios.source.md): Where the AR6 corpus comes from: pdf_index.json, the crawl over the publications the AR6 scenario database cites. (1 class, 5 functions)
-- [profiles.scenarios.store](profiles.scenarios.store.md): The project's own tables: publication metadata, the AR6 scenarios and the links between them. (4 functions)
+- [profiles.scenarios.source](profiles.scenarios.source.md): Where the scenarios corpus comes from: pdf_index.json, the crawl over the publications of the corpus. (1 class, 5 functions)
+- [profiles.scenarios.store](profiles.scenarios.store.md): The project's own table: publication metadata. (2 functions)
 - [profiles.scenarios.vocabulary](profiles.scenarios.vocabulary.md): This profile's half of the ontology snapshot. (18 functions)
 
 ## scripts
@@ -423,7 +423,7 @@ docpipe.extraction.graph
 docpipe.extraction.graphkit
 docpipe.extraction.identity
 docpipe.extraction.lookup
-docpipe.extraction.matching
+docpipe.extraction.naming
 docpipe.extraction.pipeline
 docpipe.extraction.places
 docpipe.extraction.preflight

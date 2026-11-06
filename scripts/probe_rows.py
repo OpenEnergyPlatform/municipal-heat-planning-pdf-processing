@@ -12,7 +12,7 @@ the run, and needs neither a GPU job nor retrieval:
     python scripts/probe_rows.py --hits passages.json --out probe
     python scripts/probe_rows.py --hits passages.json --out probe --whole
     python scripts/probe_rows.py --hits passages.json --out new --compute probe
-    python scripts/probe_rows.py data/ar6/ar6.db --out probe --whole --documents 4,23
+    python scripts/probe_rows.py data/scenarios/scenarios.db --out probe --whole --documents 4,23
 
 `--hits` takes the passages from a file, as `fetch_owner_content` returns them,
 so a machine without the database can run the probe.

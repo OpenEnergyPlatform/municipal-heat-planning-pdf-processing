@@ -1,5 +1,5 @@
 """
-inference.py – What the answer loop says around the ar6 prompts.
+inference.py – What the answer loop says around the scenarios prompts.
 
 English, like the publications and like the answers. See
 docpipe/inference/wording.py for what each piece is used for.

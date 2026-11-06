@@ -80,7 +80,7 @@ Fields:
 - `corrected: int = 0`
 - `exhausted: int = 0`
 - `group: Optional[str] = None`: the group of the spec asked
-- `made: list = field(default_factory=list)`: rows made beside the value, one per further wording it was stated for
+- `made: list = field(default_factory=list)`: rows made beside the value, one per further name it was stated for
 
 ### Comber
 
@@ -97,16 +97,14 @@ it asks, for its trace. *rank(document_id, probes, exclude)* is the plan's
 passages best first for the search sentences *probes*
 (`runner.make_more_sources`): the reading's sentences, and the model's
 own under "similar". *known(claim, asked)* is what a row has read in the
-plan's words (`runner.row_context`). *match* chooses the entry of a list
-matched apart that a wording answered is (`matching.Matcher`), shown
-the passage its quote stands in.
+plan's words (`runner.row_context`).
 
 #### Comber.\_\_init\_\_
 
 ```python
 def __init__(self, spec, ask: Callable, rank: Optional[Callable],
              known: Callable, *, bases: Optional[Callable] = None,
-             match: Optional[Callable] = None, pool=None, trace=None)
+             pool=None, trace=None)
 ```
 
 #### Comber.comb_groups
@@ -146,12 +144,12 @@ hits, *group* the group of the spec *slots* belong to, whose words
 for where a plan prints them the request shows, *probes* the
 sentences the reading wrote to coordinates it found unstated
 ({coordinate: sentence}), which the search ranks with. With
-*split*, a value the reply states for several wordings of a list
-matched apart is one row per wording (`reading.answers_each`, owner
-decision 2026-11-06), each a copy of the value's row in
-`Combed.made` and asked again on its own; without it, as in a pass
-over a stored harvest that re-reads each stored row in place, the
-first wording.
+*split*, a value the reply states for several names of a coordinate
+that may name several (`reading.several`) is one row per name
+(`reading.answers_each`, owner decision 2026-11-06), each a copy of
+the value's row in `Combed.made` and asked again on its own; without
+it, as in a pass over a stored harvest that re-reads each stored row
+in place, the first name.
 
 ## Functions
 

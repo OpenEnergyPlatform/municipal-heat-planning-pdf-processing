@@ -131,9 +131,11 @@ class Slot:
     options: tuple = ()
     # {"from": "unit", "value": uri} when the spec decides this coordinate.
     derive: Optional[dict] = None
-    # A list a request of its own chooses from (`spec.Axis.matched_apart`):
-    # the reading asks the wording the document prints, not the list.
-    matched_apart: bool = False
+    # The kind of thing whose name the document gives here, such as
+    # "scenario" (`spec.Axis.merged`): a value stated for several of them is
+    # one row per name, and which of the document's names mean the same thing
+    # is asked once the document is read (`naming.py`).
+    merged: Optional[str] = None
 
     @property
     def is_closed(self) -> bool:
@@ -176,9 +178,8 @@ def value_schema(slot: Slot) -> dict:
     """The answers a coordinate can take in a grammar: one entry of its list,
     UNSTATED included; for a number an integer or UNSTATED; else a wording.
     UNSTATED is an answer of every kind: a grammar that takes only an integer
-    for a year leaves the model no way to say the passage prints none. A
-    list matched apart is answered by its wording (`Slot.matched_apart`)."""
-    if slot.is_closed and not slot.matched_apart:
+    for a year leaves the model no way to say the passage prints none."""
+    if slot.is_closed:
         return {"enum": list(slot.answerable())}
     if slot.kind == NUMBER:
         return {"anyOf": [{"type": "integer"}, {"enum": [UNSTATED]}]}
@@ -474,20 +475,19 @@ def value_choice(parameter: Parameter) -> Slot:
     """The value of a category parameter, asked again as one of its entries.
 
     The rows request reads a value before its parameter, so what it writes is
-    the wording the passage prints: "New Policies Scenario" where the list
-    holds the AR6 runs and `out:not_documented`. Once the parameter is read,
-    which entry that wording is becomes a question of its own, with a quote
-    like every coordinate, and the wording stays in value_raw. Asking the
-    parameter again instead left the model no answer that could pass: on the
-    AR6 run 8,810 rows were asked it in every window to the end of their
+    the wording the passage prints: "includes only adopted policies" where
+    the list holds the types of a scenario. Once the parameter is read, which
+    entry that wording is becomes a question of its own, with a quote like
+    every coordinate, and the wording stays in value_raw. Asking the
+    parameter again instead left the model no answer that could pass: on one
+    corpus run 8,810 rows were asked it in every window to the end of their
     document, and 5,636,615 answers were refused.
     """
     return Slot(name="value", kind=CHOICE, required=True,
                 question=parameter.description,
                 options=_options(parameter.vocabulary,
                                  getattr(parameter, "definitions", None),
-                                 getattr(parameter, "glosses", None)),
-                matched_apart=getattr(parameter, "matched_apart", False))
+                                 getattr(parameter, "glosses", None)))
 
 
 def axis_slots(parameter: Parameter) -> list:
@@ -504,8 +504,7 @@ def axis_slots(parameter: Parameter) -> list:
                         question=axis.question,
                         options=_options(axis.vocabulary, axis.definitions,
                                          axis.glosses),
-                        derive=axis.derive,
-                        matched_apart=axis.matched_apart)
+                        derive=axis.derive)
         elif axis.enum:
             slot = Slot(name=name, kind=CHOICE, required=axis.required,
                         question=axis.question,
@@ -515,7 +514,8 @@ def axis_slots(parameter: Parameter) -> list:
                         question=axis.question)
         else:
             slot = Slot(name=name, kind=TEXT, required=axis.required,
-                        question=axis.question)
+                        question=axis.question,
+                        merged=getattr(axis, "merged", None))
         out.append(slot)
     return out
 

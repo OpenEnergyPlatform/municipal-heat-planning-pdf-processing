@@ -567,7 +567,7 @@ def _apply_actions(
             elif _starts_on(sec, front_pages):
                 # Authors often come out of layout detection as a one-line
                 # heading; removed as a running head, 19 of 85 author lines
-                # were gone from the AR6 corpus.
+                # were gone from the scenarios corpus.
                 log.info("  Refusing to remove '%s': it is front matter (first "
                          "or title page)", sec.get("title", "?"))
             else:
@@ -918,7 +918,7 @@ def _fold_bare_headings(sections: list[dict]) -> list[dict]:
     """A section that is a heading and nothing else opens the text of the next.
 
     The empty-section filter counts no title, and a paper's title is set apart
-    from its authors as a heading with no body of its own: 9 of the AR6
+    from its authors as a heading with no body of its own: 9 of the scenarios
     documents lost it here, and with it every node of their graph. Its heading
     goes in front of the next section's text instead, where it can be read and
     quoted, and the next section's own heading follows it there: a title

@@ -284,7 +284,7 @@ def remap_file(path: Path, spec: Spec, current: dict,
     """Re-map one harvest file in place, then carry its stamp forward.
 
     *spec_for* gives a document its own spec, with the lists its harvest was
-    offered: a dynamic list (the regions a document names, its AR6 runs) is
+    offered: a dynamic list (the regions a document names) is
     there and in no other. A document whose lists cannot be closed is left
     alone and counted, as the recheck leaves it.
     """

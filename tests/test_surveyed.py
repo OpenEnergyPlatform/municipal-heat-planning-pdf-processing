@@ -748,29 +748,29 @@ def test_two_surveys_joined_keep_the_walks_of_both():
 # Promise: a row read for the one field its request asked carries the state of
 # its parameter coordinate, derived, since nobody asked it per row, AND such a
 # row matches the published harvest schema (owner decision 2026-11-05).
-AR6 = load_spec(json.loads((Path(__file__).resolve().parent.parent
+SCENARIOS = load_spec(json.loads((Path(__file__).resolve().parent.parent
                             / "profiles" / "scenarios" / "extraction_spec.json")
                            .read_text(encoding="utf-8")))
 
 
 def test_a_row_read_for_one_field_has_its_parameter_derived():
-    title = AR6.by_uri["publication_title"]
+    title = SCENARIOS.by_uri["publication_title"]
     front = passage("section", 1, "Net zero by 2050\nAda Lovelace",
                     "Net zero by 2050")
     read = reading.Read(Batch(7, title, [WorkItem(7, title, front)]),
                         [{"source": "Q1", "value": "Net zero by 2050",
                           "quote": "Net zero by 2050"}])
-    taken = surveyed.taken_of(7, AR6,
+    taken = surveyed.taken_of(7, SCENARIOS,
                               found_of(answer(front, "publication_title")),
                               [read], [], {("section", 1): front})
     report = DocumentReport(document_id=7, owners_harvested=taken.passages,
                             sources_of=taken.sources_of)
-    runner.fold_answers(taken.answered, report, locate=None, spec=AR6)
+    runner.fold_answers(taken.answered, report, locate=None, spec=SCENARIOS)
     assert [r.get("parameter_state") for r in report.tuples] == [fields.DERIVED]
-    assert runner.check_against_schema(report, "doc", AR6) == 0
+    assert runner.check_against_schema(report, "doc", SCENARIOS) == 0
     # the failure by construction: the same row without the state
     report.tuples[0].pop("parameter_state")
-    assert runner.check_against_schema(report, "doc", AR6) == 1
+    assert runner.check_against_schema(report, "doc", SCENARIOS) == 1
 
 
 # -- what a publication says of itself, read from the front -------------------
@@ -798,7 +798,7 @@ def owner(source):
 
 def titled(source, quote="Net zero by 2050"):
     """A reading of the title in *source* answered with *quote*."""
-    title = AR6.by_uri[TITLE]
+    title = SCENARIOS.by_uri[TITLE]
     return reading.Read(Batch(7, title, [WorkItem(7, title, source)]),
                         [{"value": "Net zero by 2050", "quote": quote}])
 
@@ -820,7 +820,7 @@ def front_harvest(found, reads=None, *, title=TITLE, halt_after=None):
         return run
 
     whole = surveyed.SurveyedHarvest(
-        AR6, lambda spec, only, scope: (lambda document_id, passages: found),
+        SCENARIOS, lambda spec, only, scope: (lambda document_id, passages: found),
         make_reader, lambda spec: None, lambda document_id: list(PLAN),
         lambda document_id: 11,
         halted=(lambda: len(asked) >= halt_after) if halt_after else None,
@@ -847,7 +847,7 @@ def test_a_publication_s_own_fields_are_read_from_its_first_page_on():
     # What it read goes to the fold.
     report = DocumentReport(document_id=7, owners_harvested=taken.passages,
                             sources_of=taken.sources_of)
-    runner.fold_answers(taken.answered, report, locate=None, spec=AR6)
+    runner.fold_answers(taken.answered, report, locate=None, spec=SCENARIOS)
     assert [(row["value"], row["provenance"]["owner_id"])
             for row in report.tuples] == [("Net zero by 2050", 21)]
     # Every passage read from the front is a source of its field, in page
@@ -855,7 +855,7 @@ def test_a_publication_s_own_fields_are_read_from_its_first_page_on():
     assert taken.front.passages_of("publication_doi") == [
         owner(COVER), owner(TITLE_PAGE), owner(IMPRINT)]
     assert owner(IMPRINT) in taken.sources_of["publication_doi"]
-    blind = surveyed.taken_of(7, AR6, taken.found, taken.reads, [],
+    blind = surveyed.taken_of(7, SCENARIOS, taken.found, taken.reads, [],
                               {owner(s): s for s in PLAN})
     assert owner(IMPRINT) not in blind.sources_of["publication_doi"]
     # the failure by construction: a profile that names no title reads
@@ -923,7 +923,7 @@ def test_the_front_is_read_first_page_first_each_page_in_document_order():
 
 
 def test_the_profile_s_title_is_one_of_its_front_parameters():
-    assert TITLE in OWN and all(uri in AR6.by_uri for uri in OWN)
+    assert TITLE in OWN and all(uri in SCENARIOS.by_uri for uri in OWN)
     # the failure by construction: a title the spec does not hold reads
     # nothing from the front
     whole, asked = front_harvest(found_of(), title="publication_titel")

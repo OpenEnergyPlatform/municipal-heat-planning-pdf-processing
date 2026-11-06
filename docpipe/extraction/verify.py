@@ -277,7 +277,7 @@ def _check_value(raw: dict, parameter: Parameter, flags: list, *,
         if uri is None:
             # An answer to a closed list that is none of its entries, never
             # read (owner, 2026-09-11). It was kept with a flag, and 2,234
-            # tuples of the AR6 run said "read" with no class at all. The
+            # tuples of one corpus run said "read" with no class at all. The
             # claim stays on the refusal, wording included; the no-class
             # answer above is how a value says the list lacks it.
             return None, Refusal(raw, f"value {value.strip()!r} not in "
@@ -573,7 +573,7 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
             continue
         out[f"{name}_state"] = UNBACKED
         for suffix in ("_quote", "_source", "_window", "_link_quote",
-                       "_link_source"):
+                       "_link_source", "_means"):
             out.pop(f"{name}{suffix}", None)
         flags.append(f"unbacked:{name}")
     out.update(value_fields)

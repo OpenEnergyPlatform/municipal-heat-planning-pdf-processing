@@ -13396,46 +13396,32 @@
      "doc": {
       "type": "integer"
      },
-     "figure": {},
-     "group": {
-      "type": [
-       "string",
-       "null"
-      ]
-     },
      "input": {
       "type": "object"
      },
-     "kind": {},
+     "kind": {
+      "type": "string"
+     },
      "ms": {
+      "type": "integer"
+     },
+     "names": {
       "type": "integer"
      },
      "output": {
       "type": "object"
      },
-     "owner": {},
-     "parameter": {
-      "type": [
-       "string",
-       "null"
-      ]
+     "places": {
+      "type": "integer"
      },
-     "passages": {},
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
      },
-     "round": {
-      "type": "integer"
-     },
-     "rows": {},
      "t": {
-      "const": "match_ask"
-     },
-     "value": {
-      "type": "string"
+      "const": "naming_ask"
      }
     },
     "required": [
@@ -13443,8 +13429,9 @@
      "doc",
      "attempt",
      "corrections",
-     "parameter",
-     "kind"
+     "kind",
+     "names",
+     "places"
     ],
     "type": "object"
    },
@@ -13713,6 +13700,41 @@
      "t",
      "doc",
      "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "kind": {
+      "type": "string"
+     },
+     "names": {
+      "type": "integer"
+     },
+     "several": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "naming"
+     },
+     "things": {
+      "type": "integer"
+     },
+     "why": {
+      "enum": [
+       "cut_off"
+      ]
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "kind",
+     "names"
     ],
     "type": "object"
    },

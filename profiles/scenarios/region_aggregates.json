@@ -1291,8 +1291,7 @@
  "aggregate:iiasa:Africa (R10)": {
   "family": "R10",
   "labels": [
-   "Africa (R10)",
-   "R10AFRICA"
+   "Africa (R10)"
   ],
   "members": [
    "https://openenergyplatform.org/ontology/oekg/region/Algeria",
@@ -1358,8 +1357,7 @@
  "aggregate:iiasa:Asia (R5)": {
   "family": "R5",
   "labels": [
-   "Asia (R5)",
-   "R5ASIA"
+   "Asia (R5)"
   ],
   "members": [
    "https://openenergyplatform.org/ontology/oekg/region/Afghanistan",
@@ -2659,8 +2657,7 @@
  "aggregate:iiasa:China+ (R10)": {
   "family": "R10",
   "labels": [
-   "China+ (R10)",
-   "R10CHINA+"
+   "China+ (R10)"
   ],
   "members": [
    "https://openenergyplatform.org/ontology/oekg/region/China",
@@ -3498,8 +3495,7 @@
  "aggregate:iiasa:Europe (R10)": {
   "family": "R10",
   "labels": [
-   "Europe (R10)",
-   "R10EUROPE"
+   "Europe (R10)"
   ],
   "members": [
    "https://openenergyplatform.org/ontology/oekg/region/Albania",
@@ -8070,8 +8066,7 @@
  "aggregate:iiasa:India+ (R10)": {
   "family": "R10",
   "labels": [
-   "India+ (R10)",
-   "R10INDIA+"
+   "India+ (R10)"
   ],
   "members": [
    "https://openenergyplatform.org/ontology/oekg/region/India",
@@ -8279,8 +8274,7 @@
  "aggregate:iiasa:Latin America (R10)": {
   "family": "R10",
   "labels": [
-   "Latin America (R10)",
-   "R10LATIN_AM"
+   "Latin America (R10)"
   ],
   "members": [
    "https://openenergyplatform.org/ontology/oekg/region/AntiguaAndBarbuda",
@@ -8329,8 +8323,7 @@
  "aggregate:iiasa:Latin America (R5)": {
   "family": "R5",
   "labels": [
-   "Latin America (R5)",
-   "R5LAM"
+   "Latin America (R5)"
   ],
   "members": [
    "https://openenergyplatform.org/ontology/oekg/region/AntiguaAndBarbuda",
@@ -9690,8 +9683,7 @@
  "aggregate:iiasa:Middle East & Africa (R5)": {
   "family": "R5",
   "labels": [
-   "Middle East & Africa (R5)",
-   "R5MAF"
+   "Middle East & Africa (R5)"
   ],
   "members": [
    "https://openenergyplatform.org/ontology/oekg/region/Algeria",
@@ -9851,8 +9843,7 @@
  "aggregate:iiasa:Middle East (R10)": {
   "family": "R10",
   "labels": [
-   "Middle East (R10)",
-   "R10MIDDLE_EAST"
+   "Middle East (R10)"
   ],
   "members": [
    "https://openenergyplatform.org/ontology/oekg/region/Bahrain",
@@ -9875,8 +9866,7 @@
  "aggregate:iiasa:North America (R10)": {
   "family": "R10",
   "labels": [
-   "North America (R10)",
-   "R10NORTH_AM"
+   "North America (R10)"
   ],
   "members": [
    "https://openenergyplatform.org/ontology/oekg/region/Canada",
@@ -9888,8 +9878,7 @@
  "aggregate:iiasa:OECD & EU (R5)": {
   "family": "R5",
   "labels": [
-   "OECD & EU (R5)",
-   "R5OECD90+EU"
+   "OECD & EU (R5)"
   ],
   "members": [
    "https://openenergyplatform.org/ontology/oekg/region/Albania",
@@ -11743,8 +11732,7 @@
  "aggregate:iiasa:Pacific OECD (R10)": {
   "family": "R10",
   "labels": [
-   "Pacific OECD (R10)",
-   "R10PAC_OECD"
+   "Pacific OECD (R10)"
   ],
   "members": [
    "https://openenergyplatform.org/ontology/oekg/region/Australia",
@@ -12387,8 +12375,7 @@
  "aggregate:iiasa:Reforming Economies (R10)": {
   "family": "R10",
   "labels": [
-   "Reforming Economies (R10)",
-   "R10REF_ECON"
+   "Reforming Economies (R10)"
   ],
   "members": [
    "https://openenergyplatform.org/ontology/oekg/region/Armenia",
@@ -12409,8 +12396,7 @@
  "aggregate:iiasa:Reforming Economies (R5)": {
   "family": "R5",
   "labels": [
-   "Reforming Economies (R5)",
-   "R5REF"
+   "Reforming Economies (R5)"
   ],
   "members": [
    "https://openenergyplatform.org/ontology/oekg/region/Armenia",
@@ -12452,8 +12438,7 @@
  "aggregate:iiasa:Rest of Asia (R10)": {
   "family": "R10",
   "labels": [
-   "Rest of Asia (R10)",
-   "R10REST_ASIA"
+   "Rest of Asia (R10)"
   ],
   "members": [
    "https://openenergyplatform.org/ontology/oekg/region/BruneiDarussalam",

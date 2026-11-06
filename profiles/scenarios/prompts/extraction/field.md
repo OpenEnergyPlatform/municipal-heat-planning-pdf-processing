@@ -11,7 +11,7 @@ values that have already been extracted from a scientific publication
 If the header row names a scenario for each column, this number decides which one applies.
 
 <!-- part: example_reply -->
-{"fields": {"scenario": {"groups": [{"rows": ["R1", "R2"], "value": "EN_NPi2020_400", "value_raw": "the NDC scenario", "quote": "In the NDC scenario, emissions peak before 2030 and the remaining budget is 400 GtCO2."}], "answers": {"R3": {"value": "scenario family", "value_raw": "NPi", "quote": "Results for the NPi scenarios are shown in Figure 4."}}}}}
+{"fields": {"scenario": {"groups": [{"rows": ["R1", "R2"], "value": "the NDC scenario", "quote": "In the NDC scenario, emissions peak before 2030 and the remaining budget is 400 GtCO2."}], "answers": {"R3": {"value": "the NPi scenarios", "quote": "Results for the NPi scenarios are shown in Figure 4."}}}}}
 
 <!-- part: groups_note -->
 one paragraph introduces a scenario and backs the assignment for all values that come from it.
@@ -26,11 +26,10 @@ the words of the document you took the answer from, character for character as t
 Keep it short: the clause that carries the answer, not the whole paragraph. Copy it character for character, including numbers that stand in the middle of the text, such as the line numbers of a manuscript ("Horizon 311 2020"): they belong to the string. Invented or smoothed passages are discarded, and with them the answer.
 
 <!-- part: domain_rule_1 -->
-The identifiers are run identifiers such as "EN_INDCi2030_300f". They almost never stand in the text; there the same scenario is called "Current Policies", "the NDC scenario" or "our 1.5-degree pathway". Matching the description in the text with the identifier is exactly your task. Clues are the level of ambition, the target year, the climate target and the order in which the publication introduces its scenarios.
+A scenario is named as the publication prints it: "Current Policies", "the NDC scenario" or "our 1.5-degree pathway". Copy that name character for character from the passage that names the scenario of this value.
 
 <!-- part: domain_rule_2 -->
-Many identifiers share a beginning: EN_NPi2020_400, EN_NPi2020_1000 and EN_NPi2020_3000 are THREE different runs. If the document's name fits several runs and none of them exactly, it names a family, whatever the runs share: their beginning ("NPi", "NDC", "the NPi scenario"), their climate target ("the 1.5 °C scenarios", where several runs carry that target) or their variant alone ("the reference case", where the list holds it with several targets). Then NO single identifier is determined, and you must not pick one. For that case the list carries the entry "scenario family" — CHOOSE IT. You set an identifier only if the text makes it distinguishable, for example through the budget, the temperature target or the year it carries in its name.
-   If the publication describes a scenario that does not occur in its AR6 list at all, that is the entry "not in AR6".
+A name the publication gives several scenarios at once, such as "the 1.5 °C scenarios", is copied as it stands. Which of the publication's names mean the same scenario is asked once it is read.
 
 <!-- part: need_more_example -->
    RIGHT: "The NDC scenario assumes that pledges are implemented by 2030."

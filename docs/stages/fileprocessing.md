@@ -19,9 +19,8 @@ through `SourceDoc.meta`/`payload` and the `Source.documents()`/
 inspects `payload`. Two profiles ship a source of their own: `kwp` reads an
 Excel workbook of German municipal heat plans and writes `OrganisationUnits`,
 `Municipalities` and `MunicipalityMeta` rows alongside the shared tables;
-`scenarios` reads a JSON crawl index of the literature the AR6 scenario
-database cites and writes `Scenarios` and `DocumentScenarios` link rows
-instead. A profile that extends the built-in `default` profile and has no
+`scenarios` reads a JSON crawl index of publications on climate and energy
+scenarios and writes a `DocumentMeta` row instead. A profile that extends the built-in `default` profile and has no
 source of its own gets the one that reads a folder of PDFs. Every stage
 after this one, from preprocessing onward, iterates the `Documents` table
 and nothing else: a document this stage never registers does not exist for
@@ -122,7 +121,7 @@ picker, because the file name no longer tells them apart.
 can name a document's metadata:
 `KwwSource.document_for()` writes an `OrganisationUnits` row through
 `store.update_organisation_unit()` on every row it reads, before the PDF
-has been fetched or gated at all. `Ar6Source` has no such early write.
+has been fetched or gated at all. `ScenarioSource` has no such early write.
 
 ### Registering one document
 
@@ -186,9 +185,8 @@ count while streaming, and leaves no file or `.url` behind. Both are
 did not raise inside `register()`, whether that document was newly
 written, already present, or registered as a scan.
 `KwwSource.after_document()` writes `Municipalities` and
-`MunicipalityMeta`; `Ar6Source.after_document()` refreshes the
-publication's `DocumentMeta` row and writes
-`Scenarios`/`DocumentScenarios` links. A document that raised inside
+`MunicipalityMeta`; `ScenarioSource.after_document()` refreshes the
+publication's `DocumentMeta` row. A document that raised inside
 `register()` is skipped here, `OrganisationUnits` being the one
 exception noted above.
 
@@ -237,13 +235,11 @@ supplied.
 `DocumentMeta` is a one-row-per-document table the profile defines through
 its own `schema.sql`, applied on top of the core schema. `kwp`'s carries
 `organisation_unit` and `municipality_ags`; `scenarios`' carries `doi`,
-`title`, `year`, `venue`, `is_oa` and `scenario_count`. `kwp` additionally
+`title`, `year`, `venue` and `is_oa`. `kwp` additionally
 maintains `OrganisationUnits`, `Municipalities`, and a 30-column
 `MunicipalityMeta` (`ags` plus the 29 columns `MUNICIPALITY_META_COLUMNS`
 lists in `profiles/kwp/config.py`) copied from the KWW sheet; `scenarios`
-maintains
-`Scenarios` (one row per AR6 scenario id) and `DocumentScenarios`, the
-many-to-many link between a publication and the scenarios it documents.
+maintains `DocumentMeta` alone.
 Both profiles are described further on their own pages,
 [kwp](../profiles/kwp.md) and [scenarios](../profiles/scenarios.md).
 
@@ -280,7 +276,7 @@ Each worklist holds one tab-separated line per document, sorted by key:
 | download timeout | hardcoded | 30 seconds | the timeout of each request | `docpipe/ingest/fetch.py` |
 | `EXCEL_SHEET` | module constant, `kwp` | `"Datensatz Status quo KWP"` | Which sheet of the KWW workbook is read | `profiles/kwp/config.py` |
 | `PDF_OVERRIDES`, `SHARED_FILE_OWNERS` | module constant, `kwp` | 354, 4 entries | Per-municipality filename override, for a dead link or for a file the register renamed; owner of a shared non-convoy file | `profiles/kwp/config.py` |
-| `SCENARIO_FILE`, `PUBLICATION_META_FILE` | module constant, `scenarios` | two JSON filenames | Optional siblings of `pdf_index.json` for scenario names and OpenAlex fields | `profiles/scenarios/config.py` |
+| `PUBLICATION_META_FILE` | module constant, `scenarios` | a JSON filename | Optional sibling of `pdf_index.json` for OpenAlex fields | `profiles/scenarios/config.py` |
 | `AVAILABLE_STATUS`, `PUBLISHED_DAY` | module constant, `scenarios` | `"pdf"`, `"0101"` | Index status meaning a PDF exists; day suffix for a publication's year | `profiles/scenarios/config.py` |
 | `PDF_SUFFIX` | module constant, `scenarios` | `".pdf"` | Appended to a publication's slug to build its filename | `profiles/scenarios/config.py` |
 
@@ -353,9 +349,6 @@ Each worklist holds one tab-separated line per document, sorted by key:
   municipality in all three cases it is known to have applied to, which is
   why `SHARED_FILE_OWNERS` exists at all (`profiles/kwp/source.py`, comment
   on `group_keys_by_filename`).
-- One publication can document up to 146 AR6 scenarios, and one scenario
-  can be documented by up to three publications
-  (`profiles/scenarios/schema.sql`, comment).
 
 ## Modules
 

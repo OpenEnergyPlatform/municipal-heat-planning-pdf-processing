@@ -1,7 +1,7 @@
 """
 vocabulary.py – This profile's half of the ontology snapshot.
 
-The builder lives in `docpipe/ontology.py`. What is here is what is about AR6
+The builder lives in `docpipe/ontology.py`. What is here is what is about
 scenario publications: which roots this profile's one static list draws from,
 and the 249 study regions, which come from the OEKG rather than from an
 ontology release and are therefore pinned differently.
@@ -96,7 +96,7 @@ SOURCES = {
                     "reviewed": "b4604e02060624b381bdbe2f872df94cfd0f5630",
                     "files": ["oekg/shapes/oekg_shapes.ttl"]},
     # The groups of countries a scenario covers, with their members: the
-    # regions the AR6 database itself defines (R5, R9, R10), the regions of
+    # regions the IAM community defines (R5, R9, R10), the regions of
     # each model with the codes its mapping gives them ("LAM", "OAS"), and the
     # UN's statistical regions (M49), which carry the names a paper writes
     # ("Sub-Saharan Africa", "Western Europe"). The OEKG has countries only,
@@ -468,9 +468,7 @@ def aggregates(families: list, tree: list, regions: dict, codes=None,
                         if "|" in name:
                             natives.append((family, name, countries))
                             continue
-                        labels = [name] + ([attrs["ar6"]] if attrs.get("ar6")
-                                           else [])
-                        add(f"aggregate:iiasa:{name}", labels,
+                        add(f"aggregate:iiasa:{name}", [name],
                             placed(countries), "iiasa", family)
 
     # The newest version first: the regions of a model of one name are

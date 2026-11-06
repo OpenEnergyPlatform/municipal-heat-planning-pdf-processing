@@ -195,10 +195,10 @@ def test_a_value_the_check_refuses_is_asked_once_more_with_its_reason():
     assert corrections_of(calls) == []
 
 
-AR6 = load_spec(json.loads((Path(__file__).resolve().parent.parent
+SCENARIOS = load_spec(json.loads((Path(__file__).resolve().parent.parent
                             / "profiles" / "scenarios" / "extraction_spec.json")
                            .read_text(encoding="utf-8")))
-SECTOR = AR6.by_uri["study_sector"]
+SECTOR = SCENARIOS.by_uri["study_sector"]
 COVERS = Source("section", 8, "Scope\nThe model covers the building, "
                 "transport and industry sectors.",
                 {"document_id": 7, "section_title": "Scope"})
@@ -206,7 +206,7 @@ NAMED = "covers the building, transport and industry"
 
 
 def sector_read(*values):
-    reader, calls = asking(values, spec=AR6, frame=[])
+    reader, calls = asking(values, spec=SCENARIOS, frame=[])
     read = reader.read(7, SECTOR, COVERS, [], [],
                        {(COVERS.owner_kind, COVERS.owner_id): COVERS})
     return read, calls

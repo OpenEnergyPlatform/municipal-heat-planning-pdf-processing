@@ -88,7 +88,7 @@ from . import combing as combing_map
 from . import compute as computing
 from . import fields
 from . import found as found_places
-from . import matching as matching_map
+from . import naming as naming_map
 from . import places as places_map
 from . import reading as reading_map
 from . import replies
@@ -1192,12 +1192,11 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
 def fill_dynamic_axes(spec: Spec, vocabularies: Optional[dict]) -> Spec:
     """A copy of *spec* whose dynamic axes carry THIS document's list.
 
-    The AR6 scenario names are run identifiers — EN_INDCi2030_300f — and two
-    of 328 of them occur verbatim in the text they were extracted from. The
-    document says "the Current Policies scenario". Nothing but the model can
-    bridge that, and it can only do so if it is shown the list it may choose
-    from; the mapping then arrives flagged, like every other judgement call
-    the harvest records.
+    The countries a publication names differ per publication, and a list of
+    all 249 would bury the handful it names. Nothing but the model can map a
+    wording onto an entry, and it can only do so if it is shown the list it
+    may choose from; the mapping then arrives flagged, like every other
+    judgement call the harvest records.
     """
     if not vocabularies:
         return spec
@@ -2075,32 +2074,39 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
         spec, ask_values, ask_text, frame_slots,
         shown_with=reading_map.heading_of,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
-        known=row_context, match=make_matcher(spec), pool=AHEAD,
-        trace=trace.event)
+        known=row_context, pool=AHEAD, trace=trace.event)
 
 
-def make_matcher(spec: Spec):
-    """The request that chooses the entry of a list matched apart that a
-    wording read is (`matching.Matcher`, owner decision 2026-11-05), or None
-    where the spec matches no list apart or the profile writes no prompt for
-    it, which `surveyed_flow` refuses at the start of a run."""
-    if not matching_map.matched_apart(spec):
+def make_namer(spec: Spec, passages_of: Callable) -> Optional[Callable]:
+    """The request that asks which of a document's names mean the same
+    thing once it is folded (`naming.Namer`, owner decisions 2026-11-06):
+    `name(report)`, which marks the report's rows. None where the spec
+    merges no names or the profile writes no prompt for it, which
+    `surveyed_flow` refuses at the start of a run. *passages_of(document_id)*
+    is the plan's passages in their order."""
+    if not naming_map.merges(spec):
         return None
     try:
-        prompt = prompts.load(matching_map.MATCH_PROMPT_ID)
+        prompt = prompts.load(naming_map.NAMING_PROMPT_ID)
     except (FileNotFoundError, LookupError):
         return None
     client = _client()
 
-    def ask(payload, shape, document_id, source, parameter):
+    def ask(payload, shape, document_id, kind):
         text = json.dumps(payload, ensure_ascii=False, indent=2)
+        names = list(payload["names"])
         return ask_in_grammar(
             client, prompt, [{"role": "user", "content": text}], shape,
-            document_id, "match", "value", parameter=parameter.uri,
-            kind=source.owner_kind, owner=source.owner_id,
+            document_id, "naming", names[0] if names else "", kind=kind,
+            names=len(names), places=len(payload["places"]),
             corrections=len(payload.get("corrections") or ()))
+    namer = naming_map.Namer(spec, ask, trace=trace.event)
 
-    return matching_map.Matcher(ask)
+    def name(report) -> None:
+        passages = {(s.owner_kind, s.owner_id): s
+                    for s in passages_of(report.document_id)}
+        namer(report.document_id, report.tuples, passages)
+    return name
 
 
 def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
@@ -2133,7 +2139,7 @@ def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
     comber = combing_map.Comber(
         spec, ask, rank, row_context,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
-        match=make_matcher(spec), pool=AHEAD, trace=trace.event)
+        pool=AHEAD, trace=trace.event)
     # The sentences the search for a parameter the survey named no passage
     # for ranks with (`make_seek_probes`); None searches with its label.
     comber.seek = seek
@@ -2408,8 +2414,9 @@ def frame_pairs(reply: Optional[dict], slots: list, sources: list,
                 # An answer that is not on the closed list. It used to be
                 # taken as long as its wording stood in the quote, and the
                 # class lookup behind it then came back empty -- 8,944 of
-                # ar6's tuples carry an unmapped scenario label for exactly
-                # this reason. Asked again instead, and told which list.
+                # one corpus run's tuples carried an unmapped label for
+                # exactly this reason. Asked again instead, and told which
+                # list.
                 refuse(say("frame_not_an_option", given=given,
                            slot=slot.name,
                            options=say("frame_options", slot=slot.name)))
@@ -3336,7 +3343,8 @@ def _image_part(path: str) -> Optional[dict]:
 # (`fields.PRODUCER`) is one more: it says nothing about the value, and shown
 # to the model it would change a request the harvest did not write it for.
 _EVIDENCE = ("_raw", "_raw_foreign", "_quote", "_source", "_window", "_state",
-             "_seen", "_link_quote", "_link_source", fields.PRODUCER)
+             "_seen", "_link_quote", "_link_source", naming_map.MEANS,
+             fields.PRODUCER)
 
 
 def _prior_payload(prior: list) -> list:
@@ -6840,13 +6848,13 @@ def flow_prompts(flow: Optional[str] = None) -> tuple:
 
 def survey_prompt_ids(profile=None) -> tuple:
     """The prompts of a harvest from the survey: `SURVEY_PROMPT_IDS`, and
-    the match where the profile writes it, which a spec with a list matched
-    apart sends (`matching.MATCH_PROMPT_ID`, required by `surveyed_flow`)."""
+    the naming where the profile writes it, which a spec that merges names
+    sends (`naming.NAMING_PROMPT_ID`, required by `surveyed_flow`)."""
     try:
-        prompts.load(matching_map.MATCH_PROMPT_ID, profile)
+        prompts.load(naming_map.NAMING_PROMPT_ID, profile)
     except (FileNotFoundError, LookupError):
         return SURVEY_PROMPT_IDS
-    return (*SURVEY_PROMPT_IDS, matching_map.MATCH_PROMPT_ID)
+    return (*SURVEY_PROMPT_IDS, naming_map.NAMING_PROMPT_ID)
 
 
 def surveyed_flow(spec: Spec, profile=None) -> bool:
@@ -6863,10 +6871,10 @@ def surveyed_flow(spec: Spec, profile=None) -> bool:
     request is sent rather than at the first plan's reading."""
     if not spec.groups:
         return False
-    # The match only where a list is matched apart (`matching.py`).
+    # The naming only where the spec merges names (`naming.py`).
     needed = (*SURVEY_PROMPT_IDS,
-              *((matching_map.MATCH_PROMPT_ID,)
-                if matching_map.matched_apart(spec) else ()))
+              *((naming_map.NAMING_PROMPT_ID,)
+                if naming_map.merges(spec) else ()))
     for prompt_id in needed:
         try:
             prompt = prompts.load(prompt_id, profile)
@@ -7419,8 +7427,7 @@ def resolve_image_root(pdf_root: Optional[Path],
 
 # A choice list the profile fills per document is not in the spec file, so it
 # cannot be measured there. This is its ceiling: the widest such list in this
-# corpus is one publication's 146 AR6 scenarios beside the ~250 OEKG study
-# regions, and both together stay well inside it.
+# corpus is the ~250 OEKG study regions with their groups, well inside it.
 DYNAMIC_LIST_TOKENS = 4000
 
 
@@ -7506,7 +7513,8 @@ def fit_batch_sources(prompt, spec, wanted: int = BATCH_SOURCES) -> int:
     ever compared them: how many sources one request reads is set here, and
     how much the model may write about them is set in the prompt's
     frontmatter. Six sources of kwp tuples fit in 8192 tokens; six sources of
-    ar6 tuples, whose quotes are whole sentences, need 11000 and would be cut
+    scenarios tuples, whose quotes are whole sentences, need 11000 and would
+    be cut
     off — every time, deterministically, on five GPUs.
 
     So the batch follows the answer budget rather than a hand-picked
@@ -8314,7 +8322,7 @@ def main(argv: Optional[list] = None) -> int:
                                              profile.processed_dir)
 
     # component, not require: extraction is an optional stage. A profile that
-    # does not do OBIE (ar6 today) must stay loadable everywhere else and only
+    # does not do OBIE must stay loadable everywhere else and only
     # fail here, when someone actually asks it to extract.
     raw_spec_path = run_spec_path(args, profile)
     if raw_spec_path is None:
@@ -8792,6 +8800,7 @@ def main(argv: Optional[list] = None) -> int:
                              lambda document_id: every(document_id, set()),
                              pages_of, rank)
     completer = make_completer(profile, args.db)
+    namer = make_namer(spec, lambda document_id: every(document_id, set()))
 
     def verify(entry: tuple, replies: Optional[int] = None) -> bool:
         """Fold, work out, complete and write one document. *replies* is how
@@ -8805,6 +8814,11 @@ def main(argv: Optional[list] = None) -> int:
         if computer is not None and not computer(
                 answered, report, locate=locate, spec=spec, stop=Halted):
             return False
+        # Which names of the document mean the same thing, over every row
+        # it now holds, worked-out ones included (owner decisions
+        # 2026-11-06).
+        if namer is not None:
+            namer(report)
         if completer is not None:
             completer(report, spec)
         stamped = finish_document(report, name, args.out, spec_sha,

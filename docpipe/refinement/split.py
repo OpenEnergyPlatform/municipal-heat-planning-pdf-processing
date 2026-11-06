@@ -330,7 +330,7 @@ def _subdivide_segments(section: dict, target: int) -> bool:
 
     Sections are cut at segment boundaries, so a section whose text sits in one
     long segment has nowhere to be cut and stays oversized however often it is
-    asked — 51 sections in one ar6 run, up to 1409 words against a 1000 limit,
+    asked — 51 sections in one scenarios run, up to 1409 words against a 1000 limit,
     and three of those in a window is what the model then had to hand back.
 
     A text segment's page and kind are unchanged by the cut, so provenance is

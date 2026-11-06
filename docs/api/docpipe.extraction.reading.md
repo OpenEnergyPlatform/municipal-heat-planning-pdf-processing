@@ -50,13 +50,12 @@ Every coordinate asked is answered: the grammar of a group request requires
 each of them, and "the passage does not say" is one of the answers
 (`fields.UNSTATED`).
 
-A list matched apart (`matching.py`) is read by the wording the document
-prints, and a request shows only that wording, never the entry the match
-chose: in a round's `read`, as a value's own wording and in a correction
-(`printed`, owner decision 2026-11-06). A value the passage states for
-several wordings of such a list is one row per wording, each matched on its
-own (`answers_each`, owner decision 2026-11-06); a correction for one of them
-names its wording.
+A coordinate whose answer is the name the document gives a thing, such as
+a scenario, is read as the document prints it (`fields.Slot.merged`). A
+value the passage states for several of them is one row per name, each
+checked on its own (`answers_each`, owner decision 2026-11-06); a
+correction for one of them names its name. Which names mean the same thing
+is asked once the document is read (`naming.py`).
 
 Nothing is checked here beyond what the harvest checks everywhere. Every
 coordinate goes through `pipeline.merge_field` and every value through
@@ -201,9 +200,7 @@ value. *context* is what the request shows beside its passage,
 the passage: the heading it stands under (`heading_of`); so may what
 the value has read, as its request shows it (`known_shown`).
 *known(claim, asked)* is what a value has read in the plan's words
-(`runner.row_context`). *match* chooses the entry of a list matched
-apart that a wording read is (`matching.Matcher`); without it such a
-wording stays as read. *pool* reads passages side by side. No request
+(`runner.row_context`). *pool* reads passages side by side. No request
 of the reading has tools (owner decision 2026-11-05, ticket 26).
 
 #### Reader.\_\_init\_\_
@@ -213,7 +210,6 @@ def __init__(self, spec, ask_values: Callable, ask_text: Callable,
              frame_slots: list, *, shown_with: Optional[Callable] = None,
              bases: Optional[Callable] = None,
              known: Optional[Callable] = None,
-             match: Optional[Callable] = None,
              pool=None, trace=None)
 ```
 
@@ -324,8 +320,7 @@ def coordinate_shown(slot) -> dict
 ```
 
 A coordinate as a request shows it: its question, and its list, or
-the kind of its answer. A list matched apart is answered by its wording
-and goes to the match alone (`matching.py`).
+the kind of its answer.
 
 ### several
 
@@ -333,9 +328,10 @@ and goes to the match alone (`matching.py`).
 def several(slot) -> bool
 ```
 
-May one value name several wordings for *slot*, one row each: a list
-read by the wording the document prints and matched apart (owner
-decision 2026-11-06)?
+May one value name several things for *slot*, one row each: a
+coordinate whose answer is the name the document gives a thing, merged
+with the document's other names for it after the reading (`naming.py`,
+owner decisions 2026-11-06)?
 
 ### answer_schema
 
@@ -346,7 +342,7 @@ def answer_schema(slot, probe: bool = False) -> dict
 One coordinate's answer as the grammar takes it; with *probe* also
 the sentence a reply writes to a coordinate its passage does not state,
 as the plan would print it, which the combing searches with (owner
-decision 2026-11-05: HyDE). A coordinate that may name several wordings
+decision 2026-11-05: HyDE). A coordinate that may name several things
 (`several`) takes a list of such answers too.
 
 ### answers_each
@@ -356,8 +352,8 @@ def answers_each(reply, slots: list) -> list
 ```
 
 The reply for one value as one reply per row (owner decision
-2026-11-06): a coordinate that may name several wordings (`several`)
-and names a list of them gives one reply per wording, with every other
+2026-11-06): a coordinate that may name several things (`several`) and
+names a list of them gives one reply per name, with every other
 coordinate's answer the same on each; an empty list is no answer. Any
 other reply is the one reply.
 
@@ -485,9 +481,8 @@ def value_classes(parameter) -> dict
 
 The entries a category parameter's value is one of, as a request shows
 a closed list (`fields.Slot.answerable`), without UNSTATED: a value the
-passage does not state is no value. Empty for a parameter with no list,
-and for one whose list is matched apart (`matching.py`): its value is
-read as the document prints it.
+passage does not state is no value. Empty for a parameter with no
+list.
 
 ### source_shown
 
@@ -512,17 +507,6 @@ def shown_value(claim: dict) -> dict
 ```
 
 A value as a request shows it: its value, wording, quote and head.
-
-### printed
-
-```python
-def printed(shown: dict, parameter) -> dict
-```
-
-*shown*, a value as a request shows it (`shown_value`), with the
-wording the document prints as its value where *parameter*'s list is
-matched apart: a request that reads such a value never sees the entry
-the match chose (owner decision 2026-11-06). Any other value as it is.
 
 ### values_payload
 
@@ -662,8 +646,7 @@ group, the plan's base and target years, the same in a plan; then the
 passage, the text around a table or figure and, for a frame group, the
 survey's pairs of the passage (`group_context`); the value last, with
 its quote and, under "read", what is already read of it in the plan's
-words; with *corrections* the same request asked once more. A value of
-a list matched apart is shown by its wording (`printed`).
+words; with *corrections* the same request asked once more.
 
 ### text_response_format
 
@@ -730,8 +713,8 @@ def named_corrections(corrections: list, reply: dict, slots: list) -> list
 
 *corrections* for one of several rows a reply made of one value
 (`answers_each`): each correction of a coordinate that named several
-wordings names the wording this row was given, and its quote, so the
-request asks again for that one.
+things names the name this row was given, and its quote, so the request
+asks again for that one.
 
 ### same
 

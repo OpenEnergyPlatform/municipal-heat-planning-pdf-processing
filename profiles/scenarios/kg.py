@@ -392,8 +392,8 @@ def _squeeze(text) -> str:
 
 
 # The choice lists in extraction.py carry entries that are deliberately not a
-# thing in the graph: a scenario family instead of a run, a global scope
-# instead of a country. They exist so the model can say so instead of picking
+# thing in the graph: several regions the groups do not carry, something that
+# is not a country. They exist so the model can say so instead of picking
 # the nearest entry that is almost right — which means every place where an
 # answer turns into an IRI, a type or a link has to refuse them. One prefix
 # (NOT_IN_GRAPH, graphkit.py), checked once here, so a new out: entry cannot
@@ -403,8 +403,9 @@ def in_graph(value) -> bool:
     return bool(value) and not str(value).startswith(NOT_IN_GRAPH)
 
 
-# A chosen group of countries: the world, a region of the AR6 database or of
-# the UN (vocabulary.aggregates). The OEKG holds countries only.
+# A chosen group of countries: the world, a region of the IAM models, of the
+# UN or of the World Bank (vocabulary.aggregates). The OEKG holds countries
+# only.
 AGGREGATE = "aggregate:"
 
 
@@ -430,121 +431,47 @@ def graph_value(row: dict):
     return row.get("value")
 
 
-def ambiguous(wording, known: dict) -> bool:
-    """Does this wording fit more than one AR6 run of this publication?
+def _quoted(name, quote) -> bool:
+    """Does the passage a name was read from actually contain it?
 
-    Measured on the 146-scenario pilot document: the paper writes "NPi" and
-    "NDC", and the database has EN_NPi2020_300f, EN_NPi2020_400 and
-    EN_NPi2020_3000. Those are three runs, and "NPi" names the family, not one
-    of them. A model handed the list picks one anyway, which is a guess
-    dressed as a link — so a wording that fits several is treated as fitting
-    none, and the wording alone survives.
+    A string the model presents as the document's own name for a scenario
+    has to be findable in the quote it was read with. It used to mint a
+    factsheet anyway, with a stable IRI and the invented string as its label.
     """
-    needle = _squeeze(wording)
-    if not needle:
-        return False
-    hits = [name for name in known.values() if needle in _squeeze(name)]
-    if len(hits) < 2:
-        return False
-    return not any(_squeeze(name) == needle for name in hits)
-
-
-def _quoted(wording, row: dict) -> bool:
-    """Does the document's own passage actually contain this wording?
-
-    Only asked of a wording that is about to become an identity. A resolved run
-    identifier does not have to stand in the text — the model maps a
-    description onto it, which is the whole job — but a string the model
-    presents as the document's own name for something has to be findable in
-    the passage the same tuple quotes.
-    """
-    if "quote" not in row:
+    if quote is None:
         # Nothing to check against. The verifier guarantees a quote on every
         # tuple that reaches here, so this is the unit-test shape, and a check
         # that cannot run must not reject.
         return True
-    return _squeeze(wording) in _squeeze(row.get("quote"))
+    return _squeeze(name) in _squeeze(quote)
 
 
-def resolve_wording(wording, known: Optional[dict] = None) -> Optional[str]:
-    """The run this wording names, when the list settles it without a guess.
+def scenario_names(row: dict) -> list:
+    """The names of the scenarios a row belongs to.
 
-    The mirror of `ambiguous()`. That one refuses the link where several runs
-    fit and none matches exactly; this one MAKES the link where exactly one
-    does. Both read the same list, and between them the model's own choice is
-    only consulted where the list is genuinely undecided.
-
-    Measured on the corpus run: the model answered with an out: entry 1171
-    times for a wording its own list resolved unambiguously — 347 of them a
-    character-for-character match of a run name, one document refusing "BaU"
-    against a list whose single entry is "BaU".
-
-    Short wordings are exact-match only. "NPi" is three characters and sits
-    inside a dozen run names; a containment hit that short is a coincidence,
-    not a reading.
-    """
-    needle = _squeeze(wording)
-    if not needle or not known:
-        return None
-    for name in known.values():
-        if _squeeze(name) == needle:
-            return name
-    if len(needle) < 4:
-        return None
-    hits = [name for name in known.values() if needle in _squeeze(name)]
-    return hits[0] if len(hits) == 1 else None
-
-
-def scenario_key(row: dict, known: Optional[dict] = None,
-                 synonyms: Optional[dict] = None) -> tuple:
-    """(identity, label) for the scenario a row belongs to.
-
-    The model picks the AR6 run from this publication's own list and keeps the
-    document's wording beside it. The run identifier is the identity whenever
-    there is one, because that is what links to the AR6 database; the wording
-    is what a reader recognises. With no match, and with a wording that fits
-    several runs equally, the wording is both.
+    A scenario_label row names one by its value, any other row by its
+    `scenario` coordinate, both as the publication prints them. Which of a
+    publication's names mean the same scenario was asked once it was read
+    (`value_means`, `scenario_means`, docpipe/extraction/naming.py): a name
+    of one scenario means the name that scenario is called by, a name of
+    several scenarios means each of theirs (owner decisions 2026-11-06). A
+    row read before that was asked belongs to the scenario of its own name.
     """
     if row.get("parameter") == "scenario_label":
-        resolved, wording = row.get("value_uri"), row.get("value_raw")
-        fallback = row.get("value")
+        name, quote, means = (row.get("value"), row.get("quote"),
+                              row.get("value_means"))
     else:
-        resolved, wording = row.get("scenario"), row.get("scenario_raw")
-        fallback = row.get("scenario")
-    if not in_graph(resolved) and resolved:
-        # An out: entry. The model said the wording names no single run, so
-        # there is no identity — and no fallback either, because `value` is
-        # then the out: entry's own label ("scenario family"), which is a
-        # description and not a name.
-        resolved, fallback = None, None
-    wording = wording or fallback
-    if not resolved and wording and synonyms:
-        # The document's own name for a run, learned from the rows that DID
-        # resolve it. The prompt tells the model to leave `scenario` empty when
-        # it is unsure, and it is unsure on a table caption and certain on the
-        # sentence that introduced the scenario — so one scenario arrived as
-        # two, the linked one holding nothing and the unlinked one holding all
-        # the values.
-        resolved = synonyms.get(normalise(wording))
-    if not resolved and wording:
-        # And if the list itself settles it, the model's refusal does not
-        # stand: an out: entry says "no single run fits", which is a claim
-        # about the list, and the list is right here to be read.
-        resolved = resolve_wording(wording, known)
-    if resolved and known and ambiguous(wording, known):
-        # The wording names a family, so the link is dropped and the wording is
-        # the identity. Rows the model assigned to DIFFERENT runs then merge
-        # onto one factsheet — which is a conflation, but the alternative is
-        # worse: splitting them would take the identity from the very guess
-        # this guard just refused to trust. The merge is reported instead, in
-        # the serializer, where the whole document's rows are visible.
-        resolved = None
-    if not resolved and wording and not _quoted(wording, row):
-        # A wording that is nowhere in the passage it claims to come from
-        # cannot be a name the document uses. It used to mint a factsheet
-        # anyway, with a stable IRI and the invented string as its label.
-        return None, None
-    return (resolved or wording or None), (wording or resolved or None)
+        name, quote, means = (row.get("scenario"),
+                              row.get("scenario_quote", row.get("quote")),
+                              row.get("scenario_means"))
+    if not isinstance(name, str) or not name.strip() \
+            or not _quoted(name, quote):
+        return []
+    if isinstance(means, list):
+        named = [one for one in means if isinstance(one, str) and one.strip()]
+        if named:
+            return list(dict.fromkeys(named))
+    return [name.strip()]
 
 
 def _pick_one(rows: list) -> tuple:
@@ -633,21 +560,11 @@ TRUST_JOIN = ", "
 # written, not partway through a run.
 load_spec(_SPEC)
 
-# This corpus has no transcribed pages to declare: ar6.db Documents carries
+# This corpus has no transcribed pages to declare: its Documents table carries
 # no page_text_transcribed column, so `trust` is never told a page was itself
 # a reading. Named here so the missing argument is a fact and not an
 # oversight -- if that column ever arrives, this is where it is read.
 PAGE_TRANSCRIBED = False
-
-
-def _known_scenarios(conn, name: str) -> dict:
-    """{normalised AR6 scenario name: name as the AR6 database writes it}."""
-    rows = conn.execute(
-        "SELECT s.name FROM Scenarios s "
-        "JOIN DocumentScenarios ds ON ds.scenario = s.id "
-        "JOIN Documents d ON ds.document = d.id "
-        "WHERE d.filename LIKE ?", (f"{name}.%",)).fetchall()
-    return {normalise(r[0]): r[0] for r in rows}
 
 
 def _ttl_comment(text) -> str:
@@ -847,10 +764,6 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
 
         # A diagnostic, never a precondition: the graph does not depend on the
         # crawl, so an unreachable DocumentMeta must not stop the serialization.
-        # The AR6 scenario list is read in the same breath — it is not a source
-        # either, it is what a scenario name extracted from the PDF is matched
-        # against, and an empty list simply means nothing can be matched.
-        known: dict = {}
         conn = None
         try:
             # `with sqlite3.connect(...)` commits a transaction, it does not
@@ -858,7 +771,6 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
             # Windows a file nobody can delete afterwards.
             conn = sqlite3.connect(readonly_uri(db_path), uri=True)
             _crosscheck(conn, name, chosen)
-            known = _known_scenarios(conn, name)
         except sqlite3.Error as exc:
             log.warning("kg: %s: no cross-check against the crawl (%s)", name, exc)
         finally:
@@ -929,45 +841,14 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
                     recorded.add(id(row))
             return lines
 
-        # What this document calls each run, learned from the rows that DID
-        # resolve one. The prompt tells the model to leave the link empty when
-        # it is unsure, and it is sure on the sentence that introduces a
-        # scenario and unsure on the table caption three pages later — so the
-        # same scenario arrived twice, once linked and empty, once unlinked
-        # and carrying every value.
-        # What the list settled that the model had given up on. Counted, not
-        # silently absorbed: a number that stays high says the prompt is
-        # teaching the escape hatch too well.
-        rescued = 0
-        for key in ("scenario_label",) + SCENARIO_FIELDS:
-            for row in by_param.get(key, ()):
-                proposed = (row.get("value_uri") if key == "scenario_label"
-                            else row.get("scenario"))
-                wording = (row.get("value_raw") if key == "scenario_label"
-                           else row.get("scenario_raw"))
-                if str(proposed or "").startswith(NOT_IN_GRAPH)                         and resolve_wording(wording, known):
-                    rescued += 1
-
-        synonyms: dict = {}
-        for key in ("scenario_label",) + SCENARIO_FIELDS:
-            for row in by_param.get(key, ()):
-                proposed = (row.get("value_uri") if key == "scenario_label"
-                            else row.get("scenario"))
-                wording = (row.get("value_raw") if key == "scenario_label"
-                           else row.get("scenario_raw"))
-                if in_graph(proposed) and wording \
-                        and normalise(proposed) in known \
-                        and not ambiguous(wording, known):
-                    synonyms.setdefault(normalise(wording), proposed)
-
         def rows_for(key: str, value=None, scenario=None) -> list:
             out = []
             for row in by_param.get(key, ()):
                 if value is not None and row.get("value") != value:
                     continue
-                if scenario is not None and \
-                        normalise(scenario_key(row, known, synonyms)[0] or "") \
-                        != scenario:
+                if scenario is not None and scenario not in {
+                        normalise(one) for one in scenario_names(
+                            dict(row, parameter=key))}:
                     continue
                 out.append(row)
             return out
@@ -1043,13 +924,14 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
 
         # ---- the scenarios --------------------------------------------------
         # A scenario is named by scenario_label, or by any scenario-scope value
-        # that says which scenario it belongs to. Both are the document's own
-        # wording; `known` is the AR6 list it is matched against.
+        # that says which scenario it belongs to, both in the publication's
+        # own words, each by the name of the scenario it means
+        # (`scenario_names`).
         # A scenario-scope value whose own `scenario` coordinate never came
         # back has nothing to hang on, and until this counter it left the file
         # without a triple, a comment or a number: the value itself resolved,
         # so `out_of_graph` cannot see it, and `rows_for` simply never matches
-        # it. Measured over the 164-document ar6 harvest, 298 of 11.129
+        # it. Measured over a 164-document harvest, 298 of 11.129
         # scenario-scope tuples -- 289 of them `exhausted`, which is a finding
         # about this run's window budget and not about the papers, and 9
         # `unstated`, which is the opposite. Thrown together they say nothing,
@@ -1058,55 +940,30 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
         wanted: dict = {}
         for key in ("scenario_label",) + SCENARIO_FIELDS:
             for row in by_param.get(key, ()):
-                ident, label = scenario_key(dict(row, parameter=key),
-                                            known, synonyms)
-                if ident:
-                    wanted.setdefault(normalise(ident), (ident, label))
-                elif key != "scenario_label":
+                named = scenario_names(dict(row, parameter=key))
+                for one in named:
+                    wanted.setdefault(normalise(one), one)
+                if not named and key != "scenario_label":
                     state = row.get("scenario_state") or "missing"
                     unplaceable[f"{key}:{state}"] += 1
-
-        # One wording, several runs the model proposed for it: the guard drops
-        # every one of those links, so the rows land on one factsheet. Whether
-        # the paper describes one scenario or three cannot be decided from the
-        # wording, and the graph should not pretend either way — but nobody
-        # should find this out from the triple count.
-        merged: dict = {}
-        for key in ("scenario_label",) + SCENARIO_FIELDS:
-            for row in by_param.get(key, ()):
-                proposed = (row.get("value_uri") if key == "scenario_label"
-                            else row.get("scenario"))
-                wording = (row.get("value_raw") if key == "scenario_label"
-                           else row.get("scenario_raw"))
-                if in_graph(proposed) and wording and ambiguous(wording, known):
-                    merged.setdefault(wording, set()).add(proposed)
-        for wording, runs in merged.items():
-            if len(runs) > 1:
-                log.warning("kg: %s: %r is the document's name for %d different "
-                            "AR6 runs (%s) — they share one factsheet, because "
-                            "the wording links to none of them", name, wording,
-                            len(runs), ", ".join(sorted(runs)))
 
         scenario_links: list = []
         scenario_nodes: list = []
         scenarios: list = []
-        unplaced: list = []
-        for norm, (ident, label) in wanted.items():
-            if known and norm not in known:
-                unplaced.append(label)
+        for norm, ident in wanted.items():
             iri = mint("scenariofactsheet", f"{title}|{ident}")
             scenario_links.append(f"<{iri}>")
             block = [f"<{iri}>", f"    a oeo:{CLS_SCENARIO} ;"]
             if "scenariofactsheet" in bound.uuid_on:
                 block.append(f"    {P_UUID} {ttl_literal(uuid_of(iri))} ;")
-            if settles(iri, P_LABEL, known.get(norm, ident)):
+            if settles(iri, P_LABEL, ident):
                 block += evidence_for(iri, P_LABEL,
                                       rows_for("scenario_label", scenario=norm))
                 # Mirjam: with no long name beside the acronym, both carry the
                 # same string. That is the usual case in this corpus.
-                block.append(f"    {P_LABEL} {ttl_literal(known.get(norm, ident))} ;")
-            if settles(iri, P_SCENARIO_ACRONYM, label or ident):
-                block.append(f"    {P_SCENARIO_ACRONYM} {ttl_literal(label or ident)} ;")
+                block.append(f"    {P_LABEL} {ttl_literal(ident)} ;")
+            if settles(iri, P_SCENARIO_ACRONYM, ident):
+                block.append(f"    {P_SCENARIO_ACRONYM} {ttl_literal(ident)} ;")
 
             # The types the model chose from the shapes' own list, each with
             # the passage it read them in. On top of that Mirjam asks every IAM
@@ -1159,7 +1016,7 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
             block[-1] = block[-1].rstrip(" ;") + " ."
             scenario_nodes.append(NL.join(block) + NL)
             scenarios.append({
-                "label": known.get(norm, ident), "acronym": label or ident,
+                "label": ident, "acronym": ident,
                 "abstract": best,
                 "types": list(types) + [OEO_BASE + IAM_SCENARIO],
                 "regions": list(regions),
@@ -1206,19 +1063,15 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
         std[-1] = std[-1].rstrip(" ;") + " ."
 
         log.info("kg: %s: 1 report, 1 bundle, %d scenario(s), %d author(s), "
-                 "%d organisation(s), %d funder(s)%s%s%s%s%s%s", name,
+                 "%d organisation(s), %d funder(s)%s%s%s%s", name,
                  len(scenario_links), len(author_links), len(org_links),
                  len(funder_links),
                  f", contested {contested}" if contested else "",
                  f", MISSING REQUIRED {missing}" if missing else "",
-                 f", {len(unplaced)} scenario name(s) not in the AR6 list "
-                 f"{unplaced[:5]}" if unplaced else "",
                  f", not in the graph by choice: {dict(out_of_graph)}"
                  if out_of_graph else "",
                  f", no scenario to hang them on: {dict(unplaceable)}"
-                 if unplaceable else "",
-                 f", {rescued} link(s) the list settled after the model gave up"
-                 if rescued else "")
+                 if unplaceable else "")
         left = {key: found for key, found in asked.items()
                 if key not in recorded}
         if left:

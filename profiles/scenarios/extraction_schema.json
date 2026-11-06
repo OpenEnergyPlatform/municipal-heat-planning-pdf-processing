@@ -1511,7 +1511,7 @@
         "prefix": "obo"
        },
        "node": "scenariofactsheet",
-       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
+       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py).",
        "role": "parent"
       },
       "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\"."
@@ -1537,6 +1537,15 @@
         "type": "integer"
        }
       ],
+      "type": "array"
+     },
+     "scenario_means": {
+      "description": "The names of the things 'scenario' means, among the document's names for that kind of thing: its own name or another name of the same thing, or several names where it stands for several things. The graph writes the row to each of them.",
+      "items": {
+       "minLength": 1,
+       "type": "string"
+      },
+      "minItems": 1,
       "type": "array"
      },
      "scenario_producer": {
@@ -1823,104 +1832,25 @@
       "minLength": 1,
       "type": "string"
      },
-     "value_link_quote": {
-      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
-      "type": "string"
-     },
-     "value_link_source": {
-      "description": "Which source 'value_link_quote' was found in.",
-      "maxItems": 2,
-      "minItems": 2,
-      "prefixItems": [
-       {
-        "enum": [
-         "section",
-         "table",
-         "figure"
-        ]
-       },
-       {
-        "type": "integer"
-       }
-      ],
+     "value_means": {
+      "description": "The names of the things 'value' means, among the document's names for that kind of thing: its own name or another name of the same thing, or several names where it stands for several things. The graph writes the row to each of them.",
+      "items": {
+       "minLength": 1,
+       "type": "string"
+      },
+      "minItems": 1,
       "type": "array"
-     },
-     "value_producer": {
-      "description": "Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
-      "minimum": 0,
-      "type": "integer"
-     },
-     "value_quote": {
-      "description": "The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.",
-      "minLength": 8,
-      "type": "string"
      },
      "value_raw": {
       "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
       "type": "string"
      },
-     "value_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
-      "type": "boolean"
-     },
-     "value_seen": {
-      "description": "A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
-      "type": "string"
-     },
-     "value_source": {
-      "description": "Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
-      "maxItems": 2,
-      "minItems": 2,
-      "prefixItems": [
-       {
-        "enum": [
-         "section",
-         "table",
-         "figure"
-        ]
-       },
-       {
-        "type": "integer"
-       }
-      ],
-      "type": "array"
-     },
-     "value_state": {
-      "$ref": "#/$defs/state",
-      "description": "How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike."
-     },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is per document. The profile supplies it before the harvest, so it is not in this schema.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.",
       "type": [
        "string",
        "null"
       ]
-     },
-     "value_window": {
-      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
-      "maxItems": 2,
-      "minItems": 2,
-      "prefixItems": [
-       {
-        "enum": [
-         "own",
-         "found",
-         "retrieval",
-         "rest",
-         "places",
-         "frame",
-         "table",
-         "base_year",
-         "target_year",
-         "head"
-        ]
-       },
-       {
-        "type": "integer"
-       }
-      ],
-      "type": "array"
      }
     },
     "required": [
@@ -1940,7 +1870,7 @@
      },
      "class": "OEO_00000365",
      "node": "scenariofactsheet",
-     "note": "The AR6 run name labels the factsheet; the document's own wording is the acronym beside it. With no long name known for a run both carry the same string, which is the usual case in this corpus.",
+     "note": "The name the publication prints labels the factsheet, and the acronym beside it carries the same string. Names of one scenario are one factsheet, labelled by the name the others mean (`value_means`, docpipe/extraction/naming.py).",
      "property": {
       "label": "label",
       "predicate": "label",
@@ -2018,7 +1948,7 @@
      "parameter": {
       "const": "scenario_region",
       "description": "Spec parameter: Scenario region.",
-      "x-description-source": "The country or area a scenario depicts. Choose it from value_classes: these are the study regions of the OEKG, narrowed to those this document names. One tuple per statement. The list carries countries and groups of countries: the regions of the AR6 database (such as 'Europe (R10)' or 'Asia (R5)') and the UN's world regions (such as 'Sub-Saharan Africa' or 'Western Europe'). Choose a group where the scenario covers that group, not each of its countries; a group stands for its members. For a worldwide scenario choose 'global'; for a group the list does not carry (EU27, OECD) 'several regions'. Naming a single country instead would be invented. value_raw takes what the document calls the region. Only regions named as the area under study, not every one mentioned.",
+      "x-description-source": "The country or area a scenario depicts. Choose it from value_classes: these are the study regions of the OEKG, narrowed to those this document names. One tuple per statement. The list carries countries and groups of countries: the regions of the integrated assessment models (such as 'Europe (R10)' or 'Asia (R5)') and the UN's world regions (such as 'Sub-Saharan Africa' or 'Western Europe'). Choose a group where the scenario covers that group, not each of its countries; a group stands for its members. For a worldwide scenario choose 'global'; for a group the list does not carry (EU27, OECD) 'several regions'. Naming a single country instead would be invented. value_raw takes what the document calls the region. Only regions named as the area under study, not every one mentioned.",
       "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
@@ -2136,7 +2066,7 @@
         "prefix": "obo"
        },
        "node": "scenariofactsheet",
-       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
+       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py).",
        "role": "parent"
       },
       "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\"."
@@ -2162,6 +2092,15 @@
         "type": "integer"
        }
       ],
+      "type": "array"
+     },
+     "scenario_means": {
+      "description": "The names of the things 'scenario' means, among the document's names for that kind of thing: its own name or another name of the same thing, or several names where it stands for several things. The graph writes the row to each of them.",
+      "items": {
+       "minLength": 1,
+       "type": "string"
+      },
+      "minItems": 1,
       "type": "array"
      },
      "scenario_producer": {
@@ -2566,7 +2505,7 @@
         "prefix": "obo"
        },
        "node": "scenariofactsheet",
-       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
+       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py).",
        "role": "parent"
       },
       "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\"."
@@ -2592,6 +2531,15 @@
         "type": "integer"
        }
       ],
+      "type": "array"
+     },
+     "scenario_means": {
+      "description": "The names of the things 'scenario' means, among the document's names for that kind of thing: its own name or another name of the same thing, or several names where it stands for several things. The graph writes the row to each of them.",
+      "items": {
+       "minLength": 1,
+       "type": "string"
+      },
+      "minItems": 1,
       "type": "array"
      },
      "scenario_producer": {
@@ -3132,7 +3080,7 @@
         "prefix": "obo"
        },
        "node": "scenariofactsheet",
-       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
+       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py).",
        "role": "parent"
       },
       "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\"."
@@ -3158,6 +3106,15 @@
         "type": "integer"
        }
       ],
+      "type": "array"
+     },
+     "scenario_means": {
+      "description": "The names of the things 'scenario' means, among the document's names for that kind of thing: its own name or another name of the same thing, or several names where it stands for several things. The graph writes the row to each of them.",
+      "items": {
+       "minLength": 1,
+       "type": "string"
+      },
+      "minItems": 1,
       "type": "array"
      },
      "scenario_producer": {
@@ -8145,46 +8102,32 @@
      "doc": {
       "type": "integer"
      },
-     "figure": {},
-     "group": {
-      "type": [
-       "string",
-       "null"
-      ]
-     },
      "input": {
       "type": "object"
      },
-     "kind": {},
+     "kind": {
+      "type": "string"
+     },
      "ms": {
+      "type": "integer"
+     },
+     "names": {
       "type": "integer"
      },
      "output": {
       "type": "object"
      },
-     "owner": {},
-     "parameter": {
-      "type": [
-       "string",
-       "null"
-      ]
+     "places": {
+      "type": "integer"
      },
-     "passages": {},
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
      },
-     "round": {
-      "type": "integer"
-     },
-     "rows": {},
      "t": {
-      "const": "match_ask"
-     },
-     "value": {
-      "type": "string"
+      "const": "naming_ask"
      }
     },
     "required": [
@@ -8192,8 +8135,9 @@
      "doc",
      "attempt",
      "corrections",
-     "parameter",
-     "kind"
+     "kind",
+     "names",
+     "places"
     ],
     "type": "object"
    },
@@ -8462,6 +8406,41 @@
      "t",
      "doc",
      "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "kind": {
+      "type": "string"
+     },
+     "names": {
+      "type": "integer"
+     },
+     "several": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "naming"
+     },
+     "things": {
+      "type": "integer"
+     },
+     "why": {
+      "enum": [
+       "cut_off"
+      ]
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "kind",
+     "names"
     ],
     "type": "object"
    },

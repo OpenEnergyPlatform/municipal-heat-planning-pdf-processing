@@ -1355,12 +1355,11 @@ def fill_dynamic_axes(spec: Spec, vocabularies: Optional[dict]) -> Spec
 
 A copy of *spec* whose dynamic axes carry THIS document's list.
 
-The AR6 scenario names are run identifiers — EN_INDCi2030_300f — and two
-of 328 of them occur verbatim in the text they were extracted from. The
-document says "the Current Policies scenario". Nothing but the model can
-bridge that, and it can only do so if it is shown the list it may choose
-from; the mapping then arrives flagged, like every other judgement call
-the harvest records.
+The countries a publication names differ per publication, and a list of
+all 249 would bury the handful it names. Nothing but the model can map a
+wording onto an entry, and it can only do so if it is shown the list it
+may choose from; the mapping then arrives flagged, like every other
+judgement call the harvest records.
 
 ### spec_of
 
@@ -1701,16 +1700,18 @@ group's coordinates of one value, each group with its own system prompt
 (`reading.group_prompts`). A figure goes with its crop. Neither request
 has tools (owner decision 2026-11-05, ticket 26).
 
-### make_matcher
+### make_namer
 
 ```python
-def make_matcher(spec: Spec)
+def make_namer(spec: Spec, passages_of: Callable) -> Optional[Callable]
 ```
 
-The request that chooses the entry of a list matched apart that a
-wording read is (`matching.Matcher`, owner decision 2026-11-05), or None
-where the spec matches no list apart or the profile writes no prompt for
-it, which `surveyed_flow` refuses at the start of a run.
+The request that asks which of a document's names mean the same
+thing once it is folded (`naming.Namer`, owner decisions 2026-11-06):
+`name(report)`, which marks the report's rows. None where the spec
+merges no names or the profile writes no prompt for it, which
+`surveyed_flow` refuses at the start of a run. *passages_of(document_id)*
+is the plan's passages in their order.
 
 ### make_comber
 
@@ -2368,8 +2369,8 @@ def survey_prompt_ids(profile=None) -> tuple
 ```
 
 The prompts of a harvest from the survey: `SURVEY_PROMPT_IDS`, and
-the match where the profile writes it, which a spec with a list matched
-apart sends (`matching.MATCH_PROMPT_ID`, required by `surveyed_flow`).
+the naming where the profile writes it, which a spec that merges names
+sends (`naming.NAMING_PROMPT_ID`, required by `surveyed_flow`).
 
 ### surveyed_flow
 
@@ -2701,7 +2702,8 @@ The two numbers that killed a pilot lived in different files and nobody
 ever compared them: how many sources one request reads is set here, and
 how much the model may write about them is set in the prompt's
 frontmatter. Six sources of kwp tuples fit in 8192 tokens; six sources of
-ar6 tuples, whose quotes are whole sentences, need 11000 and would be cut
+scenarios tuples, whose quotes are whole sentences, need 11000 and would
+be cut
 off — every time, deterministically, on five GPUs.
 
 So the batch follows the answer budget rather than a hand-picked

@@ -1,15 +1,15 @@
-"""Extraction stage wiring: where the ar6 spec lives, and the lists that are
-only closed once a document is named.
+"""Extraction stage wiring: where the scenarios spec lives, and the list that
+is only closed once a document is named.
 
-Two of the ar6 fields have a finite set of correct answers, but the set is not
+One of the fields has a finite set of correct answers, but the set is not
 the same for every publication, so it cannot sit in the spec file:
 
-  scenario / scenario_label  the AR6 scenarios THIS publication documents.
-                             The corpus holds 1389 of them, one publication
-                             documents up to 146, and the model has to pick
-                             from that publication's own list.
   scenario_region            the 249 study regions the OEKG actually uses,
                              narrowed to those the document names at all.
+
+A scenario is read as the publication names it, and which of its names mean
+the same scenario is asked once the publication is read
+(`docpipe/extraction/naming.py`, owner decisions 2026-11-06).
 
 The narrowing is not a guess. Every claim has to quote its source verbatim, and
 the sources are exactly the section, table and figure texts scanned here, so a
@@ -17,16 +17,15 @@ region whose name appears nowhere in them could never have been quoted. What is
 dropped is unreachable, not merely unlikely — and dropping it keeps the prompt
 at the handful of countries a paper mentions instead of all 249.
 
-Both lists carry `out:` entries, and they are the point of this file as much as
-the real entries are. A closed list without an escape hatch does not stop the
+The list carries `out:` entries, and they are the point of this file as much
+as the real entries are. A closed list without an escape hatch does not stop the
 model from answering; it stops it from answering CORRECTLY, and what comes back
 is the nearest entry that is not quite right. The OEKG knows 249 countries and
-no aggregates, while an AR6 scenario is usually global — so without
-a world entry the honest answer to "which region" does not exist in the list,
-and a paper about worldwide emissions that happens to mention Germany once
-invites "Germany". The world and the groups of countries are entries of the
-list now and are written as their member countries. The same holds for a run identifier: naming a family is not
-naming a run, and the model needs a way to say so that is not silence.
+no aggregates, while a scenario is usually global — so without a world entry
+the honest answer to "which region" does not exist in the list, and a paper
+about worldwide emissions that happens to mention Germany once invites
+"Germany". The world and the groups of countries are entries of the list now
+and are written as their member countries.
 
 Silence is the other half of the argument. An empty field already meant
 "unmapped" and was already counted, but it meant three different things at
@@ -68,9 +67,10 @@ _WORD = r"(?<!\w){}(?!\w)"
 #
 # A scenario is global far more often than national, and the OEKG's region list
 # is 249 countries with no aggregate — no World, no EU27, no OECD, no R5.
-# The groups are entries now (`region_aggregates.json`, from the AR6
-# database's regions and the UN's M49): a group is written as its member
-# countries. "several regions" stays for a group neither source has.
+# The groups are entries now (`region_aggregates.json`, from the regions of
+# IAMconsortium/common-definitions, the UN's M49 and the World Bank): a group
+# is written as its member countries. "several regions" stays for a group
+# none of them has.
 REGION_OUT = {
     "out:multiregion": ["several regions", "several countries", "EU27", "OECD",
                         "several countries or a group the list does not "
@@ -78,22 +78,6 @@ REGION_OUT = {
     "out:other": ["other region",
                   "something else that is not a country of the list"],
 }
-
-# The AR6 identifiers are finer than the language of the papers: the pilot's
-# 146-scenario document writes "NPi", and the database has EN_NPi2020_300f,
-# _400 and _3000. That wording names a family, not a run, and `ambiguous()` in
-# kg.py drops the link when it happens. It cannot tell that case apart from a
-# scenario the publication simply does not have in AR6 — these two can.
-SCENARIO_OUT = {
-    "out:family": ["scenario family", "family",
-                   "a scenario family or a description that fits several "
-                   "runs and none of them exactly",
-                   "a scenario family, not a single run"],
-    "out:not_documented": ["not in AR6", "not in the AR6 list",
-                           "a scenario of this publication that is not in "
-                           "its AR6 list"],
-}
-
 
 def _regions() -> dict:
     return json.loads(REGIONS_PATH.read_text(encoding="utf-8"))
@@ -187,21 +171,6 @@ def _mentioned(text: str, labels: list) -> bool:
     return False
 
 
-def document_scenarios(conn: sqlite3.Connection, document_id: int) -> dict:
-    """The AR6 scenarios this publication documents, as a choice list.
-
-    Keyed by the AR6 name itself rather than an invented IRI: the name is the
-    identity the corpus links against, and kg.py resolves it the same way.
-    """
-    rows = conn.execute(
-        "SELECT sc.name FROM Scenarios sc "
-        "JOIN DocumentScenarios ds ON ds.scenario = sc.id "
-        "WHERE ds.document = ? ORDER BY sc.name",
-        (document_id,),
-    ).fetchall()
-    return {str(r[0]): [str(r[0])] for r in rows if r[0]}
-
-
 def _named(text: str, names) -> bool:
     """Does the text name one of these models, with its capitals? A model's
     name is a proper name: "IMAGE" is a model, "image" is a word of every
@@ -241,8 +210,8 @@ def _one_meaning(offered: dict, groups: dict) -> dict:
 def document_regions(conn: sqlite3.Connection, document_id: int) -> dict:
     """The countries and groups of countries this document names.
 
-    The world is always offered, as `global` was. A group of the AR6
-    database is also offered by its bare name where the document names its
+    The world is always offered, as `global` was. A group of the IAM
+    regions is also offered by its bare name where the document names its
     family: a paper writes "the R10 regions" and then "Europe". A model's
     own region is offered where the paper names the model and the region,
     and keeps a label it shares with another group (`_one_meaning`). Every
@@ -276,21 +245,14 @@ def document_regions(conn: sqlite3.Connection, document_id: int) -> dict:
 def document_axes(conn: sqlite3.Connection, document_id: int) -> dict:
     """Per-document choice lists, keyed by axis name and by parameter uri.
 
-    The out: entries are appended unconditionally, so every list exists even
+    The out: entries are appended unconditionally, so the list exists even
     when the narrowing finds nothing. That case is not hypothetical — a
-    publication with no runs in DocumentScenarios, or one that names no country
-    at all, used to leave the field with no list, and a field with no list is
-    free text again.
+    publication that names no country at all used to leave the field with no
+    list, and a field with no list is free text again.
     """
-    scenarios = dict(document_scenarios(conn, document_id))
-    scenarios.update(SCENARIO_OUT)
     regions = dict(document_regions(conn, document_id))
     regions.update(REGION_OUT)
-    return {
-        "scenario": scenarios,          # the coordinate on the other fields
-        "scenario_label": scenarios,    # and the value of the field itself
-        "scenario_region": regions,
-    }
+    return {"scenario_region": regions}
 
 # How the documents write the decimal. It decides what the digits leave
 # open: "3,251" is 3251 here, and "1.234" is 1.234.
@@ -439,6 +401,10 @@ PHRASES = {
         'character, including one that starts with "out:". If none fits '
         'although the passage states the field, leave "value" out and '
         'give the wording in "value_raw".'),
+    "name_not_listed": (
+        'For {name!r} you gave {given}, and not every one of them is a '
+        'name under "names". Answer for it with names under "names" only, '
+        'each copied character for character.'),
     "wrong_type": (
         'Your "value" {given!r} is not {wrong}. Answer with {wrong}, '
         'exactly as the passage writes it.'),

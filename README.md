@@ -2,7 +2,7 @@
 
 # Open Energy Family – municipal-heat-planning-pdf-processing
 
-Tools and scripts developed to support the [MHPO development](https://github.com/OpenEnergyPlatform/municipal-heat-planning-ontology) by automating data extraction, enrichment, and semantic indexing of PDF reports: a document pipeline (`docpipe/`) that turns a corpus of PDFs into a searchable database and index and then reads typed values out of it into a knowledge graph. The corpus is a profile's business (`profiles/<name>/`): `kwp` covers German municipal heat plans (Kommunale Wärmepläne) and feeds MHPKG on the Open Energy Platform, `scenarios` covers the literature the IPCC AR6 scenario database cites and feeds OEKG.
+Tools and scripts developed to support the [MHPO development](https://github.com/OpenEnergyPlatform/municipal-heat-planning-ontology) by automating data extraction, enrichment, and semantic indexing of PDF reports: a document pipeline (`docpipe/`) that turns a corpus of PDFs into a searchable database and index and then reads typed values out of it into a knowledge graph. The corpus is a profile's business (`profiles/<name>/`): `kwp` covers German municipal heat plans (Kommunale Wärmepläne) and feeds MHPKG on the Open Energy Platform, `scenarios` covers publications on climate and energy scenarios and feeds OEKG.
 
 ## Install and start
 
@@ -123,7 +123,7 @@ Anthropic or Gemini.
 
 ### 1. File processing (`docpipe.ingest` + profile)
 
-A profile lists its documents through its own `Source` (`profiles/<name>/source.py`); the core does the same four things for every corpus: fetch the file, refuse it when its text layer is unusable, write the `Documents` row, and link versions. What a document is called, what metadata it carries and which extra tables it needs is the profile's part: `kwp` reads the KWW register (an Excel workbook of every published Wärmeplan) and writes `OrganisationUnits`, `Municipalities` and `MunicipalityMeta` rows beside the shared tables, `scenarios` reads a crawl index of the AR6 literature and writes `Scenarios` and `DocumentScenarios` link rows instead.
+A profile lists its documents through its own `Source` (`profiles/<name>/source.py`); the core does the same four things for every corpus: fetch the file, refuse it when its text layer is unusable, write the `Documents` row, and link versions. What a document is called, what metadata it carries and which extra tables it needs is the profile's part: `kwp` reads the KWW register (an Excel workbook of every published Wärmeplan) and writes `OrganisationUnits`, `Municipalities` and `MunicipalityMeta` rows beside the shared tables, `scenarios` reads a crawl index of its publications and writes their `DocumentMeta` rows instead.
 
 Municipal links rot faster than the register is corrected, so a download failure
 does not end the run: unreachable links are collected and written to
@@ -214,7 +214,7 @@ SQLite, foreign keys enabled. The core schema (`docpipe/store/schema.sql`) descr
 | Images | Extracted figures: image path, caption, textual description |
 | Embeddings | One row per FAISS vector (`faiss_id`), typed (`embedding_type`) and linked to its owning section/table/figure (`owner_kind`, `owner_id`) |
 
-The profile tables sit beside these. `kwp` adds `OrganisationUnits` (planning bodies), `Municipalities` (unique `ags`, the German Gemeindeschlüssel, linked to a planning body), `MunicipalityMeta` (the register's own columns per municipality) and `DocumentMeta` (which municipality and planning body a document belongs to). `scenarios` adds `DocumentMeta` (DOI, title, year, venue), `Scenarios` and `DocumentScenarios` (which scenarios a paper describes).
+The profile tables sit beside these. `kwp` adds `OrganisationUnits` (planning bodies), `Municipalities` (unique `ags`, the German Gemeindeschlüssel, linked to a planning body), `MunicipalityMeta` (the register's own columns per municipality) and `DocumentMeta` (which municipality and planning body a document belongs to). `scenarios` adds `DocumentMeta` (DOI, title, year, venue).
 
 ## Versioning
 

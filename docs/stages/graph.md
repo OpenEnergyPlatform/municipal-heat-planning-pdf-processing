@@ -252,22 +252,20 @@ else the pinned vocabulary's label, else the identifier itself.
 
 `profiles/scenarios/kg.py`'s `serializer` groups rows by parameter and
 counts every `out:` answer, and every unresolved
-`scenario_label`/`scenario_region`/`scenario_type` or bundle tag row,
+`scenario_region`/`scenario_type` or bundle tag row,
 into `out_of_graph`, logged but never written. For fields the OEKG shapes
 allow at most once, `_pick_one` ranks readings, dropping a substring
 candidate first, then by vote count, location and length; the rest
 are `contested`. A document with no `publication_title` is skipped
 whole; a missing date or author is only logged. A read only
 connection cross checks the chosen fields against the crawl's
-`DocumentMeta`, logging disagreement, not substituting it,
-and loads the document's AR6 scenario list, continuing empty if the
-connection fails. Every scenario scope row is resolved by
-`scenario_key` against that list: an `out:` answer clears the
-identity; a wording matching exactly one run, even one the model
-refused, is resolved; a wording fitting several runs equally names a
-family instead, so the rows fall back to the wording alone, logged by
-name; a wording absent from its own quoted passage is refused as an
-identity entirely.
+`DocumentMeta`, logging disagreement, not substituting it.
+Every scenario scope row belongs to the scenarios its name means
+(`scenario_names`): `value_means` for a `scenario_label` row,
+`scenario_means` for any other, written by the naming step
+(`docpipe/extraction/naming.py`), else the scenario of its own name as the
+publication prints it; a name of several scenarios stands for each of them;
+a name absent from its own quoted passage mints nothing.
 
 The study report IRI is minted from the title, the bundle IRI from
 `study_project_name` or the title; a second document reusing either
@@ -275,9 +273,9 @@ IRI is logged, not refused, its triples landing on the shared subject.
 The bundle also takes one triple for each tag entry the model picked off
 the shapes' lists (`BUNDLE_TAGS`), and none for an `out:` entry or an
 unmapped wording, which are counted.
-One factsheet is minted per resolved identity: `rdfs:label` is the AR6
-database's own spelling when known, `dc:acronym` the document's own; a
-matched study region is referenced by its existing OEKG IRI, never
+One factsheet is minted per scenario: `rdfs:label` and `dc:acronym` are the
+name the scenario is called by, each carrying the fixed type
+`OEO_00020517` beside the types read; a matched study region is referenced by its existing OEKG IRI, never
 minted; an unmatched wording mints nothing and is counted. `entities()`
 mints one node per distinct author, organisation or funder by
 normalised spelling, keeping each row's passage in the evidence. The
@@ -522,11 +520,7 @@ marks a trust line is built from are at
   against a spec of 280 (inspected directly; `ontology.spec_terms`).
   `--refresh` pulls that same release straight from GitHub rather than
   by hand; both numbers move the day upstream does.
-- Over a corpus run the model answered `out:` 1,171 times for a
-  wording its document scoped AR6 list could resolve unambiguously,
-  347 a character for character match (`profiles/scenarios/kg.py`,
-  `resolve_wording` docstring).
-- Over a 164 document ar6 harvest, 298 of 11,129 scenario scope tuples
+- Over one 164 document harvest, 298 of 11,129 scenario scope tuples
   had no scenario to attach a factsheet to: 289 `exhausted` (a window
   budget finding), 9 `unstated` (a finding about the paper), counted
   separately so the first does not hide the second

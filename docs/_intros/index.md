@@ -19,7 +19,7 @@ Three profiles exist. `default` is the one the package brings itself: any
 folder of English documents, with no subject. A project's own profile extends
 it and writes only what it knows better. `kwp` covers German municipal heat
 plans and answers in German; its accepted values go into MHPKG on the Open
-Energy Platform. `scenarios` covers the literature the IPCC AR6 scenario database cites and
+Energy Platform. `scenarios` covers publications on climate and energy scenarios and
 answers in English; its accepted values go into OEKG, whose identifiers
 are minted under the Open Energy Platform's own domain by default
 (`profiles/scenarios/kg.py`). The three share every module under `docpipe/`;

@@ -326,10 +326,10 @@ def test_a_year_named_by_the_plans_word_is_read_from_the_frame():
 # A value checked while the model can still answer
 # ---------------------------------------------------------------------------
 
-AR6 = load_spec(json.loads(
+SCENARIOS = load_spec(json.loads(
     (Path(__file__).resolve().parent.parent / "profiles" / "scenarios"
      / "extraction_spec.json").read_text(encoding="utf-8")))
-SECTOR, TITLE = AR6.by_uri["study_sector"], AR6.by_uri["publication_title"]
+SECTOR, TITLE = SCENARIOS.by_uri["study_sector"], SCENARIOS.by_uri["publication_title"]
 SCOPE = "Scope\nThe model covers the building, transport and industry sectors."
 NAMED = "covers the building, transport and industry"
 

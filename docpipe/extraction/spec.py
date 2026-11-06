@@ -77,7 +77,7 @@ class Axis:
     vocabulary that only exists per document (`dynamic`).
 
     Dynamic is for a coordinate whose closed list is real but not corpus-wide:
-    the AR6 scenarios of ONE publication, for instance. The profile supplies
+    the countries ONE publication names, for instance. The profile supplies
     that list per document and the runner fills `vocabulary` in before the
     harvest; where no profile does, the axis behaves like a text axis and the
     wording is simply carried through.
@@ -99,10 +99,12 @@ class Axis:
     enum: Optional[tuple] = None
     required: bool = False
     dynamic: bool = False
-    # A dynamic list whose entry a request of its own chooses (owner
-    # decision 2026-11-05, `matching.py`): the reading reads the wording the
-    # document prints, and the list goes to that request alone.
-    matched_apart: bool = False
+    # A free-text coordinate whose answer is the name the document gives a
+    # thing, the kind of thing named here ("scenario", owner decisions
+    # 2026-11-06): a value stated for several of them is one row per name, and
+    # which of the document's names of that kind mean the same thing is asked
+    # once it is read (`naming.py`).
+    merged: Optional[str] = None
     # The one line the field request asks. It lives on the axis because the
     # harvest asks per field: a rule buried in a prompt that covers sixteen
     # fields at once is a rule the model can skip, and skipping is what cost
@@ -173,8 +175,9 @@ class Parameter:
     # A category whose closed list is real but per document, filled in by the
     # profile before the harvest. Same rule as a dynamic axis, one level up.
     vocabulary_dynamic: bool = False
-    # That list's entry chosen by a request of its own, as on an axis.
-    matched_apart: bool = False
+    # A free-text value that is the name the document gives a thing, merged
+    # with the document's other names for it as on an axis.
+    merged: Optional[str] = None
     # What a row of this parameter becomes in the graph: which node, which
     # class, which predicate carries the number and which the unit. Read by
     # the serializer and published by the JSON schema, so neither can drift
@@ -366,10 +369,9 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
                     # "CO2-Emissionen" under another IS that coin toss.
                     _fail(f"{path}.{uri}", f"label {label!r} already maps to {other}")
                 seen[fold_label(label)] = uri
-    # "text" is what a coordinate looks like when the closed list lives
-    # somewhere the spec cannot reach — the scenarios of ONE publication, for
-    # instance, which differ per document. The wording is carried through and
-    # resolved against that list where it is known; here it is just a string.
+    # "text" is a coordinate the document names in its own words, such as
+    # the scenarios of ONE publication, which differ per document. The
+    # wording is carried through; here it is just a string.
     if axis_type is not None and axis_type not in ("int", "text"):
         _fail(path, f"unsupported axis type {axis_type!r}")
     if enum is not None:
@@ -380,12 +382,15 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
     if question is not None and (not isinstance(question, str) or
                                  not question.strip()):
         _fail(path, "question must be a non-empty string when given")
-    matched_apart = bool(raw.get("matched_apart", False))
-    if matched_apart and not dynamic:
-        _fail(path, "matched_apart is for a dynamic list only")
+    merged = raw.get("merged")
+    if merged is not None and (not isinstance(merged, str)
+                               or not merged.strip()):
+        _fail(path, "merged names the kind of thing, a non-empty string")
+    if merged and (axis_type != "text" or vocabulary or enum or dynamic):
+        _fail(path, "merged is for a free-text axis only")
     return Axis(name=name, vocabulary=vocabulary, type=axis_type,
                 enum=enum, required=bool(raw.get("required", False)),
-                dynamic=dynamic, matched_apart=matched_apart,
+                dynamic=dynamic, merged=merged,
                 question=question, derive=derive,
                 kg=kg, definitions=definitions, glosses=glosses)
 
@@ -477,9 +482,12 @@ def _validate_parameter(path: str, raw) -> Parameter:
     vocabulary, value_definitions, value_glosses = _vocabulary(
         f"{path}.vocabulary", raw.get("vocabulary"))
     vocabulary_dynamic = bool(raw.get("vocabulary_dynamic", False))
-    matched_apart = bool(raw.get("matched_apart", False))
-    if matched_apart and not vocabulary_dynamic:
-        _fail(f"{path}.matched_apart", "for a dynamic list only")
+    merged = raw.get("merged")
+    if merged is not None and (not isinstance(merged, str)
+                               or not merged.strip()):
+        _fail(f"{path}.merged", "names the kind of thing, a non-empty string")
+    if merged and (value_type != "text" or vocabulary or vocabulary_dynamic):
+        _fail(f"{path}.merged", "for a free-text value only")
     brief = raw.get("brief")
     if brief is not None and (not isinstance(brief, str)
                               or not brief.strip()):
@@ -559,7 +567,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
                      glosses=value_glosses,
                      brief=brief.strip() if brief else None,
                      vocabulary_dynamic=vocabulary_dynamic,
-                     matched_apart=matched_apart,
+                     merged=merged,
                      axes=axes, example=example, kg=raw.get("kg"))
 
 
@@ -646,11 +654,12 @@ def _validate_groups(raw, parameters: list, asks_unit: bool) -> dict:
             _fail(f"{path}.coordinates",
                   "a group the survey reads must be axes of one parameter")
         if read_in == "survey" and any(
-                parameter.axes[c].matched_apart for parameter in parameters
+                parameter.axes[c].merged for parameter in parameters
                 for c in coordinates if c in parameter.axes):
-            # The survey shows a coordinate's list and has no match.
+            # The survey reads a coordinate per passage, not per value, and
+            # names are merged over the rows of the reading.
             _fail(f"{path}.coordinates",
-                  "a list matched apart is read in the reading, not the "
+                  "a merged coordinate is read in the reading, not the "
                   "survey")
         definition = entry.get("definition", "brief")
         if definition not in DEFINITIONS:
@@ -694,7 +703,7 @@ def axis_fingerprint(axis: "Axis") -> str:
         "required": axis.required,
         "dynamic": axis.dynamic,
         # Only where set, so no other coordinate's key moves.
-        **({"matched_apart": True} if axis.matched_apart else {}),
+        **({"merged": axis.merged} if axis.merged else {}),
         "derive": axis.derive,
         # The offered list: identifier, the spellings a plan may use, and the
         # sentence saying what the term means. All three reach the model, so
@@ -752,7 +761,6 @@ def value_fingerprint(parameter: "Parameter") -> str:
         return ""
     return _digest({
         "dynamic": parameter.vocabulary_dynamic,
-        **({"matched_apart": True} if parameter.matched_apart else {}),
         "options": {uri: {"spellings": sorted(map(str, labels or []))}
                     for uri, labels in (parameter.vocabulary or {}).items()},
     })

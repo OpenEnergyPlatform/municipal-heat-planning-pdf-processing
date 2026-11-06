@@ -2,43 +2,43 @@
 
 `profiles/scenarios/source.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-source.py – Where the AR6 corpus comes from: pdf_index.json, the crawl over the
-publications the AR6 scenario database cites.
+source.py – Where the scenarios corpus comes from: pdf_index.json, the crawl
+over the publications of the corpus.
 
-One entry is one publication. Its PDF is staged by hand, and the scenarios it
-documents become the link table.
+One entry is one publication. Its PDF is staged by hand. What a publication
+says about its scenarios is read from the publication alone.
 
 Author: Felix Vossel
 
 ## Classes
 
-### Ar6Source
+### ScenarioSource
 
 ```python
-class Ar6Source(Source)
+class ScenarioSource(Source)
 ```
 
-The AR6 publication crawl as a document source.
+The publication crawl as a document source.
 
-#### Ar6Source.\_\_init\_\_
+#### ScenarioSource.\_\_init\_\_
 
 ```python
 def __init__(self, index_file: Path)
 ```
 
-#### Ar6Source.documents
+#### ScenarioSource.documents
 
 ```python
 def documents(self, connection: sqlite3.Connection)
 ```
 
-#### Ar6Source.document_for
+#### ScenarioSource.document_for
 
 ```python
 def document_for(self, entry: dict) -> SourceDoc
 ```
 
-#### Ar6Source.after_document
+#### ScenarioSource.after_document
 
 ```python
 def after_document(self, connection: sqlite3.Connection, doc: SourceDoc) -> None

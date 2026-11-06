@@ -8,7 +8,7 @@ document before its coordinates are searched.
 The search for a coordinate the value's own passage does not answer used to
 read the whole plan for it, window after window: the embedding ranking first,
 then every remaining passage in order. Most passages say nothing to most
-axes, and the rest stage of one AR6 document took two hours for nineteen
+axes, and the rest stage of one scenarios document took two hours for nineteen
 coordinates.
 
 Here the model reads every passage of the document once, side by side, and

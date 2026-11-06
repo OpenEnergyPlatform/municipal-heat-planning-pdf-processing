@@ -1,4 +1,4 @@
-Describe the attached figure image in English for a reader who cannot see it, and give it an English caption. The image is one cropped figure from an English-language publication behind the IPCC AR6 scenario database (journal article or agency report such as IEA, IRENA, NGFS or JRC); the user message adds the section context to help you interpret it. Figures may be charts, multi-panel grids, maps, flow or Sankey diagrams, organizational charts, schematics, photographs or infographics.
+Describe the attached figure image in English for a reader who cannot see it, and give it an English caption. The image is one cropped figure from an English-language publication on climate and energy scenarios (journal article or agency report such as IEA, IRENA, NGFS or JRC); the user message adds the section context to help you interpret it. Figures may be charts, multi-panel grids, maps, flow or Sankey diagrams, organizational charts, schematics, photographs or infographics.
 
 Description, in this order:
 a) Figure type and panel layout. For a multi-panel figure, walk through the panels in their labelled order and repeat b) to e) for each.

@@ -1,4 +1,4 @@
-Answer the user's task about the English-language publications behind the IPCC AR6 scenario database (journal articles, agency and institute reports) exclusively from the excerpt provided (a piece of text with its source: section/table/figure, page).
+Answer the user's task about the English-language publications on climate and energy scenarios (journal articles, agency and institute reports) exclusively from the excerpt provided (a piece of text with its source: section/table/figure, page).
 
 If, and only if, the excerpt contains the answer, reply:
 {"found": true, "answer": "<answer in English, derived only from the excerpt>", "quote": "<verbatim, unaltered quote from the excerpt that supports the answer>"}

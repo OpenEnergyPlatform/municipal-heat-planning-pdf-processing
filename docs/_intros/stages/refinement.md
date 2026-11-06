@@ -15,7 +15,7 @@ example, a preprint's line numbers landing inside a sentence: a number
 counting up line after line is removed, one the sentence itself states
 stays.
 
-The front matter of the first page and of the title page (title, authors, affiliations, the journal line with volume and year, the DOI, dates and the copyright line) is never refinement's to remove: the prompts say so, and `_apply_actions` refuses a `remove` for any section that starts on either. The first page is the lowest page any section carries; the title page is the page of the detected document title, which stage 3 hands on as `title_page` in `sections.json` (`_front_pages`). Both count because a cover can stand before the title page, and because the layout detection marks a heading far into a report as its title in 8 of the 164 AR6 documents; a `sections.json` without the key protects the first page alone.
+The front matter of the first page and of the title page (title, authors, affiliations, the journal line with volume and year, the DOI, dates and the copyright line) is never refinement's to remove: the prompts say so, and `_apply_actions` refuses a `remove` for any section that starts on either. The first page is the lowest page any section carries; the title page is the page of the detected document title, which stage 3 hands on as `title_page` in `sections.json` (`_front_pages`). Both count because a cover can stand before the title page, and because the layout detection marks a heading far into a report as its title in 8 of the 164 documents of the scenarios corpus; a `sections.json` without the key protects the first page alone.
 
 Stage 4 also enforces the size limit the embedding step needs: a
 retrieval chunk is one section and one vector, so a section long enough
@@ -515,7 +515,7 @@ swallowed rather than failing an already-successful run.
 
 ## Measured behaviour
 
-Across 60 ar6 documents, 28% of sections came back byte-identical from a
+Across 60 documents of the scenarios corpus, 28% of sections came back byte-identical from a
 full rewrite, the median section was 99% unchanged, and only 166 of 4887
 sections were real conversions (`docpipe/refinement/corrections.py:6-8`,
 `docpipe/refinement/config.py:64-65`): the stage spent output tokens, a
@@ -539,11 +539,11 @@ reply naming only some of a window's sections cost one book 123 of its
 Before the context-size preflight existed, 42 windows silently kept raw
 text against a server whose `max_model_len` was smaller than a request
 could need (`docpipe/llm_preflight.py:8-9`). Under a flat, non-scaling
-reply budget, 24 of 1030 windows in one ar6 book run had their JSON reply
+reply budget, 24 of 1030 windows in one book run of the scenarios corpus had their JSON reply
 truncated mid-string, each an "Unterminated string" error
 (`docpipe/refinement/config.py:111`).
 
-Before segments could be subdivided, 51 sections in one ar6 run stayed
+Before segments could be subdivided, 51 sections in one run of the scenarios corpus stayed
 oversized however often the split was asked, up to 1409 words against the
 1000-word `SECTION_MAX_WORDS` limit, since their whole text sat in one
 segment with no boundary to cut on (`docpipe/refinement/split.py:333-334`).

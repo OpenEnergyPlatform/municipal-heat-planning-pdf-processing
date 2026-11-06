@@ -52,14 +52,12 @@ from typing import Callable, Optional
 
 from . import lookup
 from .fields import EXHAUSTED, READ, SAID_UNSTATED, UNANSWERED, UNBACKED
-from .matching import matched
 from .pipeline import Row, mark_unanswered, merge_field, row_label
 from .reading import (SHOWN, Gathered, answer_of, answer_schema,
                       answers_each, around_of, coordinate_shown, first_line,
                       gather, groups_of, heading_of, known_shown, more_schema,
-                      printed, several, shown_as, shown_hits, shown_value,
-                      slots_of, source_of, years_of)
-from .verify import quote_in
+                      several, shown_as, shown_hits, slots_of, source_of,
+                      years_of)
 from .wording import say
 
 COMB_PROMPT_ID = "extraction/comb"
@@ -99,7 +97,7 @@ def comb_response_format(slots: list, labels: list) -> dict:
 def named_rows(corrections: list, given: dict, slots: list) -> list:
     """*corrections* ([{row, what}]) of rows a reply made of one value
     (`reading.answers_each`): a row asked again for one coordinate that
-    named several wordings names the wording it was given and its quote
+    named several things names the name it was given and its quote
     (*given*: {row: its reply entry}), so the request asks for that one."""
     by_name = {slot.name: slot for slot in slots if several(slot)}
     out = []
@@ -133,7 +131,7 @@ class Combed:
     corrected: int = 0
     exhausted: int = 0
     group: Optional[str] = None   # the group of the spec asked
-    # rows made beside the value, one per further wording it was stated for
+    # rows made beside the value, one per further name it was stated for
     made: list = field(default_factory=list)
 
 
@@ -147,20 +145,17 @@ class Comber:
     passages best first for the search sentences *probes*
     (`runner.make_more_sources`): the reading's sentences, and the model's
     own under "similar". *known(claim, asked)* is what a row has read in the
-    plan's words (`runner.row_context`). *match* chooses the entry of a list
-    matched apart that a wording answered is (`matching.Matcher`), shown
-    the passage its quote stands in.
+    plan's words (`runner.row_context`).
     """
 
     def __init__(self, spec, ask: Callable, rank: Optional[Callable],
                  known: Callable, *, bases: Optional[Callable] = None,
-                 match: Optional[Callable] = None, pool=None, trace=None):
+                 pool=None, trace=None):
         self.spec = spec
         self.ask = ask
         self.rank = rank
         self.known = known
         self.bases = bases or (lambda pairs: [])
-        self.match = match
         self.pool = pool
         self.trace = trace
 
@@ -194,7 +189,7 @@ class Comber:
             combed = [one(job) for job in jobs]
         else:
             combed = list(self.pool.map(one, jobs))
-        # A value combed for several wordings is one row per wording (owner
+        # A value combed for several names is one row per name (owner
         # decision 2026-11-06): the rows made join their value's reading.
         for job, result in zip(jobs, combed):
             read, probes = job[0], job[-1]
@@ -249,12 +244,12 @@ class Comber:
         for where a plan prints them the request shows, *probes* the
         sentences the reading wrote to coordinates it found unstated
         ({coordinate: sentence}), which the search ranks with. With
-        *split*, a value the reply states for several wordings of a list
-        matched apart is one row per wording (`reading.answers_each`, owner
-        decision 2026-11-06), each a copy of the value's row in
-        `Combed.made` and asked again on its own; without it, as in a pass
-        over a stored harvest that re-reads each stored row in place, the
-        first wording."""
+        *split*, a value the reply states for several names of a coordinate
+        that may name several (`reading.several`) is one row per name
+        (`reading.answers_each`, owner decision 2026-11-06), each a copy of
+        the value's row in `Combed.made` and asked again on its own; without
+        it, as in a pass over a stored harvest that re-reads each stored row
+        in place, the first name."""
         rows = [Row(label=row_label(i), item_index=0, claim=claim)
                 for i, claim in enumerate(claims)]
         if coordinates is not None:
@@ -304,10 +299,8 @@ class Comber:
         knowns = {row.label: self.known(row.claim, names) for row in rows}
 
         def row_shown(row: Row) -> dict:
-            # A value of a list matched apart by its wording (`printed`).
             return {"row": row.label,
-                    "value": printed(shown_value(row.claim),
-                                     parameter).get("value"),
+                    "value": row.claim.get("value"),
                     "unit": row.claim.get("unit"),
                     "quote": row.claim.get("quote"),
                     "known": knowns[row.label],
@@ -369,17 +362,14 @@ class Comber:
             for name in opened[row.label]:
                 row.claim.pop(f"{name}_state", None)
 
-        def entries(reply: dict) -> dict:
-            return self._matched(document_id, parameter, asked, reply,
-                                 evidence, passages, budget)
         reply, made = self._each(rows, reply, asked, opened, knowns, split)
         result.made = made
-        failed = self._merged(rows, entries(reply), asked, opened, evidence,
+        failed = self._merged(rows, reply, asked, opened, evidence,
                               bases)
         corrections = self._corrections(rows, failed, opened)
         if corrections and made:
             # One request per row asked again, showing that row only and
-            # naming the wording it was given.
+            # naming the name it was given.
             given = {entry.get("row"): entry for entry in reply["rows"]
                      if isinstance(entry, dict)}
             by_label = {row.label: row for row in rows}
@@ -391,8 +381,8 @@ class Comber:
                 if isinstance(again, dict):
                     again, _ = self._each(rows, again, asked, opened,
                                           knowns, False)
-                    self._merged(rows, entries(again), asked, opened,
-                                 evidence, bases)
+                    self._merged(rows, again, asked, opened, evidence,
+                                 bases)
         elif corrections:
             result.corrected = len(corrections)
             again = ask(corrections)
@@ -400,7 +390,7 @@ class Comber:
             if isinstance(again, dict):
                 again, _ = self._each(rows, again, asked, opened, knowns,
                                       False)
-                self._merged(rows, entries(again), asked, opened, evidence,
+                self._merged(rows, again, asked, opened, evidence,
                              bases)
         mark_unanswered(rows, asked)
         result.filled = sum(1 for row in rows for name in opened[row.label]
@@ -411,10 +401,10 @@ class Comber:
     @staticmethod
     def _each(rows: list, reply: dict, slots: list, opened: dict,
               knowns: dict, split: bool) -> tuple:
-        """(*reply* with each row entry that names several wordings of a
-        coordinate as one entry per wording (`reading.answers_each`), [the
-        rows made for them]): every further wording on a copy of its row,
-        appended to *rows*. Without *split*, the first wording alone."""
+        """(*reply* with each row entry that names several things for a
+        coordinate as one entry per name (`reading.answers_each`), [the rows
+        made for them]): every further name on a copy of its row, appended
+        to *rows*. Without *split*, the first name alone."""
         by_label = {row.label: row for row in rows}
         entries, made = [], []
         for entry in reply.get("rows") or ():
@@ -435,38 +425,6 @@ class Comber:
                 knowns[copy_label] = knowns[label]
                 entries.append({**one, "row": copy_label})
         return {**reply, "rows": entries}, made
-
-    def _matched(self, document_id: int, parameter, slots: list, reply: dict,
-                 evidence: list, passages: dict,
-                 budget: Optional[int]) -> dict:
-        """*reply* with the wording of each list matched apart replaced by
-        its entry (`matching.matched`), each matched with the passage its
-        quote stands in and the text around a table or figure. A quote that
-        stands in nothing shown is left to the check, unmatched."""
-        if self.match is None or not any(slot.matched_apart
-                                         for slot in slots):
-            return reply
-        rows = []
-        for entry in reply.get("rows") or ():
-            if isinstance(entry, dict):
-                for slot in slots:
-                    answer = entry.get(slot.name)
-                    quote = answer.get("quote") \
-                        if isinstance(answer, dict) else None
-                    found = next((s for s in evidence
-                                  if isinstance(quote, str)
-                                  and quote_in(s.text or "", quote)), None)
-                    if not slot.matched_apart or found is None:
-                        continue
-                    passage = passages.get((found.owner_kind,
-                                            found.owner_id), found)
-                    around = around_of(passage, passages, budget)
-                    entry = matched(self.match, document_id, parameter,
-                                    [slot], entry, passage,
-                                    around.text if around is not None
-                                    else None)
-            rows.append(entry)
-        return {**reply, "rows": rows}
 
     @staticmethod
     def _merged(rows: list, reply: dict, slots: list, opened: dict,

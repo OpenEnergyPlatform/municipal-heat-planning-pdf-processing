@@ -2,18 +2,18 @@
 
 `profiles/scenarios/extraction.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-Extraction stage wiring: where the ar6 spec lives, and the lists that are
-only closed once a document is named.
+Extraction stage wiring: where the scenarios spec lives, and the list that
+is only closed once a document is named.
 
-Two of the ar6 fields have a finite set of correct answers, but the set is not
+One of the fields has a finite set of correct answers, but the set is not
 the same for every publication, so it cannot sit in the spec file:
 
-  scenario / scenario_label  the AR6 scenarios THIS publication documents.
-                             The corpus holds 1389 of them, one publication
-                             documents up to 146, and the model has to pick
-                             from that publication's own list.
   scenario_region            the 249 study regions the OEKG actually uses,
                              narrowed to those the document names at all.
+
+A scenario is read as the publication names it, and which of its names mean
+the same scenario is asked once the publication is read
+(`docpipe/extraction/naming.py`, owner decisions 2026-11-06).
 
 The narrowing is not a guess. Every claim has to quote its source verbatim, and
 the sources are exactly the section, table and figure texts scanned here, so a
@@ -21,16 +21,15 @@ region whose name appears nowhere in them could never have been quoted. What is
 dropped is unreachable, not merely unlikely — and dropping it keeps the prompt
 at the handful of countries a paper mentions instead of all 249.
 
-Both lists carry `out:` entries, and they are the point of this file as much as
-the real entries are. A closed list without an escape hatch does not stop the
+The list carries `out:` entries, and they are the point of this file as much
+as the real entries are. A closed list without an escape hatch does not stop the
 model from answering; it stops it from answering CORRECTLY, and what comes back
 is the nearest entry that is not quite right. The OEKG knows 249 countries and
-no aggregates, while an AR6 scenario is usually global — so without
-a world entry the honest answer to "which region" does not exist in the list,
-and a paper about worldwide emissions that happens to mention Germany once
-invites "Germany". The world and the groups of countries are entries of the
-list now and are written as their member countries. The same holds for a run identifier: naming a family is not
-naming a run, and the model needs a way to say so that is not silence.
+no aggregates, while a scenario is usually global — so without a world entry
+the honest answer to "which region" does not exist in the list, and a paper
+about worldwide emissions that happens to mention Germany once invites
+"Germany". The world and the groups of countries are entries of the list now
+and are written as their member countries.
 
 Silence is the other half of the argument. An empty field already meant
 "unmapped" and was already counted, but it meant three different things at
@@ -63,17 +62,6 @@ its name are joined as a paper joins them ("LAM (Latin America)",
 names of one entry names that entry, and `_one_meaning` keeps one two
 entries share from naming either.
 
-### document_scenarios
-
-```python
-def document_scenarios(conn: sqlite3.Connection, document_id: int) -> dict
-```
-
-The AR6 scenarios this publication documents, as a choice list.
-
-Keyed by the AR6 name itself rather than an invented IRI: the name is the
-identity the corpus links against, and kg.py resolves it the same way.
-
 ### document_regions
 
 ```python
@@ -82,8 +70,8 @@ def document_regions(conn: sqlite3.Connection, document_id: int) -> dict
 
 The countries and groups of countries this document names.
 
-The world is always offered, as `global` was. A group of the AR6
-database is also offered by its bare name where the document names its
+The world is always offered, as `global` was. A group of the IAM
+regions is also offered by its bare name where the document names its
 family: a paper writes "the R10 regions" and then "Europe". A model's
 own region is offered where the paper names the model and the region,
 and keeps a label it shares with another group (`_one_meaning`). Every
@@ -97,11 +85,10 @@ def document_axes(conn: sqlite3.Connection, document_id: int) -> dict
 
 Per-document choice lists, keyed by axis name and by parameter uri.
 
-The out: entries are appended unconditionally, so every list exists even
+The out: entries are appended unconditionally, so the list exists even
 when the narrowing finds nothing. That case is not hypothetical — a
-publication with no runs in DocumentScenarios, or one that names no country
-at all, used to leave the field with no list, and a field with no list is
-free text again.
+publication that names no country at all used to leave the field with no
+list, and a field with no list is free text again.
 
 ### shapes_files
 

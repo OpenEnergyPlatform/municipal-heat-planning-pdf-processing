@@ -51,7 +51,7 @@ refusal would add one to every document's refusal count, and the ratio
 that is read off it is the one this whole report exists for. The same
 holds for the parameter_state lines, and there is one per parameter of
 the spec, so an `else` that swept them into the refusals would report
-fourteen model errors per ar6 document that nobody made.
+fourteen model errors per scenarios document that nobody made.
 
 ### serialize_counts
 

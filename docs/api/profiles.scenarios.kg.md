@@ -145,57 +145,21 @@ description of why nothing fitted, not a reading of the document. The
 graph carries the wording instead, so the evidence has to name the wording
 too, or it would cite a passage for a string that is nowhere in it.
 
-### ambiguous
+### scenario_names
 
 ```python
-def ambiguous(wording, known: dict) -> bool
+def scenario_names(row: dict) -> list
 ```
 
-Does this wording fit more than one AR6 run of this publication?
+The names of the scenarios a row belongs to.
 
-Measured on the 146-scenario pilot document: the paper writes "NPi" and
-"NDC", and the database has EN_NPi2020_300f, EN_NPi2020_400 and
-EN_NPi2020_3000. Those are three runs, and "NPi" names the family, not one
-of them. A model handed the list picks one anyway, which is a guess
-dressed as a link — so a wording that fits several is treated as fitting
-none, and the wording alone survives.
-
-### resolve_wording
-
-```python
-def resolve_wording(wording, known: Optional[dict] = None) -> Optional[str]
-```
-
-The run this wording names, when the list settles it without a guess.
-
-The mirror of `ambiguous()`. That one refuses the link where several runs
-fit and none matches exactly; this one MAKES the link where exactly one
-does. Both read the same list, and between them the model's own choice is
-only consulted where the list is genuinely undecided.
-
-Measured on the corpus run: the model answered with an out: entry 1171
-times for a wording its own list resolved unambiguously — 347 of them a
-character-for-character match of a run name, one document refusing "BaU"
-against a list whose single entry is "BaU".
-
-Short wordings are exact-match only. "NPi" is three characters and sits
-inside a dozen run names; a containment hit that short is a coincidence,
-not a reading.
-
-### scenario_key
-
-```python
-def scenario_key(row: dict, known: Optional[dict] = None,
-                 synonyms: Optional[dict] = None) -> tuple
-```
-
-(identity, label) for the scenario a row belongs to.
-
-The model picks the AR6 run from this publication's own list and keeps the
-document's wording beside it. The run identifier is the identity whenever
-there is one, because that is what links to the AR6 database; the wording
-is what a reader recognises. With no match, and with a wording that fits
-several runs equally, the wording is both.
+A scenario_label row names one by its value, any other row by its
+`scenario` coordinate, both as the publication prints them. Which of a
+publication's names mean the same scenario was asked once it was read
+(`value_means`, `scenario_means`, docpipe/extraction/naming.py): a name
+of one scenario means the name that scenario is called by, a name of
+several scenarios means each of theirs (owner decisions 2026-11-06). A
+row read before that was asked belongs to the scenario of its own name.
 
 ### decision_text
 

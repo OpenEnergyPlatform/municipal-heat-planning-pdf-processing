@@ -784,9 +784,6 @@ def main(argv=None) -> int:
                         format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
                         datefmt="%H:%M:%S")
 
-    # The reading falls back to an empty AR6 list when the database cannot
-    # be opened, and the bodies then name other scenarios. That is a
-    # different run, not a degraded one.
     if not args.out.is_dir():
         print(f"{args.out}: not a harvest directory")
         return 2

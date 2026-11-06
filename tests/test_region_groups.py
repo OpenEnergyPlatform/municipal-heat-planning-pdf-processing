@@ -3,7 +3,7 @@ its passage cited; the world as every country, "several regions" as none. A
 member is placed on an OEKG region by its label or the same words in another
 order, and one nothing places is counted AND never guessed; a group label that
 is a country's is no group. A document is offered the groups it names, a
-region of the AR6 database by its bare name where it names the family too.
+region of the IAM community by its bare name where it names the family too.
 A model's region is its countries under its name and the codes its mapping
 gives it, as the newest version of the model defines it, AND it is offered
 only where the paper names the model with its capitals, AND a label two
@@ -30,8 +30,7 @@ REGION = "https://openenergyplatform.org/ontology/oekg/region/"
 REGIONS = {REGION + "France": ["France"], REGION + "Spain": ["Spain"],
            REGION + "Moldova": ["Moldova (the Republic of)"],
            REGION + "Micronesia": ["Micronesia"]}
-FAMILIES = [[{"R10": [{"Europe (R10)": {"ar6": "R10EUROPE",
-                                        "countries": ["France", "Spain",
+FAMILIES = [[{"R10": [{"Europe (R10)": {"countries": ["France", "Spain",
                                                       "Atlantis"]}},
                       "Other (R10)"]}]]
 TREE = [{"geoAreaCode": "1", "geoAreaName": "World", "type": "Region",
@@ -50,7 +49,7 @@ def test_a_group_holds_the_regions_its_members_name_and_counts_the_rest():
     groups, missing = vocabulary.aggregates(FAMILIES, TREE, REGIONS)
     europe = groups["aggregate:iiasa:Europe (R10)"]
     assert europe["members"] == [REGION + "France", REGION + "Spain"]
-    assert europe["labels"] == ["Europe (R10)", "R10EUROPE"]
+    assert europe["labels"] == ["Europe (R10)"]
     assert missing["member Atlantis"] == 1
     assert groups["aggregate:m49:151"]["members"] == [REGION + "Moldova"]
     assert "aggregate:m49:57" not in groups

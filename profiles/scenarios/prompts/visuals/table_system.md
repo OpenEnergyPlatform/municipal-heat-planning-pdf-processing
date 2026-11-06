@@ -1,4 +1,4 @@
-Transcribe the attached table image into Markdown and give it an English caption. The image is one cropped table from an English-language publication behind the IPCC AR6 scenario database (journal article or agency report such as IEA, IRENA, NGFS or JRC); the user message adds the section context to help with abbreviations, units and column meaning.
+Transcribe the attached table image into Markdown and give it an English caption. The image is one cropped table from an English-language publication on climate and energy scenarios (journal article or agency report such as IEA, IRENA, NGFS or JRC); the user message adds the section context to help with abbreviations, units and column meaning.
 
 Rules:
 1. Reproduce every column, row, number, unit and cell text exactly as shown, in the original language (English). Do not round, shorten, paraphrase or omit anything. Never invent content; write "[unreadable]" for a cell you cannot read.

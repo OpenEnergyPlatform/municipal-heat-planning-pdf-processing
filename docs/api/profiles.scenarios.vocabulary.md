@@ -4,7 +4,7 @@
 
 vocabulary.py – This profile's half of the ontology snapshot.
 
-The builder lives in `docpipe/ontology.py`. What is here is what is about AR6
+The builder lives in `docpipe/ontology.py`. What is here is what is about
 scenario publications: which roots this profile's one static list draws from,
 and the 249 study regions, which come from the OEKG rather than from an
 ontology release and are therefore pinned differently.

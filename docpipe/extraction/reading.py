@@ -47,13 +47,12 @@ Every coordinate asked is answered: the grammar of a group request requires
 each of them, and "the passage does not say" is one of the answers
 (`fields.UNSTATED`).
 
-A list matched apart (`matching.py`) is read by the wording the document
-prints, and a request shows only that wording, never the entry the match
-chose: in a round's `read`, as a value's own wording and in a correction
-(`printed`, owner decision 2026-11-06). A value the passage states for
-several wordings of such a list is one row per wording, each matched on its
-own (`answers_each`, owner decision 2026-11-06); a correction for one of them
-names its wording.
+A coordinate whose answer is the name the document gives a thing, such as
+a scenario, is read as the document prints it (`fields.Slot.merged`). A
+value the passage states for several of them is one row per name, each
+checked on its own (`answers_each`, owner decision 2026-11-06); a
+correction for one of them names its name. Which names mean the same thing
+is asked once the document is read (`naming.py`).
 
 Nothing is checked here beyond what the harvest checks everywhere. Every
 coordinate goes through `pipeline.merge_field` and every value through
@@ -78,7 +77,6 @@ from dataclasses import dataclass, field, replace
 from typing import Callable, Optional
 
 from . import fields, lookup
-from .matching import matched
 from .pipeline import (CELL, READ, YEAR_STATES, Batch, Row, Source, WorkItem,
                        cell_index, column_head, head_cells, head_pair,
                        in_several_rows, mark_unanswered, merge_field,
@@ -218,28 +216,28 @@ def group_context(context: dict, group_slots: list, frame_slots: list,
 
 def coordinate_shown(slot) -> dict:
     """A coordinate as a request shows it: its question, and its list, or
-    the kind of its answer. A list matched apart is answered by its wording
-    and goes to the match alone (`matching.py`)."""
+    the kind of its answer."""
     shown: dict = {"question": slot.question}
-    if slot.is_closed and not slot.matched_apart:
+    if slot.is_closed:
         shown["options"] = slot.answerable()
     else:
-        shown["kind"] = fields.TEXT if slot.matched_apart else slot.kind
+        shown["kind"] = slot.kind
     return shown
 
 
 def several(slot) -> bool:
-    """May one value name several wordings for *slot*, one row each: a list
-    read by the wording the document prints and matched apart (owner
-    decision 2026-11-06)?"""
-    return bool(getattr(slot, "matched_apart", False))
+    """May one value name several things for *slot*, one row each: a
+    coordinate whose answer is the name the document gives a thing, merged
+    with the document's other names for it after the reading (`naming.py`,
+    owner decisions 2026-11-06)?"""
+    return bool(getattr(slot, "merged", None))
 
 
 def answer_schema(slot, probe: bool = False) -> dict:
     """One coordinate's answer as the grammar takes it; with *probe* also
     the sentence a reply writes to a coordinate its passage does not state,
     as the plan would print it, which the combing searches with (owner
-    decision 2026-11-05: HyDE). A coordinate that may name several wordings
+    decision 2026-11-05: HyDE). A coordinate that may name several things
     (`several`) takes a list of such answers too."""
     properties = {"value": fields.value_schema(slot),
                   "value_raw": {"type": "string"},
@@ -256,8 +254,8 @@ def answer_schema(slot, probe: bool = False) -> dict:
 
 def answers_each(reply, slots: list) -> list:
     """The reply for one value as one reply per row (owner decision
-    2026-11-06): a coordinate that may name several wordings (`several`)
-    and names a list of them gives one reply per wording, with every other
+    2026-11-06): a coordinate that may name several things (`several`) and
+    names a list of them gives one reply per name, with every other
     coordinate's answer the same on each; an empty list is no answer. Any
     other reply is the one reply."""
     if not isinstance(reply, dict):
@@ -587,13 +585,12 @@ def parameter_shown(parameter, full: bool = True) -> dict:
 def value_classes(parameter) -> dict:
     """The entries a category parameter's value is one of, as a request shows
     a closed list (`fields.Slot.answerable`), without UNSTATED: a value the
-    passage does not state is no value. Empty for a parameter with no list,
-    and for one whose list is matched apart (`matching.py`): its value is
-    read as the document prints it."""
+    passage does not state is no value. Empty for a parameter with no
+    list."""
     if parameter.is_numeric:
         return {}
     slot = fields.value_choice(parameter)
-    if not slot.is_closed or slot.matched_apart:
+    if not slot.is_closed:
         return {}
     return {label: entry for label, entry in slot.answerable().items()
             if label != fields.UNSTATED}
@@ -616,20 +613,6 @@ def shown_value(claim: dict) -> dict:
     """A value as a request shows it: its value, wording, quote and head."""
     return {key: claim[key] for key in ("value", "value_raw", "quote", "head")
             if claim.get(key) not in (None, "") or key == "value"}
-
-
-def printed(shown: dict, parameter) -> dict:
-    """*shown*, a value as a request shows it (`shown_value`), with the
-    wording the document prints as its value where *parameter*'s list is
-    matched apart: a request that reads such a value never sees the entry
-    the match chose (owner decision 2026-11-06). Any other value as it is."""
-    if not getattr(parameter, "matched_apart", False):
-        return shown
-    out = {key: value for key, value in shown.items() if key != "value_raw"}
-    wording = shown.get("value_raw")
-    if isinstance(wording, str) and wording.strip():
-        out["value"] = wording
-    return out
 
 
 def values_payload(source: Source, parameter, context: dict, read: list,
@@ -800,7 +783,7 @@ def round_failure(claim: dict, shown: list, read: list,
     refuses, the model hears while it can still answer (owner decision
     2026-11-05)."""
     if any(same_value(claim, other) for other in read):
-        named = printed(shown_value(claim), parameter).get("value")
+        named = claim.get("value")
         return REPEATED, say("value_already_read",
                              value=json.dumps(named, ensure_ascii=False),
                              quote=claim.get("quote"))
@@ -839,9 +822,8 @@ def text_payload(source: Source, parameter, slots: list, row: Row,
     passage, the text around a table or figure and, for a frame group, the
     survey's pairs of the passage (`group_context`); the value last, with
     its quote and, under "read", what is already read of it in the plan's
-    words; with *corrections* the same request asked once more. A value of
-    a list matched apart is shown by its wording (`printed`)."""
-    value = printed(shown_value(row.claim), parameter)
+    words; with *corrections* the same request asked once more."""
+    value = shown_value(row.claim)
     if context.get("read"):
         value["read"] = context["read"]
     payload = {"parameter": parameter_shown(parameter, full=full),
@@ -948,8 +930,8 @@ def value_corrections(row: Row, failed: list, slots: list) -> list:
 def named_corrections(corrections: list, reply: dict, slots: list) -> list:
     """*corrections* for one of several rows a reply made of one value
     (`answers_each`): each correction of a coordinate that named several
-    wordings names the wording this row was given, and its quote, so the
-    request asks again for that one."""
+    things names the name this row was given, and its quote, so the request
+    asks again for that one."""
     by_name = {slot.name: slot for slot in slots}
     out = []
     for entry in corrections:
@@ -1053,8 +1035,8 @@ class _Job:
     made: int = 0
 
     def clone(self, row: Row) -> Row:
-        """A copy of *row* under a label of its own, for one more wording
-        of a value the reply names several of (`answers_each`): the piece it
+        """A copy of *row* under a label of its own, for one more name of
+        a value the reply names several of (`answers_each`): the piece it
         was read in and its sentences go with it."""
         label = row_label(self.made)
         self.made += 1
@@ -1099,9 +1081,7 @@ class Reader:
     the passage: the heading it stands under (`heading_of`); so may what
     the value has read, as its request shows it (`known_shown`).
     *known(claim, asked)* is what a value has read in the plan's words
-    (`runner.row_context`). *match* chooses the entry of a list matched
-    apart that a wording read is (`matching.Matcher`); without it such a
-    wording stays as read. *pool* reads passages side by side. No request
+    (`runner.row_context`). *pool* reads passages side by side. No request
     of the reading has tools (owner decision 2026-11-05, ticket 26).
     """
 
@@ -1109,7 +1089,6 @@ class Reader:
                  frame_slots: list, *, shown_with: Optional[Callable] = None,
                  bases: Optional[Callable] = None,
                  known: Optional[Callable] = None,
-                 match: Optional[Callable] = None,
                  pool=None, trace=None):
         self.spec = spec
         self.ask_values = ask_values
@@ -1118,7 +1097,6 @@ class Reader:
         self.shown_with = shown_with or (lambda source: [])
         self.bases = bases or (lambda pairs: [])
         self.known = known or (lambda claim, asked: {})
-        self.match = match
         self.pool = pool
         self.trace = trace
 
@@ -1229,8 +1207,9 @@ class Reader:
         groups = groups_of(self.spec, slots)
         grouped: list = []
         for row in rows:
-            # A value stated for several wordings of a list matched apart is
-            # one row per wording, and each asks the groups after it alone.
+            # A value stated for several names of a coordinate that may name
+            # several is one row per name, and each asks the groups after it
+            # alone.
             each = [row]
             for group, group_slots in groups:
                 each += [made for one in list(each)
@@ -1323,7 +1302,7 @@ class Reader:
                     return CUT if reply == CUT else None
                 break
             first = False
-            claim = self._matched_value(job, view, claim_of(reply, head))
+            claim = claim_of(reply, head)
             if claim is None:
                 break
             failure = round_failure(claim, shown, [r.claim for r in rows],
@@ -1333,10 +1312,9 @@ class Reader:
                 result.failed = dict(collections.Counter(result.failed)
                                      + collections.Counter({kind: 1}))
                 result.corrected += 1
-                again = ask([{**printed(shown_value(claim), job.parameter),
-                              "what": reason}])
+                again = ask([{**shown_value(claim), "what": reason}])
                 result.asked += 1
-                claim = self._matched_value(job, view, claim_of(again, head))
+                claim = claim_of(again, head)
                 if claim is None:
                     break
                 failure = round_failure(claim, shown,
@@ -1353,21 +1331,8 @@ class Reader:
                 claim["source"] = job.label_of(passage)
             rows.append(Row(label=row_label(start + len(rows)), item_index=0,
                             claim=claim))
-            read.append(printed(shown_value(claim), job.parameter))
+            read.append(shown_value(claim))
         return rows
-
-    def _matched_value(self, job: _Job, view: Source,
-                       claim: Optional[dict]) -> Optional[dict]:
-        """A value of a parameter whose list is matched apart, read as the
-        document prints it, as the entry the match chose, the printed
-        wording as its `value_raw` (`matching.matched`)."""
-        if claim is None or not getattr(job.parameter, "matched_apart",
-                                        False):
-            return claim
-        return matched(self.match, job.document_id, job.parameter,
-                       [fields.value_choice(job.parameter)],
-                       {"value": claim}, view,
-                       job.context.get("around"))["value"]
 
     def _placed(self, job: _Job, row: Row) -> None:
         """A number in a table placed in its column: the head over it on the
@@ -1409,10 +1374,10 @@ class Reader:
                      group_slots: list) -> list:
         """One group's coordinates of one value, those still open only, in a
         request of the group's own; what the check refuses asked once more,
-        by its coordinate. A reply that names several wordings of a list
-        matched apart makes one row per wording (`answers_each`), each
-        matched, checked and asked once more on its own: [the rows made
-        beside *row*]."""
+        by its coordinate. A reply that names several things for a
+        coordinate that may name several makes one row per name
+        (`answers_each`), each checked and asked once more on its own: [the
+        rows made beside *row*]."""
         asked = [slot for slot in group_slots
                  if row.claim.get(f"{slot.name}_state") != READ]
         if not asked:
@@ -1444,16 +1409,13 @@ class Reader:
     def _answered(self, job: _Job, row: Row, reply: dict, asked: list,
                   ask: Callable, evidence: list, view: Source,
                   named: bool = False) -> None:
-        """*reply*'s answers onto *row*, each wording of a list matched apart
-        matched first; what the check refuses asked once more by its
-        coordinate. With *named*, *row* is one of several a reply made of
-        one value: its correction names the wording it was given and its
-        quote (`named_corrections`), and a reply that names several again
+        """*reply*'s answers onto *row*; what the check refuses asked once
+        more by its coordinate. With *named*, *row* is one of several a reply
+        made of one value: its correction names the name it was given and
+        its quote (`named_corrections`), and a reply that names several again
         counts with its first."""
         result = job.result
-        around = job.context.get("around")
-        answers = matched(self.match, job.document_id, job.parameter, asked,
-                          reply, view, around)
+        answers = reply
         self._probed(job, row, answers, asked)
         failed = job.merged([row], {slot.name: value_replies(answers, slot,
                                                              row.label)
@@ -1469,9 +1431,7 @@ class Reader:
         result.asked += 1
         again = ask(corrections)
         if isinstance(again, dict):
-            again = matched(self.match, job.document_id, job.parameter,
-                            asked, answers_each(again, asked)[0], view,
-                            around)
+            again = answers_each(again, asked)[0]
             self._probed(job, row, again, asked)
             job.merged([row], {slot.name: value_replies(again, slot,
                                                         row.label)

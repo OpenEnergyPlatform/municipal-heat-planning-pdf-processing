@@ -43,7 +43,7 @@ One dimension of a value: a closed vocabulary, an int, an enum — or a
 vocabulary that only exists per document (`dynamic`).
 
 Dynamic is for a coordinate whose closed list is real but not corpus-wide:
-the AR6 scenarios of ONE publication, for instance. The profile supplies
+the countries ONE publication names, for instance. The profile supplies
 that list per document and the runner fills `vocabulary` in before the
 harvest; where no profile does, the axis behaves like a text axis and the
 wording is simply carried through.
@@ -58,7 +58,7 @@ Fields:
 - `enum: Optional[tuple] = None`
 - `required: bool = False`
 - `dynamic: bool = False`
-- `matched_apart: bool = False`: A dynamic list whose entry a request of its own chooses (owner decision 2026-11-05, `matching.py`): the reading reads the wording the document prints, and the list goes to that request alone.
+- `merged: Optional[str] = None`: A free-text coordinate whose answer is the name the document gives a thing, the kind of thing named here ("scenario", owner decisions 2026-11-06): a value stated for several of them is one row per name, and which of the document's names of that kind mean the same thing is asked once it is read (`naming.py`).
 - `question: Optional[str] = None`: The one line the field request asks. It lives on the axis because the harvest asks per field: a rule buried in a prompt that covers sixteen fields at once is a rule the model can skip, and skipping is what cost the corpus run 63.5% of its years.
 - `derive: Optional[dict] = None`: A coordinate the SPEC already decides, so no request asks for it: {"from": "unit", "value": "\<a key of this axis' vocabulary>"}.  Principle one, applied one step further. The structure of a tuple is deterministic, and so is a coordinate every accepted unit of the parameter fixes: measured over Kassel, all 452 aggregations the model answered were `integral`, every one of them evidenced by the unit string it had just been handed. Asking cost a fifth of the reply of every five-field request for a coordinate the spec knew. What the unit does NOT fix stays a question — the profile decides which is which.
 - `kg: Optional[dict] = None`: What this coordinate becomes in the graph: {"role": "type"|"edge"| "parent"|"comment", ...}. The serializer reads the predicate from here and the JSON schema publishes it, so the two cannot drift: a predicate changed in one place used to leave the other describing a graph nobody was writing.
@@ -95,7 +95,7 @@ Fields:
 - `glosses: dict = field(default_factory=dict)`: as on an axis
 - `brief: Optional[str] = None`: What a value of this parameter is, in one paragraph (owner decision 2026-11-05, ticket 26). The requests that find values and the groups that do not classify them show this; a group whose spec entry says "definition": "full" shows `description`, and so does every request where it is None.
 - `vocabulary_dynamic: bool = False`: A category whose closed list is real but per document, filled in by the profile before the harvest. Same rule as a dynamic axis, one level up.
-- `matched_apart: bool = False`: That list's entry chosen by a request of its own, as on an axis.
+- `merged: Optional[str] = None`: A free-text value that is the name the document gives a thing, merged with the document's other names for it as on an axis.
 - `kg: Optional[dict] = None`: What a row of this parameter becomes in the graph: which node, which class, which predicate carries the number and which the unit. Read by the serializer and published by the JSON schema, so neither can drift from the other.
 
 #### Parameter.is_numeric

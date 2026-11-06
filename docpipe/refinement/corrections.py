@@ -3,7 +3,7 @@ corrections.py: Applies a model's edit list to a section and refuses
 the edits that do not hold up.
 
 Refinement used to have the model return the whole section, which is
-mostly retyping: measured over 60 ar6 documents, 28% of sections came
+mostly retyping: measured over 60 scenarios documents, 28% of sections came
 back byte-identical, the median similarity was 99%, and only 166 of
 4887 sections were real conversions, so the stage spent the expensive
 part of the call, the tokens it writes, on copying its own input.

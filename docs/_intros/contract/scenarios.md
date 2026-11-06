@@ -28,7 +28,12 @@ the pass that appended its row (`--top-up-parameters`); a missing key means
 the harvest read it (`docpipe/extraction/schema.py:212` to `293`). Four parameters carry
 the same `scenario` axis, `scenario_type`, `scenario_abstract`,
 `scenario_region` and `scenario_year`, each stating which of the
-publication's AR6 scenarios the row belongs to.
+publication's scenarios the row belongs to, by the name the publication
+prints. A coordinate or value the spec marks `merged` (the `scenario` axis
+and the value of `scenario_label`) also carries `<name>_means` (`value_means`
+for the value): the names of the scenarios that name means, written once the
+document is folded (`docpipe/extraction/naming.py`), absent from a row read
+before that or by a top-up pass.
 
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` always present, the rest, page and
@@ -48,8 +53,8 @@ coordinate is `null` unless its own `<name>_state` says `read` or
 
 ## The lists this page cannot publish
 
-Seven parameters answer from a list rather than write a wording:
-`scenario_label`, `scenario_type` and `scenario_region`
+Six parameters answer from a list rather than write a wording:
+`scenario_type` and `scenario_region`
 (`profiles/scenarios/extraction_spec.json`), and
 the four tags of a bundle, `study_descriptor`, `study_sector_division`,
 `study_sector` and `study_technology`. Five publish their list as
@@ -58,31 +63,23 @@ one `out:` entry for a type none of them cover, and each tag the
 shapes' own list (31, 17, 153 and 43 entries) plus such an entry, for
 every document, so the spec states each list once.
 
-The other two are marked `vocabulary_dynamic` in the spec: their value
-resolves through `_value_uri`, which for a dynamic list types it as a
-plain nullable string with no `x-options`, stating in the
+The other one, `scenario_region`, is marked `vocabulary_dynamic` in the
+spec: its value resolves through `_value_uri`, which for a dynamic list types
+it as a plain nullable string with no `x-options`, stating in the
 `description` that a list exists but is not published here
-(`docpipe/extraction/schema.py:174` to `209`). The `scenario` axis on
-the same four parameters takes a different path: the spec marks it
-`dynamic`, not `vocabulary_dynamic`, and `axis_slots` types it as
-plain text through a path that never calls `_value_uri` at all; that
-call runs earlier in the same function, for the parameter's own
-`value` key (`docpipe/extraction/fields.py:433` to `458`;
-`docpipe/extraction/schema.py:383`, `:402` to `413`).
+(`docpipe/extraction/schema.py`). The scenario is no list: `scenario_label`
+and the `scenario` axis on the four parameters above are free text marked
+`merged`, typed as plain text, the name as the publication prints it with its
+quote.
 
 What the list holds is decided once, before harvest starts, by
-`document_axes` in `profiles/scenarios/extraction.py:172`. It reads
-the AR6 runs the publication documents in the `Scenarios` and
-`DocumentScenarios` tables (`document_scenarios`,
-`profiles/scenarios/extraction.py:149`), and narrows the 249 study
-regions of `profiles/scenarios/regions.json` and the groups of
+`document_axes` in `profiles/scenarios/extraction.py`. It narrows the 249
+study regions of `profiles/scenarios/regions.json` and the groups of
 countries of `profiles/scenarios/region_aggregates.json` to the ones the
 publication's own text names (`document_regions`); the world is always
 offered. A group's key starts with `aggregate:` and the graph writes its
-member countries. Both lists always carry
-fixed `out:` entries, two for the region list and two for the
-scenario list (`REGION_OUT`, `SCENARIO_OUT`,
-`profiles/scenarios/extraction.py:69` to `91`). `value_raw` and
+member countries. The list always carries two
+fixed `out:` entries (`REGION_OUT`). `value_raw` and
 `<axis>_raw` keep the publication's own wording beside the resolved
 entry on every tuple, recording what the list held at harvest time.
 No parameter of this spec is numeric, so a bare year or a dotted date is

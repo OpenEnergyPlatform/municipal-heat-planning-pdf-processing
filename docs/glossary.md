@@ -129,7 +129,7 @@ document
 
 dynamic list
 : A closed vocabulary that is real but exists only per document, such as
-  one publication's own AR6 scenario runs, filled in by a profile hook
+  the study regions a publication names, filled in by a profile hook
   before the harvest. Declared as `Axis.dynamic` or
   `Parameter.vocabulary_dynamic` in `docpipe/extraction/spec.py`; where no
   list is filled for a document, the coordinate degrades to a plain
@@ -245,6 +245,14 @@ layout
   on) into the `layout_label` a block carries. Run by
   `docpipe/preprocessing/stage2_layout.py`; see
   [preprocessing](stages/preprocessing.md).
+
+merged
+: A spec flag, `"merged": "<kind>"`, on a free-text axis or a free-text
+  value: the name a document gives a thing (a scenario) is read as printed,
+  with its quote, and once the document is folded one request asks which of
+  its names mean the same thing. Each row then carries `<coordinate>_means`
+  (`value_means` for a value). See [extraction](stages/extraction.md),
+  Naming.
 
 OBIE
 : Ontology-based information extraction, the name
