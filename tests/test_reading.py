@@ -64,8 +64,8 @@ from pathlib import Path
 
 import jsonschema
 
-from docpipe.extraction import fields, reading
-from docpipe.extraction.pipeline import Row, Source, route_claims
+from docpipe.extraction import fields, lookup, reading
+from docpipe.extraction.pipeline import Row, Source, merge_field, route_claims
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.verify import verify_tuple
 from docpipe.extraction.wording import say
@@ -367,7 +367,8 @@ def test_a_coordinate_may_quote_what_its_value_has_read():
         return ({"scenario": "Szenario Bestand 2022"}
                 if claim.get("scenario_state") == "read" else {})
     subject = {"number": [{"unit": {"value": UNSTATED}, "subject": {
-        "value": "Szenario Bestand", "quote": "Szenario Bestand 2022"}}]}
+        "value": "Szenario Bestand", "quote": "Szenario Bestand 2022"},
+        "qualifier": {"value": UNSTATED}}]}
     read, calls = read_of(years(), values=(UNDER_2022,
                                            {"value": None}),
                           groups=subject, pairs=PAIRS, known=known)
@@ -801,14 +802,26 @@ def frame(**given):
             **given}
 
 
-def test_a_quote_from_a_section_never_shown_is_not_read():
-    # The section is in the plan, but no request showed it.
+def test_a_quote_from_a_section_not_shown_is_read_only_once_it_is_shown():
+    # The first reading shows the passage alone: a year quoted from the
+    # section after it is refused there. The second reading shows that
+    # section under "after" (owner decision 2026-11-06), and the year is read
+    # from it there.
     read, calls = read_of(BARE, values=(BARE_300, {"value": None}),
                           groups={"frame": [frame(year=YEAR_AFTER)]},
                           passages=PLAN)
-    assert read.claims[0]["year_state"] == "unbacked"
+    asked = [payload for task, payload in calls if task == "frame"]
+    assert "after" not in asked[0] and asked[-1]["after"] == AFTER.text
+    claim = read.claims[0]
+    assert claim["year_state"] == "read"
+    assert claim["year_source"] == ["section", 8]
+    assert list(claim["year_window"]) == ["near", 1]
     assert not any(key in payload for _task, payload in calls
                    for key in ("more", "hits", "not_found"))
+    # Never shown, it is never read.
+    alone, _ = read_of(BARE, values=(BARE_300, {"value": None}),
+                       groups={"frame": [frame(year=YEAR_AFTER)]})
+    assert alone.claims[0]["year_state"] == "unbacked"
 
 
 # -- a reading offers no tools ----------------------------------------------------
@@ -1052,3 +1065,121 @@ def test_a_group_reply_may_write_a_sentence_and_a_tool_a_sentence_to_search():
     more = reading.more_schema()
     assert valid([{"get": "similar", "text": PROBE}], more)
     assert not valid([{"get": "similar", "sentence": PROBE}], more)
+
+
+# -- the second reading, the table it continues, the ends of a range ---------------
+# Owner decisions 2026-11-06: where the first reading leaves a coordinate open,
+# it is asked once more with the sections before and after the value's place,
+# its open coordinates only and never a word printed with the number itself;
+# a table's frame open on every value is asked once and taken by all; a table
+# at the top of a page shows the title and head it may continue; the two ends
+# of a range are linked.
+
+BEFORE = Source("section", 5, "Einleitung\nDie Werte gelten für das Jahr 2022.",
+                {"document_id": 7, "section_title": "Einleitung"})
+NEAR_PLAN = {("section", 5): BEFORE, ("section", 6): BARE, ("section", 8): AFTER}
+BARE_UNIT = {"value": "t CO2", "quote": "rund 300 t CO2"}
+
+
+def test_the_second_reading_asks_what_is_open_with_the_sections_around():
+    number = {"number": [{"unit": BARE_UNIT, "subject": {"value": UNSTATED},
+                          "qualifier": {"value": UNSTATED}}]}
+    read, calls = read_of(BARE, values=(BARE_300, {"value": None}),
+                          groups=number, passages=NEAR_PLAN)
+    second = [(task, p) for task, p in calls if "before" in p]
+    assert {task for task, _ in second} == {"frame", "number", "context"}
+    asked = next(p for task, p in second if task == "number")
+    # The unit was read, and a word printed with the number is not asked
+    # again: neither comes back.
+    assert set(asked["coordinates"]) == {"subject"}
+    assert (asked["before"], asked["after"]) == (BEFORE.text, AFTER.text)
+    assert read.near == len(second)
+    # No section around the place: nothing more is asked.
+    _, alone = read_of(BARE, values=(BARE_300, {"value": None}),
+                       groups=number)
+    assert not any("before" in p or "after" in p for _task, p in alone)
+
+
+def test_a_table_s_frame_open_on_every_value_is_asked_once_for_all():
+    around = Source("section", 9, "Bilanz\nDie folgende Tabelle.\n[p2_tbl5]",
+                    {"document_id": 7, "section_title": "Bilanz"})
+    later = Source("section", 10, "Alle Werte gelten für das Jahr 2022.",
+                   {"document_id": 7, "section_title": "Stand"})
+    passages = {("section", 9): around, ("table", 5): placed(),
+                ("section", 10): later}
+    year = {"value": 2022, "quote": "gelten für das Jahr 2022"}
+    read, calls = read_of(placed(), values=(GAS, dict(GAS, value=27,
+                                                      quote=OIL),
+                                            {"value": None}),
+                          groups={"frame": [frame(), frame(),
+                                            frame(year=year)]},
+                          passages=passages)
+    framed = [p for task, p in calls if task == "frame"]
+    assert [p.get("whole_table", False) for p in framed] == [False, False,
+                                                             True]
+    assert [(c["year"], c["year_state"], list(c["year_window"]))
+            for c in read.claims] == [(2022, "read", ["table", 1])] * 2
+    assert all(c["year_source"] == ["section", 10] for c in read.claims)
+
+
+def test_the_two_ends_of_a_range_are_linked_on_both_rows():
+    slots = reading.slots_of(SPEC, EMISSION)
+
+    def end(label, value, which, quote="zwischen 60 und 100 t CO2", **more):
+        return Row(label=label, item_index=0, claim={
+            "value": value, "quote": quote, "qualifier": which,
+            "qualifier_state": "read", **more})
+    low, high = end("R1", 60, fields.RANGE_LOW), end("R2", 100,
+                                                     fields.RANGE_HIGH)
+    assert reading.link_ranges([low, high], slots) == 1
+    assert low.claim[fields.RANGE] == high.claim[fields.RANGE] == [60, 100]
+    # Another answer to a coordinate, or another quote, is another range.
+    gas = end("R3", 60, fields.RANGE_LOW, carrier="Erdgas")
+    oil = end("R4", 100, fields.RANGE_HIGH, carrier="Heizöl")
+    elsewhere = end("R5", 100, fields.RANGE_HIGH, quote="bis 100 t CO2")
+    assert reading.link_ranges([gas, oil, elsewhere], slots) == 0
+    assert fields.RANGE not in gas.claim
+
+
+START = Source("table", 1, "Tabelle 5: Liegenschaften\n| Name | Verbrauch |\n"
+               "| --- | --- |\n| Schule | 900 |", {"document_id": 7, "page": 114})
+REST = Source("table", 2, "| Kita | 61.400 |\n| Halle | 12 |",
+              {"document_id": 7, "page": 115})
+
+
+def test_a_table_at_the_top_of_a_page_shows_the_head_it_may_continue():
+    marked = lookup.continued([START, REST])
+    assert marked[1].provenance["table_before"] == {
+        "owner": ["table", 1],
+        "text": "Tabelle 5: Liegenschaften\n| Name | Verbrauch |\n| --- | --- |"}
+    # A part the layout cut within the page may continue it as well.
+    same = replace(REST, provenance={"page": 114})
+    assert lookup.continued([START, same])[1].provenance["table_before"] \
+        == marked[1].provenance["table_before"]
+    # A passage that starts on its page stands between, or a page between.
+    section = Source("section", 3, "Neuer Abschnitt", {"page": 115})
+    assert "table_before" not in lookup.continued(
+        [START, section, REST])[2].provenance
+    assert "table_before" not in lookup.continued(
+        [START, replace(REST, provenance={"page": 116})])[1].provenance
+    # The reading shows it, and the head of the table before is a head.
+    kita = {"value": 61400, "quote": "| Kita | 61.400 |", "head": "Verbrauch"}
+    read, calls = read_of(marked[1], values=(kita, {"value": None}))
+    assert all(p["table_before"] == marked[1].provenance["table_before"][
+        "text"] for _task, p in calls)
+    assert corrections_of(calls) == []
+
+
+def test_a_correction_names_the_ways_that_pass_in_its_request():
+    source = [Source("section", 1, "Wärmeverbrauch Erdgas 300 MWh im Jahr", {})]
+    quote = "Wärmeverbrauch Erdgas 300 MWh"
+    got = merge_field([Row("R1", 0, {})], source, SLOTS["carrier"],
+                      {"answers": {"R1": {"value": "Heizöl", "quote": quote}}})
+    assert got["failed"][0]["reason"] == say(
+        "answer_not_in_quote", answer="Heizöl") + say("or_unstated",
+                                                      unstated=UNSTATED)
+    got = merge_field([Row("R1", 0, {})], source, SLOTS["subject"],
+                      {"answers": {"R1": {"value": "Schule", "quote": quote}}},
+                      not_in_quote="or_leave_out")
+    assert got["failed"][0]["reason"] == say(
+        "answer_not_in_quote_text", answer="Schule") + say("or_leave_out")

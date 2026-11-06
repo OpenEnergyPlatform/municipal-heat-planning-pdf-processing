@@ -1228,7 +1228,7 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 *, window: Optional[tuple] = None,
                 bases: Optional[list] = None,
                 not_shown: str = "quote_not_in_source",
-                not_in_quote: str = "answer_not_in_quote") -> dict:
+                not_in_quote: str = "or_unstated") -> dict:
     """Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
 
     *window* is (stage, index) and is written next to each coordinate this
@@ -1267,11 +1267,13 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
 
     *not_shown* is the phrase that tells the model a quote stands in nothing
     its request showed, in the names of what that request shows (owner
-    decision 2026-11-06); the reason stays `quote_not_in_source`.
-    *not_in_quote* is the phrase that tells it its quote lacks the answer,
-    with what else that request lets it answer: "not stated" where it offers
-    that, else to leave the coordinate out (owner decision 2026-11-06); the
-    reason stays `answer_not_in_quote`.
+    decision 2026-11-06); the reason stays `quote_not_in_source`. An answer
+    its quote does not hold is told every way that passes in its request:
+    the plan's own word as the wording where the request asks one, else the
+    answer as the quote prints it, then what else the request lets it
+    answer, *not_in_quote*: "not stated" where it offers that
+    (`or_unstated`), else to leave the coordinate out (`or_leave_out`)
+    (owner decisions 2026-11-06); the reason stays `answer_not_in_quote`.
     """
     reply = reply if isinstance(reply, dict) else {}
     pairs: list = []
@@ -1405,8 +1407,10 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             failed.append({"row": row.label, "why": "answer_not_in_quote",
                            "given": given, "raw": wording, "quote": quote,
                            "reason": say(
-                               not_in_quote, answer=shown_answer,
-                               unstated=UNSTATED)})
+                               "answer_not_in_quote" if wording_asked(slot)
+                               else "answer_not_in_quote_text",
+                               answer=shown_answer) + say(
+                               not_in_quote, unstated=UNSTATED)})
             unbacked += 1
             continue
         row.claim[f"{slot.name}_state"] = READ

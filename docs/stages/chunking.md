@@ -64,7 +64,11 @@ the file is a document and is not searched further; two of one name under
 different subfolders are refused with both places named), `merge_single` deep
 copies its sections and replaces each table or figure dict, matched by id, with
 its Stage 5 counterpart wherever that carries a `markdown` or `description`
-key, writing the result to `document.json` through a `.part` file and
+key, joins each table that stage 5 found to continue the table before it to the
+table its run started with (`docpipe.visuals.continuation.join`, owner decision
+2026-11-06: its rows are appended, its id, page, crop, bbox and `qa` go into the
+table's `parts`, it leaves its section, and its own transcription stays in
+`visuals.json`; the log counts the joined parts), writing the result to `document.json` through a `.part` file and
 `os.replace` so a killed write leaves no truncated file for the cache to
 accept (`merge.py:71`). `merge_batch` runs this over every candidate and
 reports one success or failure per directory (`merge.py:160`). A
@@ -501,10 +505,12 @@ merge.py: Merges the preprocessing and imageprocessing outputs as
 chunking's first step.
 
 Replaces each table and figure in sections_refined.json with its
-enriched counterpart from visuals.json, matched by item id, and
-writes the result to document.json with an atomic replace. A
-directory is cached and skipped on rerun once document.json is newer
-than both inputs, unless force is set.
+enriched counterpart from visuals.json, matched by item id, joins each
+table the transcription found to continue the table before it to the
+table it continues (`docpipe.visuals.continuation.join`), and writes the
+result to document.json with an atomic replace. A directory is cached and
+skipped on rerun once document.json is newer than both inputs, unless
+force is set.
 
 Author: Felix Vossel
 

@@ -1059,3 +1059,26 @@ def test_a_number_the_rows_request_worked_out_names_no_inputs_and_stands():
     assert isinstance(verify.verify_tuple(
         named, SPEC.by_uri["energy_consumption"], text, owner_kind="table"),
         verify.Refusal)
+
+
+def test_a_worked_out_number_inherits_the_word_its_inputs_print():
+    # Owner decision 2026-11-06: the compute step inherits "ca."; parts that
+    # differ in it give an approximate number, and a worked-out number is
+    # the end of no range.
+    exact = {"qualifier": fields.UNSTATED,
+             "qualifier_state": fields.SAID_UNSTATED}
+    approx = {"qualifier": rules.APPROXIMATE, "qualifier_raw": "ca.",
+              "qualifier_quote": "ca. 300 MWh/a",
+              "qualifier_state": fields.READ}
+    row = {**amount(500), "range": [100, 500],
+           "qualifier": fields.RANGE_HIGH, "qualifier_state": fields.READ}
+    none = rules.qualified(row, [exact, exact])
+    same = rules.qualified(row, [approx, approx])
+    mixed = rules.qualified(row, [approx, exact])
+    assert "qualifier" not in none \
+        and none["qualifier_state"] == fields.SAID_UNSTATED
+    assert (same["qualifier"], same["qualifier_raw"],
+            same["qualifier_state"]) == (rules.APPROXIMATE, "ca.", fields.READ)
+    assert (mixed["qualifier"], mixed["qualifier_state"]) == (
+        rules.APPROXIMATE, fields.DERIVED)
+    assert not any("range" in out for out in (none, same, mixed))

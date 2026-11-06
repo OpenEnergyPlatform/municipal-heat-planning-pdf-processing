@@ -241,6 +241,27 @@ class Group:
     # value needs every distinction the definition draws, the others only
     # what a value of the parameter is (owner decision 2026-11-05, ticket 26).
     full_definition: bool = False
+    # Coordinates only the value's own passage states, such as what the
+    # number counts: asked again with the passages around it, never searched
+    # for in the rest of the plan (spec: "own_passage", owner decision
+    # 2026-11-06).
+    own_passage: tuple = ()
+    # Coordinates printed with the number itself, such as "ca." or "bis zu":
+    # read once with the value, its "not stated" an answer that nothing
+    # qualifies the number, never asked again (spec: "own_value", owner
+    # decision 2026-11-06).
+    own_value: tuple = ()
+
+    def asked_near(self, slots: list) -> list:
+        """The slots the second reading asks again with the passages around
+        a value: all but those printed with the number itself."""
+        return [slot for slot in slots if slot.name not in self.own_value]
+
+    def combed(self, slots: list) -> list:
+        """The slots the combing looks for in the rest of the plan: all but
+        those only the value's own passage or the number itself states."""
+        return [slot for slot in slots
+                if slot.name not in self.own_passage + self.own_value]
 
 
 @dataclass
@@ -664,8 +685,18 @@ def _validate_groups(raw, parameters: list, asks_unit: bool) -> dict:
         definition = entry.get("definition", "brief")
         if definition not in DEFINITIONS:
             _fail(f"{path}.definition", f"must be one of {DEFINITIONS}")
+        own = {}
+        for key in ("own_passage", "own_value"):
+            listed = entry.get(key, [])
+            if not isinstance(listed, list) or any(
+                    c not in coordinates for c in listed):
+                _fail(f"{path}.{key}", "a list of the group's coordinates")
+            own[key] = tuple(listed)
+        if set(own["own_passage"]) & set(own["own_value"]):
+            _fail(f"{path}.own_value", "a coordinate is in own_passage or "
+                                       "own_value, not both")
         groups[name] = Group(name, tuple(coordinates), read_in, where.strip(),
-                             full_definition=definition == "full")
+                             full_definition=definition == "full", **own)
     missing = sorted(known - set(owner))
     if missing:
         _fail("spec.groups", f"in no group: {', '.join(missing)}")

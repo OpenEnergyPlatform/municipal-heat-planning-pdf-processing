@@ -3,12 +3,18 @@ combing.py: The coordinates the reading left open, looked for in the rest of
 the plan. Step 4 of the rebuilt harvest (owner decisions 2026-11-04).
 
 The reading asks a value's coordinates in its own passage and the text
-around it, and may fetch more of the plan itself. What is still open after it
-(a coordinate the passage does not state, one whose answer did not hold, one
-no reply answered) is looked for here, per value and group of the spec that
-still has an open coordinate (owner decisions 2026-11-04 and 2026-11-05:
-every request one task and one value), the group's words for where a plan
-prints it shown. The search ranks the plan with the sentences the reading
+around it, then once more with the sections before and after it. What is
+still open after it (a coordinate the passage does not state, one whose
+answer did not hold, one no reply answered) is looked for here, per value
+and group of the spec that still has an open coordinate (owner decisions
+2026-11-04 and 2026-11-05: every request one task and one value), the
+group's words for where a plan prints it shown. Only what another passage
+can state is looked for (`Group.combed`, owner decision 2026-11-06): what a
+number counts and how it is aggregated says its own passage, and a word like
+"ca." the number itself. A table that prints no frame in its head and rows,
+its frame open on every one of its values, is combed once, for its first
+value, and the others take the answers with their quotes (`taken_by`, owner
+decisions 2026-11-02 and 2026-11-06). The search ranks the plan with the sentences the reading
 wrote to the coordinates it found unstated, as the plan would print them
 (owner decision 2026-11-05: HyDE, `Read.probes`), those of the coordinates
 asked here; the best sections, tables and figures of that ranking are shown
@@ -81,10 +87,10 @@ COMB_PROMPT_ID = "extraction/comb"
 # in the names of what it shows: "more", "hits", "passage", "row" (owner
 # decision 2026-11-06).
 NOT_SHOWN = "quote_not_shown"
-# Its phrase for a quote that lacks the answer: the combing offers no "not
-# stated", so the model leaves the coordinate out (owner decision
-# 2026-11-06).
-NOT_IN_QUOTE = "answer_not_in_quote_leave_out"
+# How its correction for a quote that lacks the answer ends: the combing
+# offers no "not stated", so the model leaves the coordinate out (owner
+# decision 2026-11-06).
+NOT_IN_QUOTE = "or_leave_out"
 
 # What the reading leaves for this step.
 OPEN = (SAID_UNSTATED, UNBACKED, UNANSWERED)
@@ -244,6 +250,35 @@ class Combed:
     group: Optional[str] = None   # the group of the spec asked
     # rows made beside the value, one per further name it was stated for
     made: list = field(default_factory=list)
+    # the other values of its table that took the answers combed for this
+    # one, its frame open on all of them (owner decision 2026-11-06)
+    table_rows: int = 0
+
+
+# The keys of one coordinate a value takes from the value of its table that
+# was combed for all of them (`taken_by`).
+TAKEN = ("", "_state", "_raw", "_raw_foreign", "_quote", "_source", "_window",
+         "_link_quote", "_link_source", "_seen")
+
+
+def taken_by(first: dict, others: list, names: list) -> None:
+    """The coordinates *names* as the combing left them on *first*, the value
+    of a table it was asked for, taken by the table's other values, with
+    their quotes and states (owner decisions 2026-11-02 and 2026-11-06: a
+    table that prints no frame in its head and rows is asked once). A
+    coordinate the combing read on the first counts for the others as read
+    for their table (`table`)."""
+    for claim in others:
+        for name in names:
+            for suffix in TAKEN:
+                claim.pop(f"{name}{suffix}", None)
+                if f"{name}{suffix}" in first:
+                    claim[f"{name}{suffix}"] = copy.deepcopy(
+                        first[f"{name}{suffix}"])
+            window = claim.get(f"{name}_window") or ()
+            if claim.get(f"{name}_state") == READ and window \
+                    and window[0] == "retrieval":
+                claim[f"{name}_window"] = ["table", 2]
 
 
 class Comber:
@@ -272,14 +307,21 @@ class Comber:
         self.trace = trace
 
     def __call__(self, document_id: int, reads: list, passages: dict,
-                 pairs: list, budget: Optional[int] = None) -> list:
+                 pairs: list, budget: Optional[int] = None,
+                 bases: Optional[list] = None) -> list:
         """One Combed per read value and group of the spec with a
-        coordinate still open on it (owner decisions 2026-11-04 and
-        2026-11-05: one value per request)."""
+        coordinate still open on it that another passage can state
+        (`Group.combed`, owner decisions 2026-11-04, 2026-11-05 and
+        2026-11-06: one value per request, nothing only the value's own
+        passage says). A table's frame open on every one of its values is
+        combed once, for its first value, and the others take the answers
+        (`taken_by`). *bases* are the plan's years (`years.PlanYears`), else
+        those of *pairs*."""
         jobs: list = []
         for read in reads:
             parameter = read.batch.parameter
             slots = slots_of(self.spec, parameter)
+            whole: dict = {}
             for index, claim in enumerate(read.claims):
                 # The passage the value is read from, which may be one its
                 # round fetched (`reading.source_of`), and the sentences its
@@ -288,15 +330,43 @@ class Comber:
                 probes = read.probes[index] \
                     if index < len(read.probes) else {}
                 for group, group_slots in groups_of(self.spec, slots):
-                    if open_of(claim, group_slots):
-                        jobs.append((read, parameter, source, group,
-                                     group_slots, claim, probes))
+                    combed = group.combed(group_slots)
+                    if not open_of(claim, combed):
+                        continue
+                    if source.owner_kind == "table" \
+                            and group.read_in == "survey":
+                        whole.setdefault(
+                            (group.name, source.owner_id), []).append(
+                                (source, group, combed, claim, probes))
+                        continue
+                    jobs.append((read, parameter, source, group, combed,
+                                 claim, probes, []))
+            for (_name, owner), entries in whole.items():
+                source, group, combed, claim, probes = entries[0]
+                table = [one for one in read.claims
+                         if source_of(read.batch, one).owner_kind == "table"
+                         and source_of(read.batch, one).owner_id == owner]
+                opened = {tuple(open_of(one, combed)) for one in table}
+                if len(entries) > 1 and len(entries) == len(table) \
+                        and len(opened) == 1:
+                    jobs.append((read, parameter, source, group, combed,
+                                 claim, probes, [e[3] for e in entries[1:]]))
+                else:
+                    jobs.extend((read, parameter, e[0], e[1], e[2], e[3],
+                                 e[4], []) for e in entries)
 
         def one(job):
-            _read, parameter, source, group, group_slots, claim, probes = job
-            return self.comb(document_id, parameter, source, group_slots,
-                             [claim], passages, pairs, budget, group=group,
-                             probes=probes, split=True)
+            (_read, parameter, source, group, combed, claim, probes,
+             others) = job
+            names = open_of(claim, combed)
+            result = self.comb(document_id, parameter, source, combed,
+                               [claim], passages, pairs, budget, group=group,
+                               probes=probes, split=not others,
+                               bases=tuple(bases) if bases is not None
+                               else None, whole_table=len(others))
+            if others:
+                taken_by(claim, others, names)
+            return result
         if self.pool is None:
             combed = [one(job) for job in jobs]
         else:
@@ -304,7 +374,7 @@ class Comber:
         # A value combed for several names is one row per name (owner
         # decision 2026-11-06): the rows made join their value's reading.
         for job, result in zip(jobs, combed):
-            read, probes = job[0], job[-1]
+            read, probes = job[0], job[6]
             if result.made:
                 read.probes = list(read.probes) + [{}] * max(
                     0, len(read.claims) - len(read.probes))
@@ -332,6 +402,8 @@ class Comber:
                         continue
                 else:
                     asked = None
+                    # What another passage can state, as in a harvest.
+                    group_slots = group.combed(group_slots)
                     if not open_of(claim, group_slots):
                         continue
                 out.append(self.comb(document_id, parameter, source,
@@ -346,7 +418,8 @@ class Comber:
              coordinates: Optional[list] = None, own: bool = False,
              bases: Optional[tuple] = None,
              first: Optional[list] = None, group=None,
-             probes: Optional[dict] = None, split: bool = False) -> Combed:
+             probes: Optional[dict] = None, split: bool = False,
+             whole_table: int = 0) -> Combed:
         """The open coordinates of *claims*, values of *parameter* read in
         *source*, answered in place; with *coordinates* those of every row,
         open or not. *own* shows *source* and its section before the first
@@ -370,7 +443,9 @@ class Comber:
         Each request shows one row (owner decision 2026-11-06): *claims* is
         one value's claim, and a row made for a further name is asked again
         on its own. The reply carries that row's answers at its top, with no
-        row label (`comb_response_format`, `as_rows`)."""
+        row label (`comb_response_format`, `as_rows`). *whole_table* is how
+        many other values of the value's table take the answers (`taken_by`),
+        which the request says ("whole_table")."""
         if len(claims) != 1:
             raise ValueError(f"a combing request shows one row, not "
                              f"{len(claims)}")
@@ -387,7 +462,8 @@ class Comber:
         origin = (source.owner_kind, source.owner_id)
         result = Combed(parameter.uri, origin, len(rows),
                         sum(len(names) for names in opened.values()),
-                        group=group.name if group is not None else None)
+                        group=group.name if group is not None else None,
+                        table_rows=whole_table)
         around = around_of(source, passages, budget)
         parent = (around.owner_kind, around.owner_id) \
             if around is not None else origin
@@ -428,7 +504,8 @@ class Comber:
                     "unit": row.claim.get("unit"),
                     "quote": row.claim.get("quote"),
                     "known": knowns[row.label],
-                    "open": opened[row.label]}
+                    "open": opened[row.label],
+                    **({"whole_table": True} if whole_table else {})}
         base = {
             "passage": {"kind": source.owner_kind,
                         "title": lookup.title_of(source),
@@ -666,4 +743,6 @@ class Comber:
                        searched=result.searched, missed=result.missed,
                        corrected=result.corrected,
                        exhausted=result.exhausted, listed=result.listed,
-                       group=result.group)
+                       group=result.group,
+                       **({"table_rows": result.table_rows}
+                          if result.table_rows else {}))

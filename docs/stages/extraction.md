@@ -104,7 +104,13 @@ group or in two, a name that is no coordinate, an unknown step, and a survey
 group that is not the axes of one parameter. A group may say
 `"definition": "full"` to have its requests show a parameter's whole
 description and not its `brief` (`Group.full_definition`). Groups are for the rebuilt
-harvest (owner decision 2026-11-04); the harvest below reads none of them.
+harvest (owner decision 2026-11-04); the harvest below reads none of them. A group may also say which coordinates the
+combing does not ask (owner decision 2026-11-06): `own_passage` names those
+only the passage of the value can state, asked in the reading and never
+combed, and `own_value` those asked once with the value, whatever passage
+answers (`Group.asked_near`, `Group.combed`); a coordinate is in one of them
+or neither. kwp: `subject` and `aggregation` are `own_passage`, `qualifier`
+is `own_value`.
 
 ### The survey of a whole plan
 
@@ -220,6 +226,36 @@ split into halves of the table's rows, title and head lines kept, again and
 again; a single row that still does not fit is a hole of its own (`Read.lost`,
 `cut_off`), as is a piece no round answered (`no_answer`), and the other
 pieces are read (`surveyed.taken_of`).
+
+A table that may continue the table before it (that table stands on its page
+or the page before and no passage between them starts on its page,
+`lookup.continued`) is shown with that table's title and head right before it,
+`table_before` (owner decision 2026-11-06), in the survey and in the reading;
+stage 5 finds the same tables by the same rule (see
+[visuals](visuals.md)). Every reading request also shows the title-page line
+that names the plan's municipality, `title_page` (`runner.title_line`; the
+profile constant `TITLE_PAGE_LINE` turns it on).
+
+A coordinate still open after a value's reading is asked once more, in the
+same group, with the sections before and after the value's place
+(`reading.near_of`, window `near`; owner decision 2026-11-06). A table read
+whole by the survey asks its open frame once for all its rows
+(`Reader._near_table`). The trace's `read` event counts the requests (`near`)
+and the coordinates they filled (`near_read`).
+
+A correction names every way that passes in its request (owner decision
+2026-11-06): an answer its quote does not hold is told to give the plan's own
+word as the wording where the request asks one (`answer_not_in_quote`), else
+the answer as its quote prints it (`answer_not_in_quote_text`), and then what
+else the request lets it answer, passed as `merge_field(..., not_in_quote=...)`:
+"not stated" where the request offers it (`or_unstated`, the reading), else
+to leave the coordinate out (`or_leave_out`, the combing).
+
+A parameter with the axis `qualifier` in kwp (approximate, at most, at least,
+range low or high) reads it with the value (owner decision 2026-11-06). The
+two ends of a range are linked by code, not by the model
+(`reading.link_ranges`, tuple key `range`), and the compute step gives a number
+it works out the qualifier of the rows it used (`profiles/kwp/compute.qualified`).
 
 `extraction/read_text` asks one request per value and group of the spec, and
 only the group's coordinates still open; a group with none open is not asked.
@@ -408,10 +444,10 @@ value where an object is asked, is told `wrong_shape`,
 `combing.Comber._corrections`), a quote in nothing shown in the names of what the combing shows,
 `"more"`, `"hits"`, `"passage"` and `"row"` (`quote_not_shown`,
 `combing.NOT_SHOWN`, owner decision 2026-11-06). A quote that lacks its answer
-is told to quote the place where it really stands "or leave this coordinate out"
-(`answer_not_in_quote_leave_out`, `combing.NOT_IN_QUOTE`, passed as
-`merge_field(..., not_in_quote=...)`; the reading keeps `answer_not_in_quote`,
-which offers `out:unstated`, and the reason code stays `answer_not_in_quote`).
+is told so, ending "leave it out" where it stands nowhere (`or_leave_out`,
+`combing.NOT_IN_QUOTE`, passed as `merge_field(..., not_in_quote=...)`; the
+reading's correction ends with `or_unstated`, which offers `out:unstated`, and
+the reason code stays `answer_not_in_quote`).
 A probe showed why: the correction still offered "not stated", and the model
 took it 111 times in 334 corrections (owner decision 2026-11-06). A quote may
 stand in
@@ -434,6 +470,11 @@ then does a coordinate no reply found end `unstated`, a finding about the plan.
 One whose request no longer fit the model's window before that ends
 `exhausted`, a finding about the run. The ranking is handed in:
 `make_more_sources` in a harvest.
+
+A table that prints no frame is combed once for all its rows, not once per row
+(`Combed.table_rows`, row `whole_table`; owner decision 2026-11-06).
+The combing asks only what another passage can state: coordinates the spec
+marks `own_passage` or `own_value` are left out of it.
 
 A parameter the survey of the whole plan named no passage for is searched for
 before it can count as not stated (owner decision 2026-11-04): the same
@@ -703,6 +744,16 @@ t CO2eq/a (3,836), from tables (14,227), figures (11,869) and prose
 existed, the year axis alone produced 1,849 refusals against 0 readings,
 since every window after the first excluded the row's own source
 (`Turn.project`).
+
+### The plan's years
+
+The base and target years of a plan come from one request per plan
+(`years.PlanYears`, prompt `extraction/years`, trace event `years`; owner
+decision 2026-11-06). Each year is asked with a quote that prints it, checked
+as any coordinate is, with the combing's tools to read what it asks for. The
+pairs of single pages the survey found no longer count: one sheet's pair had
+put years of the target among the base years. The prompt is required where the
+spec dates a value by the plan's years (`runner.dates_by_plan`).
 
 ### Base years
 
@@ -2432,7 +2483,7 @@ every document whose map of places was built (`passages`, `windows`, `places`,
 `dropped`, `unread`, `complete`, `by_axis` and `by_parameter`), `coord` and
 `refusal` per folded tuple or refusal, `invalid` from the schema
 self-check described under Method, the survey flow's `survey`, `read`,
-`comb`, `seek`, `seek_probe` and `completion`, one `<stage>_ask` per answered
+`comb`, `seek`, `seek_probe`, `completion` and `years`, one `<stage>_ask` per answered
 request of each stage (`ASK_STAGES`), and `piece`, a text the requests of the
 document repeat. An event that reports a model request (`frame`, `rows`,
 `field`, every `<stage>_ask`, and an `error` of kind `exception`) carries the

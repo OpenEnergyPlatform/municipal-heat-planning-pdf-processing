@@ -51,6 +51,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
+from .lookup import continued
 from .pipeline import Batch, DocumentReport, WorkItem, drop_repeats
 from .reading import NO_ANSWER, shown_hits, source_of
 from .survey import Answer, Found, budget_of, merge
@@ -364,14 +365,20 @@ class SurveyedHarvest:
     *front* are the parameters a publication states of itself, read from
     its first page until a reading of *title* comes back (`front_walk`),
     the profile's FRONT_PAGE_PARAMETERS and FRONT_PAGE_TITLE; none without a
-    title among them.
+    title among them. *make_years(spec)* is the request for the plan's base
+    and target years (`years.PlanYears`), None where the spec dates nothing
+    by them; *title_page_of(document_id, passages)* the line of the title
+    page that names the plan's own place, None where the profile shows none
+    (owner decisions 2026-11-06).
     """
 
     def __init__(self, spec, make_survey: Callable, make_reader: Callable,
                  make_comber: Callable, passages_of: Callable,
                  pages_of: Callable, *, spec_for: Optional[Callable] = None,
                  halted: Optional[Callable] = None, front=(),
-                 title: Optional[str] = None):
+                 title: Optional[str] = None,
+                 make_years: Optional[Callable] = None,
+                 title_page_of: Optional[Callable] = None):
         self.spec = spec
         self.make_survey = make_survey
         self.make_reader = make_reader
@@ -382,6 +389,9 @@ class SurveyedHarvest:
         self.halted = halted or (lambda: False)
         self.front = tuple(front or ())
         self.title = title
+        self.make_years = make_years or (lambda spec: None)
+        self.title_page_of = title_page_of or (lambda document_id, passages:
+                                               None)
         self._made: dict = {}
         self._lock = threading.Lock()
 
@@ -406,6 +416,10 @@ class SurveyedHarvest:
         return self._once(("comber", id(spec)), spec,
                           lambda: self.make_comber(spec))
 
+    def years_of(self, spec):
+        return self._once(("years", id(spec)), spec,
+                          lambda: self.make_years(spec))
+
     def __call__(self, document_id: int, *, only=(), scope: str = "",
                  passages: Optional[list] = None,
                  also: Optional[Found] = None) -> Optional[Taken]:
@@ -413,17 +427,39 @@ class SurveyedHarvest:
         *only*, of the *passages* given, under *scope*. *also* is read with
         it: what another survey named (`take_found`, `append_unread`)."""
         spec = self.spec_for(document_id)
-        sources = self.passages_of(document_id)
+        # A table at the top of a page shows the title and head of the one
+        # it may continue, in the survey and in the reading (owner decision
+        # 2026-11-06).
+        sources = continued(self.passages_of(document_id))
         shown = {(s.owner_kind, s.owner_id): s for s in sources}
         budget = budget_of(sources, self.pages_of(document_id))
-        wanted = sources if passages is None else list(passages)
+        wanted = sources if passages is None else [
+            shown.get((s.owner_kind, s.owner_id), s) for s in passages]
         found = (self.survey_of(spec, only, scope)(document_id, wanted)
                  if wanted else Found(True))
         if also is not None:
             found = joined(found, also)
         if self.halted():
             return None
-        reads = self.reader_of(spec)(document_id, found, shown, budget)
+        # Once per plan: its base and target years, each with its quote, and
+        # the line of its title page that names its own place (owner
+        # decisions 2026-11-06).
+        asker = self.years_of(spec)
+        bases = (asker(document_id, shown, frame_pairs(found), budget)
+                 if asker is not None else None)
+        title_page = self.title_page_of(document_id, sources)
+        if self.halted():
+            return None
+        # Only what this plan has: without them the reading dates by the
+        # survey's pairs and shows no title line, as before.
+        plan = {key: value for key, value in (("bases", bases),
+                                              ("title_page", title_page))
+                if value is not None}
+
+        def read(survey: Found) -> list:
+            return self.reader_of(spec)(document_id, survey, shown, budget,
+                                        **plan)
+        reads = read(found)
         if self.halted():
             return None
         front = Found(True)
@@ -432,11 +468,8 @@ class SurveyedHarvest:
                 and (not only or parameter.uri in only)]
         # Only after a survey of the whole plan, as the walk below.
         if passages is None and also is None and self.title in uris:
-            walk = front_walk(
-                found, reads, sources, uris, self.title,
-                lambda one: self.reader_of(spec)(document_id, one, shown,
-                                                 budget),
-                self.halted)
+            walk = front_walk(found, reads, sources, uris, self.title, read,
+                              self.halted)
             if walk is None or self.halted():
                 return None
             front, more = walk
@@ -457,18 +490,15 @@ class SurveyedHarvest:
                 if comber.trace is not None:
                     comber.trace("seek", document_id, parameter=uri,
                                  kind=owner[0], owner=owner[1], rank=rank)
-            walk = sought_walk(
-                found, lists,
-                lambda one: self.reader_of(spec)(document_id, one, shown,
-                                                 budget),
-                seen, self.halted)
+            walk = sought_walk(found, lists, read, seen, self.halted)
             if walk is None or self.halted():
                 return None
             sought, more = walk
             reads = reads + more
         if comber is not None:
             combed = comber(document_id, reads, shown, frame_pairs(found),
-                            budget)
+                            budget, **({"bases": bases} if bases is not None
+                                       else {}))
             if self.halted():
                 return None
         return taken_of(document_id, spec, found, reads, combed, shown,

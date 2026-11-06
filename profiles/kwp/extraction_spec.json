@@ -24,13 +24,16 @@
       "where": "Szenario und Jahr gelten meist für eine ganze Tabelle, eine ganze Abbildung oder einen ganzen Abschnitt und stehen nahe beieinander: im Titel, in der Überschrift, in einem Spaltenkopf oder in dem Satz, der eine Tabelle ankündigt."
     },
     "number": {
-      "coordinates": ["unit", "subject"],
+      "coordinates": ["unit", "subject", "qualifier"],
       "read_in": "reading",
-      "where": "Die Zahl, ihre Einheit und ihr Bezug stehen zusammen: in derselben Zelle, derselben Tabellenzeile oder demselben Satz. Die Einheit kann auch im Spaltenkopf, in einer Einheitenzeile oder im Titel der Tabelle stehen."
+      "own_passage": ["subject"],
+      "own_value": ["qualifier"],
+      "where": "Die Zahl, ihre Einheit, ihr Bezug und ein Wort wie „ca.“ oder „bis zu“ stehen zusammen: in derselben Zelle, derselben Tabellenzeile oder demselben Satz. Die Einheit kann auch im Spaltenkopf, in einer Einheitenzeile oder im Titel der Tabelle stehen."
     },
     "context": {
       "coordinates": ["quantity", "aggregation", "carrier", "sector", "technology", "whole", "spatial_scope"],
       "read_in": "reading",
+      "own_passage": ["aggregation"],
       "definition": "full",
       "where": "Die Einordnung einer Zahl steht in ihrer Zeilenbeschriftung, in ihrem Spaltenkopf, im Titel ihrer Tabelle oder Abbildung oder in ihrem Satz."
     }
@@ -271,6 +274,60 @@
           "type": "text",
           "required": false,
           "question": "Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist der Eintrag ihrer eigenen Zeile oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit diesem Eintrag wörtlich. Der Name einer Spalte oder einer Zeilengruppe, etwa \"Energieträger\", \"Sektor\" oder \"Name des Quartiers\", sagt nur, was dort steht, und ist keine Antwort. Ein Energieträger, ein Sektor oder ein Gebiet gehört in sein eigenes Feld. Unterscheidet sie nichts davon, sagt der Plan es nicht."
+        },
+        "qualifier": {
+          "vocabulary": {
+            "out:approximate": {
+              "label": "ungefähr",
+              "spellings": [
+                "ca.",
+                "circa",
+                "rund",
+                "etwa",
+                "knapp",
+                "annähernd"
+              ],
+              "definition": "Der Plan nennt die Zahl als ungefähren Wert."
+            },
+            "out:at_most": {
+              "label": "höchstens",
+              "spellings": [
+                "bis zu",
+                "maximal",
+                "max.",
+                "weniger als",
+                "unter"
+              ],
+              "definition": "Der Plan nennt die Zahl als Obergrenze: Der Wert ist höchstens so groß."
+            },
+            "out:at_least": {
+              "label": "mindestens",
+              "spellings": [
+                "mehr als",
+                "über",
+                "ab",
+                "min."
+              ],
+              "definition": "Der Plan nennt die Zahl als Untergrenze: Der Wert ist mindestens so groß."
+            },
+            "out:range_low": {
+              "label": "unteres Ende einer Spanne",
+              "spellings": [
+                "zwischen",
+                "von"
+              ],
+              "definition": "Die kleinere von zwei Zahlen, zwischen denen der Wert liegt."
+            },
+            "out:range_high": {
+              "label": "oberes Ende einer Spanne",
+              "spellings": [
+                "bis"
+              ],
+              "definition": "Die größere von zwei Zahlen, zwischen denen der Wert liegt."
+            }
+          },
+          "required": false,
+          "question": "Steht direkt bei dieser Zahl ein Wort, das sagt, wie genau sie gilt? „ca. 8,8 GWh“ ist ungefähr, „bis zu 6.200 MWh“ höchstens, „mehr als 4 %“ mindestens; in „zwischen 60 und 100 MWh“ ist 60 das untere und 100 das obere Ende einer Spanne. \"value_raw\" ist dieses Wort des Plans, Zeichen für Zeichen. Steht kein solches Wort bei der Zahl, ist die Antwort out:unstated."
         },
         "aggregation": {
           "vocabulary": {
@@ -561,7 +618,7 @@
               "gloss": "Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart."
             }
           },
-          "question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
+          "question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
           "kg": {
             "role": "edge",
             "schema_slot": "refers_to_energy_carrier",
@@ -684,8 +741,8 @@
               "label": "Geothermie",
               "spellings": [
                 "Geothermieanlage",
-                "Tiefengeothermie",
-                "oberflächennahe Geothermie"
+                "Erdwärmesonden",
+                "Erdwärmekollektoren"
               ],
               "definition": "A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way.",
               "gloss": "Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung."
@@ -757,7 +814,7 @@
               "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
             }
           },
-          "question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
+          "question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEine Energiequelle allein (\"Geothermie\", \"Solarthermie\", \"Umweltwärme\") ist ein Energieträger und keine Technologie: Technologie nur, wo die Stelle eine Anlage nennt (\"Erdwärmesonden\", \"Kollektoren\", \"Wärmepumpen\"); sonst \"Summe\".\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
           "kg": {
             "role": "edge",
             "schema_slot": "refers_to_technology",
@@ -1296,6 +1353,60 @@
           "required": false,
           "question": "Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist der Eintrag ihrer eigenen Zeile oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit diesem Eintrag wörtlich. Der Name einer Spalte oder einer Zeilengruppe, etwa \"Energieträger\", \"Sektor\" oder \"Name des Quartiers\", sagt nur, was dort steht, und ist keine Antwort. Ein Energieträger, ein Sektor oder ein Gebiet gehört in sein eigenes Feld. Unterscheidet sie nichts davon, sagt der Plan es nicht."
         },
+        "qualifier": {
+          "vocabulary": {
+            "out:approximate": {
+              "label": "ungefähr",
+              "spellings": [
+                "ca.",
+                "circa",
+                "rund",
+                "etwa",
+                "knapp",
+                "annähernd"
+              ],
+              "definition": "Der Plan nennt die Zahl als ungefähren Wert."
+            },
+            "out:at_most": {
+              "label": "höchstens",
+              "spellings": [
+                "bis zu",
+                "maximal",
+                "max.",
+                "weniger als",
+                "unter"
+              ],
+              "definition": "Der Plan nennt die Zahl als Obergrenze: Der Wert ist höchstens so groß."
+            },
+            "out:at_least": {
+              "label": "mindestens",
+              "spellings": [
+                "mehr als",
+                "über",
+                "ab",
+                "min."
+              ],
+              "definition": "Der Plan nennt die Zahl als Untergrenze: Der Wert ist mindestens so groß."
+            },
+            "out:range_low": {
+              "label": "unteres Ende einer Spanne",
+              "spellings": [
+                "zwischen",
+                "von"
+              ],
+              "definition": "Die kleinere von zwei Zahlen, zwischen denen der Wert liegt."
+            },
+            "out:range_high": {
+              "label": "oberes Ende einer Spanne",
+              "spellings": [
+                "bis"
+              ],
+              "definition": "Die größere von zwei Zahlen, zwischen denen der Wert liegt."
+            }
+          },
+          "required": false,
+          "question": "Steht direkt bei dieser Zahl ein Wort, das sagt, wie genau sie gilt? „ca. 8,8 GWh“ ist ungefähr, „bis zu 6.200 MWh“ höchstens, „mehr als 4 %“ mindestens; in „zwischen 60 und 100 MWh“ ist 60 das untere und 100 das obere Ende einer Spanne. \"value_raw\" ist dieses Wort des Plans, Zeichen für Zeichen. Steht kein solches Wort bei der Zahl, ist die Antwort out:unstated."
+        },
         "aggregation": {
           "vocabulary": {
             "OEO_00140070": {
@@ -1585,7 +1696,7 @@
               "gloss": "Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart."
             }
           },
-          "question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
+          "question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
           "kg": {
             "role": "edge",
             "schema_slot": "refers_to_energy_carrier",
@@ -1708,8 +1819,8 @@
               "label": "Geothermie",
               "spellings": [
                 "Geothermieanlage",
-                "Tiefengeothermie",
-                "oberflächennahe Geothermie"
+                "Erdwärmesonden",
+                "Erdwärmekollektoren"
               ],
               "definition": "A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way.",
               "gloss": "Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung."
@@ -1781,7 +1892,7 @@
               "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
             }
           },
-          "question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
+          "question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEine Energiequelle allein (\"Geothermie\", \"Solarthermie\", \"Umweltwärme\") ist ein Energieträger und keine Technologie: Technologie nur, wo die Stelle eine Anlage nennt (\"Erdwärmesonden\", \"Kollektoren\", \"Wärmepumpen\"); sonst \"Summe\".\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
           "kg": {
             "role": "edge",
             "schema_slot": "refers_to_technology",
@@ -2168,6 +2279,60 @@
           "required": false,
           "question": "Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist der Eintrag ihrer eigenen Zeile oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit diesem Eintrag wörtlich. Der Name einer Spalte oder einer Zeilengruppe, etwa \"Energieträger\", \"Sektor\" oder \"Name des Quartiers\", sagt nur, was dort steht, und ist keine Antwort. Ein Energieträger, ein Sektor oder ein Gebiet gehört in sein eigenes Feld. Unterscheidet sie nichts davon, sagt der Plan es nicht."
         },
+        "qualifier": {
+          "vocabulary": {
+            "out:approximate": {
+              "label": "ungefähr",
+              "spellings": [
+                "ca.",
+                "circa",
+                "rund",
+                "etwa",
+                "knapp",
+                "annähernd"
+              ],
+              "definition": "Der Plan nennt die Zahl als ungefähren Wert."
+            },
+            "out:at_most": {
+              "label": "höchstens",
+              "spellings": [
+                "bis zu",
+                "maximal",
+                "max.",
+                "weniger als",
+                "unter"
+              ],
+              "definition": "Der Plan nennt die Zahl als Obergrenze: Der Wert ist höchstens so groß."
+            },
+            "out:at_least": {
+              "label": "mindestens",
+              "spellings": [
+                "mehr als",
+                "über",
+                "ab",
+                "min."
+              ],
+              "definition": "Der Plan nennt die Zahl als Untergrenze: Der Wert ist mindestens so groß."
+            },
+            "out:range_low": {
+              "label": "unteres Ende einer Spanne",
+              "spellings": [
+                "zwischen",
+                "von"
+              ],
+              "definition": "Die kleinere von zwei Zahlen, zwischen denen der Wert liegt."
+            },
+            "out:range_high": {
+              "label": "oberes Ende einer Spanne",
+              "spellings": [
+                "bis"
+              ],
+              "definition": "Die größere von zwei Zahlen, zwischen denen der Wert liegt."
+            }
+          },
+          "required": false,
+          "question": "Steht direkt bei dieser Zahl ein Wort, das sagt, wie genau sie gilt? „ca. 8,8 GWh“ ist ungefähr, „bis zu 6.200 MWh“ höchstens, „mehr als 4 %“ mindestens; in „zwischen 60 und 100 MWh“ ist 60 das untere und 100 das obere Ende einer Spanne. \"value_raw\" ist dieses Wort des Plans, Zeichen für Zeichen. Steht kein solches Wort bei der Zahl, ist die Antwort out:unstated."
+        },
         "aggregation": {
           "vocabulary": {
             "OEO_00140070": {
@@ -2445,7 +2610,7 @@
               "gloss": "Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart."
             }
           },
-          "question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
+          "question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
           "kg": {
             "role": "edge",
             "schema_slot": "refers_to_energy_carrier",
@@ -2839,6 +3004,60 @@
           "required": false,
           "question": "Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist der Eintrag ihrer eigenen Zeile oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit diesem Eintrag wörtlich. Der Name einer Spalte oder einer Zeilengruppe, etwa \"Energieträger\", \"Sektor\" oder \"Name des Quartiers\", sagt nur, was dort steht, und ist keine Antwort. Ein Energieträger, ein Sektor oder ein Gebiet gehört in sein eigenes Feld. Unterscheidet sie nichts davon, sagt der Plan es nicht."
         },
+        "qualifier": {
+          "vocabulary": {
+            "out:approximate": {
+              "label": "ungefähr",
+              "spellings": [
+                "ca.",
+                "circa",
+                "rund",
+                "etwa",
+                "knapp",
+                "annähernd"
+              ],
+              "definition": "Der Plan nennt die Zahl als ungefähren Wert."
+            },
+            "out:at_most": {
+              "label": "höchstens",
+              "spellings": [
+                "bis zu",
+                "maximal",
+                "max.",
+                "weniger als",
+                "unter"
+              ],
+              "definition": "Der Plan nennt die Zahl als Obergrenze: Der Wert ist höchstens so groß."
+            },
+            "out:at_least": {
+              "label": "mindestens",
+              "spellings": [
+                "mehr als",
+                "über",
+                "ab",
+                "min."
+              ],
+              "definition": "Der Plan nennt die Zahl als Untergrenze: Der Wert ist mindestens so groß."
+            },
+            "out:range_low": {
+              "label": "unteres Ende einer Spanne",
+              "spellings": [
+                "zwischen",
+                "von"
+              ],
+              "definition": "Die kleinere von zwei Zahlen, zwischen denen der Wert liegt."
+            },
+            "out:range_high": {
+              "label": "oberes Ende einer Spanne",
+              "spellings": [
+                "bis"
+              ],
+              "definition": "Die größere von zwei Zahlen, zwischen denen der Wert liegt."
+            }
+          },
+          "required": false,
+          "question": "Steht direkt bei dieser Zahl ein Wort, das sagt, wie genau sie gilt? „ca. 8,8 GWh“ ist ungefähr, „bis zu 6.200 MWh“ höchstens, „mehr als 4 %“ mindestens; in „zwischen 60 und 100 MWh“ ist 60 das untere und 100 das obere Ende einer Spanne. \"value_raw\" ist dieses Wort des Plans, Zeichen für Zeichen. Steht kein solches Wort bei der Zahl, ist die Antwort out:unstated."
+        },
         "whole": {
           "type": "text",
           "required": false,
@@ -3071,7 +3290,7 @@
               "gloss": "Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart."
             }
           },
-          "question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
+          "question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
           "kg": {
             "role": "edge",
             "schema_slot": "refers_to_energy_carrier",
@@ -3194,8 +3413,8 @@
               "label": "Geothermie",
               "spellings": [
                 "Geothermieanlage",
-                "Tiefengeothermie",
-                "oberflächennahe Geothermie"
+                "Erdwärmesonden",
+                "Erdwärmekollektoren"
               ],
               "definition": "A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way.",
               "gloss": "Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung."
@@ -3267,7 +3486,7 @@
               "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
             }
           },
-          "question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
+          "question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEine Energiequelle allein (\"Geothermie\", \"Solarthermie\", \"Umweltwärme\") ist ein Energieträger und keine Technologie: Technologie nur, wo die Stelle eine Anlage nennt (\"Erdwärmesonden\", \"Kollektoren\", \"Wärmepumpen\"); sonst \"Summe\".\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
           "kg": {
             "role": "edge",
             "schema_slot": "refers_to_technology",
@@ -3498,6 +3717,60 @@
           "type": "text",
           "required": false,
           "question": "Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist der Eintrag ihrer eigenen Zeile oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit diesem Eintrag wörtlich. Der Name einer Spalte oder einer Zeilengruppe, etwa \"Energieträger\", \"Sektor\" oder \"Name des Quartiers\", sagt nur, was dort steht, und ist keine Antwort. Ein Energieträger, ein Sektor oder ein Gebiet gehört in sein eigenes Feld. Unterscheidet sie nichts davon, sagt der Plan es nicht."
+        },
+        "qualifier": {
+          "vocabulary": {
+            "out:approximate": {
+              "label": "ungefähr",
+              "spellings": [
+                "ca.",
+                "circa",
+                "rund",
+                "etwa",
+                "knapp",
+                "annähernd"
+              ],
+              "definition": "Der Plan nennt die Zahl als ungefähren Wert."
+            },
+            "out:at_most": {
+              "label": "höchstens",
+              "spellings": [
+                "bis zu",
+                "maximal",
+                "max.",
+                "weniger als",
+                "unter"
+              ],
+              "definition": "Der Plan nennt die Zahl als Obergrenze: Der Wert ist höchstens so groß."
+            },
+            "out:at_least": {
+              "label": "mindestens",
+              "spellings": [
+                "mehr als",
+                "über",
+                "ab",
+                "min."
+              ],
+              "definition": "Der Plan nennt die Zahl als Untergrenze: Der Wert ist mindestens so groß."
+            },
+            "out:range_low": {
+              "label": "unteres Ende einer Spanne",
+              "spellings": [
+                "zwischen",
+                "von"
+              ],
+              "definition": "Die kleinere von zwei Zahlen, zwischen denen der Wert liegt."
+            },
+            "out:range_high": {
+              "label": "oberes Ende einer Spanne",
+              "spellings": [
+                "bis"
+              ],
+              "definition": "Die größere von zwei Zahlen, zwischen denen der Wert liegt."
+            }
+          },
+          "required": false,
+          "question": "Steht direkt bei dieser Zahl ein Wort, das sagt, wie genau sie gilt? „ca. 8,8 GWh“ ist ungefähr, „bis zu 6.200 MWh“ höchstens, „mehr als 4 %“ mindestens; in „zwischen 60 und 100 MWh“ ist 60 das untere und 100 das obere Ende einer Spanne. \"value_raw\" ist dieses Wort des Plans, Zeichen für Zeichen. Steht kein solches Wort bei der Zahl, ist die Antwort out:unstated."
         },
         "aggregation": {
           "vocabulary": {
@@ -3788,7 +4061,7 @@
               "gloss": "Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart."
             }
           },
-          "question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
+          "question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
           "kg": {
             "role": "edge",
             "schema_slot": "refers_to_energy_carrier",
@@ -3911,8 +4184,8 @@
               "label": "Geothermie",
               "spellings": [
                 "Geothermieanlage",
-                "Tiefengeothermie",
-                "oberflächennahe Geothermie"
+                "Erdwärmesonden",
+                "Erdwärmekollektoren"
               ],
               "definition": "A geothermal heat technology is a heat generation technology that describes how to combine geothermal heat units, geothermal heat transfer processes, energy carriers and energy in a specific way.",
               "gloss": "Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung."
@@ -3984,7 +4257,7 @@
               "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
             }
           },
-          "question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
+          "question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEine Energiequelle allein (\"Geothermie\", \"Solarthermie\", \"Umweltwärme\") ist ein Energieträger und keine Technologie: Technologie nur, wo die Stelle eine Anlage nennt (\"Erdwärmesonden\", \"Kollektoren\", \"Wärmepumpen\"); sonst \"Summe\".\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist.",
           "kg": {
             "role": "edge",
             "schema_slot": "refers_to_technology",

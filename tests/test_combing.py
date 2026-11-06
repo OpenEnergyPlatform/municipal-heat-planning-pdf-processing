@@ -106,8 +106,13 @@ def test_only_values_with_an_open_coordinate_are_combed_once_per_group():
     made, asked, _ = comber({})
     read = reads(claim(), claim(**{name: fields.READ for name in SLOTS}))
     done = made(7, read, PASSAGES, [])
-    assert [d.group for d in done] == [group.name for group, _ in GROUPS]
+    # The unit read, the number's group has nothing open another passage
+    # could state: what it counts its own passage says, a word like "ca."
+    # the number itself (owner decision 2026-11-06).
+    assert [d.group for d in done] == ["frame", "context"]
     assert all(d.rows == 1 for d in done)
+    assert not any({"subject", "qualifier", "aggregation"}
+                   & set(payload["coordinates"]) for payload in asked)
     # One row per request, shown without a label (owner decision
     # 2026-11-06).
     assert all("rows" not in payload and "row" not in payload["row"]
@@ -373,7 +378,9 @@ def test_a_quote_without_its_answer_is_told_to_be_fixed_or_left_out():
     read = reads(year_only(), probes=[SAID])
     made(7, read, PASSAGES, [])
     told = asked[1]["corrections"]["what"]["year"]
-    assert told == say(combing.NOT_IN_QUOTE, answer=2030, unstated=UNSTATED)
+    # A year may be named by the plan's word ("Basisjahr"): that way first.
+    assert told.startswith(say("answer_not_in_quote", answer=2030))
+    assert told.endswith(say(combing.NOT_IN_QUOTE, unstated=UNSTATED))
     assert UNSTATED not in told
     assert read[0].claims[0]["year_state"] == fields.UNBACKED
     # The failure by construction: where a request offers "not stated", as
@@ -420,7 +427,8 @@ def test_the_search_ranks_with_the_sentences_of_the_coordinates_asked():
     # later is the plan in its order.
     others = [p for p in asked if "year" not in p["coordinates"]]
     firsts = [p for p in others if "hits" not in p]
-    assert len(firsts) == len(GROUPS) - 1
+    # The context group; the number's has nothing to comb (its unit read).
+    assert len(firsts) == 1
     assert all(set(one) == {"hits"} for p in others
                for one in p.get("hits") or ())
 
@@ -452,3 +460,35 @@ def test_without_a_sentence_the_model_searches_itself_with_its_own():
     done = made(7, reads(claim()), PASSAGES, [])
     assert all(d.missed == 1 and d.asked == 2 and d.hits == 1
                and d.listed == 1 for d in done)
+
+
+TABLE = Source("table", 11, "Tabelle 3: Emissionen\n| Träger | t CO2 |\n"
+               "| --- | --- |\n| Erdgas | 300 |\n| Heizöl | 27 |",
+               {"document_id": 7, "page": 3})
+
+
+def test_a_table_s_frame_open_on_every_value_is_combed_once_for_all():
+    # Owner decisions 2026-11-02 and 2026-11-06: a table that prints no
+    # frame in its head and rows is combed once, and every value of it takes
+    # the answers with their quotes.
+    batch = Batch(7, EMISSION, [WorkItem(7, EMISSION, TABLE)])
+    gas = claim()
+    oil = dict(claim(), value=27, quote="| Heizöl | 27 |")
+    read = [reading.Read(batch, [gas, oil], probes=[SAID, SAID])]
+    made, asked, _ = comber(everything(year=YEAR))
+    done = made(7, read, {("table", 11): TABLE, ("section", 8): HIT}, [])
+    framed = [p for p in asked if "year" in p["coordinates"]]
+    assert len(framed) == 1 and framed[0]["row"]["whole_table"] is True
+    assert [d.table_rows for d in done if d.group == "frame"] == [1]
+    assert [(c["year"], c["year_state"]) for c in (gas, oil)] == [
+        (2030, fields.READ)] * 2
+    assert oil["year_source"] == gas["year_source"] == ["section", 8]
+    assert list(oil["year_window"]) == ["table", 2]
+    # A value of the table that read its frame: each is combed on its own.
+    read = [reading.Read(batch, [claim(), dict(claim(year=fields.READ,
+                                                     scenario=fields.READ),
+                                               value=27)],
+                         probes=[SAID, {}])]
+    made, asked, _ = comber(everything(year=YEAR))
+    made(7, read, {("table", 11): TABLE, ("section", 8): HIT}, [])
+    assert not any(p["row"].get("whole_table") for p in asked)

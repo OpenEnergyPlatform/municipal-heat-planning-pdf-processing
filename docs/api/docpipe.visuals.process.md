@@ -29,10 +29,18 @@ def process_table(
     model: str | None = None,
     lock: threading.Lock | None = None,
     source_text: str = "",
+    before: dict | None = None,
 ) -> dict
 ```
 
 Returns a copy of *table* enriched with a ``markdown`` key.
+
+*before*, for a table that may continue the table before it
+(`continuation.before_of`), is shown to the model with what stands
+between them: the model says whether the table continues it and, where
+it does, writes its rows under that table's head. The result then keeps
+the id of the table before it as ``after`` and the answer as
+``continues`` (owner decision 2026-11-06).
 
 A QA gate checks coverage against *source_text* and row duplication; on
 failure the table is still returned (best effort) but carries a

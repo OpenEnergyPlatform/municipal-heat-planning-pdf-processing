@@ -47,6 +47,34 @@ SUBJECT = "subject"
 PARTS = {"carrier": "out:total", "sector": "out:total",
          "technology": "out:total", AREA: "municipality"}
 SPLIT = ("carrier", "sector", "technology")
+# How precisely a number holds, the word the plan prints with it ("ca.", "bis
+# zu"), and the entry a worked-out number takes from parts that differ in it.
+QUALIFIER = "qualifier"
+APPROXIMATE = "out:approximate"
+
+
+def qualified(row: dict, used: list) -> dict:
+    """*row*, a number worked out from the rows *used*, with the qualifier
+    they leave it (owner decision 2026-11-06: the compute step inherits it):
+    theirs, with its evidence, where they all print the same word; none
+    where none prints one; "ungefähr" where they differ, since a sum of
+    approximate parts is approximate. A worked-out number is the end of no
+    range."""
+    out = {key: value for key, value in row.items()
+           if key != fields.RANGE and key != QUALIFIER
+           and not key.startswith(f"{QUALIFIER}_")}
+    said = {one.get(QUALIFIER) if one.get(f"{QUALIFIER}_state") == fields.READ
+            else None for one in used}
+    if said == {None}:
+        out[f"{QUALIFIER}_state"] = fields.SAID_UNSTATED
+    elif len(said) == 1:
+        first = next(one for one in used
+                     if one.get(f"{QUALIFIER}_state") == fields.READ)
+        out.update(keys_of(first, QUALIFIER))
+    else:
+        out[QUALIFIER] = APPROXIMATE
+        out[f"{QUALIFIER}_state"] = fields.DERIVED
+    return out
 
 
 def entry(row: dict, axis: str) -> Optional[str]:
@@ -229,8 +257,8 @@ def share_question(share: dict, bases: list, spec) -> Question:
         totals = [other for other in used if other is not share]
         if len(totals) != 1:
             return None         # no total named, or the answer is no share
-        return {**inherited(totals[0], *SPLIT, SUBJECT), **keys_of(
-            share, *SPLIT, SUBJECT)}
+        return qualified({**inherited(totals[0], *SPLIT, SUBJECT), **keys_of(
+            share, *SPLIT, SUBJECT)}, used)
 
     def makes(used: list) -> Optional[float]:
         """The share of its one total, in the total's unit."""
@@ -283,10 +311,11 @@ def open_shares(rows: list, spec) -> list:
 def sum_question(parts: list, axis: str, spec) -> Question:
     first = parts[0]
 
-    def row(_used: list) -> dict:
-        return {**inherited(first, axis, SUBJECT), axis: PARTS[axis],
-                f"{axis}_state": fields.DERIVED,
-                f"{SUBJECT}_state": fields.SAID_UNSTATED}
+    def row(used: list) -> dict:
+        return qualified({**inherited(first, axis, SUBJECT),
+                          axis: PARTS[axis], f"{axis}_state": fields.DERIVED,
+                          f"{SUBJECT}_state": fields.SAID_UNSTATED},
+                         used or parts)
 
     def makes(used: list) -> float:
         """The parts it names added up, in the unit of the first."""

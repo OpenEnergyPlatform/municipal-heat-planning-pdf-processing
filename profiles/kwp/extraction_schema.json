@@ -453,6 +453,38 @@
      {
       "else": {
        "properties": {
+        "qualifier": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "qualifier_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "qualifier_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "qualifier": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "qualifier"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
         "aggregation": {
          "type": "null"
         }
@@ -809,13 +841,14 @@
       "description": "How the coordinate 'aggregation' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "aggregation_window": {
-      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -1100,7 +1133,7 @@
         "uri": "OEO_00010155"
        }
       },
-      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
@@ -1170,13 +1203,14 @@
       "description": "How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "carrier_window": {
-      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -1298,13 +1332,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -1324,6 +1359,165 @@
      },
      "provenance": {
       "$ref": "#/$defs/provenance"
+     },
+     "qualifier": {
+      "description": "Axis 'qualifier' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless qualifier_state is 'read' or 'derived'.",
+      "enum": [
+       "out:approximate",
+       "out:at_most",
+       "out:at_least",
+       "out:range_low",
+       "out:range_high",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "höchstens": {
+        "meaning": "Der Plan nennt die Zahl als Obergrenze: Der Wert ist höchstens so groß.",
+        "spellings": [
+         "bis zu",
+         "maximal",
+         "max.",
+         "weniger als",
+         "unter"
+        ],
+        "uri": "out:at_most"
+       },
+       "mindestens": {
+        "meaning": "Der Plan nennt die Zahl als Untergrenze: Der Wert ist mindestens so groß.",
+        "spellings": [
+         "mehr als",
+         "über",
+         "ab",
+         "min."
+        ],
+        "uri": "out:at_least"
+       },
+       "oberes Ende einer Spanne": {
+        "meaning": "Die größere von zwei Zahlen, zwischen denen der Wert liegt.",
+        "spellings": [
+         "bis"
+        ],
+        "uri": "out:range_high"
+       },
+       "ungefähr": {
+        "meaning": "Der Plan nennt die Zahl als ungefähren Wert.",
+        "spellings": [
+         "ca.",
+         "circa",
+         "rund",
+         "etwa",
+         "knapp",
+         "annähernd"
+        ],
+        "uri": "out:approximate"
+       },
+       "unteres Ende einer Spanne": {
+        "meaning": "Die kleinere von zwei Zahlen, zwischen denen der Wert liegt.",
+        "spellings": [
+         "zwischen",
+         "von"
+        ],
+        "uri": "out:range_low"
+       }
+      },
+      "x-question": "Steht direkt bei dieser Zahl ein Wort, das sagt, wie genau sie gilt? „ca. 8,8 GWh“ ist ungefähr, „bis zu 6.200 MWh“ höchstens, „mehr als 4 %“ mindestens; in „zwischen 60 und 100 MWh“ ist 60 das untere und 100 das obere Ende einer Spanne. \"value_raw\" ist dieses Wort des Plans, Zeichen für Zeichen. Steht kein solches Wort bei der Zahl, ist die Antwort out:unstated."
+     },
+     "qualifier_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('qualifier_raw'). 'qualifier_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "qualifier_link_source": {
+      "description": "Which source 'qualifier_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "qualifier_producer": {
+      "description": "Who re-read 'qualifier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "qualifier_quote": {
+      "description": "The verbatim passage carrying 'qualifier'. Present exactly when qualifier_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "qualifier_raw": {
+      "description": "The document's own wording 'qualifier' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "qualifier_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'qualifier': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "qualifier_seen": {
+      "description": "A wording the model noticed for 'qualifier' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "qualifier_source": {
+      "description": "Which source the passage for 'qualifier' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "qualifier_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'qualifier' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "qualifier_window": {
+      "description": "[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "quantity": {
       "description": "Axis 'quantity' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless quantity_state is 'read' or 'derived'.",
@@ -1419,13 +1613,14 @@
       "description": "How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "quantity_window": {
-      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -1447,6 +1642,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "scenario": {
       "description": "Axis 'scenario' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.",
@@ -1600,13 +1804,14 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -1779,13 +1984,14 @@
       "description": "How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "sector_window": {
-      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -1926,13 +2132,14 @@
       "description": "How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "spatial_scope_window": {
-      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -2026,13 +2233,14 @@
       "description": "How the coordinate 'subject' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "subject_window": {
-      "description": "[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -2108,8 +2316,8 @@
         "meaning": "Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung.",
         "spellings": [
          "Geothermieanlage",
-         "Tiefengeothermie",
-         "oberflächennahe Geothermie"
+         "Erdwärmesonden",
+         "Erdwärmekollektoren"
         ],
         "uri": "OEO_00020306"
        },
@@ -2165,7 +2373,7 @@
         "uri": "OEO_00020490"
        }
       },
-      "x-question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEine Energiequelle allein (\"Geothermie\", \"Solarthermie\", \"Umweltwärme\") ist ein Energieträger und keine Technologie: Technologie nur, wo die Stelle eine Anlage nennt (\"Erdwärmesonden\", \"Kollektoren\", \"Wärmepumpen\"); sonst \"Summe\".\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "technology_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('technology_raw'). 'technology_quote' is then the frame's passage that prints the number.",
@@ -2235,13 +2443,14 @@
       "description": "How the coordinate 'technology' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "technology_window": {
-      "description": "[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -2352,13 +2561,14 @@
       "description": "How the coordinate 'unit' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "unit_window": {
-      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -2467,13 +2677,14 @@
       "description": "How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "year_window": {
-      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -2507,6 +2718,8 @@
      "quantity_state",
      "subject",
      "subject_state",
+     "qualifier",
+     "qualifier_state",
      "aggregation",
      "aggregation_state",
      "carrier",
@@ -2635,6 +2848,38 @@
        },
        "required": [
         "subject"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "qualifier": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "qualifier_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "qualifier_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "qualifier": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "qualifier"
        ]
       }
      },
@@ -2997,13 +3242,14 @@
       "description": "How the coordinate 'aggregation' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "aggregation_window": {
-      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -3288,7 +3534,7 @@
         "uri": "OEO_00010155"
        }
       },
-      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
@@ -3358,13 +3604,14 @@
       "description": "How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "carrier_window": {
-      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -3486,13 +3733,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -3512,6 +3760,165 @@
      },
      "provenance": {
       "$ref": "#/$defs/provenance"
+     },
+     "qualifier": {
+      "description": "Axis 'qualifier' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless qualifier_state is 'read' or 'derived'.",
+      "enum": [
+       "out:approximate",
+       "out:at_most",
+       "out:at_least",
+       "out:range_low",
+       "out:range_high",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "höchstens": {
+        "meaning": "Der Plan nennt die Zahl als Obergrenze: Der Wert ist höchstens so groß.",
+        "spellings": [
+         "bis zu",
+         "maximal",
+         "max.",
+         "weniger als",
+         "unter"
+        ],
+        "uri": "out:at_most"
+       },
+       "mindestens": {
+        "meaning": "Der Plan nennt die Zahl als Untergrenze: Der Wert ist mindestens so groß.",
+        "spellings": [
+         "mehr als",
+         "über",
+         "ab",
+         "min."
+        ],
+        "uri": "out:at_least"
+       },
+       "oberes Ende einer Spanne": {
+        "meaning": "Die größere von zwei Zahlen, zwischen denen der Wert liegt.",
+        "spellings": [
+         "bis"
+        ],
+        "uri": "out:range_high"
+       },
+       "ungefähr": {
+        "meaning": "Der Plan nennt die Zahl als ungefähren Wert.",
+        "spellings": [
+         "ca.",
+         "circa",
+         "rund",
+         "etwa",
+         "knapp",
+         "annähernd"
+        ],
+        "uri": "out:approximate"
+       },
+       "unteres Ende einer Spanne": {
+        "meaning": "Die kleinere von zwei Zahlen, zwischen denen der Wert liegt.",
+        "spellings": [
+         "zwischen",
+         "von"
+        ],
+        "uri": "out:range_low"
+       }
+      },
+      "x-question": "Steht direkt bei dieser Zahl ein Wort, das sagt, wie genau sie gilt? „ca. 8,8 GWh“ ist ungefähr, „bis zu 6.200 MWh“ höchstens, „mehr als 4 %“ mindestens; in „zwischen 60 und 100 MWh“ ist 60 das untere und 100 das obere Ende einer Spanne. \"value_raw\" ist dieses Wort des Plans, Zeichen für Zeichen. Steht kein solches Wort bei der Zahl, ist die Antwort out:unstated."
+     },
+     "qualifier_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('qualifier_raw'). 'qualifier_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "qualifier_link_source": {
+      "description": "Which source 'qualifier_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "qualifier_producer": {
+      "description": "Who re-read 'qualifier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "qualifier_quote": {
+      "description": "The verbatim passage carrying 'qualifier'. Present exactly when qualifier_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "qualifier_raw": {
+      "description": "The document's own wording 'qualifier' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "qualifier_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'qualifier': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "qualifier_seen": {
+      "description": "A wording the model noticed for 'qualifier' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "qualifier_source": {
+      "description": "Which source the passage for 'qualifier' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "qualifier_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'qualifier' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "qualifier_window": {
+      "description": "[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "quantity": {
       "description": "Axis 'quantity' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless quantity_state is 'read' or 'derived'.",
@@ -3682,13 +4089,14 @@
       "description": "How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "quantity_window": {
-      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -3710,6 +4118,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "scenario": {
       "description": "Axis 'scenario' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.",
@@ -3863,13 +4280,14 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -4042,13 +4460,14 @@
       "description": "How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "sector_window": {
-      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -4189,13 +4608,14 @@
       "description": "How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "spatial_scope_window": {
-      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -4289,13 +4709,14 @@
       "description": "How the coordinate 'subject' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "subject_window": {
-      "description": "[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -4371,8 +4792,8 @@
         "meaning": "Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung.",
         "spellings": [
          "Geothermieanlage",
-         "Tiefengeothermie",
-         "oberflächennahe Geothermie"
+         "Erdwärmesonden",
+         "Erdwärmekollektoren"
         ],
         "uri": "OEO_00020306"
        },
@@ -4428,7 +4849,7 @@
         "uri": "OEO_00020490"
        }
       },
-      "x-question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEine Energiequelle allein (\"Geothermie\", \"Solarthermie\", \"Umweltwärme\") ist ein Energieträger und keine Technologie: Technologie nur, wo die Stelle eine Anlage nennt (\"Erdwärmesonden\", \"Kollektoren\", \"Wärmepumpen\"); sonst \"Summe\".\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "technology_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('technology_raw'). 'technology_quote' is then the frame's passage that prints the number.",
@@ -4498,13 +4919,14 @@
       "description": "How the coordinate 'technology' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "technology_window": {
-      "description": "[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -4850,13 +5272,14 @@
       "description": "How the coordinate 'unit' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "unit_window": {
-      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -4965,13 +5388,14 @@
       "description": "How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "year_window": {
-      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -5005,6 +5429,8 @@
      "quantity_state",
      "subject",
      "subject_state",
+     "qualifier",
+     "qualifier_state",
      "aggregation",
      "aggregation_state",
      "carrier",
@@ -5133,6 +5559,38 @@
        },
        "required": [
         "subject"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "qualifier": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "qualifier_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "qualifier_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "qualifier": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "qualifier"
        ]
       }
      },
@@ -5495,13 +5953,14 @@
       "description": "How the coordinate 'aggregation' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "aggregation_window": {
-      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -5786,7 +6245,7 @@
         "uri": "OEO_00010155"
        }
       },
-      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
@@ -5856,13 +6315,14 @@
       "description": "How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "carrier_window": {
-      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -5984,13 +6444,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -6010,6 +6471,165 @@
      },
      "provenance": {
       "$ref": "#/$defs/provenance"
+     },
+     "qualifier": {
+      "description": "Axis 'qualifier' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless qualifier_state is 'read' or 'derived'.",
+      "enum": [
+       "out:approximate",
+       "out:at_most",
+       "out:at_least",
+       "out:range_low",
+       "out:range_high",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "höchstens": {
+        "meaning": "Der Plan nennt die Zahl als Obergrenze: Der Wert ist höchstens so groß.",
+        "spellings": [
+         "bis zu",
+         "maximal",
+         "max.",
+         "weniger als",
+         "unter"
+        ],
+        "uri": "out:at_most"
+       },
+       "mindestens": {
+        "meaning": "Der Plan nennt die Zahl als Untergrenze: Der Wert ist mindestens so groß.",
+        "spellings": [
+         "mehr als",
+         "über",
+         "ab",
+         "min."
+        ],
+        "uri": "out:at_least"
+       },
+       "oberes Ende einer Spanne": {
+        "meaning": "Die größere von zwei Zahlen, zwischen denen der Wert liegt.",
+        "spellings": [
+         "bis"
+        ],
+        "uri": "out:range_high"
+       },
+       "ungefähr": {
+        "meaning": "Der Plan nennt die Zahl als ungefähren Wert.",
+        "spellings": [
+         "ca.",
+         "circa",
+         "rund",
+         "etwa",
+         "knapp",
+         "annähernd"
+        ],
+        "uri": "out:approximate"
+       },
+       "unteres Ende einer Spanne": {
+        "meaning": "Die kleinere von zwei Zahlen, zwischen denen der Wert liegt.",
+        "spellings": [
+         "zwischen",
+         "von"
+        ],
+        "uri": "out:range_low"
+       }
+      },
+      "x-question": "Steht direkt bei dieser Zahl ein Wort, das sagt, wie genau sie gilt? „ca. 8,8 GWh“ ist ungefähr, „bis zu 6.200 MWh“ höchstens, „mehr als 4 %“ mindestens; in „zwischen 60 und 100 MWh“ ist 60 das untere und 100 das obere Ende einer Spanne. \"value_raw\" ist dieses Wort des Plans, Zeichen für Zeichen. Steht kein solches Wort bei der Zahl, ist die Antwort out:unstated."
+     },
+     "qualifier_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('qualifier_raw'). 'qualifier_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "qualifier_link_source": {
+      "description": "Which source 'qualifier_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "qualifier_producer": {
+      "description": "Who re-read 'qualifier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "qualifier_quote": {
+      "description": "The verbatim passage carrying 'qualifier'. Present exactly when qualifier_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "qualifier_raw": {
+      "description": "The document's own wording 'qualifier' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "qualifier_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'qualifier': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "qualifier_seen": {
+      "description": "A wording the model noticed for 'qualifier' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "qualifier_source": {
+      "description": "Which source the passage for 'qualifier' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "qualifier_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'qualifier' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "qualifier_window": {
+      "description": "[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "quantity": {
       "description": "Axis 'quantity' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless quantity_state is 'read' or 'derived'.",
@@ -6256,13 +6876,14 @@
       "description": "How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "quantity_window": {
-      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -6284,6 +6905,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "scenario": {
       "description": "Axis 'scenario' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.",
@@ -6437,13 +7067,14 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -6616,13 +7247,14 @@
       "description": "How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "sector_window": {
-      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -6763,13 +7395,14 @@
       "description": "How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "spatial_scope_window": {
-      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -6863,13 +7496,14 @@
       "description": "How the coordinate 'subject' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "subject_window": {
-      "description": "[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -6945,8 +7579,8 @@
         "meaning": "Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung.",
         "spellings": [
          "Geothermieanlage",
-         "Tiefengeothermie",
-         "oberflächennahe Geothermie"
+         "Erdwärmesonden",
+         "Erdwärmekollektoren"
         ],
         "uri": "OEO_00020306"
        },
@@ -7002,7 +7636,7 @@
         "uri": "OEO_00020490"
        }
       },
-      "x-question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEine Energiequelle allein (\"Geothermie\", \"Solarthermie\", \"Umweltwärme\") ist ein Energieträger und keine Technologie: Technologie nur, wo die Stelle eine Anlage nennt (\"Erdwärmesonden\", \"Kollektoren\", \"Wärmepumpen\"); sonst \"Summe\".\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "technology_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('technology_raw'). 'technology_quote' is then the frame's passage that prints the number.",
@@ -7072,13 +7706,14 @@
       "description": "How the coordinate 'technology' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "technology_window": {
-      "description": "[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -7244,13 +7879,14 @@
       "description": "How the coordinate 'unit' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "unit_window": {
-      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -7359,13 +7995,14 @@
       "description": "How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "year_window": {
-      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -7399,6 +8036,8 @@
      "quantity_state",
      "subject",
      "subject_state",
+     "qualifier",
+     "qualifier_state",
      "aggregation",
      "aggregation_state",
      "carrier",
@@ -7527,6 +8166,38 @@
        },
        "required": [
         "subject"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "qualifier": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "qualifier_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "qualifier_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "qualifier": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "qualifier"
        ]
       }
      },
@@ -7849,13 +8520,14 @@
       "description": "How the coordinate 'aggregation' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "aggregation_window": {
-      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -8140,7 +8812,7 @@
         "uri": "OEO_00010155"
        }
       },
-      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
@@ -8210,13 +8882,14 @@
       "description": "How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "carrier_window": {
-      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -8338,13 +9011,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -8364,6 +9038,165 @@
      },
      "provenance": {
       "$ref": "#/$defs/provenance"
+     },
+     "qualifier": {
+      "description": "Axis 'qualifier' of Leistung. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless qualifier_state is 'read' or 'derived'.",
+      "enum": [
+       "out:approximate",
+       "out:at_most",
+       "out:at_least",
+       "out:range_low",
+       "out:range_high",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "höchstens": {
+        "meaning": "Der Plan nennt die Zahl als Obergrenze: Der Wert ist höchstens so groß.",
+        "spellings": [
+         "bis zu",
+         "maximal",
+         "max.",
+         "weniger als",
+         "unter"
+        ],
+        "uri": "out:at_most"
+       },
+       "mindestens": {
+        "meaning": "Der Plan nennt die Zahl als Untergrenze: Der Wert ist mindestens so groß.",
+        "spellings": [
+         "mehr als",
+         "über",
+         "ab",
+         "min."
+        ],
+        "uri": "out:at_least"
+       },
+       "oberes Ende einer Spanne": {
+        "meaning": "Die größere von zwei Zahlen, zwischen denen der Wert liegt.",
+        "spellings": [
+         "bis"
+        ],
+        "uri": "out:range_high"
+       },
+       "ungefähr": {
+        "meaning": "Der Plan nennt die Zahl als ungefähren Wert.",
+        "spellings": [
+         "ca.",
+         "circa",
+         "rund",
+         "etwa",
+         "knapp",
+         "annähernd"
+        ],
+        "uri": "out:approximate"
+       },
+       "unteres Ende einer Spanne": {
+        "meaning": "Die kleinere von zwei Zahlen, zwischen denen der Wert liegt.",
+        "spellings": [
+         "zwischen",
+         "von"
+        ],
+        "uri": "out:range_low"
+       }
+      },
+      "x-question": "Steht direkt bei dieser Zahl ein Wort, das sagt, wie genau sie gilt? „ca. 8,8 GWh“ ist ungefähr, „bis zu 6.200 MWh“ höchstens, „mehr als 4 %“ mindestens; in „zwischen 60 und 100 MWh“ ist 60 das untere und 100 das obere Ende einer Spanne. \"value_raw\" ist dieses Wort des Plans, Zeichen für Zeichen. Steht kein solches Wort bei der Zahl, ist die Antwort out:unstated."
+     },
+     "qualifier_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('qualifier_raw'). 'qualifier_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "qualifier_link_source": {
+      "description": "Which source 'qualifier_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "qualifier_producer": {
+      "description": "Who re-read 'qualifier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "qualifier_quote": {
+      "description": "The verbatim passage carrying 'qualifier'. Present exactly when qualifier_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "qualifier_raw": {
+      "description": "The document's own wording 'qualifier' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "qualifier_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'qualifier': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "qualifier_seen": {
+      "description": "A wording the model noticed for 'qualifier' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "qualifier_source": {
+      "description": "Which source the passage for 'qualifier' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "qualifier_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'qualifier' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "qualifier_window": {
+      "description": "[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "quantity": {
       "description": "Axis 'quantity' of Leistung. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless quantity_state is 'read' or 'derived'.",
@@ -8587,13 +9420,14 @@
       "description": "How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "quantity_window": {
-      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -8615,6 +9449,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "scenario": {
       "description": "Axis 'scenario' of Leistung. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.",
@@ -8768,13 +9611,14 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -8947,13 +9791,14 @@
       "description": "How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "sector_window": {
-      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -9094,13 +9939,14 @@
       "description": "How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "spatial_scope_window": {
-      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -9194,13 +10040,14 @@
       "description": "How the coordinate 'subject' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "subject_window": {
-      "description": "[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -9331,13 +10178,14 @@
       "description": "How the coordinate 'unit' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "unit_window": {
-      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -9446,13 +10294,14 @@
       "description": "How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "year_window": {
-      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -9486,6 +10335,8 @@
      "quantity_state",
      "subject",
      "subject_state",
+     "qualifier",
+     "qualifier_state",
      "aggregation",
      "aggregation_state",
      "carrier",
@@ -9623,13 +10474,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -9654,6 +10506,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -9805,6 +10666,38 @@
        },
        "required": [
         "subject"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "qualifier": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "qualifier_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "qualifier_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "qualifier": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "qualifier"
        ]
       }
      },
@@ -10301,7 +11194,7 @@
         "uri": "OEO_00010155"
        }
       },
-      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
@@ -10371,13 +11264,14 @@
       "description": "How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "carrier_window": {
-      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -10499,13 +11393,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -10525,6 +11420,165 @@
      },
      "provenance": {
       "$ref": "#/$defs/provenance"
+     },
+     "qualifier": {
+      "description": "Axis 'qualifier' of Anteil. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless qualifier_state is 'read' or 'derived'.",
+      "enum": [
+       "out:approximate",
+       "out:at_most",
+       "out:at_least",
+       "out:range_low",
+       "out:range_high",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "höchstens": {
+        "meaning": "Der Plan nennt die Zahl als Obergrenze: Der Wert ist höchstens so groß.",
+        "spellings": [
+         "bis zu",
+         "maximal",
+         "max.",
+         "weniger als",
+         "unter"
+        ],
+        "uri": "out:at_most"
+       },
+       "mindestens": {
+        "meaning": "Der Plan nennt die Zahl als Untergrenze: Der Wert ist mindestens so groß.",
+        "spellings": [
+         "mehr als",
+         "über",
+         "ab",
+         "min."
+        ],
+        "uri": "out:at_least"
+       },
+       "oberes Ende einer Spanne": {
+        "meaning": "Die größere von zwei Zahlen, zwischen denen der Wert liegt.",
+        "spellings": [
+         "bis"
+        ],
+        "uri": "out:range_high"
+       },
+       "ungefähr": {
+        "meaning": "Der Plan nennt die Zahl als ungefähren Wert.",
+        "spellings": [
+         "ca.",
+         "circa",
+         "rund",
+         "etwa",
+         "knapp",
+         "annähernd"
+        ],
+        "uri": "out:approximate"
+       },
+       "unteres Ende einer Spanne": {
+        "meaning": "Die kleinere von zwei Zahlen, zwischen denen der Wert liegt.",
+        "spellings": [
+         "zwischen",
+         "von"
+        ],
+        "uri": "out:range_low"
+       }
+      },
+      "x-question": "Steht direkt bei dieser Zahl ein Wort, das sagt, wie genau sie gilt? „ca. 8,8 GWh“ ist ungefähr, „bis zu 6.200 MWh“ höchstens, „mehr als 4 %“ mindestens; in „zwischen 60 und 100 MWh“ ist 60 das untere und 100 das obere Ende einer Spanne. \"value_raw\" ist dieses Wort des Plans, Zeichen für Zeichen. Steht kein solches Wort bei der Zahl, ist die Antwort out:unstated."
+     },
+     "qualifier_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('qualifier_raw'). 'qualifier_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "qualifier_link_source": {
+      "description": "Which source 'qualifier_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "qualifier_producer": {
+      "description": "Who re-read 'qualifier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "qualifier_quote": {
+      "description": "The verbatim passage carrying 'qualifier'. Present exactly when qualifier_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "qualifier_raw": {
+      "description": "The document's own wording 'qualifier' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "qualifier_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'qualifier': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "qualifier_seen": {
+      "description": "A wording the model noticed for 'qualifier' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "qualifier_source": {
+      "description": "Which source the passage for 'qualifier' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "qualifier_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'qualifier' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "qualifier_window": {
+      "description": "[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "quantity": {
       "description": "Axis 'quantity' of Anteil. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless quantity_state is 'read' or 'derived'.",
@@ -10635,13 +11689,14 @@
       "description": "How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "quantity_window": {
-      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -10663,6 +11718,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "scenario": {
       "description": "Axis 'scenario' of Anteil. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.",
@@ -10816,13 +11880,14 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -10995,13 +12060,14 @@
       "description": "How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "sector_window": {
-      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -11142,13 +12208,14 @@
       "description": "How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "spatial_scope_window": {
-      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -11242,13 +12309,14 @@
       "description": "How the coordinate 'subject' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "subject_window": {
-      "description": "[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -11324,8 +12392,8 @@
         "meaning": "Geothermie: Kombiniert geothermische Einheiten und Wärmeprozesse zur Wärmeerzeugung.",
         "spellings": [
          "Geothermieanlage",
-         "Tiefengeothermie",
-         "oberflächennahe Geothermie"
+         "Erdwärmesonden",
+         "Erdwärmekollektoren"
         ],
         "uri": "OEO_00020306"
        },
@@ -11381,7 +12449,7 @@
         "uri": "OEO_00020490"
        }
       },
-      "x-question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welche Wärmeerzeugungstechnologie?\nNur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa \"Wärmepumpen\", \"Gaskessel\", \"Ölheizungen\".\nEnergieträger ist keine Technologie: \"Erdgas\" allein = Träger, \"Gasheizung\" = Technologie.\nEine Energiequelle allein (\"Geothermie\", \"Solarthermie\", \"Umweltwärme\") ist ein Energieträger und keine Technologie: Technologie nur, wo die Stelle eine Anlage nennt (\"Erdwärmesonden\", \"Kollektoren\", \"Wärmepumpen\"); sonst \"Summe\".\nEigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
      },
      "technology_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('technology_raw'). 'technology_quote' is then the frame's passage that prints the number.",
@@ -11451,13 +12519,14 @@
       "description": "How the coordinate 'technology' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "technology_window": {
-      "description": "[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -11573,13 +12642,14 @@
       "description": "How the coordinate 'unit' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "unit_window": {
-      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -11681,13 +12751,14 @@
       "description": "How the coordinate 'whole' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "whole_window": {
-      "description": "[stage, index] of the window 'whole' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'whole' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -11788,13 +12859,14 @@
       "description": "How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "year_window": {
-      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -11828,6 +12900,8 @@
      "quantity_state",
      "subject",
      "subject_state",
+     "qualifier",
+     "qualifier_state",
      "whole",
      "whole_state",
      "carrier",
@@ -13542,6 +14616,73 @@
      },
      "rows": {},
      "t": {
+      "const": "years_ask"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "input": {
+      "type": "object"
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "output": {
+      "type": "object"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "round": {
+      "type": "integer"
+     },
+     "rows": {},
+     "t": {
       "const": "phrase_ask"
      },
      "value": {
@@ -13822,6 +14963,12 @@
        "figure"
       ]
      },
+     "near": {
+      "type": "integer"
+     },
+     "near_read": {
+      "type": "integer"
+     },
      "owner": {
       "type": "integer"
      },
@@ -13917,6 +15064,9 @@
      },
      "t": {
       "const": "comb"
+     },
+     "table_rows": {
+      "type": "integer"
      }
     },
     "required": [
@@ -13934,6 +15084,52 @@
      "missed",
      "corrected",
      "exhausted"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "asked": {
+      "type": "integer"
+     },
+     "base": {
+      "items": {
+       "type": "integer"
+      },
+      "type": "array"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "fetched": {
+      "type": "integer"
+     },
+     "hits": {
+      "type": "integer"
+     },
+     "refused": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "years"
+     },
+     "target": {
+      "items": {
+       "type": "integer"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "base",
+     "target",
+     "asked",
+     "hits",
+     "fetched",
+     "refused"
     ],
     "type": "object"
    },

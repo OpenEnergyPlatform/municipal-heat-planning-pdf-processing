@@ -59,9 +59,10 @@ it.
 (`require_profile`), falls back to the profile's `processed_dir` when no
 input path is given, and, on `--print-context-budget`, prints
 `max_request_tokens()` and exits early: the longer, by word count, of the
-two system prompts, times `TOKENS_PER_WORD`, plus `IMAGE_TOKENS` for a
-full-page crop, plus `VLM_MAX_TOKENS` for the one reply, all over-estimated:
-13,992 tokens with the `kwp` profile and 14,163 with `scenarios`. No second
+two requests' prompts, system and user (the table's with the continuation
+prompt), times `TOKENS_PER_WORD`, plus the texts they show at `SHOWN_CHARS`,
+plus `IMAGE_TOKENS` for a full-page crop, plus `VLM_MAX_TOKENS` for the one reply, all over-estimated:
+15,144 tokens with the `kwp` profile and 15,300 with `scenarios`. No second
 reply is counted. `assert_serving` keeps the window the server reported
 (`llm_preflight.served_window`, role `vlm`), and what it holds beyond this
 budget is what a reply that was cut off is asked once more with (see The vision
@@ -84,7 +85,7 @@ goes on.
 
 `_resolve_input` tries `sections_refined.json` first and `sections.json`
 second, returning `None` if neither exists. If `visuals.json` already
-exists, `prompts.check` compares the seven `PROMPT_IDS` against the
+exists, `prompts.check` compares the eight `PROMPT_IDS` against the
 sha256s in `.prompt_versions.json`; a mismatch is only logged unless
 `--force-stale` is set, which then behaves like `--force`. Reading the
 cache keeps, by id, every table carrying `markdown` and every figure
@@ -146,6 +147,22 @@ object for (it has a `vlm_why`) has no `qa`, and none means not checked, never
 passed; so has a table of a `visuals.json` written before this, whose failures carry
 `qa_warning` and no `qa`. The merge hands it on and chunking stores it in
 `Tables.qa` (see [chunking](chunking.md)).
+
+### A table that continues the table before it
+
+A table the layout cut in parts, over a page break or within a page, used to
+come out as parts with a caption and head of their own, invented where the
+part prints none (`continuation.py`, owner decision 2026-11-06). A table may
+continue the table before it in reading order when that table stands on its
+page or the page before and no section starts between them on its page
+(`continuation.links`, `runs`). Such a table is asked after the table before
+it with prompt `visuals/table_continued`: that table's caption and head and
+the text between the two (`BETWEEN_CHARS`), and the reply says whether it
+`continues` it; where it does, its rows are written under that head and it
+gets no caption (`table_continued_reply`). The item keeps `after` (the id of
+the table before it) and `continues`. A cached table not asked against its
+current predecessor is asked again. The count of such tables is
+`continued_tables`; the merge in [chunking](chunking.md) joins them.
 
 ### Describing a figure
 
@@ -268,7 +285,8 @@ Stage 2 and Stage 3 (`bbox` is a list of one `[x0, y0, x1, y1]` rect in PDF
 points, unused by this stage). It loses `source_text`,
 present only in `sections.json` and stripped before every write. It gains
 `markdown` (absent when the model gave no object for it), optionally
-`caption`, optionally `qa_warning`, a
+`caption`, optionally `qa_warning`, `after` and `continues` (only on a table that may continue the
+table before it), a
 `{"coverage": float or null, "coverage_assessed": bool, "duplication":
 float, "has_rows": bool}` dict present only when the kept attempt did not
 pass the QA gate, and `qa`, the same metrics plus `"passed": bool`, present for
@@ -311,6 +329,7 @@ partial, tested shape rather than objects the code builds.
 | `TABLE_QA_MIN_COVERAGE`/`MAX_DUPLICATION`/`MIN_SOURCE_TOKENS` | constant | `0.5`/`0.4`/`8` | QA gate pass thresholds | `config.py`, `qa.py` |
 | `TABLE_QA_RETRY_TEMPERATURE`/`RETRY_PENALTY` | constant | `0.4`/`1.3` | sampling for the QA-failure retry | `config.py` |
 | `TOKENS_PER_WORD` | constant | `3.0` | word-to-token factor in the context budget estimate | `config.py` |
+| `SHOWN_CHARS` | constant | `800` | characters of each text a request shows beside its prompts, counted at two a token in the context budget | `config.py` |
 | `IMAGE_TOKENS` | constant | `4096` | tokens charged per image crop in the context budget estimate | `config.py` |
 | `--batch` | CLI flag | off | input path is a root of output directories | `pipeline.py` |
 | `--dry-run` | CLI flag | off | report counts only, no server call | `pipeline.py` |

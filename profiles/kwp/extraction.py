@@ -62,6 +62,13 @@ SLICE = {"quantity": kept_quantities(), "year": None}
 # sentence written once per run.
 FRONT_PAGE_PARAMETERS: tuple = ()
 
+# Every reading request shows the line of the plan's title page that names
+# its municipality (`runner.make_title_page`, the name from
+# `document_context`), as a passage a quote may stand in: whether a number
+# holds for the whole municipality is the model's reading (owner decision
+# 2026-11-06).
+TITLE_PAGE_LINE = True
+
 
 def document_context(conn, document_id: int) -> dict:
     """What this plan says about itself, for the sentence it is searched with.
@@ -220,14 +227,25 @@ PHRASES = {
         'Dein "quote" ist zu kurz, um eine Stelle zu benennen '
         '(mindestens {minimum} Zeichen). Zitier den ganzen Satz oder die '
         'ganze Zeile, in der die Antwort steht.'),
+    # A correction names every way of answering that passes in the request
+    # (owner decision 2026-11-06): the plan's own word as the wording where
+    # the request asks one, the answer as its quote prints it where the
+    # answer is its own wording; "not stated" only where the request offers
+    # it, else leaving it out.
     "answer_not_in_quote": (
-        'Dein "quote" enthält {answer!r} nicht. Zitier die Stelle, an '
-        'der es wirklich steht, oder antworte mit "{unstated}".'),
-    # The same in a request that offers no "not stated", the combing's
-    # (owner decision 2026-11-06).
-    "answer_not_in_quote_leave_out": (
-        'Dein "quote" enthält {answer!r} nicht. Zitier die Stelle, an '
-        'der es wirklich steht, oder lass die Angabe weg.'),
+        'Dein "quote" enthält {answer!r} nicht. Druckt es ein anderes Wort '
+        'des Plans für diese Angabe, schreib dieses Wort Zeichen für Zeichen '
+        'unter "value_raw"; sonst zitier die Stelle, an der die Angabe '
+        'wirklich steht.'),
+    "answer_not_in_quote_text": (
+        'Dein "quote" enthält {answer!r} nicht. Schreib die Angabe so, wie '
+        'dein Zitat sie druckt, Zeichen für Zeichen, oder zitier die Stelle, '
+        'an der sie wirklich steht.'),
+    "or_unstated": ' Steht sie nirgends, antworte mit "{unstated}".',
+    "or_leave_out": ' Steht sie nirgends, lass sie weg.',
+    "year_not_in_quote": (
+        'Das Jahr {given!r} steht nicht in seinem Zitat {quote!r}. Zitier '
+        'die Stelle, die es druckt.'),
     # The key of the frame request that holds the entries of a closed frame
     # coordinate. The frame prompt reads them there.
     "frame_options": "scenarios",

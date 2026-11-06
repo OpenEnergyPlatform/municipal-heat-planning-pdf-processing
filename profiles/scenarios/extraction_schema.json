@@ -458,13 +458,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -489,6 +490,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -650,13 +660,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -681,6 +692,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -850,13 +870,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -881,6 +902,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -1044,13 +1074,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -1075,6 +1106,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -1236,13 +1276,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -1267,6 +1308,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -1464,13 +1514,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -1495,6 +1546,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "scenario": {
       "description": "Axis 'scenario' of Scenario description. null unless scenario_state is 'read' or 'derived'.",
@@ -1593,13 +1653,14 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -1778,13 +1839,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -1809,6 +1871,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -2019,13 +2090,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -2050,6 +2122,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "scenario": {
       "description": "Axis 'scenario' of Scenario region. null unless scenario_state is 'read' or 'derived'.",
@@ -2148,13 +2229,14 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -2269,13 +2351,14 @@
       ]
      },
      "value_window": {
-      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -2458,13 +2541,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -2489,6 +2573,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "scenario": {
       "description": "Axis 'scenario' of Scenario type. null unless scenario_state is 'read' or 'derived'.",
@@ -2587,13 +2680,14 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -2845,13 +2939,14 @@
       }
      },
      "value_window": {
-      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -3033,13 +3128,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -3064,6 +3160,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "scenario": {
       "description": "Axis 'scenario' of Scenario year. null unless scenario_state is 'read' or 'derived'.",
@@ -3162,13 +3267,14 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -3350,13 +3456,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -3381,6 +3488,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -3541,13 +3657,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -3572,6 +3689,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -3873,13 +3999,14 @@
       }
      },
      "value_window": {
-      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -4025,13 +4152,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -4056,6 +4184,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -4224,13 +4361,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -4255,6 +4393,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -4423,13 +4570,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -4454,6 +4602,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -4617,13 +4774,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -4648,6 +4806,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -5574,13 +5741,14 @@
       }
      },
      "value_window": {
-      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -5726,13 +5894,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -5757,6 +5926,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -5959,13 +6137,14 @@
       }
      },
      "value_window": {
-      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -6111,13 +6290,14 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -6142,6 +6322,15 @@
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
       "minLength": 8,
       "type": "string"
+     },
+     "range": {
+      "description": "Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -6485,13 +6674,14 @@
       }
      },
      "value_window": {
-      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row, and the index is the window it was read in. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "description": "[stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
        {
         "enum": [
          "own",
+         "near",
          "found",
          "retrieval",
          "rest",
@@ -8248,6 +8438,73 @@
      },
      "rows": {},
      "t": {
+      "const": "years_ask"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "input": {
+      "type": "object"
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "output": {
+      "type": "object"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "round": {
+      "type": "integer"
+     },
+     "rows": {},
+     "t": {
       "const": "phrase_ask"
      },
      "value": {
@@ -8528,6 +8785,12 @@
        "figure"
       ]
      },
+     "near": {
+      "type": "integer"
+     },
+     "near_read": {
+      "type": "integer"
+     },
      "owner": {
       "type": "integer"
      },
@@ -8623,6 +8886,9 @@
      },
      "t": {
       "const": "comb"
+     },
+     "table_rows": {
+      "type": "integer"
      }
     },
     "required": [
@@ -8640,6 +8906,52 @@
      "missed",
      "corrected",
      "exhausted"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "asked": {
+      "type": "integer"
+     },
+     "base": {
+      "items": {
+       "type": "integer"
+      },
+      "type": "array"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "fetched": {
+      "type": "integer"
+     },
+     "hits": {
+      "type": "integer"
+     },
+     "refused": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "years"
+     },
+     "target": {
+      "items": {
+       "type": "integer"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "base",
+     "target",
+     "asked",
+     "hits",
+     "fetched",
+     "refused"
     ],
     "type": "object"
    },

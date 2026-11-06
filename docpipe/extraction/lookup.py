@@ -53,6 +53,60 @@ def following(passages: list[Source], owner: tuple[str, int],
     return None
 
 
+def page_of(passage: Source) -> Optional[int]:
+    """The page a passage starts on, None where it names none."""
+    try:
+        return int((passage.provenance or {}).get("page"))
+    except (TypeError, ValueError):
+        return None
+
+
+def head_of(text: str) -> str:
+    """A transcribed table's title and head: its lines down to the rule that
+    closes the head, the rule included; "" where it has no head."""
+    lines = (text or "").splitlines()
+    for at, line in enumerate(lines):
+        line = line.strip()
+        if line.count("|") >= 2 and "-" in line and set(line) <= set("|:- \t"):
+            head = [one for one in lines[:at] if one.count("|") >= 2]
+            return "\n".join(lines[:at + 1]).strip() if head else ""
+    return ""
+
+
+def continued(passages: list[Source]) -> list[Source]:
+    """*passages*, a document's in reading order, each table that may
+    continue the table before it marked with that table's title and head
+    (provenance "table_before": {"owner", "text"}). Owner decision
+    2026-11-06: a table the layout cut in parts, at a page break or within a
+    page, loses its title, head and unit in its later parts, and whether it
+    is the same table is the model's reading. A table may continue the table
+    before it when that table stands on its page or the page before, with no
+    passage between them that starts on its own page; the transcription
+    joins the parts it finds by the same rule (`docpipe.visuals
+    .continuation`)."""
+    out: list = []
+    previous: Optional[Source] = None
+    between: set = set()
+    for passage in passages:
+        page = page_of(passage)
+        if passage.owner_kind == "table":
+            head = head_of(previous.text) if previous is not None else ""
+            if (head and page is not None
+                    and page_of(previous) in (page - 1, page)
+                    and page not in between):
+                passage = Source(
+                    passage.owner_kind, passage.owner_id, passage.text,
+                    {**(passage.provenance or {}), "table_before": {
+                        "owner": [previous.owner_kind, previous.owner_id],
+                        "text": head}},
+                    passage.image_path, passage.body)
+            previous, between = passage, set()
+        else:
+            between.add(page)
+        out.append(passage)
+    return out
+
+
 def _block_id(name: str) -> str:
     """`p17_img1`, `[p17_img1]` and `[p17_img1: Abbildung 2-3 ...]` all name
     p17_img1."""

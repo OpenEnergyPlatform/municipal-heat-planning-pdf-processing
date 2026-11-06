@@ -209,10 +209,12 @@ def groups_of(spec, slots: list) -> list:
 def group_context(context: dict, group_slots: list, frame_slots: list,
                   bases: list) -> dict:
     """What a group's request shows beside the passage: the text around it,
-    and the survey's pairs and the plan's years only where the group asks a
+    the title page's line and the table it may continue (`beside_of`), and
+    the survey's pairs and the plan's years only where the group asks a
     frame coordinate."""
     names = {slot.name for slot in group_slots}
-    shown = {"around": context["around"]} if context.get("around") else {}
+    shown = {key: context[key] for key in ("around",) + BESIDE
+             if context.get(key)}
     if names & {slot.name for slot in frame_slots}:
         shown["known"] = context.get("known") or []
     shown.update(years_of(bases, group_slots))
@@ -388,6 +390,78 @@ def around_of(source: Source, passages: dict,
         block = provenance.get("block_id") or ""
         text = window_around(text, f"[{block}", budget)
     return replace(section, text=text)
+
+
+# What the second reading of a value shows beside its passage, the sections
+# before and after its place (owner decision 2026-11-06), and what any reading
+# request shows beside it: the line of the title page that names the plan's
+# own place, and the title and head of the table a table at the top of a page
+# may continue.
+NEAR = ("before", "after")
+BESIDE = ("title_page", "table_before")
+
+
+def near_of(source: Source, order: list,
+            budget: Optional[int]) -> dict:
+    """{"before": Source, "after": Source}: the sections before and after a
+    value's place, which is the section a table or figure stands in, as the
+    second reading shows them (owner decision 2026-11-06: where the reading
+    said a coordinate is not stated, it is asked once more with the plan
+    around it). Together at most *budget*, two pages of the plan, each side
+    the part nearest the place. A side without a section is left out; {}
+    where the plan has neither."""
+    provenance = source.provenance or {}
+    place = (source.owner_kind, source.owner_id)
+    parent = provenance.get("parent_section")
+    if source.owner_kind != "section" and parent is not None and any(
+            (p.owner_kind, p.owner_id) == ("section", int(parent))
+            for p in order):
+        place = ("section", int(parent))
+    found = {}
+    for key, step in zip(NEAR, (-1, 1)):
+        got = lookup.following(order, place, step)
+        if got is not None and (got.text or "").strip():
+            found[key] = got
+    if not found:
+        return {}
+    share = budget // len(found) if budget else None
+    out = {}
+    for key, got in found.items():
+        text = got.text
+        if share and len(text) > share:
+            text = text[-share:] if key == "before" else text[:share]
+        out[key] = replace(got, text=text, body=None)
+    return out
+
+
+def table_before_of(source: Source) -> Optional[Source]:
+    """The title and head of the last table on the page before, which a
+    table at the top of a page may continue (`lookup.continued`), as a
+    passage a quote may stand in; whether the table continues it is the
+    model's reading (owner decision 2026-11-06). None for any other
+    passage."""
+    before = (source.provenance or {}).get("table_before")
+    if not isinstance(before, dict) or not before.get("text"):
+        return None
+    owner = before.get("owner") or ()
+    try:
+        kind, at = str(owner[0]), int(owner[1])
+    except (IndexError, TypeError, ValueError):
+        return None
+    return Source(kind, at, before["text"], {"owner_kind": kind})
+
+
+def beside_of(source: Source, title_page: Optional[Source]) -> tuple:
+    """({key: text} a reading request shows beside *source*, [the passages
+    a coordinate's quote may stand in for them]): the line of the title page
+    that names the plan's own place (owner decision 2026-11-06) and the
+    title and head of the table *source* may continue (`table_before_of`)."""
+    shown, pieces = {}, []
+    for key, piece in zip(BESIDE, (title_page, table_before_of(source))):
+        if piece is not None and (piece.text or "").strip():
+            shown[key] = piece.text
+            pieces.append(piece)
+    return shown, pieces
 
 
 # -- what a reply may ask of the rest of the plan -----------------------------
@@ -672,14 +746,19 @@ def values_payload(source: Source, parameter, context: dict, read: list,
     table or figure, the same in every round of the passage; the values
     already read (*read*) last; with *corrections* the value of the round
     the check refused, asked once more (ticket 26: what requests share
-    stands first). Nothing of the value's coordinates."""
+    stands first). Nothing of the value's coordinates. The line of the
+    title page that names the plan's own place stands before the passage,
+    the same in a plan; the title and head of the table the passage may
+    continue after it (`beside_of`)."""
     classes = value_classes(parameter)
     payload = {"parameter": {**parameter_shown(parameter, full=False),
                              **({"value_classes": classes} if classes
                                 else {})},
+               **({"title_page": context["title_page"]}
+                  if context.get("title_page") else {}),
                "source": source_shown(source),
-               **({"around": context["around"]} if context.get("around")
-                  else {}),
+               **{key: context[key] for key in ("around", "table_before")
+                  if context.get(key)},
                "read": list(read)}
     if corrections:
         payload["corrections"] = corrections
@@ -874,10 +953,23 @@ def round_failure(claim: dict, shown: list, read: list,
         return VALUE, say("value_in_several_rows", values=json.dumps(
             [{"value": claim.get("value"), "quote": claim.get("quote")}],
             ensure_ascii=False))
-    if table and claim.get("head") and not head_in_table(passage,
-                                                         claim["head"]):
+    if table and claim.get("head") and not head_in_table(
+            passage, claim["head"]) and not head_in_before(passage,
+                                                           claim["head"]):
         return HEAD, say("head_not_in_table", head=claim["head"])
     return None
+
+
+def head_in_before(source: Source, head: str) -> bool:
+    """Does a head line of the table *source* may continue print *head*
+    (`table_before_of`)? Its head is the continuation's, where the model
+    reads it as one (owner decision 2026-11-06)."""
+    before = table_before_of(source)
+    if before is None:
+        return False
+    return any(_same_text(head, cell)
+               for line in (before.text or "").splitlines()
+               if line.count("|") >= 2 for cell in cells_of(line))
 
 
 # -- one group's coordinates of one value ---------------------------------------
@@ -895,7 +987,11 @@ def text_payload(source: Source, parameter, slots: list, row: Row,
     passage, the text around a table or figure and, for a frame group, the
     survey's pairs of the passage (`group_context`); the value last, with
     its quote and, under "read", what is already read of it in the plan's
-    words; with *corrections* the same request asked once more."""
+    words; with *corrections* the same request asked once more. The line of
+    the title page stands with the plan's years, the table the passage may
+    continue after it (`beside_of`), and in a second reading the sections
+    before and after the value's place (`near_of`). A request for every
+    value of a table at once says so ("whole_table", `Reader._near_table`)."""
     value = shown_value(row.claim)
     if context.get("read"):
         value["read"] = context["read"]
@@ -905,10 +1001,15 @@ def text_payload(source: Source, parameter, slots: list, row: Row,
                "where": where,
                **{key: context[key] for key in ("base_years", "target_years")
                   if key in context},
+               **({"title_page": context["title_page"]}
+                  if context.get("title_page") else {}),
                "source": source_shown(source),
-               **({"around": context["around"]} if context.get("around")
-                  else {}),
+               **{key: context[key]
+                  for key in ("around", "table_before") + NEAR
+                  if context.get(key)},
                **({"known": context["known"]} if "known" in context
+                  else {}),
+               **({"whole_table": True} if context.get("whole_table")
                   else {}),
                "value": value}
     if corrections:
@@ -977,13 +1078,21 @@ def answer_of(entry: dict) -> dict:
             if key in entry}
 
 
-def value_replies(reply: dict, slot, label: str) -> list:
+def value_replies(reply: dict, slot, label: str,
+                  window: tuple = ("own", 1)) -> list:
     """[(level, window, field reply)] of one coordinate of a group's reply
-    for the value *label*."""
+    for the value *label*; *window* is ("near", 1) in a second reading."""
     entry = reply.get(slot.name) if isinstance(reply, dict) else None
     if not isinstance(entry, dict):
         return []
-    return [("value", ("own", 1), {"answers": {label: answer_of(entry)}})]
+    return [("value", tuple(window), {"answers": {label: answer_of(entry)}})]
+
+
+def is_open(claim: dict, slot) -> bool:
+    """Is a coordinate still open on a value after its reading: said not
+    stated, answered without backing, or not answered at all?"""
+    return claim.get(f"{slot.name}_state") in (
+        None, fields.SAID_UNSTATED, fields.UNBACKED, fields.UNANSWERED)
 
 
 def refused_of(failed: list) -> collections.Counter:
@@ -1085,6 +1194,43 @@ def inherit(rows: list, slots: list, tuples: list, pairs: list,
     return taken
 
 
+def link_ranges(rows: list, slots: list) -> int:
+    """The two ends of each range a passage prints, linked (owner decision
+    2026-11-06): a value read as the lower end of a range
+    (`fields.RANGE_LOW`) and the next one read as the upper end
+    (`fields.RANGE_HIGH`), under the same quote and with the same answer to
+    every other coordinate, both carry [lower, upper] under `fields.RANGE`.
+    Only a list that has both entries marks ends. Returns how many ranges
+    were linked."""
+    ends = {fields.RANGE_LOW, fields.RANGE_HIGH}
+    marked = next((slot for slot in slots if slot.is_closed
+                   and ends <= {option.uri for option in slot.options}),
+                  None)
+    if marked is None:
+        return 0
+    others = [slot.name for slot in slots if slot is not marked]
+
+    def key(row: Row) -> tuple:
+        return (flat(str(row.claim.get("quote") or "")).casefold(),
+                tuple(json.dumps(row.claim.get(name), sort_keys=True,
+                                 default=str) for name in others))
+    waiting: dict = {}
+    linked = 0
+    for row in rows:
+        if row.claim.get(f"{marked.name}_state") != READ:
+            continue
+        end = row.claim.get(marked.name)
+        if end == fields.RANGE_LOW:
+            waiting.setdefault(key(row), []).append(row)
+        elif end == fields.RANGE_HIGH and waiting.get(key(row)):
+            low = waiting[key(row)].pop(0)
+            pair = [low.claim.get("value"), row.claim.get("value")]
+            low.claim[fields.RANGE] = list(pair)
+            row.claim[fields.RANGE] = list(pair)
+            linked += 1
+    return linked
+
+
 @dataclass
 class Read:
     """What reading one parameter in one passage came to."""
@@ -1105,6 +1251,11 @@ class Read:
     # {coordinate: sentence}, which the combing ranks with. Not on the claim:
     # no sentence enters the harvest.
     probes: list = field(default_factory=list)
+    # Requests of the second reading, which asked the coordinates the first
+    # left open once more with the sections around the value's place, and
+    # the coordinates they read (owner decision 2026-11-06).
+    near: int = 0
+    near_read: int = 0
 
 
 @dataclass
@@ -1129,6 +1280,13 @@ class _Job:
     probes: dict = field(default_factory=dict)
     # rows of the passage so far, which the label of the next copy follows
     made: int = 0
+    # What a coordinate's quote may stand in beside the passage and its
+    # section: the title page's line and the table it may continue
+    # (`beside_of`); never a value's.
+    extra: list = field(default_factory=list)
+    # the plan's passages in its order, and two pages of it in characters
+    order: list = field(default_factory=list)
+    budget: Optional[int] = None
 
     def clone(self, row: Row) -> Row:
         """A copy of *row* under a label of its own, for one more name of
@@ -1197,10 +1355,16 @@ class Reader:
         self.trace = trace
 
     def __call__(self, document_id: int, found, passages: dict,
-                 budget: Optional[int] = None) -> list:
+                 budget: Optional[int] = None, *,
+                 bases: Optional[list] = None,
+                 title_page: Optional[Source] = None) -> list:
         """One Read per parameter and passage the survey named for it. A
         section or figure longer than *budget* characters, two pages of the
-        plan, is read in pieces of that size (`survey.pieces`)."""
+        plan, is read in pieces of that size (`survey.pieces`). *bases* are
+        the plan's base and target years as one request per plan read them
+        (`years.PlanYears`), else those of the survey's pairs; *title_page*
+        the line of its title page that names its own place, which every
+        request shows (owner decisions 2026-11-06)."""
         from .survey import pieces
 
         pairs: list = []
@@ -1228,31 +1392,42 @@ class Reader:
             owner = (source.owner_kind, source.owner_id)
             return self.read(document_id, parameter, source,
                              found.tuples_at(owner, "frame"), pairs, passages,
-                             shown=shown, budget=budget)
+                             shown=shown, budget=budget, bases=bases,
+                             title_page=title_page)
         if self.pool is None:
             return [one(job) for job in jobs]
         return list(self.pool.map(one, jobs))
 
     def context_of(self, source: Source, tuples: list, passages: dict,
-                   budget: Optional[int] = None) -> tuple:
+                   budget: Optional[int] = None,
+                   title_page: Optional[Source] = None) -> tuple:
         """(what the requests of a passage show beside it, the section it
-        was cut from): the text around a table or figure (`around_of`) and
-        the survey's pairs of the passage, which only a group that asks a
-        frame coordinate shows (`group_context`)."""
+        was cut from, the passages a coordinate may quote for what stands
+        beside it): the text around a table or figure (`around_of`), the
+        title page's line and the table the passage may continue
+        (`beside_of`), and the survey's pairs of the passage, which only a
+        group that asks a frame coordinate shows (`group_context`)."""
         around = around_of(source, passages, budget)
         context = {"around": around.text} if around is not None else {}
+        beside, pieces = beside_of(source, title_page)
+        context.update(beside)
         context["known"] = known_of(tuples, self.frame_slots)
-        return context, around
+        return context, around, pieces
 
     def read(self, document_id: int, parameter, source: Source,
              tuples: list, pairs: list, passages: dict,
              shown: Optional[Source] = None,
-             budget: Optional[int] = None) -> Read:
+             budget: Optional[int] = None, *,
+             bases: Optional[list] = None,
+             title_page: Optional[Source] = None) -> Read:
         """*source* is the passage a value is verified against, *shown* the
         piece of it the requests show, *budget* two pages of the plan, which
         the text around a table or figure fits (`around_of`). The values in
         rounds (`_values`), each placed in its table (`_placed`), then each
-        group of the spec for each value (`_value_group`)."""
+        group of the spec for each value (`_value_group`), then what that
+        left open once more with the plan around the value (`_near`).
+        *bases* are the plan's years (else those of *pairs*), *title_page*
+        its title page's line (`Reader.__call__`)."""
         shown = shown or source
         slots = slots_of(self.spec, parameter)
         # The reading's spec rides on the batch, so the fold checks a value
@@ -1260,8 +1435,9 @@ class Reader:
         batch = Batch(document_id, parameter,
                       [WorkItem(document_id, parameter, source)],
                       spec=self.spec)
-        bases = self.bases(pairs)
-        context, around = self.context_of(source, tuples, passages, budget)
+        bases = list(bases) if bases is not None else self.bases(pairs)
+        context, around, beside = self.context_of(source, tuples, passages,
+                                                  budget, title_page)
         result = Read(batch, [])
         # What a coordinate's quote may stand in besides what a request
         # shows of the passage: its heading, the text around it, the frame.
@@ -1286,7 +1462,8 @@ class Reader:
 
         job = _Job(document_id, parameter, source, shown, slots, context,
                    bases, fixed, frames, merged, passages, result,
-                   pairs=list(pairs))
+                   pairs=list(pairs), extra=list(beside),
+                   order=list(passages.values()), budget=budget)
         rows, views = self._values(job)
         if not views:
             result.unread = True
@@ -1314,12 +1491,14 @@ class Reader:
                                                        group_slots)]
             grouped.extend(each)
         rows = grouped
-        evidence = list(views) + fixed + frames
+        evidence = list(views) + fixed + list(beside) + frames
         for axis in fields.axis_slots(parameter):
             fields.apply_derived(rows, axis)
         inherit(rows, [s for s in self.frame_slots
                        if s.name in {x.name for x in slots}],
                 tuples, pairs, evidence)
+        rows = rows + self._near(job, rows)
+        link_ranges(rows, slots)
         result.unanswered = mark_unanswered(rows, slots)
         result.claims = [row.claim for row in rows]
         result.probes = [job.probes.get(row.label, {}) for row in rows]
@@ -1328,8 +1507,100 @@ class Reader:
                        kind=source.owner_kind, owner=source.owner_id,
                        values=len(rows), asked=result.asked,
                        corrected=result.corrected, failed=result.failed,
-                       unanswered=result.unanswered)
+                       unanswered=result.unanswered, near=result.near,
+                       near_read=result.near_read)
         return result
+
+    def _near(self, job: _Job, rows: list) -> list:
+        """The second reading (owner decision 2026-11-06): a coordinate the
+        first reading left open (`is_open`), which the passage, its section
+        and its heading did not state, is asked once more with the sections
+        before and after the value's place (`near_of`), every group with its
+        open coordinates only, but for those printed with the number itself
+        (`Group.asked_near`). A table's frame left open on every one of its
+        values, a table that prints no frame in its head and rows, is asked
+        once for all of them, and each takes the answer with its quote
+        (`_near_table`). Nothing is asked where the plan has no section
+        around the place. [The rows made for further names of a value]."""
+        near = near_of(job.source, job.order, job.budget)
+        if not near or not rows:
+            return []
+        made: list = []
+        for group, group_slots in groups_of(self.spec, job.slots):
+            slots = group.asked_near(group_slots)
+            done: set = set()
+            if (job.source.owner_kind == "table" and group.read_in == "survey"
+                    and len(rows) > 1 and not any(several(s) for s in slots)):
+                common = [s for s in slots
+                          if all(is_open(row.claim, s) for row in rows)]
+                if common and self._near_table(job, rows, group, common,
+                                               near):
+                    done = {slot.name for slot in common}
+            for row in rows + made:
+                asked = [s for s in slots
+                         if s.name not in done and is_open(row.claim, s)]
+                if asked:
+                    made += self._value_group(job, row, group, asked,
+                                              near=near)
+        return made
+
+    def _near_table(self, job: _Job, rows: list, group, slots: list,
+                    near: dict) -> bool:
+        """One request of the second reading for the open frame of every
+        value of a table (owner decisions 2026-11-02 and 2026-11-06): the
+        table and the plan around it shown once, the first value as the one
+        asked, the request saying the answer holds for the whole table. Each
+        value takes the answer with its quote through the field check, what
+        it refuses asked once more. False where no readable reply came, and
+        the values are then asked one by one."""
+        first = rows[0]
+        view = job.views.get(first.label, job.shown)
+        base = group_context(job.context, slots, self.frame_slots, job.bases)
+        context = {**base, **{key: piece.text for key, piece in near.items()},
+                   "whole_table": True}
+        result = job.result
+
+        def ask(corrections: Optional[list] = None):
+            result.asked += 1
+            result.near += 1
+            return self.ask_text(view, job.parameter, group, slots, first,
+                                 context, corrections)
+        reply = ask()
+        if not isinstance(reply, dict):
+            return False
+        evidence = ([view] + job.fixed + job.extra + job.frames
+                    + list(near.values()))
+        labels = [row.label for row in rows]
+
+        def taken(answers: dict) -> list:
+            failed = []
+            for slot in slots:
+                entry = answers.get(slot.name)
+                if not isinstance(entry, dict):
+                    continue
+                got = merge_field(rows, evidence, slot,
+                                  {"groups": [dict(answer_of(entry),
+                                                   rows=labels)]},
+                                  window=("table", 1), bases=job.bases,
+                                  not_shown=NOT_SHOWN)
+                result.near_read += got["filled"]
+                failed.extend((slot.name, "value", failure)
+                              for failure in got["failed"])
+            return failed
+        for row in rows:
+            self._probed(job, row, reply, slots)
+        failed = taken(reply)
+        corrections = value_corrections(first, failed, slots, reply)
+        result.failed = dict(collections.Counter(result.failed)
+                             + refused_of(failed))
+        if corrections:
+            result.corrected += len(corrections)
+            again = ask(corrections)
+            if isinstance(again, dict):
+                for row in rows:
+                    self._probed(job, row, again, slots)
+                taken(again)
+        return True
 
     @staticmethod
     def _probed(job: _Job, row: Row, reply: dict, asked: list) -> None:
@@ -1381,8 +1652,8 @@ class Reader:
         (owner decision 2026-11-05)."""
         result = job.result
         head = with_head_asked(job.parameter, view)
-        shows = ({"around": job.context["around"]}
-                 if job.context.get("around") else {})
+        shows = {key: job.context[key] for key in ("around",) + BESIDE
+                 if job.context.get(key)}
         shown = job.passages_shown()
         rows: list = []
         read: list = []
@@ -1468,13 +1739,15 @@ class Reader:
                         window=("frame", index + 1))
 
     def _value_group(self, job: _Job, row: Row, group,
-                     group_slots: list) -> list:
+                     group_slots: list, near: Optional[dict] = None) -> list:
         """One group's coordinates of one value, those still open only, in a
         request of the group's own; what the check refuses asked once more,
         by its coordinate. A reply that names several things for a
         coordinate that may name several makes one row per name
         (`answers_each`), each checked and asked once more on its own: [the
-        rows made beside *row*]."""
+        rows made beside *row*]. With *near* ({"before", "after"}: Source,
+        `near_of`) it is the second reading, which shows those sections
+        too and may quote them."""
         asked = [slot for slot in group_slots
                  if row.claim.get(f"{slot.name}_state") != READ]
         if not asked:
@@ -1482,7 +1755,10 @@ class Reader:
         result = job.result
         view = job.views.get(row.label, job.shown)
         base = group_context(job.context, asked, self.frame_slots, job.bases)
+        if near:
+            base.update({key: piece.text for key, piece in near.items()})
         read = self.known(row.claim, [slot.name for slot in asked])
+        window = ("near", 1) if near else ("own", 1)
 
         def ask(corrections: Optional[list] = None):
             return self.ask_text(view, job.parameter, group, asked, row,
@@ -1490,32 +1766,41 @@ class Reader:
                                  corrections)
         reply = ask()
         result.asked += 1
+        if near:
+            result.near += 1
         if not isinstance(reply, dict):
             return []
         # What the value has read is shown too, and may be quoted (owner
-        # decision 2026-11-05).
-        evidence = ([view] + job.fixed + job.frames
+        # decision 2026-11-05), and so is what stands beside the passage.
+        evidence = ([view] + job.fixed + job.extra + job.frames
+                    + list((near or {}).values())
                     + known_shown(row.claim, read, job.passages))
         replies = answers_each(reply, asked)
         rows = [row] + [job.clone(row) for _ in replies[1:]]
         for one, answer in zip(rows, replies):
             self._answered(job, one, answer, asked, ask, evidence, view,
-                           named=len(rows) > 1)
+                           named=len(rows) > 1, window=window)
+        if near:
+            result.near_read += sum(
+                1 for one in rows for slot in asked
+                if one.claim.get(f"{slot.name}_state") == READ)
         return rows[1:]
 
     def _answered(self, job: _Job, row: Row, reply: dict, asked: list,
                   ask: Callable, evidence: list, view: Source,
-                  named: bool = False) -> None:
+                  named: bool = False, window: tuple = ("own", 1)) -> None:
         """*reply*'s answers onto *row*; what the check refuses asked once
         more by its coordinate. With *named*, *row* is one of several a reply
         made of one value: its correction names the name it was given and
         its quote (`named_corrections`), and a reply that names several again
-        counts with its first."""
+        counts with its first. *window* is where the answer was read: the
+        value's own request, or ("near", 1) for the second reading."""
         result = job.result
         answers = reply
         self._probed(job, row, answers, asked)
         failed = job.merged([row], {slot.name: value_replies(answers, slot,
-                                                             row.label)
+                                                             row.label,
+                                                             window)
                                     for slot in asked}, evidence)
         corrections = value_corrections(row, failed, asked, reply)
         result.failed = dict(collections.Counter(result.failed)
@@ -1531,5 +1816,5 @@ class Reader:
             again = answers_each(again, asked)[0]
             self._probed(job, row, again, asked)
             job.merged([row], {slot.name: value_replies(again, slot,
-                                                        row.label)
+                                                        row.label, window)
                                for slot in asked}, evidence)

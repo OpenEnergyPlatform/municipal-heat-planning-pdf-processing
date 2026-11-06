@@ -23,11 +23,13 @@ os.replace). Atomic only within one filesystem.
 def max_request_tokens() -> int
 ```
 
-Worst case for one vision request: the longer of the two system
-prompts + one page image + the reply we ask for, once. A reply cut off at
-its limit is asked once more with more room, but the room is bounded by
-what the served window leaves beyond this number (vision.call_vision), so
-no second reply is counted.
+Worst case for one vision request: the longer of the two requests'
+prompts with the texts they show, cut as they are cut, + one page image
++ the reply we ask for, once. A table's request counts the part it gets
+where it may continue the table before it. A reply cut off at its limit
+is asked once more with more room, but the room is bounded by what the
+served window leaves beyond this number (vision.call_vision), so no
+second reply is counted.
 
 ### table_system_prompt
 
@@ -41,6 +43,13 @@ def table_system_prompt() -> str
 ```python
 @prompts.per_profile
 def table_user_prompt() -> str
+```
+
+### table_continued_prompt
+
+```python
+@prompts.per_profile
+def table_continued_prompt() -> str
 ```
 
 ### caption_keep_instruction

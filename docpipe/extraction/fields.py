@@ -47,6 +47,14 @@ TEXT = "text"
 # the serializers already refuse to mint it as a class.
 UNSTATED = "out:unstated"
 
+# The entries a closed list marks the two ends of a range with, protocol
+# tokens as UNSTATED is: in "zwischen 60 und 100 MWh" 60 is the lower and 100
+# the upper end of one range, and the run links them on both rows under
+# RANGE, [lower, upper] (`reading.link_ranges`, owner decision 2026-11-06).
+RANGE_LOW = "out:range_low"
+RANGE_HIGH = "out:range_high"
+RANGE = "range"
+
 # What is known about one coordinate of one row, always one of these.
 READ = "read"                # answered, and the passage carries it
 SAID_UNSTATED = "unstated"   # answered: the passages do not say it

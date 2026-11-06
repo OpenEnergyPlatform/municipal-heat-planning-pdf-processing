@@ -3,7 +3,7 @@ temperature: 0
 max_tokens: 8192
 ---
 Extract the first value in publication order that matches the definition in "parameter", belongs to this publication, its study or its scenarios, and is absent from "read". Take one list entry per request.
-Use only text from "source", its section heading or "around"; what only a figure's image shows is no text. Skip references, footnotes, citations, passages that present, review or compare other works, and every value attributed to other works. If "corrections" is present, retry the rejected value using "what". Skip it if it lacks qualifying evidence.
+Use only text from "source", its section heading or "around"; what only a figure's image shows is no text. "table_before", where shown, is the title and head of the table right before it, on its page or the page before: if "source" continues that table, its head heads "source" too. Skip references, footnotes, citations, passages that present, review or compare other works, and every value attributed to other works. If "corrections" is present, retry the rejected value using "what". Skip it if it lacks qualifying evidence.
 Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks! If no eligible value remains, return {"value":null}. For a match, answer in this form:
 {{example}}
 

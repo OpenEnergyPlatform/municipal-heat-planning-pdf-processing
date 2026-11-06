@@ -33,6 +33,19 @@ one row of it stays (`same`, owner decision 2026-11-03).
 
 ## Functions
 
+### qualified
+
+```python
+def qualified(row: dict, used: list) -> dict
+```
+
+*row*, a number worked out from the rows *used*, with the qualifier
+they leave it (owner decision 2026-11-06: the compute step inherits it):
+theirs, with its evidence, where they all print the same word; none
+where none prints one; "ungefähr" where they differ, since a sum of
+approximate parts is approximate. A worked-out number is the end of no
+range.
+
 ### entry
 
 ```python

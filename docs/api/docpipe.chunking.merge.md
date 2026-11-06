@@ -6,10 +6,12 @@ merge.py: Merges the preprocessing and imageprocessing outputs as
 chunking's first step.
 
 Replaces each table and figure in sections_refined.json with its
-enriched counterpart from visuals.json, matched by item id, and
-writes the result to document.json with an atomic replace. A
-directory is cached and skipped on rerun once document.json is newer
-than both inputs, unless force is set.
+enriched counterpart from visuals.json, matched by item id, joins each
+table the transcription found to continue the table before it to the
+table it continues (`docpipe.visuals.continuation.join`), and writes the
+result to document.json with an atomic replace. A directory is cached and
+skipped on rerun once document.json is newer than both inputs, unless
+force is set.
 
 Author: Felix Vossel
 

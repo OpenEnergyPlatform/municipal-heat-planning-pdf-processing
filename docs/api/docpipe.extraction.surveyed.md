@@ -86,7 +86,11 @@ the document's spec, its lists closed (`runner.closed_spec`),
 *front* are the parameters a publication states of itself, read from
 its first page until a reading of *title* comes back (`front_walk`),
 the profile's FRONT_PAGE_PARAMETERS and FRONT_PAGE_TITLE; none without a
-title among them.
+title among them. *make_years(spec)* is the request for the plan's base
+and target years (`years.PlanYears`), None where the spec dates nothing
+by them; *title_page_of(document_id, passages)* the line of the title
+page that names the plan's own place, None where the profile shows none
+(owner decisions 2026-11-06).
 
 #### SurveyedHarvest.\_\_init\_\_
 
@@ -95,7 +99,9 @@ def __init__(self, spec, make_survey: Callable, make_reader: Callable,
              make_comber: Callable, passages_of: Callable,
              pages_of: Callable, *, spec_for: Optional[Callable] = None,
              halted: Optional[Callable] = None, front=(),
-             title: Optional[str] = None)
+             title: Optional[str] = None,
+             make_years: Optional[Callable] = None,
+             title_page_of: Optional[Callable] = None)
 ```
 
 #### SurveyedHarvest.survey_of
@@ -114,6 +120,12 @@ def reader_of(self, spec)
 
 ```python
 def comber_of(self, spec)
+```
+
+#### SurveyedHarvest.years_of
+
+```python
+def years_of(self, spec)
 ```
 
 ### ParameterPass

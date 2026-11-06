@@ -267,14 +267,17 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"axis' own rule (own | local | any)."},
         f"{name}_window": {
             "type": "array",
-            "prefixItems": [{"enum": ["own", "found", "retrieval", "rest",
-                                      "places", "frame", "table", "base_year",
-                                      "target_year", "head"]},
+            "prefixItems": [{"enum": ["own", "near", "found", "retrieval",
+                                      "rest", "places", "frame", "table",
+                                      "base_year", "target_year", "head"]},
                             {"type": "integer"}],
             "minItems": 2, "maxItems": 2,
             "description": f"[stage, index] of the window '{name}' was read "
                            f"in. A coordinate read in window 1 and one read "
-                           f"in window 22 cost different amounts. `frame` is "
+                           f"in window 22 cost different amounts. `near`: "
+                           f"read by the second reading, which showed the "
+                           f"sections before and after the value's place. "
+                           f"`frame` is "
                            f"the one that is not a window: the coordinate was "
                            f"read ONCE for the document and applied to this "
                            f"row, and the index is which of the document's "
@@ -283,8 +286,9 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"word, and the index is the pair whose quote "
                            f"prints the number. `target_year`: the same for "
                            f"the document's target. `table`: read once for "
-                           f"the row's table and taken by this row, and the "
-                           f"index is the window it was read in. `head`: the "
+                           f"the row's table and taken by this row; the index "
+                           f"is 1 for the second reading and 2 for the "
+                           f"combing. `head`: the "
                            f"year the head of the row's column prints, one "
                            f"of the document's pairs, taken off the table "
                            f"and not asked; the index is the column."},
@@ -369,6 +373,14 @@ def _tuple_schema(spec, parameter) -> dict:
                                  "narrower window came to, and only "
                                  "review:disagree is a reason."},
         "provenance": {"$ref": "#/$defs/provenance"},
+        fields.RANGE: {
+            "type": "array", "items": {"type": "number"},
+            "minItems": 2, "maxItems": 2,
+            "description": "Both ends of the range this value is one end "
+                           "of, [lower, upper] as the plan prints them: "
+                           "written on both rows when one reads as the lower "
+                           "and the next as the upper end under the same "
+                           "quote with the same coordinates otherwise."},
         "computed": {"type": "boolean",
                      "description": "The value came out of the sandbox, not "
                                     "off the page; the quote proves the "
@@ -839,7 +851,8 @@ def stamp_schema() -> dict:
 # search sentences, the frame, the review and the compute step
 # (`runner._asked`).
 ASK_STAGES = ("survey", "read_values", "read_text", "comb", "naming",
-              "naming_groups", "phrase", "frame", "review", "compute")
+              "naming_groups", "years", "phrase", "frame", "review",
+              "compute")
 
 
 def trace_schema() -> dict:
@@ -1086,7 +1099,11 @@ def trace_schema() -> dict:
                  "corrected": {"type": "integer"}, "failed": by_field,
                  "unanswered": {"type": "integer"},
                  "unread": {"type": "boolean"},
-                 "why": {"enum": ["cut_off", "no_answer"]}},
+                 "why": {"enum": ["cut_off", "no_answer"]},
+                 # The second reading (owner decision 2026-11-06): its
+                 # requests and the coordinates they read.
+                 "near": {"type": "integer"},
+                 "near_read": {"type": "integer"}},
         # The comb of what a reading left open (combing.py): per value and
         # group, the coordinates open and how many the requests filled.
         "comb": {"parameter": {"type": "string"},
@@ -1103,7 +1120,18 @@ def trace_schema() -> dict:
                  # Lists of the next passages the run added to a request
                  # whose round asked for nothing new while a coordinate was
                  # unfound (owner decision 2026-11-06: the search runs empty).
-                 "listed": {"type": "integer"}},
+                 "listed": {"type": "integer"},
+                 # The other values of the table that took the answers
+                 # combed for this one, its frame open on all of them.
+                 "table_rows": {"type": "integer"}},
+        # The plan's base and target years, asked once per plan (years.py):
+        # the years each state took, the requests, the hits listed, the
+        # passages fetched and the years refused.
+        "years": {"base": {"type": "array", "items": {"type": "integer"}},
+                  "target": {"type": "array", "items": {"type": "integer"}},
+                  "asked": {"type": "integer"}, "hits": {"type": "integer"},
+                  "fetched": {"type": "integer"},
+                  "refused": {"type": "integer"}},
         # A passage the walk down a search's list reads a parameter in that
         # the survey named no passage for (surveyed.py), `rank` its place in
         # the list from 1, and a sentence that search ranks with, written
@@ -1150,6 +1178,8 @@ def trace_schema() -> dict:
                           "rows", "passages", "figure", "group", "round"},
         "comb_ask": {"corrections", "parameter", "owner", "kind", "rows",
                      "passages", "figure", "group", "round", "value"},
+        "years_ask": {"corrections", "parameter", "owner", "kind", "rows",
+                      "passages", "figure", "group", "round", "value"},
         "naming": {"things", "several", "groups", "asked"},
         # A search sentence, the frame, the review and the compute step say
         # their attempt and what it cost; a parameter where they have one.
@@ -1157,8 +1187,9 @@ def trace_schema() -> dict:
                             "rows", "passages", "figure", "group", "round",
                             "value"}
            for stage in ("phrase", "frame", "review", "compute")},
-        "comb": {"group", "listed"},
-        "read": {"corrected", "failed", "unanswered", "unread", "why"},
+        "comb": {"group", "listed", "table_rows"},
+        "read": {"corrected", "failed", "unanswered", "unread", "why",
+                 "near", "near_read"},
         "completion": {"filled", "id", "key", "matched"},
     }
     # Optional on every event: what the run could not always know. Requiring

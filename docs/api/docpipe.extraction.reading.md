@@ -194,6 +194,8 @@ Fields:
 - `failed: dict = field(default_factory=dict)`: what the check refused of the first replies, by reason
 - `unanswered: int = 0`: coordinates no reply answered
 - `probes: list = field(default_factory=list)`: Per claim, in its order: the sentences its group replies wrote to the coordinates they found unstated, as the plan would print them, {coordinate: sentence}, which the combing ranks with. Not on the claim: no sentence enters the harvest.
+- `near: int = 0`: Requests of the second reading, which asked the coordinates the first left open once more with the sections around the value's place, and the coordinates they read (owner decision 2026-11-06).
+- `near_read: int = 0`
 
 ### Reader
 
@@ -232,13 +234,16 @@ def __init__(self, spec, ask_values: Callable, ask_text: Callable,
 
 ```python
 def context_of(self, source: Source, tuples: list, passages: dict,
-               budget: Optional[int] = None) -> tuple
+               budget: Optional[int] = None,
+               title_page: Optional[Source] = None) -> tuple
 ```
 
 (what the requests of a passage show beside it, the section it
-was cut from): the text around a table or figure (`around_of`) and
-the survey's pairs of the passage, which only a group that asks a
-frame coordinate shows (`group_context`).
+was cut from, the passages a coordinate may quote for what stands
+beside it): the text around a table or figure (`around_of`), the
+title page's line and the table the passage may continue
+(`beside_of`), and the survey's pairs of the passage, which only a
+group that asks a frame coordinate shows (`group_context`).
 
 #### Reader.read
 
@@ -246,14 +251,19 @@ frame coordinate shows (`group_context`).
 def read(self, document_id: int, parameter, source: Source,
          tuples: list, pairs: list, passages: dict,
          shown: Optional[Source] = None,
-         budget: Optional[int] = None) -> Read
+         budget: Optional[int] = None, *,
+         bases: Optional[list] = None,
+         title_page: Optional[Source] = None) -> Read
 ```
 
 *source* is the passage a value is verified against, *shown* the
 piece of it the requests show, *budget* two pages of the plan, which
 the text around a table or figure fits (`around_of`). The values in
 rounds (`_values`), each placed in its table (`_placed`), then each
-group of the spec for each value (`_value_group`).
+group of the spec for each value (`_value_group`), then what that
+left open once more with the plan around the value (`_near`).
+*bases* are the plan's years (else those of *pairs*), *title_page*
+its title page's line (`Reader.__call__`).
 
 ## Functions
 
@@ -325,7 +335,8 @@ def group_context(context: dict, group_slots: list, frame_slots: list,
 ```
 
 What a group's request shows beside the passage: the text around it,
-and the survey's pairs and the plan's years only where the group asks a
+the title page's line and the table it may continue (`beside_of`), and
+the survey's pairs and the plan's years only where the group asks a
 frame coordinate.
 
 ### coordinate_shown
@@ -466,6 +477,44 @@ each side would have hidden the text of 72 % of the quotes the m8 run
 took from a table's section. None for a section, and for a table or
 figure whose section is not among *passages*.
 
+### near_of
+
+```python
+def near_of(source: Source, order: list,
+            budget: Optional[int]) -> dict
+```
+
+{"before": Source, "after": Source}: the sections before and after a
+value's place, which is the section a table or figure stands in, as the
+second reading shows them (owner decision 2026-11-06: where the reading
+said a coordinate is not stated, it is asked once more with the plan
+around it). Together at most *budget*, two pages of the plan, each side
+the part nearest the place. A side without a section is left out; {}
+where the plan has neither.
+
+### table_before_of
+
+```python
+def table_before_of(source: Source) -> Optional[Source]
+```
+
+The title and head of the last table on the page before, which a
+table at the top of a page may continue (`lookup.continued`), as a
+passage a quote may stand in; whether the table continues it is the
+model's reading (owner decision 2026-11-06). None for any other
+passage.
+
+### beside_of
+
+```python
+def beside_of(source: Source, title_page: Optional[Source]) -> tuple
+```
+
+({key: text} a reading request shows beside *source*, [the passages
+a coordinate's quote may stand in for them]): the line of the title page
+that names the plan's own place (owner decision 2026-11-06) and the
+title and head of the table *source* may continue (`table_before_of`).
+
 ### more_schema
 
 ```python
@@ -558,7 +607,10 @@ in every round of the parameter; then the passage and the text around a
 table or figure, the same in every round of the passage; the values
 already read (*read*) last; with *corrections* the value of the round
 the check refused, asked once more (ticket 26: what requests share
-stands first). Nothing of the value's coordinates.
+stands first). Nothing of the value's coordinates. The line of the
+title page that names the plan's own place stands before the passage,
+the same in a plan; the title and head of the table the passage may
+continue after it (`beside_of`).
 
 ### values_response_format
 
@@ -678,6 +730,16 @@ table that print it), or a head no head line of its table prints
 refuses, the model hears while it can still answer (owner decision
 2026-11-05).
 
+### head_in_before
+
+```python
+def head_in_before(source: Source, head: str) -> bool
+```
+
+Does a head line of the table *source* may continue print *head*
+(`table_before_of`)? Its head is the continuation's, where the model
+reads it as one (owner decision 2026-11-06).
+
 ### text_payload
 
 ```python
@@ -696,7 +758,11 @@ group, the plan's base and target years, the same in a plan; then the
 passage, the text around a table or figure and, for a frame group, the
 survey's pairs of the passage (`group_context`); the value last, with
 its quote and, under "read", what is already read of it in the plan's
-words; with *corrections* the same request asked once more.
+words; with *corrections* the same request asked once more. The line of
+the title page stands with the plan's years, the table the passage may
+continue after it (`beside_of`), and in a second reading the sections
+before and after the value's place (`near_of`). A request for every
+value of a table at once says so ("whole_table", `Reader._near_table`).
 
 ### text_response_format
 
@@ -743,11 +809,21 @@ def answer_of(entry: dict) -> dict
 ### value_replies
 
 ```python
-def value_replies(reply: dict, slot, label: str) -> list
+def value_replies(reply: dict, slot, label: str,
+                  window: tuple = ("own", 1)) -> list
 ```
 
 [(level, window, field reply)] of one coordinate of a group's reply
-for the value *label*.
+for the value *label*; *window* is ("near", 1) in a second reading.
+
+### is_open
+
+```python
+def is_open(claim: dict, slot) -> bool
+```
+
+Is a coordinate still open on a value after its reading: said not
+stated, answered without backing, or not answered at all?
 
 ### refused_of
 
@@ -811,5 +887,19 @@ the passage, when the survey named exactly one, through the field check
 with the tuple's own quote. Not on a row that read a frame coordinate of
 its own the tuple contradicts: a year under its column head is not the
 year of the table's title. Returns the coordinates taken.
+
+### link_ranges
+
+```python
+def link_ranges(rows: list, slots: list) -> int
+```
+
+The two ends of each range a passage prints, linked (owner decision
+2026-11-06): a value read as the lower end of a range
+(`fields.RANGE_LOW`) and the next one read as the upper end
+(`fields.RANGE_HIGH`), under the same quote and with the same answer to
+every other coordinate, both carry [lower, upper] under `fields.RANGE`.
+Only a list that has both entries marks ends. Returns how many ranges
+were linked.
 
 [Back to the index](../README.md)

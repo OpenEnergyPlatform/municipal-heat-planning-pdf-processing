@@ -58,7 +58,7 @@ from types import SimpleNamespace
 import pytest
 
 from docpipe.extraction import (combing, fields, reading, runner, survey,
-                                surveyed)
+                                surveyed, years)
 from docpipe.extraction.pipeline import (Batch, DocumentReport, Row, Source,
                                          WorkItem)
 from docpipe.extraction.spec import load as load_spec
@@ -449,10 +449,12 @@ def test_a_spec_with_groups_and_every_prompt_harvests_from_the_survey(
     monkeypatch.setattr(runner, "FLOW", runner.SURVEYED)
     entry = runner.producer("harvest", "m")
     assert entry["flow"] == runner.SURVEYED
-    assert set(entry["prompts"]) == set(runner.SURVEY_PROMPT_IDS)
-    assert set(runner.SURVEY_PROMPT_IDS) <= set(
-        runner._stamp_current("sha", "", SPEC))
-    assert runner.sent_prompt_ids(False) == runner.SURVEY_PROMPT_IDS
+    # And the plan's years, which this profile asks once per plan (owner
+    # decision 2026-11-06).
+    sent = (*runner.SURVEY_PROMPT_IDS, years.YEARS_PROMPT_ID)
+    assert set(entry["prompts"]) == set(sent)
+    assert set(sent) <= set(runner._stamp_current("sha", "", SPEC))
+    assert runner.sent_prompt_ids(False) == sent
     monkeypatch.setattr(runner, "FLOW", runner.FIELDWISE)
     entry = runner.producer("harvest", "m")
     assert entry["flow"] == runner.FIELDWISE
@@ -926,3 +928,19 @@ def test_the_profile_s_title_is_one_of_its_front_parameters():
     whole, asked = front_harvest(found_of(), title="publication_titel")
     whole(7)
     assert asked == [{}]
+
+
+def test_the_title_page_line_is_the_one_naming_the_plan_s_place():
+    # Owner decision 2026-11-06: every reading request shows the line of the
+    # title page that names the municipality the plan is about.
+    cover = Source("section", 1, "Kommunale Wärmeplanung\nfür die Stadt "
+                   "Musterstadt\nEndbericht", {"page": 1})
+    body = Source("section", 2, "Musterstadt hat 30.000 Einwohner.",
+                  {"page": 3})
+    line = runner.title_line([body, cover], "Musterstadt")
+    assert (line.owner_kind, line.owner_id, line.text) == (
+        "section", 1, "für die Stadt Musterstadt")
+    # the failure by construction: no name, or a name the first pages do
+    # not print, shows no line
+    assert runner.title_line([body, cover], None) is None
+    assert runner.title_line([body, cover], "Beispielort") is None

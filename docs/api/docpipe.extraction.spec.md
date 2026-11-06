@@ -160,6 +160,26 @@ Fields:
 - `read_in: str`
 - `where: str`: Where a plan prints the group, in the words the prompts show.
 - `full_definition: bool = False`: Whether its requests show a parameter's full definition rather than its `brief` (spec: "definition": "full"): the group that classifies a value needs every distinction the definition draws, the others only what a value of the parameter is (owner decision 2026-11-05, ticket 26).
+- `own_passage: tuple = ()`: Coordinates only the value's own passage states, such as what the number counts: asked again with the passages around it, never searched for in the rest of the plan (spec: "own_passage", owner decision 2026-11-06).
+- `own_value: tuple = ()`: Coordinates printed with the number itself, such as "ca." or "bis zu": read once with the value, its "not stated" an answer that nothing qualifies the number, never asked again (spec: "own_value", owner decision 2026-11-06).
+
+#### Group.asked_near
+
+```python
+def asked_near(self, slots: list) -> list
+```
+
+The slots the second reading asks again with the passages around
+a value: all but those printed with the number itself.
+
+#### Group.combed
+
+```python
+def combed(self, slots: list) -> list
+```
+
+The slots the combing looks for in the rest of the plan: all but
+those only the value's own passage or the number itself states.
 
 ### Spec
 

@@ -78,14 +78,25 @@ PHRASES = {
         'Your "quote" is too short to name a place (at least {minimum} '
         'characters). Quote the whole sentence or the whole line the '
         'answer stands in.'),
+    # A correction names every way of answering that passes in the request
+    # (owner decision 2026-11-06): the document's own word as the wording
+    # where the request asks one, the answer as its quote prints it where the
+    # answer is its own wording; "not stated" only where the request offers
+    # it, else leaving it out.
     "answer_not_in_quote": (
-        'Your "quote" does not contain {answer!r}. Quote the place where '
-        'it really stands, or answer with "{unstated}".'),
-    # The same in a request that offers no "not stated", the combing's
-    # (owner decision 2026-11-06).
-    "answer_not_in_quote_leave_out": (
-        'Your "quote" does not contain {answer!r}. Quote the place where '
-        'it really stands, or leave this coordinate out.'),
+        'Your "quote" does not contain {answer!r}. If it prints another word '
+        'of the document for this, write that word character for character '
+        'under "value_raw"; otherwise quote the place where the answer '
+        'really stands.'),
+    "answer_not_in_quote_text": (
+        'Your "quote" does not contain {answer!r}. Write the answer as your '
+        'quote prints it, character for character, or quote the place where '
+        'it really stands.'),
+    "or_unstated": ' If it stands nowhere, answer with "{unstated}".',
+    "or_leave_out": ' If it stands nowhere, leave it out.',
+    "year_not_in_quote": (
+        'The year {given!r} does not stand in its quote {quote!r}. Quote the '
+        'place that prints it.'),
     # The key of the frame request that holds the entries of a closed frame
     # coordinate, one list per coordinate. The frame prompt of this profile
     # names no key of its own ("the list the request gives for ..."), and

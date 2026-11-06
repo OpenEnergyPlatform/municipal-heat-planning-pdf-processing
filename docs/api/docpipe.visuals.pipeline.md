@@ -44,7 +44,10 @@ model and writes the enriched output.
 
 Caching is item-level: tables that already have a "markdown" key and figures
 that already have a "description" key are reused from a previous enriched
-output unless *force* is set. An item the model gave no object for has
+output unless *force* is set. A table that may continue the table before
+it (`continuation`) is asked after that table, shown its caption and head;
+its cached transcription is reused only where it was asked against the
+table before it. An item the model gave no object for has
 none, says why in "vlm_why", and is asked again by the next run. An item
 an older run stored as a plain-text answer is treated like one described
 under older prompts: said once, with its number, and asked again only with

@@ -39,7 +39,7 @@ from .config import (
     dump_json_atomic,
     max_request_tokens,
 )
-from . import replies
+from . import continuation, replies
 from .models import ProcessingStats
 from .vision import create_client, check_model_available
 from .process import process_table, process_figure
@@ -137,7 +137,10 @@ def run_single(
 
     Caching is item-level: tables that already have a "markdown" key and figures
     that already have a "description" key are reused from a previous enriched
-    output unless *force* is set. An item the model gave no object for has
+    output unless *force* is set. A table that may continue the table before
+    it (`continuation`) is asked after that table, shown its caption and head;
+    its cached transcription is reused only where it was asked against the
+    table before it. An item the model gave no object for has
     none, says why in "vlm_why", and is asked again by the next run. An item
     an older run stored as a plain-text answer is treated like one described
     under older prompts: said once, with its number, and asked again only with
@@ -206,11 +209,16 @@ def run_single(
     stats = ProcessingStats()
     pending_tables = 0
     pending_figures = 0
+    # The tables that may continue the table before them (owner decision
+    # 2026-11-06).
+    found = continuation.links(data["sections"])
 
     for section in data["sections"]:
         for t in section.get("tables", []):
             stats.total_tables += 1
-            if t["id"] not in cached_items:
+            kept = cached_items.get(t["id"])
+            if kept is None or (t["id"] in found and kept.get("after")
+                                != found[t["id"]]["after"]):
                 pending_tables += 1
         for fig in section.get("figures", []):
             stats.total_figures += 1
@@ -255,44 +263,45 @@ def run_single(
         )
         return None
 
-    # Build the worklist: fill cached items in place, collect pending.
+    # Build the worklist: fill cached figures in place, collect the pending
+    # ones, and every run of tables (`continuation.runs`): a run's tables are
+    # asked in their order, each where its cache does not stand.
     enriched = copy.deepcopy(data)
-    # (kind, section_index, item_index, item, section)
-    tasks: list[tuple[str, int, int, dict, dict]] = []
+    # ("figure", section_index, item_index, item, section) or
+    # ("tables", [(section_index, item_index)])
+    tasks: list[tuple] = []
 
     for si, section in enumerate(enriched["sections"]):
-        for ti, t in enumerate(section.get("tables", [])):
-            if t["id"] in cached_items:
-                section["tables"][ti] = cached_items[t["id"]]
-            else:
-                tasks.append(("table", si, ti, t, section))
         for fi, f in enumerate(section.get("figures", [])):
             if f["id"] in cached_items:
                 section["figures"][fi] = cached_items[f["id"]]
             else:
                 tasks.append(("figure", si, fi, f, section))
+    tasks += [("tables", run)
+              for run in continuation.runs(enriched["sections"], found)]
 
     log.info(
-        "Processing %d pending items with %d parallel slots",
-        len(tasks), VLM_NUM_PARALLEL,
+        "Processing %d pending items (%d table(s) that may continue the "
+        "table before them) with %d parallel slots",
+        pending_tables + pending_figures, len(found), VLM_NUM_PARALLEL,
     )
     lock = threading.Lock()
     source_texts = _load_source_texts(output_dir)
 
-    def _enrich(task: tuple) -> tuple:
-        kind, si, ti, item, section = task
+    def _one(kind: str, item: dict, section: dict,
+             before: Optional[dict] = None) -> dict:
         try:
             if kind == "table":
-                res = process_table(
+                return process_table(
                     item, section, output_dir, client, stats,
                     model=model, lock=lock,
                     source_text=source_texts.get(item["id"], ""),
+                    before=before,
                 )
-            else:
-                res = process_figure(
-                    item, section, output_dir, client, stats,
-                    model=model, lock=lock,
-                )
+            return process_figure(
+                item, section, output_dir, client, stats,
+                model=model, lock=lock,
+            )
         except Exception as e:  # never let one item kill the whole run
             log.error("  ✗ %s %s crashed: %s", kind, item.get("id", "?"), e,
                       exc_info=True)
@@ -300,14 +309,29 @@ def run_single(
             # cause an error of our own is.
             with lock:
                 stats.hole(kind, "error")
-            res = {**item, "vlm_why": "error"}
-        return kind, si, ti, res
+            return {**item, "vlm_why": "error"}
+
+    def _enrich(task: tuple) -> list:
+        if task[0] == "figure":
+            _kind, si, fi, item, section = task
+            return [("figure", si, fi, _one("figure", item, section))]
+        run = task[1]
+        sections = enriched["sections"]
+        items = [sections[si]["tables"][ti] for si, ti in run]
+        owner = {item["id"]: sections[si] for item, (si, _ti)
+                 in zip(items, run)}
+        done = continuation.transcribe_run(
+            items, found, cached_items,
+            lambda item, before: _one("table", item, owner[item["id"]],
+                                      before))
+        return [("table", si, ti, res) for (si, ti), res in zip(run, done)]
 
     if tasks:
         with ThreadPoolExecutor(max_workers=VLM_NUM_PARALLEL) as ex:
-            for kind, si, ti, res in ex.map(_enrich, tasks):
-                key = "tables" if kind == "table" else "figures"
-                enriched["sections"][si][key][ti] = res
+            for results in ex.map(_enrich, tasks):
+                for kind, si, ti, res in results:
+                    key = "tables" if kind == "table" else "figures"
+                    enriched["sections"][si][key][ti] = res
 
     # Write unconditionally, to persist partial progress.
     _strip_source_text(enriched)
@@ -590,7 +614,9 @@ def main() -> None:
             assert_serving(args.base_url or VLM_BASE_URL, VLM_API_KEY,
                            args.model or VLM_MODEL, max_request_tokens(),
                            what="image enrichment", role="vlm",
-                           shapes=dict((replies.TABLE, replies.FIGURE)))
+                           shapes=dict((replies.TABLE,
+                                        replies.TABLE_CONTINUED,
+                                        replies.FIGURE)))
         if args.batch:
             results = run_batch(Path(args.input), **common)
             ok = sum(1 for v in results.values() if v)

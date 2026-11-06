@@ -173,6 +173,8 @@ def key_of(prompt_text: str, parameters: dict, groups: dict,
 def payload(context: list, parameters: dict, groups: dict,
             corrections: Optional[list] = None) -> dict:
     """One request: its one passage under "source", without an id, the
+    title and head of the table a table at the top of a page may continue
+    ("table_before", `lookup.continued`, owner decision 2026-11-06), the
     parameters and the groups; with *corrections* the same request asked
     once more."""
     source = one_passage(context)
@@ -182,7 +184,9 @@ def payload(context: list, parameters: dict, groups: dict,
              "text": source.text or ""}
     if provenance.get("page"):
         shown["page"] = provenance["page"]
-    body = {"source": shown, "parameters": parameters, "groups": groups}
+    before = (provenance.get("table_before") or {}).get("text")
+    body = {"source": shown, **({"table_before": before} if before else {}),
+            "parameters": parameters, "groups": groups}
     if corrections:
         body["corrections"] = list(corrections)
     return body
@@ -277,11 +281,17 @@ def read_reply(reply: dict, context: list, parameters: dict, slots: dict,
         return [], [owner]
     answer = Answer(owner, [p for p in reply["parameters"]
                             if p in parameters])
+    # A tuple may be quoted from the title and head of the table the passage
+    # may continue as well, which the request shows (owner decision
+    # 2026-11-06).
+    from .reading import table_before_of
+    before = table_before_of(source)
+    shown = list(context) + ([before] if before is not None else [])
     for name, group_slots in slots.items():
         rejected: list = []
         given = reply.get(name)
         taken = pairs_of({"pairs": given if isinstance(given, list)
-                          else []}, group_slots, context, rejected)
+                          else []}, group_slots, shown, rejected)
         if taken:
             answer.tuples[name] = taken
         for reason in rejected:

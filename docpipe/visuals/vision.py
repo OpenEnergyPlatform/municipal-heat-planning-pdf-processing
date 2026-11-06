@@ -123,8 +123,8 @@ def call_vision(
     The wall-clock bound per request is the client timeout set by
     create_client(), not *max_retries*. *reply* is the (name, schema) of the
     object asked for (see `replies`): the grammar of every request, and its
-    one required key (the item's `markdown`, `description`) has to be in the
-    reply as text.
+    first required key (the item's `markdown`, `description`) has to be in
+    the reply as text.
 
     A reply that is not that object is asked again with its cause named, the
     answer echoed back. A reply that was cut off at its token limit is not
@@ -155,7 +155,7 @@ def call_vision(
         return RETRY_PENALTIES[min(failed_attempt, len(RETRY_PENALTIES) - 1)]
 
     name, schema = reply
-    (key,) = schema["required"]
+    key = schema["required"][0]
     shape = providers.grammar(name, schema)
     current_penalty = repetition_penalty
     room = max_tokens

@@ -94,6 +94,7 @@ from . import reading as reading_map
 from . import replies
 from . import survey as survey_map
 from . import surveyed as surveyed_map
+from . import years as years_map
 from . import scheduler
 from . import scratch
 from . import trace
@@ -114,6 +115,7 @@ from .pipeline import (CELL, YEAR_STATES, DocumentReport, Source, WorkItem,
                        window_around, window_sources,
                        write_report)
 from .fields import EXHAUSTED
+from .verify import flat as flat_text
 from .queries import expand as expand_queries
 from .trust import document_summary, parameter_states
 from .spec import Spec, fingerprints, load as load_spec
@@ -2189,6 +2191,79 @@ def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
     # for ranks with (`make_seek_probes`); None searches with its label.
     comber.seek = seek
     return comber
+
+
+def frame_slots_of(spec: Spec) -> list:
+    """The coordinates the survey reads per passage, its frame."""
+    return [slot for group in spec.groups_read_in("survey")
+            for slot in fields.frame_slots(spec, group.coordinates)]
+
+
+def dates_by_plan(spec: Spec) -> bool:
+    """Does the spec date a value by the plan's own years: has its frame a
+    year?"""
+    return any(slot.kind == fields.NUMBER for slot in frame_slots_of(spec))
+
+
+def make_years(spec: Spec, rank: Optional[Callable] = None):
+    """The request for a plan's base and target years, once per plan
+    (`years.PlanYears`, owner decision 2026-11-06), or None where the spec's
+    frame has no year or the profile writes no prompt for it. *rank* is the
+    plan best first for a sentence the model writes ("similar")."""
+    if not dates_by_plan(spec):
+        return None
+    try:
+        prompt = prompts.load(years_map.YEARS_PROMPT_ID)
+    except (FileNotFoundError, LookupError):
+        return None
+    client = _client()
+    from docpipe.profile import active_profile
+    states = year_states_of(active_profile())
+
+    def ask(payload, document_id, corrections=0):
+        text = json.dumps(payload, ensure_ascii=False, indent=2)
+        return ask_in_grammar(
+            client, prompt, [{"role": "user", "content": text}],
+            years_map.response_format(), document_id, "years",
+            "base_years", example=years_map.example(),
+            corrections=corrections)
+    return years_map.PlanYears(ask, frame_slots_of(spec), states, rank=rank,
+                               trace=trace.event)
+
+
+def title_line(passages: list, name: Optional[str],
+               pages: tuple = (1, 2)) -> Optional[Source]:
+    """The first line of the plan's first page, else its second, that names
+    *name*, the place the plan is about, as a passage a quote may stand in
+    (owner decision 2026-11-06: every reading request shows it). None where
+    no such line stands there, or no name is known."""
+    if not name or not name.strip():
+        return None
+    wanted = flat_text(name).casefold()
+    for page in pages:
+        for source in passages:
+            if (source.provenance or {}).get("page") != page:
+                continue
+            for line in (source.text or "").splitlines():
+                if wanted in flat_text(line).casefold():
+                    return replace(source, text=line.strip(), body=None)
+    return None
+
+
+def make_title_page(db_path: Optional[Path], profile) -> Optional[Callable]:
+    """title_page(document_id, passages): the line of the title page that
+    names the plan's own place (`title_line`), its name from the profile's
+    `document_context`; None where the profile does not show it
+    (`TITLE_PAGE_LINE`)."""
+    if profile is None or not profile.component("extraction",
+                                                "TITLE_PAGE_LINE"):
+        return None
+    context_of = document_context_of(db_path, profile.component(
+        "extraction", "document_context"))
+
+    def title_page(document_id: int, passages: list) -> Optional[Source]:
+        return title_line(passages, context_of(document_id).get("name"))
+    return title_page
 
 
 def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
@@ -6891,14 +6966,20 @@ def flow_prompts(flow: Optional[str] = None) -> tuple:
 
 def survey_prompt_ids(profile=None) -> tuple:
     """The prompts of a harvest from the survey: `SURVEY_PROMPT_IDS`, and
-    the naming's where the profile writes them, which a spec that merges
-    names sends (`naming.NAMING_PROMPT_IDS`, required by `surveyed_flow`)."""
-    try:
-        for prompt_id in naming_map.NAMING_PROMPT_IDS:
-            prompts.load(prompt_id, profile)
-    except (FileNotFoundError, LookupError):
-        return SURVEY_PROMPT_IDS
-    return (*SURVEY_PROMPT_IDS, *naming_map.NAMING_PROMPT_IDS)
+    the naming's and the plan's years' where the profile writes them, which
+    a spec that merges names or dates a value by the plan's years sends
+    (`naming.NAMING_PROMPT_IDS`, `years.YEARS_PROMPT_ID`, required by
+    `surveyed_flow`)."""
+    out = SURVEY_PROMPT_IDS
+    for prompt_ids in (naming_map.NAMING_PROMPT_IDS,
+                       (years_map.YEARS_PROMPT_ID,)):
+        try:
+            for prompt_id in prompt_ids:
+                prompts.load(prompt_id, profile)
+        except (FileNotFoundError, LookupError):
+            continue
+        out = (*out, *prompt_ids)
+    return out
 
 
 def surveyed_flow(spec: Spec, profile=None) -> bool:
@@ -6915,10 +6996,12 @@ def surveyed_flow(spec: Spec, profile=None) -> bool:
     request is sent rather than at the first plan's reading."""
     if not spec.groups:
         return False
-    # The naming only where the spec merges names (`naming.py`).
+    # The naming only where the spec merges names (`naming.py`), the plan's
+    # years only where its frame has a year (`years.py`).
     needed = (*SURVEY_PROMPT_IDS,
               *(naming_map.NAMING_PROMPT_IDS
-                if naming_map.merges(spec) else ()))
+                if naming_map.merges(spec) else ()),
+              *((years_map.YEARS_PROMPT_ID,) if dates_by_plan(spec) else ()))
     for prompt_id in needed:
         try:
             prompt = prompts.load(prompt_id, profile)
@@ -8662,7 +8745,9 @@ def main(argv: Optional[list] = None) -> int:
             lambda doc_spec: make_comber(doc_spec, rank, seek),
             lambda document_id: every(document_id, set()), pages_of,
             spec_for=spec_for, front=own,
-            title=profile.component("extraction", "FRONT_PAGE_TITLE"))
+            title=profile.component("extraction", "FRONT_PAGE_TITLE"),
+            make_years=lambda doc_spec: make_years(doc_spec, rank),
+            title_page_of=make_title_page(args.db, profile))
 
     def pass_sweep():
         """What a pass over a stored harvest re-reads a coordinate with: the

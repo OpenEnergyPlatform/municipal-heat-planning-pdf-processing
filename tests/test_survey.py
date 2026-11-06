@@ -71,10 +71,27 @@ def test_a_survey_group_no_parameter_has_whole_is_refused():
     def odd(groups):
         for name in ("whole", "aggregation"):
             groups["context"]["coordinates"].remove(name)
+        groups["context"].pop("own_passage", None)
         groups["odd"] = {"coordinates": ["whole", "aggregation"],
                          "read_in": "survey", "where": "irgendwo"}
     with pytest.raises(SpecError, match="one parameter"):
         load_spec(with_groups(odd))
+
+
+def test_what_only_a_value_s_own_passage_or_number_says_is_of_its_group():
+    # Owner decision 2026-11-06: what a number counts and how it is
+    # aggregated only its own passage says, a word like "ca." only the
+    # number itself; the combing does not look for them elsewhere.
+    number, context = SPEC.groups["number"], SPEC.groups["context"]
+    assert (number.own_passage, number.own_value) == (("subject",),
+                                                      ("qualifier",))
+    assert context.own_passage == ("aggregation",)
+    raw = with_groups(lambda g: g["number"].update(own_passage=["year"]))
+    with pytest.raises(SpecError, match="group's coordinates"):
+        load_spec(raw)
+    raw = with_groups(lambda g: g["number"].update(own_value=["subject"]))
+    with pytest.raises(SpecError, match="not both"):
+        load_spec(raw)
 
 
 # -- contexts ------------------------------------------------------------------

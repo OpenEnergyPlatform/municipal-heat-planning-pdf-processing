@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "docpipe visuals.json (what stage 5 hands on)",
-  "description": "results/visuals.json of one document: the tables and figures of its sections, each with what the vision model read off its crop. Stage 5 writes it and reads it back as its cache; the merge in chunking replaces each table and figure of sections_refined.json by the item of the same id found here, and the database stores the result. Only the tables and figures of the sections are read from this file; the other keys of a section are carried over from the input stage 5 was given, and the merge takes its sections from sections_refined.json. A table or figure is done when it has a markdown or a description, and an item without one (which says why in vlm_why) is asked again by the next run. Keys not listed here are carried or ignored, none is read. No stage checks a file against this schema.",
+  "description": "results/visuals.json of one document: the tables and figures of its sections, each with what the vision model read off its crop. Stage 5 writes it and reads it back as its cache; the merge in chunking replaces each table and figure of sections_refined.json by the item of the same id found here and joins each table that continues the table before it to that table (see continues), and the database stores the result. Only the tables and figures of the sections are read from this file; the other keys of a section are carried over from the input stage 5 was given, and the merge takes its sections from sections_refined.json. A table or figure is done when it has a markdown or a description, and an item without one (which says why in vlm_why) is asked again by the next run. Keys not listed here are carried or ignored, none is read. No stage checks a file against this schema.",
   "type": "object",
   "properties": {
     "version": {
@@ -109,7 +109,15 @@
         "bbox": {"$ref": "#/$defs/rects"},
         "markdown": {
           "type": "string",
-          "description": "The table as a Markdown table. Present and not empty: the table is done. Absent: it was not read, and the next run asks again."
+          "description": "The table as a Markdown table. Present and not empty: the table is done, unless it may continue the table before it and was not asked against that table (see after). Absent: it was not read, and the next run asks again. A part that continues the table before it is written under that table's head; its own markdown stays here, and the merge joins its rows to that table."
+        },
+        "after": {
+          "$ref": "#/$defs/block_id",
+          "description": "Only on a table that may continue the table before it, as stage 5 finds it (docpipe/visuals/continuation.py: that table stands on its page or the page before, and no section starts between them on its page): the id of that table, whose caption and head the request was shown with what stands between them. A cached table whose after is not the table before it now is asked again."
+        },
+        "continues": {
+          "type": "boolean",
+          "description": "Beside after: the model's answer whether the table continues the table before it. True: the merge in chunking appends its rows to the table its run started with, keeps its id, page, crop, frame and check in that table's parts, and leaves it out of its section; it gets no caption of its own."
         },
         "vlm_why": {"$ref": "#/$defs/vlm_why"},
         "vlm_status": {"$ref": "#/$defs/vlm_status"},

@@ -1743,6 +1743,57 @@ when the profile writes no prompt for it or its spec names no groups.
 for the search sentences, `make_more_sources` in a harvest. *seek* is
 the sought search's sentences (`make_seek_probes`).
 
+### frame_slots_of
+
+```python
+def frame_slots_of(spec: Spec) -> list
+```
+
+The coordinates the survey reads per passage, its frame.
+
+### dates_by_plan
+
+```python
+def dates_by_plan(spec: Spec) -> bool
+```
+
+Does the spec date a value by the plan's own years: has its frame a
+year?
+
+### make_years
+
+```python
+def make_years(spec: Spec, rank: Optional[Callable] = None)
+```
+
+The request for a plan's base and target years, once per plan
+(`years.PlanYears`, owner decision 2026-11-06), or None where the spec's
+frame has no year or the profile writes no prompt for it. *rank* is the
+plan best first for a sentence the model writes ("similar").
+
+### title_line
+
+```python
+def title_line(passages: list, name: Optional[str],
+               pages: tuple = (1, 2)) -> Optional[Source]
+```
+
+The first line of the plan's first page, else its second, that names
+*name*, the place the plan is about, as a passage a quote may stand in
+(owner decision 2026-11-06: every reading request shows it). None where
+no such line stands there, or no name is known.
+
+### make_title_page
+
+```python
+def make_title_page(db_path: Optional[Path], profile) -> Optional[Callable]
+```
+
+title_page(document_id, passages): the line of the title page that
+names the plan's own place (`title_line`), its name from the profile's
+`document_context`; None where the profile does not show it
+(`TITLE_PAGE_LINE`).
+
 ### make_survey
 
 ```python
@@ -2388,8 +2439,10 @@ def survey_prompt_ids(profile=None) -> tuple
 ```
 
 The prompts of a harvest from the survey: `SURVEY_PROMPT_IDS`, and
-the naming's where the profile writes them, which a spec that merges
-names sends (`naming.NAMING_PROMPT_IDS`, required by `surveyed_flow`).
+the naming's and the plan's years' where the profile writes them, which
+a spec that merges names or dates a value by the plan's years sends
+(`naming.NAMING_PROMPT_IDS`, `years.YEARS_PROMPT_ID`, required by
+`surveyed_flow`).
 
 ### surveyed_flow
 

@@ -65,17 +65,29 @@ TOKENS_PER_WORD = 3.0
 # exact count depends on the model's patch grid, and getting it wrong upwards
 # only costs KV cache, downwards costs the run.
 IMAGE_TOKENS = 4096
+# Each text a request shows beside its prompts is cut to this many characters
+# (process._truncate): the section's text, and for a table that may continue
+# the table before it, that table's head and what stands between the two
+# (continuation.BETWEEN_CHARS). Counted at two characters a token.
+SHOWN_CHARS = 800
 
 
 def max_request_tokens() -> int:
-    """Worst case for one vision request: the longer of the two system
-    prompts + one page image + the reply we ask for, once. A reply cut off at
-    its limit is asked once more with more room, but the room is bounded by
-    what the served window leaves beyond this number (vision.call_vision), so
-    no second reply is counted."""
-    words = max(len(table_system_prompt().split()),
-                len(figure_system_prompt().split()))
-    return int(words * TOKENS_PER_WORD + IMAGE_TOKENS + VLM_MAX_TOKENS)
+    """Worst case for one vision request: the longer of the two requests'
+    prompts with the texts they show, cut as they are cut, + one page image
+    + the reply we ask for, once. A table's request counts the part it gets
+    where it may continue the table before it. A reply cut off at its limit
+    is asked once more with more room, but the room is bounded by what the
+    served window leaves beyond this number (vision.call_vision), so no
+    second reply is counted."""
+    table = ((len(table_system_prompt().split())
+              + len(table_user_prompt().split())
+              + len(table_continued_prompt().split())) * TOKENS_PER_WORD
+             + 3 * SHOWN_CHARS / 2)
+    figure = ((len(figure_system_prompt().split())
+               + len(figure_user_prompt().split())) * TOKENS_PER_WORD
+              + SHOWN_CHARS / 2)
+    return int(max(table, figure) + IMAGE_TOKENS + VLM_MAX_TOKENS)
 
 # ---------------------------------------------------------------------------
 # Retry ladder
@@ -116,6 +128,7 @@ TABLE_QA_RETRY_PENALTY     = 1.3
 # ---------------------------------------------------------------------------
 
 PROMPT_IDS = ("visuals/table_system", "visuals/table_user",
+              "visuals/table_continued",
               "visuals/figure_system", "visuals/figure_user",
               "visuals/caption_keep", "visuals/caption_generate_table",
               "visuals/caption_generate_figure")
@@ -131,6 +144,13 @@ def table_system_prompt() -> str:
 @prompts.per_profile
 def table_user_prompt() -> str:
     return prompts.text("visuals/table_user")
+
+
+# Added to the user prompt of a table that may continue the table before it
+# (see continuation.py).
+@prompts.per_profile
+def table_continued_prompt() -> str:
+    return prompts.text("visuals/table_continued")
 
 
 # ── Caption instruction fragments (inserted into the two user prompts) ──

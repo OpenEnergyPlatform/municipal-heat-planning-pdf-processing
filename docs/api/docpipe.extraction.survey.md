@@ -206,6 +206,8 @@ def payload(context: list, parameters: dict, groups: dict,
 ```
 
 One request: its one passage under "source", without an id, the
+title and head of the table a table at the top of a page may continue
+("table_before", `lookup.continued`, owner decision 2026-11-06), the
 parameters and the groups; with *corrections* the same request asked
 once more.
 

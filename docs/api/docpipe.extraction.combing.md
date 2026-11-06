@@ -6,12 +6,18 @@ combing.py: The coordinates the reading left open, looked for in the rest of
 the plan. Step 4 of the rebuilt harvest (owner decisions 2026-11-04).
 
 The reading asks a value's coordinates in its own passage and the text
-around it, and may fetch more of the plan itself. What is still open after it
-(a coordinate the passage does not state, one whose answer did not hold, one
-no reply answered) is looked for here, per value and group of the spec that
-still has an open coordinate (owner decisions 2026-11-04 and 2026-11-05:
-every request one task and one value), the group's words for where a plan
-prints it shown. The search ranks the plan with the sentences the reading
+around it, then once more with the sections before and after it. What is
+still open after it (a coordinate the passage does not state, one whose
+answer did not hold, one no reply answered) is looked for here, per value
+and group of the spec that still has an open coordinate (owner decisions
+2026-11-04 and 2026-11-05: every request one task and one value), the
+group's words for where a plan prints it shown. Only what another passage
+can state is looked for (`Group.combed`, owner decision 2026-11-06): what a
+number counts and how it is aggregated says its own passage, and a word like
+"ca." the number itself. A table that prints no frame in its head and rows,
+its frame open on every one of its values, is combed once, for its first
+value, and the others take the answers with their quotes (`taken_by`, owner
+decisions 2026-11-02 and 2026-11-06). The search ranks the plan with the sentences the reading
 wrote to the coordinates it found unstated, as the plan would print them
 (owner decision 2026-11-05: HyDE, `Read.probes`), those of the coordinates
 asked here; the best sections, tables and figures of that ranking are shown
@@ -96,6 +102,7 @@ Fields:
 - `listed: int = 0`: lists of the next passages the run added
 - `group: Optional[str] = None`: the group of the spec asked
 - `made: list = field(default_factory=list)`: rows made beside the value, one per further name it was stated for
+- `table_rows: int = 0`: the other values of its table that took the answers combed for this one, its frame open on all of them (owner decision 2026-11-06)
 
 ### Comber
 
@@ -148,7 +155,8 @@ def comb(self, document_id: int, parameter, source, slots: list,
          coordinates: Optional[list] = None, own: bool = False,
          bases: Optional[tuple] = None,
          first: Optional[list] = None, group=None,
-         probes: Optional[dict] = None, split: bool = False) -> Combed
+         probes: Optional[dict] = None, split: bool = False,
+         whole_table: int = 0) -> Combed
 ```
 
 The open coordinates of *claims*, values of *parameter* read in
@@ -174,7 +182,9 @@ in place, the first name.
 Each request shows one row (owner decision 2026-11-06): *claims* is
 one value's claim, and a row made for a further name is asked again
 on its own. The reply carries that row's answers at its top, with no
-row label (`comb_response_format`, `as_rows`).
+row label (`comb_response_format`, `as_rows`). *whole_table* is how
+many other values of the value's table take the answers (`taken_by`),
+which the request says ("whole_table").
 
 ## Functions
 

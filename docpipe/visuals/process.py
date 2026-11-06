@@ -24,7 +24,9 @@ from docpipe.reading import Hole
 
 from . import qa, replies
 from .config import (
+    SHOWN_CHARS,
     max_request_tokens,
+    table_continued_prompt,
     table_system_prompt,
     table_user_prompt,
     TABLE_VLM_TEMPERATURE,
@@ -65,7 +67,7 @@ def _assess_table(markdown: str, source_text: str) -> tuple[bool, dict]:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _truncate(text: str, max_len: int = 800) -> str:
+def _truncate(text: str, max_len: int = SHOWN_CHARS) -> str:
     """Truncates text with an ellipsis if it exceeds max_len."""
     if len(text) <= max_len:
         return text
@@ -95,9 +97,17 @@ def process_table(
     model: str | None = None,
     lock: threading.Lock | None = None,
     source_text: str = "",
+    before: dict | None = None,
 ) -> dict:
     """
     Returns a copy of *table* enriched with a ``markdown`` key.
+
+    *before*, for a table that may continue the table before it
+    (`continuation.before_of`), is shown to the model with what stands
+    between them: the model says whether the table continues it and, where
+    it does, writes its rows under that table's head. The result then keeps
+    the id of the table before it as ``after`` and the answer as
+    ``continues`` (owner decision 2026-11-06).
 
     A QA gate checks coverage against *source_text* and row duplication; on
     failure the table is still returned (best effort) but carries a
@@ -132,11 +142,19 @@ def process_table(
         section_content=_truncate(section.get("content", "")),
         caption_instruction=_caption_instruction(existing_caption, "table"),
     )
+    reply = replies.TABLE
+    if before is not None:
+        user_prompt += table_continued_prompt().format(
+            previous_caption=before.get("caption") or "(none)",
+            previous_head=_truncate(before.get("head") or "") or "(no head)",
+            between=before.get("between") or "(nothing)",
+        )
+        reply = replies.TABLE_CONTINUED
 
     kwargs = {"model": model} if model else {}
     response = call_vision(
         client, table_system_prompt(), user_prompt, image_path,
-        temperature=TABLE_VLM_TEMPERATURE, reply=replies.TABLE,
+        temperature=TABLE_VLM_TEMPERATURE, reply=reply,
         budget=max_request_tokens(), **kwargs
     )
 
@@ -156,7 +174,7 @@ def process_table(
             client, table_system_prompt(), user_prompt + _QA_RETRY_HINT, image_path,
             temperature=TABLE_QA_RETRY_TEMPERATURE,
             repetition_penalty=TABLE_QA_RETRY_PENALTY,
-            reply=replies.TABLE, budget=max_request_tokens(), **kwargs,
+            reply=reply, budget=max_request_tokens(), **kwargs,
         )
         # A retry that is a hole keeps the first attempt, which was read.
         if not isinstance(retry, Hole):
@@ -176,8 +194,15 @@ def process_table(
     result["qa"] = {"passed": passed, **metrics}
     if not passed:
         result["qa_warning"] = metrics
+    continues = False
+    if before is not None:
+        continues = response.get("continues") is True
+        result["after"] = before["after"]
+        result["continues"] = continues
 
-    new_caption = response.get("caption", "")
+    # A part of a table takes the caption of the table it continues, when
+    # the merge joins it there; it gets none of its own.
+    new_caption = "" if continues else response.get("caption", "")
     generated = bool(not existing_caption and new_caption)
     if generated:
         result["caption"] = new_caption
@@ -187,6 +212,8 @@ def process_table(
             stats.captions_generated += 1
         if not passed:
             stats.qa_failed_tables += 1
+        if continues:
+            stats.continued_tables += 1
         stats.processed_tables += 1
 
     if passed:
