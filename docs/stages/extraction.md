@@ -285,8 +285,9 @@ Asked for one name, a value of several scenarios was left without one: on one
 paper the scenario of a year was read 48 times instead of 129.
 
 Which of a document's names mean the same thing is not asked while it is
-read. Once the document is folded, the naming step (`naming.py`, prompt
-`extraction/naming`, below) shows the model every name read.
+read. Once the document is folded, the naming step (`naming.py`, prompts
+`extraction/naming_groups` and `extraction/naming`, below) puts the names read
+together.
 
 The prompt of `read_text` may be split by lines `<!-- group: NAME -->`: the text
 before the first is every group's, and each group is sent that plus its own
@@ -368,7 +369,14 @@ shows the group's `where`. It searches with HyDE (owner decisions
 kept beside the value and never on its row (`reading.Read.probes`), and the
 combing ranks the plan with the sentences of the coordinates it asks. The best
 15 sections, 20 tables and 20 figures of the ranking are shown as a list of
-titles and first lines, the passage and its section left out. Where no
+titles and first lines, the passage and its section left out, and without the
+sentences it was ranked with. No hit list shows what it was searched with
+(`reading.SEARCHED_WITH`: the ranking's sentences, the model's own `similar`
+sentence and its `pattern`; `reading.Gathered.context`): the gathering keeps
+them so the same search is not made twice. A probe showed 37 of 99 corrections
+"quote stands in nothing shown" had quoted the ranking's sentence, text the run
+wrote, as if the plan printed it (owner decision 2026-11-06). The same holds for
+the compute step. Where no
 coordinate asked has a sentence, one whose answer did not hold, one no reply
 answered, a coordinate of a stored row, the request shows no list and the
 model searches itself with `similar`. The model fetches what it wants to read
@@ -399,7 +407,14 @@ more (a coordinate the reply gave in another form than asked, such as a bare
 value where an object is asked, is told `wrong_shape`,
 `combing.Comber._corrections`), a quote in nothing shown in the names of what the combing shows,
 `"more"`, `"hits"`, `"passage"` and `"row"` (`quote_not_shown`,
-`combing.NOT_SHOWN`, owner decision 2026-11-06). A quote may stand in
+`combing.NOT_SHOWN`, owner decision 2026-11-06). A quote that lacks its answer
+is told to quote the place where it really stands "or leave this coordinate out"
+(`answer_not_in_quote_leave_out`, `combing.NOT_IN_QUOTE`, passed as
+`merge_field(..., not_in_quote=...)`; the reading keeps `answer_not_in_quote`,
+which offers `out:unstated`, and the reason code stays `answer_not_in_quote`).
+A probe showed why: the correction still offered "not stated", and the model
+took it 111 times in 334 corrections (owner decision 2026-11-06). A quote may
+stand in
 whatever the request showed of the plan (owner
 decision 2026-11-05): a passage the model fetched, a hit's line or title, the
 title or heading of a passage, the value's passage and its section, a wording
@@ -411,8 +426,8 @@ quote has to come from. A coordinate named in another form than asked and not gi
 reply ends `unanswered`. When a round asks for nothing new while a coordinate
 is still unfound, the code adds one more hit list: the next passages of the
 ranking of the reading's search sentences, as many of each kind as the first
-list (15 sections, 20 tables, 20 figures), or the plan's passages in their
-order where there is no ranking. This repeats until every passage of the plan
+list (15 sections, 20 tables, 20 figures), listed like the first, without the
+sentences, or the plan's passages in their order where there is no ranking. This repeats until every passage of the plan
 was listed (owner decision 2026-11-06: the search runs empty;
 `reading.gather(..., then=...)`, `Gathered.unfit`, `Gathered.listed`). Only
 then does a coordinate no reply found end `unstated`, a finding about the plan.
@@ -476,8 +491,9 @@ the passages read so under `front`.
 A run harvests from the survey of each plan wherever its spec names groups
 (`runner.surveyed_flow`), and then the profile must write the four prompts
 `extraction/survey`, `read_values`, `read_text` and `comb`
-(`runner.SURVEY_PROMPT_IDS`), and `extraction/naming` where its spec merges names
-(`naming.NAMING_PROMPT_ID`, below). kwp and scenarios do. A profile whose spec names
+(`runner.SURVEY_PROMPT_IDS`), and `extraction/naming_groups` and
+`extraction/naming` where its spec merges names (`naming.NAMING_PROMPT_IDS`,
+below; `runner.survey_prompt_ids` lists them). kwp and scenarios do. A profile whose spec names
 groups and lacks one of them is broken, and the run stops at the start and names
 the prompt, for every run and every probe, as `spec.load` stops at a broken group
 (owner decision 2026-11-04). It used to harvest field by field instead, saying
@@ -537,7 +553,7 @@ rows requests were shown counts as read. `--top-up-parameters`
 
 The server's window is measured over the prompts of this flow
 (`runner.sent_prompt_ids`, see Configuration). The trace names each request by
-its kind, `read_values_ask`, `read_text_ask`, `comb_ask` and `naming_ask`, each with its
+its kind, `read_values_ask`, `read_text_ask`, `comb_ask`, `naming_groups_ask` and `naming_ask`, each with its
 `group` where the request has one: `read_values_ask` carries `round`,
 `read_text_ask` carries `group` and `value`, and the `comb` event carries
 `group` and `listed`, the hit lists the run added. The requests for a search sentence, the frame, the review and
@@ -1438,7 +1454,8 @@ reading's tools (`reading.Gathered`, owner decision 2026-11-05): under `more` th
 model asks for the next or the previous section, a table or figure by its
 placeholder, a list of the passages matching a pattern, a list of those nearest
 a sentence it writes as the plan would print it (`similar`, ranked as the
-combing ranks the plan), or a passage of such a list, each cut to two pages of
+combing ranks the plan; the list shows its passages, not the sentence), or a
+passage of such a list, each cut to two pages of
 the plan, and the request is asked again with
 what came of it. A round that fetched something new is no attempt; the window
 bounds how many there are. For a share the model may take its whole from a
@@ -1523,38 +1540,70 @@ A coordinate or value the spec marks `merged` is read under the name the
 document prints (see Reading a parameter in its passages), and one thing has
 several names: "the Zero Carbon scenario" in a sentence, "LCEO Zero Carbon" in a
 table; one name can also stand for several things ("the EC LTS scenarios"). The
-naming step asks what they mean (`naming.py`, prompt `extraction/naming`, owner
-decisions 2026-11-06). It runs inside the run, in `runner.verify` right after
-the compute step and before the file is written (`runner.make_namer`), and only
-for a spec that merges names (`naming.merges`).
+naming step asks what they mean (`naming.py`, prompts `extraction/naming_groups`
+and `extraction/naming`, owner decisions 2026-11-06). It runs inside the run, in
+`runner.verify` right after the compute step and before the file is written
+(`runner.make_namer`), and only for a spec that merges names (`naming.merges`).
 
-One request per name (owner decision 2026-11-06), run in the run's thread
-pool. Two probes, where one request over all names (145 and 158) gave every
-name the same simplest answer, once the nearest other name and once itself,
-led to this. A request shows the one name under `"name"` with its number and
-the texts of its own places: its quote and 500 characters before and after it
-in the passage it stands in (`naming.CONTEXT_CHARS`), overlapping stretches
-of one passage joined. Under `"names"` it shows every name of the document
-under its number with the quote it was read with, the asked name included
-(`naming.numbered`). The reply is `{"means": [numbers]}`: its own number, the
-number of another name, or several numbers where the name stands for several
-things (`naming.response_format`). The prompt's example is the reply for that
-request with the name meaning itself (`naming.example_of`). A name whose thing
-has no other name under "names" means itself, even where the model knows the
-thing by a name that is not shown. Names of one thing become one thing, called
-by the name the others point to; a name of several things stands for each of
-them (`naming.meanings`). The answer quotes nothing, since each name keeps the
-quote it was read with.
+It works in two steps (owner decision 2026-11-06). A probe on one paper asked
+each of 240 names against all 240: the answers were mostly right, but cost 4.4 M
+input tokens, growing with the square of the names, and the code read an answer
+that lists the name itself plus its spellings as "stands for several
+scenarios", so that the 73 rows of one scenario landed on another; about 210 of
+1,406 rows with a read scenario sat on a wrong one.
 
-Nothing is checked beyond the list. A reply without "means" is asked again with
+**Candidates**, from two sources. (a) One request over all names (prompt
+`extraction/naming_groups`, `naming.groups_payload`): every name under its
+number with the quote it was read with. The reply is `{"groups": [[numbers]]}`,
+each group two or more numbers (`naming.groups_format`), put together
+generously, a name with no partner left out; the prompt's example is a group of
+the request's first two names (`naming.groups_example`). A wrong reply is asked
+once more (`key_missing`, `groups_not_listed`), wrong twice gives no groups
+(`naming.groups_of`). A request that does not fit is asked for each half of the
+names, a group across the halves being left to the embedding
+(`Namer._grouped`). It is traced as `naming_groups_ask`. (b) Every name is
+embedded with the run's embedding model together with the text around it where
+it was first read, 100 characters before and after the name
+(`naming.context_of`, `naming.EMBED_CONTEXT_CHARS`); its 15 nearest names by
+cosine (`naming.neighbours`, `naming.NEIGHBOURS`) are its candidates, and so is
+every name that has it among its nearest (`naming.candidates`).
+
+**The name against its candidates.** Each name with a candidate is asked on its
+own, run in the run's thread pool (prompt `extraction/naming`). A request shows
+the one name under `"name"` with its number and the texts of its own places: its
+quote and 500 characters before and after it in the passage it stands in
+(`naming.CONTEXT_CHARS`), overlapping stretches of one passage joined. Under
+`"names"` it shows only the name and its candidates, each under its number with
+the quote it was read with (`naming.numbered`). The reply is
+`{"means": [numbers]}`: every name of the same scenario, its own number
+included, or, for a name that stands for several scenarios, the names of each of
+them without its own (`naming.response_format`). The prompt's criterion is
+strict: two names name one scenario only where either can stand for the other
+without losing anything the publication says. The prompt's example is the reply
+for that request with the name meaning itself (`naming.example_of`). A name with
+no candidate asks nothing and means itself.
+
+**Reading the answers** (`naming.meanings`): an answer holding the name gives
+the other names of its thing, and so does an answer of one other name alone; two
+names are one thing only where each gives the other, and a thing is called by
+its first name in the document's order. An answer of several names without the
+name itself stands for each of their things and is never joined. Applied to the
+answers of the probe, this reading gives 12 groups of names with no visible
+error. The answer quotes nothing, since each name keeps the quote it was read
+with.
+
+Nothing is checked beyond the list. A reply without its key is asked again with
 the reason `key_missing`; one with an empty list or a number not shown, with
 `name_not_listed` ("Under {name!r} you gave {given}. Answer with a list of
 numbers from "names"."; German in kwp), in one correction round
-(`naming.means_of`). A name answered in neither means itself. A request that
-does not fit is asked against each half of the other names, the asked name in
-both halves; the names the halves give are joined, and the name itself is
-dropped where a half names another. The trace writes `naming_ask` per answered
-request and `naming` per document and kind, with the names asked.
+(`naming.means_of`); the request over all names has `groups_not_listed`
+("Answer with lists of numbers from "names", one list per group."). A name
+answered in neither means itself. A request about one name that does not fit is
+asked against each half of its candidates; a half that gives the name alone adds
+nothing (`Namer._halves`). The trace writes `naming_groups_ask` and `naming_ask`
+per answered request, and `naming` per document and kind, with the names asked
+and also `groups` (groups the request over all names gave) and `asked` (names
+asked against candidates).
 
 Each row keeps its name and gets what it means under `<coordinate>_means`
 (`scenario_means`), `value_means` for a merged value. The harvest schema

@@ -1227,7 +1227,8 @@ def named_year(slot, given, wording: Optional[str], quote: str,
 def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 *, window: Optional[tuple] = None,
                 bases: Optional[list] = None,
-                not_shown: str = "quote_not_in_source") -> dict:
+                not_shown: str = "quote_not_in_source",
+                not_in_quote: str = "answer_not_in_quote") -> dict:
     """Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
 
     *window* is (stage, index) and is written next to each coordinate this
@@ -1267,6 +1268,10 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
     *not_shown* is the phrase that tells the model a quote stands in nothing
     its request showed, in the names of what that request shows (owner
     decision 2026-11-06); the reason stays `quote_not_in_source`.
+    *not_in_quote* is the phrase that tells it its quote lacks the answer,
+    with what else that request lets it answer: "not stated" where it offers
+    that, else to leave the coordinate out (owner decision 2026-11-06); the
+    reason stays `answer_not_in_quote`.
     """
     reply = reply if isinstance(reply, dict) else {}
     pairs: list = []
@@ -1400,7 +1405,7 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             failed.append({"row": row.label, "why": "answer_not_in_quote",
                            "given": given, "raw": wording, "quote": quote,
                            "reason": say(
-                               "answer_not_in_quote", answer=shown_answer,
+                               not_in_quote, answer=shown_answer,
                                unstated=UNSTATED)})
             unbacked += 1
             continue

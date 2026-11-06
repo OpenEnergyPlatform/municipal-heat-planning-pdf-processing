@@ -1723,12 +1723,13 @@ has tools (owner decision 2026-11-05, ticket 26).
 def make_namer(spec: Spec, passages_of: Callable) -> Optional[Callable]
 ```
 
-The request that asks which of a document's names mean the same
+The requests that ask which of a document's names mean the same
 thing once it is folded (`naming.Namer`, owner decisions 2026-11-06):
 `name(report)`, which marks the report's rows. None where the spec
 merges no names or the profile writes no prompt for it, which
 `surveyed_flow` refuses at the start of a run. *passages_of(document_id)*
-is the plan's passages in their order.
+is the plan's passages in their order. The names are embedded with the
+run's embedding model (`COALESCED`).
 
 ### make_comber
 
@@ -2387,8 +2388,8 @@ def survey_prompt_ids(profile=None) -> tuple
 ```
 
 The prompts of a harvest from the survey: `SURVEY_PROMPT_IDS`, and
-the naming where the profile writes it, which a spec that merges names
-sends (`naming.NAMING_PROMPT_ID`, required by `surveyed_flow`).
+the naming's where the profile writes them, which a spec that merges
+names sends (`naming.NAMING_PROMPT_IDS`, required by `surveyed_flow`).
 
 ### surveyed_flow
 

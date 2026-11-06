@@ -2105,23 +2105,35 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
 
 
 def make_namer(spec: Spec, passages_of: Callable) -> Optional[Callable]:
-    """The request that asks which of a document's names mean the same
+    """The requests that ask which of a document's names mean the same
     thing once it is folded (`naming.Namer`, owner decisions 2026-11-06):
     `name(report)`, which marks the report's rows. None where the spec
     merges no names or the profile writes no prompt for it, which
     `surveyed_flow` refuses at the start of a run. *passages_of(document_id)*
-    is the plan's passages in their order."""
+    is the plan's passages in their order. The names are embedded with the
+    run's embedding model (`COALESCED`)."""
     if not naming_map.merges(spec):
         return None
     try:
-        prompt = prompts.load(naming_map.NAMING_PROMPT_ID)
+        groups_prompt, prompt = (prompts.load(prompt_id) for prompt_id
+                                 in naming_map.NAMING_PROMPT_IDS)
     except (FileNotFoundError, LookupError):
         return None
     client = _client()
 
+    def ask_groups(payload, shape, document_id, kind, example=None):
+        # The candidates (owner decision 2026-11-06): every name with its
+        # quote, the groups that may name one thing.
+        text = json.dumps(payload, ensure_ascii=False, indent=2)
+        return ask_in_grammar(
+            client, groups_prompt, [{"role": "user", "content": text}],
+            shape, document_id, "naming_groups", naming_map.GROUPS,
+            example=example, kind=kind, names=len(payload["names"]),
+            corrections=len(payload.get("corrections") or ()))
+
     def ask(payload, shape, document_id, kind, example=None):
         # One request per name (owner decision 2026-11-06): the name asked
-        # with its places, every name with its quote.
+        # with its places, its candidates with their quotes.
         text = json.dumps(payload, ensure_ascii=False, indent=2)
         return ask_in_grammar(
             client, prompt, [{"role": "user", "content": text}], shape,
@@ -2129,7 +2141,11 @@ def make_namer(spec: Spec, passages_of: Callable) -> Optional[Callable]:
             kind=kind, names=len(payload["names"]),
             places=len(payload["name"]["places"]),
             corrections=len(payload.get("corrections") or ()))
-    namer = naming_map.Namer(spec, ask, trace=trace.event, pool=AHEAD)
+
+    def embed(texts: list) -> list:
+        return COALESCED.embed([{"text": text} for text in texts])
+    namer = naming_map.Namer(spec, ask, trace=trace.event, pool=AHEAD,
+                             ask_groups=ask_groups, embed=embed)
 
     def name(report) -> None:
         passages = {(s.owner_kind, s.owner_id): s
@@ -6875,13 +6891,14 @@ def flow_prompts(flow: Optional[str] = None) -> tuple:
 
 def survey_prompt_ids(profile=None) -> tuple:
     """The prompts of a harvest from the survey: `SURVEY_PROMPT_IDS`, and
-    the naming where the profile writes it, which a spec that merges names
-    sends (`naming.NAMING_PROMPT_ID`, required by `surveyed_flow`)."""
+    the naming's where the profile writes them, which a spec that merges
+    names sends (`naming.NAMING_PROMPT_IDS`, required by `surveyed_flow`)."""
     try:
-        prompts.load(naming_map.NAMING_PROMPT_ID, profile)
+        for prompt_id in naming_map.NAMING_PROMPT_IDS:
+            prompts.load(prompt_id, profile)
     except (FileNotFoundError, LookupError):
         return SURVEY_PROMPT_IDS
-    return (*SURVEY_PROMPT_IDS, naming_map.NAMING_PROMPT_ID)
+    return (*SURVEY_PROMPT_IDS, *naming_map.NAMING_PROMPT_IDS)
 
 
 def surveyed_flow(spec: Spec, profile=None) -> bool:
@@ -6900,7 +6917,7 @@ def surveyed_flow(spec: Spec, profile=None) -> bool:
         return False
     # The naming only where the spec merges names (`naming.py`).
     needed = (*SURVEY_PROMPT_IDS,
-              *((naming_map.NAMING_PROMPT_ID,)
+              *(naming_map.NAMING_PROMPT_IDS
                 if naming_map.merges(spec) else ()))
     for prompt_id in needed:
         try:

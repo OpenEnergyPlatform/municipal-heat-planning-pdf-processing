@@ -50,7 +50,9 @@ would print it, AND that sentence is kept beside its value for the combing,
 never on the claim. The combing's tools show the next section, a table or
 figure by its placeholder and a hit by its id, each once; "similar" lists the
 passages of the plan nearest to the model's own sentence, the best of each
-kind, AND without a ranking it finds nothing and says so; the gathering ends
+kind, AND without a ranking it finds nothing and says so; no list shows what
+it was searched with, AND the gathering keeps it, so the same search is not
+made twice; the gathering ends
 when a round brings nothing new, AND a request that no longer fits leaves the
 reply before it.
 
@@ -927,6 +929,9 @@ def test_a_search_lists_its_hits_and_a_hit_asked_for_is_shown():
                           ORDER, PLAN, None)
     (listed,) = gathered.context()["hits"]
     assert listed["total"] == 1 and listed["hits"][0]["id"] == "H1"
+    # Its hits, not its pattern (owner decision 2026-11-06).
+    assert set(listed) == {"total", "hits"}
+    assert gathered.hits[0]["pattern"] == r"Jahr 20\d\d"
     assert "more" not in gathered.context()
     assert gathered.fetch([{"get": "hit", "id": "H1"}], ORDER, PLAN, None)
     assert [m["text"] for m in gathered.context()["more"]] == [AFTER.text]
@@ -973,6 +978,9 @@ def test_a_search_after_a_list_no_search_made_is_searched_once():
     ask = [{"get": "search", "pattern": r"Jahr 20\d\d"}]
     assert gathered.fetch(ask, list(PLAN.values()), PLAN, None)
     assert not gathered.fetch(ask, list(PLAN.values()), PLAN, None)
+    # No list shows what it was searched with, whoever searched.
+    assert all(set(listed) <= {"total", "hits"}
+               for listed in gathered.context()["hits"])
 
 
 PROBE = "Die Emissionen gelten für das Bilanzjahr 2022."
@@ -998,7 +1006,11 @@ def test_similar_lists_the_passages_nearest_to_its_sentence_best_of_each_kind():
     assert gathered.fetch(ask, list(PLAN.values()), PLAN, None)
     assert calls == [([PROBE], {("section", 6)})]
     (listed,) = gathered.context()["hits"]
-    assert listed["similar"] == PROBE
+    # Its hits, not its sentence, which the gathering keeps (owner decision
+    # 2026-11-06).
+    assert set(listed) == {"hits"}
+    assert PROBE not in json.dumps(gathered.context(), ensure_ascii=False)
+    assert gathered.hits[0]["similar"] == PROBE
     assert [hit["title"] for hit in listed["hits"]] \
         == [f"S{i}" for i in range(reading.SHOWN["section"])]
     # The same sentence again asks nothing and brings nothing new.

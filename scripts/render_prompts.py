@@ -303,12 +303,14 @@ def _numbers(profile, prompts, spec_path) -> dict:
     framed = bool(fields.frame_slots(
         spec, profile.component("extraction", "FRAME") or ()))
     budgets = {}
-    # The naming, where the tree has it: a profile without it gets None.
-    naming_id = getattr(getattr(runner, "naming_map", None),
-                        "NAMING_PROMPT_ID", None)
+    # The naming's prompts, where the tree has them: a profile without them
+    # gets None. A tree from before the two steps names one.
+    naming_map = getattr(runner, "naming_map", None)
+    naming_ids = getattr(naming_map, "NAMING_PROMPT_IDS", None) or tuple(
+        one for one in (getattr(naming_map, "NAMING_PROMPT_ID", None),) if one)
     for pid in (*runner.PROMPT_IDS,
                 *getattr(runner, "SURVEY_PROMPT_IDS", ()),
-                *((naming_id,) if naming_id else ()),
+                *naming_ids,
                 runner.REVIEW_PROMPT_ID):
         if pid == runner.QUERIES_PROMPT_ID:     # search templates, no request
             continue

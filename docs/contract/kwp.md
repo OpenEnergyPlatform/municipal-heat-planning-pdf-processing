@@ -4534,7 +4534,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 
 One event per line; `t` names it and `doc` the document. An event that reports a model request carries it as sent (`input`) and what came back (`output`); a text the requests repeat is a `piece` they refer to. Read by scripts/trace_report.py.
 
-31 record kinds, told apart by `t`:
+32 record kinds, told apart by `t`:
 
 - `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
 - `anchor`: `doc`, `parameter`, `text`
@@ -4556,11 +4556,12 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `read_text_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `comb_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `naming_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `output`, `places`, `prompt_tokens`
+- `naming_groups_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `output`, `prompt_tokens`
 - `phrase_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `frame_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `review_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `compute_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
-- `naming`: `doc`, `kind`, `names`, `several`, `things`, `why`
+- `naming`: `asked`, `doc`, `groups`, `kind`, `names`, `several`, `things`, `why`
 - `read`: `asked`, `corrected`, `doc`, `failed`, `kind`, `owner`, `parameter`, `unanswered`, `unread`, `values`, `why`
 - `comb`: `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `kind`, `listed`, `missed`, `open`, `owner`, `parameter`, `rows`, `searched`
 - `seek`: `doc`, `kind`, `owner`, `parameter`, `rank`

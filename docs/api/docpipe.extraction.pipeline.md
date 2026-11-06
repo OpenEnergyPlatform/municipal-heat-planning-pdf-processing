@@ -764,7 +764,8 @@ dates both states is cited from the first, the plan's own.
 def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 *, window: Optional[tuple] = None,
                 bases: Optional[list] = None,
-                not_shown: str = "quote_not_in_source") -> dict
+                not_shown: str = "quote_not_in_source",
+                not_in_quote: str = "answer_not_in_quote") -> dict
 ```
 
 Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
@@ -806,6 +807,10 @@ and keeps the row's passage as its link (`<axis>_link_quote`,
 *not_shown* is the phrase that tells the model a quote stands in nothing
 its request showed, in the names of what that request shows (owner
 decision 2026-11-06); the reason stays `quote_not_in_source`.
+*not_in_quote* is the phrase that tells it its quote lacks the answer,
+with what else that request lets it answer: "not stated" where it offers
+that, else to leave the coordinate out (owner decision 2026-11-06); the
+reason stays `answer_not_in_quote`.
 
 ### line_naming
 

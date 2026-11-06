@@ -130,6 +130,7 @@ def context(self) -> dict
 
 What the request shows of the gathering so far, as it stands
 now: a later round adds to the gathering, not to a request sent.
+Each hit list without what it was searched with (`SEARCHED_WITH`).
 
 #### Gathered.listed
 

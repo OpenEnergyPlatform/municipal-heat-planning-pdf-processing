@@ -5,13 +5,16 @@ words for where a plan prints it and asks only the group's open
 coordinates; the search ranks the plan with the sentences the
 reading wrote to the coordinates asked, AND it shows the best 15 sections, 20
 tables and 20 figures of that ranking as a list of hits, the passage itself
-and its section left out; without a sentence no list is shown and the model
-searches itself with "similar", AND that search lists the plan's passages
-nearest to its own sentence. A coordinate answered
+and its section left out, AND none of the sentences; without a sentence no
+list is shown and the model searches itself with "similar", AND that search
+lists the plan's passages nearest to its own sentence, AND the request does
+not show that sentence. A coordinate answered
 from anything the request showed of the plan (a fetched hit, a hit's line or
 title, a wording the value has read) is read and cites the passage it was
 shown with in window `retrieval`, AND one quoting what the request never
-showed is not read AND is told so in the names of what the request shows.
+showed is not read AND is told so in the names of what the request shows,
+AND one whose quote lacks its answer is told to fix it or leave the
+coordinate out, never offered "not stated", which the reading still offers.
 The combing offers no "not stated": its grammar requires no coordinate and
 takes no UNSTATED, AND its options leave it out. A coordinate the reply
 leaves out, or gives as UNSTATED all the same, is not asked for again, AND
@@ -32,7 +35,7 @@ from pathlib import Path
 import pytest
 
 from docpipe.extraction import combing, fields, reading
-from docpipe.extraction.pipeline import Batch, Source, WorkItem
+from docpipe.extraction.pipeline import Batch, Row, Source, WorkItem, merge_field
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.wording import say
 
@@ -292,7 +295,8 @@ def test_an_unfound_coordinate_lists_the_plan_to_its_end_then_is_unstated():
     assert sorted(listed) == sorted(s.text.split("\n")[0] for s in SECTIONS)
     assert len(listed) == len(set(listed))       # each passage listed once
     assert [len(one["hits"]) for one in asked[-1]["hits"]] == [15, 5]
-    assert all(one["query"] == SAID["year"] for one in asked[-1]["hits"])
+    # The sentences ranked with are not shown (owner decision 2026-11-06).
+    assert all(set(one) == {"hits"} for one in asked[-1]["hits"])
     assert done.asked == 2 and done.listed == 1
     assert all("corrections" not in payload for payload in asked)
     # The failure by construction: a find on the second list ends it, read.
@@ -361,6 +365,26 @@ def test_an_answer_in_another_form_is_asked_again_as_such_then_unanswered():
     assert read[0].claims[0]["year_state"] == fields.READ
 
 
+def test_a_quote_without_its_answer_is_told_to_be_fixed_or_left_out():
+    # The quote stands in the hit's line but lacks the year: asked again,
+    # with no "not stated" offered (owner decision 2026-11-06).
+    lacking = {"year": {"value": 2030, "quote": "Die Werte gelten für das"}}
+    made, asked, _ = comber(lacking, {})
+    read = reads(year_only(), probes=[SAID])
+    made(7, read, PASSAGES, [])
+    told = asked[1]["corrections"]["what"]["year"]
+    assert told == say(combing.NOT_IN_QUOTE, answer=2030, unstated=UNSTATED)
+    assert UNSTATED not in told
+    assert read[0].claims[0]["year_state"] == fields.UNBACKED
+    # The failure by construction: where a request offers "not stated", as
+    # the reading's do, the same check offers it.
+    slot = next(s for s in reading.slots_of(SPEC, EMISSION)
+                if s.name == "year")
+    got = merge_field([Row(label="R1", item_index=0, claim={})], [HIT], slot,
+                      {"answers": {"R1": lacking["year"]}})
+    assert UNSTATED in got["failed"][0]["reason"]
+
+
 def test_a_coordinate_read_before_is_never_touched():
     made, _, _ = comber(
         everything(carrier={"value": "Heizöl", "quote": "Ausblick"}))
@@ -388,13 +412,16 @@ def test_the_search_ranks_with_the_sentences_of_the_coordinates_asked():
     assert [probes for probes, _ in searched] == [[SAID["year"]]]
     framed = next(p for p in asked if "year" in p["coordinates"])
     (listed,) = framed["hits"]
-    assert listed["query"] == SAID["year"]
+    # Ranked with it, the list does not show it: the run wrote it, the plan
+    # does not print it (owner decision 2026-11-06).
+    assert set(listed) == {"hits"} and listed["hits"]
+    assert SAID["year"] not in json.dumps(framed, ensure_ascii=False)
     # A group without a sentence starts without a list, and what it lists
-    # later is the plan in its order, under no "query".
+    # later is the plan in its order.
     others = [p for p in asked if "year" not in p["coordinates"]]
     firsts = [p for p in others if "hits" not in p]
     assert len(firsts) == len(GROUPS) - 1
-    assert all("query" not in one for p in others
+    assert all(set(one) == {"hits"} for p in others
                for one in p.get("hits") or ())
 
 
@@ -409,7 +436,10 @@ def test_without_a_sentence_the_model_searches_itself_with_its_own():
     assert "hits" not in asked[0]
     assert searched[0] == (["Werte für das Jahr 2030"], {("section", 6)})
     (listed,) = asked[1]["hits"]
-    assert listed["similar"] == "Werte für das Jahr 2030"
+    # Its hits, not its sentence (owner decision 2026-11-06).
+    assert set(listed) == {"hits"}
+    assert "Werte für das Jahr 2030" not in json.dumps(asked[1],
+                                                       ensure_ascii=False)
     assert [hit["title"] for hit in listed["hits"]] == ["Ausblick"]
     value = read[0].claims[0]
     assert value["year"] == 2030 and value["year_state"] == fields.READ

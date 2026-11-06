@@ -12,7 +12,9 @@ prints it shown. The search ranks the plan with the sentences the reading
 wrote to the coordinates it found unstated, as the plan would print them
 (owner decision 2026-11-05: HyDE, `Read.probes`), those of the coordinates
 asked here; the best sections, tables and figures of that ranking are shown
-as a list of titles and first lines. Where no coordinate asked has a
+as a list of titles and first lines, without the sentences: they are the
+run's own writing, not the plan's, and the model quoted them as the plan's
+(owner decision 2026-11-06). Where no coordinate asked has a
 sentence, one whose answer did not hold or that no reply answered, the
 request shows no list and the model searches itself (owner decision
 2026-11-05), with the reading's own tools: a hit by its id, the next or the
@@ -32,7 +34,9 @@ plan; one whose request no longer fits the model's window before that ends
 `exhausted`, a finding about the run.
 
 Nothing is checked here. Every answer goes through `merge_field`, and what it
-refuses is asked once more with the reason. Its quote may stand in whatever
+refuses is asked once more with the reason, which offers no "not stated"
+either: a quote that lacks its answer is to be fixed or the coordinate left
+out (`NOT_IN_QUOTE`). Its quote may stand in whatever
 the request showed of the plan (owner decision 2026-11-05): a passage the
 model fetched, a hit's line or title, the title or heading of a passage, the
 value's passage and its section, a wording the value has read. The
@@ -77,6 +81,10 @@ COMB_PROMPT_ID = "extraction/comb"
 # in the names of what it shows: "more", "hits", "passage", "row" (owner
 # decision 2026-11-06).
 NOT_SHOWN = "quote_not_shown"
+# Its phrase for a quote that lacks the answer: the combing offers no "not
+# stated", so the model leaves the coordinate out (owner decision
+# 2026-11-06).
+NOT_IN_QUOTE = "answer_not_in_quote_leave_out"
 
 # What the reading leaves for this step.
 OPEN = (SAID_UNSTATED, UNBACKED, UNANSWERED)
@@ -406,10 +414,12 @@ class Comber:
         taken = {(s.owner_kind, s.owner_id) for s in listed}
         listed += shown_hits([s for s in ranked
                               if (s.owner_kind, s.owner_id) not in taken])
+        # The list alone: the sentences it was ranked for are the run's own
+        # writing, not the plan's, and were quoted as the plan's (owner
+        # decision 2026-11-06).
         result.hits = gathered.list_hits(
             [((hit.owner_kind, hit.owner_id), lookup.title_of(hit),
-              first_line(hit)) for hit in listed],
-            **({"query": " | ".join(sentences)} if sentences else {}))
+              first_line(hit)) for hit in listed])
         bases = list(bases) if bases is not None else self.bases(pairs)
         knowns = {row.label: self.known(row.claim, names) for row in rows}
 
@@ -462,7 +472,6 @@ class Comber:
         ranking = ranked or [s for s in passages.values()
                              if (s.owner_kind, s.owner_id) not in
                              {origin, parent}]
-        about = {"query": " | ".join(sentences)} if ranked else {}
         listing = {"end": False}
 
         def next_passages(reply) -> bool:
@@ -477,7 +486,7 @@ class Comber:
                 return False
             result.hits += gathered.list_hits(
                 [((s.owner_kind, s.owner_id), lookup.title_of(s),
-                  first_line(s)) for s in page], **about)
+                  first_line(s)) for s in page])
             result.listed += 1
             return True
 
@@ -621,7 +630,7 @@ class Comber:
                 continue
             got = merge_field(rows, evidence, slot, {"answers": answers},
                               window=("retrieval", 1), bases=bases,
-                              not_shown=NOT_SHOWN)
+                              not_shown=NOT_SHOWN, not_in_quote=NOT_IN_QUOTE)
             failed.extend((slot.name, failure) for failure in got["failed"])
         return failed
 

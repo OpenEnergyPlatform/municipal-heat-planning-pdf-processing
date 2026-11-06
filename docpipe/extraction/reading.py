@@ -402,6 +402,10 @@ GETS = ("next", "previous", "item", "search", "similar", "hit")
 # of the plan, or a name that fits no passage or more than one. A pattern
 # that does not compile or does not finish says `lookup.matching`'s fault.
 END, UNKNOWN = "end", "unknown"
+# What a hit list was searched with, kept by the gathering and not shown: a
+# request shows the plan's text, and the run's own sentences were quoted as
+# the plan's (owner decision 2026-11-06).
+SEARCHED_WITH = ("query", "similar", "pattern")
 
 
 def more_schema() -> dict:
@@ -438,12 +442,15 @@ class Gathered:
 
     def context(self) -> dict:
         """What the request shows of the gathering so far, as it stands
-        now: a later round adds to the gathering, not to a request sent."""
+        now: a later round adds to the gathering, not to a request sent.
+        Each hit list without what it was searched with (`SEARCHED_WITH`)."""
         out = {}
         if self.shown:
             out["more"] = list(self.shown)
         if self.hits:
-            out["hits"] = list(self.hits)
+            out["hits"] = [{key: value for key, value in listed.items()
+                            if key not in SEARCHED_WITH}
+                           for listed in self.hits]
         if self.missed:
             out["not_found"] = list(self.missed)
         return out

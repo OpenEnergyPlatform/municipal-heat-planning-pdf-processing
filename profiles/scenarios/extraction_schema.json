@@ -8159,6 +8159,59 @@
      "doc": {
       "type": "integer"
      },
+     "input": {
+      "type": "object"
+     },
+     "kind": {
+      "type": "string"
+     },
+     "ms": {
+      "type": "integer"
+     },
+     "names": {
+      "type": "integer"
+     },
+     "output": {
+      "type": "object"
+     },
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "t": {
+      "const": "naming_groups_ask"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt",
+     "corrections",
+     "kind",
+     "names"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
      "figure": {},
      "group": {
       "type": [
@@ -8412,7 +8465,13 @@
    {
     "additionalProperties": false,
     "properties": {
+     "asked": {
+      "type": "integer"
+     },
      "doc": {
+      "type": "integer"
+     },
+     "groups": {
       "type": "integer"
      },
      "kind": {

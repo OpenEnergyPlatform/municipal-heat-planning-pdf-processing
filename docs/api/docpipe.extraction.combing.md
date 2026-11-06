@@ -15,7 +15,9 @@ prints it shown. The search ranks the plan with the sentences the reading
 wrote to the coordinates it found unstated, as the plan would print them
 (owner decision 2026-11-05: HyDE, `Read.probes`), those of the coordinates
 asked here; the best sections, tables and figures of that ranking are shown
-as a list of titles and first lines. Where no coordinate asked has a
+as a list of titles and first lines, without the sentences: they are the
+run's own writing, not the plan's, and the model quoted them as the plan's
+(owner decision 2026-11-06). Where no coordinate asked has a
 sentence, one whose answer did not hold or that no reply answered, the
 request shows no list and the model searches itself (owner decision
 2026-11-05), with the reading's own tools: a hit by its id, the next or the
@@ -35,7 +37,9 @@ plan; one whose request no longer fits the model's window before that ends
 `exhausted`, a finding about the run.
 
 Nothing is checked here. Every answer goes through `merge_field`, and what it
-refuses is asked once more with the reason. Its quote may stand in whatever
+refuses is asked once more with the reason, which offers no "not stated"
+either: a quote that lacks its answer is to be fixed or the coordinate left
+out (`NOT_IN_QUOTE`). Its quote may stand in whatever
 the request showed of the plan (owner decision 2026-11-05): a passage the
 model fetched, a hit's line or title, the title or heading of a passage, the
 value's passage and its section, a wording the value has read. The

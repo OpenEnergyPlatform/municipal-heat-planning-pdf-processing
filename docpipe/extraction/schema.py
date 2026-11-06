@@ -839,7 +839,7 @@ def stamp_schema() -> dict:
 # search sentences, the frame, the review and the compute step
 # (`runner._asked`).
 ASK_STAGES = ("survey", "read_values", "read_text", "comb", "naming",
-              "phrase", "frame", "review", "compute")
+              "naming_groups", "phrase", "frame", "review", "compute")
 
 
 def trace_schema() -> dict:
@@ -1053,14 +1053,27 @@ def trace_schema() -> dict:
                        "prompt_tokens": {"type": ["integer", "null"]},
                        "completion_tokens": {"type": ["integer", "null"]},
                        "ms": {"type": "integer"}},
+        # The naming's request over all names for the candidates: the `kind`
+        # of thing and how many `names` it shows.
+        "naming_groups_ask": {"attempt": {"type": "integer"},
+                              "corrections": {"type": "integer"},
+                              "kind": {"type": "string"},
+                              "names": {"type": "integer"},
+                              "prompt_tokens": {"type": ["integer", "null"]},
+                              "completion_tokens": {"type": ["integer",
+                                                            "null"]},
+                              "ms": {"type": "integer"}},
         # What the naming of one kind came to: the `names` read, the `things`
-        # they mean, and how many names mean `several`. A request over all
-        # names that did not fit and whose halves joined none is `why`
-        # cut_off, with neither count.
+        # they mean, how many names mean `several`, the `groups` the request
+        # over all names gave, and how many names were `asked` against their
+        # candidates. A request that did not fit and whose halves left
+        # nothing to ask is `why` cut_off, with no count but `names`.
         "naming": {"kind": {"type": "string"},
                    "names": {"type": "integer"},
                    "things": {"type": "integer"},
                    "several": {"type": "integer"},
+                   "groups": {"type": "integer"},
+                   "asked": {"type": "integer"},
                    "why": {"enum": ["cut_off"]}},
         # One passage read for one parameter (reading.py), its values one per
         # round. A passage that came to no readable reply is `unread` with
@@ -1137,7 +1150,7 @@ def trace_schema() -> dict:
                           "rows", "passages", "figure", "group", "round"},
         "comb_ask": {"corrections", "parameter", "owner", "kind", "rows",
                      "passages", "figure", "group", "round", "value"},
-        "naming": {"things", "several"},
+        "naming": {"things", "several", "groups", "asked"},
         # A search sentence, the frame, the review and the compute step say
         # their attempt and what it cost; a parameter where they have one.
         **{f"{stage}_ask": {"corrections", "parameter", "owner", "kind",

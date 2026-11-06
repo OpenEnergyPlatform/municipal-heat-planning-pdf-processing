@@ -9,22 +9,35 @@ names its name, AND the combing's rows join their value's reading; a pass
 over a stored harvest takes the first name. Only a free-text coordinate or
 value is merged, AND never one the survey reads.
 
-Once the document is folded, every name read for a kind is asked on its
-own: its request shows the name with its places, each quote with 500
-characters before and after it, AND a stretch of a passage once however
-many quotes stand in it, AND only its own places, AND every name under a
-number with the quote it was read with, AND as its example the name
-meaning itself. Names of one thing mean the name it is called by, AND a name
-of several things means each of theirs, AND an answer with no name shown
-means the name itself. The reply names numbers shown under "means", at
-least one, AND nothing beside them, in the form a server holds it to and in
-the form a hosted API does. A reply without "means", AND one with a number
-not shown, is asked once more with its reason, AND a name answered in
-neither means itself. Each row read gets the names of what it means, AND a
-row that read no name gets none. One name asks nothing. A request that does
-not fit is asked against each half of the other names, AND the name itself
-is left out where a half names another. The graph writes a row to each
-scenario its name means, AND names of one scenario are one factsheet.
+Once the document is folded, the names read for a kind get candidates
+from two sources (owner decisions 2026-11-06): one request over all names,
+each under a number with the quote it was read with, AND as its example a
+group of its own first two names, whose groups name numbers shown, two or
+more each, AND a reply without "groups" or with a number not shown is asked
+once more with its reason, AND one wrong twice gives no groups, AND a
+request that does not fit is asked for each half of the names; and each
+name embedded with the text around it where it was first read, 100
+characters before and after it, AND its 15 nearest names by angle, never
+itself, AND every name that has it among its nearest. Each name with a
+candidate is asked on its own against its candidates alone: its places,
+each quote with 500 characters before and after it, AND a stretch of a
+passage once however many quotes stand in it, AND only its own places, AND
+its candidates under numbers with the quotes they were read with, AND as
+its example the name alone; a name without candidates asks nothing. An
+answer that holds the name gives the other names of its thing, AND so does
+one other name alone; two names are one thing only where each gives the
+other, called by its first name, AND a wrong name given one way joins
+nothing; an answer of several names without the name stands for each of
+their things, AND an answer with no name shown means the name itself. The
+reply names numbers shown under "means", at least one, AND nothing beside
+them, in the form a server holds it to and in the form a hosted API does. A
+reply without "means", AND one with a number not shown, is asked once more
+with its reason, AND a name answered in neither means itself. Each row read
+gets the names of what it means, AND a row that read no name gets none. One
+name asks nothing. A request about a name that does not fit is asked
+against each half of its candidates, AND a half that gives the name alone
+adds nothing. The graph writes a row to each scenario its name means, AND
+names of one scenario are one factsheet.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -228,28 +241,82 @@ LCEO, ZERO = "LCEO Zero Carbon", "the Zero Carbon scenario"
 TECH, LIFE, BOTH = "EC LTS 1.5Tech", "EC LTS 1.5Life", "the EC LTS scenarios"
 
 
-def test_names_of_one_scenario_mean_the_name_it_is_called_by():
+def test_names_are_one_scenario_only_where_each_gives_the_other():
     order = [LCEO, ZERO, TECH, LIFE, BOTH]
     meant = naming.meanings(order, {
-        LCEO: [LCEO], ZERO: [LCEO], TECH: [TECH], LIFE: [LIFE],
+        LCEO: [LCEO, ZERO], ZERO: [ZERO, LCEO], TECH: [TECH], LIFE: [LIFE],
         BOTH: [TECH, LIFE]})
     assert meant == {LCEO: [LCEO], ZERO: [LCEO], TECH: [TECH],
                      LIFE: [LIFE], BOTH: [TECH, LIFE]}
-    # A chain ends at the name that answered itself, a name pointing at a
-    # name of several means each of theirs, and an answer with no name of
-    # the order means the name itself.
-    meant = naming.meanings(["a", "b", "c", "d", "e"], {
-        "a": ["a"], "b": ["c"], "c": ["a"], "d": ["e"],
-        "e": ["a", "missing"]})
-    assert meant["b"] == ["a"] and meant["c"] == ["a"]
-    assert meant["e"] == ["a"] and meant["d"] == ["a"]
-    assert naming.meanings(["a"], {"a": ["missing"]}) == {"a": ["a"]}
-    # Two names pointing at each other are one thing, called by the first.
-    assert naming.meanings(["x", "y"], {"x": ["y"], "y": ["x"]}) \
+    # The failure by construction: a name that gives another which does not
+    # give it back is no join (owner decision 2026-11-06).
+    meant = naming.meanings(order, {LCEO: [LCEO, ZERO], ZERO: [ZERO]})
+    assert meant[LCEO] == [LCEO] and meant[ZERO] == [ZERO]
+    # One other name alone is a name of its thing too, where it gives it
+    # back.
+    assert naming.meanings(["x", "y"], {"x": ["y"], "y": ["y", "x"]}) \
         == {"x": ["x"], "y": ["x"]}
-    # Several names of one thing are that one thing.
-    assert naming.meanings(["p", "q", "r"], {
-        "p": ["p"], "q": ["p"], "r": ["p", "q"]})["r"] == ["p"]
+    assert naming.meanings(["x", "y"], {"x": ["y"], "y": ["y"]}) \
+        == {"x": ["x"], "y": ["y"]}
+    # A wrong name in a list joins nothing that does not give it back: 2DS
+    # gives RTS, RTS does not give 2DS.
+    meant = naming.meanings(["2DS", "2C", "RTS"], {
+        "2DS": ["2DS", "2C", "RTS"], "2C": ["2C", "2DS"], "RTS": ["RTS"]})
+    assert meant == {"2DS": ["2DS"], "2C": ["2DS"], "RTS": ["RTS"]}
+    # Joins chain: p and q, q and r make one thing, called by its first.
+    meant = naming.meanings(["p", "q", "r"], {
+        "p": ["p", "q"], "q": ["q", "p", "r"], "r": ["r", "q"]})
+    assert meant == {"p": ["p"], "q": ["p"], "r": ["p"]}
+    # A name of several things stands for each, by the names they are
+    # called by, and is joined to none of them.
+    meant = naming.meanings(["a", "b", "c", "g"], {
+        "a": ["a", "b"], "b": ["b", "a"], "c": ["c", "g"], "g": ["b", "c"]})
+    assert meant == {"a": ["a"], "b": ["a"], "c": ["c"], "g": ["a", "c"]}
+    # An answer with no name of the order means the name itself.
+    assert naming.meanings(["a"], {"a": ["missing"]}) == {"a": ["a"]}
+
+
+def test_the_candidates_are_the_groups_and_the_nearest_names_both_ways():
+    order = ["a", "b", "c", "d", "e"]
+    assert naming.candidates(order, [["c", "a"]], {"d": ["b"]}) == {
+        "a": ["c"], "b": ["d"], "c": ["a"], "d": ["b"], "e": []}
+    # The failure by construction: a name no group holds and no name has
+    # among its nearest has none (e above), and a name not read is none.
+    assert naming.candidates(["a"], [["a", "x"]], {"a": ["x"]}) == {"a": []}
+
+
+def test_the_nearest_names_are_by_angle_and_never_the_name_itself():
+    vectors = [(1, 0), (0.9, 0.1), (0, 1), (5, 5)]
+    near = naming.neighbours(vectors, 2)
+    # By angle: the long vector at 45 degrees is farther than the short one
+    # beside it, though their product is larger.
+    assert near[0] == [1, 3]
+    assert all(at not in nearest for at, nearest in enumerate(near))
+    assert [len(nearest) for nearest in naming.neighbours(vectors, 15)] \
+        == [3] * 4
+    assert naming.NEIGHBOURS == 15
+    many = [(1, i / 100) for i in range(20)]
+    assert {len(nearest) for nearest
+            in naming.neighbours(many, naming.NEIGHBOURS)} == {15}
+
+
+def test_a_name_is_embedded_with_100_characters_around_it_where_first_read():
+    quote = "the LCEO Zero Carbon scenario reaches"
+    text = "x" * 300 + " " + quote + " " + "y" * 300
+    passages = {
+        ("section", 1): Source("section", 1, text, {"section_title": "S"}),
+        ("section", 2): Source("section", 2, "z" * 50 + " LCEO Zero Carbon "
+                               "again " + "w" * 50, {})}
+    places = [(("section", 1), quote), (("section", 2), "LCEO Zero Carbon")]
+    at = text.index(LCEO)
+    assert naming.EMBED_CONTEXT_CHARS == 100
+    assert naming.context_of(LCEO, places, passages) == (
+        LCEO + "\n" + text[at - 100:at + len(LCEO) + 100])
+    # The failure by construction: a quote that does not print the name
+    # gives the text around the quote.
+    start = text.index(quote)
+    assert naming.context_of("LCEO ZC", places, passages) == (
+        "LCEO ZC\n" + text[start - 100:start + len(quote) + 100])
 
 
 def test_the_places_show_each_quote_with_500_characters_around_it():
@@ -301,8 +368,8 @@ def passages_of(names):
 
 def turns(per_name=None):
     """What the model answers about each name in turn: a reply as it is
-    (a dict), or the names it means in the numbers the request showed, a
-    name the request did not show as it is; a name with nothing left means
+    (a dict), or the names it gives in the numbers the request showed, a
+    name the request did not show as it is; a name with nothing left gives
     itself."""
     left = {name: list(replies) for name, replies in (per_name or {}).items()}
 
@@ -321,52 +388,114 @@ def names_shown(payload) -> dict:
     return {key: entry["name"] for key, entry in payload["names"].items()}
 
 
-def namer(answer, fits=None):
+def namer(answer, fits=None, grouped=None, vectors=None, groups_fit=None):
     """A Namer whose request about a name answers *answer(name, payload)*,
-    and what it was asked, each request with the example its prompt shows;
-    with *fits*, a request of more names than that does not fit."""
-    asked = []
+    one of more names than *fits* not fitting; whose request over all names
+    answers *grouped(payload)*, by default one group of every name it
+    shows, one of more names than *groups_fit* not fitting; and whose
+    embedding gives each name its vector in *vectors*, no embedding where
+    there are none. Returns it, the requests about a name and those over all
+    names, each with the example its prompt shows, the texts embedded, and
+    the trace."""
+    asked, group_asks, embedded, traced = [], [], [], []
 
     def ask(payload, shape, document_id, kind, example=None):
         asked.append((payload, example))
         if fits is not None and len(payload["names"]) > fits:
             return naming.CUT
         return answer(payload["name"]["name"], payload)
-    return naming.Namer(SPEC, ask), asked
+
+    def ask_groups(payload, shape, document_id, kind, example=None):
+        group_asks.append((payload, example))
+        if groups_fit is not None and len(payload["names"]) > groups_fit:
+            return naming.CUT
+        if grouped is None:
+            return {"groups": [list(payload["names"])]}
+        return grouped(payload)
+
+    def embed(texts):
+        embedded.extend(texts)
+        return [vectors[text.split("\n")[0]] for text in texts]
+    made = naming.Namer(SPEC, ask,
+                        trace=lambda *args, **kw: traced.append((args, kw)),
+                        ask_groups=ask_groups,
+                        embed=embed if vectors is not None else None)
+    return made, asked, group_asks, embedded, traced
 
 
-def test_every_name_is_asked_on_its_own_with_its_places_and_every_name():
-    names = [LCEO, ZERO]
+def test_every_name_is_asked_on_its_own_with_its_places_and_its_candidates():
+    names = [LCEO, ZERO, TECH]
     rows = rows_of(*names, unread=[fields.UNBACKED])
-    made, asked = namer(turns({ZERO: [[LCEO]]}))
+    # The request over all names puts LCEO and ZERO together; TECH has no
+    # candidate and asks nothing (owner decision 2026-11-06).
+    made, asked, group_asks, _, traced = namer(
+        turns({LCEO: [[LCEO, ZERO]], ZERO: [[ZERO, LCEO]]}),
+        grouped=lambda payload: {"groups": [["N1", "N2"]]})
     meant = made(7, rows, passages_of(names))
-    assert meant == {"scenario": {LCEO: [LCEO], ZERO: [LCEO]}}
-    # One request per name (owner decision 2026-11-06), each showing every
-    # name with the quote it was read with, and its own places alone.
-    assert [payload["name"]["name"] for payload, _ in asked] == names
+    assert meant == {"scenario": {LCEO: [LCEO], ZERO: [LCEO], TECH: [TECH]}}
+    # The request over all names shows every name with the quote it was
+    # read with, and as its example a group of its first two names.
+    ((shown, example),) = group_asks
+    assert shown["kind"] == "scenario"
+    assert names_shown(shown) == {"N1": LCEO, "N2": ZERO, "N3": TECH}
+    assert [entry["quote"] for entry in shown["names"].values()] == [
+        f"We call it {name} here" for name in names]
+    assert example == {"groups": [["N1", "N2"]]}
+    # One request per name that has a candidate, showing the name and its
+    # candidates alone, and its own places alone.
+    assert [payload["name"]["name"] for payload, _ in asked] == [LCEO, ZERO]
     for payload, example in asked:
         own = payload["name"]["name"]
         assert payload["kind"] == "scenario"
         assert names_shown(payload) == {"N1": LCEO, "N2": ZERO}
-        assert [entry["quote"] for entry in payload["names"].values()] == [
-            f"We call it {name} here" for name in names]
         places = " ".join(payload["name"]["places"])
         assert f"We call it {own} here" in places
         assert all(f"We call it {other} here" not in places
                    for other in names if other != own)
-        # Its example is its own reply: the name meaning itself.
+        # Its example is its own reply: the name alone.
         assert example == {"means": [payload["name"]["number"]]}
     assert [row.get("value_means") for row in rows
-            if row["parameter"] == "scenario_label"] == [[LCEO], [LCEO]]
+            if row["parameter"] == "scenario_label"] == [[LCEO], [LCEO],
+                                                          [TECH]]
     assert [row.get("scenario_means") for row in rows
-            if row["parameter"] == "scenario_year"] == [[LCEO], [LCEO], None]
+            if row["parameter"] == "scenario_year"] == [[LCEO], [LCEO],
+                                                         [TECH], None]
+    ((_, summary),) = [one for one in traced if one[0][0] == "naming"]
+    assert (summary["names"], summary["things"], summary["groups"],
+            summary["asked"]) == (3, 2, 1, 2)
+
+
+def test_the_nearest_names_by_their_embedding_are_candidates_too(monkeypatch):
+    names = ["A", "B", "C", "D"]
+    monkeypatch.setattr(naming, "NEIGHBOURS", 1)
+    vectors = {"A": (1, 0), "B": (0.9, 0.1), "C": (0, 1), "D": (0.1, 0.9)}
+    made, asked, _, embedded, _ = namer(
+        turns(), grouped=lambda payload: {"groups": []}, vectors=vectors)
+    made(7, rows_of(*names), passages_of(names))
+    # Each name embedded once, with the text around it where it was read.
+    assert [text.split("\n")[0] for text in embedded] == names
+    assert all(f"We call it {name} here" in text
+               for name, text in zip(names, embedded))
+    against = {payload["name"]["name"]: sorted(names_shown(payload).values())
+               for payload, _ in asked}
+    assert against == {"A": ["A", "B"], "B": ["A", "B"], "C": ["C", "D"],
+                       "D": ["C", "D"]}
+    # The failure by construction: with no group and no embedding, nothing
+    # is asked and every name means itself.
+    made, asked, _, _, _ = namer(turns(),
+                                 grouped=lambda payload: {"groups": []})
+    assert made(7, rows_of(*names), passages_of(names))["scenario"] == {
+        name: [name] for name in names}
+    assert asked == []
 
 
 def test_one_name_asks_nothing():
     rows = rows_of(LCEO)
-    made, asked = namer(turns())
+    made, asked, group_asks, embedded, _ = namer(turns(),
+                                                 vectors={LCEO: (1, 0)})
     assert made(7, rows, passages_of([LCEO])) == {"scenario": {LCEO: [LCEO]}}
-    assert asked == [] and rows[0]["value_means"] == [LCEO]
+    assert asked == group_asks == embedded == []
+    assert rows[0]["value_means"] == [LCEO]
 
 
 def test_the_reply_names_numbers_shown_under_means():
@@ -395,9 +524,90 @@ def test_the_reply_names_numbers_shown_under_means():
                                  given="[]")})
 
 
+def test_the_groups_reply_names_lists_of_numbers_shown():
+    schema = naming.groups_format(["N1", "N2", "N3"])["json_schema"]["schema"]
+    strict, decode = strict_schema.strict(schema)
+    for whole in ({"groups": [["N1", "N2"]]}, {"groups": []},
+                  {"groups": [["N3", "N1", "N2"]]}):
+        for form in (schema, strict):
+            jsonschema.validate(whole, form)
+        assert decode(whole) == whole
+    # A reply without "groups", with numbers outside a list, a name where
+    # numbers belong, or a key beside it, is no reply in either form.
+    for wrong in ({}, {"groups": ["N1", "N2"]}, {"groups": [[LCEO, "N1"]]},
+                  {"groups": [["N1", "N2"]], "note": []}):
+        for form in (schema, strict):
+            with pytest.raises(jsonschema.ValidationError):
+                jsonschema.validate(wrong, form)
+    # A group of one name: the server's grammar refuses it, and read it is
+    # no group.
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({"groups": [["N1"]]}, schema)
+    numbers = {LCEO: "N1", ZERO: "N2", TECH: "N3"}
+    assert naming.groups_of({"groups": [["N2", "N1", "N2"], ["N3"],
+                                        ["N3", "N3"]]}, numbers) == (
+        [[ZERO, LCEO]], None)
+    assert naming.groups_of({"groups": [["N1", "N9"]]}, numbers) == (None, {
+        "value": [["N1", "N9"]], "what": say(
+            "groups_not_listed", name="groups", given='[["N1", "N9"]]')})
+
+
+def test_a_wrong_groups_reply_is_asked_again_with_its_reason_then_none():
+    names = [LCEO, ZERO]
+    both = turns({LCEO: [[LCEO, ZERO]], ZERO: [[ZERO, LCEO]]})
+    replies = [{"groups": [["N1", "Zero"]]}, {"groups": [["N1", "N2"]]}]
+    made, _, group_asks, _, _ = namer(both,
+                                      grouped=lambda payload: replies.pop(0))
+    assert made(7, rows_of(*names), passages_of(names))["scenario"][ZERO] \
+        == [LCEO]
+    assert group_asks[1][0]["corrections"] == {
+        "value": [["N1", "Zero"]],
+        "what": say("groups_not_listed", name="groups",
+                    given='[["N1", "Zero"]]')}
+    # Without "groups" at all: missing, by its key.
+    replies = [{"N1": ["N2"]}, {"groups": [["N1", "N2"]]}]
+    made, _, group_asks, _, _ = namer(
+        turns({LCEO: [[LCEO, ZERO]], ZERO: [[ZERO, LCEO]]}),
+        grouped=lambda payload: replies.pop(0))
+    made(7, rows_of(*names), passages_of(names))
+    assert group_asks[1][0]["corrections"] == {
+        "what": say("key_missing", key="groups")}
+    # Wrong twice: asked twice only, no groups, and with no other source
+    # nothing is asked about a name.
+    replies = [{"groups": "N1"}, {"groups": [["N1", "x"]]}]
+    made, asked, group_asks, _, _ = namer(
+        turns(), grouped=lambda payload: replies.pop(0))
+    assert made(7, rows_of(*names), passages_of(names))["scenario"] == {
+        LCEO: [LCEO], ZERO: [ZERO]}
+    assert len(group_asks) == 2 and asked == []
+
+
+def test_a_request_over_all_names_that_does_not_fit_is_asked_for_each_half():
+    names = ["A", "B", "C", "D", "E"]
+    made, asked, group_asks, _, _ = namer(turns(), groups_fit=3)
+    made(7, rows_of(*names), passages_of(names))
+    assert [sorted(names_shown(payload).values())
+            for payload, _ in group_asks] == [names, ["A", "B"],
+                                              ["C", "D", "E"]]
+    # Each half's group gives candidates; one across the halves does not.
+    against = {payload["name"]["name"]: sorted(names_shown(payload).values())
+               for payload, _ in asked}
+    assert against == {"A": ["A", "B"], "B": ["A", "B"],
+                       "C": ["C", "D", "E"], "D": ["C", "D", "E"],
+                       "E": ["C", "D", "E"]}
+    # Nothing left to halve: no groups, and the trace says why.
+    made, asked, group_asks, _, traced = namer(turns(), groups_fit=1)
+    meant = made(7, rows_of("A", "B", "C"), passages_of(["A", "B", "C"]))
+    assert meant["scenario"] == {"A": ["A"], "B": ["B"], "C": ["C"]}
+    assert len(group_asks) == 1 and asked == []
+    assert [kw.get("why") for args, kw in traced if args[0] == "naming"] \
+        == [naming.CUT, None]
+
+
 def test_a_wrong_reply_is_asked_again_with_its_reason_then_means_itself():
     names = [LCEO, ZERO]
-    made, asked = namer(turns({ZERO: [{"means": ["Zero"]}, [LCEO]]}))
+    made, asked, _, _, _ = namer(turns({LCEO: [[LCEO, ZERO]],
+                                        ZERO: [{"means": ["Zero"]}, [LCEO]]}))
     assert made(7, rows_of(*names), passages_of(names))["scenario"][ZERO] \
         == [LCEO]
     again = [payload for payload, _ in asked if payload.get("corrections")]
@@ -406,34 +616,42 @@ def test_a_wrong_reply_is_asked_again_with_its_reason_then_means_itself():
         "value": ["Zero"],
         "what": say("name_not_listed", name="means", given='["Zero"]')}
     # Without "means" at all: missing, by its key.
-    made, asked = namer(turns({ZERO: [{"N2": ["N1"]}, [LCEO]]}))
+    made, asked, _, _, _ = namer(turns({LCEO: [[LCEO, ZERO]],
+                                        ZERO: [{"N2": ["N1"]}, [LCEO]]}))
     assert made(7, rows_of(*names), passages_of(names))["scenario"][ZERO] \
         == [LCEO]
     (again,) = [payload for payload, _ in asked if payload.get("corrections")]
     assert again["corrections"] == {"what": say("key_missing", key="means")}
     # Wrong twice: asked twice only, and the name means itself.
-    made, asked = namer(turns({ZERO: [{"means": ["Zero"]}, {"means": [LCEO]}]}))
+    made, asked, _, _, _ = namer(turns({
+        LCEO: [[LCEO, ZERO]], ZERO: [{"means": ["Zero"]}, {"means": [LCEO]}]}))
     assert made(7, rows_of(*names), passages_of(names))["scenario"][ZERO] \
         == [ZERO]
     assert [payload["name"]["name"] for payload, _ in asked].count(ZERO) == 2
 
 
-def test_a_request_that_does_not_fit_is_asked_against_each_half():
+def test_a_request_about_a_name_that_does_not_fit_is_asked_against_halves():
     names = ["A", "B", "C", "D", "E"]
-    # C means A in the half that shows A and itself in the other: A.
-    made, asked = namer(turns({"C": [["A"], ["C"]]}), fits=3)
+    # C gives A in the half that shows A and itself alone in the other, and
+    # A gives C: one thing.
+    made, asked, _, _, _ = namer(turns({"A": [["A", "C"]],
+                                        "C": [["C", "A"], ["C"]]}), fits=3)
     meant = made(7, rows_of(*names), passages_of(names))["scenario"]
     assert meant == {"A": ["A"], "B": ["B"], "C": ["A"], "D": ["D"],
                      "E": ["E"]}
     about_c = [sorted(names_shown(payload).values())
                for payload, _ in asked if payload["name"]["name"] == "C"]
     assert about_c == [names, ["A", "B", "C"], ["C", "D", "E"]]
-    # A name of several scenarios, one in each half, means both.
-    made, _ = namer(turns({"C": [["A"], ["E"]]}), fits=3)
+    # A name of several scenarios, one in each half, stands for both.
+    made, _, _, _, _ = namer(turns({"C": [["A"], ["E"]]}), fits=3)
     assert made(7, rows_of(*names), passages_of(names))["scenario"]["C"] \
         == ["A", "E"]
+    # A half that gives the name alone adds nothing: C stands for A and B.
+    made, _, _, _, _ = namer(turns({"C": [["A", "B"], ["C"]]}), fits=3)
+    assert made(7, rows_of(*names), passages_of(names))["scenario"]["C"] \
+        == ["A", "B"]
     # Nothing left to halve: the name means itself.
-    made, asked = namer(turns(), fits=1)
+    made, asked, _, _, _ = namer(turns(), fits=1)
     meant = made(7, rows_of("A", "B"), passages_of(["A", "B"]))["scenario"]
     assert meant == {"A": ["A"], "B": ["B"]} and len(asked) == 2
 

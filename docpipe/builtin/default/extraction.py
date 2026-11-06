@@ -56,6 +56,9 @@ PHRASES = {
     "name_not_listed": (
         'Under {name!r} you gave {given}. Answer with a list of numbers '
         'from "names".'),
+    "groups_not_listed": (
+        'Under {name!r} you gave {given}. Answer with lists of numbers '
+        'from "names", one list per group.'),
     "wrong_type": (
         'Your "value" {given!r} is not {wrong}. Answer with {wrong}, '
         'exactly as the passage writes it.'),
@@ -78,6 +81,11 @@ PHRASES = {
     "answer_not_in_quote": (
         'Your "quote" does not contain {answer!r}. Quote the place where '
         'it really stands, or answer with "{unstated}".'),
+    # The same in a request that offers no "not stated", the combing's
+    # (owner decision 2026-11-06).
+    "answer_not_in_quote_leave_out": (
+        'Your "quote" does not contain {answer!r}. Quote the place where '
+        'it really stands, or leave this coordinate out.'),
     # The key of the frame request that holds the entries of a closed frame
     # coordinate, one list per coordinate. The frame prompt of this profile
     # names no key of its own ("the list the request gives for ..."), and

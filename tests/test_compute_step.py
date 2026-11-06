@@ -854,8 +854,10 @@ def test_a_sentence_lists_the_passages_of_the_plan_nearest_it(monkeypatch):
         plan=plan, rank=rank)
     report, _done = run_step(step, share(21))
     assert ranked == [(7, [SENTENCE], {("table", 9)})]
-    listed = json.loads(asked[1]["messages"][1]["content"])["hits"]
-    assert listed[0]["similar"] == SENTENCE
+    shown = asked[1]["messages"][1]["content"]
+    listed = json.loads(shown)["hits"]
+    # Its hits, not its sentence (owner decision 2026-11-06).
+    assert set(listed[0]) == {"hits"} and SENTENCE not in shown
     assert [hit["line"] for hit in listed[0]["hits"]] == [
         BALANCE, "Abschnitt davor."]
     assert report.tuples[-1]["quantity_source"] == ["section", 21]

@@ -69,8 +69,8 @@ of `scenario_label` and the `scenario` axis are `merged: "scenario"` in the
 spec (owner decisions 2026-11-06, see [extraction](../stages/extraction.md)):
 a scenario is read as free text, the name as the publication prints it, and a
 value the publication states for several scenarios is one row per name. Once
-the document is folded, `extraction/naming` shows the model every name read
-and asks which of them mean the same scenario (below). `read_text`
+the document is folded, `extraction/naming_groups` and `extraction/naming` put
+together the names read that mean the same scenario (below). `read_text`
 shows both forms of an answer, a scenario named and one the passage does not
 name with the sentence the combing searches with (`probe`). A
 value is what its field asks for and never the answer of a coordinate, so
@@ -296,30 +296,57 @@ scenario" in a sentence, "LCEO Zero Carbon" in a table, an abbreviation in a
 figure), and one name can stand for several ("the EC LTS scenarios"). The
 reading takes each as printed (`merged`, above); `docpipe/extraction/naming.py`
 asks what they mean once the document is folded (`runner.verify`, right after
-the compute step, built by `runner.make_namer`). One request per name (owner decision 2026-11-06, after two
-probes where one request over all 145 to 158 names gave every name the same
-simplest answer, once the nearest other name, once itself), run in the run's
-thread pool: for the spec's `merged` names (here `scenario`, prompt
-`extraction/naming`, trace events `naming_ask` and `naming`). A request shows
-the one name under "name" with its number and the texts of its own places: its
-quote and 500 characters of the passage before and after it (`CONTEXT_CHARS`),
-overlapping stretches of one passage joined. Under "names" it shows every name
-of the document under its number with the quote it was read with, the asked
-name included. The reply is `{"means": [numbers]}`: its own number, another
-name's number, or several numbers where it stands for several scenarios
-(`naming.response_format`); the prompt's example is the reply with the name
-meaning itself (`naming.example_of`). A name whose scenario has no other name
-under "names" means itself, even where the model knows the scenario by a name
-that is not shown. Names of one scenario become one thing, called by the name
-the others point to (`naming.meanings`).
+the compute step, built by `runner.make_namer`), for the spec's `merged` names
+(here `scenario`; trace events `naming_groups_ask`, `naming_ask` and `naming`).
+It works in two steps (owner decision 2026-11-06). A probe on one paper asked
+each of 240 names against all 240: the answers were mostly right, but cost 4.4 M
+input tokens, growing with the square of the names, and an answer that lists the
+name itself plus its spellings was read as "stands for several scenarios", so
+that about 210 of 1,406 rows with a read scenario sat on a wrong one.
 
-The answer quotes nothing: each name keeps its own quote. A reply without
-"means" is asked again with `key_missing`; one with an empty list or a number
-not shown, with `name_not_listed`, in one correction round
-(`naming.means_of`). A name answered in neither means itself. A request that
-does not fit is asked against each half of the other names (the asked name in
-both halves); the names the halves give are joined, and the name itself is
-dropped where a half names another. Each row keeps the name it was read as and gets the names
+Step 1, candidates from two sources. One request over all names (prompt
+`extraction/naming_groups`, `naming.groups_payload`) shows every name under its
+number with the quote it was read with and answers `{"groups": [[numbers]]}`,
+each group two or more numbers (`naming.groups_format`), generously, a name with
+no partner left out; its example is a group of the first two names
+(`naming.groups_example`). A wrong reply is asked once more (`key_missing`,
+`groups_not_listed`), wrong twice gives no groups; one that does not fit is
+asked for each half of the names, a group across the halves being left to the
+embedding (`Namer._grouped`). And every name is embedded with the run's
+embedding model together with 100 characters before and after it where it was
+first read (`naming.context_of`, `naming.EMBED_CONTEXT_CHARS`): its 15 nearest
+names by cosine (`naming.neighbours`, `naming.NEIGHBOURS`) are its candidates,
+and so is every name that has it among its nearest (`naming.candidates`).
+
+Step 2, each name with a candidate is asked on its own against its candidates
+alone (prompt `extraction/naming`), run in the run's thread pool. A request
+shows the one name under "name" with its number and the texts of its own places:
+its quote and 500 characters of the passage before and after it
+(`CONTEXT_CHARS`), overlapping stretches of one passage joined. Under "names" it
+shows only the name and its candidates, each under its number with the quote it
+was read with. The reply is `{"means": [numbers]}`: every name of the same
+scenario, its own number included, or, for a name that stands for several
+scenarios, the names of each of them without its own (`naming.response_format`);
+the prompt's example is the reply with the name meaning itself
+(`naming.example_of`). The prompt is strict: two names name one scenario only
+where either can stand for the other without losing anything the publication
+says. A name with no candidate asks nothing and means itself.
+
+Reading the answers (`naming.meanings`): an answer holding the name gives the
+other names of its scenario, and so does an answer of one other name alone; two
+names are one scenario only where each gives the other, and a scenario is called
+by its first name in the document's order. An answer of several names without
+the name itself stands for each of their scenarios and is never joined. On the
+answers of the probe this reading gives 12 groups of names with no visible
+error. The `naming` event also carries `groups` (groups the request over all
+names gave) and `asked` (names asked against candidates).
+
+The answer quotes nothing: each name keeps its own quote. A reply without its
+key is asked again with `key_missing`; one with an empty list or a number not
+shown, with `name_not_listed`, in one correction round (`naming.means_of`). A
+name answered in neither means itself. A request about one name that does not
+fit is asked against each half of its candidates; a half that gives the name
+alone adds nothing (`Namer._halves`). Each row keeps the name it was read as and gets the names
 of what it means under `<coordinate>_means` (`scenario_means`), or
 `value_means` for its own value (`scenario_label`). The harvest schema declares
 `_means` only for merged slots, and the keys join the evidence and slot key

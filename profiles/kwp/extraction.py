@@ -198,6 +198,9 @@ PHRASES = {
     "name_not_listed": (
         'Unter {name!r} hast du {given} angegeben. Antworte mit einer '
         'Liste von Nummern aus "names".'),
+    "groups_not_listed": (
+        'Unter {name!r} hast du {given} angegeben. Antworte mit Listen von '
+        'Nummern aus "names", einer Liste je Gruppe.'),
     "wrong_type": (
         'Dein "value" {given!r} ist nicht {wrong}. Antworte mit {wrong}, '
         'genau wie die Passage es schreibt.'),
@@ -220,6 +223,11 @@ PHRASES = {
     "answer_not_in_quote": (
         'Dein "quote" enthält {answer!r} nicht. Zitier die Stelle, an '
         'der es wirklich steht, oder antworte mit "{unstated}".'),
+    # The same in a request that offers no "not stated", the combing's
+    # (owner decision 2026-11-06).
+    "answer_not_in_quote_leave_out": (
+        'Dein "quote" enthält {answer!r} nicht. Zitier die Stelle, an '
+        'der es wirklich steht, oder lass die Angabe weg.'),
     # The key of the frame request that holds the entries of a closed frame
     # coordinate. The frame prompt reads them there.
     "frame_options": "scenarios",
