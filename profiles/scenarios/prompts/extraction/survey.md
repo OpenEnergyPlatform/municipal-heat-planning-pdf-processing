@@ -3,7 +3,7 @@ temperature: 0
 max_tokens: 4096
 ---
 For every passage in "sources", name under its "id" each field of "parameters" that this passage gives a value for, of the publication itself, its study or its own scenarios. Only name the fields: read no values and quote nothing.
-Answer with exactly one JSON object on one line, one entry for every passage, with no text or code block before or after it. No Backticks!
+Answer with exactly one JSON object on one line, one entry for every passage, with no text or code block before or after it. No Backticks! In this form:
 {"passages":{"P1":{"parameters":["publication_title","publication_author"]},"P2":{"parameters":["out:none"]}}}
 
 * "parameters" lists the keys of these fields, or exactly ["out:none"] if the passage gives none. When in doubt, name a field once too often: a passage with "out:none" is read for no field.

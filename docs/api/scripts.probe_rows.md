@@ -51,7 +51,9 @@ on the CPU when the machine has no GPU.
 `--survey` with `--documents` asks only the survey of each whole plan, the
 first pass of the rebuilt harvest, and keeps it in `<out>/survey`. With
 `--read` each parameter is then read in the passages the survey named for it,
-and the values are folded as the run folds them.
+and the values are folded as the run folds them; after the fold, as in the
+run, the model is asked which names of a merged coordinate mean the same
+thing (`runner.make_namer`).
 
 A sandbox round needs CODE_EXEC_URL; `report.json` counts the rounds either way.
 

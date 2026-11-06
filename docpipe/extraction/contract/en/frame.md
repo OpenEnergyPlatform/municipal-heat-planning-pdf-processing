@@ -31,5 +31,5 @@ If the object contains a field "known", these are pairs that have already been f
 
 If the object contains a field "corrections", these are the reasons why pairs of your last answer were rejected. Read each one and answer again: with the evidence that was missing, or with the key from that list that would have fit. A pair you cannot back with evidence, you leave out.
 
-Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks!
+Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks! In this form:
 {"pairs": [{"scenario": "<key>", "scenario_raw": "<name used by the document>", "scenario_quote": "<passage>", "scenario_source": "<id>", "year": <year>, "year_quote": "<passage>", "year_source": "<id>"}], "status": "complete", "need_more": []}

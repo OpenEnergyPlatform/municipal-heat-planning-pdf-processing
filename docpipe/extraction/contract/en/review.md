@@ -37,5 +37,5 @@ For each field:
 <!-- /block -->
 If the two passages do not carry a field, then "{{unstated}}" is the right answer. That is a result and not an error, and it is better than an answer for which you have no quote from these two passages.
 
-Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks!
+Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks! In this form:
 {{example_reply}}

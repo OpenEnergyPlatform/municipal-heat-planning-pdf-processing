@@ -3,7 +3,7 @@ temperature: 0
 max_tokens: 6144
 ---
 Finde in anderen Passagen des Plans jede Angabe unter "coordinates", die dem Wert in "rows" in seiner eigenen Passage fehlt, und antworte aus den Passagen, die dir gezeigt wurden.
-Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks!
+Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
 {"rows":[{"row":"R1","year":{"value":2022,"quote":"..."},"scenario":{"value":"out:unstated"}}],"more":[{"get":"hit","id":"H2"}]}
 
 * "rows" enthält einen Eintrag mit der "row" des Werts und jeder Angabe aus "coordinates". "value" ist bei einer Liste ("options") genau einer ihrer Schlüssel, sonst die Angabe selbst, "value_raw" das Wort des Plans, wo es nicht der Schlüssel ist, und "quote" eine zusammenhängende Stelle, Zeichen für Zeichen, die die Angabe enthält und über diesen Wert spricht.

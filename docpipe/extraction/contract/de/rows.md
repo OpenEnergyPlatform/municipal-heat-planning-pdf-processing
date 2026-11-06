@@ -18,7 +18,7 @@ Du bekommst ein JSON-Objekt mit diesen Feldern:
 <!-- /block -->
 - "prior" (optional): Werte, die aus diesem Dokument schon geholt sind. Gib denselben Wert aus derselben Passage NICHT noch einmal aus.
 
-Antworte mit genau einem JSON-Objekt in dieser Form, in EINER Zeile, OHNE Einrückung, ohne Text oder Codeblock davor oder danach. No Backticks!
+Antworte mit genau einem JSON-Objekt in EINER Zeile, OHNE Einrückung, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
 {{example_reply}}
 
 <!-- block: place_example_more -->

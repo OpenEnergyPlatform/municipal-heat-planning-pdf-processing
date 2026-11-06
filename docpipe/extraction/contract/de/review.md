@@ -37,5 +37,5 @@ Für jedes Feld:
 <!-- /block -->
 Tragen die zwei Passagen ein Feld nicht, dann ist "{{unstated}}" die richtige Antwort. Das ist ein Ergebnis und kein Fehler, und es ist besser als eine Antwort, für die du kein Zitat aus diesen zwei Passagen hast.
 
-Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks!
+Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
 {{example_reply}}

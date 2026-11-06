@@ -18,7 +18,7 @@ You get a JSON object with these keys:
 <!-- /block -->
 - "prior" (optional): values already fetched from this document. Do NOT output the same value from the same passage again.
 
-Answer with exactly one JSON object in this form, on ONE line, without indentation, with no text or code block before or after it. No Backticks!
+Answer with exactly one JSON object on ONE line, without indentation, with no text or code block before or after it. No Backticks! In this form:
 {{example_reply}}
 
 <!-- block: place_example_more -->

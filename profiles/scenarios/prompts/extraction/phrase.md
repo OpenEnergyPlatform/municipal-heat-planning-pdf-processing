@@ -8,5 +8,5 @@ Write ONE short sentence as it might stand in exactly this form in this publicat
 * If "document" is given, take this publication's words and structural terms from "name" (its title) and "caption" (the heading of what a first search in it returned), but invent nothing from them that is not in the parameter. If "names" is given (the entries of the parameter's list), name one or two of them as a publication would, without listing them.
 * If the information sought is a proper name (institution, person, grant number), invent none: write in the terse style of a block of role labels and contact fields, with the role words instead of names.
 * 12 to 35 words, one sentence, two at most.
-Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks!
+Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks! In this form:
 {"phrase":"..."}

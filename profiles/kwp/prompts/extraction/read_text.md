@@ -11,7 +11,7 @@ Antworte mit genau einer Zeile JSON, mit einem Eintrag je Angabe:
 
 <!-- group: frame -->
 Gefragt sind Szenario und Jahr des Werts. "known" sind die Paare aus Szenario und Jahr, die der Plan für diese Passage nennt, "base_years" und "target_years" die Jahre seines eigenen Stands und seines Ziels.
-Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks!
+Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
 {"scenario":{"value":"...","value_raw":"...","quote":"..."},"year":{"value":2022,"value_raw":"...","quote":"..."}}
 
 * Nenne Szenario und Jahr nur, wo die Passage, ihre Überschrift oder "around" sie nennt. Sonst sind sie "out:unstated", und es gilt das Paar aus "known".
@@ -20,10 +20,10 @@ Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock da
 
 <!-- group: number -->
 Gefragt sind die Einheit dieser Zahl und ihr Bezug.
-Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks!
+Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
 {"unit":{"value":"...","quote":"..."},"subject":{"value":"out:unstated","probe":"..."}}
 
 <!-- group: context -->
 Gefragt ist die Einordnung dieser Zahl. Jeder Listeneintrag nennt, was er bedeutet ("means"), und wie Pläne ihn schreiben ("spellings").
-Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks!
+Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
 {"quantity":{"value":"...","value_raw":"...","quote":"..."},"carrier":{"value":"...","value_raw":"...","quote":"..."},"sector":{"value":"out:unstated","probe":"..."},"technology":{"value":"out:unstated","probe":"..."},"spatial_scope":{"value":"...","value_raw":"...","quote":"..."}}

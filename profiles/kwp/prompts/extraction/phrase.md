@@ -8,5 +8,5 @@ Schreibe EINEN kurzen Satz, wie er genau so in diesem Wärmeplan stehen könnte 
 * Steht "document" da, übernimm Wörter, Schreibweisen und Gliederungsbegriffe dieses Plans aus "name" (Gemeinde oder Titel) und "caption" (Überschrift dessen, was eine erste Suche in ihm fand), aber erfinde daraus nichts, was nicht in der Kennzahl steckt. Steht "frame" da, nenne Szenario und Jahr, wie der Plan sie schreibt. Steht "names" da (die Einträge der Liste der Kennzahl), nenne einen oder zwei davon, wie ein Plan es tut, ohne sie aufzuzählen.
 * Ist die gesuchte Angabe ein Eigenname (Firma, Büro, Person, Anschrift), erfinde keinen: Schreib im knappen Stil eines Impressums- oder Titelblocks, mit den Rollenwörtern statt Namen.
 * 12 bis 35 Wörter, ein Satz, höchstens zwei.
-Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks!
+Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
 {"phrase":"..."}

@@ -31,5 +31,5 @@ Steht ein Feld "known" im Objekt, sind das Paare, die schon gefunden wurden. Wie
 
 Steht ein Feld "corrections" im Objekt, sind das die Gründe, aus denen Paare deiner letzten Antwort verworfen wurden. Lies jeden und antworte erneut: mit dem Beleg, der gefehlt hat, oder mit dem Schlüssel aus "{{frame_options}}", der gepasst hätte. Ein Paar, das du nicht belegen kannst, lässt du weg.
 
-Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks!
+Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
 {"pairs": [{"scenario": "<Schlüssel>", "scenario_raw": "<Wort des Dokuments>", "scenario_quote": "<Passage>", "scenario_source": "<id>", "year": <Jahr>, "year_quote": "<Passage>", "year_source": "<id>"}], "status": "complete", "need_more": []}

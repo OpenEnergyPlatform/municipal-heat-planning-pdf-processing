@@ -3,7 +3,7 @@ temperature: 0
 max_tokens: 4096
 ---
 Nenne für jede Passage aus "sources" unter ihrer "id" die Kennzahlen aus "parameters", deren Werte in genau dieser Passage stehen, und je Gruppe aus "groups" die Tupel, die für diese Werte gelten. Die Kennzahlen nennst du nur, ohne Zitat; lies dabei keine Werte ab.
-Antworte mit genau einem JSON-Objekt in einer Zeile, mit einem Eintrag für jede Passage, ohne Text oder Codeblock davor oder danach. No Backticks!
+Antworte mit genau einem JSON-Objekt in einer Zeile, mit einem Eintrag für jede Passage, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
 {"passages":{"P1":{"parameters":["emission"],"frame":[{"scenario":"Bestand","scenario_quote":"...","scenario_raw":"...","year":2022,"year_quote":"..."}]}}}
 
 * "parameters" nennt die Schlüssel der Kennzahlen, oder genau ["out:none"], wenn kein solcher Wert darin steht. Nenne eine Kennzahl im Zweifel lieber einmal zu oft: Eine Passage mit "out:none" wird für keine Kennzahl gelesen.
