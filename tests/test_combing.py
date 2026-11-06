@@ -12,7 +12,9 @@ from anything the request showed of the plan (a fetched hit, a hit's line or
 title, a wording the value has read) is read and cites the passage it was
 shown with in window `retrieval`, AND one quoting what the request never
 showed is not read AND is told so in the names of what the request shows; one answered as not stated ends unstated; one left without an answer is asked for
-by name once more and ends unanswered; a coordinate read before is never
+by name once more as missing, AND one given in another form than asked (a
+bare word where an object with "value" is asked) as given in the wrong
+form, and both end unanswered; a coordinate read before is never
 touched; and a request that does not fit leaves every open coordinate
 exhausted.
 
@@ -251,6 +253,17 @@ def test_not_stated_stays_and_no_answer_is_asked_by_name_then_unanswered():
     assert asked[1]["corrections"] == {
         "what": {"year": say("key_missing", key="year")}}
     assert done.asked == 2 and len(asked) == 2 + len(GROUPS) - 1
+
+
+def test_an_answer_in_another_form_is_asked_again_as_such_then_unanswered():
+    # "out:unstated" as a bare word where {"value": "out:unstated"} is asked:
+    # the correction names the form, not a missing answer.
+    made, asked, _ = comber(everything(year=UNSTATED))
+    read = reads(claim())
+    done = made(7, read, PASSAGES, [])[0]
+    assert asked[1]["corrections"] == {"what": {"year": say("wrong_shape")}}
+    assert read[0].claims[0]["year_state"] == fields.UNANSWERED
+    assert done.asked == 2
 
 
 def test_a_coordinate_read_before_is_never_touched():

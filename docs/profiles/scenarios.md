@@ -78,7 +78,9 @@ a scenario's description is what the publication says the scenario assumes,
 not the scenario's name (owner decision 2026-11-04), and an author value is
 one author's name: a person, or the institution where the publication names
 no person. `extraction/comb` looks for a scenario still open in the rest of
-the publication. No field of this profile holds numbers, so a table is read
+the publication; it names the not-stated entry as `{"value": "out:unstated"}`
+and shows it as its own example line, and a coordinate the reply gave in
+another form is told `wrong_shape`, one it left out `key_missing`. No field of this profile holds numbers, so a table is read
 by `read_values` and `read_text` too, as a table is in every profile, and a
 field with a list is shown it and answers one entry, or `""` with its wording
 in `value_raw`.
@@ -299,17 +301,24 @@ document. Each name stands under a number (N1, N2, ...) with its places: the quo
 was read with and 500 characters of the passage before and after it
 (`CONTEXT_CHARS`, owner decision 2026-11-06), overlapping stretches of one
 passage shown once as one place. The model answers with numbers only and
-copies no name, and only for a name that means another name of the same
-scenario or several names where it stands for several scenarios:
-`{"N2": ["N1"], "N5": ["N3", "N4"]}`. A name it leaves out means itself, and
-`{}` says every name does (`naming.meanings`, owner decision 2026-11-06).
-Names of one scenario become one thing, called by the name the others point
-to.
+copies no name. It answers every name under its number: with its own number
+where it means itself, with the number of another name of the same scenario,
+or with several numbers where it stands for several scenarios:
+`{"N1": ["N1"], "N2": ["N1"], "N5": ["N3", "N4"]}` (`naming.response_format`
+requires every number, owner decision 2026-11-06). A name whose scenario has
+no other name under "names" means itself, even where the model knows the
+scenario by a name that is not shown. Names of one scenario become one thing,
+called by the name the others point to (`naming.meanings`). The model had
+answered only the names that mean another, a name left out meaning itself, and
+a probe showed it then putting names of distinct scenarios (other studies'
+reference scenarios, sub-scenarios of one study) on the nearest name shown.
 
-The answer quotes nothing: each name keeps its own quote. An entry under a
-number the request did not show, or with one, is asked once more with the
-reason `name_not_listed`; a name still answered so means itself
-(`naming.answers_of`). A request that does
+The answer quotes nothing: each name keeps its own quote. A name the reply
+leaves out is asked once more with the reason `key_missing`, an entry under a
+number the request did not show, or with one, with `name_not_listed`
+(`naming.answers_of`). The second reply counts only for the names asked again,
+so an answer the first reply gave stands, and a name answered in neither means
+itself. A request that does
 not fit is asked in two halves of the names, then once more over the things
 the halves found. Each row keeps the name it was read as and gets the names
 of what it means under `<coordinate>_means` (`scenario_means`), or

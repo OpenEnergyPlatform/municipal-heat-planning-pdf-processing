@@ -965,15 +965,29 @@ def refused_of(failed: list) -> collections.Counter:
                                for _name, _level, failure in failed)
 
 
-def value_corrections(row: Row, failed: list, slots: list) -> list:
+def unanswered_what(entry, name: str) -> str:
+    """What a correction says of the coordinate *name* that a reply about
+    one value (*entry*) gave no answer for: that the reply lacked it, or,
+    where it stands there in another form than the one asked (a bare word
+    where an object with "value" is asked), that the reply did not have the
+    form asked for (owner decision 2026-11-06: a correction names the
+    fault)."""
+    if isinstance(entry, dict) and name in entry:
+        return say("wrong_shape")
+    return say("key_missing", key=name)
+
+
+def value_corrections(row: Row, failed: list, slots: list,
+                      reply: Optional[dict] = None) -> list:
     """What the check refused of a group's reply for one value, each named
-    by its coordinate: [{coordinate, what}]. A coordinate the reply left out
-    is named as missing."""
+    by its coordinate: [{coordinate, what}]. A coordinate *reply* left out
+    is named as missing, one it gave in another form than asked as given in
+    the wrong form (`unanswered_what`)."""
     out = []
     for slot in slots:
         if not row.claim.get(f"{slot.name}_state"):
             out.append({"coordinate": slot.name,
-                        "what": say("key_missing", key=slot.name)})
+                        "what": unanswered_what(reply, slot.name)})
     named = {entry["coordinate"] for entry in out}
     for name, _level, failure in failed:
         if failure.get("row") == row.label and name not in named:
@@ -1476,7 +1490,7 @@ class Reader:
         failed = job.merged([row], {slot.name: value_replies(answers, slot,
                                                              row.label)
                                     for slot in asked}, evidence)
-        corrections = value_corrections(row, failed, asked)
+        corrections = value_corrections(row, failed, asked, reply)
         result.failed = dict(collections.Counter(result.failed)
                              + refused_of(failed))
         if not corrections:

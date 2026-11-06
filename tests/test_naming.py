@@ -14,12 +14,13 @@ under a number with its places, each quote with 500 characters before and
 after it, AND a stretch of a passage once however many quotes stand in it.
 Names of one thing mean the name it is called by, AND a name of several
 things means each of theirs, AND an answer with no name shown means the name
-itself. The reply answers in numbers only: under a number shown, at least
-one of the numbers shown, AND nothing beside them, in the form a server
-holds it to and in the form a hosted API does, AND a name it leaves out
-means itself. An entry under or with a number not shown is asked once more
-with the reason, AND a name still so answered means itself. Each row read gets the names of what it
-means, AND a row that read no name gets none. One name asks nothing. A
+itself. The reply answers every name in numbers only: under each number
+shown, at least one of the numbers shown, AND nothing beside them, in the
+form a server holds it to and in the form a hosted API does. An entry under
+or with a number not shown, AND a name the reply left out, is asked once
+more with its reason, AND the second reply counts only for the names asked
+again, AND a name answered in neither means itself. Each row read gets the
+names of what it means, AND a row that read no name gets none. One name asks nothing. A
 request that does not fit is asked in two halves, AND what the halves found
 once more together. The graph writes a row to each scenario its name means,
 AND names of one scenario are one factsheet.
@@ -308,6 +309,17 @@ def by_number(answers):
     return reply
 
 
+def every(answers):
+    """A reply that answers every name the request showed, under its number:
+    with *answers* ({name: [names]}) where given, with its own number
+    otherwise."""
+    def reply(payload):
+        out = {key: [key] for key in payload["names"]}
+        out.update(by_number(answers)(payload))
+        return out
+    return reply
+
+
 def names_shown(payload) -> dict:
     """{number: name} of a request."""
     return {key: entry["name"] for key, entry in payload["names"].items()}
@@ -330,9 +342,9 @@ def namer(replies, fits=None):
 def test_each_row_read_is_marked_with_what_its_name_means():
     names = [LCEO, ZERO]
     rows = rows_of(*names, unread=[fields.UNBACKED])
-    # Only the name that means another is answered (owner decision
-    # 2026-11-06): the one left out means itself.
-    made, asked = namer([by_number({ZERO: [LCEO]})])
+    # Every name is answered (owner decision 2026-11-06): the one that
+    # means itself with its own number.
+    made, asked = namer([by_number({LCEO: [LCEO], ZERO: [LCEO]})])
     meant = made(7, rows, passages_of(names))
     assert meant == {"scenario": {LCEO: [LCEO], ZERO: [LCEO]}}
     (payload,), = [asked]
@@ -353,56 +365,87 @@ def test_one_name_asks_nothing():
     assert asked == [] and rows[0]["value_means"] == [LCEO]
 
 
-def test_the_reply_answers_in_numbers_shown_and_may_leave_a_name_out():
+def test_the_reply_answers_every_name_in_numbers_shown():
     schema = naming.response_format(["N1", "N2"])["json_schema"]["schema"]
     strict, decode = strict_schema.strict(schema)
-    # A hosted API wants every key and reads a null as left out.
-    jsonschema.validate({"N2": ["N1"]}, schema)
-    jsonschema.validate({}, schema)
-    jsonschema.validate({"N1": None, "N2": ["N1", "N2"]}, strict)
-    assert decode({"N1": None, "N2": ["N1"]}) == {"N2": ["N1"]}
-    for wrong in ({"N2": [LCEO]}, {ZERO: ["N1"]},
-                  {"N2": ["N1"], "note": ["N1"]}):
-        for form, reply in ((schema, wrong), (strict, {"N1": None, **wrong})):
+    whole = {"N1": ["N1"], "N2": ["N1", "N2"]}
+    for form in (schema, strict):
+        jsonschema.validate(whole, form)
+    assert decode(whole) == whole
+    # Every name is answered (owner decision 2026-11-06): a name left out,
+    # or a null in its place, is no reply in either form, and neither is a
+    # name where numbers belong, or a key beside them.
+    for wrong in ({"N2": ["N1"]}, {}, {"N1": None, "N2": ["N1"]},
+                  {"N1": ["N1"], "N2": [LCEO]}, {"N1": ["N1"], ZERO: ["N1"]},
+                  {**whole, "note": ["N1"]}):
+        for form in (schema, strict):
             with pytest.raises(jsonschema.ValidationError):
-                jsonschema.validate(reply, form)
+                jsonschema.validate(wrong, form)
+    # An empty list: the server's grammar refuses it, a hosted API's has no
+    # minimum, so the reading asks it again.
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate({"N2": []}, schema)
+        jsonschema.validate({"N1": ["N1"], "N2": []}, schema)
+    _, wrong = naming.answers_of({"N1": ["N1"], "N2": []},
+                                 {LCEO: "N1", ZERO: "N2"})
+    assert [one["name"] for one in wrong] == ["N2"]
 
 
 def test_a_name_answered_with_names_not_shown_is_asked_again_then_itself():
     names = [LCEO, ZERO]
-    made, asked = namer([by_number({ZERO: ["Zero"]}),
-                         by_number({ZERO: [LCEO]})])
+    made, asked = namer([every({ZERO: ["Zero"]}), every({ZERO: [LCEO]})])
     assert made(7, rows_of(*names), passages_of(names))["scenario"][ZERO] \
         == [LCEO]
     assert "corrections" not in asked[0]
     assert asked[1]["corrections"] == [{
         "name": "N2", "value": ["Zero"],
         "what": say("name_not_listed", name="N2", given='["Zero"]')}]
-    # A name written where its number belongs is not a number shown.
-    made, asked = namer([{ZERO: ["N1"]}, by_number({ZERO: [LCEO]})])
+    # A name written where its number belongs is not a number shown, and
+    # its number is left out.
+    made, asked = namer([{"N1": ["N1"], ZERO: ["N1"]}, every({ZERO: [LCEO]})])
     assert made(7, rows_of(*names), passages_of(names))["scenario"][ZERO] \
         == [LCEO]
-    assert [one["name"] for one in asked[1]["corrections"]] == [ZERO]
-    made, asked = namer([by_number({ZERO: ["Zero"]}),
-                         by_number({ZERO: ["Zero"]})])
+    assert [one["name"] for one in asked[1]["corrections"]] == [ZERO, "N2"]
+    made, asked = namer([every({ZERO: ["Zero"]}), every({ZERO: ["Zero"]})])
     assert made(7, rows_of(*names), passages_of(names))["scenario"][ZERO] \
         == [ZERO]
     assert len(asked) == 2
 
 
+def test_every_name_is_answered_and_one_left_out_is_asked_again_then_itself():
+    names = [LCEO, ZERO, TECH]
+    # Left out: asked again under its number, with the reason.
+    made, asked = namer([by_number({LCEO: [LCEO], ZERO: [LCEO]}),
+                         every({TECH: [TECH]})])
+    meant = made(7, rows_of(*names), passages_of(names))["scenario"]
+    assert asked[1]["corrections"] == [
+        {"name": "N3", "what": say("key_missing", key="N3")}]
+    assert meant[TECH] == [TECH]
+    # The second reply counts only for the names asked again: what the first
+    # answered stands, whatever the second says of it.
+    made, asked = namer([by_number({LCEO: [LCEO], ZERO: [LCEO]}),
+                         every({TECH: [LCEO]})])
+    meant = made(7, rows_of(*names), passages_of(names))["scenario"]
+    assert meant[ZERO] == [LCEO] and meant[TECH] == [LCEO]
+    # Answered in neither: it means itself.
+    made, asked = namer([by_number({LCEO: [LCEO]}),
+                         by_number({LCEO: [LCEO]})])
+    meant = made(7, rows_of(*names), passages_of(names))["scenario"]
+    assert meant == {LCEO: [LCEO], ZERO: [ZERO], TECH: [TECH]}
+    assert [one["name"] for one in asked[1]["corrections"]] == ["N2", "N3"]
+    assert len(asked) == 2
+
+
 def test_a_request_that_does_not_fit_is_asked_in_halves_then_together():
     names = ["A", "B", "C", "D"]
-    made, asked = namer([by_number({"B": ["A"]}), by_number({}),
-                         by_number({"C": ["A"]})], fits=3)
+    made, asked = namer([every({"B": ["A"]}), every({}),
+                         every({"C": ["A"]})], fits=3)
     meant = made(7, rows_of(*names), passages_of(names))["scenario"]
     assert meant == {"A": ["A"], "B": ["A"], "C": ["A"], "D": ["D"]}
     assert [sorted(names_shown(one).values()) for one in asked] == [
         names, ["A", "B"], ["C", "D"], ["A", "C", "D"]]
     # Halves that join nothing ask nothing more: it would be the request
     # that did not fit.
-    made, asked = namer([by_number({}), by_number({})], fits=3)
+    made, asked = namer([every({}), every({})], fits=3)
     meant = made(7, rows_of(*names), passages_of(names))["scenario"]
     assert meant == {name: [name] for name in names}
     assert len(asked) == 3

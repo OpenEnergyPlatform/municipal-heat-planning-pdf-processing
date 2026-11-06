@@ -14,7 +14,7 @@ You get:
 - "corrections": only in a second request. What was wrong with your first answer, per coordinate under "what". A correction that names a "value" asks for that scenario alone.
 
 You answer with:
-1. EVERY coordinate from "coordinates", each with "value", the scenario's name as the publication prints it, copied character for character, and "quote": ONE contiguous place from what you were shown, copied character for character, that contains the name and speaks about THIS value. If the publication states the value for several scenarios, give each of them as its own entry of a list, each with its own quote. If it stands in no place shown, its entry is "out:unstated", without "quote". A coordinate that is not under "open" is read already: its entry is "out:unstated".
+1. EVERY coordinate from "coordinates", each with "value", the scenario's name as the publication prints it, copied character for character, and "quote": ONE contiguous place from what you were shown, copied character for character, that contains the name and speaks about THIS value. If the publication states the value for several scenarios, give each of them as its own entry of a list, each with its own quote. If it stands in no place shown, its entry is {"value": "out:unstated"}, without "quote". A coordinate that is not under "open" is read already: its entry is {"value": "out:unstated"}.
 2. "more": what you want to read before you answer. A list of requests:
    - {"get": "hit", "id": "<<id of a hit>>"}: the passage of this hit;
    - {"get": "next"} or {"get": "previous"}: the section after or before the passage of the value, next time the one after or before that;
@@ -29,3 +29,5 @@ Answer with exactly one JSON object on one line, with no text or code block befo
 {{example}}
 Where the publication states the value for several scenarios (the quotes below are descriptions in << >> and stand in no publication):
 {"scenario": [{"value": "<<the first scenario's name>>", "quote": "<<a sentence that names it>>"}, {"value": "<<the second scenario's name>>", "quote": "<<a sentence that names it>>"}]}
+Where the scenario of this value stands in no place shown:
+{"scenario": {"value": "out:unstated"}}

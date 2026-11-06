@@ -14,22 +14,27 @@ was read at: its quote and 500 characters before and after it in the
 passage it stands in (`CONTEXT_CHARS`), a stretch of a passage shown once
 however many names stand in it. Each name stands under a number (N1, N2,
 …), and the model answers with numbers, never copying a name (owner
-decision 2026-11-06). It answers only for a name that means another name of
-the same thing, or several names where it means several things ("the EC LTS
-scenarios"); a name it leaves out means itself (owner decision 2026-11-06).
-Names of the same thing are one thing, called by the name the others point
-to; a name of several things stands for each of them (`meanings`). Each row
-keeps the name it was read as and gets the names of what it means under
-`<coordinate>_means`, `value_means` for its own value, and the graph writes
-the row to each of them.
+decision 2026-11-06). It answers every name (owner decision 2026-11-06,
+after a probe in which names it was to leave out to mean themselves were
+put on the nearest name shown instead): with its own number, with the number
+of another name of the same thing, or with several where it means several
+things ("the EC LTS scenarios"). A name whose thing has no other name in
+the request means itself, even where the model knows the thing by a name the
+request does not show. Names of the same thing are one thing, called by the
+name the others point to; a name of several things stands for each of them
+(`meanings`). Each row keeps the name it was read as and gets the names of
+what it means under `<coordinate>_means`, `value_means` for its own value,
+and the graph writes the row to each of them.
 
 Nothing is checked beyond the list: an answer under or with a number the
-request did not show is asked once more with its reason (`name_not_listed`),
-and a name still answered so means itself. The answer quotes nothing, since
-each name keeps the quote it was read with (owner decision 2026-11-06). A
-request that does not fit its room is asked in two halves of the names, and
-the things the halves found are asked once more together, each by the places
-of the name it is called by.
+request did not show, and a name the reply left out, is asked once more with
+its reason (`name_not_listed`, `key_missing`). The second reply counts only
+for the names asked again, so an answer the first gave stands; a name
+answered in neither means itself. The answer quotes nothing, since each name
+keeps the quote it was read with (owner decision 2026-11-06). A request that
+does not fit its room is asked in two halves of the names, and the things
+the halves found are asked once more together, each by the places of the
+name it is called by.
 
 Author: Felix Vossel
 
@@ -151,9 +156,9 @@ with *corrections* the same request asked once more.
 def response_format(numbers: list) -> dict
 ```
 
-For a name that means another or several, under its number, the
-numbers of the names it means, each one of *numbers*. No name has to be
-answered: one left out means itself (owner decision 2026-11-06).
+For every name, under its number, the numbers of the names it means:
+its own, another's or several, each one of *numbers* (owner decision
+2026-11-06: every name is answered).
 
 The list of numbers is written once and referred to by every name, so the
 schema grows with the names and not with their square.
@@ -168,8 +173,8 @@ def answers_of(reply: dict, numbers: dict) -> tuple
 ({number: [numbers]}): each entry under a number the request showed
 whose list holds only numbers it showed, turned back into names. An
 entry under any other key, or with a number it did not show, is wrong,
-with its reason (`name_not_listed`). A name with no entry means itself
-and is not in the result.
+with its reason (`name_not_listed`), and so is a number the reply gave
+no entry (`key_missing`).
 
 ### meanings
 

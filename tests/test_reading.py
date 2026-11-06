@@ -21,7 +21,8 @@ every request of the parameter shares first and the value last (ticket 26),
 the pairs and the plan's years only where it asks a frame coordinate. What
 the check refuses of a group's reply is asked once more
 by its coordinate, and never a third time; a coordinate left out is asked
-for by name and ends unanswered; a reply the check takes whole is asked
+for by name as missing, AND one given in another form than asked as given
+in the wrong form, and both end unanswered; a reply the check takes whole is asked
 once. A frame coordinate left open takes the survey's one tuple, but not
 against a year the value read under its own head.
 
@@ -464,6 +465,16 @@ def test_a_coordinate_left_out_is_asked_for_by_name_and_ends_unanswered():
         {"coordinate": "year", "what": say("key_missing", key="year")}])]
     assert read.claims[0]["year_state"] == "unanswered"
     assert read.unanswered == 1
+
+
+def test_a_coordinate_in_another_form_is_asked_again_as_such():
+    # A bare word where an object with "value" is asked: the correction names
+    # the form, not a missing answer (owner decision 2026-11-06).
+    read, calls = read_of(TEXT, values=ONE, groups={"frame": [
+        {"scenario": {"value": UNSTATED}, "year": UNSTATED}]})
+    assert corrections_of(calls) == [("frame", [
+        {"coordinate": "year", "what": say("wrong_shape")}])]
+    assert read.claims[0]["year_state"] == "unanswered"
 
 
 # -- the survey's tuple of the passage ------------------------------------------

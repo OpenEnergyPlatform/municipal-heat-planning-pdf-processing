@@ -735,15 +735,30 @@ def refused_of(failed: list) -> collections.Counter
 
 What the check refused of a reply, by reason.
 
+### unanswered_what
+
+```python
+def unanswered_what(entry, name: str) -> str
+```
+
+What a correction says of the coordinate *name* that a reply about
+one value (*entry*) gave no answer for: that the reply lacked it, or,
+where it stands there in another form than the one asked (a bare word
+where an object with "value" is asked), that the reply did not have the
+form asked for (owner decision 2026-11-06: a correction names the
+fault).
+
 ### value_corrections
 
 ```python
-def value_corrections(row: Row, failed: list, slots: list) -> list
+def value_corrections(row: Row, failed: list, slots: list,
+                      reply: Optional[dict] = None) -> list
 ```
 
 What the check refused of a group's reply for one value, each named
-by its coordinate: [{coordinate, what}]. A coordinate the reply left out
-is named as missing.
+by its coordinate: [{coordinate, what}]. A coordinate *reply* left out
+is named as missing, one it gave in another form than asked as given in
+the wrong form (`unanswered_what`).
 
 ### named_corrections
 

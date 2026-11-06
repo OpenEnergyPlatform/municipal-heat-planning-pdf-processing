@@ -307,8 +307,11 @@ out are asked once more in the same request with the reason (`corrections`,
 each `{coordinate, what}`), in the harvest's own phrases, a quote in nothing
 shown in those of the reading (`quote_not_in_passage`); the second reply
 fills what is still open and never a coordinate read the first time, and
-there is no third. A coordinate left out is asked for by name and, if still
-open, ends `unanswered`. A request that asks the year shows the plan's base
+there is no third. A coordinate left out is asked for by name with `key_missing`; one the
+reply gave in another form than asked, such as the bare word "out:unstated"
+where an object with "value" is asked, is told `wrong_shape`
+(`reading.unanswered_what`, used by `reading.value_corrections`). Either, if
+still open after the second reply, ends `unanswered`. A request that asks the year shows the plan's base
 and target years, numbers only, as the field request does
 (`reading.years_of`), so a value whose passage names its state by the plan's
 word ("Bestand", "Zieljahr") and prints no year is read with the year of that
@@ -382,7 +385,10 @@ owner decision 2026-11-06); a correction is told as one object for that row,
 name of a coordinate that may name several is asked again on its own. The answers go through
 `merge_field` in window `retrieval`, a coordinate read before is never
 touched, and what the check refuses or the reply leaves out is asked once
-more, a quote in nothing shown in the names of what the combing shows,
+more (a coordinate the reply gave in another form than asked is told
+`wrong_shape`, one it left out `key_missing`, `combing.Comber._corrections`;
+the prompt names the not-stated entry as `{"value": "out:unstated"}` and shows
+it as its own example line), a quote in nothing shown in the names of what the combing shows,
 `"more"`, `"hits"`, `"passage"` and `"row"` (`quote_not_shown`,
 `combing.NOT_SHOWN`, owner decision 2026-11-06). A quote may stand in
 whatever the request showed of the plan (owner
@@ -1512,18 +1518,26 @@ quote and 500 characters before and after it in the passage it stands in
 (`naming.CONTEXT_CHARS`, owner decision 2026-11-06), a stretch of one passage
 shown once as one place however many names stand in it. The model answers
 with numbers only and copies no name (owner decision 2026-11-06). It answers
-only for a name that means another name of the same thing, or several names
-where it means several things: `{"N2": ["N1"], "N5": ["N3", "N4"]}`. A name it
-leaves out means itself, and `{}` says that every name does (`naming.meanings`;
-no name is required). Names of one thing become one thing, called by the name
-the others point to; a name of several things stands for each of them. The
-answer quotes nothing, since each name keeps the quote it was read with (owner
+every name under its number: with its own number where it means itself, with
+the number of another name of the same thing, or with several numbers where it
+means several things: `{"N1": ["N1"], "N2": ["N1"], "N5": ["N3", "N4"]}`. The
+schema requires every number (`naming.response_format`). A name whose thing has
+no other name under "names" means itself, even where the model knows the thing
+by a name that is not shown. Names of one thing become one thing, called by the
+name the others point to; a name of several things stands for each of them
+(`naming.meanings`). The answer quotes nothing, since each name keeps the quote
+it was read with (owner decision 2026-11-06). The model had answered only the
+names that mean another name, and a name it left out meant itself; a probe
+showed it then putting names of distinct things (other studies' reference
+scenarios, sub-scenarios of one study) on the nearest name shown (owner
 decision 2026-11-06).
 
-Nothing is checked beyond the list. An entry under a number the request did
-not show, or with a number it did not show, is asked once more with its reason
-(`name_not_listed`, worded about numbers), and a name still answered so means
-itself (`naming.answers_of`). A request that does not fit its room is asked in
+Nothing is checked beyond the list. A name the reply leaves out is asked once
+more with the reason `key_missing`, an entry under a number the request did not
+show, or with a number it did not show, with `name_not_listed`, worded about
+numbers (`naming.answers_of`). The second reply counts only for the names asked
+again, so an answer the first reply gave stands (`Namer._asked`), and a name
+answered in neither reply means itself. A request that does not fit its room is asked in
 two halves of the names, and the things the halves found are asked once more
 together, each by the places of the name it is called by. The trace writes
 `naming_ask` per answered request and `naming` per document and kind, with the

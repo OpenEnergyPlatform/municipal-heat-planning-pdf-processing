@@ -57,7 +57,7 @@ from .reading import (SHOWN, Gathered, answer_of, answer_schema,
                       answers_each, around_of, coordinate_shown, entry_example,
                       first_line, gather, groups_of, heading_of, known_shown,
                       more_schema, several, shown_as, shown_hits, slots_of,
-                      source_of, years_of)
+                      source_of, unanswered_what, years_of)
 from .wording import say
 
 COMB_PROMPT_ID = "extraction/comb"
@@ -416,7 +416,7 @@ class Comber:
         result.made = made
         failed = self._merged(rows, reply, asked, opened, evidence,
                               bases)
-        corrections = self._corrections(rows, failed, opened)
+        corrections = self._corrections(rows, failed, opened, reply)
         if corrections and made:
             # One request per row asked again, showing that row only and
             # naming the name it was given.
@@ -500,14 +500,20 @@ class Comber:
         return failed
 
     @staticmethod
-    def _corrections(rows: list, failed: list, opened: dict) -> list:
+    def _corrections(rows: list, failed: list, opened: dict,
+                     reply: dict) -> list:
         """[{row, what: {coordinate: reason}}] of the rows the check refused
-        an answer of or the reply left a coordinate open on."""
+        an answer of or *reply* gave no answer on: missing where the reply
+        left the coordinate out, in the wrong form where it gave it otherwise
+        than asked (`reading.unanswered_what`)."""
+        given = {entry.get("row"): entry for entry in reply.get("rows") or ()
+                 if isinstance(entry, dict)}
         what: dict = collections.defaultdict(dict)
         for row in rows:
             for name in opened[row.label]:
                 if not row.claim.get(f"{name}_state"):
-                    what[row.label][name] = say("key_missing", key=name)
+                    what[row.label][name] = unanswered_what(
+                        given.get(row.label), name)
         for name, failure in failed:
             if failure.get("row") in opened:
                 what[failure["row"]][name] = failure.get("reason")
