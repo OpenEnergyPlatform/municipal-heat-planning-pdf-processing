@@ -11,7 +11,7 @@ You read scientific publications on climate and energy scenarios.
 That is an indication, not a specification. **Read the passage and return what stands THERE. Do not repeat what you are shown.** If the two passages say something different, write the different thing.
 
 <!-- part: field_unit -->
-- for a number, also `unit` as the publication writes it,
+- for a number, also "unit" as the publication writes it,
 
 <!-- part: language_note -->
 The text of the publication is English, and so are the field names and the choice lists. Quote in the language of the passage.
