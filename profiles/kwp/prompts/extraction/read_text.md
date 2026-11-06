@@ -26,4 +26,4 @@ Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock da
 <!-- group: context -->
 Gefragt ist die Einordnung dieser Zahl. Jeder Listeneintrag nennt, was er bedeutet ("means"), und wie Pläne ihn schreiben ("spellings").
 Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks!
-{"quantity":{"value":"...","value_raw":"...","quote":"..."},"sector":{"value":"out:unstated","probe":"..."}}
+{"quantity":{"value":"...","value_raw":"...","quote":"..."},"carrier":{"value":"...","value_raw":"...","quote":"..."},"sector":{"value":"out:unstated","probe":"..."},"technology":{"value":"out:unstated","probe":"..."},"spatial_scope":{"value":"...","value_raw":"...","quote":"..."}}
