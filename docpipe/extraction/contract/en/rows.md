@@ -18,8 +18,7 @@ You get a JSON object with these keys:
 <!-- /block -->
 - "prior" (optional): values already fetched from this document. Do NOT output the same value from the same passage again.
 
-Return only a JSON object in this form, on ONE line, without indentation:
-
+Answer with exactly one JSON object in this form, on ONE line, without indentation, with no text or code block before or after it. No Backticks!
 {{example_reply}}
 
 <!-- block: place_example_more -->
@@ -82,7 +81,7 @@ Every entry is checked mechanically and literally against the source; whatever f
 <!-- block: sandbox -->
 <!-- rule: sandbox --> Have it calculated instead of calculating. If the value sought does not stand printed but only follows from printed numbers, return ONE action object INSTEAD of the entries:
    {"action": "python", "code": "<Python code>"}
-   numpy and pandas are available, the texts of the sources are in the dictionary `sources` (keys "Q1", "Q2", …), the title in `title`. Print every result with print(). You get the output back and answer THEN with the entries.
+   numpy and pandas are available, the texts of the sources are in the dictionary "sources" (keys "Q1", "Q2", …), the title in "title". Print every result with print(). You get the output back and answer THEN with the entries.
 {{sandbox_more}}
    Every entry produced this way carries "computed": true, and its "quote" is the passage with the INPUT NUMBERS.
 

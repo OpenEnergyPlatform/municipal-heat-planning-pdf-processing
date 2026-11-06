@@ -18,8 +18,7 @@ Du bekommst ein JSON-Objekt mit diesen Feldern:
 <!-- /block -->
 - "prior" (optional): Werte, die aus diesem Dokument schon geholt sind. Gib denselben Wert aus derselben Passage NICHT noch einmal aus.
 
-Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, OHNE Einrückung:
-
+Antworte mit genau einem JSON-Objekt in dieser Form, in EINER Zeile, OHNE Einrückung, ohne Text oder Codeblock davor oder danach. No Backticks!
 {{example_reply}}
 
 <!-- block: place_example_more -->
@@ -82,7 +81,7 @@ Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die P
 <!-- block: sandbox -->
 <!-- rule: sandbox --> Rechnen lassen statt rechnen. Steht der gesuchte Wert nicht gedruckt da, sondern ergibt sich erst aus gedruckten Zahlen, dann gib STATT der Einträge EIN Aktions-Objekt zurück:
    {"action": "python", "code": "<Python-Code>"}
-   Verfügbar sind numpy und pandas, die Quelltexte liegen als Dictionary `sources` vor (Schlüssel "Q1", "Q2", …), der Titel als `title`. Gib jedes Ergebnis mit print() aus. Du bekommst die Ausgabe zurück und antwortest DANN mit den Einträgen.
+   Verfügbar sind numpy und pandas, die Quelltexte liegen als Dictionary "sources" vor (Schlüssel "Q1", "Q2", …), der Titel als "title". Gib jedes Ergebnis mit print() aus. Du bekommst die Ausgabe zurück und antwortest DANN mit den Einträgen.
 {{sandbox_more}}
    Jeder so entstandene Eintrag trägt "computed": true, sein "quote" ist die Passage mit den EINGANGSZAHLEN.
 
