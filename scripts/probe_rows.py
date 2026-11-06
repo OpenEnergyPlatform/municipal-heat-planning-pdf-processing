@@ -49,7 +49,9 @@ on the CPU when the machine has no GPU.
 `--survey` with `--documents` asks only the survey of each whole plan, the
 first pass of the rebuilt harvest, and keeps it in `<out>/survey`. With
 `--read` each parameter is then read in the passages the survey named for it,
-and the values are folded as the run folds them.
+and the values are folded as the run folds them; after the fold, as in the
+run, the model is asked which names of a merged coordinate mean the same
+thing (`runner.make_namer`).
 
 A sandbox round needs CODE_EXEC_URL; `report.json` counts the rounds either way.
 """
@@ -161,6 +163,9 @@ def whole(hits: list, spec, args, passages=None, document_spec=None) -> list:
         slice_gate=gate, frame_axes=frame_axes, places=places)
     computer = runner.make_computer(profile)
     completer = runner.make_completer(profile, args.db)
+    # Which names of a document mean the same thing, asked once it is folded
+    # and worked out, as the run asks it; None for a spec that merges none.
+    namer = runner.make_namer(spec, lambda document: documents.get(document, ()))
     names = sorted({slot.name for parameter in spec.parameters
                     for slot in fields.axis_slots(parameter)}
                    | {"parameter", "value"})
@@ -189,6 +194,8 @@ def whole(hits: list, spec, args, passages=None, document_spec=None) -> list:
         runner.fold_answers(answered, report, locate=None, spec=own)
         if computer is not None:
             computer(answered, report, spec=spec)
+        if namer is not None:
+            namer(report)
         completion = completer(report, own) if completer else None
         row = {
             "document": document, "passages": len(sources),
@@ -244,6 +251,9 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
         return [source for source in passages.get(document, ())
                 if (source.owner_kind, source.owner_id) not in exclude]
 
+    # Which names of a document mean the same thing, asked once it is folded,
+    # as the run asks it; None for a spec that merges none.
+    namer = runner.make_namer(spec, lambda document: every(document, set()))
     pool = ThreadPoolExecutor(args.parallel)
     rank = seek = None
     profile = active_profile()
@@ -339,6 +349,10 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
                                 planned={surveyed.STAGE: taken.passages},
                                 sources_of=taken.sources_of)
         runner.fold_answers(taken.answered, report, locate=None, spec=spec)
+        # Which names mean the same thing, over every row the document now
+        # holds, as the run asks it after the fold.
+        if namer is not None:
+            namer(report)
         # What the run completes from outside the document, as it does
         # after the fold.
         row["completion"] = completer(report, own) if completer else None
