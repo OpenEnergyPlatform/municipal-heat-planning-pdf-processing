@@ -233,6 +233,23 @@ def response_format(parameters: dict, slots: dict) -> dict:
             "json_schema": {"name": "survey_reply", "schema": schema}}
 
 
+def example(slots: dict) -> dict:
+    """The reply about one passage as the example of its request shows it:
+    exactly the keys `response_format` asks, in its order (owner decisions
+    2026-11-06): a parameter named, and one tuple of each group the survey
+    reads, every coordinate of it read (`fields.value_example`) with its
+    quote and its printed wording."""
+    out: dict = {"parameters": [fields.SAID]}
+    for name, group_slots in slots.items():
+        one: dict = {}
+        for slot in group_slots:
+            one[slot.name] = fields.value_example(slot)
+            one[f"{slot.name}_quote"] = fields.SAID
+            one[f"{slot.name}_raw"] = fields.SAID
+        out[name] = [one]
+    return out
+
+
 @dataclass
 class Answer:
     """What the survey says of one passage."""

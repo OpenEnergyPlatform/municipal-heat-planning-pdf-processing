@@ -195,6 +195,24 @@ def value_schema(slot: Slot) -> dict:
     return {"type": "string"}
 
 
+# What an example reply writes for an answer (`value_example`): a placeholder
+# for an entry of a list or a wording, a year for a number, as the prompts'
+# examples always did.
+SAID = "..."
+YEAR = 2022
+
+
+def value_example(slot: Slot):
+    """A coordinate's answer as the example of a request shows it, read and
+    of the kind `value_schema` takes: an entry of its list or a wording as a
+    placeholder, a number as a year. Never UNSTATED: an example shows every
+    coordinate read (owner decision 2026-11-06), and the prompt's rule line
+    shows how an unstated one looks."""
+    if not slot.is_closed and slot.kind == NUMBER:
+        return YEAR
+    return SAID
+
+
 def _options(vocabulary: dict, definitions: Optional[dict] = None,
              glosses: Optional[dict] = None) -> tuple:
     """The closed list as options, first label canonical, rest synonyms.

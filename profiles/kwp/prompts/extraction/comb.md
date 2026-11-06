@@ -4,7 +4,7 @@ max_tokens: 6144
 ---
 Finde in anderen Passagen des Plans jede Angabe unter "coordinates", die dem Wert unter "row" in seiner eigenen Passage fehlt, und antworte aus den Passagen, die dir gezeigt wurden.
 Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
-{"year":{"value":2022,"quote":"..."},"scenario":{"value":"out:unstated"},"more":[{"get":"hit","id":"H2"}]}
+{{example}}
 
 * Die Antwort enthält jede Angabe aus "coordinates". "value" ist bei einer Liste ("options") genau einer ihrer Schlüssel, sonst die Angabe selbst, "value_raw" das Wort des Plans, wo es nicht der Schlüssel ist, und "quote" eine zusammenhängende Stelle, Zeichen für Zeichen, die die Angabe enthält und über diesen Wert spricht.
 * Eine Angabe, die keine gezeigte Stelle nennt oder die nicht unter "open" steht, ist {"value":"out:unstated"} ohne "quote". Rate nicht: Was du nicht gelesen hast, ist "out:unstated".

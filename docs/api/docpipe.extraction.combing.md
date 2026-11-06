@@ -91,9 +91,10 @@ class Comber
 (document_id, reads, passages, pairs, budget) -> [Combed], one per
 read value and group of the spec with an open coordinate.
 
-*ask(payload, shape, document_id, source, group)* is one request: the
-reply as a dict, CUT, or None, *group* the name of the group of the spec
-it asks, for its trace. *rank(document_id, probes, exclude)* is the plan's
+*ask(payload, shape, document_id, source, group, example)* is one
+request: the reply as a dict, CUT, or None, *group* the name of the group
+of the spec it asks, for its trace, *example* the reply its prompt shows
+(`comb_example`). *rank(document_id, probes, exclude)* is the plan's
 passages best first for the search sentences *probes*
 (`runner.make_more_sources`): the reading's sentences, and the model's
 own under "similar". *known(claim, asked)* is what a row has read in the
@@ -175,6 +176,17 @@ def comb_response_format(slots: list) -> dict
 Every coordinate asked of the one row a request shows, at the top of
 the reply with no wrapper and no row label (owner decision 2026-11-06),
 and what the reply asks of the rest of the plan.
+
+### comb_example
+
+```python
+def comb_example(slots: list) -> dict
+```
+
+The reply of a combing request as its example shows it: exactly the
+coordinates this request asks, in its order, each read
+(`reading.entry_example`), then what it asks of the rest of the plan,
+as `comb_response_format` has them (owner decision 2026-11-06).
 
 ### as_rows
 

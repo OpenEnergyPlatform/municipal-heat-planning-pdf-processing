@@ -17,9 +17,9 @@ For EVERY coordinate from "coordinates" one entry with "value", the scenario's n
 
 A quote is copied from text you were shown: from the passage and the heading of its section, so also from the rows of a table or the description of a figure, or from the text around it. What only the image shows and the description does not is no quote.
 
-Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks! The quotes below are descriptions in << >> and stand in no publication:
-{"scenario": {"value": "<<the scenario's name as the text prints it>>", "quote": "<<the clause that names the scenario>>"}}
-Where the publication states the value for several scenarios:
+Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks! In this form:
+{{example}}
+Where the publication states the value for several scenarios (the quotes in the two forms below are descriptions in << >> and stand in no publication):
 {"scenario": [{"value": "<<the first scenario's name>>", "quote": "<<the clause that names it>>"}, {"value": "<<the second scenario's name>>", "quote": "<<the clause that names it>>"}]}
 Where the publication does not name the scenario of this value:
 {"scenario": {"value": "out:unstated", "probe": "<<a sentence as the publication would print the scenario of this value>>"}}

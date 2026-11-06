@@ -54,10 +54,10 @@ from . import lookup
 from .fields import EXHAUSTED, READ, SAID_UNSTATED, UNANSWERED, UNBACKED
 from .pipeline import Row, mark_unanswered, merge_field, row_label
 from .reading import (SHOWN, Gathered, answer_of, answer_schema,
-                      answers_each, around_of, coordinate_shown, first_line,
-                      gather, groups_of, heading_of, known_shown, more_schema,
-                      several, shown_as, shown_hits, slots_of, source_of,
-                      years_of)
+                      answers_each, around_of, coordinate_shown, entry_example,
+                      first_line, gather, groups_of, heading_of, known_shown,
+                      more_schema, several, shown_as, shown_hits, slots_of,
+                      source_of, years_of)
 from .wording import say
 
 COMB_PROMPT_ID = "extraction/comb"
@@ -74,8 +74,12 @@ OPEN = (SAID_UNSTATED, UNBACKED, UNANSWERED)
 # (owner decision 2026-11-04: the best 15 sections, 20 tables and 20
 # figures), cut by `reading.shown_hits`; both are named here as before.
 __all__ = ["COMB_PROMPT_ID", "OPEN", "SHOWN", "Comber", "Combed",
-           "as_rows", "comb_response_format", "open_of", "shown_corrections",
-           "shown_hits"]
+           "as_rows", "comb_example", "comb_response_format", "open_of",
+           "shown_corrections", "shown_hits"]
+
+# What the example of a combing request asks of the rest of the plan, as the
+# prompts' examples always showed it.
+MORE_EXAMPLE = [{"get": "hit", "id": "H2"}]
 
 
 def open_of(claim: dict, slots: list) -> list:
@@ -95,6 +99,15 @@ def comb_response_format(slots: list) -> dict:
               "additionalProperties": False}
     return {"type": "json_schema",
             "json_schema": {"name": "comb_reply", "schema": schema}}
+
+
+def comb_example(slots: list) -> dict:
+    """The reply of a combing request as its example shows it: exactly the
+    coordinates this request asks, in its order, each read
+    (`reading.entry_example`), then what it asks of the rest of the plan,
+    as `comb_response_format` has them (owner decision 2026-11-06)."""
+    return {**{slot.name: entry_example(slot) for slot in slots},
+            "more": [dict(ask) for ask in MORE_EXAMPLE]}
 
 
 def as_rows(reply, label: str):
@@ -167,9 +180,10 @@ class Comber:
     """(document_id, reads, passages, pairs, budget) -> [Combed], one per
     read value and group of the spec with an open coordinate.
 
-    *ask(payload, shape, document_id, source, group)* is one request: the
-    reply as a dict, CUT, or None, *group* the name of the group of the spec
-    it asks, for its trace. *rank(document_id, probes, exclude)* is the plan's
+    *ask(payload, shape, document_id, source, group, example)* is one
+    request: the reply as a dict, CUT, or None, *group* the name of the group
+    of the spec it asks, for its trace, *example* the reply its prompt shows
+    (`comb_example`). *rank(document_id, probes, exclude)* is the plan's
     passages best first for the search sentences *probes*
     (`runner.make_more_sources`): the reading's sentences, and the model's
     own under "similar". *known(claim, asked)* is what a row has read in the
@@ -351,6 +365,7 @@ class Comber:
             **({"where": group.where} if group is not None else {}),
             **years_of(bases, asked)}
         shape = comb_response_format(asked)
+        example = comb_example(asked)
 
         def ask(corrections: Optional[list] = None,
                 row: Optional[Row] = None):
@@ -362,7 +377,7 @@ class Comber:
                 payload["corrections"] = told
             return as_rows(self.ask(payload, shape, document_id, source,
                                     group=group.name if group is not None
-                                    else None), row.label)
+                                    else None, example=example), row.label)
 
         reply = ask()
         result.asked = 1

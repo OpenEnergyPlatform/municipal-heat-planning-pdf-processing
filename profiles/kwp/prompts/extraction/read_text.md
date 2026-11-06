@@ -12,7 +12,7 @@ Antworte mit genau einer Zeile JSON, mit einem Eintrag je Angabe:
 <!-- group: frame -->
 Gefragt sind Szenario und Jahr des Werts. "known" sind die Paare aus Szenario und Jahr, die der Plan für diese Passage nennt, "base_years" und "target_years" die Jahre seines eigenen Stands und seines Ziels.
 Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
-{"scenario":{"value":"...","value_raw":"...","quote":"..."},"year":{"value":2022,"value_raw":"...","quote":"..."}}
+{{example}}
 
 * Nenne Szenario und Jahr nur, wo die Passage, ihre Überschrift oder "around" sie nennt. Sonst sind sie "out:unstated", und es gilt das Paar aus "known".
 * Steht bei der Zahl statt einer Jahreszahl nur das Wort des Plans für seinen eigenen Stand ("Basisjahr", "Bilanzjahr", "Ist-Zustand", "Status quo", "IST", "Bestand", "aktuell") oder für sein Ziel ("Zieljahr", "Zielzustand", "Zielszenario", "Ziel"), nimm das Jahr aus "base_years" oder "target_years", auf das dieses Wort verweist: "value" ist die Jahreszahl, "value_raw" das Wort, Zeichen für Zeichen, und "quote" die Stelle mit dem Wort. Bei mehreren "target_years" ist es das Jahr, das der Plan selbst Zieljahr nennt oder in dem sein Ziel erreicht ist, kein Zwischenziel. Fehlt die Liste oder passt keins ihrer Jahre, ist das Jahr "out:unstated".
@@ -21,9 +21,9 @@ Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock da
 <!-- group: number -->
 Gefragt sind die Einheit dieser Zahl und ihr Bezug.
 Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
-{"unit":{"value":"...","quote":"..."},"subject":{"value":"out:unstated","probe":"..."}}
+{{example}}
 
 <!-- group: context -->
 Gefragt ist die Einordnung dieser Zahl. Jeder Listeneintrag nennt, was er bedeutet ("means"), und wie Pläne ihn schreiben ("spellings").
 Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
-{"quantity":{"value":"...","value_raw":"...","quote":"..."},"carrier":{"value":"...","value_raw":"...","quote":"..."},"sector":{"value":"out:unstated","probe":"..."},"technology":{"value":"out:unstated","probe":"..."},"spatial_scope":{"value":"...","value_raw":"...","quote":"..."}}
+{{example}}

@@ -120,6 +120,18 @@ UNSTATED included; for a number an integer or UNSTATED; else a wording.
 UNSTATED is an answer of every kind: a grammar that takes only an integer
 for a year leaves the model no way to say the passage prints none.
 
+### value_example
+
+```python
+def value_example(slot: Slot)
+```
+
+A coordinate's answer as the example of a request shows it, read and
+of the kind `value_schema` takes: an entry of its list or a wording as a
+placeholder, a number as a year. Never UNSTATED: an example shows every
+coordinate read (owner decision 2026-11-06), and the prompt's rule line
+shows how an unstated one looks.
+
 ### parameter_slot
 
 ```python

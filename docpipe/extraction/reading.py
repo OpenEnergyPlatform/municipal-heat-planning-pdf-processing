@@ -259,6 +259,21 @@ def answer_schema(slot, probe: bool = False) -> dict:
     return one
 
 
+def entry_example(slot) -> dict:
+    """One coordinate's entry as the example of a request shows it: the
+    keys `answer_schema` asks, in its order, read (owner decisions
+    2026-11-06): its answer (`fields.value_example`), its printed wording
+    wherever the grammar asks one, so beside every entry of a list, the unit
+    included, and its quote. No probe: that is the sentence of an unstated
+    entry, which the prompt's rule line shows. A coordinate that may name
+    several things shows one, the form a list repeats."""
+    entry = {"value": fields.value_example(slot)}
+    if fields.wording_asked(slot):
+        entry["value_raw"] = fields.SAID
+    entry["quote"] = fields.SAID
+    return entry
+
+
 def answers_each(reply, slots: list) -> list:
     """The reply for one value as one reply per row (owner decision
     2026-11-06): a coordinate that may name several things (`several`) and
@@ -675,6 +690,25 @@ def values_response_format(parameter, head: bool = False) -> dict:
             "json_schema": {"name": "values_reply", "schema": schema}}
 
 
+# A number as the example of a value request writes it, with the point the
+# prompt asks for.
+NUMBER_SAID = 12.5
+
+
+def values_example(parameter, head: bool = False) -> dict:
+    """The reply of a value request as its example shows it: a value read,
+    with exactly the keys `values_response_format` asks for this parameter
+    and this passage, in its order (owner decision 2026-11-06). The reply
+    that names no further value stays in the prompt's rule line."""
+    entry = {"value": NUMBER_SAID if parameter.is_numeric else fields.SAID}
+    if parameter.is_numeric or value_classes(parameter):
+        entry["value_raw"] = fields.SAID
+    entry["quote"] = fields.SAID
+    if head:
+        entry["head"] = fields.SAID
+    return entry
+
+
 def claim_of(reply, head: bool = False) -> Optional[dict]:
     """The value a round's reply names, as a row's claim, or None where it
     names none: {"value": null}, or no object. A table row quoted with
@@ -865,6 +899,15 @@ def text_response_format(slots: list) -> dict:
               "additionalProperties": False}
     return {"type": "json_schema",
             "json_schema": {"name": "text_reply", "schema": schema}}
+
+
+def text_example(slots: list) -> dict:
+    """The reply of one group's request as its example shows it: exactly
+    the coordinates this request asks, in its order, each read
+    (`entry_example`). The model writes the keys its example shows: with one
+    example per prompt, 183 of 184 heat load requests left out the
+    "aggregation" it did not show (owner decision 2026-11-06)."""
+    return {slot.name: entry_example(slot) for slot in slots}
 
 
 def group_prompts(prompt, groups) -> dict:

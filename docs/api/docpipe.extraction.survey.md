@@ -229,6 +229,18 @@ The reply about one passage as a server grammar: its parameters from
 the list or NONE, and the tuples of each group the survey reads, at the
 top with no wrapper (owner decision 2026-11-06).
 
+### example
+
+```python
+def example(slots: dict) -> dict
+```
+
+The reply about one passage as the example of its request shows it:
+exactly the keys `response_format` asks, in its order (owner decisions
+2026-11-06): a parameter named, and one tuple of each group the survey
+reads, every coordinate of it read (`fields.value_example`) with its
+quote and its printed wording.
+
 ### read_reply
 
 ```python

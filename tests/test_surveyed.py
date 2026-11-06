@@ -312,7 +312,7 @@ def test_a_pass_combs_a_coordinate_in_its_own_passage_first():
 def comber(*replies, ranked=()):
     asked = []
 
-    def ask(payload, shape, document_id, source, group=None):
+    def ask(payload, shape, document_id, source, group=None, example=None):
         asked.append(payload)
         return replies[min(len(asked), len(replies)) - 1]
 

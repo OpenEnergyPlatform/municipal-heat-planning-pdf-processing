@@ -1933,10 +1933,34 @@ def make_page_count(db_path: Optional[Path]) -> Callable:
     return pages
 
 
+# Where a prompt shows the reply its request asks for (`system_text`).
+EXAMPLE_PLACE = "example"
+
+
+def system_text(prompt, example: Optional[dict]) -> str:
+    """The system prompt one request sends: the prompt with its example
+    reply ({{example}}) written for this request, as one line of JSON (owner
+    decisions 2026-11-06: every request's example shows exactly the
+    coordinates it asks, each read, so the model has no key to leave out). A
+    prompt without that place is sent as it is written; one with it and no
+    example is an error before anything is sent, as every open placeholder
+    is (`prompts.Prompt.render`)."""
+    if EXAMPLE_PLACE not in getattr(prompt, "placeholders", ()):
+        return prompt.text
+    if example is None:
+        raise KeyError(f"{prompt.id}: the prompt shows the reply of its "
+                       f"request and the request gave no example")
+    return prompt.render(**{EXAMPLE_PLACE: json.dumps(
+        example, ensure_ascii=False, separators=(",", ":"))})
+
+
 def ask_in_grammar(client, prompt, conversation: list, shape: dict,
-                   document_id: int, where: str, key: str, **noted):
+                   document_id: int, where: str, key: str,
+                   example: Optional[dict] = None, **noted):
     """One request of the rebuilt harvest: the reply as a dict, "cut_off"
-    when it did not fit its room, or None when it could not be read.
+    when it did not fit its room, or None when it could not be read. The
+    prompt shows *example*, the reply this request asks for
+    (`system_text`).
 
     Asked again with the cause when the reply is no JSON object, or one
     without a key its schema requires (`_lacking`), as every request of the
@@ -1952,10 +1976,11 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
     client = _repeating(client)
     temperature = float(prompt.meta.get("temperature", 0))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
+    text = system_text(prompt, example)
     failures = Failures(document_id)
     faults = 0
     for attempt in range(1, MAX_RETRIES + 1):
-        limit = answer_room(prompt.text, conversation, max_tokens)
+        limit = answer_room(text, conversation, max_tokens)
         if limit < MIN_ANSWER_TOKENS:
             return "cut_off"
         started = time.time()
@@ -1965,7 +1990,7 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
                     model=LLM_MODEL,
                     temperature=retry_temperature(temperature, faults),
                     max_tokens=limit,
-                    messages=[{"role": "system", "content": prompt.text},
+                    messages=[{"role": "system", "content": text},
                               *conversation],
                     response_format=shape,
                     extra_body=request_extras())
@@ -2046,12 +2071,13 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
         text = json.dumps(reading_map.values_payload(
             source, parameter, context, read, corrections),
             ensure_ascii=False, indent=2)
+        head = reading_map.with_head_asked(parameter, source)
         return ask_in_grammar(
             client, values_prompt,
             [{"role": "user", "content": content_of(source, text)}],
-            reading_map.values_response_format(
-                parameter, reading_map.with_head_asked(parameter, source)),
+            reading_map.values_response_format(parameter, head),
             document_of(source), "read_values", "value",
+            example=reading_map.values_example(parameter, head),
             parameter=parameter.uri, kind=source.owner_kind,
             owner=source.owner_id, round=len(read) + 1,
             corrections=len(corrections or ()))
@@ -2066,7 +2092,8 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
             client, text_prompts[group.name],
             [{"role": "user", "content": content_of(source, text)}],
             reading_map.text_response_format(slots), document_of(source),
-            "read_text", slots[0].name, parameter=parameter.uri,
+            "read_text", slots[0].name,
+            example=reading_map.text_example(slots), parameter=parameter.uri,
             kind=source.owner_kind, owner=source.owner_id, group=group.name,
             value=row.label, corrections=len(corrections or ()))
 
@@ -2127,11 +2154,11 @@ def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
     from docpipe.profile import active_profile
     states = year_states_of(active_profile())
 
-    def ask(payload, shape, document_id, source, group=None):
+    def ask(payload, shape, document_id, source, group=None, example=None):
         text = json.dumps(payload, ensure_ascii=False, indent=2)
         return ask_in_grammar(
             client, prompt, [{"role": "user", "content": text}], shape,
-            document_id, "comb", "rows",
+            document_id, "comb", "rows", example=example,
             parameter=payload["parameter"]["key"], kind=source.owner_kind,
             owner=source.owner_id, group=group,
             corrections=len(payload.get("corrections") or ()))
@@ -2188,7 +2215,8 @@ def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
         return ask_in_grammar(
             client, prompt, conversation_of(context, corrections),
             survey_map.response_format(parameters, slots),
-            document_id, "survey", "parameters", passages=len(context),
+            document_id, "survey", "parameters",
+            example=survey_map.example(slots), passages=len(context),
             corrections=len(corrections or ()),
             figure=any(s.owner_kind == "figure" for s in context))
 

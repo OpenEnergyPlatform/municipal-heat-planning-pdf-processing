@@ -322,6 +322,33 @@ Every reply schema lists its keys in the order its prompt's example names them
 holds a reply to its schema writes the keys in the schema's order, so an
 optional key listed before one already written can no longer come.
 No test reads a prompt (owner decision 2026-11-05).
+
+The example is written for each request (owner decisions 2026-11-06). The
+survey, both reading requests and the combing stand `{{example}}` where the
+example goes, right after the rule that the reply is one JSON object.
+`runner.system_text` fills that place, for each request, with exactly the keys
+its own schema asks, in that order, as one line:
+- `reading.text_example` builds it for a reading request,
+  `reading.values_example` for a value request, `combing.comb_example` for a
+  combing request and `survey.example` for the survey.
+- Every coordinate is read, never `out:unstated`. That form stays in the
+  prompt's rule line.
+- An entry carries its printed wording (`value_raw`) wherever the grammar asks
+  one (`fields.wording_asked`), so beside every entry of a list, the unit
+  included.
+- A placeholder stands for a wording or an entry of a list, a year for a
+  number.
+
+The model writes the keys its example shows. Where the server does not hold a
+reply to its schema, the example is all the model has to go by. With one fixed
+example per prompt, a one-plan probe showed this clearly:
+- First context requests whose keys the example showed almost never lacked
+  one: energy consumption 0 of 149, building count 0 of 84.
+- Those that asked one more key almost always lacked it: heat load 183 of 184
+  without "aggregation", share 33 of 34 without "whole".
+
+A prompt with the place and no example is not sent. The error is raised before
+the first request.
 `scripts/probe_rows.py --documents ... --survey --read` runs both steps.
 
 ### Combing what the reading left open

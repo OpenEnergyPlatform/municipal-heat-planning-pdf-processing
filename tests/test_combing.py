@@ -66,7 +66,7 @@ def reads(*claims, probes=()):
 def comber(*replies, ranked=(HIT,), ranking=True, known=None):
     asked, searched = [], []
 
-    def ask(payload, shape, document_id, source, group=None):
+    def ask(payload, shape, document_id, source, group=None, example=None):
         asked.append(payload)
         return replies[min(len(asked), len(replies)) - 1]
 

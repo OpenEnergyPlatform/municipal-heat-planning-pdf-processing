@@ -346,6 +346,20 @@ print it, which the combing searches with (owner decision 2026-11-05:
 HyDE). A coordinate that may name several things (`several`) takes a
 list of such answers too.
 
+### entry_example
+
+```python
+def entry_example(slot) -> dict
+```
+
+One coordinate's entry as the example of a request shows it: the
+keys `answer_schema` asks, in its order, read (owner decisions
+2026-11-06): its answer (`fields.value_example`), its printed wording
+wherever the grammar asks one, so beside every entry of a list, the unit
+included, and its quote. No probe: that is the sentence of an unstated
+entry, which the prompt's rule line shows. A coordinate that may name
+several things shows one, the form a list repeats.
+
 ### answers_each
 
 ```python
@@ -537,6 +551,17 @@ is its own wording, `verify.wording_of`), and with *head* the head of its
 column; {"value": null} where no further value stands in it. A category
 value is one of its entries, or "" where the model is unsure of them.
 
+### values_example
+
+```python
+def values_example(parameter, head: bool = False) -> dict
+```
+
+The reply of a value request as its example shows it: a value read,
+with exactly the keys `values_response_format` asks for this parameter
+and this passage, in its order (owner decision 2026-11-06). The reply
+that names no further value stays in the prompt's rule line.
+
 ### claim_of
 
 ```python
@@ -659,6 +684,18 @@ def text_response_format(slots: list) -> dict
 
 Every coordinate of the group for the one value the request shows,
 each with the sentence of one the passage does not state (`probe`).
+
+### text_example
+
+```python
+def text_example(slots: list) -> dict
+```
+
+The reply of one group's request as its example shows it: exactly
+the coordinates this request asks, in its order, each read
+(`entry_example`). The model writes the keys its example shows: with one
+example per prompt, 183 of 184 heat load requests left out the
+"aggregation" it did not show (owner decision 2026-11-06).
 
 ### group_prompts
 

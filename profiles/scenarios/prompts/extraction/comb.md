@@ -25,7 +25,7 @@ You answer with:
 
 In a second request you answer once more in full and fix the points from "corrections".
 
-Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks! The quotes below are descriptions in << >> and stand in no publication:
-{"scenario": {"value": "<<the scenario's name as the text prints it>>", "quote": "<<a sentence from a passage you were shown that names the scenario of this value>>"}, "more": [{"get": "hit", "id": "H2"}]}
-Where the publication states the value for several scenarios:
+Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks! In this form:
+{{example}}
+Where the publication states the value for several scenarios (the quotes below are descriptions in << >> and stand in no publication):
 {"scenario": [{"value": "<<the first scenario's name>>", "quote": "<<a sentence that names it>>"}, {"value": "<<the second scenario's name>>", "quote": "<<a sentence that names it>>"}]}

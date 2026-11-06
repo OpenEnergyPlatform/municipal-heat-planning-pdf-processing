@@ -1665,15 +1665,32 @@ def make_page_count(db_path: Optional[Path]) -> Callable
 
 document_id -> its page count in the catalog, None where unknown.
 
+### system_text
+
+```python
+def system_text(prompt, example: Optional[dict]) -> str
+```
+
+The system prompt one request sends: the prompt with its example
+reply ({{example}}) written for this request, as one line of JSON (owner
+decisions 2026-11-06: every request's example shows exactly the
+coordinates it asks, each read, so the model has no key to leave out). A
+prompt without that place is sent as it is written; one with it and no
+example is an error before anything is sent, as every open placeholder
+is (`prompts.Prompt.render`).
+
 ### ask_in_grammar
 
 ```python
 def ask_in_grammar(client, prompt, conversation: list, shape: dict,
-                   document_id: int, where: str, key: str, **noted)
+                   document_id: int, where: str, key: str,
+                   example: Optional[dict] = None, **noted)
 ```
 
 One request of the rebuilt harvest: the reply as a dict, "cut_off"
-when it did not fit its room, or None when it could not be read.
+when it did not fit its room, or None when it could not be read. The
+prompt shows *example*, the reply this request asks for
+(`system_text`).
 
 Asked again with the cause when the reply is no JSON object, or one
 without a key its schema requires (`_lacking`), as every request of the
