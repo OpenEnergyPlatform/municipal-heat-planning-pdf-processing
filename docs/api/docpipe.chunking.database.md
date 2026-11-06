@@ -166,6 +166,24 @@ block id, None for section-level embeddings. Empty if the doc is unknown.
 Runs on the calling thread's connection. Pass `doc_id` when the caller has
 already resolved it — the prepare loop asks document_id() first.
 
+### ids_of_document
+
+```python
+def ids_of_document(connection: sqlite3.Connection, doc_id: int) -> dict
+```
+
+{(embedding_type, section_index, item_id): faiss_id} of one document,
+read only: what a new index file has to hold under the same ids
+(chunking/reembed.py).
+
+### embedding_ids
+
+```python
+def embedding_ids(db_path: Path, doc_id: int) -> dict
+```
+
+`ids_of_document` on the calling thread's connection.
+
 ### clear_embedding_ids
 
 ```python

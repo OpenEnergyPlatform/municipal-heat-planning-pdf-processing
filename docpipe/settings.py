@@ -195,6 +195,11 @@ SETTINGS = (
       "Append to an index of another embedding model (both recorded); 0 "
       "stops before a vector is written.",
       stages=("chunk",)),
+    S("EMBEDDING_API_FORMAT", "embedding.api_format", "str", "input",
+      "How an item reaches the embedding endpoint (api backend only): "
+      "input, the OpenAI request, text only; messages, the chat form a vLLM "
+      "server takes, with the picture and the model's own instruction.",
+      stages=("chunk", "extract", "chat")),
     S("EMBEDDING_API_KEY", "embedding.api_key", "str", "EMPTY",
       "API key of the embedding endpoint (api backend only).",
       secret=True, stages=("extract", "chat")),

@@ -683,6 +683,39 @@ def get_existing_embeddings(
     return existing
 
 
+# The FAISS id of each embedded item of one document, by the key
+# get_existing_embeddings uses. CROSS JOIN for the same reason as above.
+_EMBEDDING_IDS_SQL = (
+    "SELECT e.embedding_type, s.section_number, NULL, e.faiss_id "
+    "FROM Sections s CROSS JOIN Embeddings e "
+    "  ON e.owner_kind = 'section' AND e.owner_id = s.id WHERE s.document = ? "
+    "UNION ALL "
+    "SELECT e.embedding_type, s.section_number, t.block_id, e.faiss_id "
+    "FROM Sections s CROSS JOIN Tables t ON t.section = s.id "
+    "CROSS JOIN Embeddings e "
+    "  ON e.owner_kind = 'table' AND e.owner_id = t.id WHERE s.document = ? "
+    "UNION ALL "
+    "SELECT e.embedding_type, s.section_number, i.block_id, e.faiss_id "
+    "FROM Sections s CROSS JOIN Images i ON i.section = s.id "
+    "CROSS JOIN Embeddings e "
+    "  ON e.owner_kind = 'figure' AND e.owner_id = i.id WHERE s.document = ?"
+)
+
+
+def ids_of_document(connection: sqlite3.Connection, doc_id: int) -> dict:
+    """{(embedding_type, section_index, item_id): faiss_id} of one document,
+    read only: what a new index file has to hold under the same ids
+    (chunking/reembed.py)."""
+    return {(etype, section_number, item_id): int(faiss_id)
+            for etype, section_number, item_id, faiss_id in connection.execute(
+                _EMBEDDING_IDS_SQL, (doc_id, doc_id, doc_id))}
+
+
+def embedding_ids(db_path: Path, doc_id: int) -> dict:
+    """`ids_of_document` on the calling thread's connection."""
+    return ids_of_document(_worker_connection(db_path), doc_id)
+
+
 def clear_embedding_ids(db_path: Path, pdf_name: str) -> list[int]:
     """
     Clear all embeddings for a given PDF and return the old FAISS IDs so they

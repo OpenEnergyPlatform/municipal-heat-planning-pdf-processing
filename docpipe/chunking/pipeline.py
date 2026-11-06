@@ -134,9 +134,10 @@ def run(
     Run the pipeline over the PDF subdirectories of `data_dir`.
 
     `step` limits the run to 'merge', 'db', 'embed' or the standalone
-    'enrich-bbox', 'enrich-page-source' or 'enrich-caption'; None runs
-    merge → db → embed (the db step backfills the page source and the
+    'enrich-bbox', 'enrich-page-source', 'enrich-caption' or 'reembed'; None
+    runs merge → db → embed (the db step backfills the page source and the
     captions itself). `force` ignores caches and clears old embeddings.
+    'reembed' writes `index_path` as a new file (see chunking/reembed.py).
 
     The embed step raises IncompleteIndex when inputs were left without a
     vector, after it saved the index with the ones that have one.
@@ -166,6 +167,14 @@ def run(
         log.info("Additive bbox backfill (non-destructive; no re-embed)")
         log.info(sep)
         enrich_bbox(db_path, data_dir, force=force)
+        return
+
+    if step == "reembed":
+        # Every item again, into a NEW index file under the ids the database
+        # already gives them; neither the database nor the old file is
+        # written (chunking/reembed.py).
+        from .reembed import run_reembed
+        run_reembed(data_dir, db_path, index_path)
         return
 
     steps = [step] if step else ["merge", "db", "embed"]
@@ -346,6 +355,7 @@ Examples:
   python -m docpipe.chunking ./data/processed/ ./KWP.db ./faiss.index --step merge
   python -m docpipe.chunking ./data/processed/ ./KWP.db ./faiss.index --step embed
   python -m docpipe.chunking ./data/processed/ ./KWP.db ./faiss.index --force
+  python -m docpipe.chunking ./data/processed/ ./KWP.db ./faiss_new.index --step reembed
         """,
     )
     p.add_argument("data_dir", nargs="?", default=None,
@@ -357,7 +367,8 @@ Examples:
                    help="FAISS index (default: the profile's)")
     p.add_argument(
         "--step", choices=["merge", "db", "embed", "enrich-bbox",
-                           "enrich-page-source", "enrich-caption"], default=None,
+                           "enrich-page-source", "enrich-caption", "reembed"],
+        default=None,
         help="Run only a specific step (default: merge, db, embed). "
              "'enrich-bbox' additively backfills segment/table/image bbox from "
              "re-run Stage-3 outputs without re-embedding (index_path is ignored). "
@@ -365,7 +376,12 @@ Examples:
              "document a model transcribed, from the preprocessing report. "
              "'enrich-caption' additively replaces a table/figure caption that "
              "does not open like one with the sentence before its placeholder "
-             "in the section text (no model, data_dir is ignored).",
+             "in the section text (no model, data_dir is ignored). "
+             "'reembed' embeds every item the database maps again, with the "
+             "configured embedder, into index_path as a NEW file under the "
+             "ids it already has; the database and the old index are not "
+             "written, and an existing file is continued only when an "
+             "earlier reembed wrote it.",
     )
     add_profile_argument(p)
     p.add_argument("--force", action="store_true", help="Force re-processing")

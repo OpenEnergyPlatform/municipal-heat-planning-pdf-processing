@@ -7,7 +7,9 @@ returns an object offering `embed()` and `embed_one()`, hiding which of
 three backends does the work. Which backend runs is a matter of
 `EMBEDDING_BACKEND`, not of the caller's code: `local` loads the model in
 this process and keeps it resident on the GPU (`docpipe/embedding/local.py`);
-`api` calls an OpenAI-compatible `/v1/embeddings` endpoint
+`api` calls an embeddings endpoint, in one of two request forms chosen by
+`EMBEDDING_API_FORMAT`: the OpenAI `/v1/embeddings` request, text only, or the
+chat form a vLLM server takes, which also embeds a picture
 (`docpipe/embedding/api.py`); a spec of the form `package.module:attribute`
 imports that module and calls the named attribute with the caller's own
 keyword arguments, the extension point for an implementation this
@@ -21,8 +23,8 @@ directly through `MultiGPUEmbedder`, since a batch run already owns the GPU it
 was launched on and never has to swap backends mid-run, so the indirection this
 package offers is unused overhead there. With `api` it returns an
 `ApiIndexEmbedder` that wraps `docpipe.embedding.api.ApiEmbedder`, so the corpus
-build uses this package's api backend, though not its factory, and embeds text
-only. What does
+build uses this package's api backend, though not its factory. It embeds text
+only in the OpenAI form and text and pictures in the messages form. What does
 call `get_embedder()` is code asking the already-built corpus a question
 after the fact: the retrieval sweep of stage 7 embedding a probe, or a
 batch of probes, against the FAISS index
@@ -77,20 +79,41 @@ re-raised as `ValueError` naming the spec and the original error. The
 resolved class or factory function is called with `**kwargs`, and whatever
 it returns is the embedder (`docpipe/embedding/__init__.py:47` to `62`).
 
-### Embedding through an OpenAI-compatible endpoint
+### Embedding through an endpoint
 
-`ApiEmbedder.__init__` resolves `base_url`, `api_key`, `model` and
-`batch_size` against `config.*`, raising `ValueError` at once if
-`base_url` is still empty and the embedding role is not a hosted API.
-`embed()` scans items for an `image` key and
-refuses the whole call if any carry one, rather than embedding only the
-text half; otherwise it chunks `text` values into groups of `batch_size`
-and sends each chunk through `_create`, concatenating results in order.
-`_create` calls `self.client().embeddings.create()` once for a server of one's
-own, whose client retries by itself, and for a hosted API that answers "not
-now" asks again, up to `HOSTED_ATTEMPTS` times in all. `embed_one()` wraps one
-item in a one-element list and calls `embed()`
-(`docpipe/embedding/api.py:32` to `89`).
+`ApiEmbedder.__init__` resolves `base_url`, `api_key`, `model`, `batch_size`
+and the request form against `config.*`, raising `ValueError` at once if
+`base_url` is still empty and the embedding role is not a hosted API, if the
+form is neither `input` nor `messages`, or if the form is `messages` and
+`base_url` is empty. `text_only` is true in the `input` form and false in the
+`messages` form (`docpipe/embedding/api.py:103` to `125`).
+
+The `input` form, the default, is the OpenAI `/v1/embeddings` request.
+`embed()` scans items for an `image` key and refuses the whole call if any
+carry one, rather than embedding only the text half; otherwise it chunks
+`text` values into groups of `batch_size` and sends each chunk through
+`_create`, concatenating results in order. `_create` calls
+`self.client().embeddings.create()` once for a server of one's own, whose
+client retries by itself, and for a hosted API that answers "not now" asks
+again, up to `HOSTED_ATTEMPTS` times in all (`docpipe/embedding/api.py:133` to
+`152`, `188` to `204`).
+
+The `messages` form is the chat a vLLM server takes. `conversation(item)`
+builds the turns of `Qwen3VLEmbedder.format_model_input`. The system turn
+carries the instruction, `DEFAULT_INSTRUCTION` ("Represent the user's
+input.") when the item names none, with a full stop added when it ends
+without punctuation. The user turn holds the picture, an `image_url` data URI,
+before the text, and "NULL" stands for an item with neither. An empty
+assistant turn follows, which the request continues
+(`continue_final_message`), so the pooled last token is the one the model's own
+code pools (`docpipe/embedding/api.py:64` to `91`). `embed()` sends all items of
+one call as concurrent requests, one chat each, and the server batches them;
+`batch_size` is not used. The vectors come back scaled to length one by
+`unit_rows`, because the index is an inner-product index of unit vectors
+(`docpipe/embedding/api.py:94` to `99`, `154` to `186`).
+
+`embed_one()` wraps one item in a one-element list and calls `embed()`
+(`docpipe/embedding/api.py:206`).
 
 ### Embedding with a resident local model
 
@@ -123,8 +146,10 @@ only shape this package defines: `embed(items: Sequence[dict]) -> list` and
 `None`) and, optionally, `image` (a file path or URL string). The
 underlying local model also recognizes `video`, `instruction`, `fps` and
 `max_frames` per item (`docpipe/chunking/qwen3_vl_embedding.py:233` to
-`240`), but no caller in this repository sets these. `ApiEmbedder` reads
-only `text`, refusing `image` and silently ignoring any other key.
+`240`), but no caller in this repository sets these. In the `input`
+form `ApiEmbedder` reads only `text`, refusing `image` and silently ignoring
+any other key. In the `messages` form it reads `text`, `image` and
+`instruction`, and ignores any other key.
 
 The output is a plain list of Python floats per item, its dimension a
 property of whichever model is running (`EMBEDDING_DIM`, declared but
@@ -142,12 +167,13 @@ package; storing a returned vector is the caller's job.
 | `EMBEDDING_BATCH_SIZE` | environment variable | `8` | Texts per `/v1/embeddings` request; read by `ApiEmbedder`, and by `docpipe values-index` for the lines it embeds per call | `docpipe/embedding/config.py:24` |
 | `EMBEDDING_BASE_URL` | environment variable | `""` | Endpoint for `api`; empty raises `ValueError` at construction | `docpipe/embedding/config.py:27` |
 | `EMBEDDING_API_KEY` | environment variable | `"EMPTY"` | API key for `api`; the placeholder works against endpoints that do not check it | `docpipe/embedding/config.py:28` |
+| `EMBEDDING_API_FORMAT` | environment variable | `"input"` | Request form of `api`: `input` is the OpenAI request, text only; `messages` is the chat form a vLLM server takes, with the picture and the model's own instruction, and needs `EMBEDDING_BASE_URL`; any other value raises `ValueError` | `docpipe/embedding/config.py:35` |
 
 `get_embedder(**kwargs)` forwards `**kwargs` unfiltered to the chosen
 backend's constructor, so only the names that constructor defines take
 effect: `model` and `max_length` for `local`
-(`docpipe/embedding/local.py:37` to `38`); `base_url`, `api_key`, `model`
-and `batch_size` for `api` (`docpipe/embedding/api.py:33` to `34`).
+(`docpipe/embedding/local.py:37` to `38`); `base_url`, `api_key`, `model`,
+`batch_size` and `form` for `api` (`docpipe/embedding/api.py:103` to `105`).
 `EMBEDDING_DIM` matches no parameter on either backend and cannot be
 overridden this way; a name belonging to the other backend raises
 `TypeError`. `docpipe/chunking/config.py` imports `EMBEDDING_DIM`,
@@ -169,16 +195,23 @@ error raised anywhere (`docpipe/chunking/config.py:13` to `16`).
   to `61`).
 - `ApiEmbedder` constructed with no usable `base_url` raises `ValueError`
   in the constructor, before any request is attempted, unless the embedding
-  role is a hosted API, which needs none (`docpipe/embedding/api.py:39` to
-  `40`).
-- `ApiEmbedder.embed()` called with any item carrying an `image` key
-  refuses the whole call with `ValueError` naming the offending indices,
-  rather than silently embedding only the text half
-  (`docpipe/embedding/api.py:71` to `75`).
+  role is a hosted API, which needs none (`docpipe/embedding/api.py:114` to
+  `115`). A form other than `input` or `messages`, or the `messages` form
+  with no `base_url` even for a hosted role, raises `ValueError` there too
+  (`docpipe/embedding/api.py:111` to `118`).
+- `ApiEmbedder.embed()` in the `input` form, called with any item carrying
+  an `image` key, refuses the whole call with `ValueError` naming the
+  offending indices, rather than silently embedding only the text half
+  (`docpipe/embedding/api.py:188` to `193`). The `messages` form embeds the
+  picture instead.
+- In the `messages` form a failing request raises from the `httpx` call or
+  `raise_for_status()` and propagates: nothing is retried, and the other
+  requests of the call are not cancelled (`docpipe/embedding/api.py:154` to
+  `164`, `179` to `186`).
 - A dead endpoint or a rejected model name is not caught: whatever the
   `openai` client raises propagates unchanged, and nothing is retried against
   a server of one's own; only a hosted API that answers "not now" is asked
-  again (`docpipe/embedding/api.py:49` to `68`).
+  again, in the `input` form (`docpipe/embedding/api.py:133` to `152`).
 - Two or more threads calling `LocalEmbedder.embed()` before the model has
   ever loaded are serialized by the double-checked lock, so only the first
   thread through constructs `MultiGPUEmbedder`; without the second check
@@ -187,7 +220,7 @@ error raised anywhere (`docpipe/chunking/config.py:13` to `16`).
 - `ApiEmbedder.client()` builds `self._client` the same lazily-checked
   way, but with no lock: two threads calling `embed()` before any client
   exists could each construct their own `OpenAI` client
-  (`docpipe/embedding/api.py:43` to `47`).
+  (`docpipe/embedding/api.py:127` to `131`).
 - A single replica's forward pass raising inside `MultiGPUEmbedder.process()`
   is captured per thread; once every thread joins, the first captured
   exception is re-raised on the main thread and the whole call fails
@@ -237,12 +270,14 @@ this package's `embed()`/list-of-floats contract. It is used directly by
 `docpipe/extraction/runner.py` and, through `get_embedder()`, by
 `docpipe/app/app.py`.
 
-`docpipe/embedding/api.py` implements `ApiEmbedder`, the text-only backend
-calling an OpenAI-compatible `/v1/embeddings` endpoint in batches (or, with
-`EMBEDDING_PROVIDER` set to `openai` or `gemini`, that hosted API; see [the
-provider layer](providers.md)), constructed by `get_embedder()` when
-`EMBEDDING_BACKEND=api`, by `docpipe/chunking/embedding.py`'s
-`ApiIndexEmbedder` when `EMBEDDING_INDEX_BACKEND=api`.
+`docpipe/embedding/api.py` implements `ApiEmbedder`, the backend calling an
+embeddings endpoint in one of two forms: the OpenAI-compatible `/v1/embeddings`
+request in batches, text only (or, with `EMBEDDING_PROVIDER` set to `openai` or
+`gemini`, that hosted API; see [the provider layer](providers.md)), or the chat
+form of a vLLM server, which also embeds a picture. It is constructed by
+`get_embedder()` when `EMBEDDING_BACKEND=api`, and by
+`docpipe/chunking/embedding.py`'s `ApiIndexEmbedder` when
+`EMBEDDING_INDEX_BACKEND=api`.
 
 `docpipe/chunking/qwen3_vl_embedding.py` is not part of this package, but
 `LocalEmbedder` depends on it entirely: `Qwen3VLForEmbedding` (a Qwen3-VL

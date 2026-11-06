@@ -70,9 +70,10 @@ def run(
 Run the pipeline over the PDF subdirectories of `data_dir`.
 
 `step` limits the run to 'merge', 'db', 'embed' or the standalone
-'enrich-bbox', 'enrich-page-source' or 'enrich-caption'; None runs
-merge → db → embed (the db step backfills the page source and the
+'enrich-bbox', 'enrich-page-source', 'enrich-caption' or 'reembed'; None
+runs merge → db → embed (the db step backfills the page source and the
 captions itself). `force` ignores caches and clears old embeddings.
+'reembed' writes `index_path` as a new file (see chunking/reembed.py).
 
 The embed step raises IncompleteIndex when inputs were left without a
 vector, after it saved the index with the ones that have one.
