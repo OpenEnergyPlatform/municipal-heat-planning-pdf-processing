@@ -2,7 +2,8 @@
 survey.py: One pass over the whole plan before any number is read.
 
 The plan is cut into small contexts, at most one figure and at most the text
-of two of its pages each, and every passage of every context is answered:
+of one of its pages each (owner decision 2026-11-06), and every passage of
+every context is answered:
 the parameters whose values stand in it, or none of them. The survey only
 names them, without a quote (owner decision 2026-11-06): it decides which
 passages a parameter is read in, and the reading checks every value it reads
@@ -51,9 +52,17 @@ NONE = "out:none"
 # an answer that did not fit its token limit. Both are split, not rescued.
 CUT = "cut_off"
 
+# The text of one survey context, in pages of its plan (owner decision
+# 2026-11-06). On paper 86 one page instead of two named scenario
+# descriptions in 18 passages instead of 12, authors in 10 instead of 6, for
+# 58 more requests. The reading keeps two pages for what it shows around a
+# table or figure (`budget_of`).
+CONTEXT_PAGES = 1
 
-def budget_of(passages: list, pages: Optional[int]) -> int:
-    """The text of two pages of this plan, in characters: twice its mean.
+
+def budget_of(passages: list, pages: Optional[int], span: int = 2) -> int:
+    """The text of *span* pages of this plan, in characters: *span* times
+    its mean; two pages unless said otherwise.
 
     A figure's description is not counted: a context holds one figure,
     whatever its description's length.
@@ -63,7 +72,7 @@ def budget_of(passages: list, pages: Optional[int]) -> int:
     if not pages:
         pages = max([(p.provenance or {}).get("page") or 0
                      for p in passages] or [0])
-    return max(1, round(2 * chars / max(pages or 1, 1)))
+    return max(1, round(span * chars / max(pages or 1, 1)))
 
 
 def pieces(text: str, budget: int) -> list:
@@ -419,7 +428,8 @@ class Survey:
                 [owner for owner in unanswered if owner in still], True)
 
     def _build(self, document_id: int, passages: list) -> Found:
-        budget = budget_of(passages, self.pages_of(document_id))
+        budget = budget_of(passages, self.pages_of(document_id),
+                           CONTEXT_PAGES)
         contexts = contexts_of(passages, budget)
         if self.pool is None:
             results = [self._ask_context(c, document_id) for c in contexts]

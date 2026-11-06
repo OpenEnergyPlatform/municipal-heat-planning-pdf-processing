@@ -2225,10 +2225,10 @@ Two questions that come to one statement leave one row: the profile's
 *passages_of(document_id)* is the plan's passages in their order. With it
 a request has the reading's tools (`reading.Gathered`: the next or the
 previous section, a table or figure by its placeholder, a search by
-pattern or by a sentence), each passage cut to the survey's two pages
-(*pages_of*), and a question that takes a number (`Question.take`) may
-take it from whatever the request showed: a passage, its title, a hit's
-line or title (owner decision 2026-11-05).
+pattern or by a sentence), each passage cut to two pages of the plan
+(*pages_of*, `survey.budget_of`), and a question that takes a number
+(`Question.take`) may take it from whatever the request showed: a
+passage, its title, a hit's line or title (owner decision 2026-11-05).
 *rank(document_id, probes, exclude)* is the plan ranked for a sentence,
 which "similar" lists (`make_more_sources` in a run); without it that
 search finds nothing.

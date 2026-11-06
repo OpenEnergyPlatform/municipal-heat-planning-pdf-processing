@@ -106,6 +106,24 @@ def test_two_pages_are_twice_the_plans_text_per_page_without_figures():
     passages = [passage("section", 1, "a" * 4000),
                 passage("figure", 2, "b" * 9000)]
     assert survey.budget_of(passages, 4) == 2000
+    assert survey.budget_of(passages, 4, 1) == 1000
+
+
+def test_a_survey_context_holds_one_page_of_the_plan(tmp_path):
+    # Owner decision 2026-11-06: one page per survey request; the reading
+    # keeps two pages around a table or figure (`budget_of`). Two pages
+    # would pair the sections up.
+    pages = [passage("section", n, "x" * 1000, page=n) for n in range(1, 5)]
+    asked = []
+
+    def ask(context, document_id, corrections=None):
+        asked.append([s.owner_id for s in context])
+        return {"passages": {f"P{i + 1}": {"parameters": ["out:none"]}
+                             for i in range(len(context))}}
+    survey.Survey(ask, lambda document_id: pages, lambda document_id: 4,
+                  PARAMETERS, SLOTS, runner.frame_pairs, "k",
+                  store=tmp_path)(7)
+    assert asked == [[1], [2], [3], [4]]
 
 
 # -- the reply -----------------------------------------------------------------

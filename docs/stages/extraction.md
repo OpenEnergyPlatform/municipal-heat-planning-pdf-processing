@@ -110,11 +110,14 @@ harvest (owner decision 2026-11-04); the harvest below reads none of them.
 
 The first step of the rebuilt harvest (`survey.py`, `runner.make_survey`,
 prompt `extraction/survey`). Every passage of a plan is read once, in contexts
-of at most one figure, sent with its crop, and at most the text of two of the
-plan's pages (`survey.budget_of`: twice its characters per page, figure
-descriptions not counted); a longer passage goes in pieces of its own that keep
-its owner. The reply has an entry for every passage of the context, which the
-grammar requires: the parameters whose values stand there, or `out:none`, and
+of at most one figure, sent with its crop, and at most the text of one of the
+plan's pages (`survey.CONTEXT_PAGES`, `survey.budget_of`: its characters per
+page, figure descriptions not counted); a longer passage goes in pieces of its
+own that keep its owner. On paper 86 one page instead of two named scenario
+descriptions in 18 passages instead of 12 and authors in 10 instead of 6, for
+58 more requests, about 2 % of the paper's (owner decision 2026-11-06). The
+reply has an entry for every passage of the context, which the grammar
+requires: the parameters whose values stand there, or `out:none`, and
 the tuples of each group the survey reads, each coordinate with its own quote.
 The survey only names the parameters, without a quote, and a parameter of the
 spec is taken as named (owner decision 2026-11-06): the survey decides where a
@@ -219,8 +222,9 @@ brief shows its description everywhere). A table or a figure is shown with the
 text around it (`reading.around_of`, owner decisions 2026-11-04 and
 2026-11-05): the whole section it stands in, other tables and figures of it
 included, where the sentence that announces it and the line under it print
-its year, its scenario and its area. A section longer than the survey's two
-pages is shown as that many characters around the table's placeholder
+its year, its scenario and its area. A section longer than two pages of the
+plan (`survey.budget_of`) is shown as that many characters around the table's
+placeholder
 (`[p3_tbl0]` or `[p3_tbl0: caption]`). A cut to 200 characters on each side
 would have hidden the text of 72 % of the quotes the m8 run took from a
 table's section. A coordinate quoted from it cites the section. Every request also
@@ -1351,8 +1355,8 @@ reading's tools (`reading.Gathered`, owner decision 2026-11-05): under `more` th
 model asks for the next or the previous section, a table or figure by its
 placeholder, a list of the passages matching a pattern, a list of those nearest
 a sentence it writes as the plan would print it (`similar`, ranked as the
-combing ranks the plan), or a passage of such a list, each cut to the survey's
-two pages, and the request is asked again with
+combing ranks the plan), or a passage of such a list, each cut to two pages of
+the plan, and the request is asked again with
 what came of it. A round that fetched something new is no attempt; the window
 bounds how many there are. For a share the model may take its whole from a
 passage it was shown, `{"take": {...}}` with the parameter, the number, one of

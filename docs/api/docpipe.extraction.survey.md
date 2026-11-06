@@ -5,7 +5,8 @@
 survey.py: One pass over the whole plan before any number is read.
 
 The plan is cut into small contexts, at most one figure and at most the text
-of two of its pages each, and every passage of every context is answered:
+of one of its pages each (owner decision 2026-11-06), and every passage of
+every context is answered:
 the parameters whose values stand in it, or none of them. The survey only
 names them, without a quote (owner decision 2026-11-06): it decides which
 passages a parameter is read in, and the reading checks every value it reads
@@ -111,10 +112,11 @@ def __init__(self, ask: Callable, passages_of: Callable,
 ### budget_of
 
 ```python
-def budget_of(passages: list, pages: Optional[int]) -> int
+def budget_of(passages: list, pages: Optional[int], span: int = 2) -> int
 ```
 
-The text of two pages of this plan, in characters: twice its mean.
+The text of *span* pages of this plan, in characters: *span* times
+its mean; two pages unless said otherwise.
 
 A figure's description is not counted: a context holds one figure,
 whatever its description's length.
