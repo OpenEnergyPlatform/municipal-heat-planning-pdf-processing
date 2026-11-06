@@ -87,7 +87,7 @@ SHOWN = {(s.owner_kind, s.owner_id): s for s in (ONE, TWO, THREE)}
 
 def answer(source, *parameters):
     owner = (source.owner_kind, source.owner_id)
-    return survey.Answer(owner, list(parameters), None, {}, [])
+    return survey.Answer(owner, list(parameters), {}, [])
 
 
 def found_of(*answers, unanswered=()):

@@ -90,10 +90,10 @@ def joined(found: Found, also: Found) -> Found:
     """One survey of both: what *also* names is read beside what *found*
     names, a passage both answer with the parameters of both."""
     out = Found(found.complete and also.complete)
-    merge(out, [Answer(a.owner, list(a.parameters), a.quote,
+    merge(out, [Answer(a.owner, list(a.parameters),
                        {k: list(v) for k, v in a.tuples.items()},
                        list(a.dropped)) for a in found.answers.values()])
-    merge(out, [Answer(a.owner, list(a.parameters), a.quote,
+    merge(out, [Answer(a.owner, list(a.parameters),
                        {k: list(v) for k, v in a.tuples.items()},
                        list(a.dropped)) for a in also.answers.values()])
     for owner in found.unanswered + also.unanswered:
@@ -154,7 +154,7 @@ def carried(found: Found) -> Found:
     its parameters, so the reading sees the plan's pairs and years as it
     does anywhere else."""
     out = Found(True)
-    merge(out, [Answer(owner, [], answer.quote,
+    merge(out, [Answer(owner, [],
                        {k: list(v) for k, v in answer.tuples.items()}, [])
                 for owner, answer in found.answers.items()])
     return out
@@ -686,7 +686,7 @@ def surveyed_owners(out_dir: Path, document_id: int) -> tuple:
                 continue
             answers.setdefault(owner, Answer(
                 owner, list(entry.get("parameters") or ()),
-                entry.get("quote"), dict(entry.get("tuples") or {}),
+                dict(entry.get("tuples") or {}),
                 list(entry.get("dropped") or ())))
         unanswered.update(tuple(o) for o in kept.get("unanswered") or ()
                           if len(o) == 2)
@@ -765,7 +765,7 @@ def append_unread(document_id: int, filename: str, out_dir: Path,
             continue               # surveyed again whole
         said = answers.get(owner)
         also.answers[owner] = Answer(
-            owner, sorted(parameters), said.quote if said else None,
+            owner, sorted(parameters),
             {k: list(v) for k, v in (said.tuples if said else {}).items()},
             [])
     if not passages and not also.answers:

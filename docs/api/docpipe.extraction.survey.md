@@ -6,9 +6,11 @@ survey.py: One pass over the whole plan before any number is read.
 
 The plan is cut into small contexts, at most one figure and at most the text
 of two of its pages each, and every passage of every context is answered:
-the parameters whose numbers stand in it, with a quote, or none of them.
-The same request names the tuples of the groups the spec reads here (a
-scenario and its year), each coordinate with its own quote. A parameter is
+the parameters whose values stand in it, or none of them. The survey only
+names them, without a quote (owner decision 2026-11-06): it decides which
+passages a parameter is read in, and the reading checks every value it reads
+there. The same request names the tuples of the groups the spec reads here
+(a scenario and its year), each coordinate with its own quote. A parameter is
 then read in its own passages, and a number takes its frame from its passage,
 without a search (owner decision 2026-11-04).
 
@@ -18,9 +20,8 @@ built at the first search, and most of the search for open coordinates. On
 Rendsburg in corpus_m8_100 those were 60, 31, 112 and 833 requests, and the
 frame saw 12 passages and found three pairs while the rows later carried six.
 
-Checked is what every reading is checked for: an assignment's quote stands
-in its own passage and is long enough to name a place there; a tuple is held
-to `runner.frame_pairs`, the frame's own check.
+A parameter named for a passage is taken as named. A tuple is held to
+`runner.frame_pairs`, the frame's own check.
 
 The survey of a document is kept (`survey/<document>.json`) under a key over
 the prompt, the parameters, the groups and the model. A survey of part of a
@@ -45,7 +46,6 @@ Fields:
 
 - `owner: tuple`
 - `parameters: list`: taken, in the reply's order
-- `quote: Optional[str] = None`
 - `tuples: dict = field(default_factory=dict)`: group -> [tuple]
 - `dropped: list = field(default_factory=list)`: why something was not taken
 
@@ -197,8 +197,8 @@ def corrections_of(answers: list, unanswered: list, context: list) -> list
 ```
 
 What was wrong with a reply over *context*, one sentence each, for
-the request that asks it again: a quote not in its passage or too short,
-a tuple not taken, a passage not answered. Empty when nothing was.
+the request that asks it again: a tuple not taken, a passage not
+answered. Empty when nothing was.
 
 ### response_format
 
@@ -207,18 +207,8 @@ def response_format(context: list, parameters: dict, slots: dict) -> dict
 ```
 
 The reply as a server grammar: one entry for EVERY passage of the
-context, its parameters from the list or NONE, a quote, and the tuples
-of each group the survey reads.
-
-### in_passage
-
-```python
-def in_passage(source, quote: str) -> bool
-```
-
-Does *quote* stand in what the survey shows of *source*: its text or
-the title of its section? Whatever a request shows of a document may be
-quoted (owner decision 2026-11-05).
+context, its parameters from the list or NONE, and the tuples of each
+group the survey reads.
 
 ### read_reply
 
@@ -229,10 +219,10 @@ def read_reply(reply: dict, context: list, parameters: dict, slots: dict,
 
 ([Answer], passages unanswered) of one context's reply.
 
-A passage's parameters are taken when their quote stands in that
-passage, its text or the title of its section (`in_passage`), and is long
-enough to name a place there; NONE beside a parameter says nothing. A tuple is taken when *pairs_of* (`runner.frame_pairs`) takes
-it over the passages shown. Nothing else is checked.
+A passage's parameters are taken as the reply names them, those of the
+spec only; NONE beside a parameter says nothing. A tuple is taken when
+*pairs_of* (`runner.frame_pairs`) takes it over the passages shown.
+Nothing else is checked.
 
 ### merge
 

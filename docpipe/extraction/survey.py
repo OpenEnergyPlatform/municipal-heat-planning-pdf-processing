@@ -3,9 +3,11 @@ survey.py: One pass over the whole plan before any number is read.
 
 The plan is cut into small contexts, at most one figure and at most the text
 of two of its pages each, and every passage of every context is answered:
-the parameters whose numbers stand in it, with a quote, or none of them.
-The same request names the tuples of the groups the spec reads here (a
-scenario and its year), each coordinate with its own quote. A parameter is
+the parameters whose values stand in it, or none of them. The survey only
+names them, without a quote (owner decision 2026-11-06): it decides which
+passages a parameter is read in, and the reading checks every value it reads
+there. The same request names the tuples of the groups the spec reads here
+(a scenario and its year), each coordinate with its own quote. A parameter is
 then read in its own passages, and a number takes its frame from its passage,
 without a search (owner decision 2026-11-04).
 
@@ -15,9 +17,8 @@ built at the first search, and most of the search for open coordinates. On
 Rendsburg in corpus_m8_100 those were 60, 31, 112 and 833 requests, and the
 frame saw 12 passages and found three pairs while the rows later carried six.
 
-Checked is what every reading is checked for: an assignment's quote stands
-in its own passage and is long enough to name a place there; a tuple is held
-to `runner.frame_pairs`, the frame's own check.
+A parameter named for a passage is taken as named. A tuple is held to
+`runner.frame_pairs`, the frame's own check.
 
 The survey of a document is kept (`survey/<document>.json`) under a key over
 the prompt, the parameters, the groups and the model. A survey of part of a
@@ -38,7 +39,6 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from . import archive, fields
-from .verify import MIN_QUOTE_CHARS, quote_in
 
 log = logging.getLogger(__name__)
 
@@ -180,8 +180,8 @@ def payload(context: list, parameters: dict, groups: dict,
 
 def corrections_of(answers: list, unanswered: list, context: list) -> list:
     """What was wrong with a reply over *context*, one sentence each, for
-    the request that asks it again: a quote not in its passage or too short,
-    a tuple not taken, a passage not answered. Empty when nothing was."""
+    the request that asks it again: a tuple not taken, a passage not
+    answered. Empty when nothing was."""
     from .wording import say
 
     label = {(s.owner_kind, s.owner_id): f"P{i + 1}"
@@ -190,15 +190,8 @@ def corrections_of(answers: list, unanswered: list, context: list) -> list:
     for answer in answers:
         for dropped in answer.dropped:
             why = dropped.get("why")
-            if why == "quote too short":
-                sentence = say("quote_too_short", minimum=MIN_QUOTE_CHARS)
-            elif why in ("quote not in its passage", "no quote"):
-                sentence = say("quote_not_in_source")
-            elif dropped.get("group") and why:
-                sentence = why
-            else:
-                continue
-            out.append(f"{label.get(answer.owner, '?')}: {sentence}")
+            if dropped.get("group") and why:
+                out.append(f"{label.get(answer.owner, '?')}: {why}")
     out.extend(say("key_missing", key=label.get(tuple(owner), "?"))
                for owner in unanswered)
     return out
@@ -206,12 +199,11 @@ def corrections_of(answers: list, unanswered: list, context: list) -> list:
 
 def response_format(context: list, parameters: dict, slots: dict) -> dict:
     """The reply as a server grammar: one entry for EVERY passage of the
-    context, its parameters from the list or NONE, a quote, and the tuples
-    of each group the survey reads."""
+    context, its parameters from the list or NONE, and the tuples of each
+    group the survey reads."""
     entry_props: dict = {
         "parameters": {"type": "array", "minItems": 1,
-                       "items": {"enum": sorted(parameters) + [NONE]}},
-        "quote": {"type": "string"}}
+                       "items": {"enum": sorted(parameters) + [NONE]}}}
     for name, group_slots in slots.items():
         props: dict = {}
         for slot in group_slots:
@@ -245,27 +237,18 @@ class Answer:
     """What the survey says of one passage."""
     owner: tuple
     parameters: list                  # taken, in the reply's order
-    quote: Optional[str] = None
     tuples: dict = field(default_factory=dict)     # group -> [tuple]
     dropped: list = field(default_factory=list)    # why something was not taken
-
-
-def in_passage(source, quote: str) -> bool:
-    """Does *quote* stand in what the survey shows of *source*: its text or
-    the title of its section? Whatever a request shows of a document may be
-    quoted (owner decision 2026-11-05)."""
-    title = (source.provenance or {}).get("section_title") or ""
-    return quote_in(source.text or "", quote) or quote_in(title, quote)
 
 
 def read_reply(reply: dict, context: list, parameters: dict, slots: dict,
                pairs_of: Callable) -> tuple:
     """([Answer], passages unanswered) of one context's reply.
 
-    A passage's parameters are taken when their quote stands in that
-    passage, its text or the title of its section (`in_passage`), and is long
-    enough to name a place there; NONE beside a parameter says nothing. A tuple is taken when *pairs_of* (`runner.frame_pairs`) takes
-    it over the passages shown. Nothing else is checked.
+    A passage's parameters are taken as the reply names them, those of the
+    spec only; NONE beside a parameter says nothing. A tuple is taken when
+    *pairs_of* (`runner.frame_pairs`) takes it over the passages shown.
+    Nothing else is checked.
     """
     answers, unanswered = [], []
     entries = (reply or {}).get("passages")
@@ -276,25 +259,8 @@ def read_reply(reply: dict, context: list, parameters: dict, slots: dict,
         if not isinstance(entry, dict):
             unanswered.append(owner)
             continue
-        answer = Answer(owner, [])
-        named = [p for p in entry.get("parameters") or ()
-                 if p in parameters]
-        quote = entry.get("quote")
-        if named:
-            if not isinstance(quote, str) or not quote.strip():
-                answer.dropped.append({"parameters": named,
-                                       "why": "no quote"})
-            elif len(quote.strip()) < MIN_QUOTE_CHARS:
-                answer.dropped.append({"parameters": named,
-                                       "why": "quote too short",
-                                       "quote": quote})
-            elif not in_passage(source, quote):
-                answer.dropped.append({"parameters": named,
-                                       "why": "quote not in its passage",
-                                       "quote": quote})
-            else:
-                answer.parameters = named
-                answer.quote = quote.strip()
+        answer = Answer(owner, [p for p in entry.get("parameters") or ()
+                                if p in parameters])
         for name, group_slots in slots.items():
             rejected: list = []
             given = entry.get(name)
@@ -341,7 +307,6 @@ def merge(found: Found, answers: list) -> None:
         for parameter in answer.parameters:
             if parameter not in held.parameters:
                 held.parameters.append(parameter)
-        held.quote = held.quote or answer.quote
         for name, tuples in answer.tuples.items():
             have = held.tuples.setdefault(name, [])
             for one in tuples:
@@ -419,8 +384,8 @@ class Survey:
         at = {(s.owner_kind, s.owner_id) for s in passages}
         answers = {tuple(a["owner"]): Answer(
             tuple(a["owner"]), list(a.get("parameters") or ()),
-            a.get("quote"), dict(a.get("tuples") or {}),
-            list(a.get("dropped") or ())) for a in kept.get("answers", ())}
+            dict(a.get("tuples") or {}), list(a.get("dropped") or ()))
+            for a in kept.get("answers", ())}
         unanswered = [tuple(o) for o in kept.get("unanswered") or ()]
         if set(answers) | set(unanswered) != at:
             return None                 # the passages changed since
@@ -499,7 +464,7 @@ class Survey:
                 {"key": self.key, "complete": found.complete,
                  "contexts": len(contexts), "budget": budget,
                  "answers": [{"owner": list(a.owner),
-                              "parameters": a.parameters, "quote": a.quote,
+                              "parameters": a.parameters,
                               "tuples": a.tuples, "dropped": a.dropped}
                              for a in found.answers.values()],
                  "unanswered": [list(o) for o in found.unanswered]},

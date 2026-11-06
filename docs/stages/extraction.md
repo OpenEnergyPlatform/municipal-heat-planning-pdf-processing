@@ -114,18 +114,19 @@ of at most one figure, sent with its crop, and at most the text of two of the
 plan's pages (`survey.budget_of`: twice its characters per page, figure
 descriptions not counted); a longer passage goes in pieces of its own that keep
 its owner. The reply has an entry for every passage of the context, which the
-grammar requires: the parameters whose values stand there, with a quote, or
-`out:none`, and the tuples of each group the survey reads, each coordinate with
-its own quote. A parameter is taken on a quote that stands in its own passage,
-its text or the title of its section (`survey.in_passage`; whatever a request
-shows of a document may be quoted, owner decision 2026-11-05), and has the
-minimum length; a tuple is held to `frame_pairs`. A reply with
-something not taken is asked once more, with what was wrong per passage
-(`survey.corrections_of`), and what either reply backs is taken: on Rendsburg
-15 assignments were refused, nearly all of them right and quoted with elisions,
-cells of several rows or words only the image prints. Each number of a
-table cell counts for its own parameter. A reply that does not fit is split,
-not rescued. The survey is kept in `<harvest>/survey/<document
+grammar requires: the parameters whose values stand there, or `out:none`, and
+the tuples of each group the survey reads, each coordinate with its own quote.
+The survey only names the parameters, without a quote, and a parameter of the
+spec is taken as named (owner decision 2026-11-06): the survey decides where a
+parameter is read, and the reading checks every value it reads there. On
+paper 86 the shortened prompt that still asked one quote per passage had sent
+fewer passages than the longer one before it: sectors 41 instead of 49,
+technologies 24 instead of 31, scenario descriptions 8 instead of 19. A tuple
+is held to `frame_pairs`. A reply with a tuple not taken or a
+passage left out is asked once more, with what was wrong per passage
+(`survey.corrections_of`), and what either reply backs is taken. Each number
+of a table cell counts for its own parameter. A reply that does not fit is
+split, not rescued. The survey is kept in `<harvest>/survey/<document
 id>.json` under a key over prompt, parameters, groups and model, and only a
 complete one is read again. `scripts/probe_rows.py --documents ... --survey`
 asks it over whole plans. On Rendsburg it replaces the anchors, the frame, the

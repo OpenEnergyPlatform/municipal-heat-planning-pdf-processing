@@ -1,8 +1,9 @@
 """The spec puts every coordinate in exactly one group, and the survey of a
 whole plan packs at most one figure and two pages of text into a context,
-asks for every passage of it, takes a parameter only on a quote from its own
-passage and a frame tuple only on quotes that carry it, and is read again
-from disk under its own key.
+asks for every passage of it, takes the parameters a reply names for a
+passage as named, those of the spec only and without a quote (owner decision
+2026-11-06), and a frame tuple only on quotes that carry it, and is read
+again from disk under its own key.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -127,40 +128,25 @@ def read(entries):
                              SLOTS, runner.frame_pairs)
 
 
-def test_a_parameter_is_taken_on_a_quote_from_its_own_passage():
-    answers, _ = read({"P1": {"parameters": ["emission"],
-                              "quote": "Treibhausgasemissionen der Stadt"},
+def test_a_parameter_named_for_a_passage_is_taken_without_a_quote():
+    answers, _ = read({"P1": {"parameters": ["emission"]},
                        "P2": {"parameters": ["out:none"]}})
     assert answers[0].parameters == ["emission"]
     assert answers[1].parameters == []
+    assert not answers[0].dropped
+    # Not even a quote the passage does not print takes a name back: the
+    # survey names, the reading checks.
+    answers, _ = read({"P1": {"parameters": ["emission"]},
+                       "P2": {"parameters": ["emission"],
+                              "quote": "steht nirgends im Plan"}})
+    assert answers[1].parameters == ["emission"] and not answers[1].dropped
 
 
-def test_a_parameter_quoted_from_another_passage_or_too_short_is_not():
-    answers, _ = read({"P1": {"parameters": ["emission"],
-                              "quote": "an einem Kanal"},
-                       "P2": {"parameters": ["emission"], "quote": "Die"}})
-    assert answers[0].parameters == [] and answers[1].parameters == []
-    assert [d["why"] for a in answers for d in a.dropped] == [
-        "quote not in its passage", "quote too short"]
-
-
-def test_a_quote_may_come_from_the_title_of_its_own_section_only():
-    # What the survey shows of a passage may be quoted, its section title
-    # too; a title shown with another passage is not this passage's.
-    def titled(number, text, title):
-        return Source("section", number, text, {"document_id": 7, "page": 1,
-                                                "section_title": title})
-    context = [titled(1, "Die Werte stehen in der Tabelle darunter.",
-                      "Treibhausgasemissionen 2022"),
-               titled(2, "Die Stadt liegt an einem Kanal.", "Lage der Stadt")]
-    title = {"parameters": ["emission"], "quote": "Treibhausgasemissionen 2022"}
-    answers, _ = survey.read_reply({"passages": {"P1": title, "P2": title}},
-                                   context, PARAMETERS, SLOTS,
-                                   runner.frame_pairs)
+def test_a_name_that_is_no_parameter_of_the_spec_is_not_taken():
+    answers, _ = read({"P1": {"parameters": ["colour", "emission"]},
+                       "P2": {"parameters": ["colour"]}})
     assert answers[0].parameters == ["emission"]
     assert answers[1].parameters == []
-    assert [d["why"] for d in answers[1].dropped] == [
-        "quote not in its passage"]
 
 
 def frame(year, year_quote):
@@ -203,8 +189,7 @@ def make(store, ask, key="k"):
 
 def emission_where_printed(context, document_id, corrections=None):
     return {"passages": {
-        f"P{i + 1}": ({"parameters": ["emission"],
-                       "quote": "Treibhausgasemissionen der Stadt"}
+        f"P{i + 1}": ({"parameters": ["emission"]}
                       if "Treibhausgas" in s.text
                       else {"parameters": ["out:none"]})
         for i, s in enumerate(context)}}
@@ -236,22 +221,22 @@ def test_a_reply_cut_off_is_split_and_not_rescued(tmp_path):
     assert found.complete and found.passages_of("emission") == [("table", 2)]
 
 
-def test_a_quote_outside_its_passage_is_asked_again_and_the_answer_taken(
+def test_a_passage_the_reply_leaves_out_is_asked_again_and_answered(
         tmp_path):
     calls = []
 
-    def wrong_first(context, document_id, corrections=None):
+    def table_left_out_first(context, document_id, corrections=None):
         calls.append(corrections)
         reply = emission_where_printed(context, document_id)
         if corrections is None:
-            for entry in reply["passages"].values():
-                if entry.get("quote"):
-                    entry["quote"] = "Emissionen ... 2022 ... Erdgas"
+            reply["passages"] = {key: entry for key, entry
+                                 in reply["passages"].items()
+                                 if "emission" not in entry["parameters"]}
         return reply
 
-    found = make(tmp_path, wrong_first)(7)
+    found = make(tmp_path, table_left_out_first)(7)
     assert found.passages_of("emission") == [("table", 2)]
-    assert len(calls) == 2 and calls[1][0].startswith("P2:")
+    assert len(calls) == 2 and "P2" in calls[1][0]
 
 
 def test_a_reply_without_fault_is_asked_once(tmp_path):
@@ -268,11 +253,11 @@ def test_a_reply_without_fault_is_asked_once(tmp_path):
 def test_a_reply_wrong_twice_is_not_asked_a_third_time(tmp_path):
     calls = []
 
-    def always_wrong(context, document_id, corrections=None):
+    def always_without_the_table(context, document_id, corrections=None):
         calls.append(corrections)
-        return {"passages": {f"P{i + 1}": {"parameters": ["emission"],
-                                           "quote": "steht nirgends im Plan"}
-                             for i in range(len(context))}}
+        return {"passages": {f"P{i + 1}": {"parameters": ["emission"]}
+                             for i, s in enumerate(context)
+                             if "Treibhausgas" not in s.text}}
 
-    found = make(tmp_path, always_wrong)(7)
-    assert len(calls) == 2 and found.passages_of("emission") == []
+    found = make(tmp_path, always_without_the_table)(7)
+    assert len(calls) == 2 and ("table", 2) in found.unanswered
