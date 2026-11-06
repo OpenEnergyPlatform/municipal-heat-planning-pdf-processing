@@ -74,7 +74,10 @@ it refers to by the name the publication prints. `extraction/match` then
 maps each name read onto a run identifier of the document's own list, in a
 request of its own with the list, the passage and the name's quote (owner
 decision 2026-11-05: `scenario_label` and the `scenario` axis are
-`matched_apart`, see [extraction](../stages/extraction.md)). `read_text`
+`matched_apart`, see [extraction](../stages/extraction.md)). No reading
+request shows the run a name was matched to, only the name, and a value
+the publication states for several scenarios is one row per scenario, each
+matched on its own (owner decisions 2026-11-06). `read_text`
 shows both forms of an answer, a scenario named and one the passage does not
 name with the sentence the combing searches with (`probe`); with the first
 alone, 7 of 123 comb tasks of a four-paper probe had such a sentence. A

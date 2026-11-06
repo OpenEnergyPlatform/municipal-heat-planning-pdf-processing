@@ -263,6 +263,21 @@ answer is kept for the next wording of the same name. scenarios matches the
 AR6 runs of a publication so (`scenario_label` and the `scenario` axis); the
 run list and the rule for choosing a run went out of every reading request.
 
+A request that reads such a list shows only the wording, never the entry
+the match chose: in a round's `read`, as a value's own wording and in a
+correction (`reading.printed`, owner decision 2026-11-06). Shown both, the
+model of an AR6 probe gave an entry ("scenario family") as the name of 15
+values. A value its passage states for several wordings of such a list,
+as `"scenario": [{...}, {...}]`, is one row per wording, each matched and
+checked on its own (`reading.answers_each`, owner decision 2026-11-06); a
+row the check refuses is asked once more alone, and the correction names
+the wording and quote it was given (`reading.named_corrections`,
+`combing.named_rows`). The rows the combing makes join their value's
+reading (`Combed.made`). A pass over a stored harvest re-reads each stored
+row in place and takes the first wording. Asked for one name, a value of
+several scenarios had been left without one: on paper 86 the scenario of a
+year was read 48 times instead of 129.
+
 The prompt of `read_text` may be split by lines `<!-- group: NAME -->`: the text
 before the first is every group's, and each group is sent that plus its own
 section (`reading.group_prompts`, owner decision 2026-11-05). A prompt without

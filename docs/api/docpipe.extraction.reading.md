@@ -50,6 +50,14 @@ Every coordinate asked is answered: the grammar of a group request requires
 each of them, and "the passage does not say" is one of the answers
 (`fields.UNSTATED`).
 
+A list matched apart (`matching.py`) is read by the wording the document
+prints, and a request shows only that wording, never the entry the match
+chose: in a round's `read`, as a value's own wording and in a correction
+(`printed`, owner decision 2026-11-06). A value the passage states for
+several wordings of such a list is one row per wording, each matched on its
+own (`answers_each`, owner decision 2026-11-06); a correction for one of them
+names its wording.
+
 Nothing is checked here beyond what the harvest checks everywhere. Every
 coordinate goes through `pipeline.merge_field` and every value through
 `fold_batch`. What that check refuses is asked once more with its reason,
@@ -147,7 +155,7 @@ def fetch(self, asks, order: list, passages: dict,
 ```
 
 The asks of one reply resolved (`lookup`), each passage cut to
-*budget*, the survey's two pages. True when a passage or a hit list
+*budget*, two pages of the plan. True when a passage or a hit list
 came of them the request has not shown yet: an ask for something
 shown already, or for nothing, ends the gathering.
 
@@ -231,7 +239,7 @@ def read(self, document_id: int, parameter, source: Source,
 ```
 
 *source* is the passage a value is verified against, *shown* the
-piece of it the requests show, *budget* the survey's two pages, which
+piece of it the requests show, *budget* two pages of the plan, which
 the text around a table or figure fits (`around_of`). The values in
 rounds (`_values`), each placed in its table (`_placed`), then each
 group of the spec for each value (`_value_group`).
@@ -319,6 +327,16 @@ A coordinate as a request shows it: its question, and its list, or
 the kind of its answer. A list matched apart is answered by its wording
 and goes to the match alone (`matching.py`).
 
+### several
+
+```python
+def several(slot) -> bool
+```
+
+May one value name several wordings for *slot*, one row each: a list
+read by the wording the document prints and matched apart (owner
+decision 2026-11-06)?
+
 ### answer_schema
 
 ```python
@@ -328,7 +346,20 @@ def answer_schema(slot, probe: bool = False) -> dict
 One coordinate's answer as the grammar takes it; with *probe* also
 the sentence a reply writes to a coordinate its passage does not state,
 as the plan would print it, which the combing searches with (owner
-decision 2026-11-05: HyDE).
+decision 2026-11-05: HyDE). A coordinate that may name several wordings
+(`several`) takes a list of such answers too.
+
+### answers_each
+
+```python
+def answers_each(reply, slots: list) -> list
+```
+
+The reply for one value as one reply per row (owner decision
+2026-11-06): a coordinate that may name several wordings (`several`)
+and names a list of them gives one reply per wording, with every other
+coordinate's answer the same on each; an empty list is no answer. Any
+other reply is the one reply.
 
 ### known_of
 
@@ -400,8 +431,8 @@ def around_of(source: Source, passages: dict,
 
 The text of the section a table or figure stands in, as its request
 shows it (owner decisions 2026-11-04 and 2026-11-05): the whole section,
-other tables and figures of it included, when it fits *budget*, the
-survey's two pages, else that many characters around the table's place
+other tables and figures of it included, when it fits *budget*, two
+pages of the plan, else that many characters around the table's place
 in it. The model reads from it what it needs: a cut to 200 characters on
 each side would have hidden the text of 72 % of the quotes the m8 run
 took from a table's section. None for a section, and for a table or
@@ -481,6 +512,17 @@ def shown_value(claim: dict) -> dict
 ```
 
 A value as a request shows it: its value, wording, quote and head.
+
+### printed
+
+```python
+def printed(shown: dict, parameter) -> dict
+```
+
+*shown*, a value as a request shows it (`shown_value`), with the
+wording the document prints as its value where *parameter*'s list is
+matched apart: a request that reads such a value never sees the entry
+the match chose (owner decision 2026-11-06). Any other value as it is.
 
 ### values_payload
 
@@ -620,7 +662,8 @@ group, the plan's base and target years, the same in a plan; then the
 passage, the text around a table or figure and, for a frame group, the
 survey's pairs of the passage (`group_context`); the value last, with
 its quote and, under "read", what is already read of it in the plan's
-words; with *corrections* the same request asked once more.
+words; with *corrections* the same request asked once more. A value of
+a list matched apart is shown by its wording (`printed`).
 
 ### text_response_format
 
@@ -678,6 +721,17 @@ def value_corrections(row: Row, failed: list, slots: list) -> list
 What the check refused of a group's reply for one value, each named
 by its coordinate: [{coordinate, what}]. A coordinate the reply left out
 is named as missing.
+
+### named_corrections
+
+```python
+def named_corrections(corrections: list, reply: dict, slots: list) -> list
+```
+
+*corrections* for one of several rows a reply made of one value
+(`answers_each`): each correction of a coordinate that named several
+wordings names the wording this row was given, and its quote, so the
+request asks again for that one.
 
 ### same
 

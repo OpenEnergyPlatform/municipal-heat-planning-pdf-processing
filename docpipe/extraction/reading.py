@@ -47,6 +47,14 @@ Every coordinate asked is answered: the grammar of a group request requires
 each of them, and "the passage does not say" is one of the answers
 (`fields.UNSTATED`).
 
+A list matched apart (`matching.py`) is read by the wording the document
+prints, and a request shows only that wording, never the entry the match
+chose: in a round's `read`, as a value's own wording and in a correction
+(`printed`, owner decision 2026-11-06). A value the passage states for
+several wordings of such a list is one row per wording, each matched on its
+own (`answers_each`, owner decision 2026-11-06); a correction for one of them
+names its wording.
+
 Nothing is checked here beyond what the harvest checks everywhere. Every
 coordinate goes through `pipeline.merge_field` and every value through
 `fold_batch`. What that check refuses is asked once more with its reason,
@@ -62,6 +70,7 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import collections
+import copy
 import json
 import re
 import sys
@@ -219,18 +228,48 @@ def coordinate_shown(slot) -> dict:
     return shown
 
 
+def several(slot) -> bool:
+    """May one value name several wordings for *slot*, one row each: a list
+    read by the wording the document prints and matched apart (owner
+    decision 2026-11-06)?"""
+    return bool(getattr(slot, "matched_apart", False))
+
+
 def answer_schema(slot, probe: bool = False) -> dict:
     """One coordinate's answer as the grammar takes it; with *probe* also
     the sentence a reply writes to a coordinate its passage does not state,
     as the plan would print it, which the combing searches with (owner
-    decision 2026-11-05: HyDE)."""
+    decision 2026-11-05: HyDE). A coordinate that may name several wordings
+    (`several`) takes a list of such answers too."""
     properties = {"value": fields.value_schema(slot),
                   "value_raw": {"type": "string"},
                   "quote": {"type": "string"}}
     if probe:
         properties["probe"] = {"type": "string"}
-    return {"type": "object", "properties": properties,
-            "required": ["value"], "additionalProperties": False}
+    one = {"type": "object", "properties": properties,
+           "required": ["value"], "additionalProperties": False}
+    if several(slot):
+        return {"anyOf": [one, {"type": "array", "items": one,
+                                "minItems": 1}]}
+    return one
+
+
+def answers_each(reply, slots: list) -> list:
+    """The reply for one value as one reply per row (owner decision
+    2026-11-06): a coordinate that may name several wordings (`several`)
+    and names a list of them gives one reply per wording, with every other
+    coordinate's answer the same on each; an empty list is no answer. Any
+    other reply is the one reply."""
+    if not isinstance(reply, dict):
+        return [reply]
+    out = [reply]
+    for slot in slots:
+        given = reply.get(slot.name)
+        if not several(slot) or not isinstance(given, list):
+            continue
+        each = [one for one in given if isinstance(one, dict)] or [None]
+        out = [{**one, slot.name: answer} for one in out for answer in each]
+    return out
 
 
 def known_of(tuples: list, frame_slots: list) -> list:
@@ -307,8 +346,8 @@ def around_of(source: Source, passages: dict,
               budget: Optional[int]) -> Optional[Source]:
     """The text of the section a table or figure stands in, as its request
     shows it (owner decisions 2026-11-04 and 2026-11-05): the whole section,
-    other tables and figures of it included, when it fits *budget*, the
-    survey's two pages, else that many characters around the table's place
+    other tables and figures of it included, when it fits *budget*, two
+    pages of the plan, else that many characters around the table's place
     in it. The model reads from it what it needs: a cut to 200 characters on
     each side would have hidden the text of 72 % of the quotes the m8 run
     took from a table's section. None for a section, and for a table or
@@ -433,7 +472,7 @@ class Gathered:
     def fetch(self, asks, order: list, passages: dict,
               budget: Optional[int]) -> bool:
         """The asks of one reply resolved (`lookup`), each passage cut to
-        *budget*, the survey's two pages. True when a passage or a hit list
+        *budget*, two pages of the plan. True when a passage or a hit list
         came of them the request has not shown yet: an ask for something
         shown already, or for nothing, ends the gathering."""
         new = False
@@ -577,6 +616,20 @@ def shown_value(claim: dict) -> dict:
     """A value as a request shows it: its value, wording, quote and head."""
     return {key: claim[key] for key in ("value", "value_raw", "quote", "head")
             if claim.get(key) not in (None, "") or key == "value"}
+
+
+def printed(shown: dict, parameter) -> dict:
+    """*shown*, a value as a request shows it (`shown_value`), with the
+    wording the document prints as its value where *parameter*'s list is
+    matched apart: a request that reads such a value never sees the entry
+    the match chose (owner decision 2026-11-06). Any other value as it is."""
+    if not getattr(parameter, "matched_apart", False):
+        return shown
+    out = {key: value for key, value in shown.items() if key != "value_raw"}
+    wording = shown.get("value_raw")
+    if isinstance(wording, str) and wording.strip():
+        out["value"] = wording
+    return out
 
 
 def values_payload(source: Source, parameter, context: dict, read: list,
@@ -747,9 +800,9 @@ def round_failure(claim: dict, shown: list, read: list,
     refuses, the model hears while it can still answer (owner decision
     2026-11-05)."""
     if any(same_value(claim, other) for other in read):
+        named = printed(shown_value(claim), parameter).get("value")
         return REPEATED, say("value_already_read",
-                             value=json.dumps(claim.get("value"),
-                                              ensure_ascii=False),
+                             value=json.dumps(named, ensure_ascii=False),
                              quote=claim.get("quote"))
     passage = passage_of(claim, shown)
     if passage is None:
@@ -786,8 +839,9 @@ def text_payload(source: Source, parameter, slots: list, row: Row,
     passage, the text around a table or figure and, for a frame group, the
     survey's pairs of the passage (`group_context`); the value last, with
     its quote and, under "read", what is already read of it in the plan's
-    words; with *corrections* the same request asked once more."""
-    value = shown_value(row.claim)
+    words; with *corrections* the same request asked once more. A value of
+    a list matched apart is shown by its wording (`printed`)."""
+    value = printed(shown_value(row.claim), parameter)
     if context.get("read"):
         value["read"] = context["read"]
     payload = {"parameter": parameter_shown(parameter, full=full),
@@ -891,6 +945,26 @@ def value_corrections(row: Row, failed: list, slots: list) -> list:
     return out
 
 
+def named_corrections(corrections: list, reply: dict, slots: list) -> list:
+    """*corrections* for one of several rows a reply made of one value
+    (`answers_each`): each correction of a coordinate that named several
+    wordings names the wording this row was given, and its quote, so the
+    request asks again for that one."""
+    by_name = {slot.name: slot for slot in slots}
+    out = []
+    for entry in corrections:
+        name = entry.get("coordinate")
+        answer = reply.get(name) if isinstance(reply, dict) else None
+        if (name in by_name and several(by_name[name])
+                and isinstance(answer, dict)):
+            entry = {"coordinate": name,
+                     **{key: answer[key] for key in ("value", "quote")
+                        if answer.get(key) not in (None, "")},
+                     "what": entry.get("what")}
+        out.append(entry)
+    return out
+
+
 # -- one parameter in one passage ----------------------------------------------
 
 def same(slot, a, b) -> bool:
@@ -975,6 +1049,20 @@ class _Job:
     views: dict = field(default_factory=dict)
     # the sentences of each value's unstated coordinates, by its label
     probes: dict = field(default_factory=dict)
+    # rows of the passage so far, which the label of the next copy follows
+    made: int = 0
+
+    def clone(self, row: Row) -> Row:
+        """A copy of *row* under a label of its own, for one more wording
+        of a value the reply names several of (`answers_each`): the piece it
+        was read in and its sentences go with it."""
+        label = row_label(self.made)
+        self.made += 1
+        self.views[label] = self.views.get(row.label, self.shown)
+        if row.label in self.probes:
+            self.probes[label] = dict(self.probes[row.label])
+        return Row(label=label, item_index=row.item_index,
+                   claim=copy.deepcopy(row.claim))
 
     def passages_shown(self) -> list:
         """Every passage a request of this reading shows: the passage, its
@@ -1037,8 +1125,8 @@ class Reader:
     def __call__(self, document_id: int, found, passages: dict,
                  budget: Optional[int] = None) -> list:
         """One Read per parameter and passage the survey named for it. A
-        section or figure longer than *budget* characters, the survey's two
-        pages, is read in the survey's pieces."""
+        section or figure longer than *budget* characters, two pages of the
+        plan, is read in pieces of that size (`survey.pieces`)."""
         from .survey import pieces
 
         pairs: list = []
@@ -1087,7 +1175,7 @@ class Reader:
              shown: Optional[Source] = None,
              budget: Optional[int] = None) -> Read:
         """*source* is the passage a value is verified against, *shown* the
-        piece of it the requests show, *budget* the survey's two pages, which
+        piece of it the requests show, *budget* two pages of the plan, which
         the text around a table or figure fits (`around_of`). The values in
         rounds (`_values`), each placed in its table (`_placed`), then each
         group of the spec for each value (`_value_group`)."""
@@ -1137,10 +1225,19 @@ class Reader:
             return result
         for row in rows:
             self._placed(job, row)
+        job.made = len(rows)
         groups = groups_of(self.spec, slots)
+        grouped: list = []
         for row in rows:
+            # A value stated for several wordings of a list matched apart is
+            # one row per wording, and each asks the groups after it alone.
+            each = [row]
             for group, group_slots in groups:
-                self._value_group(job, row, group, group_slots)
+                each += [made for one in list(each)
+                         for made in self._value_group(job, one, group,
+                                                       group_slots)]
+            grouped.extend(each)
+        rows = grouped
         evidence = list(views) + fixed + frames
         for axis in fields.axis_slots(parameter):
             fields.apply_derived(rows, axis)
@@ -1236,7 +1333,8 @@ class Reader:
                 result.failed = dict(collections.Counter(result.failed)
                                      + collections.Counter({kind: 1}))
                 result.corrected += 1
-                again = ask([{**shown_value(claim), "what": reason}])
+                again = ask([{**printed(shown_value(claim), job.parameter),
+                              "what": reason}])
                 result.asked += 1
                 claim = self._matched_value(job, view, claim_of(again, head))
                 if claim is None:
@@ -1255,7 +1353,7 @@ class Reader:
                 claim["source"] = job.label_of(passage)
             rows.append(Row(label=row_label(start + len(rows)), item_index=0,
                             claim=claim))
-            read.append(shown_value(claim))
+            read.append(printed(shown_value(claim), job.parameter))
         return rows
 
     def _matched_value(self, job: _Job, view: Source,
@@ -1308,14 +1406,17 @@ class Reader:
                         window=("frame", index + 1))
 
     def _value_group(self, job: _Job, row: Row, group,
-                     group_slots: list) -> None:
+                     group_slots: list) -> list:
         """One group's coordinates of one value, those still open only, in a
         request of the group's own; what the check refuses asked once more,
-        by its coordinate."""
+        by its coordinate. A reply that names several wordings of a list
+        matched apart makes one row per wording (`answers_each`), each
+        matched, checked and asked once more on its own: [the rows made
+        beside *row*]."""
         asked = [slot for slot in group_slots
                  if row.claim.get(f"{slot.name}_state") != READ]
         if not asked:
-            return
+            return []
         result = job.result
         view = job.views.get(row.label, job.shown)
         base = group_context(job.context, asked, self.frame_slots, job.bases)
@@ -1328,29 +1429,50 @@ class Reader:
         reply = ask()
         result.asked += 1
         if not isinstance(reply, dict):
-            return
-        around = job.context.get("around")
-        reply = matched(self.match, job.document_id, job.parameter, asked,
-                        reply, view, around)
-        self._probed(job, row, reply, asked)
+            return []
         # What the value has read is shown too, and may be quoted (owner
         # decision 2026-11-05).
-        evidence = [view] + job.fixed + job.frames \
-            + known_shown(row.claim, read, job.passages)
-        failed = job.merged([row], {slot.name: value_replies(reply, slot,
+        evidence = ([view] + job.fixed + job.frames
+                    + known_shown(row.claim, read, job.passages))
+        replies = answers_each(reply, asked)
+        rows = [row] + [job.clone(row) for _ in replies[1:]]
+        for one, answer in zip(rows, replies):
+            self._answered(job, one, answer, asked, ask, evidence, view,
+                           named=len(rows) > 1)
+        return rows[1:]
+
+    def _answered(self, job: _Job, row: Row, reply: dict, asked: list,
+                  ask: Callable, evidence: list, view: Source,
+                  named: bool = False) -> None:
+        """*reply*'s answers onto *row*, each wording of a list matched apart
+        matched first; what the check refuses asked once more by its
+        coordinate. With *named*, *row* is one of several a reply made of
+        one value: its correction names the wording it was given and its
+        quote (`named_corrections`), and a reply that names several again
+        counts with its first."""
+        result = job.result
+        around = job.context.get("around")
+        answers = matched(self.match, job.document_id, job.parameter, asked,
+                          reply, view, around)
+        self._probed(job, row, answers, asked)
+        failed = job.merged([row], {slot.name: value_replies(answers, slot,
                                                              row.label)
                                     for slot in asked}, evidence)
         corrections = value_corrections(row, failed, asked)
         result.failed = dict(collections.Counter(result.failed)
                              + refused_of(failed))
-        if corrections:
-            result.corrected += len(corrections)
-            result.asked += 1
-            again = ask(corrections)
-            if isinstance(again, dict):
-                again = matched(self.match, job.document_id, job.parameter,
-                                asked, again, view, around)
-                self._probed(job, row, again, asked)
-                job.merged([row], {slot.name: value_replies(again, slot,
-                                                            row.label)
-                                   for slot in asked}, evidence)
+        if not corrections:
+            return
+        if named:
+            corrections = named_corrections(corrections, reply, asked)
+        result.corrected += len(corrections)
+        result.asked += 1
+        again = ask(corrections)
+        if isinstance(again, dict):
+            again = matched(self.match, job.document_id, job.parameter,
+                            asked, answers_each(again, asked)[0], view,
+                            around)
+            self._probed(job, row, again, asked)
+            job.merged([row], {slot.name: value_replies(again, slot,
+                                                        row.label)
+                               for slot in asked}, evidence)

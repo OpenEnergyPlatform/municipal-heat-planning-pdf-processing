@@ -17,7 +17,10 @@ is asked once more with the reason (`not_an_option`); one still none leaves
 the entry empty and keeps the wording, as an answer whose entry the model is
 unsure of (`verify._check_value`: unmapped; `merge_field`: the wording
 seen). Every wording read is matched on its own: no answer is kept for the
-next wording of the same name.
+next wording of the same name. A value stated for several wordings is one
+row per wording, each matched on its own (`reading.answers_each`, owner
+decision 2026-11-06), and no reading request shows the entry a wording was
+matched to (`reading.printed`).
 
 Author: Felix Vossel
 

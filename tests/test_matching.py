@@ -7,6 +7,12 @@ the reason, AND one still none leaves the entry empty with the wording kept.
 The combing matches what it answers the same way, with the passage the quote
 stands in. A spec marks only a list the profile closes per document.
 
+A request that reads such a list shows only the wording, never the entry the
+match chose (owner decision 2026-11-06). A value stated for several wordings
+is one row per wording, each matched and checked on its own, AND a
+correction for one of them names its wording, AND the combing's rows join
+their value's reading; a pass over a stored harvest takes the first wording.
+
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
 import json
@@ -15,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from docpipe.extraction import combing, fields, matching, reading, runner
-from docpipe.extraction.pipeline import Batch, Source, WorkItem
+from docpipe.extraction.pipeline import READ, Batch, Row, Source, WorkItem
 from docpipe.extraction.spec import SpecError, load as load_spec
 from docpipe.extraction.wording import say
 from profiles.scenarios.extraction import SCENARIO_OUT
@@ -54,8 +60,12 @@ def matcher(*entries):
     return match, asked
 
 
-def read_of(parameter, values, groups=None, match=None):
+def read_of(parameter, values, groups=None, match=None, spec=None):
+    """A Reader over TEXT: *values* the replies of the rounds in turn,
+    *groups* {group: a reply, or [replies in turn]}."""
     calls = []
+    given = {name: (list(reply) if isinstance(reply, list) else [reply])
+             for name, reply in (groups or {}).items()}
 
     def ask_values(source, parameter, context, read, corrections=None):
         calls.append(("values", reading.values_payload(
@@ -69,10 +79,13 @@ def read_of(parameter, values, groups=None, match=None):
         calls.append((group.name, reading.text_payload(
             source, parameter, slots, row, group.where, context,
             corrections), reading.text_response_format(slots)))
-        return (groups or {}).get(group.name) or {
-            slot.name: {"value": fields.UNSTATED} for slot in slots}
+        replies = given.get(group.name)
+        if not replies:
+            return {slot.name: {"value": fields.UNSTATED} for slot in slots}
+        return replies.pop(0) if len(replies) > 1 else replies[0]
 
-    reader = reading.Reader(SPEC, ask_values, ask_text, [], match=match)
+    reader = reading.Reader(spec or SPEC, ask_values, ask_text, [],
+                            match=match)
     read = reader.read(7, parameter, TEXT, [], [],
                        {(TEXT.owner_kind, TEXT.owner_id): TEXT})
     return read, calls
@@ -90,8 +103,36 @@ def test_a_value_is_read_as_printed_and_matched_onto_the_list():
         == [("CurPol", CURPOL["quote"])]
     claim = read.claims[0]
     assert (claim["value"], claim["value_raw"]) == ("EN_NPi2100", "CurPol")
-    # The next round sees what was read in both forms.
-    assert calls[1][1]["read"][0]["value_raw"] == "CurPol"
+    # The next round sees what was read by its wording, never the entry.
+    later = calls[1][1]
+    assert later["read"] == [{"value": "CurPol", "quote": CURPOL["quote"]}]
+    assert "EN_NPi2100" not in json.dumps(later)
+    # A value of any other parameter as it was read.
+    _other, calls = read_of(YEAR, ({"next": Y2030}, {"next": None}))
+    assert calls[1][1]["read"] == [{"value": "2030",
+                                    "quote": Y2030["quote"]}]
+
+
+def test_a_correction_in_a_round_names_the_wording_never_the_entry():
+    match, _ = matcher("EN_NPi2100")
+    stray = {"value": "CurPol", "quote": "the CurPol run of another study"}
+    read, calls = read_of(LABEL, ({"next": stray}, {"next": CURPOL},
+                                  {"next": None}), match=match)
+    corrected = calls[1][1]
+    assert corrected["corrections"][0]["value"] == "CurPol"
+    assert "EN_NPi2100" not in json.dumps(corrected)
+    assert read.claims[0]["value"] == "EN_NPi2100"
+
+
+def test_a_value_of_a_list_matched_apart_is_shown_by_its_wording():
+    row = Row("R1", 0, {"value": "EN_NPi2100", "value_raw": "CurPol",
+                        "quote": CURPOL["quote"]})
+    shown = reading.text_payload(TEXT, LABEL, [], row, "", {})["value"]
+    assert shown == {"value": "CurPol", "quote": CURPOL["quote"]}
+    year = Row("R1", 0, {"value": 2030, "value_raw": "2030",
+                         "quote": Y2030["quote"]})
+    shown = reading.text_payload(TEXT, YEAR, [], year, "", {})["value"]
+    assert (shown["value"], shown["value_raw"]) == (2030, "2030")
 
 
 def test_a_value_no_entry_fits_keeps_its_wording_without_an_entry():
@@ -109,7 +150,7 @@ def test_a_coordinate_is_asked_by_its_wording_and_takes_the_entry():
     assert payload["coordinates"]["scenario"].get("options") is None
     assert payload["coordinates"]["scenario"]["kind"] == fields.TEXT
     assert shape["json_schema"]["schema"]["properties"]["scenario"][
-        "properties"]["value"] == {"type": "string"}
+        "anyOf"][0]["properties"]["value"] == {"type": "string"}
     assert [(a["slot"], a["name"]) for a in asked] == [("scenario", "CurPol")]
     claim = read.claims[0]
     assert claim["scenario_state"] == fields.READ
@@ -198,3 +239,107 @@ def test_a_list_matched_apart_is_not_read_in_the_survey():
     raw["groups"]["scenario"]["read_in"] = "survey"
     with pytest.raises(SpecError):
         load_spec(raw)
+
+
+# -- a value stated for several scenarios --------------------------------------
+
+TWO = {"scenario": [{"value": "CurPol",
+                     "quote": "Results for the CurPol scenario"},
+                    {"value": "NDC", "quote": "the NDC scenario"}]}
+
+
+def scenario_slot(spec):
+    year = spec.by_uri["scenario_year"]
+    return next(s for s in fields.axis_slots(year) if s.name == "scenario")
+
+
+def unmatched_spec():
+    """The spec with the scenario of scenario_year shown as a list again."""
+    raw = json.loads(SPEC_FILE.read_text(encoding="utf-8"))
+    year = next(p for p in raw["parameters"] if p["uri"] == "scenario_year")
+    year["axes"]["scenario"].pop("matched_apart")
+    return runner.fill_dynamic_axes(load_spec(raw), {"scenario": RUNS,
+                                                     "scenario_label": RUNS})
+
+
+def test_a_list_splits_only_where_the_coordinate_is_matched_apart():
+    slot = scenario_slot(SPEC)
+    a, b = TWO["scenario"]
+    assert reading.answers_each(TWO, [slot]) == [{"scenario": a},
+                                                 {"scenario": b}]
+    assert reading.answers_each({"scenario": a}, [slot]) == [{"scenario": a}]
+    assert reading.answers_each({"scenario": []}, [slot]) \
+        == [{"scenario": None}]
+    plain = scenario_slot(unmatched_spec())
+    assert reading.answers_each(TWO, [plain]) == [TWO]
+    assert "anyOf" in reading.answer_schema(slot)
+    assert reading.answer_schema(plain)["type"] == "object"
+
+
+def test_a_value_stated_for_several_scenarios_is_one_row_each():
+    match, asked = matcher("EN_NPi2100", "EN_INDCi2030_1000f")
+    read, _ = read_of(YEAR, ({"next": Y2030}, {"next": None}),
+                      groups={"scenario": TWO}, match=match)
+    assert [a["name"] for a in asked] == ["CurPol", "NDC"]
+    assert [(c["value"], c["scenario"], c["scenario_raw"],
+             c["scenario_state"]) for c in read.claims] == [
+        ("2030", "EN_NPi2100", "CurPol", READ),
+        ("2030", "EN_INDCi2030_1000f", "NDC", READ)]
+    assert read.claims[1]["scenario_quote"] == "the NDC scenario"
+    assert len(read.probes) == len(read.claims)
+    # A list for a coordinate whose list the reading shows is not split: it
+    # is no answer, and the value stays one row.
+    shown = unmatched_spec()
+    alone, _ = read_of(shown.by_uri["scenario_year"],
+                       ({"next": Y2030}, {"next": None}),
+                       groups={"scenario": TWO}, spec=shown)
+    assert len(alone.claims) == 1
+    assert alone.claims[0]["scenario_state"] != READ
+
+
+def test_a_correction_for_one_of_several_scenarios_names_its_wording():
+    match, _ = matcher("EN_NPi2100", "EN_INDCi2030_1000f",
+                       "EN_INDCi2030_1000f")
+    stray = {"scenario": [TWO["scenario"][0],
+                          {"value": "NDC",
+                           "quote": "the NDC pathway of another study"}]}
+    fixed = {"scenario": {"value": "NDC", "quote": "the NDC scenario"}}
+    read, calls = read_of(YEAR, ({"next": Y2030}, {"next": None}),
+                          groups={"scenario": [stray, fixed]}, match=match)
+    (_task, corrected, _shape), = [c for c in calls if c[0] == "scenario"
+                                   and c[1].get("corrections")]
+    named = corrected["corrections"][0]
+    assert (named["coordinate"], named["value"], named["quote"]) \
+        == ("scenario", "NDC", "the NDC pathway of another study")
+    assert [(c["scenario"], c["scenario_state"]) for c in read.claims] \
+        == [("EN_NPi2100", READ), ("EN_INDCi2030_1000f", READ)]
+
+
+def test_the_combing_makes_one_row_per_scenario_for_the_reading():
+    claim = {"source": "Q1", "value": "2030", "quote": Y2030["quote"],
+             "scenario_state": fields.SAID_UNSTATED}
+    batch = Batch(7, YEAR, [WorkItem(7, YEAR, TEXT)], spec=SPEC)
+    read = reading.Read(batch, [claim], probes=[{"scenario": "a sentence"}])
+    reply = {"rows": [{"row": "R1", **TWO}]}
+    match, _ = matcher("EN_NPi2100", "EN_INDCi2030_1000f")
+    passages = {(TEXT.owner_kind, TEXT.owner_id): TEXT}
+    combing.Comber(SPEC, lambda *a, **k: reply, lambda *a: [],
+                   lambda claim, names: {}, match=match)(
+        7, [read], passages, [])
+    assert [(c["scenario"], c["scenario_raw"], c["scenario_state"])
+            for c in read.claims] == [
+        ("EN_NPi2100", "CurPol", READ),
+        ("EN_INDCi2030_1000f", "NDC", READ)]
+    assert read.probes == [{"scenario": "a sentence"}] * 2
+    # A pass over a stored harvest re-reads its row in place: the first.
+    stored = {"source": "Q1", "value": "2030", "quote": Y2030["quote"],
+              "scenario_state": fields.SAID_UNSTATED}
+    match, _ = matcher("EN_NPi2100", "EN_INDCi2030_1000f")
+    claims = [stored]
+    combed = combing.Comber(SPEC, lambda *a, **k: reply, None,
+                            lambda claim, names: {}, match=match).comb_groups(
+        7, YEAR, TEXT, reading.slots_of(SPEC, YEAR), claims, passages, [],
+        coordinates=["scenario"])
+    assert claims == [stored] and not combed[0].made
+    assert (stored["scenario"], stored["scenario_state"]) \
+        == ("EN_NPi2100", READ)

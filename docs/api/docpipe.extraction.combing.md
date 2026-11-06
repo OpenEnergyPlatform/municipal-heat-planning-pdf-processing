@@ -80,6 +80,7 @@ Fields:
 - `corrected: int = 0`
 - `exhausted: int = 0`
 - `group: Optional[str] = None`: the group of the spec asked
+- `made: list = field(default_factory=list)`: rows made beside the value, one per further wording it was stated for
 
 ### Comber
 
@@ -133,7 +134,7 @@ def comb(self, document_id: int, parameter, source, slots: list,
          coordinates: Optional[list] = None, own: bool = False,
          bases: Optional[tuple] = None,
          first: Optional[list] = None, group=None,
-         probes: Optional[dict] = None) -> Combed
+         probes: Optional[dict] = None, split: bool = False) -> Combed
 ```
 
 The open coordinates of *claims*, values of *parameter* read in
@@ -144,7 +145,13 @@ those of *pairs*), *first* passages listed before the search's
 hits, *group* the group of the spec *slots* belong to, whose words
 for where a plan prints them the request shows, *probes* the
 sentences the reading wrote to coordinates it found unstated
-({coordinate: sentence}), which the search ranks with.
+({coordinate: sentence}), which the search ranks with. With
+*split*, a value the reply states for several wordings of a list
+matched apart is one row per wording (`reading.answers_each`, owner
+decision 2026-11-06), each a copy of the value's row in
+`Combed.made` and asked again on its own; without it, as in a pass
+over a stored harvest that re-reads each stored row in place, the
+first wording.
 
 ## Functions
 

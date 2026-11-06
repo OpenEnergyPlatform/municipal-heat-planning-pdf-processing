@@ -45,7 +45,8 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import collections
-from dataclasses import dataclass
+import copy
+from dataclasses import dataclass, field
 from functools import partial
 from typing import Callable, Optional
 
@@ -53,10 +54,11 @@ from . import lookup
 from .fields import EXHAUSTED, READ, SAID_UNSTATED, UNANSWERED, UNBACKED
 from .matching import matched
 from .pipeline import Row, mark_unanswered, merge_field, row_label
-from .reading import (SHOWN, Gathered, answer_of, answer_schema, around_of,
-                      coordinate_shown, first_line, gather, groups_of,
-                      heading_of, known_shown, more_schema, shown_as,
-                      shown_hits, slots_of, source_of, years_of)
+from .reading import (SHOWN, Gathered, answer_of, answer_schema,
+                      answers_each, around_of, coordinate_shown, first_line,
+                      gather, groups_of, heading_of, known_shown, more_schema,
+                      printed, several, shown_as, shown_hits, shown_value,
+                      slots_of, source_of, years_of)
 from .verify import quote_in
 from .wording import say
 
@@ -94,6 +96,27 @@ def comb_response_format(slots: list, labels: list) -> dict:
             "json_schema": {"name": "comb_reply", "schema": schema}}
 
 
+def named_rows(corrections: list, given: dict, slots: list) -> list:
+    """*corrections* ([{row, what}]) of rows a reply made of one value
+    (`reading.answers_each`): a row asked again for one coordinate that
+    named several wordings names the wording it was given and its quote
+    (*given*: {row: its reply entry}), so the request asks for that one."""
+    by_name = {slot.name: slot for slot in slots if several(slot)}
+    out = []
+    for correction in corrections:
+        entry = given.get(correction.get("row")) or {}
+        names = [name for name in correction.get("what") or {}
+                 if name in by_name and isinstance(entry.get(name), dict)]
+        if len(names) == 1:
+            answer = entry[names[0]]
+            correction = {"row": correction["row"],
+                          **{key: answer[key] for key in ("value", "quote")
+                             if answer.get(key) not in (None, "")},
+                          "what": correction["what"]}
+        out.append(correction)
+    return out
+
+
 @dataclass
 class Combed:
     """What combing the open coordinates of one value came to."""
@@ -110,6 +133,8 @@ class Combed:
     corrected: int = 0
     exhausted: int = 0
     group: Optional[str] = None   # the group of the spec asked
+    # rows made beside the value, one per further wording it was stated for
+    made: list = field(default_factory=list)
 
 
 class Comber:
@@ -157,17 +182,28 @@ class Comber:
                     if index < len(read.probes) else {}
                 for group, group_slots in groups_of(self.spec, slots):
                     if open_of(claim, group_slots):
-                        jobs.append((parameter, source, group, group_slots,
-                                     claim, probes))
+                        jobs.append((read, parameter, source, group,
+                                     group_slots, claim, probes))
 
         def one(job):
-            parameter, source, group, group_slots, claim, probes = job
+            _read, parameter, source, group, group_slots, claim, probes = job
             return self.comb(document_id, parameter, source, group_slots,
                              [claim], passages, pairs, budget, group=group,
-                             probes=probes)
+                             probes=probes, split=True)
         if self.pool is None:
-            return [one(job) for job in jobs]
-        return list(self.pool.map(one, jobs))
+            combed = [one(job) for job in jobs]
+        else:
+            combed = list(self.pool.map(one, jobs))
+        # A value combed for several wordings is one row per wording (owner
+        # decision 2026-11-06): the rows made join their value's reading.
+        for job, result in zip(jobs, combed):
+            read, probes = job[0], job[-1]
+            if result.made:
+                read.probes = list(read.probes) + [{}] * max(
+                    0, len(read.claims) - len(read.probes))
+                read.claims.extend(row.claim for row in result.made)
+                read.probes.extend(dict(probes) for _ in result.made)
+        return combed
 
     def comb_groups(self, document_id: int, parameter, source, slots: list,
                     claims: list, passages: dict, pairs: list,
@@ -203,7 +239,7 @@ class Comber:
              coordinates: Optional[list] = None, own: bool = False,
              bases: Optional[tuple] = None,
              first: Optional[list] = None, group=None,
-             probes: Optional[dict] = None) -> Combed:
+             probes: Optional[dict] = None, split: bool = False) -> Combed:
         """The open coordinates of *claims*, values of *parameter* read in
         *source*, answered in place; with *coordinates* those of every row,
         open or not. *own* shows *source* and its section before the first
@@ -212,7 +248,13 @@ class Comber:
         hits, *group* the group of the spec *slots* belong to, whose words
         for where a plan prints them the request shows, *probes* the
         sentences the reading wrote to coordinates it found unstated
-        ({coordinate: sentence}), which the search ranks with."""
+        ({coordinate: sentence}), which the search ranks with. With
+        *split*, a value the reply states for several wordings of a list
+        matched apart is one row per wording (`reading.answers_each`, owner
+        decision 2026-11-06), each a copy of the value's row in
+        `Combed.made` and asked again on its own; without it, as in a pass
+        over a stored harvest that re-reads each stored row in place, the
+        first wording."""
         rows = [Row(label=row_label(i), item_index=0, claim=claim)
                 for i, claim in enumerate(claims)]
         if coordinates is not None:
@@ -260,6 +302,16 @@ class Comber:
             **({"query": " | ".join(sentences)} if sentences else {}))
         bases = list(bases) if bases is not None else self.bases(pairs)
         knowns = {row.label: self.known(row.claim, names) for row in rows}
+
+        def row_shown(row: Row) -> dict:
+            # A value of a list matched apart by its wording (`printed`).
+            return {"row": row.label,
+                    "value": printed(shown_value(row.claim),
+                                     parameter).get("value"),
+                    "unit": row.claim.get("unit"),
+                    "quote": row.claim.get("quote"),
+                    "known": knowns[row.label],
+                    "open": opened[row.label]}
         base = {
             "passage": {"kind": source.owner_kind,
                         "title": lookup.title_of(source),
@@ -267,21 +319,20 @@ class Comber:
                             "section_title")},
             "parameter": {"key": parameter.uri, "label": parameter.label,
                           "definition": parameter.description},
-            "rows": [{"row": row.label, "value": row.claim.get("value"),
-                      "unit": row.claim.get("unit"),
-                      "quote": row.claim.get("quote"),
-                      "known": knowns[row.label],
-                      "open": opened[row.label]} for row in rows],
+            "rows": [row_shown(row) for row in rows],
             "coordinates": {slot.name: coordinate_shown(slot)
                             for slot in asked},
             **({"where": group.where} if group is not None else {}),
             **years_of(bases, asked)}
-        shape = comb_response_format(asked, [row.label for row in rows])
-
-        def ask(corrections: Optional[list] = None):
+        def ask(corrections: Optional[list] = None,
+                shown: Optional[list] = None):
             payload = {**base, **gathered.context()}
+            if shown is not None:
+                payload["rows"] = shown
             if corrections:
                 payload["corrections"] = corrections
+            shape = comb_response_format(
+                asked, [entry["row"] for entry in payload["rows"]])
             return self.ask(payload, shape, document_id, source,
                             group=group.name if group is not None else None)
 
@@ -321,14 +372,34 @@ class Comber:
         def entries(reply: dict) -> dict:
             return self._matched(document_id, parameter, asked, reply,
                                  evidence, passages, budget)
+        reply, made = self._each(rows, reply, asked, opened, knowns, split)
+        result.made = made
         failed = self._merged(rows, entries(reply), asked, opened, evidence,
                               bases)
         corrections = self._corrections(rows, failed, opened)
-        if corrections:
+        if corrections and made:
+            # One request per row asked again, showing that row only and
+            # naming the wording it was given.
+            given = {entry.get("row"): entry for entry in reply["rows"]
+                     if isinstance(entry, dict)}
+            by_label = {row.label: row for row in rows}
+            result.corrected = len(corrections)
+            for correction in named_rows(corrections, given, asked):
+                again = ask([correction],
+                            [row_shown(by_label[correction["row"]])])
+                result.asked += 1
+                if isinstance(again, dict):
+                    again, _ = self._each(rows, again, asked, opened,
+                                          knowns, False)
+                    self._merged(rows, entries(again), asked, opened,
+                                 evidence, bases)
+        elif corrections:
             result.corrected = len(corrections)
             again = ask(corrections)
             result.asked += 1
             if isinstance(again, dict):
+                again, _ = self._each(rows, again, asked, opened, knowns,
+                                      False)
                 self._merged(rows, entries(again), asked, opened, evidence,
                              bases)
         mark_unanswered(rows, asked)
@@ -336,6 +407,34 @@ class Comber:
                             if row.claim.get(f"{name}_state") == READ)
         self._traced(document_id, result)
         return result
+
+    @staticmethod
+    def _each(rows: list, reply: dict, slots: list, opened: dict,
+              knowns: dict, split: bool) -> tuple:
+        """(*reply* with each row entry that names several wordings of a
+        coordinate as one entry per wording (`reading.answers_each`), [the
+        rows made for them]): every further wording on a copy of its row,
+        appended to *rows*. Without *split*, the first wording alone."""
+        by_label = {row.label: row for row in rows}
+        entries, made = [], []
+        for entry in reply.get("rows") or ():
+            label = entry.get("row") if isinstance(entry, dict) else None
+            if label not in by_label:
+                entries.append(entry)
+                continue
+            each = answers_each(entry, slots)
+            entries.append(each[0])
+            for one in (each[1:] if split else ()):
+                row = by_label[label]
+                copy_label = row_label(len(rows))
+                clone = Row(label=copy_label, item_index=row.item_index,
+                            claim=copy.deepcopy(row.claim))
+                rows.append(clone)
+                made.append(clone)
+                opened[copy_label] = list(opened[label])
+                knowns[copy_label] = knowns[label]
+                entries.append({**one, "row": copy_label})
+        return {**reply, "rows": entries}, made
 
     def _matched(self, document_id: int, parameter, slots: list, reply: dict,
                  evidence: list, passages: dict,
