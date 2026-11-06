@@ -183,14 +183,20 @@ def wording_asked(slot: Slot) -> bool:
     return bool(slot.is_closed) or slot.kind == NUMBER
 
 
-def value_schema(slot: Slot) -> dict:
+def value_schema(slot: Slot, unstated: bool = True) -> dict:
     """The answers a coordinate can take in a grammar: one entry of its list,
     UNSTATED included; for a number an integer or UNSTATED; else a wording.
     UNSTATED is an answer of every kind: a grammar that takes only an integer
-    for a year leaves the model no way to say the passage prints none."""
+    for a year leaves the model no way to say the passage prints none.
+    Without *unstated* it is none: the combing leaves a coordinate it did not
+    find out of its reply, and the run, not the model, says the plan does not
+    state it once every passage was listed (owner decision 2026-11-06)."""
     if slot.is_closed:
-        return {"enum": list(slot.answerable())}
+        return {"enum": [label for label in slot.answerable()
+                         if unstated or label != UNSTATED]}
     if slot.kind == NUMBER:
+        if not unstated:
+            return {"type": "integer"}
         return {"anyOf": [{"type": "integer"}, {"enum": [UNSTATED]}]}
     return {"type": "string"}
 

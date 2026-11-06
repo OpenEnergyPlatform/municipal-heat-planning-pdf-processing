@@ -219,12 +219,15 @@ def group_context(context: dict, group_slots: list, frame_slots: list,
     return shown
 
 
-def coordinate_shown(slot) -> dict:
+def coordinate_shown(slot, unstated: bool = True) -> dict:
     """A coordinate as a request shows it: its question, and its list, or
-    the kind of its answer."""
+    the kind of its answer; without *unstated* a list without UNSTATED, as
+    the combing asks (`fields.value_schema`)."""
     shown: dict = {"question": slot.question}
     if slot.is_closed:
-        shown["options"] = slot.answerable()
+        shown["options"] = {label: entry
+                            for label, entry in slot.answerable().items()
+                            if unstated or label != fields.UNSTATED}
     else:
         shown["kind"] = slot.kind
     return shown
@@ -238,14 +241,15 @@ def several(slot) -> bool:
     return bool(getattr(slot, "merged", None))
 
 
-def answer_schema(slot, probe: bool = False) -> dict:
+def answer_schema(slot, probe: bool = False, unstated: bool = True) -> dict:
     """One coordinate's answer as the grammar takes it, its printed wording
     only where `fields.wording_asked`; with *probe* also the sentence a reply
     writes to a coordinate its passage does not state, as the plan would
     print it, which the combing searches with (owner decision 2026-11-05:
     HyDE). A coordinate that may name several things (`several`) takes a
-    list of such answers too."""
-    properties = {"value": fields.value_schema(slot)}
+    list of such answers too. Without *unstated* its answer is never
+    UNSTATED (`fields.value_schema`)."""
+    properties = {"value": fields.value_schema(slot, unstated)}
     if fields.wording_asked(slot):
         properties["value_raw"] = {"type": "string"}
     properties["quote"] = {"type": "string"}
@@ -419,7 +423,9 @@ class Gathered:
     under "not_found". *seen* are the passages the request already shows,
     *cursor* where "next" and "previous" go on from, *rank(probes, exclude)*
     the plan's passages best first for sentences, which "similar" lists
-    (`runner.make_more_sources`); None where the run ranks nothing."""
+    (`runner.make_more_sources`); None where the run ranks nothing. *unfit*
+    is set when a request of the gathering no longer fit the model's window
+    or came back unread (`gather`)."""
     seen: set = field(default_factory=set)
     cursor: dict = field(default_factory=dict)
     sources: list = field(default_factory=list)
@@ -428,16 +434,23 @@ class Gathered:
     missed: list = field(default_factory=list)
     by_hit: dict = field(default_factory=dict)
     rank: Optional[Callable] = None
+    unfit: bool = False
 
     def context(self) -> dict:
+        """What the request shows of the gathering so far, as it stands
+        now: a later round adds to the gathering, not to a request sent."""
         out = {}
         if self.shown:
-            out["more"] = self.shown
+            out["more"] = list(self.shown)
         if self.hits:
-            out["hits"] = self.hits
+            out["hits"] = list(self.hits)
         if self.missed:
-            out["not_found"] = self.missed
+            out["not_found"] = list(self.missed)
         return out
+
+    def listed(self) -> set:
+        """The passages the request has listed as a hit or shown."""
+        return {owner for owner, _line in self.by_hit.values()} | self.seen
 
     def evidence(self, passages: dict) -> list:
         """What the request showed of the plan, as passages a quote may stand
@@ -577,16 +590,23 @@ def first_line(source: Source) -> str:
 
 
 def gather(ask: Callable, reply: dict, gathered: Gathered, order: list,
-           passages: dict, budget: Optional[int]) -> tuple:
+           passages: dict, budget: Optional[int],
+           then: Optional[Callable] = None) -> tuple:
     """(the reply that stands, the requests made): what each reply asks of
     the rest of the plan is fetched and the request sent again, until a round
     asks for nothing the request has not shown or the request no longer fits
-    the model's window. The reply before such a round stands."""
+    the model's window (`Gathered.unfit`). The reply before such a round
+    stands. *then(reply)*, where given, is asked when a round asks for
+    nothing new: True when it showed the request something new, which sends
+    it again (the combing lists the next passages of its ranking, owner
+    decision 2026-11-06)."""
     asked = 0
-    while gathered.fetch(reply.get("more"), order, passages, budget):
+    while (gathered.fetch(reply.get("more"), order, passages, budget)
+           or (then is not None and then(reply))):
         again = ask()
         asked += 1
         if not isinstance(again, dict):
+            gathered.unfit = True
             break
         reply = again
     return reply, asked

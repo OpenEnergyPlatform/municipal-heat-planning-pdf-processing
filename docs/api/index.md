@@ -96,7 +96,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.\_\_main\_\_](docpipe.extraction.__main__.md): Allow execution via: python -m docpipe.extraction
 - [docpipe.extraction.archive](docpipe.extraction.archive.md): A harvest or stamp file is never overwritten. (3 functions)
 - [docpipe.extraction.benchmark](docpipe.extraction.benchmark.md): One harvest, recorded once and made again without a model. (7 functions)
-- [docpipe.extraction.combing](docpipe.extraction.combing.md): The coordinates the reading left open, looked for in the rest of the plan. (2 classes, 5 functions)
+- [docpipe.extraction.combing](docpipe.extraction.combing.md): The coordinates the reading left open, looked for in the rest of the plan. (2 classes, 7 functions)
 - [docpipe.extraction.compute](docpipe.extraction.compute.md): The numbers a plan does not print and its printed numbers yield. (2 classes, 13 functions)
 - [docpipe.extraction.contract](docpipe.extraction.contract.md): The core's half of the extraction prompts: where its templates are, which languages they come in and the facts the code fills into them. (8 functions)
 - [docpipe.extraction.evaluate](docpipe.extraction.evaluate.md): Holds a harvest against what people decided about it. (1 class, 11 functions)
@@ -108,7 +108,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.graphkit](docpipe.extraction.graphkit.md): The small tools the graph writers share. (7 functions)
 - [docpipe.extraction.identity](docpipe.extraction.identity.md): Which value a harvested row is, and where its passage is now. (7 functions)
 - [docpipe.extraction.lookup](docpipe.extraction.lookup.md): What the model may ask of the rest of one document, resolved by code. (1 class, 4 functions)
-- [docpipe.extraction.naming](docpipe.extraction.naming.md): Which of a document's names mean the same thing, asked once the document is read (owner decisions 2026-11-06). (1 class, 12 functions)
+- [docpipe.extraction.naming](docpipe.extraction.naming.md): Which of a document's names mean the same thing, asked once the document is read (owner decisions 2026-11-06). (1 class, 13 functions)
 - [docpipe.extraction.pipeline](docpipe.extraction.pipeline.md): The harvest loop that turns a document's retrieved passages into verified value tuples. (6 classes, 49 functions)
 - [docpipe.extraction.places](docpipe.extraction.places.md): Where a document says something to each axis, read once per document before its coordinates are searched. (2 classes, 8 functions)
 - [docpipe.extraction.preflight](docpipe.extraction.preflight.md): A profile, everything a corpus run rests on. (11 functions)

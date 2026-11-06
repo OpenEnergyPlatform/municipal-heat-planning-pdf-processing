@@ -226,7 +226,7 @@ def from_traces(trace_dirs: Iterable[Path],
                 elif kind == "comb":
                     combed["passages"] += 1
                     for key in ("open", "filled", "exhausted", "hits",
-                                "fetched", "searched", "missed"):
+                                "fetched", "searched", "missed", "listed"):
                         combed[key] += _int(event, key)
     return {
         # The maps of places: documents mapped and how many completely,
@@ -292,7 +292,9 @@ def from_traces(trace_dirs: Iterable[Path],
             "refused_first_by_reason": dict(refused_first)},
         # Combed passages (one passage for one parameter), coordinates open
         # when combed, filled and left exhausted, hits shown, passages
-        # fetched, hit lists, asks not found.
+        # fetched, hit lists the model asked for, lists of the next
+        # passages the run added (owner decision 2026-11-06: the search runs
+        # empty), asks not found.
         "combing": {
             "passages": combed["passages"],
             "coordinates_open": combed["open"],
@@ -301,6 +303,7 @@ def from_traces(trace_dirs: Iterable[Path],
             "hits_shown": combed["hits"],
             "passages_fetched": combed["fetched"],
             "hit_lists": combed["searched"],
+            "lists_added": combed["listed"],
             "asks_not_found": combed["missed"]},
     }
 

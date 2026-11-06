@@ -11,12 +11,18 @@ nearest to its own sentence. A coordinate answered
 from anything the request showed of the plan (a fetched hit, a hit's line or
 title, a wording the value has read) is read and cites the passage it was
 shown with in window `retrieval`, AND one quoting what the request never
-showed is not read AND is told so in the names of what the request shows; one answered as not stated ends unstated; one left without an answer is asked for
-by name once more as missing, AND one given in another form than asked (a
-bare word where an object with "value" is asked) as given in the wrong
-form, and both end unanswered; a coordinate read before is never
-touched; and a request that does not fit leaves every open coordinate
-exhausted.
+showed is not read AND is told so in the names of what the request shows.
+The combing offers no "not stated": its grammar requires no coordinate and
+takes no UNSTATED, AND its options leave it out. A coordinate the reply
+leaves out, or gives as UNSTATED all the same, is not asked for again, AND
+a round that asks for nothing new while one is unfound gets the next
+passages of the ranking, of the plan in its order where there is none,
+until every passage was listed, AND only then does it end unstated; a find
+ends the listing; one whose request no longer fits before that ends
+exhausted. One given in another form than asked (a bare word where an
+object with "value" is asked) is asked for again as given in the wrong
+form and ends unanswered; a coordinate read before is never touched; and a
+first request that does not fit leaves every open coordinate exhausted.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -116,7 +122,6 @@ def test_a_request_shows_one_row_and_its_answers_stand_at_the_top():
     # Owner decision 2026-11-06: no wrapper and no row label.
     slots = reading.slots_of(SPEC, EMISSION)
     schema = combing.comb_response_format(slots)["json_schema"]["schema"]
-    assert schema["required"] == SLOTS
     assert set(schema["properties"]) == {*SLOTS, "more"}
     more = [{"get": "hit", "id": "H1"}]
     assert combing.as_rows(dict(everything(year=YEAR), more=more), "R2") == {
@@ -163,11 +168,34 @@ def test_a_coordinate_answered_from_a_fetched_hit_is_read_and_cites_it():
     assert [m["text"] for m in asked[1]["more"]] == [HIT.text]
 
 
+def test_the_combing_offers_no_not_stated():
+    # Owner decision 2026-11-06: the run, not the model, says the plan does
+    # not state a coordinate. Neither the grammar nor the options offer it.
+    slots = reading.slots_of(SPEC, EMISSION)
+    schema = combing.comb_response_format(slots)["json_schema"]["schema"]
+    assert "required" not in schema
+    text = json.dumps(schema)
+    assert UNSTATED not in text
+    year = schema["properties"]["year"]["properties"]["value"]
+    assert year == {"type": "integer"}
+    made, asked, _ = comber({})
+    made(7, reads(claim()), PASSAGES, [])
+    shown = [entry for payload in asked
+             for entry in payload["coordinates"].values()]
+    assert any("options" in entry for entry in shown)
+    assert all(UNSTATED not in entry.get("options", {}) for entry in shown)
+    # The failure by construction: the reading still offers it.
+    assert UNSTATED in json.dumps(reading.answer_schema(slots[0]))
+    assert UNSTATED in reading.coordinate_shown(
+        next(slot for slot in slots if slot.is_closed))["options"]
+
+
 def test_a_quote_from_nothing_the_request_showed_is_not_read():
     # Without a sentence no list is shown: the passage that prints the year
-    # is in the plan, but the request never showed it.
+    # is in the plan, but the request never showed it, and with every
+    # coordinate found it lists nothing more.
     made, asked, _ = comber(everything(year=YEAR))
-    read = reads(claim())
+    read = reads(claim(scenario=fields.READ))
     made(7, read, PASSAGES, [])
     assert read[0].claims[0]["year_state"] == fields.UNBACKED
     # Told in the names of what a combing request shows (owner decision
@@ -241,29 +269,96 @@ def test_a_quote_from_a_wording_the_value_has_read_cites_where_it_was_read():
     assert read[0].claims[0]["year_state"] == fields.UNBACKED
 
 
-def test_not_stated_stays_and_no_answer_is_asked_by_name_then_unanswered():
-    entry = everything()
-    del entry["year"]
-    made, asked, _ = comber(entry)
-    read = reads(claim())
-    done = made(7, read, PASSAGES, [])[0]
+SECTIONS = [Source("section", 100 + i,
+                   f"S{i}\nDie Werte gelten für das Jahr {2000 + i}.", {})
+            for i in range(20)]
+PLAN = {**PASSAGES, **{(s.owner_kind, s.owner_id): s for s in SECTIONS}}
+
+
+def year_only():
+    """A value of OWN whose year alone is open."""
+    return claim(**{name: fields.READ for name in SLOTS if name != "year"})
+
+
+def test_an_unfound_coordinate_lists_the_plan_to_its_end_then_is_unstated():
+    # A reply that finds nothing and asks for nothing: never asked for it
+    # again, the next passages of the ranking instead, until every passage
+    # was listed (owner decision 2026-11-06: the search runs empty).
+    made, asked, _ = comber({}, ranked=SECTIONS)
+    read = reads(year_only(), probes=[SAID])
+    (done,) = made(7, read, PLAN, [])
+    assert read[0].claims[0]["year_state"] == fields.SAID_UNSTATED
+    listed = [hit["title"] for one in asked[-1]["hits"] for hit in one["hits"]]
+    assert sorted(listed) == sorted(s.text.split("\n")[0] for s in SECTIONS)
+    assert len(listed) == len(set(listed))       # each passage listed once
+    assert [len(one["hits"]) for one in asked[-1]["hits"]] == [15, 5]
+    assert all(one["query"] == SAID["year"] for one in asked[-1]["hits"])
+    assert done.asked == 2 and done.listed == 1
+    assert all("corrections" not in payload for payload in asked)
+    # The failure by construction: a find on the second list ends it, read.
+    found = {"year": {"value": 2017, "quote": "gelten für das Jahr 2017"}}
+    made, asked, _ = comber({}, found, {}, ranked=SECTIONS)
+    read = reads(year_only(), probes=[SAID])
+    (done,) = made(7, read, PLAN, [])
     value = read[0].claims[0]
-    assert value["scenario_state"] == fields.SAID_UNSTATED
-    assert value["year_state"] == fields.UNANSWERED
-    assert asked[1]["corrections"] == {
-        "what": {"year": say("key_missing", key="year")}}
-    assert done.asked == 2 and len(asked) == 2 + len(GROUPS) - 1
+    assert value["year_state"] == fields.READ
+    assert value["year_source"] == ["section", 117]
+    assert done.asked == 2 and done.listed == 1
+
+
+def test_without_a_ranking_the_plan_is_listed_in_its_order():
+    made, asked, _ = comber({})
+    read = reads(year_only())
+    (done,) = made(7, read, PLAN, [])
+    assert "hits" not in asked[0]
+    order = [s.text.split("\n")[0] for s in PLAN.values() if s is not OWN]
+    listed = [hit["title"] for one in asked[-1]["hits"] for hit in one["hits"]]
+    assert listed == ["Ausblick"] + [f"S{i}" for i in range(15)] \
+        + [f"S{i}" for i in range(15, 20)]
+    assert listed == order
+    assert all("query" not in one for one in asked[-1]["hits"])
+    assert read[0].claims[0]["year_state"] == fields.SAID_UNSTATED
+
+
+def test_unstated_from_the_model_is_no_answer_and_the_listing_goes_on():
+    # The model writes "not stated" all the same, as an object or a bare
+    # word: no answer, not asked for again, and the plan is listed on.
+    for said in ({"value": UNSTATED}, UNSTATED, [{"value": UNSTATED}]):
+        made, asked, _ = comber({"year": said}, ranked=SECTIONS)
+        read = reads(year_only(), probes=[SAID])
+        (done,) = made(7, read, PLAN, [])
+        assert read[0].claims[0]["year_state"] == fields.SAID_UNSTATED
+        assert done.listed == 1
+        assert all("corrections" not in payload for payload in asked)
+
+
+def test_a_request_that_no_longer_fits_while_listing_leaves_it_exhausted():
+    made, _, _ = comber({}, reading.CUT, ranked=SECTIONS)
+    read = reads(year_only(), probes=[SAID])
+    (done,) = made(7, read, PLAN, [])
+    assert read[0].claims[0]["year_state"] == fields.EXHAUSTED
+    assert done.exhausted == 1
+    # The failure by construction: the same listing that fits ends unstated.
+    made, _, _ = comber({}, {}, ranked=SECTIONS)
+    read = reads(year_only(), probes=[SAID])
+    made(7, read, PLAN, [])
+    assert read[0].claims[0]["year_state"] == fields.SAID_UNSTATED
 
 
 def test_an_answer_in_another_form_is_asked_again_as_such_then_unanswered():
-    # "out:unstated" as a bare word where {"value": "out:unstated"} is asked:
-    # the correction names the form, not a missing answer.
-    made, asked, _ = comber(everything(year=UNSTATED))
-    read = reads(claim())
-    done = made(7, read, PASSAGES, [])[0]
+    # A bare year where {"value": 2030, "quote": ...} is asked: a find, so
+    # the listing ends, and the correction names the form.
+    made, asked, _ = comber({"year": 2030})
+    read = reads(year_only(), probes=[SAID])
+    (done,) = made(7, read, PASSAGES, [])
     assert asked[1]["corrections"] == {"what": {"year": say("wrong_shape")}}
     assert read[0].claims[0]["year_state"] == fields.UNANSWERED
-    assert done.asked == 2
+    assert done.asked == 2 and done.listed == 0
+    # The failure by construction: given in the form asked, it is read.
+    made, asked, _ = comber({"year": 2030}, {"year": YEAR})
+    read = reads(year_only(), probes=[SAID])
+    made(7, read, PASSAGES, [])
+    assert read[0].claims[0]["year_state"] == fields.READ
 
 
 def test_a_coordinate_read_before_is_never_touched():
@@ -294,8 +389,13 @@ def test_the_search_ranks_with_the_sentences_of_the_coordinates_asked():
     framed = next(p for p in asked if "year" in p["coordinates"])
     (listed,) = framed["hits"]
     assert listed["query"] == SAID["year"]
-    assert all("hits" not in payload for payload in asked
-               if "year" not in payload["coordinates"])
+    # A group without a sentence starts without a list, and what it lists
+    # later is the plan in its order, under no "query".
+    others = [p for p in asked if "year" not in p["coordinates"]]
+    firsts = [p for p in others if "hits" not in p]
+    assert len(firsts) == len(GROUPS) - 1
+    assert all("query" not in one for p in others
+               for one in p.get("hits") or ())
 
 
 def test_without_a_sentence_the_model_searches_itself_with_its_own():
@@ -313,11 +413,12 @@ def test_without_a_sentence_the_model_searches_itself_with_its_own():
     assert [hit["title"] for hit in listed["hits"]] == ["Ausblick"]
     value = read[0].claims[0]
     assert value["year"] == 2030 and value["year_state"] == fields.READ
-    # Where the run ranks nothing, the search finds nothing and the reply
-    # stands.
+    # Where the run ranks nothing, the search finds nothing, and the plan is
+    # listed in its order: here its one other passage.
     made, asked, _ = comber(
         dict(everything(),
              more=[{"get": "similar", "text": "Werte für das Jahr 2030"}]),
         ranking=False)
     done = made(7, reads(claim()), PASSAGES, [])
-    assert all(d.missed == 1 and d.asked == 1 and d.hits == 0 for d in done)
+    assert all(d.missed == 1 and d.asked == 2 and d.hits == 1
+               and d.listed == 1 for d in done)

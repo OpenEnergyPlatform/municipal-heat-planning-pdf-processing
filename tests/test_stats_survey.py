@@ -80,12 +80,16 @@ def test_comb_events_add_up_open_filled_and_exhausted_coordinates(tmp_path):
             "missed": 0, "corrected": 0}
     out = traced(tmp_path,
                  {**base, "open": 5, "filled": 3, "exhausted": 0},
-                 {**base, "open": 4, "filled": 0, "exhausted": 4})["combing"]
+                 {**base, "open": 4, "filled": 0, "exhausted": 4,
+                  "listed": 2})["combing"]
     assert out["passages"] == 2
     assert out["coordinates_open"] == 9
     assert out["coordinates_filled"] == 3
     assert out["coordinates_exhausted"] == 4
     assert out["hits_shown"] == 8
+    # The lists of the next passages the run added (owner decision
+    # 2026-11-06), none in an event written before them.
+    assert out["lists_added"] == 2
     # By construction: no comb event, no combed coordinate.
     empty = traced(tmp_path, ask("comb_ask"))["combing"]
     assert empty["passages"] == 0 and empty["coordinates_open"] == 0

@@ -9,19 +9,19 @@ You get:
 - "parameter": the field with its definition.
 - "row": the value with its quote, what is already read about it ("known", in the publication's words) and what is still open ("open").
 - "coordinates": the open coordinates, each with its question; "where": where a publication usually prints them.
-- "hits": hit lists, each hit with "id", kind, title and one line: its first line, for a "search" the line that matches. The first list, where there is one, holds the passages of the publication nearest to the sentences under "query": how the publication would print the open coordinates, written when this value was read. Where there is none, search yourself with "similar". After it come the hits of your own searches.
+- "hits": hit lists, each hit with "id", kind, title and one line: its first line, for a "search" the line that matches. The first list, where there is one, holds the passages of the publication nearest to the sentences under "query": how the publication would print the open coordinates, written when this value was read. Where there is none, search yourself with "similar". After it come the hits of your own searches. When you ask for nothing new while a coordinate is still missing, you get the same question once more with one more list: the next passages nearest to the sentences under "query", or, without "query", the next passages in the order of the publication, until every passage of the publication was listed.
 - "more", "not_found": the passages you asked for, each with "id", and what could not be found, with its reason ("end": there is no section in that direction any more, "unknown": no or more than one placeholder or hit of that name, "invalid_pattern" or "timeout": the pattern did not work).
 - "corrections": only in a second request. What was wrong with your first answer, per coordinate under "what". A correction that names a "value" asks for that scenario alone.
 
 You answer with:
-1. EVERY coordinate from "coordinates", each with "value", the scenario's name as the publication prints it, copied character for character, and "quote": ONE contiguous place from what you were shown, copied character for character, that contains the name and speaks about THIS value. If the publication states the value for several scenarios, give each of them as its own entry of a list, each with its own quote. If it stands in no place shown, its entry is {"value": "out:unstated"}, without "quote". A coordinate that is not under "open" is read already: its entry is {"value": "out:unstated"}.
+1. Each coordinate from "coordinates" you found, with "value", the scenario's name as the publication prints it, copied character for character, and "quote": ONE contiguous place from what you were shown, copied character for character, that contains the name and speaks about THIS value. If the publication states the value for several scenarios, give each of them as its own entry of a list, each with its own quote. A coordinate you have not found, leave out.
 2. "more": what you want to read before you answer. A list of requests:
    - {"get": "hit", "id": "<<id of a hit>>"}: the passage of this hit;
    - {"get": "next"} or {"get": "previous"}: the section after or before the passage of the value, next time the one after or before that;
    - {"get": "item", "id": "<<placeholder>>"}: the table or figure whose placeholder stands in square brackets in the text;
    - {"get": "search", "pattern": "<<regular expression>>"}: a hit list of the passages whose text contains the pattern, regardless of case;
    - {"get": "similar", "text": "<<a sentence as the publication would print the coordinate for this value>>"}: a hit list of the passages nearest to that sentence; what it says may be made up.
-   You then get the same question once more, with what you asked for under "more" and "hits". Give your whole answer with everything you already know when you ask for more as well; without a new request in "more" it stands. Do not guess: what you have not read is "out:unstated".
+   You then get the same question once more, with what you asked for under "more" and "hits". Give your whole answer with everything you already know when you ask for more as well; without a new request in "more" it stands. Do not guess: name only what you have read.
 
 In a second request you answer once more in full and fix the points from "corrections".
 
@@ -29,5 +29,3 @@ Answer with exactly one JSON object on one line, with no text or code block befo
 {{example}}
 Where the publication states the value for several scenarios (the quotes below are descriptions in << >> and stand in no publication):
 {"scenario": [{"value": "<<the first scenario's name>>", "quote": "<<a sentence that names it>>"}, {"value": "<<the second scenario's name>>", "quote": "<<a sentence that names it>>"}]}
-Where the scenario of this value stands in no place shown:
-{"scenario": {"value": "out:unstated"}}

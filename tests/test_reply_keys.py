@@ -1,11 +1,12 @@
 """A reply that parses but lacks a key its schema requires at the top is not
 the object that was asked for: it is asked again as missing_key, the retry
 naming the key, in every request of the stage that goes out with a schema
-(the survey, the two reading requests, the combing, the places and the field
-requests). A
+(the survey, the two reading requests, the places and the field requests). A
 reply that has every key the top requires is taken as it is, whatever it
-leaves out below. Each promise has a case that breaks it by construction
-beside the one that keeps it."""
+leaves out below. The combing requires no key: a coordinate it did not find
+is left out, so `{}` is its reply that found nothing and asks for nothing
+(owner decision 2026-11-06). Each promise has a case that breaks it by
+construction beside the one that keeps it."""
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -60,10 +61,9 @@ REQUESTS = ((reading.values_response_format(EMISSION, True), "read_values",
             (survey.response_format(survey.parameters_of(SPEC),
                                     survey.tuple_slots(SPEC)), "survey",
              "parameters", {"parameters": ["out:none"]}),
-            (combing.comb_response_format(SLOTS), "comb", SLOTS[0].name,
-             {slot.name: {"value": "out:unstated"} for slot in SLOTS}),
             (reading.text_response_format(SLOTS), "read_text", SLOTS[0].name,
              {slot.name: {"value": "out:unstated"} for slot in SLOTS}))
+COMB = combing.comb_response_format(SLOTS)
 
 
 def test_a_reply_without_its_keys_is_asked_again_naming_the_key(faults):
@@ -78,16 +78,13 @@ def test_a_reply_without_its_keys_is_asked_again_naming_the_key(faults):
 
 def test_a_reply_in_a_wrapper_the_reply_lost_is_asked_again(faults):
     # Owner decision 2026-11-06: no wrapper. The survey's reply as it was
-    # before, a value inside "next" and a combed row inside "rows" lack the
-    # key their top requires.
+    # before and a value inside "next" lack the key their top requires.
     for shape, where, key, wrapped, whole in (
             (REQUESTS[1][0], "survey", "parameters",
              {"passages": {"P1": {"parameters": ["out:none"]}}},
              {"parameters": ["out:none"]}),
             (REQUESTS[0][0], "read_values", "value", {"next": None},
-             {"value": None}),
-            (REQUESTS[2][0], "comb", SLOTS[0].name,
-             {"rows": [dict(REQUESTS[2][3], row="R1")]}, REQUESTS[2][3])):
+             {"value": None})):
         faults.clear()
         client, sent = replying(json.dumps(wrapped), json.dumps(whole))
         assert runner.ask_in_grammar(client, PROMPT, [], shape, 7, where,
@@ -103,6 +100,13 @@ def test_a_reply_with_every_key_the_top_requires_is_taken_as_it_is(faults):
         assert runner.ask_in_grammar(client, PROMPT, [], shape, 7, where,
                                      key) == whole
         assert len(sent) == 1 and faults == [], where
+    # The combing requires no key: {} found nothing and asks for nothing.
+    assert "required" not in COMB["json_schema"]["schema"]
+    for whole in ({}, {"year": {"value": 2030, "quote": "für 2030"}}):
+        client, sent = replying(json.dumps(whole))
+        assert runner.ask_in_grammar(client, PROMPT, [], COMB, 7, "comb",
+                                     "year") == whole
+        assert len(sent) == 1 and faults == []
 
 
 def test_a_places_reply_without_its_hits_is_asked_again(monkeypatch, faults,

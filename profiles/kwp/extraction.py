@@ -196,8 +196,8 @@ PHRASES = {
         'Passage die Angabe nennt, dann lass "value" weg und gib die '
         'Bezeichnung in "value_raw".'),
     "name_not_listed": (
-        'Unter {name!r} hast du {given} angegeben. Antworte nur unter einer '
-        'Nummer aus "names", mit einer Liste von Nummern aus "names".'),
+        'Unter {name!r} hast du {given} angegeben. Antworte mit einer '
+        'Liste von Nummern aus "names".'),
     "wrong_type": (
         'Dein "value" {given!r} ist nicht {wrong}. Antworte mit {wrong}, '
         'genau wie die Passage es schreibt.'),

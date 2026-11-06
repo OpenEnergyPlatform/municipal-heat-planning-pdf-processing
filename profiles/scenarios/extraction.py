@@ -402,8 +402,8 @@ PHRASES = {
         'although the passage states the field, leave "value" out and '
         'give the wording in "value_raw".'),
     "name_not_listed": (
-        'Under {name!r} you gave {given}. Answer only under a number from '
-        '"names", with a list of numbers from "names".'),
+        'Under {name!r} you gave {given}. Answer with a list of numbers '
+        'from "names".'),
     "wrong_type": (
         'Your "value" {given!r} is not {wrong}. Answer with {wrong}, '
         'exactly as the passage writes it.'),

@@ -106,7 +106,9 @@ of its searches under "hits", and what could not be found, with why,
 under "not_found". *seen* are the passages the request already shows,
 *cursor* where "next" and "previous" go on from, *rank(probes, exclude)*
 the plan's passages best first for sentences, which "similar" lists
-(`runner.make_more_sources`); None where the run ranks nothing.
+(`runner.make_more_sources`); None where the run ranks nothing. *unfit*
+is set when a request of the gathering no longer fit the model's window
+or came back unread (`gather`).
 
 Fields:
 
@@ -118,12 +120,24 @@ Fields:
 - `missed: list = field(default_factory=list)`
 - `by_hit: dict = field(default_factory=dict)`
 - `rank: Optional[Callable] = None`
+- `unfit: bool = False`
 
 #### Gathered.context
 
 ```python
 def context(self) -> dict
 ```
+
+What the request shows of the gathering so far, as it stands
+now: a later round adds to the gathering, not to a request sent.
+
+#### Gathered.listed
+
+```python
+def listed(self) -> set
+```
+
+The passages the request has listed as a hit or shown.
 
 #### Gathered.evidence
 
@@ -316,11 +330,12 @@ frame coordinate.
 ### coordinate_shown
 
 ```python
-def coordinate_shown(slot) -> dict
+def coordinate_shown(slot, unstated: bool = True) -> dict
 ```
 
 A coordinate as a request shows it: its question, and its list, or
-the kind of its answer.
+the kind of its answer; without *unstated* a list without UNSTATED, as
+the combing asks (`fields.value_schema`).
 
 ### several
 
@@ -336,7 +351,7 @@ owner decisions 2026-11-06)?
 ### answer_schema
 
 ```python
-def answer_schema(slot, probe: bool = False) -> dict
+def answer_schema(slot, probe: bool = False, unstated: bool = True) -> dict
 ```
 
 One coordinate's answer as the grammar takes it, its printed wording
@@ -344,7 +359,8 @@ only where `fields.wording_asked`; with *probe* also the sentence a reply
 writes to a coordinate its passage does not state, as the plan would
 print it, which the combing searches with (owner decision 2026-11-05:
 HyDE). A coordinate that may name several things (`several`) takes a
-list of such answers too.
+list of such answers too. Without *unstated* its answer is never
+UNSTATED (`fields.value_schema`).
 
 ### entry_example
 
@@ -470,13 +486,18 @@ of it.
 
 ```python
 def gather(ask: Callable, reply: dict, gathered: Gathered, order: list,
-           passages: dict, budget: Optional[int]) -> tuple
+           passages: dict, budget: Optional[int],
+           then: Optional[Callable] = None) -> tuple
 ```
 
 (the reply that stands, the requests made): what each reply asks of
 the rest of the plan is fetched and the request sent again, until a round
 asks for nothing the request has not shown or the request no longer fits
-the model's window. The reply before such a round stands.
+the model's window (`Gathered.unfit`). The reply before such a round
+stands. *then(reply)*, where given, is asked when a round asks for
+nothing new: True when it showed the request something new, which sends
+it again (the combing lists the next passages of its ranking, owner
+decision 2026-11-06).
 
 ### parameter_shown
 

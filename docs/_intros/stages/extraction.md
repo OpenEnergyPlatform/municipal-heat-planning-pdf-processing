@@ -372,9 +372,19 @@ answered, a coordinate of a stored row, the request shows no list and the
 model searches itself with `similar`. The model fetches what it wants to read
 with the reading's tools (`reading.Gathered`: a hit by its id, the next or the
 previous section, a table or figure by its placeholder, a pattern, a sentence
-of its own), each group with its own, and answers each open
-coordinate of the group with its
-quote, or that the plan does not state it. A request shows that one row under
+of its own), each group with its own, and gives each open
+coordinate of the group it found, with its value and quote, and leaves out
+what it did not find (owner decision 2026-11-06). The combing does not offer
+"not stated": its reply grammar requires no coordinate and takes no
+`out:unstated`, and the options of a closed list it shows leave that entry
+out (`reading.coordinate_shown(slot, unstated=False)`,
+`fields.value_schema(slot, unstated=False)`). `{}` is a valid reply: nothing
+found, nothing asked for. A coordinate left out is not asked for again, and an
+`out:unstated` the model writes all the same counts as no answer
+(`combing.found`, `combing.finds`). A probe on paper 86 showed why: with a
+not-stated example line in the prompt the model ended its search at once, and
+the combing filled 47 of 266 open coordinates, where the probe before
+filled 153 of 272. A request shows that one row under
 `row`, with no list of rows and no row label, and the reply carries the asked
 coordinates at its top with `more` beside them, no `rows` wrapper and no label
 (`combing.comb_response_format`, read back as the row by `combing.as_rows`,
@@ -383,10 +393,9 @@ owner decision 2026-11-06); a correction is told as one object for that row,
 name of a coordinate that may name several is asked again on its own. The answers go through
 `merge_field` in window `retrieval`, a coordinate read before is never
 touched, and what the check refuses or the reply leaves out is asked once
-more (a coordinate the reply gave in another form than asked is told
-`wrong_shape`, one it left out `key_missing`, `combing.Comber._corrections`;
-the prompt names the not-stated entry as `{"value": "out:unstated"}` and shows
-it as its own example line), a quote in nothing shown in the names of what the combing shows,
+more (a coordinate the reply gave in another form than asked, such as a bare
+value where an object is asked, is told `wrong_shape`,
+`combing.Comber._corrections`), a quote in nothing shown in the names of what the combing shows,
 `"more"`, `"hits"`, `"passage"` and `"row"` (`quote_not_shown`,
 `combing.NOT_SHOWN`, owner decision 2026-11-06). A quote may stand in
 whatever the request showed of the plan (owner
@@ -396,9 +405,17 @@ the value has read (`reading.Gathered.evidence`, `reading.shown_as`,
 `reading.known_shown`). The coordinate cites the passage that piece was shown
 with, so a quote from a hit's line cites the hit's passage; the rest of a
 listed passage was not shown and does not count. The prompt names no place a
-quote has to come from. A coordinate the request leaves without an answer ends `unanswered`; one
-whose request no longer fits the model's window ends `exhausted`; `unstated`
-is from here on a finding about the plan. The ranking is handed in:
+quote has to come from. A coordinate named in another form than asked and not given by the second
+reply ends `unanswered`. When a round asks for nothing new while a coordinate
+is still unfound, the code adds one more hit list: the next passages of the
+ranking of the reading's search sentences, as many of each kind as the first
+list (15 sections, 20 tables, 20 figures), or the plan's passages in their
+order where there is no ranking. This repeats until every passage of the plan
+was listed (owner decision 2026-11-06: the search runs empty;
+`reading.gather(..., then=...)`, `Gathered.unfit`, `Gathered.listed`). Only
+then does a coordinate no reply found end `unstated`, a finding about the plan.
+One whose request no longer fit the model's window before that ends
+`exhausted`, a finding about the run. The ranking is handed in:
 `make_more_sources` in a harvest.
 
 A parameter the survey of the whole plan named no passage for is searched for
@@ -521,12 +538,12 @@ The server's window is measured over the prompts of this flow
 its kind, `read_values_ask`, `read_text_ask`, `comb_ask` and `naming_ask`, each with its
 `group` where the request has one: `read_values_ask` carries `round`,
 `read_text_ask` carries `group` and `value`, and the `comb` event carries
-`group` too. The requests for a search sentence, the frame, the review and
+`group` and `listed`, the hit lists the run added. The requests for a search sentence, the frame, the review and
 the compute step write `phrase_ask`, `frame_ask`, `review_ask` and
 `compute_ask` (`runner._asked`, one per reply, with its tokens). `stats.py`
 writes per run the requests per stage, every `<stage>_ask` kind under its
 stage and the known stages (`schema.ASK_STAGES`) even when they asked
-nothing, and the survey, reading and combing counts (`stats.from_traces`);
+nothing, and the survey, reading and combing counts, `lists_added` among them (`stats.from_traces`);
 the cost estimate counts the requests of both flows (`estimate.TRACED`),
 a frame request once, by its `frame` event (owner decision 2026-11-05).
 
@@ -1509,37 +1526,33 @@ decisions 2026-11-06). It runs inside the run, in `runner.verify` right after
 the compute step and before the file is written (`runner.make_namer`), and only
 for a spec that merges names (`naming.merges`).
 
-One request per kind of thing, the word `merged` names (`scenario`), shows the
-model every name read for it in the document. Each name stands under a number, N1, N2, and so on, with its places
-(`"names": {"N1": {"name": ..., "places": [...]}}`, `naming.numbered`): its
-quote and 500 characters before and after it in the passage it stands in
-(`naming.CONTEXT_CHARS`, owner decision 2026-11-06), a stretch of one passage
-shown once as one place however many names stand in it. The model answers
-with numbers only and copies no name (owner decision 2026-11-06). It answers
-every name under its number: with its own number where it means itself, with
-the number of another name of the same thing, or with several numbers where it
-means several things: `{"N1": ["N1"], "N2": ["N1"], "N5": ["N3", "N4"]}`. The
-schema requires every number (`naming.response_format`). A name whose thing has
-no other name under "names" means itself, even where the model knows the thing
-by a name that is not shown. Names of one thing become one thing, called by the
-name the others point to; a name of several things stands for each of them
-(`naming.meanings`). The answer quotes nothing, since each name keeps the quote
-it was read with (owner decision 2026-11-06). The model had answered only the
-names that mean another name, and a name it left out meant itself; a probe
-showed it then putting names of distinct things (other studies' reference
-scenarios, sub-scenarios of one study) on the nearest name shown (owner
-decision 2026-11-06).
+One request per name (owner decision 2026-11-06), run in the run's thread
+pool. Two probes, where one request over all names (145 and 158) gave every
+name the same simplest answer, once the nearest other name and once itself,
+led to this. A request shows the one name under `"name"` with its number and
+the texts of its own places: its quote and 500 characters before and after it
+in the passage it stands in (`naming.CONTEXT_CHARS`), overlapping stretches
+of one passage joined. Under `"names"` it shows every name of the document
+under its number with the quote it was read with, the asked name included
+(`naming.numbered`). The reply is `{"means": [numbers]}`: its own number, the
+number of another name, or several numbers where the name stands for several
+things (`naming.response_format`). The prompt's example is the reply for that
+request with the name meaning itself (`naming.example_of`). A name whose thing
+has no other name under "names" means itself, even where the model knows the
+thing by a name that is not shown. Names of one thing become one thing, called
+by the name the others point to; a name of several things stands for each of
+them (`naming.meanings`). The answer quotes nothing, since each name keeps the
+quote it was read with.
 
-Nothing is checked beyond the list. A name the reply leaves out is asked once
-more with the reason `key_missing`, an entry under a number the request did not
-show, or with a number it did not show, with `name_not_listed`, worded about
-numbers (`naming.answers_of`). The second reply counts only for the names asked
-again, so an answer the first reply gave stands (`Namer._asked`), and a name
-answered in neither reply means itself. A request that does not fit its room is asked in
-two halves of the names, and the things the halves found are asked once more
-together, each by the places of the name it is called by. The trace writes
-`naming_ask` per answered request and `naming` per document and kind, with the
-names asked.
+Nothing is checked beyond the list. A reply without "means" is asked again with
+the reason `key_missing`; one with an empty list or a number not shown, with
+`name_not_listed` ("Under {name!r} you gave {given}. Answer with a list of
+numbers from "names"."; German in kwp), in one correction round
+(`naming.means_of`). A name answered in neither means itself. A request that
+does not fit is asked against each half of the other names, the asked name in
+both halves; the names the halves give are joined, and the name itself is
+dropped where a half names another. The trace writes `naming_ask` per answered
+request and `naming` per document and kind, with the names asked.
 
 Each row keeps its name and gets what it means under `<coordinate>_means`
 (`scenario_means`), `value_means` for a merged value. The harvest schema
@@ -2337,7 +2350,7 @@ different kind of finding.
 |---|---|
 | `read` | Answered; the cited passage carries the answer |
 | `derived` | Not asked: the spec decided it from the row itself |
-| `unstated` | Answered: the shown passages do not state it. Final once the document's search for the coordinate read the document to its end |
+| `unstated` | Answered: the shown passages do not state it, or, after the combing, no reply found it in any passage of the plan. Final once the document's search for the coordinate read the document to its end |
 | `unanswered` | The field reply never mentioned it |
 | `exhausted` | Still open when the allowance of the document's search for the coordinate ran out, in windows or in requests, document unread to the end |
 | `unbacked` | Answered, but no shown passage carried it, it was another row's, or (a closed list) it named none of the list's entries |

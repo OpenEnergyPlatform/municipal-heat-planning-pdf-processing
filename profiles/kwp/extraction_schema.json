@@ -13835,6 +13835,9 @@
        "figure"
       ]
      },
+     "listed": {
+      "type": "integer"
+     },
      "missed": {
       "type": "integer"
      },

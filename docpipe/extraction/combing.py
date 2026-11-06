@@ -17,8 +17,19 @@ sentence, one whose answer did not hold or that no reply answered, the
 request shows no list and the model searches itself (owner decision
 2026-11-05), with the reading's own tools: a hit by its id, the next or the
 previous section, a table or figure by its placeholder, a pattern, a
-sentence of its own ("similar"). It answers each open coordinate of the
-value with its quote, or that the plan does not state it.
+sentence of its own ("similar"). It answers each open coordinate it finds
+with its quote and leaves out what it does not find: the combing offers no
+"not stated" (owner decision 2026-11-06, after a probe in which the model
+ended its search with it at once), and one the model writes all the same
+is no answer (`found`).
+
+A round that asks for nothing new while a coordinate is still unfound gets
+the next passages of the ranking, as many of each kind as the first list,
+or of the plan in its order where there is no ranking, until every passage
+of the plan was listed (owner decision 2026-11-06: the search runs empty).
+Only then is a coordinate no reply found `unstated`, a finding about the
+plan; one whose request no longer fits the model's window before that ends
+`exhausted`, a finding about the run.
 
 Nothing is checked here. Every answer goes through `merge_field`, and what it
 refuses is asked once more with the reason. Its quote may stand in whatever
@@ -26,9 +37,8 @@ the request showed of the plan (owner decision 2026-11-05): a passage the
 model fetched, a hit's line or title, the title or heading of a passage, the
 value's passage and its section, a wording the value has read. The
 coordinate then cites the passage that piece was shown with. A coordinate
-this request leaves
-without an answer ends `unanswered`; one whose request no longer fits the
-model's window ends `exhausted`; `unstated` is now a finding about the plan.
+the reply names in another form than asked is asked for once more in the
+form asked, and ends `unanswered` where that reply does not give it.
 
 A pass over a stored harvest combs with the same requests
 (`Comber.comb_groups`): the coordinates it names (*coordinates*) whatever
@@ -51,8 +61,9 @@ from functools import partial
 from typing import Callable, Optional
 
 from . import lookup
-from .fields import EXHAUSTED, READ, SAID_UNSTATED, UNANSWERED, UNBACKED
-from .pipeline import Row, mark_unanswered, merge_field, row_label
+from .fields import (EXHAUSTED, READ, SAID_UNSTATED, UNANSWERED, UNBACKED,
+                     UNSTATED)
+from .pipeline import Row, merge_field, row_label
 from .reading import (SHOWN, Gathered, answer_of, answer_schema,
                       answers_each, around_of, coordinate_shown, entry_example,
                       first_line, gather, groups_of, heading_of, known_shown,
@@ -74,8 +85,8 @@ OPEN = (SAID_UNSTATED, UNBACKED, UNANSWERED)
 # (owner decision 2026-11-04: the best 15 sections, 20 tables and 20
 # figures), cut by `reading.shown_hits`; both are named here as before.
 __all__ = ["COMB_PROMPT_ID", "OPEN", "SHOWN", "Comber", "Combed",
-           "as_rows", "comb_example", "comb_response_format", "open_of",
-           "shown_corrections", "shown_hits"]
+           "as_rows", "comb_example", "comb_response_format", "finds",
+           "found", "open_of", "shown_corrections", "shown_hits"]
 
 # What the example of a combing request asks of the rest of the plan, as the
 # prompts' examples always showed it.
@@ -89,16 +100,66 @@ def open_of(claim: dict, slots: list) -> list:
 
 
 def comb_response_format(slots: list) -> dict:
-    """Every coordinate asked of the one row a request shows, at the top of
-    the reply with no wrapper and no row label (owner decision 2026-11-06),
-    and what the reply asks of the rest of the plan."""
-    properties = {slot.name: answer_schema(slot) for slot in slots}
+    """The coordinates asked of the one row a request shows that the reply
+    found, at the top of the reply with no wrapper and no row label (owner
+    decision 2026-11-06), none required and none UNSTATED, and what the
+    reply asks of the rest of the plan."""
+    properties = {slot.name: answer_schema(slot, unstated=False)
+                  for slot in slots}
     properties["more"] = more_schema()
     schema = {"type": "object", "properties": properties,
-              "required": [slot.name for slot in slots],
               "additionalProperties": False}
     return {"type": "json_schema",
             "json_schema": {"name": "comb_reply", "schema": schema}}
+
+
+def found(answer) -> bool:
+    """Does *answer*, a reply's entry for one coordinate, name something: an
+    answer that is not UNSTATED, alone or in a list? An entry the reply left
+    out, one without a value, and UNSTATED name nothing: the combing does
+    not offer it, and one the model writes all the same is no answer (owner
+    decision 2026-11-06). A name in another form than asked names something,
+    and is asked for once more in the form asked."""
+    if isinstance(answer, list):
+        return any(found(one) for one in answer)
+    if isinstance(answer, dict):
+        answer = answer.get("value")
+    if isinstance(answer, str):
+        answer = answer.strip()
+    return answer not in (None, "", UNSTATED)
+
+
+def finds(reply, slots: list):
+    """*reply* (`as_rows`) as the combing reads it: each row's entries that
+    name nothing (`found`) taken out, and each list without its entries
+    that name nothing. Anything but an object is left as it is."""
+    if not isinstance(reply, dict):
+        return reply
+    names = [slot.name for slot in slots]
+    rows = []
+    for entry in reply.get("rows") or ():
+        if not isinstance(entry, dict):
+            rows.append(entry)
+            continue
+        entry = dict(entry)
+        for name in names:
+            given = entry.get(name)
+            if isinstance(given, list):
+                given = [one for one in given if found(one)]
+            if found(given):
+                entry[name] = given
+            else:
+                entry.pop(name, None)
+        rows.append(entry)
+    return {**reply, "rows": rows}
+
+
+def entry_of(reply, label: str) -> dict:
+    """The entry of the row *label* in *reply* (`as_rows`), or {}."""
+    for entry in (reply.get("rows") or ()) if isinstance(reply, dict) else ():
+        if isinstance(entry, dict) and entry.get("row") == label:
+            return entry
+    return {}
 
 
 def comb_example(slots: list) -> dict:
@@ -171,6 +232,7 @@ class Combed:
     missed: int = 0
     corrected: int = 0
     exhausted: int = 0
+    listed: int = 0               # lists of the next passages the run added
     group: Optional[str] = None   # the group of the spec asked
     # rows made beside the value, one per further name it was stated for
     made: list = field(default_factory=list)
@@ -285,7 +347,11 @@ class Comber:
         hits, *group* the group of the spec *slots* belong to, whose words
         for where a plan prints them the request shows, *probes* the
         sentences the reading wrote to coordinates it found unstated
-        ({coordinate: sentence}), which the search ranks with. With
+        ({coordinate: sentence}), which the search ranks with. A round that
+        asks for nothing new while a coordinate is unfound lists the next
+        passages of that ranking, or of the plan in its order, until every
+        passage was listed; a coordinate still unfound then is unstated,
+        one whose request no longer fit before is exhausted. With
         *split*, a value the reply states for several names of a coordinate
         that may name several (`reading.several`) is one row per name
         (`reading.answers_each`, owner decision 2026-11-06), each a copy of
@@ -360,7 +426,7 @@ class Comber:
                             "section_title")},
             "parameter": {"key": parameter.uri, "label": parameter.label,
                           "definition": parameter.description},
-            "coordinates": {slot.name: coordinate_shown(slot)
+            "coordinates": {slot.name: coordinate_shown(slot, unstated=False)
                             for slot in asked},
             **({"where": group.where} if group is not None else {}),
             **years_of(bases, asked)}
@@ -389,12 +455,43 @@ class Comber:
                     result.exhausted += 1
             self._traced(document_id, result)
             return result
+        # What the search lists on from when a round asks for nothing new and
+        # leaves a coordinate unfound (owner decision 2026-11-06: the search
+        # runs empty): the ranking of the sentences, or the plan in its order
+        # where there is none, as many of each kind as the first list.
+        ranking = ranked or [s for s in passages.values()
+                             if (s.owner_kind, s.owner_id) not in
+                             {origin, parent}]
+        about = {"query": " | ".join(sentences)} if ranked else {}
+        listing = {"end": False}
+
+        def next_passages(reply) -> bool:
+            entry = entry_of(reply, rows[0].label)
+            if all(found(entry.get(name)) for name in opened[rows[0].label]):
+                return False
+            listed = gathered.listed()
+            page = shown_hits([s for s in ranking
+                               if (s.owner_kind, s.owner_id) not in listed])
+            if not page:
+                listing["end"] = True
+                return False
+            result.hits += gathered.list_hits(
+                [((s.owner_kind, s.owner_id), lookup.title_of(s),
+                  first_line(s)) for s in page], **about)
+            result.listed += 1
+            return True
+
         reply, more = gather(ask, reply, gathered, list(passages.values()),
-                             passages, budget)
+                             passages, budget, then=next_passages)
         result.asked += more
         result.fetched = len(gathered.sources)
-        result.searched = len(gathered.hits) - (1 if result.hits else 0)
+        result.searched = sum(1 for listed in gathered.hits
+                              if "pattern" in listed or "similar" in listed)
         result.missed = len(gathered.missed)
+        # What the reply said of a coordinate it did not find, kept as the
+        # wording the model saw where it gave one (`pipeline.merge_field`).
+        unfound = entry_of(reply, rows[0].label)
+        reply = finds(reply, asked)
         # Whatever the request showed of the plan may be quoted (owner
         # decision 2026-11-05), each piece under the passage it was shown
         # with: the value's passage and its section, their heading and
@@ -428,8 +525,8 @@ class Comber:
                 again = ask([correction], by_label[correction["row"]])
                 result.asked += 1
                 if isinstance(again, dict):
-                    again, _ = self._each(rows, again, asked, opened,
-                                          knowns, False)
+                    again, _ = self._each(rows, finds(again, asked), asked,
+                                          opened, knowns, False)
                     self._merged(rows, again, asked, opened, evidence,
                                  bases)
         elif corrections:
@@ -437,15 +534,44 @@ class Comber:
             again = ask(corrections)
             result.asked += 1
             if isinstance(again, dict):
-                again, _ = self._each(rows, again, asked, opened, knowns,
-                                      False)
+                again, _ = self._each(rows, finds(again, asked), asked,
+                                      opened, knowns, False)
                 self._merged(rows, again, asked, opened, evidence,
                              bases)
-        mark_unanswered(rows, asked)
+        self._ended(rows, opened, corrections, unfound,
+                    listing["end"] and not gathered.unfit, result)
         result.filled = sum(1 for row in rows for name in opened[row.label]
                             if row.claim.get(f"{name}_state") == READ)
         self._traced(document_id, result)
         return result
+
+    @staticmethod
+    def _ended(rows: list, opened: dict, corrections: list, unfound: dict,
+               empty: bool, result: Combed) -> None:
+        """Every coordinate still without a state when the search ended: one
+        asked again for its form, unanswered; any other unstated where the
+        search listed every passage of the plan (*empty*), exhausted where
+        a request no longer fit before (owner decision 2026-11-06). An
+        unstated one keeps the wording the reply gave it (*unfound*, its
+        entry before `finds`) as what the model saw."""
+        again = {(correction["row"], name) for correction in corrections
+                 for name in correction.get("what") or {}}
+        for row in rows:
+            for name in opened[row.label]:
+                if row.claim.get(f"{name}_state"):
+                    continue
+                if (row.label, name) in again:
+                    row.claim[f"{name}_state"] = UNANSWERED
+                elif empty:
+                    row.claim[f"{name}_state"] = SAID_UNSTATED
+                    given = unfound.get(name)
+                    noticed = given.get("value_raw") \
+                        if isinstance(given, dict) else None
+                    if isinstance(noticed, str) and noticed.strip():
+                        row.claim.setdefault(f"{name}_seen", noticed.strip())
+                else:
+                    row.claim[f"{name}_state"] = EXHAUSTED
+                    result.exhausted += 1
 
     @staticmethod
     def _each(rows: list, reply: dict, slots: list, opened: dict,
@@ -503,17 +629,18 @@ class Comber:
     def _corrections(rows: list, failed: list, opened: dict,
                      reply: dict) -> list:
         """[{row, what: {coordinate: reason}}] of the rows the check refused
-        an answer of or *reply* gave no answer on: missing where the reply
-        left the coordinate out, in the wrong form where it gave it otherwise
-        than asked (`reading.unanswered_what`)."""
+        an answer of or *reply* (`finds`) named something on in another form
+        than asked (`reading.unanswered_what`). A coordinate the reply left
+        out is not asked for: the combing found nothing there (owner
+        decision 2026-11-06)."""
         given = {entry.get("row"): entry for entry in reply.get("rows") or ()
                  if isinstance(entry, dict)}
         what: dict = collections.defaultdict(dict)
         for row in rows:
+            entry = given.get(row.label) or {}
             for name in opened[row.label]:
-                if not row.claim.get(f"{name}_state"):
-                    what[row.label][name] = unanswered_what(
-                        given.get(row.label), name)
+                if not row.claim.get(f"{name}_state") and name in entry:
+                    what[row.label][name] = unanswered_what(entry, name)
         for name, failure in failed:
             if failure.get("row") in opened:
                 what[failure["row"]][name] = failure.get("reason")
@@ -529,4 +656,5 @@ class Comber:
                        hits=result.hits, fetched=result.fetched,
                        searched=result.searched, missed=result.missed,
                        corrected=result.corrected,
-                       exhausted=result.exhausted, group=result.group)
+                       exhausted=result.exhausted, listed=result.listed,
+                       group=result.group)

@@ -2119,15 +2119,17 @@ def make_namer(spec: Spec, passages_of: Callable) -> Optional[Callable]:
         return None
     client = _client()
 
-    def ask(payload, shape, document_id, kind):
+    def ask(payload, shape, document_id, kind, example=None):
+        # One request per name (owner decision 2026-11-06): the name asked
+        # with its places, every name with its quote.
         text = json.dumps(payload, ensure_ascii=False, indent=2)
-        names = list(payload["names"])
         return ask_in_grammar(
             client, prompt, [{"role": "user", "content": text}], shape,
-            document_id, "naming", names[0] if names else "", kind=kind,
-            names=len(names), places=len(payload["places"]),
+            document_id, "naming", naming_map.MEANT, example=example,
+            kind=kind, names=len(payload["names"]),
+            places=len(payload["name"]["places"]),
             corrections=len(payload.get("corrections") or ()))
-    namer = naming_map.Namer(spec, ask, trace=trace.event)
+    namer = naming_map.Namer(spec, ask, trace=trace.event, pool=AHEAD)
 
     def name(report) -> None:
         passages = {(s.owner_kind, s.owner_id): s

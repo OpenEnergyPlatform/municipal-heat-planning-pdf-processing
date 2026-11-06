@@ -20,8 +20,19 @@ sentence, one whose answer did not hold or that no reply answered, the
 request shows no list and the model searches itself (owner decision
 2026-11-05), with the reading's own tools: a hit by its id, the next or the
 previous section, a table or figure by its placeholder, a pattern, a
-sentence of its own ("similar"). It answers each open coordinate of the
-value with its quote, or that the plan does not state it.
+sentence of its own ("similar"). It answers each open coordinate it finds
+with its quote and leaves out what it does not find: the combing offers no
+"not stated" (owner decision 2026-11-06, after a probe in which the model
+ended its search with it at once), and one the model writes all the same
+is no answer (`found`).
+
+A round that asks for nothing new while a coordinate is still unfound gets
+the next passages of the ranking, as many of each kind as the first list,
+or of the plan in its order where there is no ranking, until every passage
+of the plan was listed (owner decision 2026-11-06: the search runs empty).
+Only then is a coordinate no reply found `unstated`, a finding about the
+plan; one whose request no longer fits the model's window before that ends
+`exhausted`, a finding about the run.
 
 Nothing is checked here. Every answer goes through `merge_field`, and what it
 refuses is asked once more with the reason. Its quote may stand in whatever
@@ -29,9 +40,8 @@ the request showed of the plan (owner decision 2026-11-05): a passage the
 model fetched, a hit's line or title, the title or heading of a passage, the
 value's passage and its section, a wording the value has read. The
 coordinate then cites the passage that piece was shown with. A coordinate
-this request leaves
-without an answer ends `unanswered`; one whose request no longer fits the
-model's window ends `exhausted`; `unstated` is now a finding about the plan.
+the reply names in another form than asked is asked for once more in the
+form asked, and ends `unanswered` where that reply does not give it.
 
 A pass over a stored harvest combs with the same requests
 (`Comber.comb_groups`): the coordinates it names (*coordinates*) whatever
@@ -79,6 +89,7 @@ Fields:
 - `missed: int = 0`
 - `corrected: int = 0`
 - `exhausted: int = 0`
+- `listed: int = 0`: lists of the next passages the run added
 - `group: Optional[str] = None`: the group of the spec asked
 - `made: list = field(default_factory=list)`: rows made beside the value, one per further name it was stated for
 
@@ -144,7 +155,11 @@ those of *pairs*), *first* passages listed before the search's
 hits, *group* the group of the spec *slots* belong to, whose words
 for where a plan prints them the request shows, *probes* the
 sentences the reading wrote to coordinates it found unstated
-({coordinate: sentence}), which the search ranks with. With
+({coordinate: sentence}), which the search ranks with. A round that
+asks for nothing new while a coordinate is unfound lists the next
+passages of that ranking, or of the plan in its order, until every
+passage was listed; a coordinate still unfound then is unstated,
+one whose request no longer fit before is exhausted. With
 *split*, a value the reply states for several names of a coordinate
 that may name several (`reading.several`) is one row per name
 (`reading.answers_each`, owner decision 2026-11-06), each a copy of
@@ -173,9 +188,33 @@ The coordinates of a value still open after its reading.
 def comb_response_format(slots: list) -> dict
 ```
 
-Every coordinate asked of the one row a request shows, at the top of
-the reply with no wrapper and no row label (owner decision 2026-11-06),
-and what the reply asks of the rest of the plan.
+The coordinates asked of the one row a request shows that the reply
+found, at the top of the reply with no wrapper and no row label (owner
+decision 2026-11-06), none required and none UNSTATED, and what the
+reply asks of the rest of the plan.
+
+### found
+
+```python
+def found(answer) -> bool
+```
+
+Does *answer*, a reply's entry for one coordinate, name something: an
+answer that is not UNSTATED, alone or in a list? An entry the reply left
+out, one without a value, and UNSTATED name nothing: the combing does
+not offer it, and one the model writes all the same is no answer (owner
+decision 2026-11-06). A name in another form than asked names something,
+and is asked for once more in the form asked.
+
+### finds
+
+```python
+def finds(reply, slots: list)
+```
+
+*reply* (`as_rows`) as the combing reads it: each row's entries that
+name nothing (`found`) taken out, and each list without its entries
+that name nothing. Anything but an object is left as it is.
 
 ### comb_example
 

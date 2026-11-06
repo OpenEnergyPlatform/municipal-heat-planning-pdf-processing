@@ -1086,7 +1086,11 @@ def trace_schema() -> dict:
                  "searched": {"type": "integer"},
                  "missed": {"type": "integer"},
                  "corrected": {"type": "integer"},
-                 "exhausted": {"type": "integer"}},
+                 "exhausted": {"type": "integer"},
+                 # Lists of the next passages the run added to a request
+                 # whose round asked for nothing new while a coordinate was
+                 # unfound (owner decision 2026-11-06: the search runs empty).
+                 "listed": {"type": "integer"}},
         # A passage the walk down a search's list reads a parameter in that
         # the survey named no passage for (surveyed.py), `rank` its place in
         # the list from 1, and a sentence that search ranks with, written
@@ -1140,7 +1144,7 @@ def trace_schema() -> dict:
                             "rows", "passages", "figure", "group", "round",
                             "value"}
            for stage in ("phrase", "frame", "review", "compute")},
-        "comb": {"group"},
+        "comb": {"group", "listed"},
         "read": {"corrected", "failed", "unanswered", "unread", "why"},
         "completion": {"filled", "id", "key", "matched"},
     }

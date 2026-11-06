@@ -3219,7 +3219,7 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `compute_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `naming`: `doc`, `kind`, `names`, `several`, `things`, `why`
 - `read`: `asked`, `corrected`, `doc`, `failed`, `kind`, `owner`, `parameter`, `unanswered`, `unread`, `values`, `why`
-- `comb`: `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `kind`, `missed`, `open`, `owner`, `parameter`, `rows`, `searched`
+- `comb`: `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `kind`, `listed`, `missed`, `open`, `owner`, `parameter`, `rows`, `searched`
 - `seek`: `doc`, `kind`, `owner`, `parameter`, `rank`
 - `seek_probe`: `doc`, `parameter`, `per`, `text`
 - `completion`: `detail`, `doc`, `filled`, `id`, `key`, `matched`, `open`, `outcome`
