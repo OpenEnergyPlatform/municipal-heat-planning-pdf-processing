@@ -174,6 +174,15 @@ class Slot:
         return out
 
 
+def wording_asked(slot: Slot) -> bool:
+    """Is the printed wording (`value_raw`) asked beside a coordinate's
+    answer? Only where the answer is not the print itself: an entry of a
+    list or a number. A free text answer is its own wording; the request
+    does not ask it twice, and the row keeps it as its wording
+    (`pipeline.merge_field`, owner decision 2026-11-06)."""
+    return bool(slot.is_closed) or slot.kind == NUMBER
+
+
 def value_schema(slot: Slot) -> dict:
     """The answers a coordinate can take in a grammar: one entry of its list,
     UNSTATED included; for a number an integer or UNSTATED; else a wording.

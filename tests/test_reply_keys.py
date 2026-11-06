@@ -1,7 +1,8 @@
 """A reply that parses but lacks a key its schema requires at the top is not
 the object that was asked for: it is asked again as missing_key, the retry
 naming the key, in every request of the stage that goes out with a schema
-(the two reading requests, the places and the field requests). A
+(the survey, the two reading requests, the combing, the places and the field
+requests). A
 reply that has every key the top requires is taken as it is, whatever it
 leaves out below. Each promise has a case that breaks it by construction
 beside the one that keeps it."""
@@ -11,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from docpipe.extraction import reading, runner
+from docpipe.extraction import combing, reading, runner, survey
 from docpipe.extraction.pipeline import Row, Source
 from docpipe.extraction.spec import load as load_spec
 
@@ -55,7 +56,12 @@ def told(conversation) -> str:
 
 
 REQUESTS = ((reading.values_response_format(EMISSION, True), "read_values",
-             "next", {"next": None}),
+             "value", {"value": None}),
+            (survey.response_format(survey.parameters_of(SPEC),
+                                    survey.tuple_slots(SPEC)), "survey",
+             "parameters", {"parameters": ["out:none"]}),
+            (combing.comb_response_format(SLOTS), "comb", SLOTS[0].name,
+             {slot.name: {"value": "out:unstated"} for slot in SLOTS}),
             (reading.text_response_format(SLOTS), "read_text", SLOTS[0].name,
              {slot.name: {"value": "out:unstated"} for slot in SLOTS}))
 
@@ -68,6 +74,25 @@ def test_a_reply_without_its_keys_is_asked_again_naming_the_key(faults):
                                      key) == whole
         assert faults == ["missing_key"] and len(sent) == 2, where
         assert f'"{key}"' in told(sent[1])
+
+
+def test_a_reply_in_a_wrapper_the_reply_lost_is_asked_again(faults):
+    # Owner decision 2026-11-06: no wrapper. The survey's reply as it was
+    # before, a value inside "next" and a combed row inside "rows" lack the
+    # key their top requires.
+    for shape, where, key, wrapped, whole in (
+            (REQUESTS[1][0], "survey", "parameters",
+             {"passages": {"P1": {"parameters": ["out:none"]}}},
+             {"parameters": ["out:none"]}),
+            (REQUESTS[0][0], "read_values", "value", {"next": None},
+             {"value": None}),
+            (REQUESTS[2][0], "comb", SLOTS[0].name,
+             {"rows": [dict(REQUESTS[2][3], row="R1")]}, REQUESTS[2][3])):
+        faults.clear()
+        client, sent = replying(json.dumps(wrapped), json.dumps(whole))
+        assert runner.ask_in_grammar(client, PROMPT, [], shape, 7, where,
+                                     key) == whole
+        assert faults == ["missing_key"] and f'"{key}"' in told(sent[1])
 
 
 def test_a_reply_with_every_key_the_top_requires_is_taken_as_it_is(faults):

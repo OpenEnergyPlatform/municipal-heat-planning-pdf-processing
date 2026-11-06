@@ -48,7 +48,7 @@ from . import queries as queries_mod
 from .wording import say
 from .spec import Spec, fold_label
 from .fields import (CHOICE, DERIVED, NUMBER, READ, SAID_UNSTATED, TEXT,
-                     UNANSWERED, UNBACKED, UNSTATED)
+                     UNANSWERED, UNBACKED, UNSTATED, wording_asked)
 from .verify import (MIN_QUOTE_CHARS, Refusal, Verified, canonical_number,
                      flat, numbers_in, quote_in, verify_tuple, wording_of)
 from .trust import document_summary
@@ -1226,7 +1226,8 @@ def named_year(slot, given, wording: Optional[str], quote: str,
 
 def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 *, window: Optional[tuple] = None,
-                bases: Optional[list] = None) -> dict:
+                bases: Optional[list] = None,
+                not_shown: str = "quote_not_in_source") -> dict:
     """Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
 
     *window* is (stage, index) and is written next to each coordinate this
@@ -1262,6 +1263,10 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
     target year): the coordinate then cites the frame's passage for the year
     and keeps the row's passage as its link (`<axis>_link_quote`,
     `<axis>_link_source`).
+
+    *not_shown* is the phrase that tells the model a quote stands in nothing
+    its request showed, in the names of what that request shows (owner
+    decision 2026-11-06); the reason stays `quote_not_in_source`.
     """
     reply = reply if isinstance(reply, dict) else {}
     pairs: list = []
@@ -1372,8 +1377,7 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             row.claim[f"{slot.name}_state"] = UNBACKED
             failed.append({"row": row.label, "why": "quote_not_in_source",
                            "given": given, "raw": answer.get("value_raw"),
-                           "quote": quote, "reason": say(
-                               "quote_not_in_source")})
+                           "quote": quote, "reason": say(not_shown)})
             unquoted += 1
             continue
         if len(quote.strip()) < MIN_QUOTE_CHARS:
@@ -1413,6 +1417,12 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 # without guessing at the ratio now.
                 row.claim[f"{slot.name}_raw_foreign"] = True
                 raw_foreign += 1
+        elif not wording_asked(slot) and isinstance(given, str) \
+                and given.strip():
+            # A free text answer is its own wording: the request does not ask
+            # it twice (owner decision 2026-11-06), and the row keeps it
+            # beside the answer as every coordinate keeps its wording.
+            row.claim[f"{slot.name}_raw"] = given
         elif slot.kind == CHOICE:
             # A choice without the words it was read from cannot be re-mapped
             # when the vocabulary moves: the URI is all that survives, and

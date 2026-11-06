@@ -102,6 +102,11 @@ NO_ANSWER = "no_answer"
 # 2026-11-04: the best 15 sections, 20 tables and 20 figures).
 SHOWN = {"section": 15, "table": 20, "figure": 20}
 
+# What a reading request tells of a quote that stands in nothing it showed,
+# in the names of what it shows: "source", the heading of its section,
+# "around" (owner decision 2026-11-06).
+NOT_SHOWN = "quote_not_in_passage"
+
 # A group's section of a prompt the groups share opens with this line; what
 # stands before the first section is every group's (`group_prompts`).
 GROUP_SECTION = re.compile(r"^<!-- group: ([A-Za-z_]+) -->[ \t]*$",
@@ -234,14 +239,16 @@ def several(slot) -> bool:
 
 
 def answer_schema(slot, probe: bool = False) -> dict:
-    """One coordinate's answer as the grammar takes it; with *probe* also
-    the sentence a reply writes to a coordinate its passage does not state,
-    as the plan would print it, which the combing searches with (owner
-    decision 2026-11-05: HyDE). A coordinate that may name several things
-    (`several`) takes a list of such answers too."""
-    properties = {"value": fields.value_schema(slot),
-                  "value_raw": {"type": "string"},
-                  "quote": {"type": "string"}}
+    """One coordinate's answer as the grammar takes it, its printed wording
+    only where `fields.wording_asked`; with *probe* also the sentence a reply
+    writes to a coordinate its passage does not state, as the plan would
+    print it, which the combing searches with (owner decision 2026-11-05:
+    HyDE). A coordinate that may name several things (`several`) takes a
+    list of such answers too."""
+    properties = {"value": fields.value_schema(slot)}
+    if fields.wording_asked(slot):
+        properties["value_raw"] = {"type": "string"}
+    properties["quote"] = {"type": "string"}
     if probe:
         properties["probe"] = {"type": "string"}
     one = {"type": "object", "properties": properties,
@@ -638,10 +645,12 @@ def values_payload(source: Source, parameter, context: dict, read: list,
 
 
 def values_response_format(parameter, head: bool = False) -> dict:
-    """The next value of the passage, with its wording, its quote and, with
-    *head*, the head of its column; null where no further value stands in it.
-    A category value is one of its entries, or "" where the model is unsure
-    of them."""
+    """The next value of the passage as the reply itself, with no wrapper
+    (owner decision 2026-11-06): its value and quote, its printed wording
+    only where the value is an entry of a list or a number (a free text value
+    is its own wording, `verify.wording_of`), and with *head* the head of its
+    column; {"value": null} where no further value stands in it. A category
+    value is one of its entries, or "" where the model is unsure of them."""
     classes = value_classes(parameter)
     if parameter.is_numeric:
         value = {"type": "number"}
@@ -649,32 +658,35 @@ def values_response_format(parameter, head: bool = False) -> dict:
         value = {"enum": [*classes, ""]}
     else:
         value = {"type": "string"}
-    properties = {"value": value, "value_raw": {"type": "string"},
-                  "quote": {"type": "string"}}
+    properties = {"value": value}
+    if parameter.is_numeric or classes:
+        properties["value_raw"] = {"type": "string"}
+    properties["quote"] = {"type": "string"}
     if head:
         properties["head"] = {"type": "string"}
     entry = {"type": "object", "properties": properties,
              "required": ["value", "quote"], "additionalProperties": False}
-    schema = {"type": "object",
-              "properties": {"next": {"anyOf": [entry, {"type": "null"}]}},
-              "required": ["next"], "additionalProperties": False}
+    end = {"type": "object", "properties": {"value": {"type": "null"}},
+           "required": ["value"], "additionalProperties": False}
+    # "value" at the top as well: a reply without it is asked again
+    # (`runner._lacking`).
+    schema = {"type": "object", "anyOf": [entry, end], "required": ["value"]}
     return {"type": "json_schema",
             "json_schema": {"name": "values_reply", "schema": schema}}
 
 
 def claim_of(reply, head: bool = False) -> Optional[dict]:
     """The value a round's reply names, as a row's claim, or None where it
-    names none. A table row quoted with others is cut to the one row that
-    prints the number (`narrow_quote`)."""
-    entry = reply.get("next") if isinstance(reply, dict) else None
-    if not isinstance(entry, dict):
+    names none: {"value": null}, or no object. A table row quoted with
+    others is cut to the one row that prints the number (`narrow_quote`)."""
+    if not isinstance(reply, dict) or reply.get("value") is None:
         return None
-    claim = {"source": "Q1", "value": entry.get("value"),
-             "quote": entry.get("quote")}
-    if entry.get("value_raw"):
-        claim["value_raw"] = entry["value_raw"]
-    if head and isinstance(entry.get("head"), str) and entry["head"].strip():
-        claim["head"] = entry["head"].strip()
+    claim = {"source": "Q1", "value": reply.get("value"),
+             "quote": reply.get("quote")}
+    if reply.get("value_raw"):
+        claim["value_raw"] = reply["value_raw"]
+    if head and isinstance(reply.get("head"), str) and reply["head"].strip():
+        claim["head"] = reply["head"].strip()
     return narrow_quote(claim)
 
 
@@ -763,7 +775,7 @@ def value_failure(claim: dict, source: Source) -> Optional[str]:
     `number_outside_quote`). Said as the harvest says it."""
     quote = claim.get("quote")
     if not isinstance(quote, str) or not quote_in(source.text or "", quote):
-        return say("quote_not_in_source")
+        return say(NOT_SHOWN)
     if number_outside_quote(claim):
         return say("value_outside_quote", values=json.dumps(
             [{"value": claim.get("value"), "quote": quote}],
@@ -789,7 +801,7 @@ def round_failure(claim: dict, shown: list, read: list,
                              quote=claim.get("quote"))
     passage = passage_of(claim, shown)
     if passage is None:
-        return VALUE, say("quote_not_in_source")
+        return VALUE, say(NOT_SHOWN)
     reason = value_failure(claim, passage)
     if reason:
         return VALUE, reason
@@ -1182,7 +1194,8 @@ class Reader:
             for slot in slots:
                 for level, window, field_reply in replies.get(slot.name, ()):
                     got = merge_field(rows, evidence, slot, field_reply,
-                                      window=window, bases=bases)
+                                      window=window, bases=bases,
+                                      not_shown=NOT_SHOWN)
                     failed.extend((slot.name, level, failure)
                                   for failure in got["failed"])
             return failed

@@ -1,9 +1,9 @@
 """The spec puts every coordinate in exactly one group, and the survey of a
-whole plan packs at most one figure and two pages of text into a context,
-asks for every passage of it, takes the parameters a reply names for a
-passage as named, those of the spec only and without a quote (owner decision
-2026-11-06), and a frame tuple only on quotes that carry it, and is read
-again from disk under its own key.
+whole plan asks for each passage in a request of its own, a passage longer
+than a page in pieces (owner decisions 2026-11-06), reads the reply as that
+passage's entry with no wrapper and no id, takes the parameters it names as
+named, those of the spec only and without a quote, and a frame tuple only on
+quotes that carry it, and is read again from disk under its own key.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -79,21 +79,21 @@ def test_a_survey_group_no_parameter_has_whole_is_refused():
 
 # -- contexts ------------------------------------------------------------------
 
-def test_a_context_holds_one_figure_and_two_pages_and_misses_no_passage():
-    passages = [passage("section", 1, "a" * 300),
-                passage("figure", 2, "Abbildung " * 50),
-                passage("figure", 3, "Abbildung " * 50),
-                passage("section", 4, "b" * 300),
-                passage("table", 5, "c" * 450)]
+def test_each_passage_is_a_context_of_its_own_and_none_is_missed():
+    # Small passages that would have fit one page together are still asked
+    # one by one, and a figure is not cut however long its description.
+    passages = [passage("section", 1, "a" * 30),
+                passage("figure", 2, "Abbildung " * 100),
+                passage("figure", 3, "Abbildung " * 5),
+                passage("section", 4, "b" * 30),
+                passage("table", 5, "c" * 45)]
     contexts = survey.contexts_of(passages, 700)
-    for context in contexts:
-        assert sum(p.owner_kind == "figure" for p in context) <= 1
-        assert sum(len(p.text) for p in context
-                   if p.owner_kind != "figure") <= 700
+    assert all(len(context) == 1 for context in contexts)
     assert [p.owner_id for c in contexts for p in c] == [1, 2, 3, 4, 5]
+    assert contexts[1][0].text == "Abbildung " * 100
 
 
-def test_a_passage_longer_than_two_pages_goes_in_pieces_that_keep_it():
+def test_a_passage_longer_than_a_page_goes_in_pieces_that_keep_it():
     long = passage("section", 9, ("Zeile mit Text\n" * 100))
     contexts = survey.contexts_of([long], 300)
     assert len(contexts) > 1
@@ -109,30 +109,39 @@ def test_two_pages_are_twice_the_plans_text_per_page_without_figures():
     assert survey.budget_of(passages, 4, 1) == 1000
 
 
-def test_a_survey_context_holds_one_page_of_the_plan(tmp_path):
-    # Owner decision 2026-11-06: one page per survey request; the reading
-    # keeps two pages around a table or figure (`budget_of`). Two pages
-    # would pair the sections up.
-    pages = [passage("section", n, "x" * 1000, page=n) for n in range(1, 5)]
+def test_every_passage_is_asked_alone_however_short(tmp_path):
+    # Owner decision 2026-11-06: one passage per request. Four short
+    # sections of a plan of one page are that page's text together, and
+    # still four requests.
+    pages = [passage("section", n, "x" * 100) for n in range(1, 5)]
     asked = []
 
     def ask(context, document_id, corrections=None):
         asked.append([s.owner_id for s in context])
-        return {"passages": {f"P{i + 1}": {"parameters": ["out:none"]}
-                             for i in range(len(context))}}
-    survey.Survey(ask, lambda document_id: pages, lambda document_id: 4,
+        return {"parameters": ["out:none"]}
+    survey.Survey(ask, lambda document_id: pages, lambda document_id: 1,
                   PARAMETERS, SLOTS, runner.frame_pairs, "k",
                   store=tmp_path)(7)
     assert asked == [[1], [2], [3], [4]]
 
 
-# -- the reply -----------------------------------------------------------------
+# -- the request and the reply -------------------------------------------------
 
-def test_the_grammar_wants_an_answer_for_every_passage():
-    context = [passage("section", 1, "x"), passage("table", 2, "y")]
-    shape = survey.response_format(context, PARAMETERS, SLOTS)
-    schema = shape["json_schema"]["schema"]["properties"]["passages"]
-    assert schema["required"] == ["P1", "P2"]
+def test_a_request_shows_its_one_passage_without_an_id():
+    shown = survey.payload([passage("table", 1, "y")], PARAMETERS, {})
+    assert shown["source"] == {"kind": "table", "section": "Bilanz",
+                               "text": "y", "page": 1}
+    assert "sources" not in shown and "id" not in shown["source"]
+    with pytest.raises(ValueError, match="one passage"):
+        survey.payload([passage("section", 1, "x"), passage("table", 2, "y")],
+                       PARAMETERS, {})
+
+
+def test_the_grammar_wants_the_passages_parameters_at_its_top():
+    schema = survey.response_format(PARAMETERS, SLOTS)["json_schema"]["schema"]
+    assert schema["required"] == ["parameters"]
+    assert set(schema["properties"]) == {"parameters", "frame"}
+    assert "passages" not in schema["properties"]
 
 
 TABLE = ("Tabelle 3: Treibhausgasemissionen der Stadt im Jahr 2022\n"
@@ -140,31 +149,31 @@ TABLE = ("Tabelle 3: Treibhausgasemissionen der Stadt im Jahr 2022\n"
 TEXT = "Die Stadt liegt an einem Kanal und hat viele Brücken."
 
 
-def read(entries):
-    context = [passage("table", 1, TABLE), passage("section", 2, TEXT)]
-    return survey.read_reply({"passages": entries}, context, PARAMETERS,
-                             SLOTS, runner.frame_pairs)
+def read(reply, source=None):
+    source = source or passage("table", 1, TABLE)
+    return survey.read_reply(reply, [source], PARAMETERS, SLOTS,
+                             runner.frame_pairs)
 
 
 def test_a_parameter_named_for_a_passage_is_taken_without_a_quote():
-    answers, _ = read({"P1": {"parameters": ["emission"]},
-                       "P2": {"parameters": ["out:none"]}})
-    assert answers[0].parameters == ["emission"]
-    assert answers[1].parameters == []
-    assert not answers[0].dropped
+    answers, _ = read({"parameters": ["emission"]})
+    assert answers[0].parameters == ["emission"] and not answers[0].dropped
+    answers, _ = read({"parameters": ["out:none"]},
+                      passage("section", 2, TEXT))
+    assert answers[0].parameters == []
     # Not even a quote the passage does not print takes a name back: the
     # survey names, the reading checks.
-    answers, _ = read({"P1": {"parameters": ["emission"]},
-                       "P2": {"parameters": ["emission"],
-                              "quote": "steht nirgends im Plan"}})
-    assert answers[1].parameters == ["emission"] and not answers[1].dropped
+    answers, _ = read({"parameters": ["emission"],
+                       "quote": "steht nirgends im Plan"},
+                      passage("section", 2, TEXT))
+    assert answers[0].parameters == ["emission"] and not answers[0].dropped
 
 
 def test_a_name_that_is_no_parameter_of_the_spec_is_not_taken():
-    answers, _ = read({"P1": {"parameters": ["colour", "emission"]},
-                       "P2": {"parameters": ["colour"]}})
+    answers, _ = read({"parameters": ["colour", "emission"]})
     assert answers[0].parameters == ["emission"]
-    assert answers[1].parameters == []
+    answers, _ = read({"parameters": ["colour"]})
+    assert answers[0].parameters == []
 
 
 def frame(year, year_quote):
@@ -174,25 +183,30 @@ def frame(year, year_quote):
 
 
 def test_a_frame_tuple_is_taken_when_its_quotes_carry_it():
-    answers, _ = read({"P1": {"parameters": ["out:none"],
-                              "frame": frame(2022, "im Jahr 2022")},
-                       "P2": {"parameters": ["out:none"]}})
+    answers, _ = read({"parameters": ["out:none"],
+                       "frame": frame(2022, "im Jahr 2022")})
     assert [(t["scenario"], t["year"]) for t in answers[0].tuples["frame"]] \
         == [("Bestand", 2022)]
 
 
 def test_a_frame_tuple_whose_quote_lacks_its_year_is_not():
-    answers, _ = read({"P1": {"parameters": ["out:none"],
-                              "frame": frame(2040, "im Jahr 2022")},
-                       "P2": {"parameters": ["out:none"]}})
+    answers, _ = read({"parameters": ["out:none"],
+                       "frame": frame(2040, "im Jahr 2022")})
     assert answers[0].tuples == {}
     assert answers[0].dropped
 
 
-def test_a_passage_the_reply_leaves_out_is_unanswered():
-    answers, unanswered = read({"P1": {"parameters": ["out:none"]}})
-    assert [a.owner for a in answers] == [("table", 1)]
-    assert unanswered == [("section", 2)]
+def test_a_reply_without_a_list_of_parameters_leaves_its_passage_unanswered():
+    # The wrapper the reply had before, a list that is no list, no object.
+    for reply in ({"passages": {"P1": {"parameters": ["emission"]}}},
+                  {"parameters": "emission"}, None):
+        answers, unanswered = read(reply)
+        assert answers == [] and unanswered == [("table", 1)]
+    with pytest.raises(ValueError, match="one passage"):
+        survey.read_reply({"parameters": ["emission"]},
+                          [passage("table", 1, TABLE),
+                           passage("section", 2, TEXT)],
+                          PARAMETERS, SLOTS, runner.frame_pairs)
 
 
 # -- one document --------------------------------------------------------------
@@ -206,11 +220,9 @@ def make(store, ask, key="k"):
 
 
 def emission_where_printed(context, document_id, corrections=None):
-    return {"passages": {
-        f"P{i + 1}": ({"parameters": ["emission"]}
-                      if "Treibhausgas" in s.text
-                      else {"parameters": ["out:none"]})
-        for i, s in enumerate(context)}}
+    return ({"parameters": ["emission"]}
+            if "Treibhausgas" in context[0].text
+            else {"parameters": ["out:none"]})
 
 
 def test_a_survey_names_a_parameters_passages_and_is_read_again(tmp_path):
@@ -229,35 +241,38 @@ def test_a_survey_names_a_parameters_passages_and_is_read_again(tmp_path):
     assert asked
 
 
-def test_a_reply_cut_off_is_split_and_not_rescued(tmp_path):
-    def cut_when_long(context, document_id, corrections=None):
-        if len(context) > 1:
+def test_a_reply_cut_off_leaves_its_passage_unanswered_and_is_not_rescued(
+        tmp_path):
+    def cut_at_the_table(context, document_id, corrections=None):
+        if "Treibhausgas" in context[0].text:
             return survey.CUT
         return emission_where_printed(context, document_id)
 
-    found = make(tmp_path, cut_when_long)(7)
-    assert found.complete and found.passages_of("emission") == [("table", 2)]
+    found = make(tmp_path, cut_at_the_table)(7)
+    assert not found.complete and found.unanswered == [("table", 2)]
+    assert found.passages_of("emission") == []
+    assert set(found.answers) == {("section", 1), ("section", 3)}
 
 
-def test_a_passage_the_reply_leaves_out_is_asked_again_and_answered(
+def test_a_reply_without_its_parameters_is_asked_again_and_answered(
         tmp_path):
     calls = []
 
-    def table_left_out_first(context, document_id, corrections=None):
-        calls.append(corrections)
+    def table_wrapped_first(context, document_id, corrections=None):
         reply = emission_where_printed(context, document_id)
-        if corrections is None:
-            reply["passages"] = {key: entry for key, entry
-                                 in reply["passages"].items()
-                                 if "emission" not in entry["parameters"]}
+        if "Treibhausgas" in context[0].text:
+            calls.append(corrections)
+            if corrections is None:
+                return {"passages": {"P1": reply}}
         return reply
 
-    found = make(tmp_path, table_left_out_first)(7)
+    found = make(tmp_path, table_wrapped_first)(7)
     assert found.passages_of("emission") == [("table", 2)]
-    assert len(calls) == 2 and "P2" in calls[1][0]
+    assert len(calls) == 2 and calls[0] is None
+    assert len(calls[1]) == 1 and '"parameters"' in calls[1][0]
 
 
-def test_a_reply_without_fault_is_asked_once(tmp_path):
+def test_a_reply_without_fault_is_asked_once_per_passage(tmp_path):
     calls = []
 
     def right(context, document_id, corrections=None):
@@ -265,17 +280,17 @@ def test_a_reply_without_fault_is_asked_once(tmp_path):
         return emission_where_printed(context, document_id)
 
     make(tmp_path, right)(7)
-    assert calls == [None]
+    assert calls == [None, None, None]
 
 
 def test_a_reply_wrong_twice_is_not_asked_a_third_time(tmp_path):
     calls = []
 
     def always_without_the_table(context, document_id, corrections=None):
-        calls.append(corrections)
-        return {"passages": {f"P{i + 1}": {"parameters": ["emission"]}
-                             for i, s in enumerate(context)
-                             if "Treibhausgas" not in s.text}}
+        if "Treibhausgas" in context[0].text:
+            calls.append(corrections)
+            return {}
+        return {"parameters": ["out:none"]}
 
     found = make(tmp_path, always_without_the_table)(7)
     assert len(calls) == 2 and ("table", 2) in found.unanswered

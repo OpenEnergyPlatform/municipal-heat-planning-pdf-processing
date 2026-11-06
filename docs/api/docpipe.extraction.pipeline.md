@@ -763,7 +763,8 @@ dates both states is cited from the first, the plan's own.
 ```python
 def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 *, window: Optional[tuple] = None,
-                bases: Optional[list] = None) -> dict
+                bases: Optional[list] = None,
+                not_shown: str = "quote_not_in_source") -> dict
 ```
 
 Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
@@ -801,6 +802,10 @@ them (owner decisions 2026-09-22 for the base year, 2026-10-06 for the
 target year): the coordinate then cites the frame's passage for the year
 and keeps the row's passage as its link (`<axis>_link_quote`,
 `<axis>_link_source`).
+
+*not_shown* is the phrase that tells the model a quote stands in nothing
+its request showed, in the names of what that request shows (owner
+decision 2026-11-06); the reason stays `quote_not_in_source`.
 
 ### line_naming
 

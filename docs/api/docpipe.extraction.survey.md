@@ -4,10 +4,12 @@
 
 survey.py: One pass over the whole plan before any number is read.
 
-The plan is cut into small contexts, at most one figure and at most the text
-of one of its pages each (owner decision 2026-11-06), and every passage of
-every context is answered:
-the parameters whose values stand in it, or none of them. The survey only
+Every passage of the plan is a request of its own, a passage longer than the
+text of one of its pages cut into pieces of a page (owner decisions
+2026-11-06), and every passage is answered: the parameters whose values stand
+in it, or none of them. The reply is that passage's entry alone, with no
+wrapper and no id: the request shows one passage, so the model has nothing to
+key its answer by (owner decision 2026-11-06). The survey only
 names them, without a quote (owner decision 2026-11-06): it decides which
 passages a parameter is read in, and the reading checks every value it reads
 there. The same request names the tuples of the groups the spec reads here
@@ -118,8 +120,8 @@ def budget_of(passages: list, pages: Optional[int], span: int = 2) -> int
 The text of *span* pages of this plan, in characters: *span* times
 its mean; two pages unless said otherwise.
 
-A figure's description is not counted: a context holds one figure,
-whatever its description's length.
+A figure's description is not counted: a figure is never cut, whatever
+its description's length.
 
 ### pieces
 
@@ -136,11 +138,22 @@ where one stands in the second half of the piece.
 def contexts_of(passages: list, budget: int) -> list
 ```
 
-The passages in document order, packed into contexts of at most one
-figure and at most *budget* characters of text.
+The passages in document order, each a context of its own (owner
+decision 2026-11-06: one passage per request).
 
-A passage longer than the budget is cut into pieces of the budget, each
-a context of its own, and every piece keeps its passage's owner.
+A passage whose text is longer than *budget* characters is cut into
+pieces of the budget, each a context of its own, and every piece keeps
+its passage's owner. A figure is never cut: its description is not
+counted, whatever its length.
+
+### one_passage
+
+```python
+def one_passage(context: list)
+```
+
+The one passage of a survey context (`contexts_of`); a context of any
+other size is a mistake of the caller, not something to answer.
 
 ### tuple_slots
 
@@ -192,25 +205,29 @@ def payload(context: list, parameters: dict, groups: dict,
             corrections: Optional[list] = None) -> dict
 ```
 
+One request: its one passage under "source", without an id, the
+parameters and the groups; with *corrections* the same request asked
+once more.
+
 ### corrections_of
 
 ```python
-def corrections_of(answers: list, unanswered: list, context: list) -> list
+def corrections_of(answers: list, unanswered: list) -> list
 ```
 
-What was wrong with a reply over *context*, one sentence each, for
-the request that asks it again: a tuple not taken, a passage not
-answered. Empty when nothing was.
+What was wrong with the reply about one passage, one sentence each,
+for the request that asks it again: a tuple not taken, or no list of
+parameters. Empty when nothing was.
 
 ### response_format
 
 ```python
-def response_format(context: list, parameters: dict, slots: dict) -> dict
+def response_format(parameters: dict, slots: dict) -> dict
 ```
 
-The reply as a server grammar: one entry for EVERY passage of the
-context, its parameters from the list or NONE, and the tuples of each
-group the survey reads.
+The reply about one passage as a server grammar: its parameters from
+the list or NONE, and the tuples of each group the survey reads, at the
+top with no wrapper (owner decision 2026-11-06).
 
 ### read_reply
 
@@ -219,12 +236,14 @@ def read_reply(reply: dict, context: list, parameters: dict, slots: dict,
                pairs_of: Callable) -> tuple
 ```
 
-([Answer], passages unanswered) of one context's reply.
+([Answer], passages unanswered) of the reply about a context's one
+passage: the reply is that passage's entry itself (`response_format`).
 
-A passage's parameters are taken as the reply names them, those of the
-spec only; NONE beside a parameter says nothing. A tuple is taken when
-*pairs_of* (`runner.frame_pairs`) takes it over the passages shown.
-Nothing else is checked.
+The parameters are taken as the reply names them, those of the spec
+only; NONE beside a parameter says nothing. A reply that is no object or
+has no list under "parameters" leaves the passage unanswered. A tuple is
+taken when *pairs_of* (`runner.frame_pairs`) takes it over the passage
+shown. Nothing else is checked.
 
 ### merge
 

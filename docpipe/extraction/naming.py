@@ -9,22 +9,24 @@ document is folded, one request per kind of thing, the word `merged` names
 ("scenario"), shows the model every name read for it with the places it
 was read at: its quote and 500 characters before and after it in the
 passage it stands in (`CONTEXT_CHARS`), a stretch of a passage shown once
-however many names stand in it. For each name the model answers the names
-of what it means: itself, another name of the same thing, or several names
-where it means several things ("the EC LTS scenarios"). Names of the same
-thing are one thing, called by the name the others point to; a name of
-several things stands for each of them (`meanings`). Each row keeps the
-name it was read as and gets the names of what it means under
+however many names stand in it. Each name stands under a number (N1, N2,
+…), and the model answers with numbers, never copying a name (owner
+decision 2026-11-06). It answers only for a name that means another name of
+the same thing, or several names where it means several things ("the EC LTS
+scenarios"); a name it leaves out means itself (owner decision 2026-11-06).
+Names of the same thing are one thing, called by the name the others point
+to; a name of several things stands for each of them (`meanings`). Each row
+keeps the name it was read as and gets the names of what it means under
 `<coordinate>_means`, `value_means` for its own value, and the graph writes
 the row to each of them.
 
-Nothing is checked beyond the list: an answer with a name the request did
-not show is asked once more with its reason (`name_not_listed`), and a name
-still answered so means itself. The answer quotes nothing, since each name
-keeps the quote it was read with (owner decision 2026-11-06). A request
-that does not fit its room is asked in two halves of the names, and the
-things the halves found are asked once more together, each by the places of
-the name it is called by.
+Nothing is checked beyond the list: an answer under or with a number the
+request did not show is asked once more with its reason (`name_not_listed`),
+and a name still answered so means itself. The answer quotes nothing, since
+each name keeps the quote it was read with (owner decision 2026-11-06). A
+request that does not fit its room is asked in two halves of the names, and
+the things the halves found are asked once more together, each by the places
+of the name it is called by.
 
 Author: Felix Vossel
 """
@@ -180,30 +182,60 @@ def places_of(names: dict, passages: dict) -> tuple:
     return shown, at
 
 
-def payload(kind: str, places: dict, at: dict,
+def numbered(order: list) -> dict:
+    """{name: its number} of the names *order*: N1, N2, … in their order."""
+    return {name: f"N{index + 1}" for index, name in enumerate(order)}
+
+
+def payload(kind: str, places: dict, at: dict, numbers: dict,
             corrections: Optional[list] = None) -> dict:
-    """One request: what the names name, the places, then the names with
-    the places each was read at; with *corrections* the same request asked
-    once more."""
-    out = {"kind": kind, "places": places, "names": at}
+    """One request: what the names name, the places, then each name under
+    its number (*numbers*, `numbered`) with the places it was read at (*at*);
+    with *corrections* the same request asked once more."""
+    names = {numbers[name]: {"name": name, "places": at.get(name, [])}
+             for name in numbers}
+    out = {"kind": kind, "places": places, "names": names}
     if corrections:
         out["corrections"] = corrections
     return out
 
 
-def response_format(names: list) -> dict:
-    """For every name a list of the names it means, each one of *names*.
+def response_format(numbers: list) -> dict:
+    """For a name that means another or several, under its number, the
+    numbers of the names it means, each one of *numbers*. No name has to be
+    answered: one left out means itself (owner decision 2026-11-06).
 
-    The list of names is written once and referred to by every name, so the
+    The list of numbers is written once and referred to by every name, so the
     schema grows with the names and not with their square."""
     means = {"type": "array", "items": {"$ref": "#/$defs/name"},
              "minItems": 1}
     schema = {"type": "object",
-              "$defs": {"name": {"type": "string", "enum": list(names)}},
-              "properties": {name: means for name in names},
-              "required": list(names), "additionalProperties": False}
+              "$defs": {"name": {"type": "string", "enum": list(numbers)}},
+              "properties": {number: means for number in numbers},
+              "additionalProperties": False}
     return {"type": "json_schema",
             "json_schema": {"name": "naming_reply", "schema": schema}}
+
+
+def answers_of(reply: dict, numbers: dict) -> tuple:
+    """({name: [names it means]}, [what was wrong]) of a naming *reply*
+    ({number: [numbers]}): each entry under a number the request showed
+    whose list holds only numbers it showed, turned back into names. An
+    entry under any other key, or with a number it did not show, is wrong,
+    with its reason (`name_not_listed`). A name with no entry means itself
+    and is not in the result."""
+    name_of = {number: name for name, number in numbers.items()}
+    answers: dict = {}
+    wrong: list = []
+    for key, given in (reply or {}).items():
+        if key in name_of and isinstance(given, list) and given \
+                and all(one in name_of for one in given):
+            answers[name_of[key]] = [name_of[one] for one in given]
+        else:
+            wrong.append({"name": key, "value": given, "what": say(
+                "name_not_listed", name=key,
+                given=json.dumps(given, ensure_ascii=False))})
+    return answers, wrong
 
 
 def meanings(order: list, answers: dict) -> dict:
@@ -332,29 +364,26 @@ class Namer:
 
     def _asked(self, document_id: int, kind: str, order: list, shown: dict,
                at: dict):
-        """One request and, for the names it answered with names it did not
-        show, one more; CUT where the first did not fit its room."""
-        shape = response_format(order)
+        """One request and, for the entries it gave under or with numbers
+        it did not show, one more; CUT where the first did not fit its
+        room. {name: [names it means]} of the names answered; a name left
+        out means itself (`meanings`)."""
+        numbers = numbered(order)
+        shape = response_format(list(numbers.values()))
         answers: dict = {}
-        asked, corrections = list(order), None
+        corrections = None
         for _ in range(2):
-            reply = self.ask(payload(kind, shown, at, corrections), shape,
-                             document_id, kind)
+            reply = self.ask(payload(kind, shown, at, numbers, corrections),
+                             shape, document_id, kind)
             if reply == CUT and corrections is None:
                 return CUT
             if not isinstance(reply, dict):
                 break
-            wrong = []
-            for name in asked:
-                given = reply.get(name)
-                if isinstance(given, list) and given \
-                        and all(one in at for one in given):
-                    answers[name] = list(given)
-                else:
-                    wrong.append({"name": name, "value": given, "what": say(
-                        "name_not_listed", name=name,
-                        given=json.dumps(given, ensure_ascii=False))})
+            # What the second reply answers well is taken over the first's;
+            # what it gets wrong leaves the first's answer standing.
+            taken, wrong = answers_of(reply, numbers)
+            answers.update(taken)
             if not wrong:
                 break
-            asked, corrections = [one["name"] for one in wrong], wrong
+            corrections = wrong
         return answers

@@ -107,27 +107,34 @@ harvest (owner decision 2026-11-04); the harvest below reads none of them.
 ### The survey of a whole plan
 
 The first step of the rebuilt harvest (`survey.py`, `runner.make_survey`,
-prompt `extraction/survey`). Every passage of a plan is read once, in contexts
-of at most one figure, sent with its crop, and at most the text of one of the
-plan's pages (`survey.CONTEXT_PAGES`, `survey.budget_of`: its characters per
-page, figure descriptions not counted); a longer passage goes in pieces of its
-own that keep its owner. On paper 86 one page instead of two named scenario
-descriptions in 18 passages instead of 12 and authors in 10 instead of 6, for
-58 more requests, about 2 % of the paper's (owner decision 2026-11-06). The
-reply has an entry for every passage of the context, which the grammar
-requires: the parameters whose values stand there, or `out:none`, and
-the tuples of each group the survey reads, each coordinate with its own quote.
+prompt `extraction/survey`). Every passage of a plan is read once, in a request
+of its own, however short (owner decision 2026-11-06): it shows the passage
+under `source` (kind, section, text, page), with no id, and a figure with its
+crop. A passage longer than the text of one of the plan's pages
+(`survey.CONTEXT_PAGES`, `survey.budget_of`: its characters per page, figure
+descriptions not counted) goes in pieces of that size, each a request of its
+own that keeps the passage's owner. On paper 86 one page instead of two named
+scenario descriptions in 18 passages instead of 12 and authors in 10 instead of
+6, for 58 more requests, about 2 % of the paper's (owner decision 2026-11-06).
+The reply is that passage's entry, with no `passages` wrapper and no id, which
+the grammar requires: the parameters whose values stand there, or `out:none`,
+and the tuples of each group the survey reads, each coordinate with its own
+quote (kwp `{"parameters": ["emission"], "frame": [...]}`, scenarios
+`{"parameters": ["publication_title", "publication_author"]}`). The model
+copies nothing to key its answer by, since the request shows one passage.
 The survey only names the parameters, without a quote, and a parameter of the
 spec is taken as named (owner decision 2026-11-06): the survey decides where a
 parameter is read, and the reading checks every value it reads there. On
 paper 86 the shortened prompt that still asked one quote per passage had sent
 fewer passages than the longer one before it: sectors 41 instead of 49,
 technologies 24 instead of 31, scenario descriptions 8 instead of 19. A tuple
-is held to `frame_pairs`. A reply with a tuple not taken or a
-passage left out is asked once more, with what was wrong per passage
-(`survey.corrections_of`), and what either reply backs is taken. Each number
-of a table cell counts for its own parameter. A reply that does not fit is
-split, not rescued. The survey is kept in `<harvest>/survey/<document
+is held to `frame_pairs`. A reply with a tuple not taken or without a list
+`parameters` is asked once more, with what was wrong
+(`survey.corrections_of`; the second names `parameters`, `key_missing`), and
+what either reply backs is taken; a passage still without a list stays
+unanswered. Each number
+of a table cell counts for its own parameter. A reply that is cut off leaves
+its passage unanswered: one passage cannot be split further, and nothing is rescued. The survey is kept in `<harvest>/survey/<document
 id>.json` under a key over prompt, parameters, groups and model, and only a
 complete one is read again. `scripts/probe_rows.py --documents ... --survey`
 asks it over whole plans. On Rendsburg it replaces the anchors, the frame, the
@@ -149,9 +156,12 @@ the parameter, the whole passage (a table with its title, head and all rows; a
 section as the survey's piece), the text around a table or figure (`around`)
 and the values already read (`read`), in that order, so that the rounds of a
 passage share a prefix for the server's cache (owner decision 2026-11-05).
-It asks for the next value not under `read`: `{"next": {value, value_raw,
-quote, head}}`, or `{"next": null}`, which ends the rounds. The reading has no
-tools (see below). The parameter is shown by its `brief` where the spec
+It asks for the next value not under `read`, the reply being the value itself
+with no wrapper (owner decision 2026-11-06): `{"value": 12.5, "value_raw":
+"...", "quote": "...", "head": "..."}`, or `{"value": null}`, which ends the
+rounds. `value_raw` is asked only for a number or an entry of a list; a
+free-text value is its own wording (`verify.wording_of`) and is not asked twice. The
+reading has no tools (see below). The parameter is shown by its `brief` where the spec
 writes one, a paragraph on what a value of it is, else by its description. A
 list field is shown with its
 entries under `value_classes`, each with its meaning and spellings, as the
@@ -174,6 +184,11 @@ axes are not checked there, since they are read after the value and checked
 as they are read. A number quoted over several table rows that print it, and
 a head printed on no head line, are asked again too. Each refusal gets one
 correction with its reason; a head still on no head line after it is dropped.
+A quote in no passage the round showed is told in the names of what the
+reading shows, `"source"`, the heading of its section and `"around"`
+(`quote_not_in_passage`, `reading.NOT_SHOWN`, owner decision 2026-11-06); the
+reason stays `quote_not_in_source`, whose phrase names the field request's
+`"sources"`.
 A value named again (same value, wording, quote and head) is asked once more,
 and named again after that it ends the rounds. The reasons are
 `value_already_read`, `head_not_in_table` and `value_rejected`, the last with
@@ -212,6 +227,11 @@ a plan prints them), the plan's `base_years` and `target_years`, then the
 passage, the text around it and `known`, and last the value with its quote,
 head and `read` (what is read of it, in the plan's words, `runner.row_context`);
 a second request adds `corrections` at the end (owner decision 2026-11-05).
+A coordinate's `value_raw` is asked only where the coordinate is a closed list
+or a number (`fields.wording_asked`, `reading.answer_schema`); a free-text
+answer is its own wording, and the row keeps it beside the answer as
+`<coordinate>_raw` (`pipeline.merge_field`, owner decision 2026-11-06), so
+every coordinate still keeps its wording.
 Only a group that asks a frame coordinate sees `known` (the survey's pairs),
 `base_years` and `target_years`. The parameter is shown by its `brief`, except
 for a group whose spec entry says `"definition": "full"`, which shows the full
@@ -282,7 +302,8 @@ group, and `out:unstated` is an answer of every kind, a year's too
 (`fields.value_schema`, shared with the field request). Every coordinate goes
 through `merge_field`. What the check refuses and a coordinate the reply left
 out are asked once more in the same request with the reason (`corrections`,
-each `{coordinate, what}`), in the harvest's own phrases; the second reply
+each `{coordinate, what}`), in the harvest's own phrases, a quote in nothing
+shown in those of the reading (`quote_not_in_passage`); the second reply
 fills what is still open and never a coordinate read the first time, and
 there is no third. A coordinate left out is asked for by name and, if still
 open, ends `unanswered`. A request that asks the year shows the plan's base
@@ -322,11 +343,20 @@ model searches itself with `similar`. The model fetches what it wants to read
 with the reading's tools (`reading.Gathered`: a hit by its id, the next or the
 previous section, a table or figure by its placeholder, a pattern, a sentence
 of its own), each group with its own, and answers each open
-coordinate of the group for each row with its
-quote, or that the plan does not state it. The answers go through
+coordinate of the group with its
+quote, or that the plan does not state it. A request shows that one row under
+`row`, with no list of rows and no row label, and the reply carries the asked
+coordinates at its top with `more` beside them, no `rows` wrapper and no label
+(`combing.comb_response_format`, read back as the row by `combing.as_rows`,
+owner decision 2026-11-06); a correction is told as one object for that row,
+`{"what": {...}}` (`combing.shown_corrections`), and a row made for a further
+name of a coordinate that may name several is asked again on its own. The answers go through
 `merge_field` in window `retrieval`, a coordinate read before is never
 touched, and what the check refuses or the reply leaves out is asked once
-more. A quote may stand in whatever the request showed of the plan (owner
+more, a quote in nothing shown in the names of what the combing shows,
+`"more"`, `"hits"`, `"passage"` and `"row"` (`quote_not_shown`,
+`combing.NOT_SHOWN`, owner decision 2026-11-06). A quote may stand in
+whatever the request showed of the plan (owner
 decision 2026-11-05): a passage the model fetched, a hit's line or title, the
 title or heading of a passage, the value's passage and its section, a wording
 the value has read (`reading.Gathered.evidence`, `reading.shown_as`,
@@ -1447,21 +1477,25 @@ the compute step and before the file is written (`runner.make_namer`), and only
 for a spec that merges names (`naming.merges`).
 
 One request per kind of thing, the word `merged` names (`scenario`), shows the
-model every name read for it in the document. Each name comes with its places:
-its quote and 500 characters before and after it in the passage it stands in
+model every name read for it in the document. Each name stands under a number, N1, N2, and so on, with its places
+(`"names": {"N1": {"name": ..., "places": [...]}}`, `naming.numbered`): its
+quote and 500 characters before and after it in the passage it stands in
 (`naming.CONTEXT_CHARS`, owner decision 2026-11-06), a stretch of one passage
-shown once as one place however many names stand in it. For each name the
-model answers the names of what it means: itself, another name of the same
-thing, or several names where it stands for several things
-(`naming.meanings`). Names of one thing become one thing, called by the name
+shown once as one place however many names stand in it. The model answers
+with numbers only and copies no name (owner decision 2026-11-06). It answers
+only for a name that means another name of the same thing, or several names
+where it means several things: `{"N2": ["N1"], "N5": ["N3", "N4"]}`. A name it
+leaves out means itself, and `{}` says that every name does (`naming.meanings`;
+no name is required). Names of one thing become one thing, called by the name
 the others point to; a name of several things stands for each of them. The
 answer quotes nothing, since each name keeps the quote it was read with (owner
 decision 2026-11-06).
 
-Nothing is checked beyond the list. An answer with a name the request did not
-show is asked once more with its reason (`name_not_listed`), and a name still
-answered so means itself. A request that does not fit its room is asked in two
-halves of the names, and the things the halves found are asked once more
+Nothing is checked beyond the list. An entry under a number the request did
+not show, or with a number it did not show, is asked once more with its reason
+(`name_not_listed`, worded about numbers), and a name still answered so means
+itself (`naming.answers_of`). A request that does not fit its room is asked in
+two halves of the names, and the things the halves found are asked once more
 together, each by the places of the name it is called by. The trace writes
 `naming_ask` per answered request and `naming` per document and kind, with the
 names asked.

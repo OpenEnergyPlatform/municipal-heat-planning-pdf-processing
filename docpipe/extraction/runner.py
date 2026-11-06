@@ -2051,7 +2051,7 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
             [{"role": "user", "content": content_of(source, text)}],
             reading_map.values_response_format(
                 parameter, reading_map.with_head_asked(parameter, source)),
-            document_of(source), "read_values", "next",
+            document_of(source), "read_values", "value",
             parameter=parameter.uri, kind=source.owner_kind,
             owner=source.owner_id, round=len(read) + 1,
             corrections=len(corrections or ()))
@@ -2153,8 +2153,9 @@ def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
     """The survey of whole plans (`survey.Survey`), or None when the profile
     writes no prompt for it or its spec names no groups. *every* is
     (document, exclude) -> passages, read from *db_path* when not given.
-    A figure goes with its crop, one to a context. *scope* names a survey of
-    part of a plan, kept beside the whole one's."""
+    Each request shows one passage, a figure with its crop beside the text
+    as the reading shows it. *scope* names a survey of part of a plan, kept
+    beside the whole one's."""
     if not spec.groups:
         return None
     try:
@@ -2172,26 +2173,22 @@ def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
         text = json.dumps(survey_map.payload(context, parameters, groups,
                                              corrections),
                           ensure_ascii=False, indent=2)
-        parts: list = [{"type": "text", "text": text}]
-        for index, source in enumerate(context):
-            if source.owner_kind != "figure" or not (source.image_path
-                                                     and ATTACH_IMAGES):
-                continue
+        source = survey_map.one_passage(context)
+        if source.owner_kind == "figure" and source.image_path \
+                and ATTACH_IMAGES:
             part = _image_part(str(image_root / source.image_path)
                                if image_root else source.image_path)
             if part is not None:
-                parts.append({"type": "text", "text": say(
-                    "image_for", label=f"P{index + 1}")})
-                parts.append(part)
-        return [{"role": "user", "content": parts if len(parts) > 1
-                 else text}]
+                return [{"role": "user",
+                         "content": [{"type": "text", "text": text}, part]}]
+        return [{"role": "user", "content": text}]
 
     def ask(context: list, document_id: int,
             corrections: Optional[list] = None):
         return ask_in_grammar(
             client, prompt, conversation_of(context, corrections),
-            survey_map.response_format(context, parameters, slots),
-            document_id, "survey", "passages", passages=len(context),
+            survey_map.response_format(parameters, slots),
+            document_id, "survey", "parameters", passages=len(context),
             corrections=len(corrections or ()),
             figure=any(s.owner_kind == "figure" for s in context))
 

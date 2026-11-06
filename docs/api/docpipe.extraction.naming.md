@@ -12,22 +12,24 @@ document is folded, one request per kind of thing, the word `merged` names
 ("scenario"), shows the model every name read for it with the places it
 was read at: its quote and 500 characters before and after it in the
 passage it stands in (`CONTEXT_CHARS`), a stretch of a passage shown once
-however many names stand in it. For each name the model answers the names
-of what it means: itself, another name of the same thing, or several names
-where it means several things ("the EC LTS scenarios"). Names of the same
-thing are one thing, called by the name the others point to; a name of
-several things stands for each of them (`meanings`). Each row keeps the
-name it was read as and gets the names of what it means under
+however many names stand in it. Each name stands under a number (N1, N2,
+…), and the model answers with numbers, never copying a name (owner
+decision 2026-11-06). It answers only for a name that means another name of
+the same thing, or several names where it means several things ("the EC LTS
+scenarios"); a name it leaves out means itself (owner decision 2026-11-06).
+Names of the same thing are one thing, called by the name the others point
+to; a name of several things stands for each of them (`meanings`). Each row
+keeps the name it was read as and gets the names of what it means under
 `<coordinate>_means`, `value_means` for its own value, and the graph writes
 the row to each of them.
 
-Nothing is checked beyond the list: an answer with a name the request did
-not show is asked once more with its reason (`name_not_listed`), and a name
-still answered so means itself. The answer quotes nothing, since each name
-keeps the quote it was read with (owner decision 2026-11-06). A request
-that does not fit its room is asked in two halves of the names, and the
-things the halves found are asked once more together, each by the places of
-the name it is called by.
+Nothing is checked beyond the list: an answer under or with a number the
+request did not show is asked once more with its reason (`name_not_listed`),
+and a name still answered so means itself. The answer quotes nothing, since
+each name keeps the quote it was read with (owner decision 2026-11-06). A
+request that does not fit its room is asked in two halves of the names, and
+the things the halves found are asked once more together, each by the places
+of the name it is called by.
 
 Author: Felix Vossel
 
@@ -124,27 +126,50 @@ quote)]}): each quote with `CONTEXT_CHARS` before and after it in the
 text it stands in, stretches of one text that overlap joined into one
 place, the places in the order of the plan.
 
+### numbered
+
+```python
+def numbered(order: list) -> dict
+```
+
+{name: its number} of the names *order*: N1, N2, … in their order.
+
 ### payload
 
 ```python
-def payload(kind: str, places: dict, at: dict,
+def payload(kind: str, places: dict, at: dict, numbers: dict,
             corrections: Optional[list] = None) -> dict
 ```
 
-One request: what the names name, the places, then the names with
-the places each was read at; with *corrections* the same request asked
-once more.
+One request: what the names name, the places, then each name under
+its number (*numbers*, `numbered`) with the places it was read at (*at*);
+with *corrections* the same request asked once more.
 
 ### response_format
 
 ```python
-def response_format(names: list) -> dict
+def response_format(numbers: list) -> dict
 ```
 
-For every name a list of the names it means, each one of *names*.
+For a name that means another or several, under its number, the
+numbers of the names it means, each one of *numbers*. No name has to be
+answered: one left out means itself (owner decision 2026-11-06).
 
-The list of names is written once and referred to by every name, so the
+The list of numbers is written once and referred to by every name, so the
 schema grows with the names and not with their square.
+
+### answers_of
+
+```python
+def answers_of(reply: dict, numbers: dict) -> tuple
+```
+
+({name: [names it means]}, [what was wrong]) of a naming *reply*
+({number: [numbers]}): each entry under a number the request showed
+whose list holds only numbers it showed, turned back into names. An
+entry under any other key, or with a number it did not show, is wrong,
+with its reason (`name_not_listed`). A name with no entry means itself
+and is not in the result.
 
 ### meanings
 

@@ -97,6 +97,18 @@ BY_UNKNOWN, and never the harvest. `--recheck` deletes the stamps, so a
 position can outlive the list it was written for; reading that as the
 harvest would put a top-up's answer under a model that never saw it.
 
+### wording_asked
+
+```python
+def wording_asked(slot: Slot) -> bool
+```
+
+Is the printed wording (`value_raw`) asked beside a coordinate's
+answer? Only where the answer is not the print itself: an entry of a
+list or a number. A free text answer is its own wording; the request
+does not ask it twice, and the row keeps it as its wording
+(`pipeline.merge_field`, owner decision 2026-11-06).
+
 ### value_schema
 
 ```python

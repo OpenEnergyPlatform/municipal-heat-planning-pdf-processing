@@ -151,6 +151,11 @@ the value's row in `Combed.made` and asked again on its own; without
 it, as in a pass over a stored harvest that re-reads each stored row
 in place, the first name.
 
+Each request shows one row (owner decision 2026-11-06): *claims* is
+one value's claim, and a row made for a further name is asked again
+on its own. The reply carries that row's answers at its top, with no
+row label (`comb_response_format`, `as_rows`).
+
 ## Functions
 
 ### open_of
@@ -164,10 +169,32 @@ The coordinates of a value still open after its reading.
 ### comb_response_format
 
 ```python
-def comb_response_format(slots: list, labels: list) -> dict
+def comb_response_format(slots: list) -> dict
 ```
 
-Each row of *labels* with every coordinate asked, and what the reply
-asks of the rest of the plan.
+Every coordinate asked of the one row a request shows, at the top of
+the reply with no wrapper and no row label (owner decision 2026-11-06),
+and what the reply asks of the rest of the plan.
+
+### as_rows
+
+```python
+def as_rows(reply, label: str)
+```
+
+A reply about the one row a request showed (`comb_response_format`)
+as the rows the step folds: its answers under that row's *label*, its
+requests for more beside them. Anything but an object is left as it
+is.
+
+### shown_corrections
+
+```python
+def shown_corrections(corrections: list, label: str) -> Optional[dict]
+```
+
+What a request asked again is told of its one row: the coordinates
+under "what", and where a correction names it the name and quote it was
+given; None where nothing was wrong with that row.
 
 [Back to the index](../README.md)

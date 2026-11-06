@@ -339,11 +339,12 @@ owner decisions 2026-11-06)?
 def answer_schema(slot, probe: bool = False) -> dict
 ```
 
-One coordinate's answer as the grammar takes it; with *probe* also
-the sentence a reply writes to a coordinate its passage does not state,
-as the plan would print it, which the combing searches with (owner
-decision 2026-11-05: HyDE). A coordinate that may name several things
-(`several`) takes a list of such answers too.
+One coordinate's answer as the grammar takes it, its printed wording
+only where `fields.wording_asked`; with *probe* also the sentence a reply
+writes to a coordinate its passage does not state, as the plan would
+print it, which the combing searches with (owner decision 2026-11-05:
+HyDE). A coordinate that may name several things (`several`) takes a
+list of such answers too.
 
 ### answers_each
 
@@ -529,10 +530,12 @@ stands first). Nothing of the value's coordinates.
 def values_response_format(parameter, head: bool = False) -> dict
 ```
 
-The next value of the passage, with its wording, its quote and, with
-*head*, the head of its column; null where no further value stands in it.
-A category value is one of its entries, or "" where the model is unsure
-of them.
+The next value of the passage as the reply itself, with no wrapper
+(owner decision 2026-11-06): its value and quote, its printed wording
+only where the value is an entry of a list or a number (a free text value
+is its own wording, `verify.wording_of`), and with *head* the head of its
+column; {"value": null} where no further value stands in it. A category
+value is one of its entries, or "" where the model is unsure of them.
 
 ### claim_of
 
@@ -541,8 +544,8 @@ def claim_of(reply, head: bool = False) -> Optional[dict]
 ```
 
 The value a round's reply names, as a row's claim, or None where it
-names none. A table row quoted with others is cut to the one row that
-prints the number (`narrow_quote`).
+names none: {"value": null}, or no object. A table row quoted with
+others is cut to the one row that prints the number (`narrow_quote`).
 
 ### same_value
 

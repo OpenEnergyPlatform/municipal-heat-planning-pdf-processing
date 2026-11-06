@@ -1,10 +1,12 @@
 """
 survey.py: One pass over the whole plan before any number is read.
 
-The plan is cut into small contexts, at most one figure and at most the text
-of one of its pages each (owner decision 2026-11-06), and every passage of
-every context is answered:
-the parameters whose values stand in it, or none of them. The survey only
+Every passage of the plan is a request of its own, a passage longer than the
+text of one of its pages cut into pieces of a page (owner decisions
+2026-11-06), and every passage is answered: the parameters whose values stand
+in it, or none of them. The reply is that passage's entry alone, with no
+wrapper and no id: the request shows one passage, so the model has nothing to
+key its answer by (owner decision 2026-11-06). The survey only
 names them, without a quote (owner decision 2026-11-06): it decides which
 passages a parameter is read in, and the reading checks every value it reads
 there. The same request names the tuples of the groups the spec reads here
@@ -49,14 +51,15 @@ SURVEY_PROMPT_ID = "extraction/survey"
 NONE = "out:none"
 
 # What a context's request came to besides a reply: too long to be sent, or
-# an answer that did not fit its token limit. Both are split, not rescued.
+# an answer that did not fit its token limit. Neither is rescued; a request
+# shows one passage of at most a page, so its passage stays unanswered.
 CUT = "cut_off"
 
-# The text of one survey context, in pages of its plan (owner decision
-# 2026-11-06). On paper 86 one page instead of two named scenario
-# descriptions in 18 passages instead of 12, authors in 10 instead of 6, for
-# 58 more requests. The reading keeps two pages for what it shows around a
-# table or figure (`budget_of`).
+# The most text one survey request shows, in pages of its plan: a longer
+# passage is cut into pieces of it (owner decision 2026-11-06). On paper 86 one
+# page instead of two named scenario descriptions in 18 passages instead of
+# 12, authors in 10 instead of 6, for 58 more requests. The reading keeps two
+# pages for what it shows around a table or figure (`budget_of`).
 CONTEXT_PAGES = 1
 
 
@@ -64,8 +67,8 @@ def budget_of(passages: list, pages: Optional[int], span: int = 2) -> int:
     """The text of *span* pages of this plan, in characters: *span* times
     its mean; two pages unless said otherwise.
 
-    A figure's description is not counted: a context holds one figure,
-    whatever its description's length.
+    A figure's description is not counted: a figure is never cut, whatever
+    its description's length.
     """
     chars = sum(len(p.text or "") for p in passages
                 if p.owner_kind != "figure")
@@ -92,35 +95,32 @@ def pieces(text: str, budget: int) -> list:
 
 
 def contexts_of(passages: list, budget: int) -> list:
-    """The passages in document order, packed into contexts of at most one
-    figure and at most *budget* characters of text.
+    """The passages in document order, each a context of its own (owner
+    decision 2026-11-06: one passage per request).
 
-    A passage longer than the budget is cut into pieces of the budget, each
-    a context of its own, and every piece keeps its passage's owner.
+    A passage whose text is longer than *budget* characters is cut into
+    pieces of the budget, each a context of its own, and every piece keeps
+    its passage's owner. A figure is never cut: its description is not
+    counted, whatever its length.
     """
     out: list = []
-    current: list = []
-    chars, figure = 0, False
     for passage in passages:
         text = passage.text or ""
-        is_figure = passage.owner_kind == "figure"
-        size = 0 if is_figure else len(text)
-        if size > budget:
-            if current:
-                out.append(current)
-            current, chars, figure = [], 0, False
+        if passage.owner_kind != "figure" and len(text) > budget:
             out.extend([replace(passage, text=piece)]
                        for piece in pieces(text, budget))
-            continue
-        if current and (chars + size > budget or (is_figure and figure)):
-            out.append(current)
-            current, chars, figure = [], 0, False
-        current.append(passage)
-        chars += size
-        figure = figure or is_figure
-    if current:
-        out.append(current)
+        else:
+            out.append([passage])
     return out
+
+
+def one_passage(context: list):
+    """The one passage of a survey context (`contexts_of`); a context of any
+    other size is a mistake of the caller, not something to answer."""
+    if len(context) != 1:
+        raise ValueError(f"a survey request shows one passage, not "
+                         f"{len(context)}")
+    return context[0]
 
 
 def tuple_slots(spec) -> dict:
@@ -172,44 +172,42 @@ def key_of(prompt_text: str, parameters: dict, groups: dict,
 
 def payload(context: list, parameters: dict, groups: dict,
             corrections: Optional[list] = None) -> dict:
-    sources = []
-    for index, source in enumerate(context):
-        provenance = source.provenance or {}
-        entry = {"id": f"P{index + 1}", "kind": source.owner_kind,
-                 "section": provenance.get("section_title"),
-                 "text": source.text or ""}
-        if provenance.get("page"):
-            entry["page"] = provenance["page"]
-        sources.append(entry)
-    body = {"sources": sources, "parameters": parameters, "groups": groups}
+    """One request: its one passage under "source", without an id, the
+    parameters and the groups; with *corrections* the same request asked
+    once more."""
+    source = one_passage(context)
+    provenance = source.provenance or {}
+    shown = {"kind": source.owner_kind,
+             "section": provenance.get("section_title"),
+             "text": source.text or ""}
+    if provenance.get("page"):
+        shown["page"] = provenance["page"]
+    body = {"source": shown, "parameters": parameters, "groups": groups}
     if corrections:
         body["corrections"] = list(corrections)
     return body
 
 
-def corrections_of(answers: list, unanswered: list, context: list) -> list:
-    """What was wrong with a reply over *context*, one sentence each, for
-    the request that asks it again: a tuple not taken, a passage not
-    answered. Empty when nothing was."""
+def corrections_of(answers: list, unanswered: list) -> list:
+    """What was wrong with the reply about one passage, one sentence each,
+    for the request that asks it again: a tuple not taken, or no list of
+    parameters. Empty when nothing was."""
     from .wording import say
 
-    label = {(s.owner_kind, s.owner_id): f"P{i + 1}"
-             for i, s in enumerate(context)}
     out: list = []
     for answer in answers:
         for dropped in answer.dropped:
             why = dropped.get("why")
             if dropped.get("group") and why:
-                out.append(f"{label.get(answer.owner, '?')}: {why}")
-    out.extend(say("key_missing", key=label.get(tuple(owner), "?"))
-               for owner in unanswered)
+                out.append(why)
+    out.extend(say("key_missing", key="parameters") for _ in unanswered)
     return out
 
 
-def response_format(context: list, parameters: dict, slots: dict) -> dict:
-    """The reply as a server grammar: one entry for EVERY passage of the
-    context, its parameters from the list or NONE, and the tuples of each
-    group the survey reads."""
+def response_format(parameters: dict, slots: dict) -> dict:
+    """The reply about one passage as a server grammar: its parameters from
+    the list or NONE, and the tuples of each group the survey reads, at the
+    top with no wrapper (owner decision 2026-11-06)."""
     entry_props: dict = {
         "parameters": {"type": "array", "minItems": 1,
                        "items": {"enum": sorted(parameters) + [NONE]}}}
@@ -229,14 +227,8 @@ def response_format(context: list, parameters: dict, slots: dict) -> dict:
             "required": [s.name for s in group_slots]
             + [f"{s.name}_quote" for s in group_slots],
             "additionalProperties": False}}
-    entry = {"type": "object", "properties": entry_props,
-             "required": ["parameters"], "additionalProperties": False}
-    ids = [f"P{i + 1}" for i in range(len(context))]
-    schema = {"type": "object",
-              "properties": {"passages": {
-                  "type": "object", "properties": {i: entry for i in ids},
-                  "required": ids, "additionalProperties": False}},
-              "required": ["passages"], "additionalProperties": False}
+    schema = {"type": "object", "properties": entry_props,
+              "required": ["parameters"], "additionalProperties": False}
     return {"type": "json_schema",
             "json_schema": {"name": "survey_reply", "schema": schema}}
 
@@ -252,36 +244,33 @@ class Answer:
 
 def read_reply(reply: dict, context: list, parameters: dict, slots: dict,
                pairs_of: Callable) -> tuple:
-    """([Answer], passages unanswered) of one context's reply.
+    """([Answer], passages unanswered) of the reply about a context's one
+    passage: the reply is that passage's entry itself (`response_format`).
 
-    A passage's parameters are taken as the reply names them, those of the
-    spec only; NONE beside a parameter says nothing. A tuple is taken when
-    *pairs_of* (`runner.frame_pairs`) takes it over the passages shown.
-    Nothing else is checked.
+    The parameters are taken as the reply names them, those of the spec
+    only; NONE beside a parameter says nothing. A reply that is no object or
+    has no list under "parameters" leaves the passage unanswered. A tuple is
+    taken when *pairs_of* (`runner.frame_pairs`) takes it over the passage
+    shown. Nothing else is checked.
     """
-    answers, unanswered = [], []
-    entries = (reply or {}).get("passages")
-    entries = entries if isinstance(entries, dict) else {}
-    for index, source in enumerate(context):
-        owner = (source.owner_kind, source.owner_id)
-        entry = entries.get(f"P{index + 1}")
-        if not isinstance(entry, dict):
-            unanswered.append(owner)
-            continue
-        answer = Answer(owner, [p for p in entry.get("parameters") or ()
-                                if p in parameters])
-        for name, group_slots in slots.items():
-            rejected: list = []
-            given = entry.get(name)
-            taken = pairs_of({"pairs": given if isinstance(given, list)
-                              else []}, group_slots, context, rejected)
-            if taken:
-                answer.tuples[name] = taken
-            for reason in rejected:
-                answer.dropped.append({"group": name,
-                                       "why": reason.get("reason")})
-        answers.append(answer)
-    return answers, unanswered
+    source = one_passage(context)
+    owner = (source.owner_kind, source.owner_id)
+    if not isinstance(reply, dict) \
+            or not isinstance(reply.get("parameters"), list):
+        return [], [owner]
+    answer = Answer(owner, [p for p in reply["parameters"]
+                            if p in parameters])
+    for name, group_slots in slots.items():
+        rejected: list = []
+        given = reply.get(name)
+        taken = pairs_of({"pairs": given if isinstance(given, list)
+                          else []}, group_slots, context, rejected)
+        if taken:
+            answer.tuples[name] = taken
+        for reason in rejected:
+            answer.dropped.append({"group": name,
+                                   "why": reason.get("reason")})
+    return [answer], []
 
 
 @dataclass
@@ -402,19 +391,17 @@ class Survey:
         return Found(True, answers, unanswered)
 
     def _ask_context(self, context: list, document_id: int) -> tuple:
-        """(answers, unanswered, complete) of one context, halved while its
-        reply does not fit, asked once more for what it got wrong."""
+        """(answers, unanswered, complete) of one context, its one passage
+        asked once more for what the reply got wrong. A reply that did not
+        fit its room leaves the passage unanswered: there is nothing left to
+        split."""
+        source = one_passage(context)
         reply = self.ask(context, document_id, None)
-        if reply == CUT and len(context) > 1:
-            cut = len(context) // 2
-            a = self._ask_context(context[:cut], document_id)
-            b = self._ask_context(context[cut:], document_id)
-            return a[0] + b[0], a[1] + b[1], a[2] and b[2]
         if not isinstance(reply, dict):
-            return [], [(s.owner_kind, s.owner_id) for s in context], False
+            return [], [(source.owner_kind, source.owner_id)], False
         answers, unanswered = read_reply(reply, context, self.parameters,
                                          self.slots, self.pairs_of)
-        corrections = corrections_of(answers, unanswered, context)
+        corrections = corrections_of(answers, unanswered)
         if not corrections:
             return answers, unanswered, True
         again = self.ask(context, document_id, corrections)

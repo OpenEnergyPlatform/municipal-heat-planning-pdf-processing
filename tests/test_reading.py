@@ -115,7 +115,7 @@ def nth(given, calls, task):
     return given[min(n, len(given)) - 1]
 
 
-def asking(values=({"next": None},), groups=None, spec=SPEC, frame=FRAME,
+def asking(values=({"value": None},), groups=None, spec=SPEC, frame=FRAME,
            **kw):
     """A Reader whose values requests are answered by *values* in turn and
     the requests of each group by *groups[name]* in turn, any other group
@@ -141,7 +141,7 @@ def asking(values=({"next": None},), groups=None, spec=SPEC, frame=FRAME,
     return reading.Reader(spec, ask_values, ask_text, frame, **kw), calls
 
 
-def read_of(source, *, values=({"next": None},), groups=None, pairs=(),
+def read_of(source, *, values=({"value": None},), groups=None, pairs=(),
             tuples=(), passages=None, **kw):
     reader, calls = asking(values, groups, **kw)
     passages = passages or {(source.owner_kind, source.owner_id): source}
@@ -169,8 +169,8 @@ def test_a_table_gives_its_rows_cell_by_cell_and_text_gives_none():
 # -- the values of a passage, one per round ---------------------------------------
 
 def test_each_round_names_the_next_value_and_the_rounds_end_on_none():
-    read, calls = read_of(TEXT, values=({"next": V300}, {"next": V27},
-                                        {"next": None}))
+    read, calls = read_of(TEXT, values=(V300, V27,
+                                        {"value": None}))
     assert [p["read"] for p in rounds(calls)] == [[], [V300], [V300, V27]]
     assert [c["value"] for c in read.claims] == [300, 27]
     none, calls = read_of(TEXT)
@@ -180,18 +180,18 @@ def test_each_round_names_the_next_value_and_the_rounds_end_on_none():
 def test_a_value_the_check_refuses_is_asked_once_more_with_its_reason():
     for wrong, why in (
             (dict(V300, quote="rund 300 t CO2 im Jahr"),       # in no passage
-             say("quote_not_in_source")),
+             say("quote_not_in_passage")),
             (dict(V300, value=300000), say("value_outside_quote", values=json
                                            .dumps([{"value": 300000,
                                                     "quote": V300["quote"]}],
                                                   ensure_ascii=False)))):
-        read, calls = read_of(TEXT, values=({"next": wrong}, {"next": V300},
-                                            {"next": None}))
+        read, calls = read_of(TEXT, values=(wrong, V300,
+                                            {"value": None}))
         assert corrections_of(calls) == [("values", [dict(wrong, what=why)])]
         assert [(c["value"], c["quote"]) for c in read.claims] \
             == [(300, V300["quote"])]
         assert read.corrected == 1 and read.failed == {reading.VALUE: 1}
-    _read, calls = read_of(TEXT, values=({"next": V300}, {"next": None}))
+    _read, calls = read_of(TEXT, values=(V300, {"value": None}))
     assert corrections_of(calls) == []
 
 
@@ -217,8 +217,8 @@ def test_what_the_fold_refuses_of_a_value_is_asked_with_the_fold_s_reason():
              "quote": NAMED}
     for wrong in ({"value": "bioenergy", "quote": NAMED},       # off its list
                   {"value": "industry sector", "quote": NAMED}):  # not quoted
-        read, calls = sector_read({"next": wrong}, {"next": right},
-                                  {"next": None})
+        read, calls = sector_read(wrong, right,
+                                  {"value": None})
         why = verify_tuple(wrong, SECTOR, COVERS.text).reason
         assert corrections_of(calls) == [("values", [dict(
             wrong, what=say("value_rejected", reason=why))])]
@@ -226,17 +226,17 @@ def test_what_the_fold_refuses_of_a_value_is_asked_with_the_fold_s_reason():
                 for c in read.claims] == [("industry sector", "industry")]
         assert read.corrected == 1 and read.failed == {reading.VALUE: 1}
     # the failure by construction: a value the fold takes is not asked again
-    read, calls = sector_read({"next": right}, {"next": None})
+    read, calls = sector_read(right, {"value": None})
     assert corrections_of(calls) == [] and len(read.claims) == 1
 
 
 def test_a_value_named_again_is_asked_once_more_and_then_ends_the_rounds():
-    read, calls = read_of(TEXT, values=({"next": V300}, {"next": V300},
-                                        {"next": V27}, {"next": None}))
+    read, calls = read_of(TEXT, values=(V300, V300,
+                                        V27, {"value": None}))
     assert corrections_of(calls) == [("values", [dict(V300, what=say(
         "value_already_read", value="300", quote=V300["quote"]))])]
     assert [c["value"] for c in read.claims] == [300, 27]
-    stuck, calls = read_of(TEXT, values=({"next": V300},))
+    stuck, calls = read_of(TEXT, values=(V300,))
     assert [c["value"] for c in stuck.claims] == [300]
     assert len(rounds(calls)) == 3          # the value, again, again: done
     assert stuck.failed == {reading.REPEATED: 1}
@@ -257,9 +257,9 @@ def placed():
 
 def test_a_value_in_the_text_around_a_table_is_read_from_its_section():
     passages = {("table", 5): placed(), ("section", 9): SECTION}
-    read, calls = read_of(placed(), values=({"next": dict(AROUND,
-                                                         head="gesamt")},
-                                           {"next": None}),
+    read, calls = read_of(placed(), values=(dict(AROUND,
+                                                         head="gesamt"),
+                                           {"value": None}),
                           passages=passages)
     claim = read.claims[0]
     assert corrections_of(calls) == [] and claim["value"] == 2027
@@ -269,8 +269,8 @@ def test_a_value_in_the_text_around_a_table_is_read_from_its_section():
     assert [len(r) for r in routed] == [0, 1] and orphans == []
     assert "head" not in claim             # a section has no column
     # Not shown, the section holds no value of this reading.
-    alone, calls = read_of(placed(), values=({"next": AROUND}, {"next": None}))
-    assert corrections_of(calls)[0][1][0]["what"] == say("quote_not_in_source")
+    alone, calls = read_of(placed(), values=(AROUND, {"value": None}))
+    assert corrections_of(calls)[0][1][0]["what"] == say("quote_not_in_passage")
     assert len(alone.batch.items) == 1
 
 
@@ -282,15 +282,15 @@ BARE = Source("section", 6, "Bilanz\nEs fielen rund 300 t CO2 an.",
 
 def test_two_equal_numbers_of_a_row_are_two_values_by_their_heads():
     read, calls = read_of(table(), values=(
-        {"next": {"value": 27, "quote": OIL, "head": "Haushalte"}},
-        {"next": {"value": 27, "quote": OIL, "head": "gesamt"}},
-        {"next": None}))
+        {"value": 27, "quote": OIL, "head": "Haushalte"},
+        {"value": 27, "quote": OIL, "head": "gesamt"},
+        {"value": None}))
     assert corrections_of(calls) == []
     assert [c["head"] for c in read.claims] == ["Haushalte", "gesamt"]
     # Named without its head, the second is the first named again.
     same, calls = read_of(table(), values=(
-        {"next": {"value": 27, "quote": OIL}},
-        {"next": {"value": 27, "quote": OIL}}, {"next": None}))
+        {"value": 27, "quote": OIL},
+        {"value": 27, "quote": OIL}, {"value": None}))
     assert corrections_of(calls) == [("values", [{
         "value": 27, "quote": OIL,
         "what": say("value_already_read", value="27", quote=OIL)}])]
@@ -301,14 +301,14 @@ def test_two_equal_numbers_of_a_row_are_two_values_by_their_heads():
 def test_a_head_no_head_line_prints_is_asked_once_more_and_then_dropped():
     wrong = {"value": 800, "quote": "| Erdgas | 1.200 | 800 | 2.000 |",
              "head": "Wohnen"}
-    read, calls = read_of(table(), values=({"next": wrong}, {"next": wrong},
-                                           {"next": None}))
+    read, calls = read_of(table(), values=(wrong, wrong,
+                                           {"value": None}))
     assert corrections_of(calls) == [("values", [dict(wrong, what=say(
         "head_not_in_table", head="Wohnen"))])]
     # The number's own cell still names its column.
     assert read.claims[0]["head"] == "GHD"
-    right, calls = read_of(table(), values=({"next": dict(wrong, head="GHD")},
-                                            {"next": None}))
+    right, calls = read_of(table(), values=(dict(wrong, head="GHD"),
+                                            {"value": None}))
     assert corrections_of(calls) == [] and right.claims[0]["head"] == "GHD"
 
 
@@ -332,8 +332,8 @@ def years():
 
 
 def test_a_head_with_a_year_of_the_pairs_dates_the_number_and_its_pair():
-    read, calls = read_of(years(), values=({"next": UNDER_2022},
-                                           {"next": None}), pairs=PAIRS)
+    read, calls = read_of(years(), values=(UNDER_2022,
+                                           {"value": None}), pairs=PAIRS)
     claim = read.claims[0]
     assert (claim["year"], claim["year_state"]) == (2022, "read")
     assert list(claim["year_window"]) == ["head", 2]
@@ -341,15 +341,15 @@ def test_a_head_with_a_year_of_the_pairs_dates_the_number_and_its_pair():
     # Both frame coordinates read: the frame group is not asked.
     assert "frame" not in {task for task, _ in calls}
     # Two pairs of that year: the year is read, the scenario asked.
-    twice, calls = read_of(years(), values=({"next": UNDER_2022},
-                                            {"next": None}),
+    twice, calls = read_of(years(), values=(UNDER_2022,
+                                            {"value": None}),
                            pairs=[PAIRS[0], dict(PAIRS[1], year=2022)])
     assert twice.claims[0]["year_state"] == "read"
     assert [set(p["coordinates"]) for task, p in calls if task == "frame"] \
         == [{"scenario"}]
     # A year no pair has dates nothing.
-    none, calls = read_of(years(), values=({"next": UNDER_2022},
-                                           {"next": None}), pairs=PAIRS[1:])
+    none, calls = read_of(years(), values=(UNDER_2022,
+                                           {"value": None}), pairs=PAIRS[1:])
     assert none.claims[0].get("year_state") != "read"
     assert [set(p["coordinates"]) for task, p in calls if task == "frame"] \
         == [{"scenario", "year"}]
@@ -365,8 +365,8 @@ def test_a_coordinate_may_quote_what_its_value_has_read():
                 if claim.get("scenario_state") == "read" else {})
     subject = {"number": [{"unit": {"value": UNSTATED}, "subject": {
         "value": "Szenario Bestand", "quote": "Szenario Bestand 2022"}}]}
-    read, calls = read_of(years(), values=({"next": UNDER_2022},
-                                           {"next": None}),
+    read, calls = read_of(years(), values=(UNDER_2022,
+                                           {"value": None}),
                           groups=subject, pairs=PAIRS, known=known)
     assert [p["value"]["read"] for task, p in calls if task == "number"] \
         == [{"scenario": "Szenario Bestand 2022"}]
@@ -374,7 +374,7 @@ def test_a_coordinate_may_quote_what_its_value_has_read():
     assert claim["subject_state"] == "read"
     assert claim["subject_source"] == ["table", 4]
     # Not shown, the same quote stands nowhere.
-    alone, _ = read_of(years(), values=({"next": UNDER_2022}, {"next": None}),
+    alone, _ = read_of(years(), values=(UNDER_2022, {"value": None}),
                        groups=subject, pairs=PAIRS)
     assert alone.claims[0]["subject_state"] == "unbacked"
 
@@ -389,8 +389,8 @@ TEXT_KEYS = ("parameter", "coordinates", "where", "base_years",
 
 
 def test_each_group_is_asked_alone_and_only_a_frame_group_sees_the_pairs():
-    read, calls = read_of(TEXT, values=({"next": V300}, {"next": V27},
-                                        {"next": None}),
+    read, calls = read_of(TEXT, values=(V300, V27,
+                                        {"value": None}),
                           tuples=[PAIRS[0]], pairs=PAIRS)
     asked = [(task, payload) for task, payload in calls if task != "values"]
     assert [task for task, _ in asked] == [g.name for g, _ in GROUPS] * 2
@@ -418,14 +418,14 @@ def context(**given):
     return {**{slot.name: {"value": UNSTATED} for slot in CONTEXT}, **given}
 
 
-ONE = ({"next": V300}, {"next": None})
+ONE = (V300, {"value": None})
 
 
 def test_a_coordinate_the_check_refuses_is_asked_again_by_its_coordinate():
     read, calls = read_of(TEXT, values=ONE, groups={"context": [
         context(carrier=WRONG_CARRIER), context(carrier=RIGHT_CARRIER)]})
     assert corrections_of(calls) == [("context", [
-        {"coordinate": "carrier", "what": say("quote_not_in_source")}])]
+        {"coordinate": "carrier", "what": say("quote_not_in_passage")}])]
     claim = read.claims[0]
     assert claim["carrier"] == "Erdgas" and claim["carrier_state"] == "read"
 
@@ -509,9 +509,17 @@ def rejected(instance, schema) -> bool:
     return False
 
 
-def values_grammar(head=False):
-    return reading.values_response_format(EMISSION, head)["json_schema"][
+def values_grammar(head=False, parameter=EMISSION):
+    return reading.values_response_format(parameter, head)["json_schema"][
         "schema"]
+
+
+def properties_of(schema) -> set:
+    """Every key a grammar takes at its top, over its alternatives."""
+    keys = set(schema.get("properties") or ())
+    for one in schema.get("anyOf") or ():
+        keys |= set(one.get("properties") or ())
+    return keys
 
 
 def group_grammar(name):
@@ -520,13 +528,23 @@ def group_grammar(name):
 
 
 def test_a_round_names_one_value_or_none_and_a_head_only_where_asked():
-    assert not rejected({"next": None}, values_grammar())
-    assert not rejected({"next": V300}, values_grammar())
-    assert rejected({"next": {"value": 300}}, values_grammar())     # no quote
-    assert rejected({"next": [V300]}, values_grammar())
+    assert not rejected({"value": None}, values_grammar())
+    assert not rejected(V300, values_grammar())
+    assert rejected({"value": 300}, values_grammar())     # no quote
+    assert rejected([V300], values_grammar())
     with_head = dict(V300, head="gesamt")
-    assert not rejected({"next": with_head}, values_grammar(head=True))
-    assert rejected({"next": with_head}, values_grammar())
+    assert not rejected(with_head, values_grammar(head=True))
+    assert rejected(with_head, values_grammar())
+    # No wrapper (owner decision 2026-11-06): the reply as it was before is
+    # refused, and a free text value carries no wording beside it, which a
+    # number may.
+    assert rejected({"next": V300}, values_grammar())
+    assert not rejected(dict(V300, value_raw="300"), values_grammar())
+    office = SPEC.by_uri["planning_organisation"]
+    named = {"value": "Planungsbüro A", "quote": "Planungsbüro A GmbH"}
+    assert not rejected(named, values_grammar(parameter=office))
+    assert rejected(dict(named, value_raw="Planungsbüro A"),
+                    values_grammar(parameter=office))
     assert reading.with_head_asked(EMISSION, table())
     assert not reading.with_head_asked(EMISSION, TEXT)
     assert not reading.with_head_asked(SPEC.by_uri["planning_organisation"],
@@ -581,9 +599,9 @@ def model(cut=lambda rows: False, silent=lambda rows: False):
         for line, cells in reading.grid_of(source.text).body:
             value = int(cells[1].replace(".", ""))
             if value not in done:
-                return {"next": {"value": value, "quote": line,
-                                 "head": "2022"}}
-        return {"next": None}
+                return {"value": value, "quote": line,
+                                 "head": "2022"}
+        return {"value": None}
     return answer
 
 
@@ -650,9 +668,9 @@ STATE = Source("section", 6, "Im Bestand fielen rund 300 t CO2 an.",
 
 
 def read_by_word(year):
-    read, _ = read_of(STATE, values=({"next": {"value": 300, "quote":
-                                               "rund 300 t CO2"}},
-                                     {"next": None}),
+    read, _ = read_of(STATE, values=({"value": 300, "quote":
+                                               "rund 300 t CO2"},
+                                     {"value": None}),
                       groups={"frame": [{"scenario": {"value": UNSTATED},
                                          "year": {
                                              "value": year,
@@ -707,14 +725,14 @@ FROM_AROUND = {"frame": [{"scenario": {"value": UNSTATED}, "year": {
 
 def test_a_year_printed_in_the_text_around_a_table_is_read_from_there():
     passages = {("table", 5): placed(), ("section", 9): SECTION}
-    read, calls = read_of(placed(), values=({"next": GAS}, {"next": None}),
+    read, calls = read_of(placed(), values=(GAS, {"value": None}),
                           groups=FROM_AROUND, passages=passages)
     assert all("Die folgende Tabelle" in payload["around"]
                for _task, payload in calls)
     claim = read.claims[0]
     assert claim["year"] == 2022 and claim["year_state"] == "read"
     assert claim["year_source"] == ["section", 9]
-    alone, _ = read_of(placed(), values=({"next": GAS}, {"next": None}),
+    alone, _ = read_of(placed(), values=(GAS, {"value": None}),
                        groups=FROM_AROUND)
     assert alone.claims[0]["year_state"] == "unbacked"
 
@@ -742,13 +760,13 @@ def test_a_passage_is_shown_with_its_heading_where_its_text_lacks_it():
 
 
 def test_a_year_printed_only_in_a_section_s_own_heading_is_read_from_it():
-    read, _ = read_of(HEADED, values=({"next": V80}, {"next": None}),
+    read, _ = read_of(HEADED, values=(V80, {"value": None}),
                       groups=FROM_HEADING, shown_with=reading.heading_of)
     claim = read.claims[0]
     assert claim["year"] == 2045 and claim["year_state"] == "read"
     assert claim["year_quote"] == "Zielszenario 2045"
     assert claim["year_source"] == ["section", 12]
-    alone, _ = read_of(HEADED, values=({"next": V80}, {"next": None}),
+    alone, _ = read_of(HEADED, values=(V80, {"value": None}),
                        groups=FROM_HEADING)
     assert alone.claims[0]["year_state"] == "unbacked"
 
@@ -772,7 +790,7 @@ def frame(**given):
 
 def test_a_quote_from_a_section_never_shown_is_not_read():
     # The section is in the plan, but no request showed it.
-    read, calls = read_of(BARE, values=({"next": BARE_300}, {"next": None}),
+    read, calls = read_of(BARE, values=(BARE_300, {"value": None}),
                           groups={"frame": [frame(year=YEAR_AFTER)]},
                           passages=PLAN)
     assert read.claims[0]["year_state"] == "unbacked"
@@ -785,8 +803,8 @@ def test_a_quote_from_a_section_never_shown_is_not_read():
 def test_a_reading_offers_no_tools_in_its_grammars_or_its_requests():
     for schema in (values_grammar(), values_grammar(head=True),
                    *(group_grammar(group.name) for group, _ in GROUPS)):
-        assert "more" not in schema["properties"]
-    assert rejected({"next": None, "more": [{"get": "next"}]},
+        assert "more" not in properties_of(schema)
+    assert rejected({"value": None, "more": [{"get": "next"}]},
                     values_grammar())
     _read, calls = read_of(TEXT, values=ONE, tuples=[PAIRS[0]], pairs=PAIRS)
     assert calls and not any(key in payload for _task, payload in calls
@@ -798,9 +816,9 @@ def test_a_reading_offers_no_tools_in_its_grammars_or_its_requests():
 
 def shown_definitions(parameter):
     """{task: the definition its first request showed of *parameter*}."""
-    reader, calls = asking(({"next": {"value": 300,
-                                      "quote": "Es fielen 300 t an"}},
-                            {"next": None}))
+    reader, calls = asking(({"value": 300,
+                                      "quote": "Es fielen 300 t an"},
+                            {"value": None}))
     source = Source("section", 6, "Es fielen 300 t an.",
                     {"document_id": 7, "section_title": "Bilanz"})
     reader.read(7, parameter, source, [], [], {("section", 6): source})
@@ -986,13 +1004,13 @@ def test_similar_without_a_ranking_finds_nothing_and_says_so():
 
 
 def test_a_group_reply_keeps_the_sentence_of_what_it_found_unstated_apart():
-    read, _ = read_of(BARE, values=({"next": BARE_300}, {"next": None}),
+    read, _ = read_of(BARE, values=(BARE_300, {"value": None}),
                       groups={"frame": [frame(year={"value": UNSTATED,
                                                     "probe": PROBE})]})
     assert read.probes == [{"year": PROBE}]
     assert not any("probe" in key for key in read.claims[0])
     assert read.claims[0]["year_state"] == "unstated"
-    plain, _ = read_of(BARE, values=({"next": BARE_300}, {"next": None}),
+    plain, _ = read_of(BARE, values=(BARE_300, {"value": None}),
                        groups={"frame": [frame()]})
     assert plain.probes == [{}]
 

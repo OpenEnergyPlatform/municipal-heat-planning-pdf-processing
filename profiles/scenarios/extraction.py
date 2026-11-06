@@ -402,9 +402,8 @@ PHRASES = {
         'although the passage states the field, leave "value" out and '
         'give the wording in "value_raw".'),
     "name_not_listed": (
-        'For {name!r} you gave {given}, and not every one of them is a '
-        'name under "names". Answer for it with names under "names" only, '
-        'each copied character for character.'),
+        'Under {name!r} you gave {given}. Answer only under a number from '
+        '"names", with a list of numbers from "names".'),
     "wrong_type": (
         'Your "value" {given!r} is not {wrong}. Answer with {wrong}, '
         'exactly as the passage writes it.'),
@@ -412,6 +411,14 @@ PHRASES = {
         'Your "quote" stands in none of the sources shown. Copy a '
         'passage character for character from "sources" or from the '
         '"quote" of the row itself.'),
+    "quote_not_in_passage": (
+        'Your "quote" stands neither in "source", nor in the heading of its '
+        'section, nor in "around". Copy it character for character from '
+        'one of them.'),
+    "quote_not_shown": (
+        'Your "quote" stands in nothing this request shows. Copy it '
+        'character for character from "more", from a title or line under '
+        '"hits", from "passage" or from "row".'),
     "quote_too_short": (
         'Your "quote" is too short to name a place (at least {minimum} '
         'characters). Quote the whole sentence or the whole line the '

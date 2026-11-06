@@ -57,9 +57,12 @@ table gives this profile's own answer.
 A run harvests a publication from its survey (owner decisions 2026-11-04,
 see [extraction](../stages/extraction.md)): the spec names one group,
 `scenario`, read with the value, and English prompts serve it.
-`extraction/survey` names per passage the fields the publication states
-about itself, its study or its own scenarios. `extraction/read_values`
-names the values one per request, with `value`, `value_raw` and quote, and
+`extraction/survey` names per passage, one request each, the fields the
+publication states about itself, its study or its own scenarios, as the
+passage's entry alone (`{"parameters": ["publication_title",
+"publication_author"]}`, owner decision 2026-11-06). `extraction/read_values`
+names the values one per request, with `value`, `value_raw` (only for an entry
+of a list) and quote, and
 `extraction/read_text` answers for each value the scenario
 it refers to by the name the publication prints, with its quote. The value
 of `scenario_label` and the `scenario` axis are `merged: "scenario"` in the
@@ -292,17 +295,21 @@ asks what they mean once the document is folded (`runner.verify`, right after
 the compute step, built by `runner.make_namer`). One request per kind the
 spec's `merged` names (here `scenario`, prompt `extraction/naming`, trace
 events `naming_ask` and `naming`) shows the model every name read for the
-document. Each name comes with its places: the quote it was read with and 500
-characters of the passage before and after it (`CONTEXT_CHARS`, owner
-decision 2026-11-06), overlapping stretches of one passage shown once as one
-place. For each name the model answers the names of what it means: itself,
-another name of the same scenario, or several names where it stands for
-several scenarios (`naming.meanings`). Names of one scenario become one thing,
-called by the name the others point to.
+document. Each name stands under a number (N1, N2, ...) with its places: the quote it
+was read with and 500 characters of the passage before and after it
+(`CONTEXT_CHARS`, owner decision 2026-11-06), overlapping stretches of one
+passage shown once as one place. The model answers with numbers only and
+copies no name, and only for a name that means another name of the same
+scenario or several names where it stands for several scenarios:
+`{"N2": ["N1"], "N5": ["N3", "N4"]}`. A name it leaves out means itself, and
+`{}` says every name does (`naming.meanings`, owner decision 2026-11-06).
+Names of one scenario become one thing, called by the name the others point
+to.
 
-The answer quotes nothing: each name keeps its own quote. An answer with a
-name the request did not show is asked once more with the reason
-`name_not_listed`; a name still answered so means itself. A request that does
+The answer quotes nothing: each name keeps its own quote. An entry under a
+number the request did not show, or with one, is asked once more with the
+reason `name_not_listed`; a name still answered so means itself
+(`naming.answers_of`). A request that does
 not fit is asked in two halves of the names, then once more over the things
 the halves found. Each row keeps the name it was read as and gets the names
 of what it means under `<coordinate>_means` (`scenario_means`), or

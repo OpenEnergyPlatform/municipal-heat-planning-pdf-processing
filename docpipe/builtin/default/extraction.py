@@ -54,9 +54,8 @@ PHRASES = {
         'although the passage states the field, leave "value" out and '
         'give the wording in "value_raw".'),
     "name_not_listed": (
-        'For {name!r} you gave {given}, and not every one of them is a '
-        'name under "names". Answer for it with names under "names" only, '
-        'each copied character for character.'),
+        'Under {name!r} you gave {given}. Answer only under a number from '
+        '"names", with a list of numbers from "names".'),
     "wrong_type": (
         'Your "value" {given!r} is not {wrong}. Answer with {wrong}, '
         'exactly as the passage writes it.'),
@@ -64,6 +63,14 @@ PHRASES = {
         'Your "quote" stands in none of the sources shown. Copy a '
         'passage character for character from "sources" or from the '
         '"quote" of the row itself.'),
+    "quote_not_in_passage": (
+        'Your "quote" stands neither in "source", nor in the heading of its '
+        'section, nor in "around". Copy it character for character from '
+        'one of them.'),
+    "quote_not_shown": (
+        'Your "quote" stands in nothing this request shows. Copy it '
+        'character for character from "more", from a title or line under '
+        '"hits", from "passage" or from "row".'),
     "quote_too_short": (
         'Your "quote" is too short to name a place (at least {minimum} '
         'characters). Quote the whole sentence or the whole line the '
@@ -145,15 +152,15 @@ PHRASES = {
     # a round of the values of a passage, one value each
     "value_already_read": (
         'You named this value already: {value} with the quote {quote!r}. '
-        'Name the next value that is not yet under "read", or answer with '
-        '"next": null.'),
+        'Name the next value that is not yet under "read", or answer '
+        '{{"value":null}}.'),
     "value_rejected": (
         'This value was not taken: {reason}. Name it again with a "quote" '
         'copied character for character from the passage that prints it. '
         'For a parameter with a list, "value" is one of its entries, or "" '
         'where none fits, and the passage\'s own words for it go under '
         '"value_raw". If the passage holds no such value, name the next value '
-        'that is not yet under "read" instead, or answer with "next": null '
+        'that is not yet under "read" instead, or answer {{"value":null}} '
         'if none is left.'),
     "head_not_in_table": (
         'The head {head!r} stands on no head line of the table. Write the '

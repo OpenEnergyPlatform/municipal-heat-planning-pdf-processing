@@ -196,9 +196,8 @@ PHRASES = {
         'Passage die Angabe nennt, dann lass "value" weg und gib die '
         'Bezeichnung in "value_raw".'),
     "name_not_listed": (
-        'Für {name!r} hast du {given} angegeben, und nicht jeder davon ist '
-        'ein Name unter "names". Antworte dafür nur mit Namen unter '
-        '"names", jeden Zeichen für Zeichen abgeschrieben.'),
+        'Unter {name!r} hast du {given} angegeben. Antworte nur unter einer '
+        'Nummer aus "names", mit einer Liste von Nummern aus "names".'),
     "wrong_type": (
         'Dein "value" {given!r} ist nicht {wrong}. Antworte mit {wrong}, '
         'genau wie die Passage es schreibt.'),
@@ -206,6 +205,14 @@ PHRASES = {
         'Dein "quote" steht in keiner der gezeigten Quellen. Kopiere '
         'eine Passage Zeichen für Zeichen aus "sources" oder aus dem '
         '"quote" der Zeile selbst.'),
+    "quote_not_in_passage": (
+        'Dein "quote" steht weder in "source" noch in der Überschrift ihres '
+        'Abschnitts noch in "around". Kopiere es Zeichen für Zeichen aus '
+        'einem davon.'),
+    "quote_not_shown": (
+        'Dein "quote" steht in nichts, was diese Anfrage zeigt. Kopiere es '
+        'Zeichen für Zeichen aus "more", aus einem Titel oder einer Zeile '
+        'unter "hits", aus "passage" oder aus "row".'),
     "quote_too_short": (
         'Dein "quote" ist zu kurz, um eine Stelle zu benennen '
         '(mindestens {minimum} Zeichen). Zitier den ganzen Satz oder die '
@@ -286,7 +293,7 @@ PHRASES = {
     "value_already_read": (
         'Diesen Wert hast du schon genannt: {value} mit dem Zitat {quote!r}. '
         'Nenne den nächsten Wert, der noch nicht unter "read" steht, oder '
-        'antworte mit "next": null.'),
+        'antworte {{"value":null}}.'),
     "value_rejected": (
         'Dieser Wert ist nicht übernommen: {reason}. Nenne ihn noch einmal, '
         'mit einem "quote", das Zeichen für Zeichen aus der Passage '
@@ -294,7 +301,7 @@ PHRASES = {
         '"value" einer ihrer Einträge, oder "", wo keiner passt, und das Wort '
         'der Passage dafür steht in "value_raw". Steht kein solcher Wert in '
         'der Passage, nenne stattdessen den nächsten Wert, der noch nicht '
-        'unter "read" steht, oder antworte mit "next": null, wenn keiner mehr '
+        'unter "read" steht, oder antworte {{"value":null}}, wenn keiner mehr '
         'kommt.'),
     "head_not_in_table": (
         'Der Kopf {head!r} steht in keiner Kopfzeile der Tabelle. Schreib '

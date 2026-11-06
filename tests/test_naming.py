@@ -10,14 +10,15 @@ over a stored harvest takes the first name. Only a free-text coordinate or
 value is merged, AND never one the survey reads.
 
 Once the document is folded, one request shows every name read for a kind
-with its places, each quote with 500 characters before and after it, AND a
-stretch of a passage once however many quotes stand in it. Names of one
-thing mean the name it is called by, AND a name of several things means each
-of theirs, AND an answer with no name shown means the name itself. The reply
-gives every name at least one of the names shown, AND nothing beside them, in
-the form a server holds it to and in the form a hosted API does. A name
-answered with names not shown is asked once more with the reason, AND one
-still so answered means itself. Each row read gets the names of what it
+under a number with its places, each quote with 500 characters before and
+after it, AND a stretch of a passage once however many quotes stand in it.
+Names of one thing mean the name it is called by, AND a name of several
+things means each of theirs, AND an answer with no name shown means the name
+itself. The reply answers in numbers only: under a number shown, at least
+one of the numbers shown, AND nothing beside them, in the form a server
+holds it to and in the form a hosted API does, AND a name it leaves out
+means itself. An entry under or with a number not shown is asked once more
+with the reason, AND a name still so answered means itself. Each row read gets the names of what it
 means, AND a row that read no name gets none. One name asks nothing. A
 request that does not fit is asked in two halves, AND what the halves found
 once more together. The graph writes a row to each scenario its name means,
@@ -106,7 +107,7 @@ def unmerged_spec():
 # -- the reading ---------------------------------------------------------------
 
 def test_a_scenario_is_read_as_printed_and_a_name_its_quote_lacks_is_not():
-    read, calls = read_of(YEAR, ({"next": Y2030}, {"next": None}),
+    read, calls = read_of(YEAR, (Y2030, {"value": None}),
                           groups={"scenario": NAMED})
     (_task, payload, shape), = [c for c in calls if c[0] == "scenario"]
     assert payload["coordinates"]["scenario"].get("options") is None
@@ -116,7 +117,7 @@ def test_a_scenario_is_read_as_printed_and_a_name_its_quote_lacks_is_not():
     assert claim["scenario_quote"] == NAMED["scenario"]["quote"]
     elsewhere = {"scenario": {"value": "CurPol",
                               "quote": "We analyse two pathways"}}
-    alone, _ = read_of(YEAR, ({"next": Y2030}, {"next": None}),
+    alone, _ = read_of(YEAR, (Y2030, {"value": None}),
                        groups={"scenario": elsewhere})
     assert alone.claims[0]["scenario_state"] == fields.UNBACKED
 
@@ -136,7 +137,7 @@ def test_a_list_splits_only_where_the_coordinate_is_merged():
 
 
 def test_a_value_stated_for_several_scenarios_is_one_row_each():
-    read, _ = read_of(YEAR, ({"next": Y2030}, {"next": None}),
+    read, _ = read_of(YEAR, (Y2030, {"value": None}),
                       groups={"scenario": TWO})
     assert [(c["value"], c["scenario"], c["scenario_state"])
             for c in read.claims] == [("2030", "CurPol", READ),
@@ -147,7 +148,7 @@ def test_a_value_stated_for_several_scenarios_is_one_row_each():
     # answer, and the value stays one row.
     plain = unmerged_spec()
     alone, _ = read_of(plain.by_uri["scenario_year"],
-                       ({"next": Y2030}, {"next": None}),
+                       (Y2030, {"value": None}),
                        groups={"scenario": TWO}, spec=plain)
     assert len(alone.claims) == 1
     assert alone.claims[0]["scenario_state"] != READ
@@ -158,7 +159,7 @@ def test_a_correction_for_one_of_several_scenarios_names_its_name():
                           {"value": "NDC",
                            "quote": "the NDC pathway of another study"}]}
     fixed = {"scenario": {"value": "NDC", "quote": "the NDC scenario"}}
-    read, calls = read_of(YEAR, ({"next": Y2030}, {"next": None}),
+    read, calls = read_of(YEAR, (Y2030, {"value": None}),
                           groups={"scenario": [stray, fixed]})
     (_task, corrected, _shape), = [c for c in calls if c[0] == "scenario"
                                    and c[1].get("corrections")]
@@ -174,7 +175,7 @@ def test_the_combing_makes_one_row_per_scenario_for_the_reading():
              "scenario_state": fields.SAID_UNSTATED}
     batch = Batch(7, YEAR, [WorkItem(7, YEAR, TEXT)], spec=SPEC)
     read = reading.Read(batch, [claim], probes=[{"scenario": "a sentence"}])
-    reply = {"rows": [{"row": "R1", **TWO}]}
+    reply = TWO
     passages = {(TEXT.owner_kind, TEXT.owner_id): TEXT}
     combing.Comber(SPEC, lambda *a, **k: reply, lambda *a: [],
                    lambda claim, names: {})(7, [read], passages, [])
@@ -296,6 +297,22 @@ def passages_of(names):
             for index, name in enumerate(names)}
 
 
+def by_number(answers):
+    """A reply as the model gives it: *answers* ({name: [names]}) under the
+    numbers the request showed the names under; a name it did not show
+    stays as it is."""
+    def reply(payload):
+        number = {entry["name"]: key for key, entry in payload["names"].items()}
+        return {number.get(name, name): [number.get(one, one) for one in given]
+                for name, given in answers.items()}
+    return reply
+
+
+def names_shown(payload) -> dict:
+    """{number: name} of a request."""
+    return {key: entry["name"] for key, entry in payload["names"].items()}
+
+
 def namer(replies, fits=None):
     """A Namer whose requests answer *replies* in turn, and what it was
     asked; with *fits*, a request of more names than that does not fit."""
@@ -313,12 +330,14 @@ def namer(replies, fits=None):
 def test_each_row_read_is_marked_with_what_its_name_means():
     names = [LCEO, ZERO]
     rows = rows_of(*names, unread=[fields.UNBACKED])
-    made, asked = namer([{LCEO: [LCEO], ZERO: [LCEO]}])
+    # Only the name that means another is answered (owner decision
+    # 2026-11-06): the one left out means itself.
+    made, asked = namer([by_number({ZERO: [LCEO]})])
     meant = made(7, rows, passages_of(names))
     assert meant == {"scenario": {LCEO: [LCEO], ZERO: [LCEO]}}
     (payload,), = [asked]
     assert payload["kind"] == "scenario"
-    assert set(payload["names"]) == {LCEO, ZERO}
+    assert names_shown(payload) == {"N1": LCEO, "N2": ZERO}
     assert all(f"We call it {name} here" in " ".join(payload["places"].values())
                for name in names)
     assert [row.get("value_means") for row in rows
@@ -334,32 +353,40 @@ def test_one_name_asks_nothing():
     assert asked == [] and rows[0]["value_means"] == [LCEO]
 
 
-def test_the_reply_gives_every_name_names_shown_and_nothing_else():
-    schema = naming.response_format([LCEO, ZERO])["json_schema"]["schema"]
-    strict, _decode = strict_schema.strict(schema)
-    for form in (schema, strict):
-        jsonschema.validate({LCEO: [LCEO], ZERO: [LCEO, ZERO]}, form)
-        for wrong in ({LCEO: [LCEO]},
-                      {LCEO: [LCEO], ZERO: ["Zero"]},
-                      {LCEO: [LCEO], ZERO: [LCEO], "note": [LCEO]}):
+def test_the_reply_answers_in_numbers_shown_and_may_leave_a_name_out():
+    schema = naming.response_format(["N1", "N2"])["json_schema"]["schema"]
+    strict, decode = strict_schema.strict(schema)
+    # A hosted API wants every key and reads a null as left out.
+    jsonschema.validate({"N2": ["N1"]}, schema)
+    jsonschema.validate({}, schema)
+    jsonschema.validate({"N1": None, "N2": ["N1", "N2"]}, strict)
+    assert decode({"N1": None, "N2": ["N1"]}) == {"N2": ["N1"]}
+    for wrong in ({"N2": [LCEO]}, {ZERO: ["N1"]},
+                  {"N2": ["N1"], "note": ["N1"]}):
+        for form, reply in ((schema, wrong), (strict, {"N1": None, **wrong})):
             with pytest.raises(jsonschema.ValidationError):
-                jsonschema.validate(wrong, form)
+                jsonschema.validate(reply, form)
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate({LCEO: [LCEO], ZERO: []}, schema)
+        jsonschema.validate({"N2": []}, schema)
 
 
 def test_a_name_answered_with_names_not_shown_is_asked_again_then_itself():
     names = [LCEO, ZERO]
-    made, asked = namer([{LCEO: [LCEO], ZERO: ["Zero"]},
-                         {LCEO: [LCEO], ZERO: [LCEO]}])
+    made, asked = namer([by_number({ZERO: ["Zero"]}),
+                         by_number({ZERO: [LCEO]})])
     assert made(7, rows_of(*names), passages_of(names))["scenario"][ZERO] \
         == [LCEO]
     assert "corrections" not in asked[0]
     assert asked[1]["corrections"] == [{
-        "name": ZERO, "value": ["Zero"],
-        "what": say("name_not_listed", name=ZERO, given='["Zero"]')}]
-    made, asked = namer([{LCEO: [LCEO], ZERO: ["Zero"]},
-                         {LCEO: [LCEO], ZERO: ["Zero"]}])
+        "name": "N2", "value": ["Zero"],
+        "what": say("name_not_listed", name="N2", given='["Zero"]')}]
+    # A name written where its number belongs is not a number shown.
+    made, asked = namer([{ZERO: ["N1"]}, by_number({ZERO: [LCEO]})])
+    assert made(7, rows_of(*names), passages_of(names))["scenario"][ZERO] \
+        == [LCEO]
+    assert [one["name"] for one in asked[1]["corrections"]] == [ZERO]
+    made, asked = namer([by_number({ZERO: ["Zero"]}),
+                         by_number({ZERO: ["Zero"]})])
     assert made(7, rows_of(*names), passages_of(names))["scenario"][ZERO] \
         == [ZERO]
     assert len(asked) == 2
@@ -367,17 +394,15 @@ def test_a_name_answered_with_names_not_shown_is_asked_again_then_itself():
 
 def test_a_request_that_does_not_fit_is_asked_in_halves_then_together():
     names = ["A", "B", "C", "D"]
-    made, asked = namer([{"A": ["A"], "B": ["A"]},
-                         {"C": ["C"], "D": ["D"]},
-                         {"A": ["A"], "C": ["A"], "D": ["D"]}], fits=3)
+    made, asked = namer([by_number({"B": ["A"]}), by_number({}),
+                         by_number({"C": ["A"]})], fits=3)
     meant = made(7, rows_of(*names), passages_of(names))["scenario"]
     assert meant == {"A": ["A"], "B": ["A"], "C": ["A"], "D": ["D"]}
-    assert [sorted(one["names"]) for one in asked] == [
+    assert [sorted(names_shown(one).values()) for one in asked] == [
         names, ["A", "B"], ["C", "D"], ["A", "C", "D"]]
     # Halves that join nothing ask nothing more: it would be the request
     # that did not fit.
-    made, asked = namer([{"A": ["A"], "B": ["B"]},
-                         {"C": ["C"], "D": ["D"]}], fits=3)
+    made, asked = namer([by_number({}), by_number({})], fits=3)
     meant = made(7, rows_of(*names), passages_of(names))["scenario"]
     assert meant == {name: [name] for name in names}
     assert len(asked) == 3

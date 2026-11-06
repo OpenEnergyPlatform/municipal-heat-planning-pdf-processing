@@ -1737,8 +1737,9 @@ def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
 The survey of whole plans (`survey.Survey`), or None when the profile
 writes no prompt for it or its spec names no groups. *every* is
 (document, exclude) -> passages, read from *db_path* when not given.
-A figure goes with its crop, one to a context. *scope* names a survey of
-part of a plan, kept beside the whole one's.
+Each request shows one passage, a figure with its crop beside the text
+as the reading shows it. *scope* names a survey of part of a plan, kept
+beside the whole one's.
 
 ### make_frame_asker
 

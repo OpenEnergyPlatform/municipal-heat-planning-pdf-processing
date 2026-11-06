@@ -163,7 +163,7 @@ def test_a_reading_says_why_it_came_to_nothing():
     silent = reader(None).read(7, EMISSION, ONE, [], [], SHOWN)
     assert cut.unread and cut.why == reading.CUT
     assert silent.unread and silent.why == reading.NO_ANSWER
-    answered = reader({"next": None}).read(7, EMISSION, ONE, [], [], SHOWN)
+    answered = reader({"value": None}).read(7, EMISSION, ONE, [], [], SHOWN)
     assert not answered.unread and answered.why is None
 
 
@@ -253,9 +253,7 @@ def test_a_survey_of_part_of_a_plan_is_kept_under_its_scope(tmp_path):
 
     def leaves_out_the_table(context, document_id, corrections=None):
         asked.append(len(context))
-        return {"passages": {f"P{i + 1}": {"parameters": ["out:none"]}
-                             for i, s in enumerate(context)
-                             if s.owner_kind != "table"}}
+        return {} if context[0].owner_kind == "table"             else {"parameters": ["out:none"]}
 
     def made(scope=""):
         return survey.Survey(leaves_out_the_table,
@@ -343,17 +341,16 @@ def stored_row():
 def test_a_named_coordinate_is_asked_whatever_its_state_in_its_own_passage():
     carrier = next(s for s in reading.slots_of(SPEC, EMISSION)
                    if s.name == "carrier")
-    made, asked = comber({"rows": [{"row": "R1", "carrier": {
-        "value": fields.UNSTATED}}]})
+    made, asked = comber({"carrier": {"value": fields.UNSTATED}})
     claim = stored_row()
     made.comb(7, EMISSION, ONE, [carrier], [claim], SHOWN, [], None,
               coordinates=["carrier"], own=True)
-    assert asked[0]["rows"][0]["open"] == ["carrier"]
+    assert asked[0]["row"]["open"] == ["carrier"]
     assert [m["text"] for m in asked[0]["more"]] == [ONE.text]
     # Not named and read: not asked.
-    made, asked = comber({"rows": []})
+    made, asked = comber({})
     made.comb(7, EMISSION, ONE, [carrier], [stored_row()], SHOWN, [], None)
-    assert asked[0]["rows"][0]["open"] == [] and "more" not in asked[0]
+    assert asked[0]["row"]["open"] == [] and "more" not in asked[0]
 
 
 def test_the_passages_read_before_are_listed_and_a_stored_row_ranks_none():

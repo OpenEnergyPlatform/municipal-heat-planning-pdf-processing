@@ -62,6 +62,11 @@ from .wording import say
 
 COMB_PROMPT_ID = "extraction/comb"
 
+# What a combing request tells of a quote that stands in nothing it showed,
+# in the names of what it shows: "more", "hits", "passage", "row" (owner
+# decision 2026-11-06).
+NOT_SHOWN = "quote_not_shown"
+
 # What the reading leaves for this step.
 OPEN = (SAID_UNSTATED, UNBACKED, UNANSWERED)
 
@@ -69,7 +74,8 @@ OPEN = (SAID_UNSTATED, UNBACKED, UNANSWERED)
 # (owner decision 2026-11-04: the best 15 sections, 20 tables and 20
 # figures), cut by `reading.shown_hits`; both are named here as before.
 __all__ = ["COMB_PROMPT_ID", "OPEN", "SHOWN", "Comber", "Combed",
-           "comb_response_format", "open_of", "shown_hits"]
+           "as_rows", "comb_response_format", "open_of", "shown_corrections",
+           "shown_hits"]
 
 
 def open_of(claim: dict, slots: list) -> list:
@@ -78,20 +84,42 @@ def open_of(claim: dict, slots: list) -> list:
             if claim.get(f"{slot.name}_state") in OPEN]
 
 
-def comb_response_format(slots: list, labels: list) -> dict:
-    """Each row of *labels* with every coordinate asked, and what the reply
-    asks of the rest of the plan."""
-    properties = {"row": {"enum": list(labels)}}
-    properties.update({slot.name: answer_schema(slot) for slot in slots})
-    entry = {"type": "object", "properties": properties,
-             "required": ["row", *(slot.name for slot in slots)],
-             "additionalProperties": False}
-    schema = {"type": "object",
-              "properties": {"rows": {"type": "array", "items": entry},
-                             "more": more_schema()},
-              "required": ["rows"], "additionalProperties": False}
+def comb_response_format(slots: list) -> dict:
+    """Every coordinate asked of the one row a request shows, at the top of
+    the reply with no wrapper and no row label (owner decision 2026-11-06),
+    and what the reply asks of the rest of the plan."""
+    properties = {slot.name: answer_schema(slot) for slot in slots}
+    properties["more"] = more_schema()
+    schema = {"type": "object", "properties": properties,
+              "required": [slot.name for slot in slots],
+              "additionalProperties": False}
     return {"type": "json_schema",
             "json_schema": {"name": "comb_reply", "schema": schema}}
+
+
+def as_rows(reply, label: str):
+    """A reply about the one row a request showed (`comb_response_format`)
+    as the rows the step folds: its answers under that row's *label*, its
+    requests for more beside them. Anything but an object is left as it
+    is."""
+    if not isinstance(reply, dict):
+        return reply
+    entry = {key: value for key, value in reply.items() if key != "more"}
+    out = {"rows": [{**entry, "row": label}]}
+    if "more" in reply:
+        out["more"] = reply["more"]
+    return out
+
+
+def shown_corrections(corrections: list, label: str) -> Optional[dict]:
+    """What a request asked again is told of its one row: the coordinates
+    under "what", and where a correction names it the name and quote it was
+    given; None where nothing was wrong with that row."""
+    for correction in corrections or ():
+        if correction.get("row") == label:
+            return {key: value for key, value in correction.items()
+                    if key != "row"}
+    return None
 
 
 def named_rows(corrections: list, given: dict, slots: list) -> list:
@@ -249,9 +277,16 @@ class Comber:
         (`reading.answers_each`, owner decision 2026-11-06), each a copy of
         the value's row in `Combed.made` and asked again on its own; without
         it, as in a pass over a stored harvest that re-reads each stored row
-        in place, the first name."""
-        rows = [Row(label=row_label(i), item_index=0, claim=claim)
-                for i, claim in enumerate(claims)]
+        in place, the first name.
+
+        Each request shows one row (owner decision 2026-11-06): *claims* is
+        one value's claim, and a row made for a further name is asked again
+        on its own. The reply carries that row's answers at its top, with no
+        row label (`comb_response_format`, `as_rows`)."""
+        if len(claims) != 1:
+            raise ValueError(f"a combing request shows one row, not "
+                             f"{len(claims)}")
+        rows = [Row(label=row_label(0), item_index=0, claim=claims[0])]
         if coordinates is not None:
             have = {slot.name for slot in slots}
             opened = {row.label: [name for name in coordinates
@@ -299,8 +334,7 @@ class Comber:
         knowns = {row.label: self.known(row.claim, names) for row in rows}
 
         def row_shown(row: Row) -> dict:
-            return {"row": row.label,
-                    "value": row.claim.get("value"),
+            return {"value": row.claim.get("value"),
                     "unit": row.claim.get("unit"),
                     "quote": row.claim.get("quote"),
                     "known": knowns[row.label],
@@ -312,22 +346,23 @@ class Comber:
                             "section_title")},
             "parameter": {"key": parameter.uri, "label": parameter.label,
                           "definition": parameter.description},
-            "rows": [row_shown(row) for row in rows],
             "coordinates": {slot.name: coordinate_shown(slot)
                             for slot in asked},
             **({"where": group.where} if group is not None else {}),
             **years_of(bases, asked)}
+        shape = comb_response_format(asked)
+
         def ask(corrections: Optional[list] = None,
-                shown: Optional[list] = None):
-            payload = {**base, **gathered.context()}
-            if shown is not None:
-                payload["rows"] = shown
-            if corrections:
-                payload["corrections"] = corrections
-            shape = comb_response_format(
-                asked, [entry["row"] for entry in payload["rows"]])
-            return self.ask(payload, shape, document_id, source,
-                            group=group.name if group is not None else None)
+                row: Optional[Row] = None):
+            # One row per request: the value's own, or one asked again.
+            row = row or rows[0]
+            payload = {**base, "row": row_shown(row), **gathered.context()}
+            told = shown_corrections(corrections, row.label)
+            if told:
+                payload["corrections"] = told
+            return as_rows(self.ask(payload, shape, document_id, source,
+                                    group=group.name if group is not None
+                                    else None), row.label)
 
         reply = ask()
         result.asked = 1
@@ -375,8 +410,7 @@ class Comber:
             by_label = {row.label: row for row in rows}
             result.corrected = len(corrections)
             for correction in named_rows(corrections, given, asked):
-                again = ask([correction],
-                            [row_shown(by_label[correction["row"]])])
+                again = ask([correction], by_label[correction["row"]])
                 result.asked += 1
                 if isinstance(again, dict):
                     again, _ = self._each(rows, again, asked, opened,
@@ -445,7 +479,8 @@ class Comber:
             if not answers:
                 continue
             got = merge_field(rows, evidence, slot, {"answers": answers},
-                              window=("retrieval", 1), bases=bases)
+                              window=("retrieval", 1), bases=bases,
+                              not_shown=NOT_SHOWN)
             failed.extend((slot.name, failure) for failure in got["failed"])
         return failed
 

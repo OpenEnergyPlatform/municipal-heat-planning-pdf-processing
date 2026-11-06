@@ -70,23 +70,23 @@ def asked_for(parameter, *replies):
 
 
 def test_a_table_is_read_by_name_and_only_a_number_writes_its_head():
-    asked, read = asked_for(EMISSION, {"next": {
-        "value": 27, "quote": "| Heizöl | 27 |", "head": "t CO2"}},
-        {"next": None})
+    asked, read = asked_for(EMISSION, {
+        "value": 27, "quote": "| Heizöl | 27 |", "head": "t CO2"},
+        {"value": None})
     assert [head for head, _ in asked] == [True, True]
     assert [c["value"] for c in read.claims] == [27]
-    asked, read = asked_for(PLANNER, {"next": NAMED}, {"next": None})
+    asked, read = asked_for(PLANNER, NAMED, {"value": None})
     assert [head for head, _ in asked] == [False, False]
     assert [c["value"] for c in read.claims] == [NAMED["value"]]
 
 
 def test_a_wording_in_a_table_is_quoted_from_the_table_or_asked_again():
-    asked, read = asked_for(PLANNER, {"next": NAMED}, {"next": None})
+    asked, read = asked_for(PLANNER, NAMED, {"value": None})
     assert [corrections for _, corrections in asked] == [None, None]
     assert [claim["quote"] for claim in read.claims] == [NAMED["quote"]]
-    asked, read = asked_for(PLANNER, {"next": ELSEWHERE}, {"next": NAMED},
-                            {"next": None})
-    assert asked[1][1] == [dict(ELSEWHERE, what=say("quote_not_in_source"))]
+    asked, read = asked_for(PLANNER, ELSEWHERE, NAMED,
+                            {"value": None})
+    assert asked[1][1] == [dict(ELSEWHERE, what=say("quote_not_in_passage"))]
     assert [claim["quote"] for claim in read.claims] == [NAMED["quote"]]
 
 
@@ -107,7 +107,7 @@ def grammar(parameter):
 
 
 def one(value, **given):
-    return {"next": {"value": value, "quote": PASSAGE.text, **given}}
+    return {"value": value, "quote": PASSAGE.text, **given}
 
 
 def test_a_category_value_is_one_entry_or_left_open_and_nothing_else():
