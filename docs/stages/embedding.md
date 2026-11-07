@@ -125,12 +125,13 @@ first call to `embed()`, a double-checked lock (check, acquire
 `self._lock`, check again) constructs
 `docpipe.chunking.qwen3_vl_embedding.MultiGPUEmbedder`; later calls reuse
 that instance. `embed()` then calls `self._resident.process(list(items))`,
-not `.embed()` (`MultiGPUEmbedder` speaks `process()` and returns a bf16
-tensor), converting the result with `.detach().float().cpu().tolist()`.
+not `.embed()` (`MultiGPUEmbedder` speaks `process()` and returns a tensor
+in its device's precision, bf16 on a GPU and fp32 on the CPU), converting
+the result with `.detach().float().cpu().tolist()`.
 `normalize` is left at its default (`True`) because the vectors already
 stored in the index were written with that same default; embedding a
 query any other way would score it against them incorrectly rather than
-raise (`docpipe/embedding/local.py:36` to `68`).
+raise (`docpipe/embedding/local.py:37` to `69`).
 
 ### What the local backend delegates to
 
@@ -138,7 +139,7 @@ raise (`docpipe/embedding/local.py:36` to `68`).
 [chunking](chunking.md)), which also constructs it independently for the
 batch build. `LocalEmbedder` only holds one instance and calls its
 `process()`; what that call actually does is described under Modules,
-below (`docpipe/chunking/qwen3_vl_embedding.py:403` to `485`).
+below (`docpipe/chunking/qwen3_vl_embedding.py:410` to `495`).
 
 ## Data model
 
@@ -147,8 +148,8 @@ only shape this package defines: `embed(items: Sequence[dict]) -> list` and
 `embed_one(item: dict) -> list`. An item dict carries `text` (a string or
 `None`) and, optionally, `image` (a file path or URL string). The
 underlying local model also recognizes `video`, `instruction`, `fps` and
-`max_frames` per item (`docpipe/chunking/qwen3_vl_embedding.py:233` to
-`240`), but no caller in this repository sets these. In the `input`
+`max_frames` per item (`docpipe/chunking/qwen3_vl_embedding.py:240` to
+`247`), but no caller in this repository sets these. In the `input`
 form `ApiEmbedder` reads only `text`, refusing `image` and silently ignoring
 any other key. In the `messages` form it reads `text`, `image` and
 `instruction`, and ignores any other key.
@@ -174,7 +175,7 @@ package; storing a returned vector is the caller's job.
 `get_embedder(**kwargs)` forwards `**kwargs` unfiltered to the chosen
 backend's constructor, so only the names that constructor defines take
 effect: `model` and `max_length` for `local`
-(`docpipe/embedding/local.py:37` to `38`); `base_url`, `api_key`, `model`,
+(`docpipe/embedding/local.py:38` to `39`); `base_url`, `api_key`, `model`,
 `batch_size` and `form` for `api` (`docpipe/embedding/api.py:103` to `105`).
 `EMBEDDING_DIM` matches no parameter on either backend and cannot be
 overridden this way; a name belonging to the other backend raises
@@ -218,7 +219,7 @@ error raised anywhere (`docpipe/chunking/config.py:13` to `16`).
   ever loaded are serialized by the double-checked lock, so only the first
   thread through constructs `MultiGPUEmbedder`; without the second check
   inside the lock, concurrent threads could each start their own load
-  (`docpipe/embedding/local.py:47` to `57`).
+  (`docpipe/embedding/local.py:48` to `58`).
 - `ApiEmbedder.client()` builds `self._client` the same lazily-checked
   way, but with no lock: two threads calling `embed()` before any client
   exists could each construct their own `OpenAI` client
@@ -226,21 +227,21 @@ error raised anywhere (`docpipe/chunking/config.py:13` to `16`).
 - A single replica's forward pass raising inside `MultiGPUEmbedder.process()`
   is captured per thread; once every thread joins, the first captured
   exception is re-raised on the main thread and the whole call fails
-  (`docpipe/chunking/qwen3_vl_embedding.py:460` to `474`).
+  (`docpipe/chunking/qwen3_vl_embedding.py:470` to `484`).
 - A sequence truncated to `max_length` is still embedded, not refused, but
   logged with its index and real token count
-  (`docpipe/chunking/qwen3_vl_embedding.py:337` to `344`).
+  (`docpipe/chunking/qwen3_vl_embedding.py:344` to `351`).
 
 ## Measured behaviour
 
 - Calling `.embed()` directly on `MultiGPUEmbedder`, instead of the
   `.process()` it actually exposes, raised `AttributeError`, meaning the
   local backend had never once run successfully before this was corrected
-  (`docpipe/embedding/local.py:58` to `61`, comment).
+  (`docpipe/embedding/local.py:59` to `62`, comment).
 - One resident replica occupies roughly 16 GB of GPU memory that nothing
   releases for the life of the process, the reason `embed()` guards its
   lazy load rather than using a bare check
-  (`docpipe/embedding/local.py:49` to `52`, comment).
+  (`docpipe/embedding/local.py:50` to `53`, comment).
 - In the pilot that motivated the singleton `docpipe/extraction/runner.py`
   wraps around `get_embedder()`, five replicas of the model fit on one
   card, a sixth raised a CUDA out-of-memory error, and none of the
@@ -334,10 +335,11 @@ local.py: Embeds items with a model loaded and kept resident in this
 process.
 
 LocalEmbedder loads the model once, under a lock, and keeps it on the
-GPUs for every later call. This is what a batch run wants: thousands
-of items against one load. embed() delegates to
-docpipe.chunking.qwen3_vl_embedding.MultiGPUEmbedder, whose
-process() method returns a bf16 tensor; embed() converts that tensor
+GPUs (on the CPU where there are none) for every later call. This is
+what a batch run wants: thousands of items against one load. embed()
+delegates to docpipe.chunking.qwen3_vl_embedding.MultiGPUEmbedder,
+whose process() method returns a tensor in its device's precision
+(bf16 on a GPU, fp32 on the CPU); embed() converts that tensor
 to a list of floats, so this backend returns the same shape of
 result as ApiEmbedder. The `normalize` setting is left at its
 default because the corpus vectors already stored in the index were

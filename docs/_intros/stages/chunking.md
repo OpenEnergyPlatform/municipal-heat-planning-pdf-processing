@@ -40,7 +40,7 @@ index are read at query time instead, by [extraction](extraction.md) and the
 | **In** | `sections_refined.json` + `visuals.json` (merge); `document.json` (db, embed); `sections.json` (standalone `enrich-bbox`); `page_transcription_report.json` (standalone `enrich-page-source`); an existing FAISS index file, if present (embed). |
 | **Out** | `document.json` per PDF; `Sections`, `Pages`, `SectionPages`, `Segments`, `Tables`, `Images` rows in the database; `Embeddings` rows and their vectors in the FAISS index file. |
 | **Resumes on** | Merge: `document.json` newer than both its inputs. Db: a document already has `Sections` rows. Embed: an `(embedding_type, section_index, item_id)` triple already in `Embeddings`; an input whose batch failed has none, so a document with missing vectors is not done. `--force` clears exactly the step it is passed for. |
-| **Needs** | A `Documents` row already written by fileprocessing, to resolve a processed directory (db, embed). One GPU replica per visible device (embed), or with `EMBEDDING_INDEX_BACKEND=api` an embeddings endpoint and no GPU. No other network call. |
+| **Needs** | A `Documents` row already written by fileprocessing, to resolve a processed directory (db, embed). One GPU replica per visible device (embed), one replica on the CPU in fp32 where there is none, or with `EMBEDDING_INDEX_BACKEND=api` an embeddings endpoint and no GPU. No other network call. |
 
 ## Method
 
@@ -138,7 +138,9 @@ vector or `Meta` row is written.
 `load_embedder` reads `EMBEDDING_INDEX_BACKEND` (`index_backend()` in
 `embedding.py`). With `local`, the default, it imports
 `qwen3_vl_embedding.MultiGPUEmbedder` and loads the model data-parallel on
-every visible GPU in bf16. With `api` it returns an `ApiIndexEmbedder`, which
+every visible GPU in bf16, or on the CPU in fp32 where there is none
+(`qwen3_vl_embedding.dtype_for`: a CPU without bf16 instructions embedded
+about 11 tokens per second in bf16). With `api` it returns an `ApiIndexEmbedder`, which
 wraps `docpipe.embedding.api.ApiEmbedder` (see [embedding](embedding.md)) and
 needs no GPU; `load_embedder` returns before it imports torch or the model
 module. The query side's `EMBEDDING_BACKEND` is a separate setting and changes

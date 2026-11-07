@@ -70,7 +70,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.chunking.merge](docpipe.chunking.merge.md): Merges the preprocessing and imageprocessing outputs as chunking's first step. (2 functions)
 - [docpipe.chunking.models](docpipe.chunking.models.md): Data structures for the chunkingandembedding module. (1 class)
 - [docpipe.chunking.pipeline](docpipe.chunking.pipeline.md): Orchestrates the chunkingandembedding stage: merge, then the database step, then embedding. (5 functions)
-- [docpipe.chunking.qwen3_vl_embedding](docpipe.chunking.qwen3_vl_embedding.md): Qwen3-VL wrapper producing normalized text and vision-language embeddings. (4 classes, 1 function)
+- [docpipe.chunking.qwen3_vl_embedding](docpipe.chunking.qwen3_vl_embedding.md): Qwen3-VL wrapper producing normalized text and vision-language embeddings. (4 classes, 2 functions)
 - [docpipe.chunking.reembed](docpipe.chunking.reembed.md): Embeds every item of an index again, into a new index file and under the ids it already has. (1 class, 6 functions)
 
 ## docpipe.compile

@@ -173,8 +173,9 @@ def load_embedder(model_name: str = EMBEDDING_MODEL):
     The embedder of this run, for the backend EMBEDDING_INDEX_BACKEND names.
 
     `api`: an ApiIndexEmbedder. Otherwise the model itself, data-parallel
-    across all visible GPUs in bf16: a MultiGPUEmbedder, which exposes the
-    same ``process()`` interface as a single Qwen3VLEmbedder.
+    across all visible GPUs in bf16, or on the CPU in fp32 where there is
+    none (`qwen3_vl_embedding.dtype_for`): a MultiGPUEmbedder, which exposes
+    the same ``process()`` interface as a single Qwen3VLEmbedder.
     """
     if index_backend() == "api":
         embedder = ApiIndexEmbedder()
@@ -182,13 +183,11 @@ def load_embedder(model_name: str = EMBEDDING_MODEL):
                  "text inputs only" if embedder.text_only
                  else "text and picture inputs")
         return embedder
-    import torch
     from docpipe.chunking.qwen3_vl_embedding import MultiGPUEmbedder
     log.info("Loading embedding model: %s", model_name)
     model = MultiGPUEmbedder(
         model_name_or_path=model_name,
         max_length=MAX_TOKEN_LENGTH,
-        dtype=torch.bfloat16,
     )
     log.info("Embedding model loaded on %d device(s): %s",
              len(model.replicas), model.devices)

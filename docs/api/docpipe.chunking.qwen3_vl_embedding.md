@@ -197,6 +197,8 @@ results back into the original input order.
 
 Exposes the same ``process(inputs, normalize=True) -> Tensor`` interface as
 :class:`Qwen3VLEmbedder`; with a single device it degenerates to one replica.
+Each replica computes in the precision of its device (`dtype_for`) unless
+*dtype* asks for one.
 
 #### MultiGPUEmbedder.\_\_init\_\_
 
@@ -205,7 +207,7 @@ def __init__(
     self,
     model_name_or_path: str,
     max_length: int = EMBEDDING_MAX_TOKEN_LENGTH,
-    dtype: torch.dtype = torch.bfloat16,
+    dtype: Optional[torch.dtype] = None,
     devices: Optional[List[str]] = None,
     **kwargs,
 )
@@ -220,6 +222,17 @@ def process(self, inputs: List[Dict[str, Any]], normalize: bool = True) -> torch
 Embed ``inputs`` across all replicas, returned on the CPU in order.
 
 ## Functions
+
+### dtype_for
+
+```python
+def dtype_for(device: Union[str, torch.device]) -> torch.dtype
+```
+
+The precision a replica computes in on *device*: bf16 on a GPU, fp32
+on the CPU, where bf16 matmuls are slow or missing. A CPU without bf16
+instructions embedded about 11 tokens per second in bf16, ten hours for
+one plan of 432 inputs.
 
 ### sample_frames
 

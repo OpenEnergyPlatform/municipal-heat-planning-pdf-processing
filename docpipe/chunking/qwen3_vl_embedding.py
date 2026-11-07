@@ -38,6 +38,14 @@ MAX_TOTAL_PIXELS = 10 * FRAME_MAX_PIXELS
 PAD_TOKEN = "<|endoftext|>"
 
 
+def dtype_for(device: Union[str, torch.device]) -> torch.dtype:
+    """The precision a replica computes in on *device*: bf16 on a GPU, fp32
+    on the CPU, where bf16 matmuls are slow or missing. A CPU without bf16
+    instructions embedded about 11 tokens per second in bf16, ten hours for
+    one plan of 432 inputs."""
+    return torch.bfloat16 if torch.device(device).type == "cuda" else torch.float32
+
+
 @dataclass
 class Qwen3VLForEmbeddingOutput(ModelOutput):
     """Output structure for the embedding model forward pass."""
@@ -184,9 +192,8 @@ class Qwen3VLEmbedder:
         self.default_instruction = default_instruction
         self.model_name = model_name_or_path
 
-        # bf16 on GPU; fp32 on CPU, where bf16 matmuls are slow/unsupported.
         if torch_dtype is None:
-            torch_dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
+            torch_dtype = dtype_for(device)
 
         self.model = Qwen3VLForEmbedding.from_pretrained(
             model_name_or_path, trust_remote_code=True, torch_dtype=torch_dtype, **kwargs
@@ -409,13 +416,15 @@ class MultiGPUEmbedder:
 
     Exposes the same ``process(inputs, normalize=True) -> Tensor`` interface as
     :class:`Qwen3VLEmbedder`; with a single device it degenerates to one replica.
+    Each replica computes in the precision of its device (`dtype_for`) unless
+    *dtype* asks for one.
     """
 
     def __init__(
         self,
         model_name_or_path: str,
         max_length: int = EMBEDDING_MAX_TOKEN_LENGTH,
-        dtype: torch.dtype = torch.bfloat16,
+        dtype: Optional[torch.dtype] = None,
         devices: Optional[List[str]] = None,
         **kwargs,
     ):
@@ -425,14 +434,15 @@ class MultiGPUEmbedder:
         if not devices:
             devices = ["cpu"]
 
+        dtypes = [dtype or dtype_for(dev) for dev in devices]
         logger.info("Loading %d embedder replica(s) on %s (dtype=%s)",
-                    len(devices), devices, dtype)
+                    len(devices), devices, sorted({str(d) for d in dtypes}))
         self.replicas: List[Qwen3VLEmbedder] = []
-        for dev in devices:
+        for dev, dev_dtype in zip(devices, dtypes):
             self.replicas.append(
                 Qwen3VLEmbedder(
                     model_name_or_path, max_length=max_length,
-                    device=dev, torch_dtype=dtype, **kwargs,
+                    device=dev, torch_dtype=dev_dtype, **kwargs,
                 )
             )
         self.devices = devices

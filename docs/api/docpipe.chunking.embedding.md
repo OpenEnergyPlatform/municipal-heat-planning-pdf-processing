@@ -150,8 +150,9 @@ def load_embedder(model_name: str = EMBEDDING_MODEL)
 The embedder of this run, for the backend EMBEDDING_INDEX_BACKEND names.
 
 `api`: an ApiIndexEmbedder. Otherwise the model itself, data-parallel
-across all visible GPUs in bf16: a MultiGPUEmbedder, which exposes the
-same ``process()`` interface as a single Qwen3VLEmbedder.
+across all visible GPUs in bf16, or on the CPU in fp32 where there is
+none (`qwen3_vl_embedding.dtype_for`): a MultiGPUEmbedder, which exposes
+the same ``process()`` interface as a single Qwen3VLEmbedder.
 
 ### create_embeddings
 
