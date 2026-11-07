@@ -122,16 +122,32 @@ QUANTITIES = frozenset(uri for par in _SPEC["parameters"]
                        for uri in par["axes"]["quantity"]["vocabulary"]
                        if not uri.startswith(NOT_IN_GRAPH))
 # The unit a value is written in is its parameter's, not its class's: a
-# technological flow potential is an energy in MWh/a and a power in MW.
+# technological flow potential is an energy in MWh/a and a power in MW. An
+# entry of units_accepted may convert onto a unit of its own ("target"): an
+# emission factor in g CO2/kWh.
 UNIT_TARGET = {par["uri"]: par["unit_target"] for par in _SPEC["parameters"]
                if par.get("unit_target")}
+ENTRY_TARGET = {(par["uri"], unit): entry["target"]
+                for par in _SPEC["parameters"]
+                for unit, entry in (par.get("units_accepted") or {}).items()
+                if isinstance(entry, dict) and entry.get("target")}
+
+
+def target_of(row: dict) -> Optional[str]:
+    """The unit this value's number was converted onto."""
+    return ENTRY_TARGET.get((row.get("parameter"), row.get("unit")),
+                            UNIT_TARGET.get(row.get("parameter")))
 
 
 def unit_of(row: dict) -> Optional[str]:
-    """The unit the graph writes this value in, None outside the graph."""
+    """The unit the graph writes this value in, None outside the graph:
+    the unit its number was converted onto, where that is an ontology term.
+    g CO2/kWh is none in OEO 2.14, so an emission factor stays in the
+    harvest until the ontology has one (owner decision 2026-11-07)."""
     if row.get("quantity") not in QUANTITIES:
         return None
-    return UNIT_TARGET.get(row.get("parameter"))
+    target = target_of(row)
+    return target if target and _IDENTIFIER.fullmatch(target) else None
 
 
 def typed_as(row: dict, schema_class: Optional[str] = None) -> str:
@@ -951,6 +967,14 @@ def make_serializer(db_path: Path, strict: bool = False):
                 skip("sub_area_unnamed")
             elif not isinstance(row.get("year"), int):
                 skip("year")
+            # A number whose unit no list holds has no converted value, and
+            # one converted onto a unit the ontology does not have has no
+            # unit to be written in: both stay in the harvest with their
+            # wording (owner decisions 2026-11-07).
+            elif row.get("value_target") is None:
+                skip(f"unit_unlisted:{row.get('unit_raw') or '?'}")
+            elif unit_of(row) is None:
+                skip(f"unit_not_in_ontology:{target_of(row)}")
             # A value without an aggregation is written without that edge:
             # neither the ontology nor the full graph demands one, and the
             # strict graph refuses it where the schema's class requires it

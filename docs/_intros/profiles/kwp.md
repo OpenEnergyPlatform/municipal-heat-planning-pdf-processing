@@ -92,7 +92,7 @@ plan's own municipality, on that municipality's node (see
 | parameter | value type | unit family | unit target | accepted spellings |
 |---|---|---|---|---|
 | `energy_consumption` | `float` | energy (kJ to PJ, kWh to TWh) | `OEO_00050008` | 22 |
-| `emission` | `float` | mass, CO2 equivalent | `OEO_00010137` | 48 |
+| `emission` | `float` | mass, CO2 equivalent, emission factor (g CO2/kWh) | `OEO_00010137` | 68 |
 | `heat_load` | `float` | power (kW to GW, kWel, MWel, kWp, MWp) | `OEO_00390001` | 9 |
 | `share` | `float` | percent | `UO_0000187` | 2 |
 | `building_count` | `float` | a count of buildings | `UO_0000189` | 1 |
@@ -110,7 +110,7 @@ compute step, which adds only amounts over a span, does not sum it. An
 integrated parameter's units each say whether they name a
 period, `names_period`, and the loader refuses an entry that does not say
 (`spec._validate_unit_entry`): of the 22 entries of `energy_consumption` and the
-48 of `emission`, 39 say true ("kWh/a") and 31 say false ("kWh"), and the
+68 of `emission`, 39 say true ("kWh/a") and 51 say false ("kWh"), and the
 entries of `heat_load` and `building_count` stay bare factors. The verifier
 flags `period:unstated` from that
 statement alone, and it reaches no request and no stamp key, so changing one
@@ -143,7 +143,8 @@ no spellings. `energy_consumption` offers energy value and all its subclasses
 (energy consumption value, gross inland, gross national electricity, electrical
 energy amount, import and export, energy storage content and capacity, areal
 energy density); `emission` adds emission value, greenhouse gas emission value
-and emission factor value; `heat_load` adds power rating, power capacity,
+and emission factor value, and the parameter's brief and description name an emission factor, the
+emission per unit of activity ("g CO2/kWh"); `heat_load` adds power rating, power capacity,
 declared net and nameplate capacity, block size and areal power density, with
 instantaneous in its aggregation list; `share` offers every fraction value
 subclass and efficiency value, and a share of buildings, areas or costs is a
@@ -157,7 +158,7 @@ amounts in how its aggregation is decided:
 | parameter | `quantity` size (`out:`) | `aggregation` size (`out:`) | `aggregation` derived |
 |---|---|---|---|
 | `energy_consumption` | 29 (3) | 5 (0) | yes, from the unit unless `period_start` was read |
-| `emission` | 11 (6) | 5 (0) | yes, from the unit unless `period_start` was read |
+| `emission` | 11 (6) | 5 (0) | yes, from a unit that converts onto the parameter's own unit unless `period_start` was read; asked otherwise |
 | `heat_load` | 24 (2) | 5 (0) | no, asked |
 | `share` | 16 (1) | none | no axis |
 | `building_count` | 1 (0), derived from the unit | 5 (0) | yes, from the unit (instantaneous) |
@@ -178,7 +179,12 @@ A potential is a class: the energy and the power list offer OEO's thirteen,
 potential, flow and stock potential, and the theoretical, technological,
 economic, developable and sustainable kind of each, and the model takes the
 kind the plan prints. Because one of them can be an energy or a power, the
-graph writes a value in its parameter's unit (`kg.unit_of`). A number whose
+graph writes a value in the unit its number was converted onto (`kg.unit_of`),
+the entry's own target (`kg.target_of`) else its parameter's, and only where
+that is an ontology identifier: OEO 2.14 and live OEO dev have no unit for
+"g CO2/kWh", so an emission factor is read and converted in the harvest and
+reaches the graph once the ontology has one, as useful energy and generation
+did until 2026-11-07 (owner decision 2026-11-07). A number whose
 printed unit is no entry of its parameter's list is read and flagged
 `unmapped:unit:<print>`, has no `value_target`, is no input of the compute step
 and stays out of the graph until the list grows and a top-up asks the unit again
@@ -199,13 +205,18 @@ the wording in the quote. The questions of both axes say so and point to
 Two of the numeric parameters decide their `aggregation` on their own
 rather than asking, carried as the `derived` state
 (`docpipe/extraction/fields.py:68` to `75`; [glossary](../glossary.md)):
-every unit `energy_consumption` or `emission` accepts names a span, so
-their aggregation is the closed list's integral entry, never asked, unless
-`period_start` was read (`docpipe/extraction/spec.py:381` to `400`,
+every unit `energy_consumption` or `emission` accepts that converts onto the
+parameter's own unit names a span, so their aggregation is the closed list's
+integral entry, never asked, unless `period_start` was read (`docpipe/extraction/spec.py:381` to `400`,
 `Axis.derive`, whose block carries `"unless_read": "period_start"`; the key
 must name an axis of the same parameter, and `fields.derives` applies it): a
 plan that names the start of a span states a mean over years, and a mean is a
-mean (owner decision 2026-11-07), so there the aggregation is asked. Before this was
+mean (owner decision 2026-11-07), so there the aggregation is asked. It is asked
+as well for the 20 emission-factor units ("g CO2/kWh", "kg CO2/MWh", "kg CO2/GJ",
+...): an entry of `units_accepted` may name its own `"target"`, the unit its
+factor converts onto where that is not `unit_target` (`Parameter.target_of`),
+and an emission factor is no annual amount, so `fields.derived_by_unit` leaves
+it to the model (owner decision 2026-11-07). Before this was
 derived, all 452 aggregation answers the model gave for these two
 parameters over one plan were that same entry every time, evidenced
 only by the unit string the request had itself just handed over. `heat_load`'s aggregation is
@@ -469,7 +480,9 @@ SHACL-validated against the refreshed shapes.
 
 What the serializer refuses, briefly (in full on
 [stages/graph.md](../stages/graph.md)): a row failing the quantity,
-scenario, year or aggregation-list gate, or whose spatial scope is neither the
+scenario, year or aggregation-list gate, or a number without `value_target`
+(`unit_unlisted:<unit_raw>`) or converted onto a unit the ontology lacks
+(`unit_not_in_ontology:<target>`), or whose spatial scope is neither the
 municipality nor a named sub area, quantity checked
 first so a row closed on it is never counted against the scenario too;
 a document with no resolvable AGS or date; a second document claiming

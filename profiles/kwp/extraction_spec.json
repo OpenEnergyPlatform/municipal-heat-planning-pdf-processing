@@ -466,7 +466,7 @@
             "role": "edge",
             "schema_slot": "has_aggregation_type",
             "label": "has aggregation type",
-            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount."
+            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from a unit that converts onto the parameter's own unit, unless period_start was read; asked otherwise."
           }
         },
         "carrier": {
@@ -1772,11 +1772,111 @@
     {
       "uri": "emission",
       "label": "Emissionen",
-      "description": "Eine im Wärmeplan bilanzierte Emissionsmenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: CO2 emission value ist \"a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit\", also reines Kohlendioxid. carbon dioxide equivalent quantity value ist \"the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2\", also alle Treibhausgase in CO2-Äquivalenten. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Dazu stehen in der Liste die Oberklassen greenhouse gas emission value und emission value, wo die Stelle nicht sagt, welche Gase gemeint sind, und emission factor value, \"a fraction value that quantifies an emission factor as quotient of the emissions or removals of a gas per unit activity\". Die Einträge out: sind Größen ohne Klasse der Ontologie, etwa eine kumulierte Summe über mehrere Jahre, eine vermiedene Emission oder eine abgeschiedene Menge aus einer CCS-Anlage. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
-      "brief": "Eine Emissionsmenge, die der Wärmeplan bilanziert, je Energieträger, Sektor und Jahr: Kohlendioxid oder alle Treibhausgase in CO2-Äquivalenten, auch eine kumulierte, vermiedene oder abgeschiedene Menge.",
+      "description": "Eine im Wärmeplan bilanzierte Emissionsmenge, je Energieträger, Sektor und Jahr, oder ein Emissionsfaktor, die Emission je Einheit Aktivität, etwa g CO2/kWh. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: CO2 emission value ist \"a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit\", also reines Kohlendioxid. carbon dioxide equivalent quantity value ist \"the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2\", also alle Treibhausgase in CO2-Äquivalenten. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Dazu stehen in der Liste die Oberklassen greenhouse gas emission value und emission value, wo die Stelle nicht sagt, welche Gase gemeint sind, und emission factor value, \"a fraction value that quantifies an emission factor as quotient of the emissions or removals of a gas per unit activity\". Die Einträge out: sind Größen ohne Klasse der Ontologie, etwa eine kumulierte Summe über mehrere Jahre, eine vermiedene Emission oder eine abgeschiedene Menge aus einer CCS-Anlage. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "brief": "Eine Emissionsmenge, die der Wärmeplan bilanziert, je Energieträger, Sektor und Jahr: Kohlendioxid oder alle Treibhausgase in CO2-Äquivalenten, auch eine kumulierte, vermiedene oder abgeschiedene Menge. Auch ein Emissionsfaktor, die Emission je Einheit Aktivität, etwa g CO2/kWh.",
       "value_type": "float",
       "unit_target": "OEO_00010137",
       "units_accepted": {
+        "g CO2/kWh": {
+          "factor": 1.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "g/kWh": {
+          "factor": 1.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "gCO2/kWh": {
+          "factor": 1.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "g CO2-Äq/kWh": {
+          "factor": 1.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "g CO2-Äq./kWh": {
+          "factor": 1.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "g CO2e/kWh": {
+          "factor": 1.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "g CO2eq/kWh": {
+          "factor": 1.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "kg CO2/kWh": {
+          "factor": 1000.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "kg/kWh": {
+          "factor": 1000.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "kg CO2/MWh": {
+          "factor": 1.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "kg CO2-Äq/MWh": {
+          "factor": 1.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "kg CO2eq/MWh": {
+          "factor": 1.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "kg/MWh": {
+          "factor": 1.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "t CO2/MWh": {
+          "factor": 1000.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "t/MWh": {
+          "factor": 1000.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "t CO2-Äq/MWh": {
+          "factor": 1000.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "t CO2/GWh": {
+          "factor": 1.0,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "g CO2/MJ": {
+          "factor": 3.6,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "kg CO2/GJ": {
+          "factor": 3.6,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
+        "t CO2/TJ": {
+          "factor": 3.6,
+          "names_period": false,
+          "target": "g CO2/kWh"
+        },
         "Tonnen": {
           "factor": 1.0,
           "names_period": false
@@ -2190,7 +2290,7 @@
             "role": "edge",
             "schema_slot": "has_aggregation_type",
             "label": "has aggregation type",
-            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount."
+            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from a unit that converts onto the parameter's own unit, unless period_start was read; asked otherwise."
           }
         },
         "carrier": {

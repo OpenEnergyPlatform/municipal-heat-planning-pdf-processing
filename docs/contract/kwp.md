@@ -1352,7 +1352,7 @@ The prompt's own wording:
 
 <details><summary>Why</summary>
 
-Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount.
+Object is a named individual of OEO_00140068 aggregation type. Derived from a unit that converts onto the parameter's own unit, unless period_start was read; asked otherwise.
 
 </details>
 
@@ -2292,13 +2292,13 @@ text_located: the quote sits in the document's own refined text, so it can be ch
 
 ### `unit`
 
-The unit: one entry of units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, kg, kg CO2, kg CO2/a, kg CO2eq, kg CO2eq/a, kg/a, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/a, t/a CO2eq, tCO2, tCO2/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
+The unit: one entry of units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, g CO2-Äq./kWh, g CO2-Äq/kWh, g CO2/MJ, g CO2/kWh, g CO2e/kWh, g CO2eq/kWh, g/kWh, gCO2/kWh, kg, kg CO2, kg CO2-Äq/MWh, kg CO2/GJ, kg CO2/MWh, kg CO2/a, kg CO2/kWh, kg CO2eq, kg CO2eq/MWh, kg CO2eq/a, kg/MWh, kg/a, kg/kWh, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/MWh, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/GWh, t CO2/MWh, t CO2/TJ, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/MWh, t/a, t/a CO2eq, tCO2, tCO2/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
 
 The prompt's own wording:
 
 > Welche Einheit hat diese Zahl? Schreib in "value_raw" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in "value" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: "Gigawattstunden" meint GWh, "t CO₂-Äq." t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" kWh und GWh, "1.700 kg CO2" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person) oder je Kilowattstunde (g CO2/kWh), ist "value" "", und "value_raw" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
 
-<details><summary>What it may answer (48)</summary>
+<details><summary>What it may answer (68)</summary>
 
 - **Mio. t CO2/a** → `Mio. t CO2/a` — Emissionen
 - **Mio. t CO2eq** → `Mio. t CO2eq` — Emissionen
@@ -2315,12 +2315,27 @@ The prompt's own wording:
 - **Tonnen pro Jahr** → `Tonnen pro Jahr` — Emissionen
 - **Tsd. t** → `Tsd. t` — Emissionen
 - **Tsd. t/a** → `Tsd. t/a` — Emissionen
+- **g CO2-Äq./kWh** → `g CO2-Äq./kWh` — Emissionen
+- **g CO2-Äq/kWh** → `g CO2-Äq/kWh` — Emissionen
+- **g CO2/MJ** → `g CO2/MJ` — Emissionen
+- **g CO2/kWh** → `g CO2/kWh` — Emissionen
+- **g CO2e/kWh** → `g CO2e/kWh` — Emissionen
+- **g CO2eq/kWh** → `g CO2eq/kWh` — Emissionen
+- **g/kWh** → `g/kWh` — Emissionen
+- **gCO2/kWh** → `gCO2/kWh` — Emissionen
 - **kg** → `kg` — Emissionen
 - **kg CO2** → `kg CO2` — Emissionen
+- **kg CO2-Äq/MWh** → `kg CO2-Äq/MWh` — Emissionen
+- **kg CO2/GJ** → `kg CO2/GJ` — Emissionen
+- **kg CO2/MWh** → `kg CO2/MWh` — Emissionen
 - **kg CO2/a** → `kg CO2/a` — Emissionen
+- **kg CO2/kWh** → `kg CO2/kWh` — Emissionen
 - **kg CO2eq** → `kg CO2eq` — Emissionen
+- **kg CO2eq/MWh** → `kg CO2eq/MWh` — Emissionen
 - **kg CO2eq/a** → `kg CO2eq/a` — Emissionen
+- **kg/MWh** → `kg/MWh` — Emissionen
 - **kg/a** → `kg/a` — Emissionen
+- **kg/kWh** → `kg/kWh` — Emissionen
 - **kt** → `kt` — Emissionen
 - **kt CO2 pro Jahr** → `kt CO2 pro Jahr` — Emissionen
 - **kt CO2-Äq./a** → `kt CO2-Äq./a` — Emissionen
@@ -2334,9 +2349,13 @@ The prompt's own wording:
 - **t CO2-eq./a** → `t CO2-eq./a` — Emissionen
 - **t CO2-eq/a** → `t CO2-eq/a` — Emissionen
 - **t CO2-Äq./a** → `t CO2-Äq./a` — Emissionen
+- **t CO2-Äq/MWh** → `t CO2-Äq/MWh` — Emissionen
 - **t CO2-Äq/a** → `t CO2-Äq/a` — Emissionen
 - **t CO2-Äquivalent** → `t CO2-Äquivalent` — Emissionen
 - **t CO2-Äquivalente/a** → `t CO2-Äquivalente/a` — Emissionen
+- **t CO2/GWh** → `t CO2/GWh` — Emissionen
+- **t CO2/MWh** → `t CO2/MWh` — Emissionen
+- **t CO2/TJ** → `t CO2/TJ` — Emissionen
 - **t CO2/a** → `t CO2/a` — Emissionen
 - **t CO2e** → `t CO2e` — Emissionen
 - **t CO2e/a** → `t CO2e/a` — Emissionen
@@ -2344,6 +2363,7 @@ The prompt's own wording:
 - **t CO2eq/a** → `t CO2eq/a` — Emissionen
 - **t CO2äq** → `t CO2äq` — Emissionen
 - **t CO2äq.** → `t CO2äq.` — Emissionen
+- **t/MWh** → `t/MWh` — Emissionen
 - **t/a** → `t/a` — Emissionen
 - **t/a CO2eq** → `t/a CO2eq` — Emissionen
 - **tCO2** → `tCO2` — Emissionen
@@ -2546,7 +2566,7 @@ The prompt's own wording:
 
 <details><summary>Why</summary>
 
-Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount.
+Object is a named individual of OEO_00140068 aggregation type. Derived from a unit that converts onto the parameter's own unit, unless period_start was read; asked otherwise.
 
 </details>
 

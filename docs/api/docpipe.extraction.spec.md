@@ -91,6 +91,7 @@ Fields:
 - `units_accepted: dict = field(default_factory=dict)`: unit -> factor
 - `integrated: bool = True`: Whether this parameter's unit is an amount over a span or a rate. A consumption in MWh/a is integrated over a year and a plan that states one without saying over what has left something out; a power in MW is not, and has no period to leave out. The verifier flags the first and must not flag the second, or the flag fires on every row of one parameter and means nothing.
 - `unit_names_period: dict = field(default_factory=dict)`: unit -> bool
+- `unit_targets: dict = field(default_factory=dict)`: unit -> target
 - `vocabulary: Optional[dict] = None`: category parameters: uri -> labels
 - `definitions: dict = field(default_factory=dict)`
 - `glosses: dict = field(default_factory=dict)`: as on an axis
@@ -117,6 +118,15 @@ Factor onto unit_target for one entry of units_accepted, as listed.
 Exact and nothing else. Which entry a document's wording means is
 read by the model with its own passage (`fields.unit_slot`); a
 spelling table here would be a second reader that nothing checks.
+
+#### Parameter.target_of
+
+```python
+def target_of(self, unit) -> Optional[str]
+```
+
+The unit one entry of units_accepted converts onto: its own
+target, else unit_target; None for no entry.
 
 #### Parameter.names_period
 

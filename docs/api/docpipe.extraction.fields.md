@@ -207,8 +207,8 @@ Which entry of units_accepted a number is in: a choice, with a passage.
 A coordinate like the parameter, and asked before it: the value request
 writes the unit as the passage prints it, and which entry that means is a
 reading, not a lookup. "450 kWh über das Jahr" is kWh/a and a storage
-capacity of 200 kWh is kWh; "Gigawattstunden" is GWh; "kWh/m²a", "kWp"
-and "g/kWh" are in no list and the row is refused for saying so. A
+capacity of 200 kWh is kWh; "Gigawattstunden" is GWh; "kWh/m²a" is in no
+list and the number keeps the unit as printed, unconverted. A
 spelling table stood in for this reading once, and measured on 641 plans
 of corpus_m5 it let 3,324 tuples carry an entry their wording
 contradicts.
@@ -325,9 +325,12 @@ def derived_by_unit(claim: dict, parameter) -> bool
 ```
 
 Does the spec decide the coordinates it derives from the unit for this
-value: the unit question read an entry of the parameter's list? Where it
-read the print without one, the model is asked them (owner decision
-2026-11-07: "wo es nicht automatisch geht, soll es das LLM versuchen").
+value: the unit question read an entry of the parameter's list that
+converts onto the parameter's own unit? Where it read the print without
+one, the model is asked them (owner decision 2026-11-07: "wo es nicht
+automatisch geht, soll es das LLM versuchen"); so is a value whose entry
+converts onto a unit of its own, an emission factor in g CO2/kWh being
+no annual amount.
 
 ### derives
 

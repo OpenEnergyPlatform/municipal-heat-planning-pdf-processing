@@ -176,7 +176,11 @@ second entity); every other row passes a gate,
 `quantity` checked first: `quantity` a class in `UNIT_TARGET`,
 `scenario` a key of `PARTS` (`status_quo`, `trend`, `target`),
 `spatial_scope` `municipality`, a named `sub_area` or not read, `year` an
-`int`, `aggregation`, where present, known. A row failing any gate is dropped
+`int`, `aggregation`, where present, known, and a number with a `value_target` converted onto an
+ontology unit: a numeric row without `value_target` is counted `unit_unlisted:<unit_raw>`
+(it used to crash the document's graph with a `TypeError`) and one whose
+`unit_of` is None, as an emission factor in g CO2/kWh (a unit OEO 2.14 lacks),
+`unit_not_in_ontology:<target>`, in both graphs (owner decision 2026-11-07). A row failing any gate is dropped
 and counted by reason; a value without `aggregation` is written without that
 edge (the reason `aggregation_missing` is gone) and one without `spatial_scope`
 is kept in the full graph, the strict graph refusing them (owner decision

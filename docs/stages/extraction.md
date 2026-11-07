@@ -88,7 +88,10 @@ with its printed unit and without `value_target`, flagged
 graph until the list grows and a top-up asks the unit again (key `slot/unit`).
 Each harvest file's summary line counts them as `unlisted_units`. An entry of
 `units_accepted` is a factor onto
-`unit_target` or an object, `{"factor": 1.0, "names_period": true}`. A
+`unit_target` or an object, `{"factor": 1.0, "names_period": true}`, which may add
+a `"target"`, the unit its factor converts onto where that is not `unit_target`
+(`Parameter.target_of`); only an entry onto `unit_target` derives coordinates
+from the unit (`fields.derived_by_unit`). A
 parameter that is an amount over a span (`integrated`, the default) has to
 say it for every entry, whether the unit names a period ("MWh/a" does,
 "MWh" does not): `spec.load` refuses an entry without a true or false

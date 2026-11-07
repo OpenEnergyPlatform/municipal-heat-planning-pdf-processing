@@ -77,9 +77,11 @@ def additive(row: dict, spec) -> bool
 ```
 
 An amount over a span in the slice, with its year and scenario. A power
-is no amount: two peaks do not add up. An `out:` quantity has no class the
-graph takes: a specific value, a saving, a useful energy. Zero is a part of
-nothing and the whole of nothing, and rows of it fill plans' tables.
+is no amount: two peaks do not add up, and neither do two emission
+factors, converted onto a unit of their own (g CO2/kWh) and not onto
+their parameter's. An `out:` quantity has no class the graph takes: a
+specific value, a saving, a useful energy. Zero is a part of nothing and
+the whole of nothing, and rows of it fill plans' tables.
 
 ### same_number
 

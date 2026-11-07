@@ -4153,7 +4153,7 @@
       ],
       "x-kg": {
        "label": "has aggregation type",
-       "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount.",
+       "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from a unit that converts onto the parameter's own unit, unless period_start was read; asked otherwise.",
        "role": "edge",
        "schema_slot": "has_aggregation_type"
       },
@@ -5249,7 +5249,7 @@
      "parameter": {
       "const": "emission",
       "description": "Spec parameter: Emissionen.",
-      "x-description-source": "Eine im Wärmeplan bilanzierte Emissionsmenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: CO2 emission value ist \"a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit\", also reines Kohlendioxid. carbon dioxide equivalent quantity value ist \"the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2\", also alle Treibhausgase in CO2-Äquivalenten. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Dazu stehen in der Liste die Oberklassen greenhouse gas emission value und emission value, wo die Stelle nicht sagt, welche Gase gemeint sind, und emission factor value, \"a fraction value that quantifies an emission factor as quotient of the emissions or removals of a gas per unit activity\". Die Einträge out: sind Größen ohne Klasse der Ontologie, etwa eine kumulierte Summe über mehrere Jahre, eine vermiedene Emission oder eine abgeschiedene Menge aus einer CCS-Anlage. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "x-description-source": "Eine im Wärmeplan bilanzierte Emissionsmenge, je Energieträger, Sektor und Jahr, oder ein Emissionsfaktor, die Emission je Einheit Aktivität, etwa g CO2/kWh. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: CO2 emission value ist \"a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit\", also reines Kohlendioxid. carbon dioxide equivalent quantity value ist \"the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2\", also alle Treibhausgase in CO2-Äquivalenten. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Dazu stehen in der Liste die Oberklassen greenhouse gas emission value und emission value, wo die Stelle nicht sagt, welche Gase gemeint sind, und emission factor value, \"a fraction value that quantifies an emission factor as quotient of the emissions or removals of a gas per unit activity\". Die Einträge out: sind Größen ohne Klasse der Ontologie, etwa eine kumulierte Summe über mehrere Jahre, eine vermiedene Emission oder eine abgeschiedene Menge aus einer CCS-Anlage. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
       "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil. Eine Zahl von Gebäuden ist eine Gebäudeanzahl."
      },
      "parameter_link_quote": {
@@ -6709,8 +6709,28 @@
       ]
      },
      "unit": {
-      "description": "The unit: one entry of units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, kg, kg CO2, kg CO2/a, kg CO2eq, kg CO2eq/a, kg/a, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/a, t/a CO2eq, tCO2, tCO2/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
+      "description": "The unit: one entry of units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, g CO2-Äq./kWh, g CO2-Äq/kWh, g CO2/MJ, g CO2/kWh, g CO2e/kWh, g CO2eq/kWh, g/kWh, gCO2/kWh, kg, kg CO2, kg CO2-Äq/MWh, kg CO2/GJ, kg CO2/MWh, kg CO2/a, kg CO2/kWh, kg CO2eq, kg CO2eq/MWh, kg CO2eq/a, kg/MWh, kg/a, kg/kWh, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/MWh, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/GWh, t CO2/MWh, t CO2/TJ, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/MWh, t/a, t/a CO2eq, tCO2, tCO2/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
       "enum": [
+       "g CO2/kWh",
+       "g/kWh",
+       "gCO2/kWh",
+       "g CO2-Äq/kWh",
+       "g CO2-Äq./kWh",
+       "g CO2e/kWh",
+       "g CO2eq/kWh",
+       "kg CO2/kWh",
+       "kg/kWh",
+       "kg CO2/MWh",
+       "kg CO2-Äq/MWh",
+       "kg CO2eq/MWh",
+       "kg/MWh",
+       "t CO2/MWh",
+       "t/MWh",
+       "t CO2-Äq/MWh",
+       "t CO2/GWh",
+       "g CO2/MJ",
+       "kg CO2/GJ",
+       "t CO2/TJ",
        "Tonnen",
        "Tonnen CO2",
        "Tonnen CO2 im Jahr",
@@ -6826,6 +6846,38 @@
         "meaning": "Emissionen",
         "uri": "Tsd. t/a"
        },
+       "g CO2-Äq./kWh": {
+        "meaning": "Emissionen",
+        "uri": "g CO2-Äq./kWh"
+       },
+       "g CO2-Äq/kWh": {
+        "meaning": "Emissionen",
+        "uri": "g CO2-Äq/kWh"
+       },
+       "g CO2/MJ": {
+        "meaning": "Emissionen",
+        "uri": "g CO2/MJ"
+       },
+       "g CO2/kWh": {
+        "meaning": "Emissionen",
+        "uri": "g CO2/kWh"
+       },
+       "g CO2e/kWh": {
+        "meaning": "Emissionen",
+        "uri": "g CO2e/kWh"
+       },
+       "g CO2eq/kWh": {
+        "meaning": "Emissionen",
+        "uri": "g CO2eq/kWh"
+       },
+       "g/kWh": {
+        "meaning": "Emissionen",
+        "uri": "g/kWh"
+       },
+       "gCO2/kWh": {
+        "meaning": "Emissionen",
+        "uri": "gCO2/kWh"
+       },
        "kg": {
         "meaning": "Emissionen",
         "uri": "kg"
@@ -6834,21 +6886,49 @@
         "meaning": "Emissionen",
         "uri": "kg CO2"
        },
+       "kg CO2-Äq/MWh": {
+        "meaning": "Emissionen",
+        "uri": "kg CO2-Äq/MWh"
+       },
+       "kg CO2/GJ": {
+        "meaning": "Emissionen",
+        "uri": "kg CO2/GJ"
+       },
+       "kg CO2/MWh": {
+        "meaning": "Emissionen",
+        "uri": "kg CO2/MWh"
+       },
        "kg CO2/a": {
         "meaning": "Emissionen",
         "uri": "kg CO2/a"
+       },
+       "kg CO2/kWh": {
+        "meaning": "Emissionen",
+        "uri": "kg CO2/kWh"
        },
        "kg CO2eq": {
         "meaning": "Emissionen",
         "uri": "kg CO2eq"
        },
+       "kg CO2eq/MWh": {
+        "meaning": "Emissionen",
+        "uri": "kg CO2eq/MWh"
+       },
        "kg CO2eq/a": {
         "meaning": "Emissionen",
         "uri": "kg CO2eq/a"
        },
+       "kg/MWh": {
+        "meaning": "Emissionen",
+        "uri": "kg/MWh"
+       },
        "kg/a": {
         "meaning": "Emissionen",
         "uri": "kg/a"
+       },
+       "kg/kWh": {
+        "meaning": "Emissionen",
+        "uri": "kg/kWh"
        },
        "kt": {
         "meaning": "Emissionen",
@@ -6902,6 +6982,10 @@
         "meaning": "Emissionen",
         "uri": "t CO2-Äq./a"
        },
+       "t CO2-Äq/MWh": {
+        "meaning": "Emissionen",
+        "uri": "t CO2-Äq/MWh"
+       },
        "t CO2-Äq/a": {
         "meaning": "Emissionen",
         "uri": "t CO2-Äq/a"
@@ -6913,6 +6997,18 @@
        "t CO2-Äquivalente/a": {
         "meaning": "Emissionen",
         "uri": "t CO2-Äquivalente/a"
+       },
+       "t CO2/GWh": {
+        "meaning": "Emissionen",
+        "uri": "t CO2/GWh"
+       },
+       "t CO2/MWh": {
+        "meaning": "Emissionen",
+        "uri": "t CO2/MWh"
+       },
+       "t CO2/TJ": {
+        "meaning": "Emissionen",
+        "uri": "t CO2/TJ"
        },
        "t CO2/a": {
         "meaning": "Emissionen",
@@ -6941,6 +7037,10 @@
        "t CO2äq.": {
         "meaning": "Emissionen",
         "uri": "t CO2äq."
+       },
+       "t/MWh": {
+        "meaning": "Emissionen",
+        "uri": "t/MWh"
        },
        "t/a": {
         "meaning": "Emissionen",
@@ -7793,7 +7893,7 @@
       ],
       "x-kg": {
        "label": "has aggregation type",
-       "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount.",
+       "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from a unit that converts onto the parameter's own unit, unless period_start was read; asked otherwise.",
        "role": "edge",
        "schema_slot": "has_aggregation_type"
       },

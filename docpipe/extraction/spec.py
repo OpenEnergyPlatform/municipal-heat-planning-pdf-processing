@@ -169,6 +169,12 @@ class Parameter:
     # the period, and the verifier reads this instead of a spelling. Shown to
     # no request and in no fingerprint.
     unit_names_period: dict = field(default_factory=dict)  # unit -> bool
+    # The unit an entry converts onto where it is not unit_target, said by
+    # the entry, {"factor": 1.0, "target": "g CO2/kWh"}: an emission factor
+    # is a quotient and no mass, so it has no factor onto tonnes. A target
+    # that names no ontology term keeps the value in the harvest and out of
+    # the graph until the ontology has one (owner decision 2026-11-07).
+    unit_targets: dict = field(default_factory=dict)  # unit -> target
     vocabulary: Optional[dict] = None      # category parameters: uri -> labels
     definitions: dict = field(default_factory=dict)
     glosses: dict = field(default_factory=dict)   # as on an axis
@@ -204,6 +210,13 @@ class Parameter:
         if isinstance(unit, str):
             return self.units_accepted.get(unit)
         return None
+
+    def target_of(self, unit) -> Optional[str]:
+        """The unit one entry of units_accepted converts onto: its own
+        target, else unit_target; None for no entry."""
+        if self.unit_factor(unit) is None:
+            return None
+        return self.unit_targets.get(unit, self.unit_target)
 
     def names_period(self, unit) -> bool:
         """Does this entry of units_accepted name a period, as the spec says?
@@ -497,17 +510,24 @@ def _validate_example(path: str, raw, value_type: str,
 
 
 def _validate_unit_entry(path: str, raw, integrated: bool) -> tuple:
-    """(factor, names_period or None) of one entry of units_accepted.
+    """(factor, names_period or None, target or None) of one entry of
+    units_accepted.
 
     A bare factor is the short form and says nothing about a period. An
     integrated parameter has to say it for every entry: the verifier flags a
     plain amount from this statement and from nothing else, so an entry that
     left it out would be read as a plain amount by silence.
     """
-    statement = None
+    statement = target = None
     if isinstance(raw, dict):
         factor = raw.get("factor")
         statement = raw.get("names_period")
+        target = raw.get("target")
+        if target is not None and (not isinstance(target, str)
+                                   or not target.strip()):
+            _fail(f"{path}.target",
+                  "the unit the factor converts onto where it is not "
+                  "unit_target, a non-empty string")
         if statement is not None and not isinstance(statement, bool):
             _fail(f"{path}.names_period",
                   "true when the entry names a period (\"MWh/a\"), false "
@@ -522,7 +542,7 @@ def _validate_unit_entry(path: str, raw, integrated: bool) -> tuple:
               "required for a unit of an integrated parameter: true when the "
               "entry names a period (\"MWh/a\"), false when it is a plain "
               "amount (\"MWh\")")
-    return factor, statement
+    return factor, statement, target
 
 
 def _validate_parameter(path: str, raw) -> Parameter:
@@ -545,6 +565,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
     # numbers-only.
     units: dict = {}
     unit_names_period: dict = {}
+    unit_targets: dict = {}
     unit_target = raw.get("unit_target")
     vocabulary, value_definitions, value_glosses = _vocabulary(
         f"{path}.vocabulary", raw.get("vocabulary"))
@@ -573,11 +594,13 @@ def _validate_parameter(path: str, raw) -> Parameter:
                   "true when the unit is an amount over a span, false when "
                   "it is a rate")
         for unit, entry in listed.items():
-            units[unit], period = _validate_unit_entry(
+            units[unit], period, target = _validate_unit_entry(
                 f"{path}.units_accepted.{unit}", entry,
                 bool(raw.get("integrated", True)))
             if period is not None:
                 unit_names_period[unit] = period
+            if target is not None and target != unit_target:
+                unit_targets[unit] = target
     else:
         if "integrated" in raw:
             _fail(f"{path}.integrated",
@@ -635,6 +658,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
                      unit_target=unit_target, units_accepted=units,
                      integrated=bool(raw.get("integrated", True)),
                      unit_names_period=unit_names_period,
+                     unit_targets=unit_targets,
                      vocabulary=vocabulary, definitions=value_definitions,
                      glosses=value_glosses,
                      brief=brief.strip() if brief else None,

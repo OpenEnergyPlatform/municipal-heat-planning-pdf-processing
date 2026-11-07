@@ -43,13 +43,24 @@ classes, and writing one as `oeo:out:total` mints an IRI that does not
 exist. Checked by shape rather than by prefix so a new entry cannot slip
 past by being spelled differently.
 
+### target_of
+
+```python
+def target_of(row: dict) -> Optional[str]
+```
+
+The unit this value's number was converted onto.
+
 ### unit_of
 
 ```python
 def unit_of(row: dict) -> Optional[str]
 ```
 
-The unit the graph writes this value in, None outside the graph.
+The unit the graph writes this value in, None outside the graph:
+the unit its number was converted onto, where that is an ontology term.
+g CO2/kWh is none in OEO 2.14, so an emission factor stays in the
+harvest until the ontology has one (owner decision 2026-11-07).
 
 ### typed_as
 
