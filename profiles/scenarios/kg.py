@@ -40,7 +40,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
 
-from docpipe.extraction import graphkit
+from docpipe.extraction import fields, graphkit
 from docpipe.extraction.compute import owner_of
 from docpipe.extraction.graphkit import NOT_IN_GRAPH, ttl_comment, ttl_literal
 from docpipe.extraction.identity import tuple_ids
@@ -581,7 +581,21 @@ TRUST_JOIN = ", "
 # Through the core's loader once, at import, for what that loader refuses:
 # a spec broken that way stops the serializer before a single document is
 # written, not partway through a run.
-load_spec(_SPEC)
+SPEC = load_spec(_SPEC)
+
+
+def held_back(row: dict) -> Optional[str]:
+    """Why the graph does not take *row*'s value, though the harvest keeps
+    it: a coordinate with an entry the value must have read it as another
+    entry or left it open ("<coordinate>:<answer>", owner decisions
+    2026-11-07: an author of another work, a year that is no scenario
+    year); None for a value it takes (`fields.in_parameter`)."""
+    parameter = SPEC.by_uri.get(row.get("parameter"))
+    if parameter is None or fields.in_parameter(parameter, row):
+        return None
+    slot = next(slot for slot in fields.axis_slots(parameter)
+                if slot.keep and not fields.kept(slot, row))
+    return f"{slot.name}:{row.get(slot.name) or row.get(f'{slot.name}_state')}"
 
 # This corpus has no transcribed pages to declare: its Documents table carries
 # no page_text_transcribed column, so `trust` is never told a page was itself
@@ -742,6 +756,17 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
             for tuple_name, row in zip(tuple_ids(name, rows), rows):
                 if tuple_name in decided:
                     asked[id(row)] = decided[tuple_name]
+        # What the harvest keeps and the graph does not take: a value read
+        # as no value of its parameter, or whose reading of that stayed open.
+        held: Counter = Counter()
+        taken: list = []
+        for row in rows:
+            why = held_back(row)
+            if why is None:
+                taken.append(row)
+            else:
+                held[why] += 1
+        rows = taken
         by_param: dict = {}
         for row in rows:
             by_param.setdefault(row.get("parameter"), []).append(row)
@@ -751,7 +776,7 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
         # effect of whichever loop happened to look at the row: a run of
         # publications that is 80% out:multiregion is telling us the groups
         # of countries are missing one, not that the harvest is failing.
-        out_of_graph: Counter = Counter()
+        out_of_graph: Counter = Counter(held)
         for row in rows:
             for field in ("value_uri", "scenario"):
                 if field == "value_uri" \

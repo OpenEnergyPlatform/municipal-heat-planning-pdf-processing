@@ -426,8 +426,29 @@ name: its own quote must print it, whatever wording stands beside it, and its
 raw is the name itself. The naming takes no `out:` entry as a name
 (`naming.read_name`). The scenarios profile lists two: `out:status_quo`, the
 way kwp's closed list has "Bestand", and `out:several`, for a value stated for
-several scenarios that the text shown does not name one by one, which then goes
-to no search and to no scenario of the graph (owner decision 2026-11-07).
+several scenarios that the text shown does not name one by one, which goes to
+no search and, after the naming, to the scenarios a request per wording and
+document finds these words stand for (owner decisions 2026-11-07).
+
+An axis with a list may name the entry a value must have to be a value of its
+parameter at all, under the spec key `"keep"` (`spec.Axis.keep`,
+`fields.Slot.keep`, owner decisions 2026-11-07); the spec refuses one that is
+no entry of the list. The scenarios profile has two: the kind of a scenario
+year, "scenario year" (OEO_00020097) or "other year", and the work of each of
+its thirteen publication and study fields, "this publication" or "another
+work". Their groups come first, so each is its value's first coordinate. A
+value read with another entry (`fields.kept` False) is asked nothing after it,
+its other coordinates `out_of_slice`, in the reading (`Reader._coordinates`)
+and in the combing (`Comber.comb`). It is asked for once more in the
+conversation of the rounds its passage was read in, with the follow-up
+`wrong`: its value and quote, and that it was read wrongly
+(`value_not_kept`); a value named instead is checked as a round's value is and
+asks its coordinates, without a second such question (`Reader._again`). An
+entry left open asks the coordinates after it, as an open gate keeps a row.
+The answer is backed by the words of its quote that show it, as an entry
+beside names is. The graph takes a value only where every such entry is read
+as the one to keep (`fields.in_parameter`, `kg.held_back`); the others stay
+in the harvest and are counted among what is not in the graph by choice.
 
 Which of a document's names mean the same thing is not asked while it is
 read. Once the document is folded, the naming step (`naming.py`, prompts
@@ -437,8 +458,7 @@ together.
 The prompt of `read_text` may be split by lines `<!-- group: NAME -->`: the text
 before the first is the system prompt's common part, and each group's section
 is sent in the message that asks that group (owner decisions 2026-11-05 and
-2026-11-07). A prompt without sections serves every group as it is
-(scenarios). A prompt with sections needs exactly one for each group of the
+2026-11-07). A prompt without sections serves every group as it is. A prompt with sections needs exactly one for each group of the
 spec, which the run checks at its start. In a list a request shows, an entry's `means` is its `gloss` where the spec has one,
 one line in the profile's language, else its English definition
 (`fields._options`); a gloss needs a definition beside it. The axis fingerprint

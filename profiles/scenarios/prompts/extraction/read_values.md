@@ -31,5 +31,8 @@ Where the figure's description prints the value, quote it like any other.
 <!-- follow-up: next -->
 Name the next value in this passage that you have not named yet, in the same form. If no eligible value remains, return {"value":null}.
 
+<!-- follow-up: wrong -->
+The value under "wrong" is no value of "parameter"; why stands under "what". Name the next value in this passage that matches the definition and that you have not named yet, in the same form. If no eligible value remains, return {"value":null}.
+
 <!-- follow-up: corrections -->
 Your last value was not taken; why, and what to do, stands under "what". Skip it if it lacks qualifying evidence.

@@ -6,8 +6,10 @@ title finds counts only where two of its authors' family names stand among
 the authors read, or one where either side names one author, AND never over
 a value the document prints, AND not without a title read; such a row is
 quoted by the read value it was found with and carries its record, AND is
-graded D for its own reason, AND is a valid harvest row, AND once the
-catalogue cannot be reached the run asks it no more.
+graded D for its own reason, AND is a valid harvest row, AND carries the
+work the read value it was found with was read for (owner decisions
+2026-11-07), AND once the catalogue cannot be reached the run asks it no
+more.
 
 A field its front pages give, or one looked up already, is not looked up,
 AND one read only elsewhere is; the record is found with the title AND the
@@ -46,6 +48,8 @@ DOI = "10.1080/17583004.2018.1477374"
 def read(parameter, value, quote=None) -> dict:
     return {"parameter": parameter, "parameter_state": "read",
             "value": value, "value_raw": value, "quote": quote or value,
+            "work": "work:this_publication", "work_raw": quote or value,
+            "work_quote": quote or value, "work_state": "read",
             "tier": "text_located", "provenance": dict(PASSAGE)}
 
 
@@ -154,6 +158,16 @@ def test_without_a_title_read_nothing_is_looked_up():
     outcome = completion.complete(report, SPEC, fetch=fetch)
     assert asked == [] and outcome["outcome"] == "no_title"
     assert looked_up(report) == {}
+
+
+def test_a_looked_up_row_carries_the_work_of_the_row_it_was_found_with():
+    for work in ("work:this_publication", "out:another_work"):
+        title = dict(read("publication_title", TITLE), work=work)
+        report = report_of(title, *AUTHORS)
+        completion.complete(report, SPEC, fetch=looked(RECORD)[0])
+        rows = list(looked_up(report).values())
+        assert rows and all(row["work"] == work and row["work_state"] == "read"
+                            for row in rows), work
 
 
 def test_a_looked_up_row_is_a_valid_harvest_row():

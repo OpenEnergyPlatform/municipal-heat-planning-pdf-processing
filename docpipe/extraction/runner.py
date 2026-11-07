@@ -2080,6 +2080,7 @@ FOLLOWS = {
     seeking_map.SEEK_PROMPT_ID: seeking_map.FOLLOWS,
     naming_map.NAMING_PROMPT_ID: naming_map.FOLLOWS,
     naming_map.GROUPS_PROMPT_ID: naming_map.FOLLOWS,
+    naming_map.SEVERAL_PROMPT_ID: naming_map.FOLLOWS,
     computing.COMPUTE_PROMPT_ID: computing.FOLLOWS,
 }
 

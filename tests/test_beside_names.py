@@ -28,7 +28,7 @@ from docpipe.extraction.pipeline import Row, Source, merge_field
 from docpipe.extraction.spec import SpecError, load as load_spec
 from docpipe.extraction.wording import say
 from profiles.scenarios import kg
-from test_graph_from_shapes import OEO, oekg
+from test_graph_from_shapes import OEO, make_serializer, oekg
 
 RAW = json.loads((Path(__file__).resolve().parent.parent / "profiles"
                   / "scenarios" / "extraction_spec.json")
@@ -152,7 +152,7 @@ def test_the_graph_hangs_a_status_quo_row_on_no_scenario():
             "scenario": STATUS_QUO}
     assert kg.scenario_names(bare) == []
     assert kg.scenario_names(dict(bare, scenario="CurPol")) == ["CurPol"]
-    serializer = kg.make_serializer(Path("no-such.db"), model=oekg())
+    serializer = make_serializer(Path("no-such.db"), model=oekg())
     graph = Graph().parse(data=serializer("doc", rows), format="turtle")
     factsheets = set(graph.subjects(object=URIRef(OEO + "OEO_00000365")))
     years = {str(o)[:4] for o in graph.objects(

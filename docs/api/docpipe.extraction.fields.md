@@ -60,6 +60,7 @@ Fields:
 - `derive: Optional[dict] = None`: {"from": "unit", "value": uri} when the spec decides this coordinate.
 - `merged: Optional[str] = None`: The kind of thing whose name the document gives here, such as "scenario" (`spec.Axis.merged`): a value stated for several of them is one row per name, and which of the document's names mean the same thing is asked once the document is read (`naming.py`).
 - `keeps_print: bool = False`: Whether an answer may be the print itself where the list has no entry for it: the unit, which is never refused (owner decision 2026-11-07, `pipeline.printed_only`).
+- `keep: Optional[str] = None`: The entry a value must have here to be a value of its parameter (`spec.Axis.keep`, owner decisions 2026-11-07, `kept`).
 
 #### Slot.is_closed
 
@@ -393,6 +394,39 @@ Every coordinate of this parameter, in spec order, as its own question.
 A dynamic axis whose list the profile could not fill for this document has
 no options left, so it degrades to a wording, the same rule verify.py
 follows one step later.
+
+### kept
+
+```python
+def kept(slot: Slot, claim: dict) -> Optional[bool]
+```
+
+Is the value of *claim* a value of its parameter by *slot*, a
+coordinate with an entry it must have (`Slot.keep`, owner decisions
+2026-11-07)? True where the coordinate was read as that entry, False
+where it was read as another, None where it is open or *slot* has no
+such entry. The answer is the entry's label, as `pipeline.merge_field`
+writes it, or its key.
+
+### closed
+
+```python
+def closed(slots: list, claim: dict) -> bool
+```
+
+Has a coordinate of *slots* read the value of *claim* as no value of
+its parameter (`kept` False), so that nothing after it is asked?
+
+### in_parameter
+
+```python
+def in_parameter(parameter: Parameter, claim: dict) -> bool
+```
+
+Is the value of *claim* a value of *parameter* on every coordinate
+with an entry it must have, each read as that entry? The graph takes
+only such a value; one read with another entry, or whose entry stayed
+open, stays in the harvest (owner decisions 2026-11-07).
 
 ### slots
 

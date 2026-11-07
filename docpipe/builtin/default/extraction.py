@@ -191,6 +191,9 @@ PHRASES = {
         'You named this value already: {value} with the quote {quote!r}. '
         'Name the next value you have not named yet, or answer '
         '{{"value":null}}.'),
+    "value_not_kept": (
+        'By its reading this value is "{given}" and no value of '
+        '"parameter": it was read wrongly.'),
     "value_rejected": (
         'This value was not taken: {reason}. Name it again with a "quote" '
         'copied character for character from the passage that prints it. '

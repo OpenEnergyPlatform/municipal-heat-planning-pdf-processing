@@ -339,6 +339,9 @@ PHRASES = {
         'Diesen Wert hast du schon genannt: {value} mit dem Zitat {quote!r}. '
         'Nenne den nächsten Wert, den du noch nicht genannt hast, oder '
         'antworte {{"value":null}}.'),
+    "value_not_kept": (
+        'Gelesen ist dieser Wert "{given}" und kein Wert aus "parameter": '
+        'Er ist falsch gelesen.'),
     "value_rejected": (
         'Dieser Wert ist nicht übernommen: {reason}. Nenne ihn noch einmal, '
         'mit einem "quote", das Zeichen für Zeichen aus der Passage '

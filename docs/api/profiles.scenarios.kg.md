@@ -170,6 +170,18 @@ of one scenario means the name that scenario is called by, a name of
 several scenarios means each of theirs (owner decisions 2026-11-06). A
 row read before that was asked belongs to the scenario of its own name.
 
+### held_back
+
+```python
+def held_back(row: dict) -> Optional[str]
+```
+
+Why the graph does not take *row*'s value, though the harvest keeps
+it: a coordinate with an entry the value must have read it as another
+entry or left it open ("\<coordinate>:\<answer>", owner decisions
+2026-11-07: an author of another work, a year that is no scenario
+year); None for a value it takes (`fields.in_parameter`).
+
 ### decision_text
 
 ```python

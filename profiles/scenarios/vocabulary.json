@@ -13,6 +13,10 @@
    "BFO_0000031"
   ],
   [
+   "BFO_0000008",
+   "BFO_0000015"
+  ],
+  [
    "BFO_0000016",
    "BFO_0000023"
   ],
@@ -374,6 +378,16 @@
     "BFO_0000141"
    ]
   },
+  "BFO_0000008": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "temporal region",
+   "parents": [
+    "BFO_0000003"
+   ]
+  },
   "BFO_0000015": {
    "alt_labels": [],
    "definition": "p is a process = Def. p is an occurrent that has temporal proper parts and for some time t, p s-depends_on some material entity at t. (axiom label in BFO2 Reference: [083-003])",
@@ -432,6 +446,16 @@
    "label": "generically dependent continuant",
    "parents": [
     "BFO_0000002"
+   ]
+  },
+  "BFO_0000038": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "one-dimensional temporal region",
+   "parents": [
+    "BFO_0000008"
    ]
   },
   "BFO_0000040": {
@@ -2810,6 +2834,16 @@
     "OEO_00360020"
    ]
   },
+  "OEO_00020097": {
+   "alt_labels": [],
+   "definition": "A scenario year is a time step that has a duration of one year and is part of a scenario horizon.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "scenario year",
+   "parents": [
+    "OEO_00030033"
+   ]
+  },
   "OEO_00020166": {
    "alt_labels": [],
    "definition": "A methodology is a plan specification that describes processes that are part of a study.",
@@ -3332,6 +3366,16 @@
    "label": "supply system",
    "parents": [
     "RO_0002577"
+   ]
+  },
+  "OEO_00030033": {
+   "alt_labels": [],
+   "definition": "A time step is a one-dimensional temporal region that has a start time and an ending time and thus a finite duration.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "time step",
+   "parents": [
+    "BFO_0000038"
    ]
   },
   "OEO_00050016": {

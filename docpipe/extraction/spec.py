@@ -133,6 +133,14 @@ class Axis:
     # changed in one place used to leave the other describing a graph nobody
     # was writing.
     kg: Optional[dict] = None
+    # The entry of this coordinate's list a value must have to be a value of
+    # its parameter at all (owner decisions 2026-11-07): "scenario year" for
+    # a year, "this publication" for an author. Asked before the coordinates
+    # after it; a value read with another entry is asked for its parameter
+    # once more, told it was read wrongly, is asked nothing further, and
+    # stays out of the graph, as does one whose entry stays open
+    # (`fields.kept`).
+    keep: Optional[str] = None
 
     def label_to_uri(self) -> dict:
         """Corpus label (folded) -> URI. Built once, used per tuple."""
@@ -450,6 +458,11 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
         _fail(path, "merged names the kind of thing, a non-empty string")
     if merged and (axis_type != "text" or vocabulary or enum or dynamic):
         _fail(path, "merged is for a free-text axis only")
+    keep = raw.get("keep")
+    if keep is not None and (not isinstance(vocabulary, dict)
+                             or keep not in vocabulary):
+        _fail(f"{path}.keep", f"{keep!r} is not a key of this axis' "
+                              f"vocabulary")
     beside, beside_definitions, beside_glosses = _vocabulary(
         f"{path}.beside", raw.get("beside"))
     if beside is not None:
@@ -472,7 +485,7 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
                 enum=enum, required=bool(raw.get("required", False)),
                 dynamic=dynamic, merged=merged, beside=beside,
                 question=question, derive=derive,
-                kg=kg, definitions=definitions, glosses=glosses)
+                kg=kg, definitions=definitions, glosses=glosses, keep=keep)
 
 
 def _validate_example(path: str, raw, value_type: str,
@@ -823,6 +836,7 @@ def axis_fingerprint(axis: "Axis") -> str:
                        for uri, labels in axis.beside.items()}}
            if axis.beside else {}),
         "derive": axis.derive,
+        **({"keep": axis.keep} if axis.keep else {}),
         # The offered list: identifier, the spellings a plan may use, and the
         # sentence saying what the term means. All three reach the model, so
         # all three decide whether an answer is still the answer to this

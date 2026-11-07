@@ -224,6 +224,19 @@ anywhere else), and a merged coordinate is never read in the survey. Which
 of a publication's names mean the same scenario is asked once the publication
 is read, by `docpipe/extraction/naming.py` (below).
 
+Two coordinates say whether a value is a value of its field at all (spec key
+`"keep"`, owner decisions 2026-11-07, see [extraction](../stages/extraction.md)):
+`year_kind` of `scenario_year`, "scenario year" with the OEO definition of
+scenario year and scenario horizon or "other year", and `work` of the
+thirteen `publication_*` and `study_*` fields, "this publication" or "another
+work" the publication presents, compares, reviews or cites. Each is asked
+first and backed by the words of its quote. A value read with the other entry
+is asked nothing further, is asked for once more in its passage's rounds as
+read wrongly, and stays out of the graph, as does one whose entry stayed open
+(`kg.held_back`). A row the catalogue fills (`completion.row_of`) is a copy of
+the row it was found with and carries its work. `read_text` has one section
+per group (`work`, `year_kind`, `scenario`).
+
 The list for one document is computed once, before the harvest starts,
 by `profiles/scenarios/extraction.py`'s `document_axes(conn, document_id)`,
 which returns a dict keyed `scenario_region`. `document_regions`

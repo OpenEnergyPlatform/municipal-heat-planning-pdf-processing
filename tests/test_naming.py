@@ -56,7 +56,7 @@ from docpipe.extraction.pipeline import READ, Batch, Source, WorkItem
 from docpipe.extraction.spec import SpecError, load as load_spec
 from docpipe.extraction.wording import say
 from profiles.scenarios import kg
-from test_graph_from_shapes import OEO, oekg
+from test_graph_from_shapes import OEO, make_serializer, oekg
 
 
 def answered(thread, reply):
@@ -707,7 +707,7 @@ def test_a_request_about_a_name_that_does_not_fit_is_asked_against_halves():
 # -- the graph -------------------------------------------------------------------
 
 def factsheets(rows):
-    serializer = kg.make_serializer(Path("no-such.db"), model=oekg(),
+    serializer = make_serializer(Path("no-such.db"), model=oekg(),
                                     groups={})
     graph = Graph().parse(data=serializer("doc", rows), format="turtle")
     sheets = set(graph.subjects(RDF.type, URIRef(OEO + "OEO_00000365")))

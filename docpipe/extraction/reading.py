@@ -126,6 +126,11 @@ NOT_SHOWN = "quote_not_in_passage"
 # what the reading left open (`combing.py`), the coordinate asked next.
 NEXT = "next"
 COORDINATES = "coordinates"
+# A value its coordinates read as no value of its parameter (`fields.kept`),
+# asked for once more in its passage's rounds, told that it was read wrongly
+# and why (owner decision 2026-11-07: "noch einmal nachfragen mit dem
+# hinweis, dass das falsch ist").
+WRONG = "wrong"
 
 # Why the check refused a round's value, as `Read.failed` counts it: the value
 # itself, a quote that does not pin it down (owner decision 2026-11-07), or a
@@ -496,7 +501,7 @@ def around_of(source: Source, passages: dict,
 NEAR = ("before", "after")
 # The fields of the follow-ups each kind of reading request sends, whose
 # words its prompt holds (`runner.FOLLOWS`).
-VALUE_FOLLOWS = (NEXT, CORRECTIONS)
+VALUE_FOLLOWS = (NEXT, CORRECTIONS, WRONG)
 TEXT_FOLLOWS = (CORRECTIONS,)
 BESIDE = ("title_page", "table_before")
 
@@ -1606,6 +1611,9 @@ class _Job:
     # another's, whose messages show them again
     threads: dict = field(default_factory=dict)
     branched: set = field(default_factory=set)
+    # the rounds of the piece each value was read in, by its label, which a
+    # value read as no value of its parameter is asked again in (`_again`)
+    rounds: dict = field(default_factory=dict)
 
     def clone(self, row: Row) -> Row:
         """A copy of *row* under a label of its own, for one more name of
@@ -1641,6 +1649,18 @@ class _Job:
         batch.items.append(WorkItem(self.document_id, self.parameter,
                                     passage))
         return batch.label(len(batch.items) - 1)
+
+
+@dataclass
+class _Rounds:
+    """The rounds of one piece of a passage (`Reader._rounds`): *ask(follow)*
+    sends a message of their conversation, *rows* the values they named,
+    *read* those values as the requests show them."""
+    ask: Callable
+    rows: list
+    read: list
+    view: Source
+    drawn: bool
 
 
 class Reader:
@@ -1822,19 +1842,7 @@ class Reader:
         groups = groups_of(self.spec, slots)
         grouped: list = []
         for row in rows:
-            # One message per coordinate, in the order of the groups and of
-            # each group's coordinates (owner decision 2026-11-07). A value
-            # stated for several names of a coordinate that may name several
-            # is one row per name, and each asks the coordinates after it
-            # alone.
-            each = [row]
-            for group, group_slots in groups:
-                for slot in in_group_order(group, group_slots):
-                    each += [made for one in list(each)
-                             if not fields.derives(slot, one.claim, parameter)
-                             for made in self._value_group(job, one, group,
-                                                           [slot])]
-            grouped.extend(each)
+            grouped.extend(self._coordinates(job, row, groups))
         rows = grouped
         evidence = list(views) + fixed + list(beside) + frames
         # What the spec derives from the unit, where the unit question chose
@@ -1900,6 +1908,78 @@ class Reader:
             views.append(view)
         return rows, views
 
+    def _coordinates(self, job: _Job, row: Row, groups: list,
+                     again: bool = True) -> list:
+        """[*row* and the rows made beside it], each coordinate asked in
+        one message, in the order of the groups and of each group's
+        coordinates (owner decision 2026-11-07). A value stated for several
+        names of a coordinate that may name several is one row per name, and
+        each asks the coordinates after it alone. A coordinate with an entry
+        a value must have (`fields.kept`) that reads a row as no value of
+        its parameter closes the coordinates after it, which are never
+        asked (`out_of_slice`); with *again* the value is asked for once
+        more (`_again`), and a value named instead asks its coordinates
+        without it."""
+        each = [row]
+        before: list = []
+        for group, group_slots in groups:
+            for slot in in_group_order(group, group_slots):
+                for one in list(each):
+                    if fields.closed(before, one.claim):
+                        one.claim.setdefault(f"{slot.name}_state",
+                                             fields.OUT_OF_SLICE)
+                        continue
+                    if fields.derives(slot, one.claim, job.parameter):
+                        continue
+                    each += self._value_group(job, one, group, [slot])
+                before.append(slot)
+        if again:
+            for one in list(each):
+                if fields.closed(before, one.claim):
+                    for named in self._again(job, one, before):
+                        each += self._coordinates(job, named, groups,
+                                                  again=False)
+        return each
+
+    def _again(self, job: _Job, row: Row, slots: list) -> list:
+        """The value of *row*, read as no value of its parameter by a
+        coordinate of *slots* (`fields.kept`), asked for once more in the
+        conversation of the rounds it was read in: told that it was read
+        wrongly and why, the model names a value of the passage it has not
+        named yet that is one, or none (owner decision 2026-11-07). [The row
+        of the value named instead], checked as a round's value is; one the
+        check refuses is not asked again."""
+        rounds = job.rounds.get(row.label)
+        if rounds is None:
+            return []
+        slot = next(one for one in slots
+                    if fields.kept(one, row.claim) is False)
+        result = job.result
+        reply = rounds.ask({WRONG: {**shown_value(row.claim), "what": say(
+            "value_not_kept", given=row.claim.get(slot.name))}})
+        result.asked += 1
+        result.corrected += 1
+        claim = claim_of(reply, rounds.drawn) if isinstance(reply, dict) \
+            else None
+        if claim is None:
+            return []
+        shown = job.passages_shown()
+        if round_failure(claim, shown, [one.claim for one in rounds.rows],
+                         job.parameter, rounds.view.owner_kind) is not None:
+            return []
+        passage = passage_of(claim, shown) if claim.get("quote") \
+            else (rounds.view if read_off(claim, rounds.view.owner_kind)
+                  else None)
+        if passage is not None:
+            claim["source"] = job.label_of(passage)
+        named = Row(label=row_label(job.made), item_index=0, claim=claim)
+        job.made += 1
+        job.views[named.label] = rounds.view
+        job.rounds[named.label] = rounds
+        rounds.rows.append(named)
+        rounds.read.append(shown_value(claim))
+        return [named]
+
     def _rounds(self, job: _Job, view: Source, start: int = 0):
         """The values of one piece, one per round, until the model names no
         further value; CUT or None where its first round came to nothing.
@@ -1923,6 +2003,7 @@ class Reader:
             return self.ask_values(view, job.parameter, dict(shows),
                                    list(read), threads[-1], follow,
                                    drawn=drawn)
+        rounds = _Rounds(ask, rows, read, view, drawn)
         first = True
         while True:
             reply = ask({NEXT: None} if threads[-1].begun else None)
@@ -1965,6 +2046,7 @@ class Reader:
                 claim["source"] = job.label_of(passage)
             rows.append(Row(label=row_label(start + len(rows)), item_index=0,
                             claim=claim))
+            job.rounds[rows[-1].label] = rounds
             read.append(shown_value(claim))
         return rows
 

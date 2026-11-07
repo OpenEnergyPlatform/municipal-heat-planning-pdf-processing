@@ -327,6 +327,61 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
+### `work`
+
+Axis 'work' of Abstract. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work.
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `publication_author`
@@ -460,6 +515,61 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
+### `work`
+
+Axis 'work' of Author. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work.
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `publication_date`
@@ -591,6 +701,61 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
+### `work`
+
+Axis 'work' of Publication year. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work.
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `publication_doi`
@@ -715,6 +880,61 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+### `work`
+
+Axis 'work' of DOI. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work.
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -847,6 +1067,61 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+### `work`
+
+Axis 'work' of Publication title. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work.
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -1897,6 +2172,61 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
+### `year_kind`
+
+Axis 'year_kind' of Scenario year. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless year_kind_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Is this year a scenario year, a year of the time a scenario of this publication investigates, or another year? Give the words of the quote that show it as value_raw.
+
+<details><summary>What it may answer (2)</summary>
+
+- **other year** → `out:other_year` — Any other year the document states: one that is not part of the time a scenario investigates.
+- **scenario year** → `https://openenergyplatform.org/ontology/oeo/OEO_00020097` — A scenario year is a time step that has a duration of one year and is part of a scenario horizon. A scenario horizon is a time step that is under investigation and consists entirely of one or more scenario years.
+
+</details>
+
+### `year_kind_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('year_kind_raw'). 'year_kind_quote' is then the frame's passage that prints the number.
+
+### `year_kind_link_source`
+
+Which source 'year_kind_link_quote' was found in.
+
+### `year_kind_producer`
+
+Who re-read 'year_kind': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `year_kind_quote`
+
+The verbatim passage carrying 'year_kind'. Present exactly when year_kind_state is 'read'.
+
+### `year_kind_raw`
+
+The document's own wording 'year_kind' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `year_kind_raw_foreign`
+
+The wording does not name the option chosen for 'year_kind': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `year_kind_seen`
+
+A wording the model noticed for 'year_kind' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `year_kind_source`
+
+Which source the passage for 'year_kind' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `year_kind_state`
+
+How the coordinate 'year_kind' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `year_kind_window`
+
+[stage, index] of the window 'year_kind' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `study_acronym`
@@ -2021,6 +2351,61 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+### `work`
+
+Axis 'work' of Project acronym. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work.
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -2238,6 +2623,61 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 
 [stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
+### `work`
+
+Axis 'work' of Topic keyword. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work.
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `study_funder`
@@ -2365,6 +2805,61 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
+### `work`
+
+Axis 'work' of Funder. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work.
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `study_organisation`
@@ -2491,6 +2986,61 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+### `work`
+
+Axis 'work' of Involved organisation. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work.
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -2623,6 +3173,61 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+### `work`
+
+Axis 'work' of Project name. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work.
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -3102,6 +3707,61 @@ It is equivalent to the CRF sector (IPCC 2006): land use, land-use change and fo
 
 [stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
+### `work`
+
+Axis 'work' of Covered sector. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work.
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `study_sector_division`
@@ -3296,6 +3956,61 @@ NACE is a four-digit classification providing the framework for collecting and p
 ### `value_window`
 
 [stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
+### `work`
+
+Axis 'work' of Sector division. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work.
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -3518,6 +4233,61 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 ### `value_window`
 
 [stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
+### `work`
+
+Axis 'work' of Covered technology. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work.
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 

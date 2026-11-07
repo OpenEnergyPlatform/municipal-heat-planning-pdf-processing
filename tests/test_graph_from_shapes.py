@@ -13,11 +13,38 @@ from pathlib import Path
 import pytest
 from rdflib import Graph, Literal, URIRef
 
-from docpipe.extraction import gate
+from docpipe.extraction import fields, gate
 from docpipe.extraction.shapemodel import Model, SchemaError
 from profiles.scenarios import completion, kg, vocabulary
 
 OEO = "https://openenergyplatform.org/ontology/oeo/"
+
+
+def own(rows: list) -> list:
+    """*rows* as the reading leaves values of this publication: every
+    coordinate with an entry a value must have (`fields.kept`) read as that
+    entry, by its key as the harvest keeps it, where the row says nothing of
+    it."""
+    for row in rows:
+        parameter = kg.SPEC.by_uri.get(row.get("parameter"))
+        for slot in fields.axis_slots(parameter) if parameter else ():
+            if slot.keep and f"{slot.name}_state" not in row:
+                row[slot.name] = slot.keep
+                row[f"{slot.name}_state"] = fields.READ
+    return rows
+
+
+def make_serializer(*args, **kwargs):
+    """`kg.make_serializer` over rows of this publication (`own`)."""
+    inner = kg.make_serializer(*args, **kwargs)
+
+    def serializer(name, rows):
+        inner.decisions = serializer.decisions
+        return inner(name, own(rows))
+    serializer.decisions = {}
+    return serializer
+
+
 HEAD = """@prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -158,7 +185,7 @@ def test_the_scenarios_graph_parses_and_carries_the_shapes_paths():
              "value_uri": "https://openenergyplatform.org/ontology/oekg/"
                           "region/Germany",
              "scenario": "NDC", "scenario_raw": "NDC", "quote": "NDC Germany"}]
-    serializer = kg.make_serializer(Path("no-such.db"), model=oekg())
+    serializer = make_serializer(Path("no-such.db"), model=oekg())
     graph = Graph().parse(data=serializer("doc", rows), format="turtle")
     uuid = URIRef(OEO + "OEO_00390095")
     region = URIRef(OEO + "OEO_00020220")
@@ -179,7 +206,7 @@ def test_a_node_two_documents_describe_keeps_the_first_value_of_a_single_path():
                  "quote": "the ENGAGE project"},
                 {"parameter": "publication_abstract", "value": abstract,
                  "quote": abstract}]
-    serializer = kg.make_serializer(Path("no-such.db"), model=oekg())
+    serializer = make_serializer(Path("no-such.db"), model=oekg())
     first = serializer("a", rows("Paper A", "Sergey Paltsev", "Abstract A"))
     second = serializer("b", rows("Paper B", "SERGEY PALTSEV", "Abstract B"))
     graph = Graph().parse(data=first + "\n" + second, format="turtle")
@@ -202,7 +229,7 @@ def test_a_node_two_documents_describe_keeps_the_first_value_of_a_single_path():
 # (owner decision 2026-11-07); two such papers stay two bundles in the upload
 # body, which then names no label.
 def bundle_labels(rows):
-    serializer = kg.make_serializer(Path("no-such.db"), model=oekg())
+    serializer = make_serializer(Path("no-such.db"), model=oekg())
     graph = Graph().parse(data=serializer("doc", rows), format="turtle")
     label = URIRef("http://www.w3.org/2000/01/rdf-schema#label")
     bundle = next(graph.subjects(predicate=None,
@@ -252,7 +279,7 @@ def dated(*years_on_pages, title_page=1):
 
 
 def year_in_graph(rows):
-    serializer = kg.make_serializer(Path("no-such.db"), model=oekg())
+    serializer = make_serializer(Path("no-such.db"), model=oekg())
     graph = Graph().parse(data=serializer("doc", rows), format="turtle")
     return [str(o)[:4] for o in
             graph.objects(predicate=URIRef(OEO + "OEO_00390096"))]
@@ -318,7 +345,7 @@ def written_by(*names_on_pages):
 
 
 def serialized(rows):
-    return kg.make_serializer(Path("no-such.db"), model=oekg())("doc", rows)
+    return make_serializer(Path("no-such.db"), model=oekg())("doc", rows)
 
 
 def test_the_authors_a_front_page_names_go_before_those_of_other_works():
@@ -361,7 +388,7 @@ def confirmed_lines(*readings):
                  "value": "Ioannis Tsiropoulos", "quote": "Ioannis Tsiropoulos",
                  "provenance": {"page": 1, "owner_kind": "section",
                                 "owner_id": 1}})
-    serializer = kg.make_serializer(Path("no-such.db"), model=oekg())
+    serializer = make_serializer(Path("no-such.db"), model=oekg())
     mark = kg.TRUST_PROSE["corroborated"]
     return sum(mark in line for line in serializer("doc", rows).splitlines())
 
@@ -408,7 +435,7 @@ LABEL = URIRef("http://www.w3.org/2000/01/rdf-schema#label")
 def described(names, *documents):
     """The graph and the texts of *documents*, [(name, [region IRI])], each
     a study with one scenario, written with *names*."""
-    serializer = kg.make_serializer(Path("no-such.db"), model=oekg(),
+    serializer = make_serializer(Path("no-such.db"), model=oekg(),
                                     groups={}, names=names)
     texts = []
     for name, regions in documents:
@@ -514,7 +541,7 @@ def regions_of(raw):
              "value_uri": "out:multiregion", "value_raw": raw,
              "scenario": "NDC", "scenario_raw": "NDC",
              "quote": "NDC for OECD Europe"}]
-    serializer = kg.make_serializer(Path("no-such.db"), model=oekg())
+    serializer = make_serializer(Path("no-such.db"), model=oekg())
     graph = Graph().parse(data=serializer("doc", rows), format="turtle")
     label = URIRef("http://www.w3.org/2000/01/rdf-schema#label")
     return [str(graph.value(node, label)) for node in
@@ -539,7 +566,7 @@ def acronyms_of(short_marked):
             {"parameter": "scenario_label", "value": "ENTSO-E DG",
              "quote": "ENTSO-E DG", "value_means": ["Distributed Generation"],
              **({"value_short": True} if short_marked else {})}]
-    serializer = kg.make_serializer(Path("no-such.db"), model=oekg())
+    serializer = make_serializer(Path("no-such.db"), model=oekg())
     graph = Graph().parse(data=serializer("doc", rows), format="turtle")
     return [str(o) for o in graph.objects(
         predicate=URIRef("http://purl.org/dc/terms/acronym"))]

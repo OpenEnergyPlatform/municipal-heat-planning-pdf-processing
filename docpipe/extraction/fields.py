@@ -157,6 +157,9 @@ class Slot:
     # for it: the unit, which is never refused (owner decision 2026-11-07,
     # `pipeline.printed_only`).
     keeps_print: bool = False
+    # The entry a value must have here to be a value of its parameter
+    # (`spec.Axis.keep`, owner decisions 2026-11-07, `kept`).
+    keep: Optional[str] = None
 
     @property
     def is_closed(self) -> bool:
@@ -595,7 +598,7 @@ def axis_slots(parameter: Parameter) -> list:
                         question=axis.question,
                         options=_options(axis.vocabulary, axis.definitions,
                                          axis.glosses),
-                        derive=axis.derive)
+                        derive=axis.derive, keep=axis.keep)
         elif axis.enum:
             slot = Slot(name=name, kind=CHOICE, required=axis.required,
                         question=axis.question,
@@ -613,6 +616,36 @@ def axis_slots(parameter: Parameter) -> list:
                         merged=getattr(axis, "merged", None))
         out.append(slot)
     return out
+
+
+def kept(slot: Slot, claim: dict) -> Optional[bool]:
+    """Is the value of *claim* a value of its parameter by *slot*, a
+    coordinate with an entry it must have (`Slot.keep`, owner decisions
+    2026-11-07)? True where the coordinate was read as that entry, False
+    where it was read as another, None where it is open or *slot* has no
+    such entry. The answer is the entry's label, as `pipeline.merge_field`
+    writes it, or its key."""
+    if not slot.keep or claim.get(f"{slot.name}_state") != READ:
+        return None
+    answer = claim.get(slot.name)
+    uri = next((option.uri for option in slot.options
+                if answer in (option.label, option.uri)), answer)
+    return uri == slot.keep
+
+
+def closed(slots: list, claim: dict) -> bool:
+    """Has a coordinate of *slots* read the value of *claim* as no value of
+    its parameter (`kept` False), so that nothing after it is asked?"""
+    return any(kept(slot, claim) is False for slot in slots)
+
+
+def in_parameter(parameter: Parameter, claim: dict) -> bool:
+    """Is the value of *claim* a value of *parameter* on every coordinate
+    with an entry it must have, each read as that entry? The graph takes
+    only such a value; one read with another entry, or whose entry stayed
+    open, stays in the harvest (owner decisions 2026-11-07)."""
+    return all(kept(slot, claim) for slot in axis_slots(parameter)
+               if slot.keep)
 
 
 def slots(parameter: Parameter) -> list:

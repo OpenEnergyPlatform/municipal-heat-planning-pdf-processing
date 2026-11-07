@@ -780,7 +780,8 @@ def test_a_row_read_for_one_field_has_its_parameter_derived():
                     "Net zero by 2050")
     read = reading.Read(Batch(7, title, [WorkItem(7, title, front)]),
                         [{"source": "Q1", "value": "Net zero by 2050",
-                          "quote": "Net zero by 2050"}])
+                          "quote": "Net zero by 2050",
+                          "work_state": fields.UNANSWERED}])
     taken = surveyed.taken_of(7, SCENARIOS,
                               found_of(answer(front, "publication_title")),
                               [read], [], {("section", 1): front})

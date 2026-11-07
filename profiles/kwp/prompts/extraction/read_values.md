@@ -34,5 +34,8 @@ Unter "read" stehen die Werte, die du in dieser Passage schon genannt hast: Nenn
 <!-- follow-up: next -->
 Nenne den nächsten Wert der Kennzahl in dieser Passage, den du noch nicht genannt hast, in derselben Form. Steht keiner mehr darin, antworte {"value":null}.
 
+<!-- follow-up: wrong -->
+Der Wert unter "wrong" ist kein Wert der Kennzahl; warum, steht unter "what". Nenne den nächsten Wert in dieser Passage, der zur Definition passt und den du noch nicht genannt hast, in derselben Form. Steht keiner mehr darin, antworte {"value":null}.
+
 <!-- follow-up: corrections -->
 Dein letzter Wert ist nicht übernommen. Warum und was du tun sollst, steht unter "what".

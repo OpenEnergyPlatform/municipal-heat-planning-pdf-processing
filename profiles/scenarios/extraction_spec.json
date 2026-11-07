@@ -42,6 +42,16 @@
   ],
   "parameter_question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.",
   "groups": {
+    "work": {
+      "coordinates": ["work"],
+      "read_in": "reading",
+      "where": "The value's own passage, the heading of its section and the text shown around it."
+    },
+    "year_kind": {
+      "coordinates": ["year_kind"],
+      "read_in": "reading",
+      "where": "The year's own passage, the heading of its section and the text shown around it."
+    },
     "scenario": {
       "coordinates": ["scenario"],
       "read_in": "reading",
@@ -54,6 +64,24 @@
       "label": "Publication title",
       "description": "The title of this document, the study report: the whole title as the document prints it. Only this document's own title, never that of a study, report or article it cites, presents or compares.",
       "value_type": "text",
+      "axes": {
+        "work": {
+          "vocabulary": {
+            "work:this_publication": {
+              "label": "this publication",
+              "spellings": [],
+              "definition": "This document itself, the study it reports and the scenarios it presents."
+            },
+            "out:another_work": {
+              "label": "another work",
+              "spellings": [],
+              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
+            }
+          },
+          "keep": "work:this_publication",
+          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+        }
+      },
       "example": {
         "source": "Global Energy and Climate Outlook 2023: Transforming Energy Systems for a Net Zero Future. JRC Science for Policy Report.",
         "tuples": [
@@ -79,6 +107,24 @@
       "label": "Author",
       "description": "An author of this document, one tuple each, spelled as the document prints it: whoever wrote this document. Never the authors or the publisher of a study, report or article the document cites, presents or compares.",
       "value_type": "text",
+      "axes": {
+        "work": {
+          "vocabulary": {
+            "work:this_publication": {
+              "label": "this publication",
+              "spellings": [],
+              "definition": "This document itself, the study it reports and the scenarios it presents."
+            },
+            "out:another_work": {
+              "label": "another work",
+              "spellings": [],
+              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
+            }
+          },
+          "keep": "work:this_publication",
+          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+        }
+      },
       "example": {
         "source": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P., Garaffa, R., Després, J.",
         "tuples": [
@@ -114,6 +160,24 @@
       "label": "Publication year",
       "description": "The year this document was published in, four digits and exactly as it stands in the document. Not the year of the data, not a year projected in the text, and never the year of a study, report or article the document cites, presents or compares.",
       "value_type": "text",
+      "axes": {
+        "work": {
+          "vocabulary": {
+            "work:this_publication": {
+              "label": "this publication",
+              "spellings": [],
+              "definition": "This document itself, the study it reports and the scenarios it presents."
+            },
+            "out:another_work": {
+              "label": "another work",
+              "spellings": [],
+              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
+            }
+          },
+          "keep": "work:this_publication",
+          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+        }
+      },
       "example": {
         "source": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619.",
         "tuples": [
@@ -139,6 +203,24 @@
       "label": "DOI",
       "description": "The Digital Object Identifier of this document. Only the DOI itself, without the prefix doi: and without the URL before it. Never the DOI of a study, report, article or dataset the document cites, presents, compares or uses.",
       "value_type": "text",
+      "axes": {
+        "work": {
+          "vocabulary": {
+            "work:this_publication": {
+              "label": "this publication",
+              "spellings": [],
+              "definition": "This document itself, the study it reports and the scenarios it presents."
+            },
+            "out:another_work": {
+              "label": "another work",
+              "spellings": [],
+              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
+            }
+          },
+          "keep": "work:this_publication",
+          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+        }
+      },
       "example": {
         "source": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619.",
         "tuples": [
@@ -162,6 +244,24 @@
       "label": "Abstract",
       "description": "A summary of this document and its study, word for word and complete as the document prints it. Do not write a summary of your own.",
       "value_type": "text",
+      "axes": {
+        "work": {
+          "vocabulary": {
+            "work:this_publication": {
+              "label": "this publication",
+              "spellings": [],
+              "definition": "This document itself, the study it reports and the scenarios it presents."
+            },
+            "out:another_work": {
+              "label": "another work",
+              "spellings": [],
+              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
+            }
+          },
+          "keep": "work:this_publication",
+          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+        }
+      },
       "example": {
         "source": "Abstract This report presents the results of the 2023 edition of the Global Energy and Climate Outlook, which assesses the implications of current climate pledges for the global energy system.",
         "tuples": [
@@ -185,6 +285,24 @@
       "label": "Involved organisation",
       "description": "An organisation in which this document was created, one tuple per organisation, spelled as in the document.",
       "value_type": "text",
+      "axes": {
+        "work": {
+          "vocabulary": {
+            "work:this_publication": {
+              "label": "this publication",
+              "spellings": [],
+              "definition": "This document itself, the study it reports and the scenarios it presents."
+            },
+            "out:another_work": {
+              "label": "another work",
+              "spellings": [],
+              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
+            }
+          },
+          "keep": "work:this_publication",
+          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+        }
+      },
       "example": {
         "source": "European Commission, Joint Research Centre (JRC), Seville, Spain, and Potsdam Institute for Climate Impact Research (PIK).",
         "tuples": [
@@ -219,6 +337,24 @@
       "label": "Funder",
       "description": "A funder of the work: a body that supports it by giving money. Only who pays, not who contributed to the content.",
       "value_type": "text",
+      "axes": {
+        "work": {
+          "vocabulary": {
+            "work:this_publication": {
+              "label": "this publication",
+              "spellings": [],
+              "definition": "This document itself, the study it reports and the scenarios it presents."
+            },
+            "out:another_work": {
+              "label": "another work",
+              "spellings": [],
+              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
+            }
+          },
+          "keep": "work:this_publication",
+          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+        }
+      },
       "example": {
         "source": "This work was funded by the German Federal Ministry of Education and Research under grant 01LA1809A.",
         "tuples": [
@@ -249,6 +385,24 @@
       "label": "Project name",
       "description": "The name of the study this document reports on, as the document prints it. A study is a project with the goal to methodologically investigate something. The title of this document is the report's, not the study's name.",
       "value_type": "text",
+      "axes": {
+        "work": {
+          "vocabulary": {
+            "work:this_publication": {
+              "label": "this publication",
+              "spellings": [],
+              "definition": "This document itself, the study it reports and the scenarios it presents."
+            },
+            "out:another_work": {
+              "label": "another work",
+              "spellings": [],
+              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
+            }
+          },
+          "keep": "work:this_publication",
+          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+        }
+      },
       "example": {
         "source": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020.",
         "tuples": [
@@ -274,6 +428,24 @@
       "label": "Project acronym",
       "description": "The short name (acronym) of the study this document reports on, as the document prints it.",
       "value_type": "text",
+      "axes": {
+        "work": {
+          "vocabulary": {
+            "work:this_publication": {
+              "label": "this publication",
+              "spellings": [],
+              "definition": "This document itself, the study it reports and the scenarios it presents."
+            },
+            "out:another_work": {
+              "label": "another work",
+              "spellings": [],
+              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
+            }
+          },
+          "keep": "work:this_publication",
+          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+        }
+      },
       "example": {
         "source": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020.",
         "tuples": [
@@ -296,6 +468,24 @@
       "label": "Topic keyword",
       "description": "A keyword that describes the study, chosen from value_classes. These are the keywords the OEKG allows for a study; the spellings beside them come from the ontology itself. 'none of these keywords' means the text names a topic of the study but no keyword covers it; that is a finding and is counted. value_raw takes the document's wording. One tuple per keyword; a study may carry several.",
       "value_type": "category",
+      "axes": {
+        "work": {
+          "vocabulary": {
+            "work:this_publication": {
+              "label": "this publication",
+              "spellings": [],
+              "definition": "This document itself, the study it reports and the scenarios it presents."
+            },
+            "out:another_work": {
+              "label": "another work",
+              "spellings": [],
+              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
+            }
+          },
+          "keep": "work:this_publication",
+          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+        }
+      },
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000143": {
           "label": "electricity grid",
@@ -514,6 +704,24 @@
       "label": "Sector division",
       "description": "A sector division the study is based on, chosen from value_classes: a specific way to subdivide a system, such as the CRF of the IPCC guidelines for national greenhouse gas inventories, NACE, an energy balance, the annex of the German Climate Protection Act (KSG) or the study's own list of sectors. A sector itself is no division. Take the most specific entry the text supports: 'CRF sectors (IPCC 2006)' for the 2006 Guidelines or CRF tables from 2015 on, 'CRF sectors (IPCC 1996)' for the Revised 1996 Guidelines or CRF tables until 2014, 'CRF sector division' for the CRF without its version. A division no narrower entry matches, such as a model's own sectors or the study's own list of sectors, is 'sector division'. value_raw takes the document's wording of the division. One tuple per division.",
       "value_type": "category",
+      "axes": {
+        "work": {
+          "vocabulary": {
+            "work:this_publication": {
+              "label": "this publication",
+              "spellings": [],
+              "definition": "This document itself, the study it reports and the scenarios it presents."
+            },
+            "out:another_work": {
+              "label": "another work",
+              "spellings": [],
+              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
+            }
+          },
+          "keep": "work:this_publication",
+          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+        }
+      },
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000368": {
           "label": "sector division",
@@ -631,6 +839,24 @@
       "label": "Covered sector",
       "description": "A sector the study covers, chosen from value_classes. These are the sectors the OEKG allows for this field; many belong to a particular sector division and carry its name in front (CRF, KSG, NC/BR, RED). Take the most specific class the text supports. 'none of these sectors' means the text names a sector that none of the classes matches. value_raw takes the document's wording. One tuple per sector.",
       "value_type": "category",
+      "axes": {
+        "work": {
+          "vocabulary": {
+            "work:this_publication": {
+              "label": "this publication",
+              "spellings": [],
+              "definition": "This document itself, the study it reports and the scenarios it presents."
+            },
+            "out:another_work": {
+              "label": "another work",
+              "spellings": [],
+              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
+            }
+          },
+          "keep": "work:this_publication",
+          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+        }
+      },
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000367": {
           "label": "sector",
@@ -1475,6 +1701,24 @@
       "label": "Covered technology",
       "description": "A technology the study covers, chosen from value_classes. These are the technology classes the OEKG allows for this field. Take the most specific class the text supports: where it says offshore wind, that is 'offshore wind power technology' and not merely 'wind power technology'. 'none of these technologies' means the text names a technology that none of the classes matches; that is a finding and is counted. value_raw takes the document's wording. One tuple per technology.",
       "value_type": "category",
+      "axes": {
+        "work": {
+          "vocabulary": {
+            "work:this_publication": {
+              "label": "this publication",
+              "spellings": [],
+              "definition": "This document itself, the study it reports and the scenarios it presents."
+            },
+            "out:another_work": {
+              "label": "another work",
+              "spellings": [],
+              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
+            }
+          },
+          "keep": "work:this_publication",
+          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+        }
+      },
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000407": {
           "label": "technology",
@@ -2123,6 +2367,22 @@
       "description": "A year of the period a scenario investigates, its scenario horizon, four digits and word for word from the document: a year the document states as part of the time the scenario looks at. One tuple per year.",
       "value_type": "text",
       "axes": {
+        "year_kind": {
+          "vocabulary": {
+            "https://openenergyplatform.org/ontology/oeo/OEO_00020097": {
+              "label": "scenario year",
+              "spellings": [],
+              "definition": "A scenario year is a time step that has a duration of one year and is part of a scenario horizon. A scenario horizon is a time step that is under investigation and consists entirely of one or more scenario years."
+            },
+            "out:other_year": {
+              "label": "other year",
+              "spellings": [],
+              "definition": "Any other year the document states: one that is not part of the time a scenario investigates."
+            }
+          },
+          "keep": "https://openenergyplatform.org/ontology/oeo/OEO_00020097",
+          "question": "Is this year a scenario year, a year of the time a scenario of this publication investigates, or another year? Give the words of the quote that show it as value_raw."
+        },
         "scenario": {
           "type": "text",
           "merged": "scenario",

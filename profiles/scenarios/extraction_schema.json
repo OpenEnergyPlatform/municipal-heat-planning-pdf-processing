@@ -377,6 +377,38 @@
         "reading"
        ]
       }
+     },
+     {
+      "else": {
+       "properties": {
+        "work": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "work_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "work_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "work": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "work"
+       ]
+      }
      }
     ],
     "properties": {
@@ -571,6 +603,122 @@
        "string",
        "null"
       ]
+     },
+     "work": {
+      "description": "Axis 'work' of Abstract. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.",
+      "enum": [
+       "work:this_publication",
+       "out:another_work",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "another work": {
+        "meaning": "A study, report, article or model other than this document that the document presents, compares, reviews or cites.",
+        "uri": "out:another_work"
+       },
+       "this publication": {
+        "meaning": "This document itself, the study it reports and the scenarios it presents.",
+        "uri": "work:this_publication"
+       }
+      },
+      "x-question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+     },
+     "work_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_link_source": {
+      "description": "Which source 'work_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_producer": {
+      "description": "Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "work_quote": {
+      "description": "The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_raw": {
+      "description": "The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "work_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "work_seen": {
+      "description": "A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "work_source": {
+      "description": "Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "work_window": {
+      "description": "[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -579,7 +727,9 @@
      "parameter_state",
      "tier",
      "provenance",
-     "value"
+     "value",
+     "work",
+     "work_state"
     ],
     "type": "object",
     "x-kg": {
@@ -608,6 +758,38 @@
       "then": {
        "required": [
         "reading"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "work": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "work_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "work_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "work": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "work"
        ]
       }
      }
@@ -804,6 +986,122 @@
        "string",
        "null"
       ]
+     },
+     "work": {
+      "description": "Axis 'work' of Author. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.",
+      "enum": [
+       "work:this_publication",
+       "out:another_work",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "another work": {
+        "meaning": "A study, report, article or model other than this document that the document presents, compares, reviews or cites.",
+        "uri": "out:another_work"
+       },
+       "this publication": {
+        "meaning": "This document itself, the study it reports and the scenarios it presents.",
+        "uri": "work:this_publication"
+       }
+      },
+      "x-question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+     },
+     "work_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_link_source": {
+      "description": "Which source 'work_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_producer": {
+      "description": "Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "work_quote": {
+      "description": "The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_raw": {
+      "description": "The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "work_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "work_seen": {
+      "description": "A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "work_source": {
+      "description": "Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "work_window": {
+      "description": "[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -812,7 +1110,9 @@
      "parameter_state",
      "tier",
      "provenance",
-     "value"
+     "value",
+     "work",
+     "work_state"
     ],
     "type": "object",
     "x-kg": {
@@ -849,6 +1149,38 @@
       "then": {
        "required": [
         "reading"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "work": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "work_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "work_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "work": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "work"
        ]
       }
      }
@@ -1045,6 +1377,122 @@
        "string",
        "null"
       ]
+     },
+     "work": {
+      "description": "Axis 'work' of Publication year. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.",
+      "enum": [
+       "work:this_publication",
+       "out:another_work",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "another work": {
+        "meaning": "A study, report, article or model other than this document that the document presents, compares, reviews or cites.",
+        "uri": "out:another_work"
+       },
+       "this publication": {
+        "meaning": "This document itself, the study it reports and the scenarios it presents.",
+        "uri": "work:this_publication"
+       }
+      },
+      "x-question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+     },
+     "work_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_link_source": {
+      "description": "Which source 'work_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_producer": {
+      "description": "Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "work_quote": {
+      "description": "The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_raw": {
+      "description": "The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "work_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "work_seen": {
+      "description": "A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "work_source": {
+      "description": "Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "work_window": {
+      "description": "[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -1053,7 +1501,9 @@
      "parameter_state",
      "tier",
      "provenance",
-     "value"
+     "value",
+     "work",
+     "work_state"
     ],
     "type": "object",
     "x-kg": {
@@ -1084,6 +1534,38 @@
       "then": {
        "required": [
         "reading"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "work": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "work_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "work_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "work": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "work"
        ]
       }
      }
@@ -1280,6 +1762,122 @@
        "string",
        "null"
       ]
+     },
+     "work": {
+      "description": "Axis 'work' of DOI. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.",
+      "enum": [
+       "work:this_publication",
+       "out:another_work",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "another work": {
+        "meaning": "A study, report, article or model other than this document that the document presents, compares, reviews or cites.",
+        "uri": "out:another_work"
+       },
+       "this publication": {
+        "meaning": "This document itself, the study it reports and the scenarios it presents.",
+        "uri": "work:this_publication"
+       }
+      },
+      "x-question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+     },
+     "work_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_link_source": {
+      "description": "Which source 'work_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_producer": {
+      "description": "Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "work_quote": {
+      "description": "The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_raw": {
+      "description": "The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "work_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "work_seen": {
+      "description": "A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "work_source": {
+      "description": "Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "work_window": {
+      "description": "[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -1288,7 +1886,9 @@
      "parameter_state",
      "tier",
      "provenance",
-     "value"
+     "value",
+     "work",
+     "work_state"
     ],
     "type": "object",
     "x-kg": {
@@ -1317,6 +1917,38 @@
       "then": {
        "required": [
         "reading"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "work": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "work_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "work_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "work": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "work"
        ]
       }
      }
@@ -1513,6 +2145,122 @@
        "string",
        "null"
       ]
+     },
+     "work": {
+      "description": "Axis 'work' of Publication title. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.",
+      "enum": [
+       "work:this_publication",
+       "out:another_work",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "another work": {
+        "meaning": "A study, report, article or model other than this document that the document presents, compares, reviews or cites.",
+        "uri": "out:another_work"
+       },
+       "this publication": {
+        "meaning": "This document itself, the study it reports and the scenarios it presents.",
+        "uri": "work:this_publication"
+       }
+      },
+      "x-question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+     },
+     "work_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_link_source": {
+      "description": "Which source 'work_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_producer": {
+      "description": "Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "work_quote": {
+      "description": "The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_raw": {
+      "description": "The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "work_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "work_seen": {
+      "description": "A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "work_source": {
+      "description": "Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "work_window": {
+      "description": "[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -1521,7 +2269,9 @@
      "parameter_state",
      "tier",
      "provenance",
-     "value"
+     "value",
+     "work",
+     "work_state"
     ],
     "type": "object",
     "x-kg": {
@@ -3338,6 +4088,38 @@
      {
       "else": {
        "properties": {
+        "year_kind": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "year_kind_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "year_kind_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "year_kind": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "year_kind"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
         "scenario": {
          "type": "null"
         }
@@ -3698,6 +4480,122 @@
        "string",
        "null"
       ]
+     },
+     "year_kind": {
+      "description": "Axis 'year_kind' of Scenario year. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless year_kind_state is 'read' or 'derived'.",
+      "enum": [
+       "https://openenergyplatform.org/ontology/oeo/OEO_00020097",
+       "out:other_year",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "other year": {
+        "meaning": "Any other year the document states: one that is not part of the time a scenario investigates.",
+        "uri": "out:other_year"
+       },
+       "scenario year": {
+        "meaning": "A scenario year is a time step that has a duration of one year and is part of a scenario horizon. A scenario horizon is a time step that is under investigation and consists entirely of one or more scenario years.",
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020097"
+       }
+      },
+      "x-question": "Is this year a scenario year, a year of the time a scenario of this publication investigates, or another year? Give the words of the quote that show it as value_raw."
+     },
+     "year_kind_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('year_kind_raw'). 'year_kind_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "year_kind_link_source": {
+      "description": "Which source 'year_kind_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "year_kind_producer": {
+      "description": "Who re-read 'year_kind': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "year_kind_quote": {
+      "description": "The verbatim passage carrying 'year_kind'. Present exactly when year_kind_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "year_kind_raw": {
+      "description": "The document's own wording 'year_kind' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "year_kind_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'year_kind': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "year_kind_seen": {
+      "description": "A wording the model noticed for 'year_kind' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "year_kind_source": {
+      "description": "Which source the passage for 'year_kind' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "year_kind_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'year_kind' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "year_kind_window": {
+      "description": "[stage, index] of the window 'year_kind' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -3707,6 +4605,8 @@
      "tier",
      "provenance",
      "value",
+     "year_kind",
+     "year_kind_state",
      "scenario",
      "scenario_state"
     ],
@@ -3739,6 +4639,38 @@
       "then": {
        "required": [
         "reading"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "work": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "work_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "work_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "work": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "work"
        ]
       }
      }
@@ -3935,6 +4867,122 @@
        "string",
        "null"
       ]
+     },
+     "work": {
+      "description": "Axis 'work' of Project acronym. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.",
+      "enum": [
+       "work:this_publication",
+       "out:another_work",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "another work": {
+        "meaning": "A study, report, article or model other than this document that the document presents, compares, reviews or cites.",
+        "uri": "out:another_work"
+       },
+       "this publication": {
+        "meaning": "This document itself, the study it reports and the scenarios it presents.",
+        "uri": "work:this_publication"
+       }
+      },
+      "x-question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+     },
+     "work_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_link_source": {
+      "description": "Which source 'work_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_producer": {
+      "description": "Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "work_quote": {
+      "description": "The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_raw": {
+      "description": "The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "work_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "work_seen": {
+      "description": "A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "work_source": {
+      "description": "Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "work_window": {
+      "description": "[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -3943,7 +4991,9 @@
      "parameter_state",
      "tier",
      "provenance",
-     "value"
+     "value",
+     "work",
+     "work_state"
     ],
     "type": "object",
     "x-kg": {
@@ -3971,6 +5021,38 @@
       "then": {
        "required": [
         "reading"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "work": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "work_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "work_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "work": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "work"
        ]
       }
      }
@@ -4459,6 +5541,122 @@
        }
       ],
       "type": "array"
+     },
+     "work": {
+      "description": "Axis 'work' of Topic keyword. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.",
+      "enum": [
+       "work:this_publication",
+       "out:another_work",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "another work": {
+        "meaning": "A study, report, article or model other than this document that the document presents, compares, reviews or cites.",
+        "uri": "out:another_work"
+       },
+       "this publication": {
+        "meaning": "This document itself, the study it reports and the scenarios it presents.",
+        "uri": "work:this_publication"
+       }
+      },
+      "x-question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+     },
+     "work_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_link_source": {
+      "description": "Which source 'work_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_producer": {
+      "description": "Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "work_quote": {
+      "description": "The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_raw": {
+      "description": "The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "work_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "work_seen": {
+      "description": "A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "work_source": {
+      "description": "Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "work_window": {
+      "description": "[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -4467,7 +5665,9 @@
      "parameter_state",
      "tier",
      "provenance",
-     "value"
+     "value",
+     "work",
+     "work_state"
     ],
     "type": "object",
     "x-kg": {
@@ -4497,6 +5697,38 @@
       "then": {
        "required": [
         "reading"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "work": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "work_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "work_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "work": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "work"
        ]
       }
      }
@@ -4693,6 +5925,122 @@
        "string",
        "null"
       ]
+     },
+     "work": {
+      "description": "Axis 'work' of Funder. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.",
+      "enum": [
+       "work:this_publication",
+       "out:another_work",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "another work": {
+        "meaning": "A study, report, article or model other than this document that the document presents, compares, reviews or cites.",
+        "uri": "out:another_work"
+       },
+       "this publication": {
+        "meaning": "This document itself, the study it reports and the scenarios it presents.",
+        "uri": "work:this_publication"
+       }
+      },
+      "x-question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+     },
+     "work_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_link_source": {
+      "description": "Which source 'work_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_producer": {
+      "description": "Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "work_quote": {
+      "description": "The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_raw": {
+      "description": "The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "work_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "work_seen": {
+      "description": "A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "work_source": {
+      "description": "Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "work_window": {
+      "description": "[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -4701,7 +6049,9 @@
      "parameter_state",
      "tier",
      "provenance",
-     "value"
+     "value",
+     "work",
+     "work_state"
     ],
     "type": "object",
     "x-kg": {
@@ -4737,6 +6087,38 @@
       "then": {
        "required": [
         "reading"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "work": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "work_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "work_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "work": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "work"
        ]
       }
      }
@@ -4933,6 +6315,122 @@
        "string",
        "null"
       ]
+     },
+     "work": {
+      "description": "Axis 'work' of Involved organisation. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.",
+      "enum": [
+       "work:this_publication",
+       "out:another_work",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "another work": {
+        "meaning": "A study, report, article or model other than this document that the document presents, compares, reviews or cites.",
+        "uri": "out:another_work"
+       },
+       "this publication": {
+        "meaning": "This document itself, the study it reports and the scenarios it presents.",
+        "uri": "work:this_publication"
+       }
+      },
+      "x-question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+     },
+     "work_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_link_source": {
+      "description": "Which source 'work_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_producer": {
+      "description": "Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "work_quote": {
+      "description": "The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_raw": {
+      "description": "The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "work_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "work_seen": {
+      "description": "A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "work_source": {
+      "description": "Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "work_window": {
+      "description": "[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -4941,7 +6439,9 @@
      "parameter_state",
      "tier",
      "provenance",
-     "value"
+     "value",
+     "work",
+     "work_state"
     ],
     "type": "object",
     "x-kg": {
@@ -4977,6 +6477,38 @@
       "then": {
        "required": [
         "reading"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "work": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "work_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "work_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "work": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "work"
        ]
       }
      }
@@ -5173,6 +6705,122 @@
        "string",
        "null"
       ]
+     },
+     "work": {
+      "description": "Axis 'work' of Project name. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.",
+      "enum": [
+       "work:this_publication",
+       "out:another_work",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "another work": {
+        "meaning": "A study, report, article or model other than this document that the document presents, compares, reviews or cites.",
+        "uri": "out:another_work"
+       },
+       "this publication": {
+        "meaning": "This document itself, the study it reports and the scenarios it presents.",
+        "uri": "work:this_publication"
+       }
+      },
+      "x-question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+     },
+     "work_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_link_source": {
+      "description": "Which source 'work_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_producer": {
+      "description": "Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "work_quote": {
+      "description": "The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_raw": {
+      "description": "The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "work_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "work_seen": {
+      "description": "A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "work_source": {
+      "description": "Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "work_window": {
+      "description": "[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -5181,7 +6829,9 @@
      "parameter_state",
      "tier",
      "provenance",
-     "value"
+     "value",
+     "work",
+     "work_state"
     ],
     "type": "object",
     "x-kg": {
@@ -5212,6 +6862,38 @@
       "then": {
        "required": [
         "reading"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "work": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "work_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "work_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "work": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "work"
        ]
       }
      }
@@ -6326,6 +8008,122 @@
        }
       ],
       "type": "array"
+     },
+     "work": {
+      "description": "Axis 'work' of Covered sector. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.",
+      "enum": [
+       "work:this_publication",
+       "out:another_work",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "another work": {
+        "meaning": "A study, report, article or model other than this document that the document presents, compares, reviews or cites.",
+        "uri": "out:another_work"
+       },
+       "this publication": {
+        "meaning": "This document itself, the study it reports and the scenarios it presents.",
+        "uri": "work:this_publication"
+       }
+      },
+      "x-question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+     },
+     "work_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_link_source": {
+      "description": "Which source 'work_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_producer": {
+      "description": "Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "work_quote": {
+      "description": "The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_raw": {
+      "description": "The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "work_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "work_seen": {
+      "description": "A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "work_source": {
+      "description": "Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "work_window": {
+      "description": "[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -6334,7 +8132,9 @@
      "parameter_state",
      "tier",
      "provenance",
-     "value"
+     "value",
+     "work",
+     "work_state"
     ],
     "type": "object",
     "x-kg": {
@@ -6364,6 +8164,38 @@
       "then": {
        "required": [
         "reading"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "work": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "work_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "work_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "work": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "work"
        ]
       }
      }
@@ -6745,6 +8577,122 @@
        }
       ],
       "type": "array"
+     },
+     "work": {
+      "description": "Axis 'work' of Sector division. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.",
+      "enum": [
+       "work:this_publication",
+       "out:another_work",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "another work": {
+        "meaning": "A study, report, article or model other than this document that the document presents, compares, reviews or cites.",
+        "uri": "out:another_work"
+       },
+       "this publication": {
+        "meaning": "This document itself, the study it reports and the scenarios it presents.",
+        "uri": "work:this_publication"
+       }
+      },
+      "x-question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+     },
+     "work_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_link_source": {
+      "description": "Which source 'work_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_producer": {
+      "description": "Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "work_quote": {
+      "description": "The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_raw": {
+      "description": "The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "work_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "work_seen": {
+      "description": "A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "work_source": {
+      "description": "Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "work_window": {
+      "description": "[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -6753,7 +8701,9 @@
      "parameter_state",
      "tier",
      "provenance",
-     "value"
+     "value",
+     "work",
+     "work_state"
     ],
     "type": "object",
     "x-kg": {
@@ -6783,6 +8733,38 @@
       "then": {
        "required": [
         "reading"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "work": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "work_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "work_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "work": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "work"
        ]
       }
      }
@@ -7313,6 +9295,122 @@
        }
       ],
       "type": "array"
+     },
+     "work": {
+      "description": "Axis 'work' of Covered technology. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.",
+      "enum": [
+       "work:this_publication",
+       "out:another_work",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-options": {
+       "another work": {
+        "meaning": "A study, report, article or model other than this document that the document presents, compares, reviews or cites.",
+        "uri": "out:another_work"
+       },
+       "this publication": {
+        "meaning": "This document itself, the study it reports and the scenarios it presents.",
+        "uri": "work:this_publication"
+       }
+      },
+      "x-question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+     },
+     "work_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_link_source": {
+      "description": "Which source 'work_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_producer": {
+      "description": "Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "work_quote": {
+      "description": "The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "work_raw": {
+      "description": "The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "work_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "work_seen": {
+      "description": "A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "work_source": {
+      "description": "Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "work_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "work_window": {
+      "description": "[stage, index] of the window 'work' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      }
     },
     "required": [
@@ -7321,7 +9419,9 @@
      "parameter_state",
      "tier",
      "provenance",
-     "value"
+     "value",
+     "work",
+     "work_state"
     ],
     "type": "object",
     "x-kg": {

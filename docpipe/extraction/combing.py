@@ -88,7 +88,7 @@ from dataclasses import dataclass, field
 from functools import partial
 from typing import Callable, Optional
 
-from . import lookup, naming
+from . import fields, lookup, naming
 from .fields import (COORDINATE_KEYS, EXHAUSTED, READ, SAID_UNSTATED,
                      UNANSWERED, UNBACKED, UNIT, UNSTATED)
 from .pipeline import Row, merge_field, row_label
@@ -806,9 +806,20 @@ class Comber:
                             not_in_quote=not_in_quote)
 
         # -- the second reading --------------------------------------------
+        def shut(slot) -> bool:
+            # A coordinate after one that read the value as no value of its
+            # parameter (`fields.closed`) is not asked: never asked, as in
+            # the reading (owner decisions 2026-11-07).
+            before = ordered[:ordered.index(slot)]
+            gone = [row for row in rows if fields.closed(before, row.claim)]
+            for row in gone:
+                if row.claim.get(f"{slot.name}_state") != READ:
+                    row.claim[f"{slot.name}_state"] = fields.OUT_OF_SLICE
+            return len(gone) == len(rows)
+
         near_window = ("table", 1) if table else ("near", 1)
         for slot in (near_slots if near else ()):
-            if rows[0].claim.get(f"{slot.name}_state") == READ:
+            if rows[0].claim.get(f"{slot.name}_state") == READ or shut(slot):
                 continue
             shows = {**({key: piece.text for key, piece in near.items()}),
                      COORDINATES: coordinate_of(slot, unstated=True),
@@ -854,7 +865,7 @@ class Comber:
         listed_first = {"done": False}
         for slot in search_slots:
             if all(row.claim.get(f"{slot.name}_state") == READ
-                   for row in rows):
+                   for row in rows) or shut(slot):
                 continue
             sentence = probes.get(slot.name)
             ranked = self.rank(document_id, [sentence],

@@ -226,6 +226,19 @@ anywhere else), and a merged coordinate is never read in the survey. Which
 of a publication's names mean the same scenario is asked once the publication
 is read, by `docpipe/extraction/naming.py` (below).
 
+Two coordinates say whether a value is a value of its field at all (spec key
+`"keep"`, owner decisions 2026-11-07, see [extraction](../stages/extraction.md)):
+`year_kind` of `scenario_year`, "scenario year" with the OEO definition of
+scenario year and scenario horizon or "other year", and `work` of the
+thirteen `publication_*` and `study_*` fields, "this publication" or "another
+work" the publication presents, compares, reviews or cites. Each is asked
+first and backed by the words of its quote. A value read with the other entry
+is asked nothing further, is asked for once more in its passage's rounds as
+read wrongly, and stays out of the graph, as does one whose entry stayed open
+(`kg.held_back`). A row the catalogue fills (`completion.row_of`) is a copy of
+the row it was found with and carries its work. `read_text` has one section
+per group (`work`, `year_kind`, `scenario`).
+
 The list for one document is computed once, before the harvest starts,
 by `profiles/scenarios/extraction.py`'s `document_axes(conn, document_id)`,
 which returns a dict keyed `scenario_region`. `document_regions`
@@ -829,23 +842,23 @@ Read from `profiles/scenarios/extraction_schema.json` by `scripts/build_docs.py`
 
 | parameter | value | axes | graph node |
 |---|---|---|---|
-| `publication_abstract` | string | `parameter` (one of the spec's parameters) | `scenariobundle` |
-| `publication_author` | string | `parameter` (one of the spec's parameters) | `author` |
-| `publication_date` | string | `parameter` (one of the spec's parameters) | `studyreport` |
-| `publication_doi` | string | `parameter` (one of the spec's parameters) | `studyreport` |
-| `publication_title` | string | `parameter` (one of the spec's parameters) | `studyreport` |
+| `publication_abstract` | string | `parameter` (one of the spec's parameters), `work` (2 options) | `scenariobundle` |
+| `publication_author` | string | `parameter` (one of the spec's parameters), `work` (2 options) | `author` |
+| `publication_date` | string | `parameter` (one of the spec's parameters), `work` (2 options) | `studyreport` |
+| `publication_doi` | string | `parameter` (one of the spec's parameters), `work` (2 options) | `studyreport` |
+| `publication_title` | string | `parameter` (one of the spec's parameters), `work` (2 options) | `studyreport` |
 | `scenario_abstract` | string | `parameter` (one of the spec's parameters), `scenario` (string, or 2 out: entries beside) | `scenariofactsheet` |
 | `scenario_label` | string | `parameter` (one of the spec's parameters) | `scenariofactsheet` |
 | `scenario_region` | string | `parameter` (one of the spec's parameters), `scenario` (string, or 2 out: entries beside), `value` (string) | `scenariofactsheet` |
 | `scenario_type` | string | `parameter` (one of the spec's parameters), `scenario` (string, or 2 out: entries beside), `value` (string) | `scenariofactsheet` |
-| `scenario_year` | string | `parameter` (one of the spec's parameters), `scenario` (string, or 2 out: entries beside) | `scenariofactsheet` |
-| `study_acronym` | string | `parameter` (one of the spec's parameters) | `scenariobundle` |
-| `study_descriptor` | string | `parameter` (one of the spec's parameters), `value` (string) | `scenariobundle` |
-| `study_funder` | string | `parameter` (one of the spec's parameters) | `funder` |
-| `study_organisation` | string | `parameter` (one of the spec's parameters) | `organisation` |
-| `study_project_name` | string | `parameter` (one of the spec's parameters) | `scenariobundle` |
-| `study_sector` | string | `parameter` (one of the spec's parameters), `value` (string) | `scenariobundle` |
-| `study_sector_division` | string | `parameter` (one of the spec's parameters), `value` (string) | `scenariobundle` |
-| `study_technology` | string | `parameter` (one of the spec's parameters), `value` (string) | `scenariobundle` |
+| `scenario_year` | string | `parameter` (one of the spec's parameters), `scenario` (string, or 2 out: entries beside), `year_kind` (2 options) | `scenariofactsheet` |
+| `study_acronym` | string | `parameter` (one of the spec's parameters), `work` (2 options) | `scenariobundle` |
+| `study_descriptor` | string | `parameter` (one of the spec's parameters), `value` (string), `work` (2 options) | `scenariobundle` |
+| `study_funder` | string | `parameter` (one of the spec's parameters), `work` (2 options) | `funder` |
+| `study_organisation` | string | `parameter` (one of the spec's parameters), `work` (2 options) | `organisation` |
+| `study_project_name` | string | `parameter` (one of the spec's parameters), `work` (2 options) | `scenariobundle` |
+| `study_sector` | string | `parameter` (one of the spec's parameters), `value` (string), `work` (2 options) | `scenariobundle` |
+| `study_sector_division` | string | `parameter` (one of the spec's parameters), `value` (string), `work` (2 options) | `scenariobundle` |
+| `study_technology` | string | `parameter` (one of the spec's parameters), `value` (string), `work` (2 options) | `scenariobundle` |
 
 [Back to the index](../README.md)
