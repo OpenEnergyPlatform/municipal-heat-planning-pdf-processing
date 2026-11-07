@@ -20028,6 +20028,75 @@
      "doc": {
       "type": "integer"
      },
+     "input": {
+      "type": "object"
+     },
+     "kind": {
+      "type": "string"
+     },
+     "ms": {
+      "type": "integer"
+     },
+     "names": {
+      "type": "integer"
+     },
+     "once": {
+      "type": "boolean"
+     },
+     "output": {
+      "type": "object"
+     },
+     "places": {
+      "type": "integer"
+     },
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "sent_at": {
+      "type": "number"
+     },
+     "t": {
+      "const": "naming_several_ask"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt",
+     "corrections",
+     "kind",
+     "names",
+     "places"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
      "figure": {},
      "group": {
       "type": [
@@ -20554,6 +20623,34 @@
      "t",
      "doc",
      "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "kind": {
+      "type": "string"
+     },
+     "resolved": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "naming_several"
+     },
+     "wordings": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "kind",
+     "wordings",
+     "resolved"
     ],
     "type": "object"
    },

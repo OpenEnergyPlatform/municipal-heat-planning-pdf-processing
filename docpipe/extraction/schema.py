@@ -900,7 +900,8 @@ def stamp_schema() -> dict:
 # search sentences, the frame, the review and the compute step
 # (`runner._asked`).
 ASK_STAGES = ("survey", "read_values", "read_text", "comb", "comb_check",
-              "naming", "naming_groups", "years", "settings", "seek_free",
+              "naming", "naming_groups", "naming_several", "years",
+              "settings", "seek_free",
               "phrase", "frame", "review", "compute")
 
 
@@ -1125,6 +1126,23 @@ def trace_schema() -> dict:
                               "completion_tokens": {"type": ["integer",
                                                             "null"]},
                               "ms": {"type": "integer"}},
+        # The request about the words of several things (owner decision
+        # 2026-11-07): the `kind` of thing, how many `names` it shows and in
+        # how many `places` the words stand.
+        "naming_several_ask": {"attempt": {"type": "integer"},
+                               "corrections": {"type": "integer"},
+                               "kind": {"type": "string"},
+                               "names": {"type": "integer"},
+                               "places": {"type": "integer"},
+                               "prompt_tokens": {"type": ["integer", "null"]},
+                               "completion_tokens": {"type": ["integer",
+                                                             "null"]},
+                               "ms": {"type": "integer"}},
+        # What it came to for one kind: the distinct `wordings` asked and
+        # how many of them the answer `resolved` into things.
+        "naming_several": {"kind": {"type": "string"},
+                           "wordings": {"type": "integer"},
+                           "resolved": {"type": "integer"}},
         # What the naming of one kind came to: the `names` read, the `things`
         # they mean, how many names mean `several`, the `groups` the request
         # over all names gave, and how many names were `asked` against their

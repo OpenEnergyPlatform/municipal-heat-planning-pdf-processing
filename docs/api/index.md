@@ -109,7 +109,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.graphkit](docpipe.extraction.graphkit.md): The small tools the graph writers share. (7 functions)
 - [docpipe.extraction.identity](docpipe.extraction.identity.md): Which value a harvested row is, and where its passage is now. (7 functions)
 - [docpipe.extraction.lookup](docpipe.extraction.lookup.md): What the model may ask of the rest of one document, resolved by code. (1 class, 7 functions)
-- [docpipe.extraction.naming](docpipe.extraction.naming.md): Which of a document's names mean the same thing, asked once the document is read (owner decisions 2026-11-06). (1 class, 20 functions)
+- [docpipe.extraction.naming](docpipe.extraction.naming.md): Which of a document's names mean the same thing, asked once the document is read (owner decisions 2026-11-06). (1 class, 25 functions)
 - [docpipe.extraction.pipeline](docpipe.extraction.pipeline.md): The harvest loop that turns a document's retrieved passages into verified value tuples. (6 classes, 50 functions)
 - [docpipe.extraction.places](docpipe.extraction.places.md): Where a document says something to each axis, read once per document before its coordinates are searched. (2 classes, 8 functions)
 - [docpipe.extraction.preflight](docpipe.extraction.preflight.md): A profile, everything a corpus run rests on. (11 functions)
@@ -274,7 +274,7 @@ is for and what it hands to what; this is the reference.
 - [profiles.scenarios.extraction](profiles.scenarios.extraction.md): Extraction stage wiring: where the scenarios spec lives, and the list that is only closed once a document is named. (6 functions)
 - [profiles.scenarios.front](profiles.scenarios.front.md): What a publication says of itself, and which reading of it goes first (owner decisions 2026-11-05). (5 functions)
 - [profiles.scenarios.inference](profiles.scenarios.inference.md): What the answer loop says around the scenarios prompts.
-- [profiles.scenarios.kg](profiles.scenarios.kg.md): Harvested publication metadata to OEKG Turtle. (14 functions)
+- [profiles.scenarios.kg](profiles.scenarios.kg.md): Harvested publication metadata to OEKG Turtle. (15 functions)
 - [profiles.scenarios.oekg_api](profiles.scenarios.oekg_api.md): What the OEKG scenario-bundle API would be asked, and what it would answer. (1 class, 14 functions)
 - [profiles.scenarios.preprocessing](profiles.scenarios.preprocessing.md): What text extraction has to know about English.
 - [profiles.scenarios.profile](profiles.scenarios.profile.md): Scenario literature: publications on climate and energy scenarios.

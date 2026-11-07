@@ -324,8 +324,14 @@ def body(study: dict, known: dict) -> dict:
         if types:
             item["scenario_types"] = types
         if scenario.get("regions"):
-            item["study_regions"] = [{"iri": iri, "label": known.get(iri, iri)}
-                                     for iri in scenario["regions"]]
+            # A region the OEKG holds is referenced by its IRI; one the
+            # document names beyond its list goes by its printed name alone,
+            # and the server makes the node (owner decision 2026-11-07).
+            printed = scenario.get("region_names") or {}
+            item["study_regions"] = [
+                {"iri": iri, "label": known[iri]} if iri in known
+                else {"label": printed.get(iri, iri)}
+                for iri in scenario["regions"]]
         if scenario.get("years"):
             item["years"] = list(scenario["years"])
         scenarios.append(item)
@@ -559,11 +565,12 @@ def graph(payload: dict, known: dict):
         text(scenario, kg.P_SCENARIO_ABSTRACT, item.get("abstract"))
         listed(scenario, kg.P_SCENARIO_TYPE, item.get("scenario_types"))
         for region in item.get("study_regions") or ():
-            target = URIRef(region["iri"])
+            # A region sent by its name alone is a node the server makes.
+            target = URIRef(region["iri"]) if region.get("iri")                 else node("region")
             out.add((scenario, oeo(API_STUDY_REGION), target))
             out.add((target, RDF.type, oeo(API_CLS_STUDY_REGION)))
-            out.add((target, RDFS.label, Literal(known.get(region["iri"],
-                                                           region["label"]))))
+            out.add((target, RDFS.label, Literal(known.get(
+                region.get("iri"), region["label"]))))
         for year in item.get("years") or ():
             stamp(scenario, kg.P_SCENARIO_YEAR, year)
     return out

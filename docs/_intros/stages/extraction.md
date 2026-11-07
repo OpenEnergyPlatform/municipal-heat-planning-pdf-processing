@@ -715,8 +715,8 @@ the passages read so under `front`.
 
 A run harvests from the survey of each plan wherever its spec names groups
 (`runner.surveyed_flow`), and then the profile must write the prompts `extraction/survey`, `read_values`, `read_text`, `comb`, `comb_check`, `settings` and `seek`
-(`runner.SURVEY_PROMPT_IDS`), and `extraction/naming_groups` and
-`extraction/naming` where its spec merges names (`naming.NAMING_PROMPT_IDS`,
+(`runner.SURVEY_PROMPT_IDS`), and `extraction/naming_groups`,
+`extraction/naming` and `extraction/naming_several` where its spec merges names (`naming.NAMING_PROMPT_IDS`,
 below; `runner.survey_prompt_ids` lists them). kwp and scenarios do. A profile whose spec names
 groups and lacks one of them is broken, and the run stops at the start and names
 the prompt, for every run and every probe, as `spec.load` stops at a broken group
@@ -1883,6 +1883,18 @@ marked `<coordinate>_short` (owner decision 2026-11-07). Applied to the
 answers of the probe, this reading gives 12 groups of names with no visible
 error. The answer quotes nothing, since each name keeps the quote it was read
 with.
+
+**The words of several things** (owner decision 2026-11-07): a value stated
+for several things whose names the text shown does not give takes the entry
+beside the names for that (`naming.SEVERAL`, "several scenarios") with the
+words that name them. Once the names are put together, one request per
+distinct wording and document (`extraction/naming_several`,
+`Namer._resolve`) shows the words with their quote and `CONTEXT_CHARS` around
+it and every thing of the document under a number with its quote; the answer
+is the numbers of the things the words stand for, an empty list where the
+document does not say. The rows with those words get them under
+`<coordinate>_means`, and the graph writes them to each; without an answer
+they go to none.
 
 Nothing is checked beyond the list. A reply without its key is asked again, as
 a `corrections` follow-up after its answer (owner decisions 2026-11-07), with

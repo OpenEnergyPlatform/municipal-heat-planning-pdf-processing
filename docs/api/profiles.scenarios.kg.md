@@ -123,6 +123,15 @@ def in_graph(value) -> bool
 
 Is this answer something the graph takes, or one of the out: entries?
 
+### printed_region
+
+```python
+def printed_region(row: dict) -> Optional[str]
+```
+
+The name of a study region the list did not carry, as the row's
+document prints it (`value_raw`); None for any other row.
+
 ### region_members
 
 ```python

@@ -78,11 +78,15 @@ def regions_written(*uris):
         predicate=URIRef(OEO + "OEO_00020220"))}, text
 
 
-def test_a_group_is_written_as_its_members_and_an_out_entry_as_none():
+def test_a_group_is_written_as_its_members_and_an_unlisted_one_as_printed():
     written, text = regions_written("aggregate:iiasa:Europe (R10)")
     assert written == {REGION + "France", REGION + "Spain"}
     assert "NDC covers Europe" in text
-    assert regions_written("out:multiregion")[0] == set()
+    # A group the list lacks is a study region of its own, named as printed
+    # (owner decision 2026-11-07), never the members of a nearby group.
+    (one,) = regions_written("out:multiregion")[0]
+    assert one.startswith(REGION) and one not in written
+    assert "rdfs:label \"Europe\"" in regions_written("out:multiregion")[1]
 
 
 def offered(monkeypatch, text, families=FAMILIES, codes=None):

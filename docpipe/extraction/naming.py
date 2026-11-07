@@ -37,6 +37,17 @@ and means itself. Each row keeps the name it was read as and gets the names
 of what it means under `<coordinate>_means`, `value_means` for its own
 value, and the graph writes the row to each of them.
 
+A value stated for several things whose names the text shown does not give
+takes the entry beside the names for that (`SEVERAL`, "several scenarios"),
+with the words that name them. Once the names are put together, one request
+per distinct such wording and document (owner decision 2026-11-07, "Gruppe +
+alle Szenarien") shows the words with their quote and `CONTEXT_CHARS` around
+it, and every thing of the document under a number with the quote its name
+was read with; the model answers with the numbers of the things the words
+stand for, an empty list where the document does not say. Each row with
+those words gets them under `<coordinate>_means`; one the answer names none
+for keeps the entry and goes to no thing (`several_of`, `Namer._members`).
+
 Nothing is checked beyond the list: a reply without its key, or with a
 number the request did not show, is asked once more with its reason
 (`key_missing`, `name_not_listed`); a name answered in neither means itself,
@@ -62,9 +73,13 @@ from .wording import say
 
 NAMING_PROMPT_ID = "extraction/naming"
 GROUPS_PROMPT_ID = "extraction/naming_groups"
-# The naming's prompts: the request over all names for the candidates, and
-# the request about one name.
-NAMING_PROMPT_IDS = (GROUPS_PROMPT_ID, NAMING_PROMPT_ID)
+SEVERAL_PROMPT_ID = "extraction/naming_several"
+# The naming's prompts: the request over all names for the candidates, the
+# request about one name, and the request about the words of several things.
+NAMING_PROMPT_IDS = (GROUPS_PROMPT_ID, NAMING_PROMPT_ID, SEVERAL_PROMPT_ID)
+# The entry beside the names a value stated for several of them takes where
+# the text shown does not give their names (owner decision 2026-11-07).
+SEVERAL = "out:several"
 # The field of the message that follows a wrong answer (owner decisions
 # 2026-11-07).
 FOLLOWS = (CORRECTIONS,)
@@ -459,6 +474,72 @@ def mark(rows: list, slots: dict, meant: dict,
     return marked
 
 
+def several_of(rows: list, slots: dict) -> dict:
+    """{kind: {words: [(row, key)]}} of every row whose coordinate *key*
+    read `SEVERAL` with the words that name the things (`<key>_raw`), one
+    entry per wording, compared without case and outer spaces, in the
+    order the rows read them."""
+    out: dict = {}
+    for row in rows:
+        for key, kind in (slots.get(row.get("parameter")) or {}).items():
+            if key == VALUE or row.get(key) != SEVERAL \
+                    or row.get(f"{key}_state") != fields.READ:
+                continue
+            words = str(row.get(f"{key}_raw") or "").strip()
+            if not words:
+                continue
+            group = out.setdefault(kind, {})
+            same = next((one for one in group
+                         if one.casefold() == words.casefold()), words)
+            group.setdefault(same, []).append((row, key))
+    return out
+
+
+def several_payload(kind: str, words: str, places: list, numbers: dict,
+                    quotes: dict) -> dict:
+    """One request: the *words* of several things with the texts of the
+    places they were read at (*places*), and every thing of the document
+    under its number (*numbers*) with the quote its name was read with."""
+    return {"kind": kind, "group": {"words": words, "places": list(places)},
+            "names": {number: {"name": one, "quote": quotes.get(one, "")}
+                      for one, number in numbers.items()}}
+
+
+def several_format(numbers: list) -> dict:
+    """The numbers of the things the words stand for, under `MEANT`, each
+    one of *numbers*; none where the document does not say."""
+    schema = {"type": "object",
+              "properties": {MEANT: {
+                  "type": "array",
+                  "items": {"type": "string", "enum": list(numbers)}}},
+              "required": [MEANT], "additionalProperties": False}
+    return {"type": "json_schema",
+            "json_schema": {"name": "naming_several_reply", "schema": schema}}
+
+
+def several_example(numbers: dict) -> dict:
+    """The reply the prompt shows: the words standing for the first thing."""
+    return {MEANT: list(numbers.values())[:1]}
+
+
+def members_of(reply, numbers: dict) -> tuple:
+    """([things the words stand for], None) of a *reply* ({"means":
+    [numbers]}) whose list holds only numbers the request showed, empty
+    where it names none; (None, what was wrong) of any other: a reply
+    without "means" (`key_missing`), or one with a number the request did
+    not show (`name_not_listed`)."""
+    name_of = {number: one for one, number in numbers.items()}
+    if not isinstance(reply, dict) or MEANT not in reply:
+        return None, {"what": say("key_missing", key=MEANT)}
+    given = reply[MEANT]
+    if isinstance(given, list) and all(
+            isinstance(one, str) and one in name_of for one in given):
+        return list(dict.fromkeys(name_of[one] for one in given)), None
+    return None, {"value": given, "what": say(
+        "name_not_listed", name=MEANT,
+        given=json.dumps(given, ensure_ascii=False))}
+
+
 class Namer:
     """(document_id, rows, passages) -> {kind: {name: [names it means]}},
     each row marked on the way (`mark`).
@@ -469,7 +550,9 @@ class Namer:
     conversation (`thread.Thread`): the first shows *payload*, a later one
     what was wrong with the answer it follows (*follow*, owner decisions
     2026-11-07); the reply as a dict, CUT, or None, *example* the reply its
-    prompt shows. *embed(texts)* is a vector per text
+    prompt shows. *ask_several*, with the same arguments, is the request
+    about the words of several things (`several_payload`); without it they
+    stay with no thing. *embed(texts)* is a vector per text
     (`context_of`). Without *ask_groups*, or without *embed*, that source
     gives no candidates. *passages* is {(owner kind, owner id): Source} of
     the document in the order of the plan. The requests about the names of
@@ -478,10 +561,12 @@ class Namer:
 
     def __init__(self, spec, ask: Callable, trace: Optional[Callable] = None,
                  pool=None, ask_groups: Optional[Callable] = None,
-                 embed: Optional[Callable] = None):
+                 embed: Optional[Callable] = None,
+                 ask_several: Optional[Callable] = None):
         self.slots = merged_slots(spec)
         self.ask = ask
         self.ask_groups = ask_groups
+        self.ask_several = ask_several
         self.embed = embed
         self.trace = trace
         self.pool = pool
@@ -489,7 +574,8 @@ class Namer:
     def __call__(self, document_id: int, rows: list, passages: dict) -> dict:
         meant: dict = {}
         short: dict = {}
-        for kind, names in names_of(rows, self.slots).items():
+        read = names_of(rows, self.slots)
+        for kind, names in read.items():
             order = list(names)
             noted: dict = {}
             short[kind] = set()
@@ -504,7 +590,73 @@ class Namer:
                            several=sum(1 for each in meant[kind].values()
                                        if len(each) > 1), **noted)
         mark(rows, self.slots, meant, short)
+        self._resolve(document_id, rows, passages, meant, read)
         return meant
+
+    def _resolve(self, document_id: int, rows: list, passages: dict,
+                 meant: dict, read: dict) -> None:
+        """Each row that read the words of several things gets the things
+        they stand for under `<key>_means`, one request per wording and
+        kind (`several_of`); a wording answered with none, or not answered,
+        leaves its rows with no thing."""
+        if self.ask_several is None:
+            return
+        for kind, groups in several_of(rows, self.slots).items():
+            things = list(dict.fromkeys(
+                thing for each in (meant.get(kind) or {}).values()
+                for thing in each))
+            if not things:
+                continue
+            quotes = {thing: next((quote for _owner, quote
+                                   in (read.get(kind) or {}).get(thing, ())
+                                   if quote), thing) for thing in things}
+            resolved = 0
+            for words, hits in groups.items():
+                places = list(dict.fromkeys(
+                    (tuple(row.get(f"{key}_source") or ()) or (None, None),
+                     row.get(f"{key}_quote") or "") for row, key in hits))
+                shown, at = places_of({words: places}, passages)
+                texts = [shown[place] for place in at.get(words, [])]
+                members = self._members(document_id, kind, words, texts,
+                                        things, quotes)
+                if members:
+                    resolved += 1
+                    for row, key in hits:
+                        row[f"{key}{MEANS}"] = list(members)
+            if self.trace is not None:
+                self.trace("naming_several", document_id, kind=kind,
+                           wordings=len(groups), resolved=resolved)
+
+    def _members(self, document_id: int, kind: str, words: str, texts: list,
+                 things: list, quotes: dict) -> Optional[list]:
+        """[the things *words* stand for] of *things*: one request, and one
+        more where the reply was wrong; None where neither answered. A
+        request that does not fit is asked for each half of the things, and
+        the halves' answers are joined."""
+        numbers = numbered(things)
+        shape = several_format(list(numbers.values()))
+        example = several_example(numbers)
+        thread, follow = Thread(), None
+        for _ in range(2):
+            reply = self.ask_several(
+                several_payload(kind, words, texts, numbers, quotes), shape,
+                document_id, kind, example, thread, follow)
+            if reply == CUT:
+                if len(things) < 2:
+                    return None
+                half = len(things) // 2
+                joined: list = []
+                for part in (things[:half], things[half:]):
+                    joined += self._members(document_id, kind, words, texts,
+                                            part, quotes) or []
+                return joined
+            if not isinstance(reply, dict):
+                return None
+            members, wrong = members_of(reply, numbers)
+            if members is not None:
+                return members
+            follow = {CORRECTIONS: wrong}
+        return None
 
     def answered(self, document_id: int, kind: str, order: list,
                  names: dict, passages: dict,

@@ -209,8 +209,10 @@ spelling "historical"), a value of a past or the current year,
 measured, observed or balanced, which belongs to no scenario, as KWP's closed
 list has "Bestand", and `out:several` (label "several scenarios", spelling "all
 scenarios"), a value stated for several scenarios that the text shown does not
-name one by one, which is given to no scenario of its own (owner decision
-2026-11-07, above); `read_text` and `comb` explain them and `value_raw`
+name one by one, which goes to the scenarios a request after the naming
+finds these words stand for, one request per wording and document, and to none
+where the publication does not say (owner decisions 2026-11-07,
+`naming.SEVERAL`); `read_text` and `comb` explain them and `value_raw`
 (`Axis.beside`, see [extraction](../stages/extraction.md)). The value of `scenario_label` and the
 `scenario` axis of the other four parameters (`scenario_type`,
 `scenario_abstract`, `scenario_region`, `scenario_year`, together

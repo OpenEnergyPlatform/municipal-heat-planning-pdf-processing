@@ -500,3 +500,52 @@ def test_the_gate_shuts_on_a_serializer_that_does_not_build():
     reasons = gate.check(Path("h"), Path("db"), Path("out.ttl"),
                          profile=_Profile())
     assert reasons and "does not build" in reasons[0]
+
+
+# Promise: a region the list does not carry is a study region node of its
+# own, labelled with the name the document prints, AND one with no printed
+# name reaches no node (owner decision 2026-11-07).
+def regions_of(raw):
+    rows = [{"parameter": "publication_title", "value": "A Study",
+             "quote": "A Study"},
+            {"parameter": "scenario_label", "value": "NDC", "value_uri": "NDC",
+             "value_raw": "NDC", "quote": "the NDC scenario"},
+            {"parameter": "scenario_region", "value": "several regions",
+             "value_uri": "out:multiregion", "value_raw": raw,
+             "scenario": "NDC", "scenario_raw": "NDC",
+             "quote": "NDC for OECD Europe"}]
+    serializer = kg.make_serializer(Path("no-such.db"), model=oekg())
+    graph = Graph().parse(data=serializer("doc", rows), format="turtle")
+    label = URIRef("http://www.w3.org/2000/01/rdf-schema#label")
+    return [str(graph.value(node, label)) for node in
+            graph.objects(predicate=URIRef(OEO + "OEO_00020220"))]
+
+
+def test_a_region_the_list_lacks_is_its_own_node_named_as_printed():
+    assert regions_of("OECD Europe") == ["OECD Europe"]
+    # the failure by construction: no printed name, no region
+    assert regions_of("") == []
+
+
+# Promise: a scenario's acronym is the short name the naming marked among its
+# names, AND without one it is the scenario's name (owner decision
+# 2026-11-07).
+def acronyms_of(short_marked):
+    rows = [{"parameter": "publication_title", "value": "A Study",
+             "quote": "A Study"},
+            {"parameter": "scenario_label", "value": "Distributed Generation",
+             "quote": "Distributed Generation",
+             "value_means": ["Distributed Generation"]},
+            {"parameter": "scenario_label", "value": "ENTSO-E DG",
+             "quote": "ENTSO-E DG", "value_means": ["Distributed Generation"],
+             **({"value_short": True} if short_marked else {})}]
+    serializer = kg.make_serializer(Path("no-such.db"), model=oekg())
+    graph = Graph().parse(data=serializer("doc", rows), format="turtle")
+    return [str(o) for o in graph.objects(
+        predicate=URIRef("http://purl.org/dc/terms/acronym"))]
+
+
+def test_the_printed_short_name_is_the_acronym_of_its_scenario():
+    assert acronyms_of(True) == ["ENTSO-E DG"]
+    # the failure by construction: no short name, the name is the acronym
+    assert acronyms_of(False) == ["Distributed Generation"]

@@ -955,27 +955,65 @@ def test_the_combing_shows_every_name_read_so_far_once():
 
 
 # Promise: a name the naming answers as a short name marks its rows
-# `value_short`, AND the graph writes that printed short name as its
-# scenario's acronym; a scenario without one keeps its name as acronym
-# (owner decision 2026-11-07).
-def test_a_printed_short_name_is_the_acronym_of_its_scenario():
-    from pathlib import Path
-    from profiles.scenarios import kg
+# `value_short`, AND one it does not answer so stays unmarked (owner decision
+# 2026-11-07; the graph's side is in test_graph_from_shapes.py).
+def test_a_name_answered_as_short_marks_its_rows():
     long, short = "Distributed Generation", "ENTSO-E DG"
 
-    def graph_of(shorts):
-        rows = [{"parameter": "publication_title", "value": "Net-zero EU",
-                 "quote": "Net-zero EU"}] + rows_of(long, short)
+    def marked(shorts):
+        rows = rows_of(long, short)
         made, _, _, _, _ = namer(turns({long: [[long, short]],
                                         short: [[short, long]]},
                                        shorts=shorts))
         made(7, rows, passages_of([long, short]))
-        marked = [row["value"] for row in rows if row.get("value_short")]
-        turtle = kg.make_serializer(Path("no-such.db"))("doc", rows)
-        return marked, turtle
-    marked, turtle = graph_of({short})
-    assert marked == [short]
-    assert f'dc:acronym "{short}"' in turtle
-    # the failure by construction: no short name, the name is the acronym
-    marked, turtle = graph_of(set())
-    assert marked == [] and f'dc:acronym "{long}"' in turtle
+        return [row["value"] for row in rows if row.get("value_short")]
+    assert marked({short}) == [short]
+    # the failure by construction: no short name answered, none marked
+    assert marked(set()) == []
+
+
+# Promise: the words of several scenarios are asked once per wording and
+# document, against every scenario of the document, AND the rows with those
+# words get the scenarios the answer names; an answer naming none leaves
+# them with no scenario. The graph writes such a row to each of them, AND to
+# none without them (owner decision 2026-11-07).
+def several_rows(*names):
+    rows = rows_of(*names)
+    for index, words in enumerate(("all scenarios", "All Scenarios")):
+        rows.append({"parameter": "scenario_year", "value": f"20{40 + index}",
+                     "quote": f"by 20{40 + index} in {words}",
+                     "scenario": naming.SEVERAL, "scenario_raw": words,
+                     "scenario_state": READ,
+                     "scenario_quote": f"by 20{40 + index} in {words}",
+                     "scenario_source": ["section", 0]})
+    return rows
+
+
+def resolve(answer):
+    asked = []
+
+    def ask_several(payload, shape, document_id, kind, example=None,
+                    thread=None, follow=None):
+        asked.append(payload)
+        number = {entry["name"]: key for key, entry in payload["names"].items()}
+        return {"means": [number[one] for one in answer]}
+    made = naming.Namer(SPEC, turns(), ask_groups=lambda *a, **k: {"groups": []},
+                        ask_several=ask_several)
+    rows = several_rows(LCEO, TECH)
+    made(7, rows, passages_of([LCEO, TECH]))
+    return rows, asked
+
+
+def test_the_words_of_several_scenarios_get_the_scenarios_they_stand_for():
+    rows, asked = resolve([LCEO, TECH])
+    assert len(asked) == 1
+    assert set(names_shown(asked[0]).values()) == {LCEO, TECH}
+    several = [row for row in rows if row.get("scenario") == naming.SEVERAL]
+    assert [row.get("scenario_means") for row in several] == [[LCEO, TECH]] * 2
+    from profiles.scenarios import kg
+    assert kg.scenario_names(several[0]) == [LCEO, TECH]
+    # the failure by construction: the answer names none
+    rows, _ = resolve([])
+    several = [row for row in rows if row.get("scenario") == naming.SEVERAL]
+    assert all("scenario_means" not in row for row in several)
+    assert kg.scenario_names(several[0]) == []

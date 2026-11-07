@@ -959,7 +959,7 @@ The prompt's own wording:
 
 <details><summary>What it may answer beside a name (2)</summary>
 
-- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value is given to no scenario of its own.
+- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.
   - also written: all scenarios
 - **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
   - also written: historical
@@ -1193,7 +1193,7 @@ How the row becomes a node:
 
 <details><summary>Why</summary>
 
-The object is an OEKG region individual that already exists over there and is only referenced. A wording the list did not hold mints nothing: writing our own gloss under oekg/region/ would put a 250th region beside the 249 real ones. The predicate is the one the closed ScenarioShape names. Its declared domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET; the shapes win over that mismatch (owner decision 2026-10-22), which is the ontology side's to settle.
+The object is an OEKG region individual that already exists over there and is only referenced; a group of countries is written as its members. A region the list did not hold ('several regions', 'other region') is a study region node of its own, minted from and labelled with the words the document prints (owner decision 2026-11-07); the shapes ask only for a node of the class study region. The predicate is the one the closed ScenarioShape names. Its declared domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET; the shapes win over that mismatch (owner decision 2026-10-22), which is the ontology side's to settle.
 
 </details>
 
@@ -1299,7 +1299,7 @@ The prompt's own wording:
 
 <details><summary>What it may answer beside a name (2)</summary>
 
-- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value is given to no scenario of its own.
+- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.
   - also written: all scenarios
 - **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
   - also written: historical
@@ -1538,7 +1538,7 @@ The prompt's own wording:
 
 <details><summary>What it may answer beside a name (2)</summary>
 
-- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value is given to no scenario of its own.
+- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.
   - also written: all scenarios
 - **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
   - also written: historical
@@ -1811,7 +1811,7 @@ The prompt's own wording:
 
 <details><summary>What it may answer beside a name (2)</summary>
 
-- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value is given to no scenario of its own.
+- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.
   - also written: all scenarios
 - **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
   - also written: historical
@@ -3265,7 +3265,7 @@ How the coordinate 'value' ended. Always present: a missing key and a refused re
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is closed. An entry beginning 'out:' is a deliberate non-class answer and mints no node.
 
-<details><summary>What it may answer (18)</summary>
+<details><summary>What it may answer (17)</summary>
 
 - **BSI-KritisV sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00360044` — The BSI-KritisV sector division is a sector division by the German regulation BSI-Kritisverordnung (BSI-KritisV) defining eight sectors that contain critical infrastructures.
 - **CRF sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00010055` — The common reporting format (CRF) is a sector division used for compiling national inventory reports on greenhouse gas emissions and providing emission relevant data in so called CRF tables.
@@ -3289,8 +3289,6 @@ The energy balance expresses all forms of energy in a common accounting unit. Th
 - **nace_ sectors** → `https://openenergyplatform.org/ontology/oeo/OEO_00000291` — The Statistical classification of economic activities in the European Community, abbreviated as NACE, is the classification of economic activities in the European Union (EU); the term NACE is derived from the French Nomenclature statistique des activités économiques dans la Communauté européenne. Various NACE versions have been developed since 1970.
 
 NACE is a four-digit classification providing the framework for collecting and presenting a large range of statistical data according to economic activity in the fields of economic statistics (e.g. production, employment and national accounts) and in other statistical domains developed within the European statistical system (ESS).
-- **none of these divisions** → `out:not_in_list` — The text names a sector division that none of these classes matches. Not to be confused with the text naming no division at all: that is the answer that these passages do not state it.
-  - also written: the division the text names is not in the list
 - **sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00000368` — A sector division is a specific way to subdivide a system.
 
 </details>
@@ -3550,7 +3548,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 
 One event per line; `t` names it and `doc` the document. An event that reports a model request carries it as sent (`input`) and what came back (`output`); a text the requests repeat is a `piece` they refer to. Read by scripts/trace_report.py.
 
-39 record kinds, told apart by `t`:
+41 record kinds, told apart by `t`:
 
 - `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
 - `anchor`: `doc`, `parameter`, `text`
@@ -3574,6 +3572,7 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `comb_check_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `naming_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `places`, `prompt_tokens`, `sent_at`
 - `naming_groups_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `prompt_tokens`, `sent_at`
+- `naming_several_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `places`, `prompt_tokens`, `sent_at`
 - `years_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `settings_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `seek_free_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
@@ -3581,6 +3580,7 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `frame_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `review_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `compute_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
+- `naming_several`: `doc`, `kind`, `resolved`, `wordings`
 - `naming`: `asked`, `doc`, `groups`, `kind`, `names`, `several`, `things`, `why`
 - `read`: `asked`, `corrected`, `doc`, `failed`, `kind`, `owner`, `parameter`, `unanswered`, `unread`, `values`, `why`
 - `comb`: `anew`, `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `judged`, `kind`, `listed`, `missed`, `near`, `near_read`, `open`, `owner`, `parameter`, `rows`, `searched`, `table_rows`, `turned`

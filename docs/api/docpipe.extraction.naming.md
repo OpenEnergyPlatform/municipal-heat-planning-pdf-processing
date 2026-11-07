@@ -40,6 +40,17 @@ and means itself. Each row keeps the name it was read as and gets the names
 of what it means under `<coordinate>_means`, `value_means` for its own
 value, and the graph writes the row to each of them.
 
+A value stated for several things whose names the text shown does not give
+takes the entry beside the names for that (`SEVERAL`, "several scenarios"),
+with the words that name them. Once the names are put together, one request
+per distinct such wording and document (owner decision 2026-11-07, "Gruppe +
+alle Szenarien") shows the words with their quote and `CONTEXT_CHARS` around
+it, and every thing of the document under a number with the quote its name
+was read with; the model answers with the numbers of the things the words
+stand for, an empty list where the document does not say. Each row with
+those words gets them under `<coordinate>_means`; one the answer names none
+for keeps the entry and goes to no thing (`several_of`, `Namer._members`).
+
 Nothing is checked beyond the list: a reply without its key, or with a
 number the request did not show, is asked once more with its reason
 (`key_missing`, `name_not_listed`); a name answered in neither means itself,
@@ -68,7 +79,9 @@ request over all names (`groups_payload`), each a message of a
 conversation (`thread.Thread`): the first shows *payload*, a later one
 what was wrong with the answer it follows (*follow*, owner decisions
 2026-11-07); the reply as a dict, CUT, or None, *example* the reply its
-prompt shows. *embed(texts)* is a vector per text
+prompt shows. *ask_several*, with the same arguments, is the request
+about the words of several things (`several_payload`); without it they
+stay with no thing. *embed(texts)* is a vector per text
 (`context_of`). Without *ask_groups*, or without *embed*, that source
 gives no candidates. *passages* is {(owner kind, owner id): Source} of
 the document in the order of the plan. The requests about the names of
@@ -79,7 +92,8 @@ one kind run in *pool* where one is given.
 ```python
 def __init__(self, spec, ask: Callable, trace: Optional[Callable] = None,
              pool=None, ask_groups: Optional[Callable] = None,
-             embed: Optional[Callable] = None)
+             embed: Optional[Callable] = None,
+             ask_several: Optional[Callable] = None)
 ```
 
 #### Namer.answered
@@ -314,5 +328,56 @@ Each row's names under `<key>_means` (`VALUE`: `value_means`): the
 names of the things it means (*meant*, {kind: {name: [names]}}); a row
 whose name the naming called a short name (*short*, {kind: {names}})
 gets `<key>_short`. How many names were marked.
+
+### several_of
+
+```python
+def several_of(rows: list, slots: dict) -> dict
+```
+
+{kind: {words: [(row, key)]}} of every row whose coordinate *key*
+read `SEVERAL` with the words that name the things (`<key>_raw`), one
+entry per wording, compared without case and outer spaces, in the
+order the rows read them.
+
+### several_payload
+
+```python
+def several_payload(kind: str, words: str, places: list, numbers: dict,
+                    quotes: dict) -> dict
+```
+
+One request: the *words* of several things with the texts of the
+places they were read at (*places*), and every thing of the document
+under its number (*numbers*) with the quote its name was read with.
+
+### several_format
+
+```python
+def several_format(numbers: list) -> dict
+```
+
+The numbers of the things the words stand for, under `MEANT`, each
+one of *numbers*; none where the document does not say.
+
+### several_example
+
+```python
+def several_example(numbers: dict) -> dict
+```
+
+The reply the prompt shows: the words standing for the first thing.
+
+### members_of
+
+```python
+def members_of(reply, numbers: dict) -> tuple
+```
+
+([things the words stand for], None) of a *reply* ({"means":
+[numbers]}) whose list holds only numbers the request showed, empty
+where it names none; (None, what was wrong) of any other: a reply
+without "means" (`key_missing`), or one with a number the request did
+not show (`name_not_listed`).
 
 [Back to the index](../README.md)

@@ -70,7 +70,9 @@ _WORD = r"(?<!\w){}(?!\w)"
 # The groups are entries now (`region_aggregates.json`, from the regions of
 # IAMconsortium/common-definitions, the UN's M49 and the World Bank): a group
 # is written as its member countries. "several regions" stays for a group
-# none of them has.
+# none of them has, "other region" for any other region the list lacks; the
+# graph writes either as a study region of its own under the name the
+# document prints (kg.printed_region, owner decision 2026-11-07).
 REGION_OUT = {
     "out:multiregion": ["several regions", "several countries", "EU27", "OECD",
                         "several countries or a group the list does not "

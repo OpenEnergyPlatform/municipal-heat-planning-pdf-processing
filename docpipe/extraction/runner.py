@@ -2304,8 +2304,8 @@ def make_namer(spec: Spec, passages_of: Callable) -> Optional[Callable]:
     if not naming_map.merges(spec):
         return None
     try:
-        groups_parts, parts = (parts_of(prompt_id) for prompt_id
-                               in naming_map.NAMING_PROMPT_IDS)
+        groups_parts, parts, several_parts = (
+            parts_of(prompt_id) for prompt_id in naming_map.NAMING_PROMPT_IDS)
     except (FileNotFoundError, LookupError):
         return None
     client = _client()
@@ -2337,10 +2337,25 @@ def make_namer(spec: Spec, passages_of: Callable) -> Optional[Callable]:
             names=len(payload["names"]),
             places=len(payload["name"]["places"]), corrections=told(follow))
 
+    def ask_several(payload, shape, document_id, kind, example=None,
+                    thread=None, follow=None):
+        # One request per wording of several things and document (owner
+        # decision 2026-11-07): the words with their places, every thing of
+        # the document with its quote.
+        thread = thread if thread is not None else thread_map.Thread()
+        prompt, conversation = threaded(several_parts, thread, payload,
+                                        follow, example=example)
+        return ask_in_grammar(
+            client, prompt, conversation, shape, document_id,
+            "naming_several", naming_map.MEANT, example=example,
+            thread=thread, kind=kind, names=len(payload["names"]),
+            places=len(payload["group"]["places"]), corrections=told(follow))
+
     def embed(texts: list) -> list:
         return COALESCED.embed([{"text": text} for text in texts])
     namer = naming_map.Namer(spec, ask, trace=trace.event, pool=AHEAD,
-                             ask_groups=ask_groups, embed=embed)
+                             ask_groups=ask_groups, embed=embed,
+                             ask_several=ask_several)
 
     def name(report) -> None:
         passages = {(s.owner_kind, s.owner_id): s

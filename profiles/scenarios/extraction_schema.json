@@ -1768,7 +1768,7 @@
       },
       "x-options": {
        "several scenarios": {
-        "meaning": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value is given to no scenario of its own.",
+        "meaning": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.",
         "spellings": [
          "all scenarios"
         ],
@@ -2278,7 +2278,7 @@
      "parameter": {
       "const": "scenario_region",
       "description": "Spec parameter: Scenario region.",
-      "x-description-source": "The country or area a scenario depicts. Choose it from value_classes: these are the study regions of the OEKG, narrowed to those this document names. One tuple per statement. The list carries countries and groups of countries: the regions of the integrated assessment models (such as 'Europe (R10)' or 'Asia (R5)') and the UN's world regions (such as 'Sub-Saharan Africa' or 'Western Europe'). Choose a group where the scenario covers that group, not each of its countries; a group stands for its members. For a worldwide scenario choose 'global'; for a group the list does not carry (EU27, OECD) 'several regions'. Naming a single country instead would be invented. value_raw takes what the document calls the region. Only regions named as the area under study, not every one mentioned.",
+      "x-description-source": "The region a scenario studies: its study region, the spatial focus of the investigation, not a region it only interacts with and not every one mentioned. Choose it from value_classes: the study regions of the OEKG, narrowed to those this document names, and groups of countries: the regions of the integrated assessment models (such as 'Europe (R10)' or 'Asia (R5)') and the UN's world regions (such as 'Sub-Saharan Africa' or 'Western Europe'). Choose a group where the scenario covers that group, not each of its countries; a group stands for its members. For a worldwide scenario choose 'global'. A region the list does not carry, such as 'OECD Europe', a federal state or a city, is 'several regions' where it is a group of countries and 'other region' otherwise, with value_raw its name as the document prints it: it becomes a study region of its own. Naming a single country instead would be invented. One tuple per statement.",
       "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
@@ -2420,7 +2420,7 @@
       },
       "x-options": {
        "several scenarios": {
-        "meaning": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value is given to no scenario of its own.",
+        "meaning": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.",
         "spellings": [
          "all scenarios"
         ],
@@ -2674,7 +2674,7 @@
     "type": "object",
     "x-kg": {
      "node": "scenariofactsheet",
-     "note": "The object is an OEKG region individual that already exists over there and is only referenced. A wording the list did not hold mints nothing: writing our own gloss under oekg/region/ would put a 250th region beside the 249 real ones. The predicate is the one the closed ScenarioShape names. Its declared domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET; the shapes win over that mismatch (owner decision 2026-10-22), which is the ontology side's to settle.",
+     "note": "The object is an OEKG region individual that already exists over there and is only referenced; a group of countries is written as its members. A region the list did not hold ('several regions', 'other region') is a study region node of its own, minted from and labelled with the words the document prints (owner decision 2026-11-07); the shapes ask only for a node of the class study region. The predicate is the one the closed ScenarioShape names. Its declared domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET; the shapes win over that mismatch (owner decision 2026-10-22), which is the ontology side's to settle.",
      "property": {
       "accepted": "the closed ScenarioShape names this path on the factsheet, and the shapes win over its declared domain scenario (owner decision 2026-10-22)",
       "label": "has study region",
@@ -2916,7 +2916,7 @@
       },
       "x-options": {
        "several scenarios": {
-        "meaning": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value is given to no scenario of its own.",
+        "meaning": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.",
         "spellings": [
          "all scenarios"
         ],
@@ -3548,7 +3548,7 @@
       },
       "x-options": {
        "several scenarios": {
-        "meaning": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value is given to no scenario of its own.",
+        "meaning": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.",
         "spellings": [
          "all scenarios"
         ],
@@ -3781,7 +3781,7 @@
      "parameter": {
       "const": "study_acronym",
       "description": "Spec parameter: Project acronym.",
-      "x-description-source": "The short name (acronym) of the study this document reports on, as the document prints it. Not that of a model and not that of an institution.",
+      "x-description-source": "The short name (acronym) of the study this document reports on, as the document prints it.",
       "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
@@ -6406,7 +6406,7 @@
      "parameter": {
       "const": "study_sector_division",
       "description": "Spec parameter: Sector division.",
-      "x-description-source": "A sector division the study is based on, chosen from value_classes: a specific way to subdivide a system, such as the CRF of the IPCC guidelines for national greenhouse gas inventories, NACE, an energy balance, the annex of the German Climate Protection Act (KSG) or the study's own list of sectors. A sector itself is no division. Take the most specific entry the text supports: 'CRF sectors (IPCC 2006)' for the 2006 Guidelines or CRF tables from 2015 on, 'CRF sectors (IPCC 1996)' for the Revised 1996 Guidelines or CRF tables until 2014, 'CRF sector division' for the CRF without its version. A division no entry matches, such as a model's own sectors, is 'none of these divisions'. value_raw takes the document's wording of the division. One tuple per division.",
+      "x-description-source": "A sector division the study is based on, chosen from value_classes: a specific way to subdivide a system, such as the CRF of the IPCC guidelines for national greenhouse gas inventories, NACE, an energy balance, the annex of the German Climate Protection Act (KSG) or the study's own list of sectors. A sector itself is no division. Take the most specific entry the text supports: 'CRF sectors (IPCC 2006)' for the 2006 Guidelines or CRF tables from 2015 on, 'CRF sectors (IPCC 1996)' for the Revised 1996 Guidelines or CRF tables until 2014, 'CRF sector division' for the CRF without its version. A division no narrower entry matches, such as a model's own sectors or the study's own list of sectors, is 'sector division'. value_raw takes the document's wording of the division. One tuple per division.",
       "x-question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from."
      },
      "parameter_link_quote": {
@@ -6637,7 +6637,6 @@
        "https://openenergyplatform.org/ontology/oeo/OEO_00010204",
        "https://openenergyplatform.org/ontology/oeo/OEO_00000291",
        "https://openenergyplatform.org/ontology/oeo/OEO_00360044",
-       "out:not_in_list",
        null
       ],
       "type": [
@@ -6714,13 +6713,6 @@
        "nace_ sectors": {
         "meaning": "The Statistical classification of economic activities in the European Community, abbreviated as NACE, is the classification of economic activities in the European Union (EU); the term NACE is derived from the French Nomenclature statistique des activités économiques dans la Communauté européenne. Various NACE versions have been developed since 1970.\n\nNACE is a four-digit classification providing the framework for collecting and presenting a large range of statistical data according to economic activity in the fields of economic statistics (e.g. production, employment and national accounts) and in other statistical domains developed within the European statistical system (ESS).",
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00000291"
-       },
-       "none of these divisions": {
-        "meaning": "The text names a sector division that none of these classes matches. Not to be confused with the text naming no division at all: that is the answer that these passages do not state it.",
-        "spellings": [
-         "the division the text names is not in the list"
-        ],
-        "uri": "out:not_in_list"
        },
        "sector division": {
         "meaning": "A sector division is a specific way to subdivide a system.",
@@ -9229,6 +9221,75 @@
      "doc": {
       "type": "integer"
      },
+     "input": {
+      "type": "object"
+     },
+     "kind": {
+      "type": "string"
+     },
+     "ms": {
+      "type": "integer"
+     },
+     "names": {
+      "type": "integer"
+     },
+     "once": {
+      "type": "boolean"
+     },
+     "output": {
+      "type": "object"
+     },
+     "places": {
+      "type": "integer"
+     },
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "sent_at": {
+      "type": "number"
+     },
+     "t": {
+      "const": "naming_several_ask"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt",
+     "corrections",
+     "kind",
+     "names",
+     "places"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
      "figure": {},
      "group": {
       "type": [
@@ -9755,6 +9816,34 @@
      "t",
      "doc",
      "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "kind": {
+      "type": "string"
+     },
+     "resolved": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "naming_several"
+     },
+     "wordings": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "kind",
+     "wordings",
+     "resolved"
     ],
     "type": "object"
    },

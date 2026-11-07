@@ -44,6 +44,7 @@ from docpipe.extraction import graphkit
 from docpipe.extraction.compute import owner_of
 from docpipe.extraction.graphkit import NOT_IN_GRAPH, ttl_comment, ttl_literal
 from docpipe.extraction.identity import tuple_ids
+from docpipe.extraction.naming import SEVERAL
 from docpipe.extraction.shapemodel import (XSD, Model, SchemaError,
                                            snapshot_ancestors)
 from docpipe.extraction.spec import kg_name, load as load_spec
@@ -406,6 +407,22 @@ def in_graph(value) -> bool:
 AGGREGATE = "aggregate:"
 
 
+# The two entries a region answer takes where the list holds no class for the
+# region the document names (`extraction.REGION_OUT`): a group none of the
+# groups carries, and any other region. Such a region is its own study region
+# node, named as the document prints it (owner decision 2026-11-07).
+UNLISTED_REGION = ("out:multiregion", "out:other")
+
+
+def printed_region(row: dict) -> Optional[str]:
+    """The name of a study region the list did not carry, as the row's
+    document prints it (`value_raw`); None for any other row."""
+    raw = str(row.get("value_raw") or "").strip()
+    if row.get("value_uri") in UNLISTED_REGION and raw:
+        return raw
+    return None
+
+
 def region_members(value, groups: dict) -> list:
     """The OEKG regions a scenario_region answer stands for: a country is
     itself, a group its members, an out: entry none."""
@@ -461,8 +478,15 @@ def scenario_names(row: dict) -> list:
         name, quote, means = (row.get("scenario"),
                               row.get("scenario_quote", row.get("quote")),
                               row.get("scenario_means"))
-    # An out: entry, such as "status quo" for a value of a past or the
-    # current year (owner decision 2026-11-07), belongs to no scenario.
+    # The words of several scenarios belong to the scenarios the naming
+    # found they stand for, and to none where it found none (owner decision
+    # 2026-11-07, `naming.SEVERAL`).
+    if name == SEVERAL:
+        return list(dict.fromkeys(
+            one for one in means if isinstance(one, str) and one.strip())) \
+            if isinstance(means, list) else []
+    # Any other out: entry, such as "status quo" for a value of a past or
+    # the current year (owner decision 2026-11-07), belongs to no scenario.
     if not isinstance(name, str) or not name.strip() or not in_graph(name) \
             or not _quoted(name, quote):
         return []
@@ -730,6 +754,13 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
         out_of_graph: Counter = Counter()
         for row in rows:
             for field in ("value_uri", "scenario"):
+                if field == "value_uri" \
+                        and row.get("parameter") == "scenario_region" \
+                        and printed_region(row):
+                    continue
+                if field == "scenario" and row.get(field) == SEVERAL \
+                        and row.get("scenario_means"):
+                    continue
                 if str(row.get(field) or "").startswith(NOT_IN_GRAPH):
                     out_of_graph[row[field]] += 1
         for key in ("scenario_label", "scenario_region",
@@ -1005,14 +1036,20 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
 
             # A region the model picked already exists in the OEKG under
             # its own IRI (oekg/region/Germany), so it is referenced, not
-            # minted, and described below by the name LCC gives it, never by
-            # the harvest's wording. Everything else — an out: entry, or a
-            # wording the list did not hold — is counted and not minted.
-            # Minting put a German gloss under oekg/region/ next to the 249
-            # real ones. A group of countries is written as its members, and
-            # its passage is cited once, above the first of them.
+            # minted, and described below by the name LCC gives it. A group
+            # of countries is written as its members, and its passage is
+            # cited once, above the first of them. A region the list did not
+            # carry ("OECD Europe", a federal state, a city) is a study
+            # region node of its own, minted from and named by the words the
+            # document prints (owner decision 2026-11-07).
             regions: dict = {}
             for row in rows_for("scenario_region", scenario=norm):
+                printed = printed_region(row)
+                if printed:
+                    region_iri = mint("studyregion", printed)
+                    names.setdefault(region_iri, printed)
+                    regions.setdefault(region_iri, []).append(row)
+                    continue
                 for region_iri in region_members(row.get("value_uri"),
                                                  groups):
                     regions.setdefault(region_iri, []).append(row)
@@ -1036,6 +1073,8 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
                 "abstract": best,
                 "types": list(types) + [OEO_BASE + IAM_SCENARIO],
                 "regions": list(regions),
+                "region_names": {region: names[region] for region in regions
+                                 if names.get(region)},
                 "years": [f"{year}-01-01T00:00:00" for year in years]})
 
         # ---- the bundle -----------------------------------------------------
