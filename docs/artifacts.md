@@ -7,7 +7,7 @@ Generated from `docpipe/artifacts.py` by `scripts/build_docs.py`: the names belo
 Preprocessing, refinement, visuals and chunking each run as their own
 command-line invocation (`docpipe/preprocessing/pipeline.py:659`,
 `docpipe/refinement/pipeline.py:312`, `docpipe/visuals/pipeline.py:611`,
-`docpipe/chunking/pipeline.py:424`, each its own `__main__` entry point).
+`docpipe/chunking/pipeline.py:454`, each its own `__main__` entry point).
 Nothing survives between invocations except what a stage writes to disk,
 so the files below let a later run resume or reuse an earlier one's work.
 

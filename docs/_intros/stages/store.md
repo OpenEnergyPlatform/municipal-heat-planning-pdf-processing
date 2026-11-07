@@ -130,8 +130,8 @@ Closing a connection is left to whoever opened it; this package tracks
 no handle. File processing's `with sqlite3.connect(db_file) as
 connection:` (`docpipe/ingest/pipeline.py:122`) commits on exit but does
 not close it. Chunking's `connect()` is closed by at least ten call
-sites: `EmbeddingWriter.close()` (`docpipe/chunking/database.py:813` to
-`814`); `_worker_connection`, closing a thread's previous connection
+sites: `EmbeddingWriter.close()` (`docpipe/chunking/database.py:875` to
+`876`); `_worker_connection`, closing a thread's previous connection
 before opening a replacement (`docpipe/chunking/database.py:123` to
 `127`); and eight `with closing(connect(db_path)) as conn:` blocks in
 `enrich_page_source`, `enrich_caption`, `update_database`, `enrich_bbox`,
@@ -406,10 +406,10 @@ Reading the tables back out is not this package's job.
   `Segments` beneath them.
 - Two processed directories with no `Documents` row put 1,096 dead
   vectors into the FAISS index in one run
-  (`docpipe/chunking/pipeline.py:256` to `259`, comment). The embed step
+  (`docpipe/chunking/database.py:923` to `928`, comment). The embed step
   now checks for a document id before embedding, instead of writing
   vectors no `Embeddings` row can resolve and repeating that work next
-  run (`docpipe/chunking/database.py:861` to `866`, comment).
+  run (`docpipe/chunking/pipeline.py:276` to `284`, comment).
 - Eleven plans in the heat-plan corpus carry no PDF text layer; their
   `page_text_transcribed` count is filled by a model reading the
   rendered page instead of the PDF's own text

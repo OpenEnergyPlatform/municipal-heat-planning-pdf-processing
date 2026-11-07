@@ -22,7 +22,7 @@ database through the merged `document.json`; only the standalone
 `enrich-bbox` step reads `sections.json` itself, for its geometry
 (`docpipe/refinement/pipeline.py:95`; `docpipe/visuals/pipeline.py:62-71`,
 193-196; `docpipe/chunking/merge.py:24-25`, `165-177`;
-`docpipe/chunking/database.py:597`).
+`docpipe/chunking/database.py:626`).
 
 Everything here is deterministic, PyMuPDF text extraction, the
 PP-DocLayoutV3 forward pass, and rule-based section assembly, with one

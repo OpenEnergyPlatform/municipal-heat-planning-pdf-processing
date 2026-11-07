@@ -81,7 +81,7 @@ rule in one line, "the core never imports a profile; it receives one"
 Five entry points, preprocessing, refinement, visuals, extraction, and
 chunking, reach `load_profile` through `resolve_profile(args)` rather than
 calling it directly (`docpipe/preprocessing/pipeline.py:599`,
-`docpipe/chunking/pipeline.py:390`), except that refinement, visuals and
+`docpipe/chunking/pipeline.py:418`), except that refinement, visuals and
 extraction have nothing to run without a profile and go through
 `require_profile(args)`, which refuses in one line naming the available
 profiles when none is given (the chat is the one entry point that does not stop:
