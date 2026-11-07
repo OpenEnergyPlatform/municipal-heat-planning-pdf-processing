@@ -9,7 +9,7 @@ Answer with exactly one JSON object on one line, with no text or code block befo
 
 * Two names name the same scenario only where either can stand for the other without losing anything the publication says of it: a short and a long form of one scenario's name can; the name of a group of scenarios and the name of one of them cannot.
 * A name of one scenario: its own number and the numbers of the other names of that scenario, or its own number alone where "names" holds no other name of it.
-* A name that stands for several scenarios, such as "the 2 °C scenarios": the numbers of the names of each of them, without its own.
+* A name that stands for several scenarios, such as "the 2 °C scenarios", the title of a study with several scenarios, the scenarios of a figure or "all scenarios": the numbers of the names of each of them, without its own.
 * Decide by what the places and quotes say of the scenarios, not by how the names are spelled.
 * Answer with the numbers from "names", never with the names themselves.
 

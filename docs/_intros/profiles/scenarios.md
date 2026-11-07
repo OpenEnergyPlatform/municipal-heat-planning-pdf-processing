@@ -71,7 +71,15 @@ the definition excludes." (prompt only, no check). The value
 of `scenario_label` and the `scenario` axis are `merged: "scenario"` in the
 spec (owner decisions 2026-11-06, see [extraction](../stages/extraction.md)):
 a scenario is read as free text, the name as the publication prints it, and a
-value the publication states for several scenarios is one row per name; names
+value the publication states for several scenarios is one row per name. A value
+the publication states for a study, its model, a figure, a table, a group of
+scenarios or all of them holds for each of their scenarios: the `scenario`
+question asks for their names, or, where they stand nowhere in what the model
+was shown, for the name of the study or the group as printed, which the naming
+resolves like any name of several scenarios (owner decision 2026-11-07, after a
+probe on one paper ended 120 of 301 values "unstated" and each of 25 of them,
+drawn at random, held for such a group; KWP keeps one state per value until its
+next probe counts how often a value is stated for several). Names
 the publication gives in one place may share one quote,
 `{"value": [names], "quote": ...}`, which must hold each name and is spread
 into one answer per name at once, each checked on its own (`read_text` and
@@ -365,7 +373,11 @@ scenarios, the names of each of them without its own (`naming.response_format`);
 the prompt's example is the reply with the name meaning itself
 (`naming.example_of`). The prompt is strict: two names name one scenario only
 where either can stand for the other without losing anything the publication
-says. A name with no candidate asks nothing and means itself.
+says. A name with no candidate asks nothing and means itself. Both prompts
+name, beside "the 2 °C scenarios", the title of a study with several
+scenarios, the scenarios of a figure and "all scenarios" as names of several
+scenarios, the names the `scenario` question now allows for a value of a
+group (owner decision 2026-11-07, above).
 
 Reading the answers (`naming.meanings`): an answer holding the name gives the
 other names of its scenario, and so does an answer of one other name alone; two

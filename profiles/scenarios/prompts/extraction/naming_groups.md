@@ -8,7 +8,7 @@ Answer with exactly one JSON object on one line, with no text or code block befo
 {{example}}
 
 * A group holds the names that may name one scenario: its spellings, its abbreviations, a short and a long form of its name.
-* A name that may stand for several scenarios, such as "the 2 °C scenarios", goes into a group with the names of each of them.
+* A name that may stand for several scenarios, such as "the 2 °C scenarios", the title of a study with several scenarios, the scenarios of a figure or "all scenarios", goes into a group with the names of each of them.
 * When in doubt, put the names together: every name is checked on its own afterwards.
 * Leave out a name that has no other name of its scenario under "names".
 * Answer with the numbers from "names", never with the names themselves.
