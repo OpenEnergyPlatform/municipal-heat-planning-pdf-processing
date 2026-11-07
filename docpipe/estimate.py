@@ -45,6 +45,7 @@ from . import settings, usage
 from .artifacts import (REFINEMENT_PARTIAL_JSON, SECTIONS_JSON,
                         SECTIONS_REFINED_JSON, VISUALS_JSON, DOCUMENT_JSON)
 from .extraction import trace
+from .extraction.schema import ASK_STAGES
 from .profile import (add_profile_argument, bind_command_line, program,
                       require_profile)
 from .store.schema import readonly_uri
@@ -57,14 +58,14 @@ COMMANDS = ("ingest", "preprocess", "refine", "visuals", "chunk", "extract")
 # The events of the harvest's trace that are one answered request each.
 # runner.py writes them; a frame event without tokens is the summary of a
 # frame search and no request.
-# The answered requests of either flow: field by field, and from the
-# survey (survey, the four readings, the combing, the naming), and the search
-# sentences, the review and the compute step. `frame_ask` is not here: the
-# frame event counts the same requests, and a trace written before
-# `frame_ask` alike.
-TRACED = ("frame", "rows", "field", "survey_ask", "read_values_ask",
-          "read_text_ask", "comb_ask", "naming_ask", "phrase_ask",
-          "review_ask", "compute_ask")
+# The answered requests of either flow: field by field, and every stage that
+# writes `<stage>_ask` (`schema.ASK_STAGES`: the survey, the readings, the
+# combing and its check, the naming, the plan's years, the search sentences,
+# the review and the compute step), so a stage added there is counted here.
+# `frame_ask` is not here: the frame event counts the same requests, and a
+# trace written before `frame_ask` alike.
+TRACED = ("frame", "rows", "field",
+          *(f"{stage}_ask" for stage in ASK_STAGES if stage != "frame"))
 TRACE_DIR = "trace"
 
 

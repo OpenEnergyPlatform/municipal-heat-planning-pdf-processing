@@ -465,7 +465,7 @@ def audit(name: str) -> list:
         spec, {axis_name: {"entry_1": ["one entry of the list"]}
                for axis_name in dynamic}) if dynamic else spec
     closed = [s for p in filled.parameters for s in fields.axis_slots(p)
-              if s.options]
+              if s.is_closed]
     # A spec whose coordinates are all free text has no list to hold to it.
     check("out:unstated is selectable",
           all(fields.UNSTATED in s.answerable() for s in closed),

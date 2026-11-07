@@ -53,6 +53,7 @@ import re
 from typing import Callable, Optional
 
 from . import fields
+from .graphkit import NOT_IN_GRAPH
 from .verify import flat
 from .wording import say
 
@@ -109,7 +110,10 @@ def read_name(row: dict, key: str) -> Optional[tuple]:
         source = row.get(f"{key}_source")
         owner = tuple(source) if isinstance(source, (list, tuple)) \
             and len(source) == 2 else (None, None)
-    if not isinstance(name, str) or not name.strip():
+    # An out: entry, such as the "status quo" a coordinate of names takes
+    # beside them (owner decision 2026-11-07), names nothing.
+    if not isinstance(name, str) or not name.strip() \
+            or name.startswith(NOT_IN_GRAPH):
         return None
     return name.strip(), owner, quote if isinstance(quote, str) else ""
 

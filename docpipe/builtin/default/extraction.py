@@ -97,6 +97,17 @@ PHRASES = {
     "year_not_in_quote": (
         'The year {given!r} does not stand in its quote {quote!r}. Quote the '
         'place that prints it.'),
+    # A find of the combing quoted from a passage other than the value's own
+    # that the check found does not speak about the value (owner decision
+    # 2026-11-07), and a check whose answer is neither "yes" nor "no".
+    "not_about_value": (
+        'A second look found that the place you quoted for {answer!r} does '
+        'not speak about this value, so it does not say what belongs to it. '
+        'Answer only from a place that speaks about this value; if none '
+        'does, leave it out.'),
+    "verdict_not_an_option": (
+        'Your "about" {given!r} is neither "yes" nor "no". Answer with one '
+        'of the two.'),
     # The key of the frame request that holds the entries of a closed frame
     # coordinate, one list per coordinate. The frame prompt of this profile
     # names no key of its own ("the list the request gives for ..."), and

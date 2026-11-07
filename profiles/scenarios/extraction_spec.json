@@ -1924,7 +1924,14 @@
           "type": "text",
           "merged": "scenario",
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\".",
+          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
+          "beside": {
+            "out:status_quo": {
+              "label": "status quo",
+              "spellings": ["historical", "base year"],
+              "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
+            }
+          },
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",
@@ -1976,7 +1983,14 @@
           "type": "text",
           "merged": "scenario",
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\".",
+          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
+          "beside": {
+            "out:status_quo": {
+              "label": "status quo",
+              "spellings": ["historical", "base year"],
+              "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
+            }
+          },
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",
@@ -2019,7 +2033,14 @@
           "type": "text",
           "merged": "scenario",
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\".",
+          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
+          "beside": {
+            "out:status_quo": {
+              "label": "status quo",
+              "spellings": ["historical", "base year"],
+              "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
+            }
+          },
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",
@@ -2085,7 +2106,14 @@
           "type": "text",
           "merged": "scenario",
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\".",
+          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
+          "beside": {
+            "out:status_quo": {
+              "label": "status quo",
+              "spellings": ["historical", "base year"],
+              "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
+            }
+          },
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",

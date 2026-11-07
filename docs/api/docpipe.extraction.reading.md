@@ -347,7 +347,9 @@ def coordinate_shown(slot, unstated: bool = True) -> dict
 
 A coordinate as a request shows it: its question, and its list, or
 the kind of its answer; without *unstated* a list without UNSTATED, as
-the combing asks (`fields.value_schema`).
+the combing asks (`fields.value_schema`). A coordinate of names shows
+the entries it takes beside them under its kind (`fields.beside_names`,
+owner decision 2026-11-07), without UNSTATED, which a wording answers.
 
 ### several
 

@@ -11,10 +11,10 @@ You get:
 - "coordinates": the open coordinates, each with its question; "where": where a publication usually prints them.
 - "hits": hit lists, each hit with "id", kind, title and one line: its first line, for a "search" the line that matches. The first list, where there is one, holds the passages of the publication that come nearest to how it would print the open coordinates of this value. Where there is none, search yourself with "similar". After it come the hits of your own searches. When you ask for nothing new while a coordinate is still missing, you get the same question once more with one more list: the next passages of that ranking, or, where there was none, the next passages in the order of the publication, until every passage of the publication was listed.
 - "more", "not_found": the passages you asked for, each with "id", and what could not be found, with its reason ("end": there is no section in that direction any more, "unknown": no or more than one placeholder or hit of that name, "invalid_pattern" or "timeout": the pattern did not work).
-- "corrections": only in a second request. What was wrong with your first answer, per coordinate under "what". A correction that names a "value" asks for that scenario alone.
+- "corrections": what was wrong with an answer you gave, per coordinate under "what": in a second request, and in every request after a place you quoted was found not to speak about this value. A correction that names a "value" asks for that scenario alone.
 
 You answer with:
-1. Each coordinate from "coordinates" you found, with "value", the scenario's name as the publication prints it, copied character for character, and "quote": ONE contiguous place from what you were shown, copied character for character, that contains the name and speaks about THIS value. If the publication states the value for several scenarios, give each of them as its own entry of a list, each with its own quote. A coordinate you have not found, leave out.
+1. Each coordinate from "coordinates" you found, with "value", the scenario's name as the publication prints it, copied character for character, and "quote": ONE contiguous place from what you were shown, copied character for character, that contains the name and speaks about THIS value. Where the question says so, "value" is an entry of the coordinate's "options" instead of a name, such as "status quo"; "value_raw" then holds the words of the quote that show it, and the quote is the value's own. Beside a name, "value_raw" repeats the name. If the publication states the value for several scenarios, give each of them as its own entry of a list, each with its own quote. A coordinate you have not found, leave out.
 2. "more": what you want to read before you answer. A list of requests:
    - {"get": "hit", "id": "<<id of a hit>>"}: the passage of this hit;
    - {"get": "next"} or {"get": "previous"}: the section after or before the passage of the value, next time the one after or before that;
@@ -23,7 +23,7 @@ You answer with:
    - {"get": "similar", "text": "<<a sentence as the publication would print the coordinate for this value>>"}: a hit list of the passages nearest to that sentence; what it says may be made up.
    You then get the same question once more, with what you asked for under "more" and "hits". Give your whole answer with everything you already know when you ask for more as well; without a new request in "more" it stands. Do not guess: name only what you have read.
 
-In a second request you answer once more in full and fix the points from "corrections".
+Where there are "corrections", you answer once more in full and fix their points.
 
 Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks! In this form:
 {{example}}

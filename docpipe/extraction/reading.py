@@ -224,7 +224,9 @@ def group_context(context: dict, group_slots: list, frame_slots: list,
 def coordinate_shown(slot, unstated: bool = True) -> dict:
     """A coordinate as a request shows it: its question, and its list, or
     the kind of its answer; without *unstated* a list without UNSTATED, as
-    the combing asks (`fields.value_schema`)."""
+    the combing asks (`fields.value_schema`). A coordinate of names shows
+    the entries it takes beside them under its kind (`fields.beside_names`,
+    owner decision 2026-11-07), without UNSTATED, which a wording answers."""
     shown: dict = {"question": slot.question}
     if slot.is_closed:
         shown["options"] = {label: entry
@@ -232,6 +234,10 @@ def coordinate_shown(slot, unstated: bool = True) -> dict:
                             if unstated or label != fields.UNSTATED}
     else:
         shown["kind"] = slot.kind
+        if fields.beside_names(slot):
+            shown["options"] = {label: entry
+                                for label, entry in slot.answerable().items()
+                                if label != fields.UNSTATED}
     return shown
 
 

@@ -619,6 +619,11 @@ def render_profile_page(name: str, harvest: dict, intro: str) -> str:
             kinds = [k for k in kinds if k != "null"]
             if axis == "parameter":
                 axes.append("`parameter` (one of the spec's parameters)")
+            elif isinstance(choices, dict) and choices and "enum" not in prop:
+                # A name, or an entry it takes beside the names.
+                entries = "entry" if len(choices) == 1 else "entries"
+                axes.append(f"`{axis}` ({kinds[0] if kinds else 'string'}, "
+                            f"or {len(choices)} out: {entries} beside)")
             elif isinstance(choices, dict) and choices:
                 axes.append(f"`{axis}` ({len(choices)} options)")
             else:
@@ -707,7 +712,9 @@ def render_contract_page(profile: str, schema: dict, stamp=None,
                         f"> {question}", ""]
             options = prop.get("x-options")
             if isinstance(options, dict) and options:
-                out += ["<details><summary>What it may answer "
+                summary = ("What it may answer beside a name"
+                           if "enum" not in prop else "What it may answer")
+                out += [f"<details><summary>{summary} "
                         f"({len(options)})</summary>", ""]
                 out += _option_lines(options) + ["", "</details>", ""]
             prop_kg = prop.get("x-kg")

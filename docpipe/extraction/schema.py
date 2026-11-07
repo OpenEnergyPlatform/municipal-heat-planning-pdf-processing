@@ -157,11 +157,13 @@ def _owner() -> dict:
 
 
 def _slot_value(slot, doc: str) -> dict:
-    """The property for the coordinate itself."""
+    """The property for the coordinate itself: an entry of its list, a
+    number, or a wording; a name or an entry beside the names where a
+    coordinate of names takes some (`fields.beside_names`)."""
     if slot.options:
-        value = {"type": ["string", "null"],
-                 "enum": [o.uri for o in slot.options] + [None],
-                 "description": doc}
+        value = {"type": ["string", "null"], "description": doc}
+        if not fields.beside_names(slot):
+            value["enum"] = [o.uri for o in slot.options] + [None]
         value["x-options"] = {
             o.label: {k: v for k, v in
                       (("uri", o.uri), ("meaning", o.definition),
@@ -466,9 +468,13 @@ def _tuple_schema(spec, parameter) -> dict:
         "x-description-source": parameter.description,
         "x-question": parameter_slot.question}
     for slot in fields.axis_slots(parameter):
-        closed = ("A closed list; an entry beginning 'out:' is a deliberate "
-                  "non-class answer and mints no node. " if slot.options
-                  else "")
+        closed = ("A name the document prints, or one of the entries beside "
+                  "the names, each beginning 'out:', a deliberate answer that "
+                  "names nothing and mints no node. "
+                  if fields.beside_names(slot)
+                  else "A closed list; an entry beginning 'out:' is a "
+                       "deliberate non-class answer and mints no node. "
+                  if slot.options else "")
         props.update(_slot_properties(
             slot.name, slot,
             f"Axis '{slot.name}' of {parameter.label}. {closed}"
@@ -850,9 +856,9 @@ def stamp_schema() -> dict:
 # survey flow's own (`runner.ask_in_grammar`), the naming among them, and the
 # search sentences, the frame, the review and the compute step
 # (`runner._asked`).
-ASK_STAGES = ("survey", "read_values", "read_text", "comb", "naming",
-              "naming_groups", "years", "phrase", "frame", "review",
-              "compute")
+ASK_STAGES = ("survey", "read_values", "read_text", "comb", "comb_check",
+              "naming", "naming_groups", "years", "phrase", "frame",
+              "review", "compute")
 
 
 def trace_schema() -> dict:
@@ -1123,7 +1129,12 @@ def trace_schema() -> dict:
                  "listed": {"type": "integer"},
                  # The other values of the table that took the answers
                  # combed for this one, its frame open on all of them.
-                 "table_rows": {"type": "integer"}},
+                 "table_rows": {"type": "integer"},
+                 # Requests that checked a find quoted from a passage other
+                 # than the value's own, and the finds they said do not
+                 # speak about the value (owner decision 2026-11-07).
+                 "judged": {"type": "integer"},
+                 "turned": {"type": "integer"}},
         # The plan's base and target years, asked once per plan (years.py):
         # the years each state took, the requests, the hits listed, the
         # passages fetched and the years refused.
@@ -1178,6 +1189,9 @@ def trace_schema() -> dict:
                           "rows", "passages", "figure", "group", "round"},
         "comb_ask": {"corrections", "parameter", "owner", "kind", "rows",
                      "passages", "figure", "group", "round", "value"},
+        "comb_check_ask": {"corrections", "parameter", "owner", "kind",
+                           "rows", "passages", "figure", "group", "round",
+                           "value"},
         "years_ask": {"corrections", "parameter", "owner", "kind", "rows",
                       "passages", "figure", "group", "round", "value"},
         "naming": {"things", "several", "groups", "asked"},
@@ -1187,7 +1201,7 @@ def trace_schema() -> dict:
                             "rows", "passages", "figure", "group", "round",
                             "value"}
            for stage in ("phrase", "frame", "review", "compute")},
-        "comb": {"group", "listed", "table_rows"},
+        "comb": {"group", "listed", "table_rows", "judged", "turned"},
         "read": {"corrected", "failed", "unanswered", "unread", "why",
                  "near", "near_read"},
         "completion": {"filled", "id", "key", "matched"},

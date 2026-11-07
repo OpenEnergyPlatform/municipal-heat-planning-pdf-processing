@@ -464,7 +464,9 @@ def scenario_names(row: dict) -> list:
         name, quote, means = (row.get("scenario"),
                               row.get("scenario_quote", row.get("quote")),
                               row.get("scenario_means"))
-    if not isinstance(name, str) or not name.strip() \
+    # An out: entry, such as "status quo" for a value of a past or the
+    # current year (owner decision 2026-11-07), belongs to no scenario.
+    if not isinstance(name, str) or not name.strip() or not in_graph(name) \
             or not _quoted(name, quote):
         return []
     if isinstance(means, list):
@@ -943,7 +945,11 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
                 named = scenario_names(dict(row, parameter=key))
                 for one in named:
                     wanted.setdefault(normalise(one), one)
-                if not named and key != "scenario_label":
+                # One whose scenario is an out: entry belongs to none by
+                # choice and is counted there (`out_of_graph`).
+                if not named and key != "scenario_label" \
+                        and not str(row.get("scenario") or "").startswith(
+                            NOT_IN_GRAPH):
                     state = row.get("scenario_state") or "missing"
                     unplaceable[f"{key}:{state}"] += 1
 

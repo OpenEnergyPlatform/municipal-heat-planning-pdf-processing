@@ -182,13 +182,21 @@ class Slot:
         return out
 
 
+def beside_names(slot: Slot) -> bool:
+    """Does a coordinate of names take entries beside them
+    (`spec.Axis.beside`, owner decision 2026-11-07): a free-text slot with a
+    list?"""
+    return slot.kind == TEXT and bool(slot.options)
+
+
 def wording_asked(slot: Slot) -> bool:
     """Is the printed wording (`value_raw`) asked beside a coordinate's
     answer? Only where the answer is not the print itself: an entry of a
-    list or a number. A free text answer is its own wording; the request
-    does not ask it twice, and the row keeps it as its wording
-    (`pipeline.merge_field`, owner decision 2026-11-06)."""
-    return bool(slot.is_closed) or slot.kind == NUMBER
+    list or a number, and a coordinate of names that takes entries beside
+    them, whose entry the wording backs. A free text answer is its own
+    wording; the request does not ask it twice, and the row keeps it as its
+    wording (`pipeline.merge_field`, owner decision 2026-11-06)."""
+    return bool(slot.is_closed) or slot.kind == NUMBER or beside_names(slot)
 
 
 def value_schema(slot: Slot, unstated: bool = True) -> dict:
@@ -554,8 +562,12 @@ def axis_slots(parameter: Parameter) -> list:
             slot = Slot(name=name, kind=NUMBER, required=axis.required,
                         question=axis.question)
         else:
+            # A coordinate of names keeps the entries it takes beside them
+            # as its list (`beside_names`).
             slot = Slot(name=name, kind=TEXT, required=axis.required,
                         question=axis.question,
+                        options=_options(getattr(axis, "beside", None),
+                                         axis.definitions, axis.glosses),
                         merged=getattr(axis, "merged", None))
         out.append(slot)
     return out

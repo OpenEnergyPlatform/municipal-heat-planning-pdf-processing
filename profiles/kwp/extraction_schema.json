@@ -14470,6 +14470,73 @@
      "doc": {
       "type": "integer"
      },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "input": {
+      "type": "object"
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "output": {
+      "type": "object"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "round": {
+      "type": "integer"
+     },
+     "rows": {},
+     "t": {
+      "const": "comb_check_ask"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
@@ -15034,6 +15101,9 @@
      "hits": {
       "type": "integer"
      },
+     "judged": {
+      "type": "integer"
+     },
      "kind": {
       "enum": [
        "section",
@@ -15066,6 +15136,9 @@
       "const": "comb"
      },
      "table_rows": {
+      "type": "integer"
+     },
+     "turned": {
       "type": "integer"
      }
     },

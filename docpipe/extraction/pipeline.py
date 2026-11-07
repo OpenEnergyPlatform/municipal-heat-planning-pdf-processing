@@ -48,7 +48,8 @@ from . import queries as queries_mod
 from .wording import say
 from .spec import Spec, fold_label
 from .fields import (CHOICE, DERIVED, NUMBER, READ, SAID_UNSTATED, TEXT,
-                     UNANSWERED, UNBACKED, UNSTATED, wording_asked)
+                     UNANSWERED, UNBACKED, UNSTATED, beside_names,
+                     wording_asked)
 from .verify import (MIN_QUOTE_CHARS, Refusal, Verified, canonical_number,
                      flat, numbers_in, quote_in, verify_tuple, wording_of)
 from .trust import document_summary
@@ -971,11 +972,12 @@ def answer_in_quote(slot, given, wording: Optional[str], quote: str) -> bool:
         return wanted in numbers_in(quote)
     said = flat(quote).casefold()
     option = (option_named(slot, given)
-              if slot.kind == CHOICE and slot.options else None)
-    # The document's own wording speaks for a choice from a list. A text
-    # answer is its own wording, and one written beside it vouches for
-    # nothing but itself (owner decision 2026-11-04).
-    if wording and slot.kind == CHOICE:
+              if slot.options and slot.kind in (CHOICE, TEXT) else None)
+    # The document's own wording speaks for a choice from a list, and for an
+    # entry a coordinate of names takes beside them (owner decision
+    # 2026-11-07). A text answer is its own wording, and one written beside
+    # it vouches for nothing but itself (owner decision 2026-11-04).
+    if wording and (slot.kind == CHOICE or option is not None):
         return stands_in(slot, option, flat(wording).casefold(), said)
     spellings = ((option.label, *option.synonyms) if option is not None
                  else (str(given),))
@@ -1341,7 +1343,10 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             unstated += 1
             continue
         option = (option_named(slot, given)
-                  if slot.kind == CHOICE and slot.options else None)
+                  if slot.options and slot.kind in (CHOICE, TEXT) else None)
+        # A name of a coordinate that takes entries beside its names
+        # (`fields.beside_names`): its own wording, as any free text.
+        name_only = beside_names(slot) and option is None
         if slot.kind == CHOICE and slot.options and option is None:
             # An answer to a closed list that is not on it. It used to be read
             # whenever its wording stood in the quote, and the class lookup
@@ -1403,19 +1408,25 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                                                bases)
         if not backed and named is None:
             row.claim[f"{slot.name}_state"] = UNBACKED
-            shown_answer = wording or given
+            # A name is told as itself: the wording beside it is not what
+            # its quote has to print.
+            shown_answer = given if name_only else (wording or given)
             failed.append({"row": row.label, "why": "answer_not_in_quote",
                            "given": given, "raw": wording, "quote": quote,
                            "reason": say(
-                               "answer_not_in_quote" if wording_asked(slot)
+                               "answer_not_in_quote"
+                               if wording_asked(slot) and not name_only
                                else "answer_not_in_quote_text",
                                answer=shown_answer) + say(
                                not_in_quote, unstated=UNSTATED)})
             unbacked += 1
             continue
         row.claim[f"{slot.name}_state"] = READ
-        row.claim[slot.name] = given
-        if wording:
+        # An entry beside the names is kept as what it is, its out: key,
+        # so nothing takes it for a name (`naming.read_name`, the graph).
+        row.claim[slot.name] = option.uri \
+            if beside_names(slot) and option is not None else given
+        if wording and not name_only:
             row.claim[f"{slot.name}_raw"] = wording
             if not wording_names_option(slot, given, wording):
                 # The wording does not say the option that was chosen. Kept,
@@ -1426,13 +1437,13 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 # without guessing at the ratio now.
                 row.claim[f"{slot.name}_raw_foreign"] = True
                 raw_foreign += 1
-        elif not wording_asked(slot) and isinstance(given, str) \
-                and given.strip():
+        elif (not wording_asked(slot) or name_only) \
+                and isinstance(given, str) and given.strip():
             # A free text answer is its own wording: the request does not ask
             # it twice (owner decision 2026-11-06), and the row keeps it
             # beside the answer as every coordinate keeps its wording.
             row.claim[f"{slot.name}_raw"] = given
-        elif slot.kind == CHOICE:
+        elif slot.kind == CHOICE or option is not None:
             # A choice without the words it was read from cannot be re-mapped
             # when the vocabulary moves: the URI is all that survives, and
             # which wording the model resolved to it is gone. That is the

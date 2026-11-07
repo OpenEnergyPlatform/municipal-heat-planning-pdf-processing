@@ -50,7 +50,7 @@ table gives this profile's own answer.
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 6 prompt ids of its own | page transcription, English artefact repair, table and figure captioning; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object (`reading.REQUIRED`), in English, the language of the prompts of the first three; the extraction prompts are German and `extraction.PHRASES` is another table, the harvest's own |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and names (a name opens each line of the values index) and two filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `FRONT_PAGE_PARAMETERS`, `FRONT_PAGE_TITLE`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 14 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document region list, the sentences the stage writes to the model and the passages the preflight holds its prompts to, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
+| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `FRONT_PAGE_PARAMETERS`, `FRONT_PAGE_TITLE`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 16 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document region list, the sentences the stage writes to the model and the passages the preflight holds its prompts to, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
 | The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 11 prompt ids of its own | the English chat wording and the answer loop's own prompts; the twelfth, `json_format`, is the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copy gave |
 
@@ -80,7 +80,11 @@ one author's name: a person, or the institution where the publication names
 no person. `extraction/comb` looks for a scenario still open in the rest of
 the publication; it offers no "not stated" (owner decision 2026-11-06): the
 model gives what it found and leaves out the rest, `{}` is a valid reply, and a
-coordinate left out is not asked for again. It ends `unstated` only after every
+coordinate left out is not asked for again. A find quoted from a passage other
+than the value's own and its section is checked first by `extraction/comb_check`,
+which asks whether the passage is about this value; on "no" the find is dropped
+and the search goes on (owner decision 2026-11-07, see
+[extraction](../stages/extraction.md)). It ends `unstated` only after every
 passage of the publication was listed; a coordinate the reply gave in another
 form is told `wrong_shape`. No field of this profile holds numbers, so a table is read
 by `read_values` and `read_text` too, as a table is in every profile, and a
@@ -161,7 +165,12 @@ plain wording, the glossary's definition of a dynamic list.
 This profile uses the second mechanism once: `scenario_region`'s value is
 `vocabulary_dynamic` (`extraction_spec.json`, the `scenario_region`
 parameter), picking from a narrowed slice of the OEKG's 249 study regions.
-A scenario is not a list at all: the value of `scenario_label` and the
+A scenario is not a list at all, apart from one entry beside the names: the
+`scenario` axis lists `out:status_quo` under `"beside"` (label "status quo",
+spellings "historical" and "base year"), a value of a past or the current year,
+measured, observed or balanced, which belongs to no scenario, as KWP's closed
+list has "Bestand"; `read_text` and `comb` explain it and `value_raw`
+(`Axis.beside`, see [extraction](../stages/extraction.md)). The value of `scenario_label` and the
 `scenario` axis of the other four parameters (`scenario_type`,
 `scenario_abstract`, `scenario_region`, `scenario_year`, together
 `SCENARIO_FIELDS` in `kg.py`) are free text marked `merged: "scenario"`,
@@ -476,7 +485,10 @@ parameter, `scenario_names()` in `kg.py` gives the scenarios the row belongs
 to: those its name means (`value_means` for a `scenario_label` row,
 `scenario_means` for any other), else the scenario of its own name as
 printed. A name that does not stand in its own quote mints nothing, and the
-row contributes no factsheet, comment or number. A name of several scenarios
+row contributes no factsheet, comment or number. A row whose scenario is the
+`out:status_quo` entry hangs on no scenario: it is counted under "not in the
+graph by choice" and not under "no scenario to hang them on", and its year or
+region becomes no scenario's year or region. A name of several scenarios
 stands for each of them, so one row lands on several factsheets. A
 factsheet's `rdfs:label` and `dc:acronym` are both the name the scenario is
 called by (`kg.py`, the factsheet block of `_make_builder`). Every factsheet
@@ -768,11 +780,11 @@ Read from `profiles/scenarios/extraction_schema.json` by `scripts/build_docs.py`
 | `publication_date` | string | `parameter` (one of the spec's parameters) | `studyreport` |
 | `publication_doi` | string | `parameter` (one of the spec's parameters) | `studyreport` |
 | `publication_title` | string | `parameter` (one of the spec's parameters) | `studyreport` |
-| `scenario_abstract` | string | `parameter` (one of the spec's parameters), `scenario` (string) | `scenariofactsheet` |
+| `scenario_abstract` | string | `parameter` (one of the spec's parameters), `scenario` (string, or 1 out: entry beside) | `scenariofactsheet` |
 | `scenario_label` | string | `parameter` (one of the spec's parameters) | `scenariofactsheet` |
-| `scenario_region` | string | `parameter` (one of the spec's parameters), `scenario` (string), `value` (string) | `scenariofactsheet` |
-| `scenario_type` | string | `parameter` (one of the spec's parameters), `scenario` (string), `value` (string) | `scenariofactsheet` |
-| `scenario_year` | string | `parameter` (one of the spec's parameters), `scenario` (string) | `scenariofactsheet` |
+| `scenario_region` | string | `parameter` (one of the spec's parameters), `scenario` (string, or 1 out: entry beside), `value` (string) | `scenariofactsheet` |
+| `scenario_type` | string | `parameter` (one of the spec's parameters), `scenario` (string, or 1 out: entry beside), `value` (string) | `scenariofactsheet` |
+| `scenario_year` | string | `parameter` (one of the spec's parameters), `scenario` (string, or 1 out: entry beside) | `scenariofactsheet` |
 | `study_acronym` | string | `parameter` (one of the spec's parameters) | `scenariobundle` |
 | `study_descriptor` | string | `parameter` (one of the spec's parameters), `value` (string) | `scenariobundle` |
 | `study_funder` | string | `parameter` (one of the spec's parameters) | `funder` |

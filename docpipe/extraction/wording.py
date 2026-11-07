@@ -35,6 +35,7 @@ REQUIRED = frozenset({
     "quote_not_in_source", "quote_not_in_passage", "quote_not_shown",
     "quote_too_short", "answer_not_in_quote", "answer_not_in_quote_text",
     "or_unstated", "or_leave_out", "year_not_in_quote",
+    "not_about_value", "verdict_not_an_option",
     "frame_missing", "frame_no_quote", "frame_quote_not_in_source",
     "frame_answer_not_in_quote", "frame_not_an_option", "frame_not_a_year",
     "frame_options",

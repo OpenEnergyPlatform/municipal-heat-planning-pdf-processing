@@ -70,7 +70,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.chunking.merge](docpipe.chunking.merge.md): Merges the preprocessing and imageprocessing outputs as chunking's first step. (2 functions)
 - [docpipe.chunking.models](docpipe.chunking.models.md): Data structures for the chunkingandembedding module. (1 class)
 - [docpipe.chunking.pipeline](docpipe.chunking.pipeline.md): Orchestrates the chunkingandembedding stage: merge, then the database step, then embedding. (5 functions)
-- [docpipe.chunking.qwen3_vl_embedding](docpipe.chunking.qwen3_vl_embedding.md): Qwen3-VL wrapper producing normalized text and vision-language embeddings. (4 classes, 2 functions)
+- [docpipe.chunking.qwen3_vl_embedding](docpipe.chunking.qwen3_vl_embedding.md): Qwen3-VL wrapper producing normalized text and vision-language embeddings. (4 classes, 4 functions)
 - [docpipe.chunking.reembed](docpipe.chunking.reembed.md): Embeds every item of an index again, into a new index file and under the ids it already has. (1 class, 6 functions)
 
 ## docpipe.compile
@@ -96,11 +96,11 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.\_\_main\_\_](docpipe.extraction.__main__.md): Allow execution via: python -m docpipe.extraction
 - [docpipe.extraction.archive](docpipe.extraction.archive.md): A harvest or stamp file is never overwritten. (3 functions)
 - [docpipe.extraction.benchmark](docpipe.extraction.benchmark.md): One harvest, recorded once and made again without a model. (7 functions)
-- [docpipe.extraction.combing](docpipe.extraction.combing.md): The coordinates the reading left open, looked for in the rest of the plan. (2 classes, 7 functions)
+- [docpipe.extraction.combing](docpipe.extraction.combing.md): The coordinates the reading left open, looked for in the rest of the plan. (2 classes, 10 functions)
 - [docpipe.extraction.compute](docpipe.extraction.compute.md): The numbers a plan does not print and its printed numbers yield. (2 classes, 13 functions)
 - [docpipe.extraction.contract](docpipe.extraction.contract.md): The core's half of the extraction prompts: where its templates are, which languages they come in and the facts the code fills into them. (8 functions)
 - [docpipe.extraction.evaluate](docpipe.extraction.evaluate.md): Holds a harvest against what people decided about it. (1 class, 11 functions)
-- [docpipe.extraction.fields](docpipe.extraction.fields.md): Computes the deterministic skeleton of a tuple from the spec. (2 classes, 18 functions)
+- [docpipe.extraction.fields](docpipe.extraction.fields.md): Computes the deterministic skeleton of a tuple from the spec. (2 classes, 19 functions)
 - [docpipe.extraction.found](docpipe.extraction.found.md): Where the harvests before this run found something. (2 classes, 2 functions)
 - [docpipe.extraction.gate](docpipe.extraction.gate.md): Whether the graph of a run can still be written, before the run. (3 functions)
 - [docpipe.extraction.gold](docpipe.extraction.gold.md): What a person decided about harvested values, kept beside the harvest and never in it. (1 class, 16 functions)

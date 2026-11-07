@@ -81,6 +81,8 @@ def test_an_example_of_a_list_closed_per_document_is_read_as_a_choice():
         if axis is not None:
             axis.pop("type")
             axis.pop("merged")
+            # A list closes it: entries beside names are for names only.
+            axis.pop("beside", None)
             axis["dynamic"] = True
     closed = load_spec(raw)
     quote = "In the NDC scenario, emissions peak before 2030."

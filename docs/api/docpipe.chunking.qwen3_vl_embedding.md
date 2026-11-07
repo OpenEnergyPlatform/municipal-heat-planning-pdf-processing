@@ -181,7 +181,8 @@ def process(self, inputs: List[Dict[str, Any]], normalize: bool = True) -> torch
 
 Embed a batch of inputs — dicts with 'text' and optionally
 'image'/'video' — into a (batch_size, hidden_dim) tensor, L2-normalized
-unless `normalize` is False.
+unless `normalize` is False. The inputs run in groups of similar
+length, each padded to its own longest (`in_groups`).
 
 ### MultiGPUEmbedder
 
@@ -241,5 +242,25 @@ def sample_frames(frames: List[Union[str, Image.Image]], num_segments: int, max_
 ```
 
 Sample evenly spaced frames from a frame list.
+
+### pad_groups
+
+```python
+def pad_groups(sizes: List[int], many: int = PAD_GROUPS) -> List[List[int]]
+```
+
+[[indices]] of the inputs of *sizes*: sorted by size and cut into
+*many* groups of neighbouring sizes, fewer where there are fewer inputs,
+their counts as even as the cut allows. Every index stands in one group.
+
+### in_groups
+
+```python
+def in_groups(inputs: List[Dict[str, Any]], run, many: int = PAD_GROUPS) -> torch.Tensor
+```
+
+*run(items)* -> a tensor of one row per item, once per group of
+*inputs* (`pad_groups` over `_input_size`), so each group is padded only
+to its own longest; the rows come back in the order of *inputs*.
 
 [Back to the index](../README.md)

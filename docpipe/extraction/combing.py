@@ -66,6 +66,7 @@ from __future__ import annotations
 
 import collections
 import copy
+import re
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Callable, Optional
@@ -73,15 +74,26 @@ from typing import Callable, Optional
 from . import lookup
 from .fields import (EXHAUSTED, READ, SAID_UNSTATED, UNANSWERED, UNBACKED,
                      UNSTATED)
-from .pipeline import Row, merge_field, row_label
+from .pipeline import Row, answer_in_quote, merge_field, row_label
 from .reading import (SHOWN, Gathered, answer_of, answer_schema,
                       answers_each, around_of, coordinate_shown, entry_example,
                       first_line, gather, groups_of, heading_of, known_shown,
                       more_schema, several, shown_as, shown_hits, slots_of,
                       source_of, unanswered_what, years_of)
+from .verify import MIN_QUOTE_CHARS, quote_in
 from .wording import say
 
 COMB_PROMPT_ID = "extraction/comb"
+# The request that asks of a find quoted from a passage other than the
+# value's own and its section whether that place speaks about the value
+# (owner decision 2026-11-07, after a probe in which the model took the
+# scenario of a neighbouring sentence: "The green marker indicates
+# projections of EC LTS Baseline for 2030" for years of other figures).
+CHECK_PROMPT_ID = "extraction/comb_check"
+# Its answers, and the reason a find it says "no" to is not taken: the
+# requests that follow tell the model so, and the search goes on.
+ABOUT = ("yes", "no")
+NOT_ABOUT = "not_about_value"
 
 # What a combing request tells of a quote that stands in nothing it showed,
 # in the names of what it shows: "more", "hits", "passage", "row" (owner
@@ -98,9 +110,11 @@ OPEN = (SAID_UNSTATED, UNBACKED, UNANSWERED)
 # The hits of one search the request shows, per kind, are `reading.SHOWN`
 # (owner decision 2026-11-04: the best 15 sections, 20 tables and 20
 # figures), cut by `reading.shown_hits`; both are named here as before.
-__all__ = ["COMB_PROMPT_ID", "OPEN", "SHOWN", "Comber", "Combed",
-           "as_rows", "comb_example", "comb_response_format", "finds",
-           "found", "open_of", "shown_corrections", "shown_hits"]
+__all__ = ["ABOUT", "CHECK_PROMPT_ID", "COMB_PROMPT_ID", "NOT_ABOUT", "OPEN",
+           "SHOWN", "Comber", "Combed", "as_rows", "check_example",
+           "check_response_format", "comb_example", "comb_response_format",
+           "finds", "found", "open_of", "place_text", "shown_corrections",
+           "shown_hits"]
 
 # What the example of a combing request asks of the rest of the plan, as the
 # prompts' examples always showed it.
@@ -185,6 +199,35 @@ def comb_example(slots: list) -> dict:
             "more": [dict(ask) for ask in MORE_EXAMPLE]}
 
 
+def check_response_format() -> dict:
+    """What the check of a find answers: whether the place it was quoted
+    from speaks about the value, one of `ABOUT`."""
+    schema = {"type": "object",
+              "properties": {"about": {"enum": list(ABOUT)}},
+              "required": ["about"], "additionalProperties": False}
+    return {"type": "json_schema",
+            "json_schema": {"name": "comb_check", "schema": schema}}
+
+
+def check_example() -> dict:
+    """The reply of a check as its example shows it."""
+    return {"about": ABOUT[0]}
+
+
+def place_text(text: str, quote: str, budget: Optional[int]) -> str:
+    """The text of the place a check shows: whole where it fits *budget*
+    characters, else the stretch of *budget* around *quote*, so the quote
+    stands in what is shown."""
+    text = text or ""
+    if not budget or len(text) <= budget:
+        return text
+    words = [re.escape(word) for word in (quote or "").split()]
+    hit = re.search(r"\s+".join(words), text) if words else None
+    start = max(0, (hit.start() if hit else 0)
+                - max(0, budget - (len(hit.group(0)) if hit else 0)) // 2)
+    return text[start:start + budget]
+
+
 def as_rows(reply, label: str):
     """A reply about the one row a request showed (`comb_response_format`)
     as the rows the step folds: its answers under that row's *label*, its
@@ -253,6 +296,11 @@ class Combed:
     # the other values of its table that took the answers combed for this
     # one, its frame open on all of them (owner decision 2026-11-06)
     table_rows: int = 0
+    # finds quoted from a passage other than the value's own the check was
+    # asked about, and those it said do not speak about the value (owner
+    # decision 2026-11-07)
+    judged: int = 0
+    turned: int = 0
 
 
 # The keys of one coordinate a value takes from the value of its table that
@@ -292,12 +340,16 @@ class Comber:
     passages best first for the search sentences *probes*
     (`runner.make_more_sources`): the reading's sentences, and the model's
     own under "similar". *known(claim, asked)* is what a row has read in the
-    plan's words (`runner.row_context`).
+    plan's words (`runner.row_context`). *check(payload, shape, document_id,
+    source, group, example)*, where given, is the request that asks of a
+    find quoted from a passage other than the value's own and its section
+    whether that place speaks about the value (`CHECK_PROMPT_ID`, owner
+    decision 2026-11-07).
     """
 
     def __init__(self, spec, ask: Callable, rank: Optional[Callable],
                  known: Callable, *, bases: Optional[Callable] = None,
-                 pool=None, trace=None):
+                 pool=None, trace=None, check: Optional[Callable] = None):
         self.spec = spec
         self.ask = ask
         self.rank = rank
@@ -305,6 +357,7 @@ class Comber:
         self.bases = bases or (lambda pairs: [])
         self.pool = pool
         self.trace = trace
+        self.check = check
 
     def __call__(self, document_id: int, reads: list, passages: dict,
                  pairs: list, budget: Optional[int] = None,
@@ -519,13 +572,75 @@ class Comber:
             **years_of(bases, asked)}
         shape = comb_response_format(asked)
         example = comb_example(asked)
+        # The value's own passage and its section: a find quoted from them
+        # needs no check (owner decision 2026-11-07).
+        own = {origin, parent} | {(s.owner_kind, s.owner_id)
+                                  for s in heading_of(source)}
+        # What the check said of each find, by coordinate, answer and quote,
+        # so a find given again is not asked about twice; and what the
+        # requests after a "no" tell the model, per row and coordinate.
+        judged: dict = {}
+        turned: dict = collections.defaultdict(dict)
+
+        def shown_now() -> list:
+            # Whatever the request showed of the plan may be quoted (owner
+            # decision 2026-11-05), each piece under the passage it was shown
+            # with: the value's passage and its section, their heading and
+            # title, what the model fetched, the hits' lines and titles, and
+            # the wordings the value has read.
+            return [source] + ([around] if around is not None else []) \
+                + heading_of(source) \
+                + shown_as(source, lookup.title_of(source)) \
+                + gathered.evidence(passages) + [
+                    one for row in rows
+                    for one in known_shown(row.claim, knowns[row.label],
+                                           passages)]
+
+        def judge(reply, row: Optional[Row] = None) -> None:
+            # Each find of *reply* quoted from a passage other than the
+            # value's own is asked about once (`_verdict`); one the check
+            # says "no" to is taken out of the reply, and the requests that
+            # follow say so. A find the check of its quote and answer would
+            # refuse anyway is left to it (`merge_field`).
+            row = row or rows[0]
+            entry = entry_of(reply, row.label)
+            if self.check is None or not entry:
+                return
+            evidence = None
+            for slot in asked:
+                given = entry.get(slot.name)
+                if given is None:
+                    continue
+                kept = []
+                for one in (given if isinstance(given, list) else [given]):
+                    if isinstance(one, dict) and found(one):
+                        if evidence is None:
+                            evidence = shown_now()
+                        verdict = self._verdict(
+                            document_id, slot, one, evidence, own, judged,
+                            result, base, row_shown(row), source, group,
+                            passages, budget)
+                        if verdict == ABOUT[1]:
+                            turned[row.label][slot.name] = say(
+                                NOT_ABOUT, answer=one.get("value"))
+                            continue
+                    kept.append(one)
+                if kept:
+                    entry[slot.name] = kept if isinstance(given, list) \
+                        else kept[0]
+                else:
+                    entry.pop(slot.name)
 
         def ask(corrections: Optional[list] = None,
                 row: Optional[Row] = None):
-            # One row per request: the value's own, or one asked again.
+            # One row per request: the value's own, or one asked again. A
+            # find the check turned is told with every request after it.
             row = row or rows[0]
             payload = {**base, "row": row_shown(row), **gathered.context()}
-            told = shown_corrections(corrections, row.label)
+            told = shown_corrections(corrections, row.label) or {}
+            if turned.get(row.label):
+                told = {**told, "what": {**turned[row.label],
+                                         **(told.get("what") or {})}}
             if told:
                 payload["corrections"] = told
             return as_rows(self.ask(payload, shape, document_id, source,
@@ -552,6 +667,9 @@ class Comber:
         listing = {"end": False}
 
         def next_passages(reply) -> bool:
+            # A find the check turns is no find: the search goes on (owner
+            # decision 2026-11-07).
+            judge(reply)
             entry = entry_of(reply, rows[0].label)
             if all(found(entry.get(name)) for name in opened[rows[0].label]):
                 return False
@@ -569,6 +687,9 @@ class Comber:
 
         reply, more = gather(ask, reply, gathered, list(passages.values()),
                              passages, budget, then=next_passages)
+        # The reply that stands where the next request no longer fit was
+        # never past `next_passages`.
+        judge(reply)
         result.asked += more
         result.fetched = len(gathered.sources)
         result.searched = sum(1 for listed in gathered.hits
@@ -578,17 +699,7 @@ class Comber:
         # wording the model saw where it gave one (`pipeline.merge_field`).
         unfound = entry_of(reply, rows[0].label)
         reply = finds(reply, asked)
-        # Whatever the request showed of the plan may be quoted (owner
-        # decision 2026-11-05), each piece under the passage it was shown
-        # with: the value's passage and its section, their heading and
-        # title, what the model fetched, the hits' lines and titles, and the
-        # wordings the value has read.
-        evidence = [source] + ([around] if around is not None else []) \
-            + heading_of(source) + shown_as(source, lookup.title_of(source)) \
-            + gathered.evidence(passages) + [
-                one for row in rows
-                for one in known_shown(row.claim, knowns[row.label],
-                                       passages)]
+        evidence = shown_now()
         # This request answers the open coordinates afresh: what it leaves
         # without an answer is unanswered, not what the reading said.
         for row in rows:
@@ -611,6 +722,7 @@ class Comber:
                 again = ask([correction], by_label[correction["row"]])
                 result.asked += 1
                 if isinstance(again, dict):
+                    judge(again, by_label[correction["row"]])
                     again, _ = self._each(rows, finds(again, asked), asked,
                                           opened, knowns, False)
                     self._merged(rows, again, asked, opened, evidence,
@@ -620,6 +732,7 @@ class Comber:
             again = ask(corrections)
             result.asked += 1
             if isinstance(again, dict):
+                judge(again)
                 again, _ = self._each(rows, finds(again, asked), asked,
                                       opened, knowns, False)
                 self._merged(rows, again, asked, opened, evidence,
@@ -630,6 +743,65 @@ class Comber:
                             if row.claim.get(f"{name}_state") == READ)
         self._traced(document_id, result)
         return result
+
+    def _verdict(self, document_id: int, slot, one: dict, evidence: list,
+                 own: set, judged: dict, result: Combed, base: dict,
+                 row: dict, source, group, passages: dict,
+                 budget: Optional[int]) -> Optional[str]:
+        """What the check says of the find *one* for *slot* (owner decision
+        2026-11-07): "yes" or "no" where its quote stands in a passage the
+        request showed other than the value's own and its section (*own*);
+        None where it stands in one of those, where the check of its quote
+        and answer would refuse it anyway (`merge_field`), or where no reply
+        gave one of `ABOUT`. Asked once per coordinate, answer and quote
+        (*judged*), and once more, told why, where the reply names neither
+        answer."""
+        value, quote = one.get("value"), one.get("quote")
+        if not isinstance(quote, str) or len(quote.strip()) < MIN_QUOTE_CHARS:
+            return None
+        wording = one.get("value_raw")
+        wording = wording.strip() if isinstance(wording, str) \
+            and wording.strip() else None
+        if not answer_in_quote(slot, value, wording, quote):
+            return None
+        cited = next((s for s in evidence if quote_in(s.text or "", quote)),
+                     None)
+        if cited is None or (cited.owner_kind, cited.owner_id) in own:
+            return None
+        key = (slot.name, str(value), quote)
+        if key in judged:
+            return judged[key]
+        place = passages.get((cited.owner_kind, cited.owner_id)) or cited
+        payload = {"passage": base["passage"],
+                   "parameter": base["parameter"], "row": row,
+                   "coordinate": {slot.name: coordinate_shown(
+                       slot, unstated=False)},
+                   "answer": {k: one[k] for k in ("value", "value_raw",
+                                                  "quote")
+                              if one.get(k) not in (None, "")},
+                   "place": {"kind": place.owner_kind,
+                             "title": lookup.title_of(place),
+                             "section": (place.provenance or {}).get(
+                                 "section_title"),
+                             "text": place_text(place.text, quote, budget)}}
+        verdict, corrections = None, None
+        for _ in range(2):
+            asked = {**payload,
+                     **({"corrections": corrections} if corrections else {})}
+            reply = self.check(asked, check_response_format(), document_id,
+                               source, group=group.name if group is not None
+                               else None, example=check_example())
+            result.judged += 1
+            about = reply.get("about") if isinstance(reply, dict) else None
+            if about in ABOUT or not isinstance(reply, dict):
+                verdict = about if about in ABOUT else None
+                break
+            corrections = {"what": {"about": say("verdict_not_an_option",
+                                                 given=about)}}
+        judged[key] = verdict
+        if verdict == ABOUT[1]:
+            result.turned += 1
+        return verdict
 
     @staticmethod
     def _ended(rows: list, opened: dict, corrections: list, unfound: dict,
@@ -745,4 +917,6 @@ class Comber:
                        exhausted=result.exhausted, listed=result.listed,
                        group=result.group,
                        **({"table_rows": result.table_rows}
-                          if result.table_rows else {}))
+                          if result.table_rows else {}),
+                       **({"judged": result.judged, "turned": result.turned}
+                          if result.judged else {}))

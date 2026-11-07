@@ -69,7 +69,10 @@ Author: Felix Vossel
 
 What `__all__` names, and where each name is defined:
 
+- `ABOUT`
+- `CHECK_PROMPT_ID`
 - `COMB_PROMPT_ID`
+- `NOT_ABOUT`
 - `OPEN`
 - `SHOWN` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
 - `shown_hits` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
@@ -103,6 +106,8 @@ Fields:
 - `group: Optional[str] = None`: the group of the spec asked
 - `made: list = field(default_factory=list)`: rows made beside the value, one per further name it was stated for
 - `table_rows: int = 0`: the other values of its table that took the answers combed for this one, its frame open on all of them (owner decision 2026-11-06)
+- `judged: int = 0`: finds quoted from a passage other than the value's own the check was asked about, and those it said do not speak about the value (owner decision 2026-11-07)
+- `turned: int = 0`
 
 ### Comber
 
@@ -120,14 +125,18 @@ of the spec it asks, for its trace, *example* the reply its prompt shows
 passages best first for the search sentences *probes*
 (`runner.make_more_sources`): the reading's sentences, and the model's
 own under "similar". *known(claim, asked)* is what a row has read in the
-plan's words (`runner.row_context`).
+plan's words (`runner.row_context`). *check(payload, shape, document_id,
+source, group, example)*, where given, is the request that asks of a
+find quoted from a passage other than the value's own and its section
+whether that place speaks about the value (`CHECK_PROMPT_ID`, owner
+decision 2026-11-07).
 
 #### Comber.\_\_init\_\_
 
 ```python
 def __init__(self, spec, ask: Callable, rank: Optional[Callable],
              known: Callable, *, bases: Optional[Callable] = None,
-             pool=None, trace=None)
+             pool=None, trace=None, check: Optional[Callable] = None)
 ```
 
 #### Comber.comb_groups
@@ -240,6 +249,33 @@ The reply of a combing request as its example shows it: exactly the
 coordinates this request asks, in its order, each read
 (`reading.entry_example`), then what it asks of the rest of the plan,
 as `comb_response_format` has them (owner decision 2026-11-06).
+
+### check_response_format
+
+```python
+def check_response_format() -> dict
+```
+
+What the check of a find answers: whether the place it was quoted
+from speaks about the value, one of `ABOUT`.
+
+### check_example
+
+```python
+def check_example() -> dict
+```
+
+The reply of a check as its example shows it.
+
+### place_text
+
+```python
+def place_text(text: str, quote: str, budget: Optional[int]) -> str
+```
+
+The text of the place a check shows: whole where it fits *budget*
+characters, else the stretch of *budget* around *quote*, so the quote
+stands in what is shown.
 
 ### as_rows
 

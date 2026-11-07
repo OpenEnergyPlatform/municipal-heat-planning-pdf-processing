@@ -246,6 +246,17 @@ PHRASES = {
     "year_not_in_quote": (
         'Das Jahr {given!r} steht nicht in seinem Zitat {quote!r}. Zitier '
         'die Stelle, die es druckt.'),
+    # A find of the combing quoted from a passage other than the value's own
+    # that the check found does not speak about the value (owner decision
+    # 2026-11-07), and a check whose answer is neither "yes" nor "no".
+    "not_about_value": (
+        'Eine zweite Prüfung ergab: Die Stelle, die du für {answer!r} '
+        'zitiert hast, spricht nicht über diesen Wert und sagt deshalb nicht, '
+        'was zu ihm gehört. Antworte nur aus einer Stelle, die über diesen '
+        'Wert spricht; gibt es keine, lass die Angabe weg.'),
+    "verdict_not_an_option": (
+        'Dein "about" {given!r} ist weder "yes" noch "no". Antworte mit einem '
+        'von beiden.'),
     # The key of the frame request that holds the entries of a closed frame
     # coordinate. The frame prompt reads them there.
     "frame_options": "scenarios",

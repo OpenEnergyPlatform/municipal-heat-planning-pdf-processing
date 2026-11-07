@@ -385,7 +385,7 @@ PROMPT_IDS = (QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID, ROWS_PROMPT_ID,
 # combing.py), the run's own wherever the profile writes them and its spec
 # names groups (`surveyed_flow`).
 SURVEY_PROMPT_IDS = (survey_map.SURVEY_PROMPT_ID, *reading_map.PROMPT_IDS,
-                     combing_map.COMB_PROMPT_ID)
+                     combing_map.COMB_PROMPT_ID, combing_map.CHECK_PROMPT_ID)
 # Which of the two flows this run harvests with: "survey" or "fieldwise".
 # `main` sets it; stamps and producers record it and the prompts it sends,
 # and nothing compares either.
@@ -2165,7 +2165,9 @@ def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
     if not spec.groups:
         return None
     try:
-        prompt = prompts.load(combing_map.COMB_PROMPT_ID)
+        prompt, check_prompt = (prompts.load(prompt_id) for prompt_id in
+                                (combing_map.COMB_PROMPT_ID,
+                                 combing_map.CHECK_PROMPT_ID))
     except (FileNotFoundError, LookupError):
         return None
     client = _client()
@@ -2183,10 +2185,21 @@ def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
             owner=source.owner_id, group=group,
             corrections=len(payload.get("corrections") or ()))
 
+    def check(payload, shape, document_id, source, group=None, example=None):
+        # A find quoted from a passage other than the value's own: does that
+        # place speak about the value (owner decision 2026-11-07)?
+        text = json.dumps(payload, ensure_ascii=False, indent=2)
+        return ask_in_grammar(
+            client, check_prompt, [{"role": "user", "content": text}], shape,
+            document_id, "comb_check", "about", example=example,
+            parameter=payload["parameter"]["key"], kind=source.owner_kind,
+            owner=source.owner_id, group=group,
+            corrections=len(payload.get("corrections") or ()))
+
     comber = combing_map.Comber(
         spec, ask, rank, row_context,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
-        pool=AHEAD, trace=trace.event)
+        pool=AHEAD, trace=trace.event, check=check)
     # The sentences the search for a parameter the survey named no passage
     # for ranks with (`make_seek_probes`); None searches with its label.
     comber.seek = seek

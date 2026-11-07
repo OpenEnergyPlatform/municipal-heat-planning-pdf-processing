@@ -105,6 +105,12 @@ class Axis:
     # which of the document's names of that kind mean the same thing is asked
     # once it is read (`naming.py`).
     merged: Optional[str] = None
+    # What such an axis answers instead of a name, uri -> labels like a
+    # vocabulary, each an out: entry with its meaning in `definitions` (owner
+    # decision 2026-11-07): "status quo" for a value of a past or the current
+    # year, which belongs to no scenario, as KWP's closed list has "Bestand".
+    # Read with its wording like an entry of a list, and never a name.
+    beside: Optional[dict] = None
     # The one line the field request asks. It lives on the axis because the
     # harvest asks per field: a rule buried in a prompt that covers sixteen
     # fields at once is a rule the model can skip, and skipping is what cost
@@ -409,9 +415,27 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
         _fail(path, "merged names the kind of thing, a non-empty string")
     if merged and (axis_type != "text" or vocabulary or enum or dynamic):
         _fail(path, "merged is for a free-text axis only")
+    beside, beside_definitions, beside_glosses = _vocabulary(
+        f"{path}.beside", raw.get("beside"))
+    if beside is not None:
+        if not merged:
+            _fail(f"{path}.beside", "entries beside the names are for an axis "
+                                    "of names only (merged)")
+        for uri, labels in beside.items():
+            # The out: convention: nothing that turns an answer into a node
+            # or a name takes one (`graphkit.NOT_IN_GRAPH`).
+            if not str(uri).startswith("out:"):
+                _fail(f"{path}.beside.{uri}", "an entry beside the names is "
+                                              "an out: entry, it names nothing")
+            if not isinstance(labels, list) or not labels or \
+                    not all(isinstance(l, str) and l.strip() for l in labels):
+                _fail(f"{path}.beside.{uri}",
+                      "labels must be a non-empty list of strings")
+        definitions = {**definitions, **beside_definitions}
+        glosses = {**glosses, **beside_glosses}
     return Axis(name=name, vocabulary=vocabulary, type=axis_type,
                 enum=enum, required=bool(raw.get("required", False)),
-                dynamic=dynamic, merged=merged,
+                dynamic=dynamic, merged=merged, beside=beside,
                 question=question, derive=derive,
                 kg=kg, definitions=definitions, glosses=glosses)
 
@@ -735,6 +759,11 @@ def axis_fingerprint(axis: "Axis") -> str:
         "dynamic": axis.dynamic,
         # Only where set, so no other coordinate's key moves.
         **({"merged": axis.merged} if axis.merged else {}),
+        **({"beside": {uri: {"spellings": sorted(map(str, labels or [])),
+                             "definition": (axis.definitions or {}).get(uri),
+                             "gloss": (axis.glosses or {}).get(uri)}
+                       for uri, labels in axis.beside.items()}}
+           if axis.beside else {}),
         "derive": axis.derive,
         # The offered list: identifier, the spellings a plan may use, and the
         # sentence saying what the term means. All three reach the model, so

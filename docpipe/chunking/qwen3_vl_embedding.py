@@ -365,8 +365,13 @@ class Qwen3VLEmbedder:
         """
         Embed a batch of inputs — dicts with 'text' and optionally
         'image'/'video' — into a (batch_size, hidden_dim) tensor, L2-normalized
-        unless `normalize` is False.
+        unless `normalize` is False. The inputs run in groups of similar
+        length, each padded to its own longest (`in_groups`).
         """
+        return in_groups(inputs, lambda items: self._embed(items, normalize))
+
+    def _embed(self, inputs: List[Dict[str, Any]], normalize: bool) -> torch.Tensor:
+        """One forward over *inputs*, every one padded to the longest."""
         conversations = [self.format_model_input(
             text=ele.get('text'),
             image=ele.get('image'),
@@ -397,7 +402,7 @@ class Qwen3VLEmbedder:
 
 
 def _input_size(item: Dict[str, Any]) -> int:
-    """Rough token cost of one item, for balancing shards.
+    """Rough token cost of one item, for balancing shards and grouping a call.
 
     Text length stands in for tokens: the ratio is near enough constant
     within a corpus, and only the ORDER matters here. An image is worth a
@@ -405,6 +410,42 @@ def _input_size(item: Dict[str, Any]) -> int:
     """
     size = len(item.get("text") or "")
     return size + (4000 if item.get("image") is not None else 0)
+
+
+# Groups a call's inputs run in (owner decision 2026-11-07). One forward pads
+# every input to the longest of the call: the 240 scenario names of one paper,
+# 116 characters on average and 403 at most, cost 2.3 times their tokens, and
+# on a CPU that was the hour a probe ran out of time in.
+PAD_GROUPS = 10
+
+
+def pad_groups(sizes: List[int], many: int = PAD_GROUPS) -> List[List[int]]:
+    """[[indices]] of the inputs of *sizes*: sorted by size and cut into
+    *many* groups of neighbouring sizes, fewer where there are fewer inputs,
+    their counts as even as the cut allows. Every index stands in one group."""
+    order = sorted(range(len(sizes)), key=lambda at: sizes[at])
+    count = min(many, len(order))
+    groups: List[List[int]] = []
+    start = 0
+    for made in range(count):
+        end = start + (len(order) - start) // (count - made)
+        groups.append(order[start:end])
+        start = end
+    return groups
+
+
+def in_groups(inputs: List[Dict[str, Any]], run, many: int = PAD_GROUPS) -> torch.Tensor:
+    """*run(items)* -> a tensor of one row per item, once per group of
+    *inputs* (`pad_groups` over `_input_size`), so each group is padded only
+    to its own longest; the rows come back in the order of *inputs*."""
+    groups = pad_groups([_input_size(item) for item in inputs], many)
+    if len(groups) <= 1:
+        return run(list(inputs))
+    parts = [run([inputs[at] for at in group]) for group in groups]
+    result = parts[0].new_empty((len(inputs), parts[0].shape[1]))
+    for group, part in zip(groups, parts):
+        result[torch.tensor(group, dtype=torch.long, device=part.device)] = part
+    return result
 
 
 class MultiGPUEmbedder:

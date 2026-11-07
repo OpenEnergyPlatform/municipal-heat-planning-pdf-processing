@@ -116,6 +116,8 @@ def unmerged_spec():
     raw = json.loads(SPEC_FILE.read_text(encoding="utf-8"))
     year = next(p for p in raw["parameters"] if p["uri"] == "scenario_year")
     year["axes"]["scenario"].pop("merged")
+    # Entries beside the names are for an axis of names only.
+    year["axes"]["scenario"].pop("beside", None)
     return load_spec(raw)
 
 
@@ -125,8 +127,11 @@ def test_a_scenario_is_read_as_printed_and_a_name_its_quote_lacks_is_not():
     read, calls = read_of(YEAR, (Y2030, {"value": None}),
                           groups={"scenario": NAMED})
     (_task, payload, shape), = [c for c in calls if c[0] == "scenario"]
-    assert payload["coordinates"]["scenario"].get("options") is None
+    # A wording, with no list but the entries it takes beside the names
+    # (owner decision 2026-11-07).
     assert payload["coordinates"]["scenario"]["kind"] == fields.TEXT
+    assert set(payload["coordinates"]["scenario"]["options"]) == {
+        "status quo"}
     claim = read.claims[0]
     assert (claim["scenario_state"], claim["scenario"]) == (READ, "CurPol")
     assert claim["scenario_quote"] == NAMED["scenario"]["quote"]

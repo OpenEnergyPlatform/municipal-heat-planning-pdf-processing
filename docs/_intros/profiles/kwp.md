@@ -73,7 +73,7 @@ table gives kwp's own answer.
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object, in English like the prompts of the first three (`reading.REQUIRED`), laid over the built-in profile's |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | plan-centric labels and names (a name opens each line of the values index), convoy membership, three filters |
 | Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `BASE_YEAR`, `TARGET_YEAR`, `document_context`, `FRONT_PAGE_PARAMETERS` (empty), `PHRASES`, `PROMPT_CHECKS`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE` | the spec, the slice gate, the frame axes, the frame pairs that are the plan's own state and its target, the German sentences the stage writes to the model (the frame request's list of a closed coordinate stands under `"scenarios"`), the passages the preflight holds its prompts to, and the language (`"de"`) of the core's templates its parts files are put together with |
-| Extraction | `prompts/extraction/*.md` | 14 prompt ids | phrase, anchors and queries as plain files; frame, rows, field, review and example as parts files that name a template of the core; `compute`; and the four prompts of the survey flow, `survey`, `read_values`, `read_text` and `comb` (see The prompts) |
+| Extraction | `prompts/extraction/*.md` | 16 prompt ids | phrase, anchors and queries as plain files; frame, rows, field, review and example as parts files that name a template of the core; `compute`; `places` and `years`; and the five prompts of the survey flow, `survey`, `read_values`, `read_text`, `comb` and `comb_check` (see The prompts) |
 | The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
 | The answer app | `inference.py` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |
 | The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 12 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
@@ -264,7 +264,7 @@ that same file.
 
 ## The prompts
 
-15 prompt ids belong to extraction and the graph route, kwp's own
+17 prompt ids belong to extraction and the graph route, kwp's own
 wording of each spec question:
 
 | id | loaded | asks for |
@@ -272,6 +272,7 @@ wording of each spec question:
 | `extraction/phrase` | once per document, before any row | the one sentence this document is searched with |
 | `extraction/places` | once per document, at its first search | which passages answer which parameters and axes, with a quote and no value; the map the search then reads from |
 | `extraction/frame` | once per document, before any row | which scenario and year pairs the plan actually carries |
+| `extraction/years` | once per plan, where the spec dates a value by the plan's years | the plan's `base_years` and `target_years`, each year with a quote that prints it and names it the plan's state or target, read with the combing's tools; an empty list is an answer |
 | `extraction/anchors` | once per run, per question the field sweep asks | six hypothetical sentences a passage stating this coordinate could read |
 | `extraction/queries` | once per run, as a plain template list | one retrieval query template per parameter or per vocabulary entry |
 | `extraction/rows` | per retrieved window | which values a passage states, without their coordinates |
@@ -283,6 +284,7 @@ wording of each spec question:
 | `extraction/read_values` | once per round of a passage's reading, one value per request, without tools | the next value not yet read, as the reply itself: `value`, `value_raw` (only for a number or an entry of a list), `quote` and, for a number in a table, `head`, or `{"value": null}` to end the rounds; a value is what the field asks for and the year of a number is a coordinate, not a value |
 | `extraction/read_text` | once per value and group of the spec with a coordinate open, without tools | that group's open coordinates for the one value; one file in three sections, `frame`, `number` and `context`, each group sent the shared text and its own section |
 | `extraction/comb` | once per value and group with an open coordinate | the open coordinates of the one row the request shows, searched for in the rest of the plan with the tools (`reading.Gathered`); the coordinates it finds stand at the top of the reply with `more` beside them; no "not stated" is offered, what it leaves out is not asked again, and `{}` is valid |
+| `extraction/comb_check` | once per find of the combing quoted from a passage other than the value's own and its section | whether that passage is about this value, as `{"about": "yes"\|"no"}`; on "no" the find is dropped and the search goes on |
 | `kg/coordinate` | once per chat turn the graph route tries | one closed answer to one coordinate axis, for the SPARQL query |
 
 Five of these ids, `extraction/rows`, `field`, `frame`, `review` and `example`,

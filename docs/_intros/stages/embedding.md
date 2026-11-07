@@ -131,6 +131,15 @@ stored in the index were written with that same default; embedding a
 query any other way would score it against them incorrectly rather than
 raise (`docpipe/embedding/local.py:37` to `69`).
 
+Every local call embeds in length groups (`Qwen3VLEmbedder.process` wraps
+`_embed` in `qwen3_vl_embedding.in_groups`, owner decision 2026-11-07): the
+inputs are sorted by length (`_input_size`), cut into up to `PAD_GROUPS = 10`
+groups of neighbouring lengths (`pad_groups`), and each group is one forward,
+padded only to its own longest input; the rows come back in the caller's
+order. This holds for the index, the queries and the names, on a GPU and on
+the CPU. One forward over 240 scenario names (mean 116 characters, longest
+403) padded all of them to the longest and cost 2.3 times their tokens.
+
 ### What the local backend delegates to
 
 `MultiGPUEmbedder` is not part of this package; it belongs to stage 6 (see

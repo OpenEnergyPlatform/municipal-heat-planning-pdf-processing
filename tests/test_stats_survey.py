@@ -79,7 +79,8 @@ def test_comb_events_add_up_open_filled_and_exhausted_coordinates(tmp_path):
             "rows": 3, "asked": 1, "hits": 4, "fetched": 1, "searched": 1,
             "missed": 0, "corrected": 0}
     out = traced(tmp_path,
-                 {**base, "open": 5, "filled": 3, "exhausted": 0},
+                 {**base, "open": 5, "filled": 3, "exhausted": 0,
+                  "judged": 3, "turned": 1},
                  {**base, "open": 4, "filled": 0, "exhausted": 4,
                   "listed": 2})["combing"]
     assert out["passages"] == 2
@@ -90,6 +91,9 @@ def test_comb_events_add_up_open_filled_and_exhausted_coordinates(tmp_path):
     # The lists of the next passages the run added (owner decision
     # 2026-11-06), none in an event written before them.
     assert out["lists_added"] == 2
+    # The checks of finds quoted from another passage and the finds they
+    # turned (owner decision 2026-11-07), none in an event without them.
+    assert (out["check_requests"], out["finds_turned"]) == (3, 1)
     # By construction: no comb event, no combed coordinate.
     empty = traced(tmp_path, ask("comb_ask"))["combing"]
     assert empty["passages"] == 0 and empty["coordinates_open"] == 0
@@ -190,7 +194,7 @@ def test_every_ask_kind_is_counted_under_its_stage(tmp_path):
 
 def test_the_trace_schema_takes_the_ask_of_every_stage():
     trace = schema.trace_schema()
-    for stage in ("phrase", "frame", "review", "compute"):
+    for stage in ("phrase", "frame", "review", "compute", "comb_check"):
         jsonschema.validate({"t": f"{stage}_ask", "doc": 1, "attempt": 1,
                              "ms": 3, "prompt_tokens": 10,
                              "completion_tokens": 2}, trace)
@@ -200,7 +204,8 @@ def test_the_trace_schema_takes_the_ask_of_every_stage():
 
 
 # Promise: the cost estimate counts every answered request kind, the search
-# sentences, the review and the compute step too, AND a frame request once,
+# sentences, the review, the compute step, the naming's request over all
+# names, the plan's years and the comb's check too, AND a frame request once,
 # by its frame event and not again by its ask.
 def test_the_estimate_counts_every_request_kind_once(tmp_path):
     from docpipe import estimate
@@ -208,13 +213,15 @@ def test_the_estimate_counts_every_request_kind_once(tmp_path):
     (tmp_path / estimate.TRACE_DIR / "plan.trace.jsonl").write_text("\n".join(
         json.dumps({"doc": 1, **ask(kind)}) for kind in (
             "phrase_ask", "review_ask", "compute_ask", "frame", "frame_ask",
-            "survey_ask")), encoding="utf-8")
+            "survey_ask", "naming_groups_ask", "years_ask",
+            "comb_check_ask")), encoding="utf-8")
     documents, sections, counted = estimate._trace_of(
         tmp_path, [("plan", 1)], {1: 10})
     assert (documents, sections) == (1, 10)
     assert {k: n[0] for k, n in counted.items() if n[0]} == {
         "phrase_ask": 1, "review_ask": 1, "compute_ask": 1, "frame": 1,
-        "survey_ask": 1}
+        "survey_ask": 1, "naming_groups_ask": 1, "years_ask": 1,
+        "comb_check_ask": 1}
 
 
 # Promise: a document's search for a parameter the survey named no passage for

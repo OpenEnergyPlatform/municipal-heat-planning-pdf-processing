@@ -318,6 +318,20 @@ stored harvest re-reads each stored row in place and takes the first name.
 Asked for one name, a value of several scenarios was left without one: on one
 paper the scenario of a year was read 48 times instead of 129.
 
+An axis of names may list entries beside them under the spec key `"beside"`
+(`spec.Axis.beside`, owner decision 2026-11-07), written uri to labels like a
+vocabulary, with a definition; only a `merged` axis may, and only with keys
+starting `out:`. The request shows each entry with its meaning under the
+coordinate's kind `text` and asks `value_raw` beside the answer
+(`fields.beside_names`, `reading.coordinate_shown`, `fields.wording_asked`).
+An answer naming the entry is read only where its wording, or else a spelling,
+stands in its quote; it is stored as the `out:` key with the wording in
+`<axis>_raw` (`pipeline.merge_field`, `pipeline.answer_in_quote`). A name stays a
+name: its own quote must print it, whatever wording stands beside it, and its
+raw is the name itself. The naming takes no `out:` entry as a name
+(`naming.read_name`). The scenarios profile lists one, `out:status_quo`, the
+way kwp's closed list has "Bestand".
+
 Which of a document's names mean the same thing is not asked while it is
 read. Once the document is folded, the naming step (`naming.py`, prompts
 `extraction/naming_groups` and `extraction/naming`, below) puts the names read
@@ -465,6 +479,31 @@ sentences, or the plan's passages in their order where there is no ranking. This
 was listed (owner decision 2026-11-06: the search runs empty;
 `reading.gather(..., then=...)`, `Gathered.unfit`, `Gathered.listed`). Only
 then does a coordinate no reply found end `unstated`, a finding about the plan.
+
+**The check of a find** (`combing.Comber._verdict`, prompt
+`extraction/comb_check`, `combing.CHECK_PROMPT_ID`, owner decision
+2026-11-07, both profiles). A find whose quote stands in a passage the request
+showed other than the value's own and its section gets one more request. It
+shows the value's passage, the row, the coordinate's question, the answer and
+the place, the passage the quote stands in, whole or cut to the budget around
+the quote (`combing.place_text`), and asks `{"about": "yes"|"no"}`
+(`combing.ABOUT`, `combing.check_response_format`, `combing.check_example`).
+On "no" the find is taken out of the reply (reason `combing.NOT_ABOUT`,
+`not_about_value`), the search goes on as for a coordinate left out, listing
+the next passages until every passage was shown, and every later request
+carries the reason under `corrections`. On "yes" the find stands. A find quoted
+from the value's own passage or its section is not checked, nor one that
+`merge_field` would refuse anyway (quote too short, quote shown nowhere, answer
+not in the quote); the same coordinate, answer and quote is asked about once.
+A reply naming neither word is asked once more, told why
+(`verdict_not_an_option`); without a verdict the find stands. A probe showed
+why: the model attached the scenario of a neighbouring sentence to years of
+other figures, and picked single scenarios out of lists. The trace stage is
+`comb_check` (`schema.ASK_STAGES`); the `comb` event carries `judged`, the check
+requests, and `turned`, the finds the check said "no" to, which `stats.py`
+reports as `check_requests` and `finds_turned`; `estimate.TRACED` is derived
+from `ASK_STAGES`, so `naming_groups_ask`, `years_ask` and `comb_check_ask` are
+counted.
 One whose request no longer fit the model's window before that ends
 `exhausted`, a finding about the run. The ranking is handed in:
 `make_more_sources` in a harvest.
@@ -592,7 +631,7 @@ rows requests were shown counts as read. `--top-up-parameters`
 
 The server's window is measured over the prompts of this flow
 (`runner.sent_prompt_ids`, see Configuration). The trace names each request by
-its kind, `read_values_ask`, `read_text_ask`, `comb_ask`, `naming_groups_ask` and `naming_ask`, each with its
+its kind, `read_values_ask`, `read_text_ask`, `comb_ask`, `comb_check_ask`, `naming_groups_ask` and `naming_ask`, each with its
 `group` where the request has one: `read_values_ask` carries `round`,
 `read_text_ask` carries `group` and `value`, and the `comb` event carries
 `group` and `listed`, the hit lists the run added. The requests for a search sentence, the frame, the review and
@@ -1371,7 +1410,13 @@ this widened (`answer_in_quote`, `pipeline.py`, owner's decision
 2026-09-13); a wording that is given still has to stand in the quote
 itself. A wording speaks only for a choice from a list: a text answer is
 its own wording and has to stand in its quote itself, whatever is written
-beside it (owner decision 2026-11-04). The preflight reads a prompt's
+beside it (owner decision 2026-11-04). The same holds for a name on an axis
+of names: its own quote prints it and its raw is the name itself. Only an
+entry listed beside the names (`Axis.beside`, `fields.beside_names`; below,
+Coordinates) is read from a wording: the answer naming it is read where its
+`value_raw`, or else one of its spellings, stands in its quote
+(`pipeline.answer_in_quote`), is stored as its `out:` key, and keeps the
+wording in `<axis>_raw`. The preflight reads a prompt's
 example of a list the profile closes per document with the list closed by
 the example's own answers, as the run reads it (`preflight.reads_back`). A year counts only where its own four digits stand in the quote
 in one run, so "2.022 MWh" no longer backs the year 2022 though a dated
@@ -1586,7 +1631,8 @@ earlier made a container of its own while podman was still starting, and failed.
 ### Naming: which names are one thing
 
 A coordinate or value the spec marks `merged` is read under the name the
-document prints (see Reading a parameter in its passages), and one thing has
+document prints (see Reading a parameter in its passages; an `out:` entry
+beside the names is no name and is not joined), and one thing has
 several names: "the Zero Carbon scenario" in a sentence, "LCEO Zero Carbon" in a
 table; one name can also stand for several things ("the EC LTS scenarios"). The
 naming step asks what they mean (`naming.py`, prompts `extraction/naming_groups`

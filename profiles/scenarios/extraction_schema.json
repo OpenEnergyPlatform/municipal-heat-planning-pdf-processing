@@ -1557,7 +1557,7 @@
       "type": "array"
      },
      "scenario": {
-      "description": "Axis 'scenario' of Scenario description. null unless scenario_state is 'read' or 'derived'.",
+      "description": "Axis 'scenario' of Scenario description. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.",
       "type": [
        "string",
        "null"
@@ -1574,7 +1574,17 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py).",
        "role": "parent"
       },
-      "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\"."
+      "x-options": {
+       "status quo": {
+        "meaning": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.",
+        "spellings": [
+         "historical",
+         "base year"
+        ],
+        "uri": "out:status_quo"
+       }
+      },
+      "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw."
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
@@ -2133,7 +2143,7 @@
       "type": "array"
      },
      "scenario": {
-      "description": "Axis 'scenario' of Scenario region. null unless scenario_state is 'read' or 'derived'.",
+      "description": "Axis 'scenario' of Scenario region. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.",
       "type": [
        "string",
        "null"
@@ -2150,7 +2160,17 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py).",
        "role": "parent"
       },
-      "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\"."
+      "x-options": {
+       "status quo": {
+        "meaning": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.",
+        "spellings": [
+         "historical",
+         "base year"
+        ],
+        "uri": "out:status_quo"
+       }
+      },
+      "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw."
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
@@ -2584,7 +2604,7 @@
       "type": "array"
      },
      "scenario": {
-      "description": "Axis 'scenario' of Scenario type. null unless scenario_state is 'read' or 'derived'.",
+      "description": "Axis 'scenario' of Scenario type. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.",
       "type": [
        "string",
        "null"
@@ -2601,7 +2621,17 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py).",
        "role": "parent"
       },
-      "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\"."
+      "x-options": {
+       "status quo": {
+        "meaning": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.",
+        "spellings": [
+         "historical",
+         "base year"
+        ],
+        "uri": "out:status_quo"
+       }
+      },
+      "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw."
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
@@ -3171,7 +3201,7 @@
       "type": "array"
      },
      "scenario": {
-      "description": "Axis 'scenario' of Scenario year. null unless scenario_state is 'read' or 'derived'.",
+      "description": "Axis 'scenario' of Scenario year. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.",
       "type": [
        "string",
        "null"
@@ -3188,7 +3218,17 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py).",
        "role": "parent"
       },
-      "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\"."
+      "x-options": {
+       "status quo": {
+        "meaning": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.",
+        "spellings": [
+         "historical",
+         "base year"
+        ],
+        "uri": "out:status_quo"
+       }
+      },
+      "x-question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw."
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
@@ -8292,6 +8332,73 @@
      "doc": {
       "type": "integer"
      },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "input": {
+      "type": "object"
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "output": {
+      "type": "object"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "round": {
+      "type": "integer"
+     },
+     "rows": {},
+     "t": {
+      "const": "comb_check_ask"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
@@ -8856,6 +8963,9 @@
      "hits": {
       "type": "integer"
      },
+     "judged": {
+      "type": "integer"
+     },
      "kind": {
       "enum": [
        "section",
@@ -8888,6 +8998,9 @@
       "const": "comb"
      },
      "table_rows": {
+      "type": "integer"
+     },
+     "turned": {
       "type": "integer"
      }
     },

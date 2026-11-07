@@ -73,8 +73,11 @@ it as a plain nullable string with no `x-options`, stating in the
 `description` that a list exists but is not published here
 (`docpipe/extraction/schema.py`). The scenario is no list: `scenario_label`
 and the `scenario` axis on the four parameters above are free text marked
-`merged`, typed as plain text, the name as the publication prints it with its
-quote.
+`merged`, the name as the publication prints it with its quote. The axis is
+typed as a string, or the one `out:` entry the spec lists beside the names
+(`out:status_quo`), published under `x-options` without an `enum`; the page
+says "What it may answer beside a name" and the table "string, or 1 out:
+entry beside".
 
 What the list holds is decided once, before harvest starts, by
 `document_axes` in `profiles/scenarios/extraction.py`. It narrows the 249
@@ -862,11 +865,18 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `scenario`
 
-Axis 'scenario' of Scenario description. null unless scenario_state is 'read' or 'derived'.
+Axis 'scenario' of Scenario description. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario".
+> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario". A value its own passage reports for a past or the current year, measured, observed or balanced, such as "in 2017 emissions were", "today" or "between 2005 and 2015", belongs to no scenario: answer "status quo", with the words of its own quote that show it as value_raw.
+
+<details><summary>What it may answer beside a name (1)</summary>
+
+- **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
+  - also written: historical, base year
+
+</details>
 
 - `class`: `OEO_00000365`
 - `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
@@ -1167,11 +1177,18 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `scenario`
 
-Axis 'scenario' of Scenario region. null unless scenario_state is 'read' or 'derived'.
+Axis 'scenario' of Scenario region. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario".
+> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario". A value its own passage reports for a past or the current year, measured, observed or balanced, such as "in 2017 emissions were", "today" or "between 2005 and 2015", belongs to no scenario: answer "status quo", with the words of its own quote that show it as value_raw.
+
+<details><summary>What it may answer beside a name (1)</summary>
+
+- **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
+  - also written: historical, base year
+
+</details>
 
 - `class`: `OEO_00000365`
 - `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
@@ -1385,11 +1402,18 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `scenario`
 
-Axis 'scenario' of Scenario type. null unless scenario_state is 'read' or 'derived'.
+Axis 'scenario' of Scenario type. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario".
+> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario". A value its own passage reports for a past or the current year, measured, observed or balanced, such as "in 2017 emissions were", "today" or "between 2005 and 2015", belongs to no scenario: answer "status quo", with the words of its own quote that show it as value_raw.
+
+<details><summary>What it may answer beside a name (1)</summary>
+
+- **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
+  - also written: historical, base year
+
+</details>
 
 - `class`: `OEO_00000365`
 - `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
@@ -1637,11 +1661,18 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `scenario`
 
-Axis 'scenario' of Scenario year. null unless scenario_state is 'read' or 'derived'.
+Axis 'scenario' of Scenario year. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario".
+> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario". A value its own passage reports for a past or the current year, measured, observed or balanced, such as "in 2017 emissions were", "today" or "between 2005 and 2015", belongs to no scenario: answer "status quo", with the words of its own quote that show it as value_raw.
+
+<details><summary>What it may answer beside a name (1)</summary>
+
+- **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
+  - also written: historical, base year
+
+</details>
 
 - `class`: `OEO_00000365`
 - `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
@@ -3263,7 +3294,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 
 One event per line; `t` names it and `doc` the document. An event that reports a model request carries it as sent (`input`) and what came back (`output`); a text the requests repeat is a `piece` they refer to. Read by scripts/trace_report.py.
 
-34 record kinds, told apart by `t`:
+35 record kinds, told apart by `t`:
 
 - `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
 - `anchor`: `doc`, `parameter`, `text`
@@ -3284,6 +3315,7 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `read_values_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `read_text_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `comb_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
+- `comb_check_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `naming_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `output`, `places`, `prompt_tokens`
 - `naming_groups_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `output`, `prompt_tokens`
 - `years_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
@@ -3293,7 +3325,7 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `compute_ask`: `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `value`
 - `naming`: `asked`, `doc`, `groups`, `kind`, `names`, `several`, `things`, `why`
 - `read`: `asked`, `corrected`, `doc`, `failed`, `kind`, `near`, `near_read`, `owner`, `parameter`, `unanswered`, `unread`, `values`, `why`
-- `comb`: `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `kind`, `listed`, `missed`, `open`, `owner`, `parameter`, `rows`, `searched`, `table_rows`
+- `comb`: `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `judged`, `kind`, `listed`, `missed`, `open`, `owner`, `parameter`, `rows`, `searched`, `table_rows`, `turned`
 - `years`: `asked`, `base`, `doc`, `fetched`, `hits`, `refused`, `target`
 - `seek`: `doc`, `kind`, `owner`, `parameter`, `rank`
 - `seek_probe`: `doc`, `parameter`, `per`, `text`
