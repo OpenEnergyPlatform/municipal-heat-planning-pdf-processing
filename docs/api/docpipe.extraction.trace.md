@@ -23,7 +23,11 @@ request ended in), so that a run can be read back request by request (owner
 decision 2026-11-05). The request is taken where every request of the stage
 passes (`scheduler.Repeats`, `exchanged`) and goes into the next event of the
 same thread that reports it: one that carries `prompt_tokens`, or an error of
-kind `exception`.
+kind `exception`. With it go the request's times, to the millisecond
+(`asked_at`, `sent_at`, `answered_at`: when the caller asked, when it left
+the run's queue for the server, when its answer or error came), and `once`
+where the answer is that of the same request sent before in the document
+and nothing was sent (owner decision 2026-11-07).
 
 Nothing repeated is written twice. A text longer than a reference to it -- a
 system prompt, a reply format, a passage, a parameter's description, a list of
@@ -53,12 +57,17 @@ Start writing traces under `directory`, naming files via `name_of(id)`.
 ### exchanged
 
 ```python
-def exchanged(request: dict, response=None, error=None) -> None
+def exchanged(request: dict, response=None, error=None, *,
+              times: Optional[tuple] = None, once: bool = False) -> None
 ```
 
 The request the calling thread has just sent, with the reply that came
 back or the error it ended in, for the event that reports it (`event`).
 A thread's next request takes the place of one no event reported.
+*times* are (asked, sent, answered) in seconds since the epoch, sent
+None where no queue held the request; *once* says the answer is that of
+the same request sent before and nothing was sent
+(`scheduler.Once`).
 
 ### event
 

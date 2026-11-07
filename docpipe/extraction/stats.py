@@ -21,7 +21,11 @@ numbers a report and the ontology side can act on:
 - the open questions of the compute step, per kind and how they ended;
 - the survey flow: requests, tokens and second rounds per stage, the
   survey's passages, the readings per reason unread, and the combing's
-  coordinates open, filled and exhausted.
+  coordinates open, filled and exhausted;
+- how many requests were with the server at once, on average and at most,
+  and the seconds they spent with it and waiting for a place, all and per
+  stage; and per stage the requests answered with the answer of the same
+  request sent before, which went out once (owner decision 2026-11-07).
 
 Every count says what it counts. Read from the harvest files and the trace
 directories named; written to `<harvest dir>/stats/<pass>-<run start>.json`.
@@ -52,6 +56,61 @@ def _int(event: dict, key: str) -> int:
     value = event.get(key)
     return value if isinstance(value, int) and not isinstance(value, bool) \
         else 0
+
+
+def _at(event: dict, key: str) -> Optional[float]:
+    value = event.get(key)
+    return float(value) if isinstance(value, (int, float)) \
+        and not isinstance(value, bool) else None
+
+
+def _stage(event: dict) -> str:
+    """The stage an event that reports a request speaks for: `<stage>_ask`
+    names it, an error says where it was, any other event is its own."""
+    kind = str(event.get("t"))
+    if kind.endswith(ASK) and len(kind) > len(ASK):
+        return kind[:-len(ASK)]
+    if kind == "error":
+        return str(event.get("where"))
+    return kind
+
+
+def at_once(timed: list) -> dict:
+    """How many requests were with the server at once (owner decision
+    2026-11-07): the mean over the time from the first one sent to the last
+    answer, and the most at one moment; and the seconds they were with the
+    server and waited for a place in the run's queue, all and per stage.
+    *timed* is [(stage, event)] of the events that report a request sent,
+    whatever their kind. One without its times (a trace from before
+    2026-11-07) counts in none of these; one no queue held waited no time."""
+    serving: Counter = Counter()
+    waiting: Counter = Counter()
+    edges = []
+    for stage, event in timed:
+        asked, answered = _at(event, "asked_at"), _at(event, "answered_at")
+        if asked is None or answered is None:
+            continue
+        sent = _at(event, "sent_at")
+        sent = asked if sent is None else sent
+        serving[stage] += max(0.0, answered - sent)
+        waiting[stage] += max(0.0, sent - asked)
+        edges += [(sent, 1), (answered, -1)]
+    # An answer and a sending at the same moment: the answer first.
+    edges.sort()
+    now = most = 0
+    for _moment, step in edges:
+        now += step
+        most = max(most, now)
+    span = (edges[-1][0] - edges[0][0]) if edges else 0.0
+    served = sum(serving.values())
+    return {"mean": round(served / span, 2) if span > 0 else 0.0,
+            "most": most,
+            "seconds_with_the_server": round(served, 1),
+            "seconds_waiting_for_a_place": round(sum(waiting.values()), 1),
+            "by_stage": {stage: {
+                "seconds_with_the_server": round(serving[stage], 1),
+                "seconds_waiting_for_a_place": round(waiting[stage], 1)}
+                for stage in sorted(serving)}}
 
 
 def _lines(path: Path) -> Iterable[dict]:
@@ -151,12 +210,17 @@ def from_traces(trace_dirs: Iterable[Path],
     unread_why: Counter = Counter()
     refused_first: Counter = Counter()
     combed: Counter = Counter()
+    timed: list = []
     for directory in trace_dirs:
         for path in trace.files(directory):
             if names is not None and trace.name_of(path) not in names:
                 continue
             for event in trace.lines(path):
                 kind = event.get("t")
+                if "asked_at" in event and event.get("once") is not True:
+                    # Every event that reports a request carries its times,
+                    # whatever its kind; an answer given again was not sent.
+                    timed.append((_stage(event), event))
                 if kind == "field":
                     axis = str(event.get("slot"))
                     stage = str(event.get("stage"))
@@ -196,6 +260,12 @@ def from_traces(trace_dirs: Iterable[Path],
                 elif isinstance(kind, str) and kind.endswith(ASK) \
                         and len(kind) > len(ASK):
                     stage = kind[:-len(ASK)]
+                    if event.get("once") is True:
+                        # The answer of the same request sent before: nothing
+                        # went out and nothing was spent (owner decision
+                        # 2026-11-07).
+                        stages[stage]["answered_once"] += 1
+                        continue
                     stages[stage]["requests"] += 1
                     stages[stage]["prompt_tokens"] += _int(event,
                                                            "prompt_tokens")
@@ -262,13 +332,18 @@ def from_traces(trace_dirs: Iterable[Path],
             axis: [{"given": g, "wording": w, "answers": n}
                    for (g, w), n in c.most_common()]
             for axis, c in outside.items()},
-        # Per stage: requests that got a reply, their tokens, and those
-        # that were a second round (corrections sent).
+        # Per stage: requests that got a reply, their tokens, those that
+        # were a second round (corrections sent), and those answered with the
+        # answer of the same request sent before in the document, which were
+        # not sent (owner decision 2026-11-07).
         "requests_by_stage": {
             stage: {k: stages[stage][k] for k in (
                 "requests", "prompt_tokens", "completion_tokens",
-                "second_rounds")}
+                "second_rounds", "answered_once")}
             for stage in dict.fromkeys((*ASK_STAGES, *sorted(stages)))},
+        # Requests with the server at once, and the seconds with it and
+        # waiting for a place (`at_once`).
+        "requests_at_once": at_once(timed),
         # Documents surveyed and completely, passages found, contexts sent,
         # passages carrying no parameter, passages without an answer,
         # answers not taken, and passages per parameter.

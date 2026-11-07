@@ -1419,6 +1419,23 @@ every later request with the reason (`Scheduler._close`): its callers wait
 without a limit, and a probe whose dispatcher had died stood two hours on a
 node doing nothing until its time limit.
 
+A request sent word for word a second time in the same document is not sent
+(owner decision 2026-11-07, `scheduler.Once` in `Repeats`): it gets the first
+one's answer, and one sent while its twin is still out waits for that answer.
+Word for word is everything the request sends but its timeout
+(`scheduler.request_key`). A request of no document, such as an anchor, is
+sent every time, and so is one whose twin ended without an answer. A request
+names its document only while it is sent (`runner._for`), so a thread that
+sent for one document leaves it behind for no later request. The answer
+given again carries no usage (`scheduler.answered_again`), so no token is
+counted twice; its event in the trace says `once`, and the stats count it
+under `answered_once` and not as a request. On one paper the second reading
+had sent 70 of its 311 requests word for word a second time. A document's
+answers are kept while it is read and go when it is done
+(`scheduler.read_out`, called by `harvest_documents` for each document it
+ran): a run reads many documents at once, and a fixed number of documents
+kept would forget the answers of one still being read.
+
 The same limit decides how many documents are in flight. `runner.document_room`
 lets one more document start, one per look and a look every second, while the
 model requests in flight stay below the limit; `harvest_documents` and
@@ -1869,7 +1886,13 @@ estimate` counts such a document as stale the way the run does. Beside every har
 request as it was sent (`input`) and what came back (`output`: the reply, or
 the error the request ended in), taken where every request of the stage
 passes (`scheduler.Repeats`, `trace.exchanged`) and put into the next event
-of the same thread that reports it (owner decision 2026-11-05). A text the
+of the same thread that reports it (owner decision 2026-11-05). With it go the
+request's times in seconds since the epoch, to the millisecond (owner decision
+2026-11-07): `asked_at`, when the caller asked; `sent_at`, when the request
+left the run's queue for the server, absent where no queue held it; and
+`answered_at`, when its answer or its error came. Without them a run could not
+say why on average only 2.7 requests were with the server at once, whether
+they waited for a place or asked one after another. A text the
 requests of a document repeat, such as a system prompt, a reply format, a
 passage, a list of options or a picture, stands once in its trace as a
 `piece` event that the requests refer to by hash; a JSON payload is split at
@@ -2270,6 +2293,8 @@ and never fails the run. Each count says what it counts:
 | `coordinates_taken_from_their_table` | coordinates a row took from the reading of its table, without being asked |
 | `computed_questions_by_kind_outcome` | open questions of the compute step, per kind and how they ended |
 | `passages_planned_by_origin` | passages planned, per origin: a search or a found place |
+| `requests_by_stage` | per stage (`<stage>_ask`): `requests` that got a reply, their `prompt_tokens` and `completion_tokens`, `second_rounds` (corrections sent), and `answered_once`, requests answered with the answer of the same request sent before in the document, which were not sent |
+| `requests_at_once` | requests with the server at once: the `mean` over the time from the first one sent to the last answer and the `most` at one moment; `seconds_with_the_server` (sending to answer) and `seconds_waiting_for_a_place` (asking to sending), all and `by_stage` (`stats.at_once`). Every event that reports a request counts, whatever its kind: `<stage>_ask` under its stage, an error that left a request without an answer under the stage it names, any other (`frame`, `rows`, `field`) under its own kind; an answer given again (`once`) and an event without times (a trace from before 2026-11-07) count in none |
 
 The same file can be made for any harvest by hand with `python -m
 docpipe.extraction.stats HARVEST_DIR [--trace DIR ...]`, trace directories

@@ -1175,7 +1175,13 @@ def trace_schema() -> dict:
     # An event that reports a model request carries the request as it was
     # sent and what came back, the reply or the error (`trace.sent` puts the
     # request back together); one that reports no request carries neither.
-    exchange = {"input": {"type": "object"}, "output": {"type": "object"}}
+    # With them its times in seconds since the epoch, and `once` where the
+    # answer is that of the same request sent before in the document and
+    # nothing was sent (`scheduler.Once`, owner decision 2026-11-07).
+    exchange = {"input": {"type": "object"}, "output": {"type": "object"},
+                "asked_at": {"type": "number"}, "sent_at": {"type": "number"},
+                "answered_at": {"type": "number"},
+                "once": {"type": "boolean"}}
     for kind, props in kinds.items():
         if "prompt_tokens" in props or kind == "error":
             props.update(exchange)
@@ -1214,7 +1220,8 @@ def trace_schema() -> dict:
              "field", "raw_missing", "raw_foreign", "cause", "owner",
              "rejected", "given", "raw", "quote", "via_base", "via_target",
              "via_table", "scope", "withdrawn",
-             "batches", "input", "output"}
+             "batches", "input", "output", "asked_at", "sent_at",
+             "answered_at", "once"}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"{BASE_ID}/trace-record",

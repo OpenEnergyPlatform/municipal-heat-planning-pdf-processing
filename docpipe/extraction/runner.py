@@ -2531,18 +2531,18 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                 trace.event("error", document_id, where="frame",
                             kind="too_long", attempt=attempt, room=limit)
                 break
-            scheduler.serve_for(document_id)
             try:
-                completion = client.chat.completions.create(
-                    model=LLM_MODEL,
-                    temperature=retry_temperature(temperature, faults),
-                    max_tokens=limit,
-                    messages=[{"role": "system", "content": prompt.text},
-                              *conversation],
-                    extra_body=request_extras(),
-                    **providers.formatted("llm", "frame_reply",
-                                          replies.frame(slots)),
-                )
+                with _for(document_id):
+                    completion = client.chat.completions.create(
+                        model=LLM_MODEL,
+                        temperature=retry_temperature(temperature, faults),
+                        max_tokens=limit,
+                        messages=[{"role": "system", "content": prompt.text},
+                                  *conversation],
+                        extra_body=request_extras(),
+                        **providers.formatted("llm", "frame_reply",
+                                              replies.frame(slots)),
+                    )
                 failures.answered()
                 _observe_usage(getattr(completion, "usage", None))
                 _asked("frame", document_id, completion, attempt=attempt,
@@ -3842,10 +3842,10 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
         limit = answer_room(prompt.text, asked, max_tokens)
         if limit < MIN_ANSWER_TOKENS:
             return answer
-        scheduler.serve_for(batch.document_id)
         try:
-            response = send(asked, limit, temperature,
-                            request_timeout(max_tokens, max_tokens))
+            with _for(batch.document_id):
+                response = send(asked, limit, temperature,
+                                request_timeout(max_tokens, max_tokens))
         except Exception as exc:
             log.warning("   harvest %s: second reading failed: %s",
                         batch.document_id, exc)
@@ -3927,11 +3927,11 @@ def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
                             kind="too_long", attempt=attempt, room=limit,
                             owner=[first.owner_kind, first.owner_id])
                 break
-            scheduler.serve_for(batch.document_id)
             try:
-                response = send(conversation, limit,
-                                retry_temperature(temperature, faults),
-                                allowed)
+                with _for(batch.document_id):
+                    response = send(conversation, limit,
+                                    retry_temperature(temperature, faults),
+                                    allowed)
                 failures.answered()
                 why[0] = "no_answer"
                 reply = response.choices[0]
@@ -6764,7 +6764,9 @@ def harvest_documents(documents: list, harvest_document: Callable, *,
 
     *harvest_document* returns (written, failures). *stop* (SIGTERM) ends the
     loop at once without waiting for what is open; *halted* only stops new
-    documents from starting, and the open ones are waited for.
+    documents from starting, and the open ones are waited for. A document
+    that is done, written or not, has the answers kept for its requests
+    forgotten (`scheduler.read_out`).
 
     Returns (done, written, failures).
     """
@@ -6790,7 +6792,7 @@ def harvest_documents(documents: list, harvest_document: Callable, *,
                    and not (halted is not None and halted())):
                 document_id, filename = queue.pop(0)
                 pending[pool.submit(harvest_document, document_id,
-                                    filename)] = filename
+                                    filename)] = (document_id, filename)
                 allowed -= 1
             if not pending or stopping():
                 break
@@ -6800,8 +6802,11 @@ def harvest_documents(documents: list, harvest_document: Callable, *,
                                timeout=1 if room is not None and queue else 5,
                                return_when=FIRST_COMPLETED)
             for future in finished:
-                filename = pending.pop(future)
+                document_id, filename = pending.pop(future)
                 done += 1
+                # Done, written or not: the answers kept for its requests go
+                # (`scheduler.read_out`).
+                scheduler.read_out(document_id)
                 try:
                     ok, failed = future.result()
                     failures += failed

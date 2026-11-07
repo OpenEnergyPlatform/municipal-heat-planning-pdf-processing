@@ -20,13 +20,25 @@ are not sent. A withdrawn request raises `Withdrawn` in its caller. A request
 sent ahead of knowing it is needed (`Ticket(ahead=True)`) waits behind every
 other one until its ticket is promoted.
 
+A request sent word for word a second time in the same document is not sent
+again: it gets the first one's answer, and one sent while its twin is still
+out waits for that answer (`Once`, owner decision 2026-11-07). A document's
+answers are kept while it is read and go when it is done (`read_out`). Every
+request is traced with when it was asked, when it left this queue for the
+server and when its answer came (`trace.exchanged`).
+
 Author: Felix Vossel
 """
 from __future__ import annotations
 
+import copy
+import hashlib
 import heapq
 import itertools
+import json
 import threading
+import time
+import weakref
 from concurrent.futures import Future, ThreadPoolExecutor
 from types import SimpleNamespace
 from typing import Callable, Optional
@@ -189,6 +201,9 @@ class Scheduler:
 
     def _send(self, send: Callable, future: Future) -> None:
         try:
+            # When the request leaves the queue for the server, for its trace
+            # (`Scheduled.create`, owner decision 2026-11-07).
+            future.sent = time.time()
             future.set_result(send())
         except BaseException as exc:            # handed to the caller
             future.set_exception(exc)
@@ -212,9 +227,115 @@ class Scheduled:
         document, ticket = current()
         if ticket is not None and ticket.withdrawn:
             raise Withdrawn()
-        return self._scheduler.submit(
+        future = self._scheduler.submit(
             lambda: self._client.chat.completions.create(*args, **kwargs),
-            document, ticket).result()
+            document, ticket)
+        try:
+            return future.result()
+        finally:
+            # When it left the queue, for the trace of the request (`Repeats`).
+            _local.sent = getattr(future, "sent", None)
+
+
+# Every memo of the run (`Once`), so a document that is done is forgotten in
+# each (`read_out`).
+_memos: "weakref.WeakSet" = weakref.WeakSet()
+_memos_lock = threading.Lock()
+
+
+def read_out(document) -> None:
+    """*document* is done: every memo forgets the answers to its requests, so
+    a run keeps them only for the documents it is reading."""
+    with _memos_lock:
+        memos = list(_memos)
+    for memo in memos:
+        memo.forget(document)
+
+
+def request_key(request: dict) -> Optional[str]:
+    """What a request asks, as one key: everything it sends but the time it
+    may take, which a repeat after a timeout changes (`Repeats`). None where
+    it cannot be written as JSON."""
+    try:
+        text = json.dumps({key: value for key, value in request.items()
+                           if key != "timeout"}, sort_keys=True,
+                          ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        return None
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def answered_again(response):
+    """*response* as the answer to its twin: the same reply, and no usage,
+    since nothing was sent and nothing spent."""
+    copier = getattr(response, "model_copy", None)
+    if callable(copier):
+        return copier(update={"usage": None})
+    clone = copy.copy(response)
+    try:
+        clone.usage = None
+    except AttributeError:
+        pass
+    return clone
+
+
+class Once:
+    """The answers of a document's requests, by what each sent
+    (`request_key`), owner decision 2026-11-07: a request sent word for word
+    a second time in the same document gets the first one's answer and is
+    not sent; one sent while its twin is still out waits for that answer. A
+    request that ended without an answer is forgotten, so its next twin is
+    sent. A request of no document is sent every time (`Repeats`). A
+    document's answers are kept while it is read and go when it is done
+    (`read_out`)."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._held: dict = {}
+        with _memos_lock:
+            _memos.add(self)
+
+    def claim(self, document, key: str) -> tuple:
+        """(the future that holds or will hold the answer to *key* in
+        *document*, whether the caller is the first to ask it and so sends
+        it and settles the future)."""
+        with self._lock:
+            held = self._held.setdefault(document, {})
+            twin = held.get(key)
+            if twin is not None:
+                return twin, False
+            mine = held[key] = Future()
+            return mine, True
+
+    def forget(self, document) -> None:
+        """*document* is done: the answers to its requests go."""
+        with self._lock:
+            self._held.pop(document, None)
+
+    @staticmethod
+    def answered(held: Future, response) -> None:
+        if not held.done():
+            held.set_result(response)
+
+    def failed(self, document, key: str, held: Future,
+               error: BaseException) -> None:
+        """The first asking ended without an answer: its twins waiting are
+        told, and the next one is sent."""
+        with self._lock:
+            kept = self._held.get(document)
+            if kept is not None and kept.get(key) is held:
+                del kept[key]
+        if not held.done():
+            held.set_exception(error)
+
+    @staticmethod
+    def wait(held: Future):
+        """The twin's answer as this request's (`answered_again`), or None
+        where the twin ended without one."""
+        try:
+            return answered_again(held.result())
+        except BaseException:           # the waiting request is sent itself
+            return None
 
 
 class Repeats:
@@ -229,7 +350,10 @@ class Repeats:
 
     Every request of the stage passes here, so here it is also taken for the
     trace: what was sent and what came back (`trace.exchanged`), for the
-    event that reports it.
+    event that reports it, with when it was asked, sent and answered. And
+    here a request sent word for word a second time in the same document is
+    answered with the first one's answer (`Once`, owner decision
+    2026-11-07).
     """
 
     def __init__(self, client, repeat: float, usual: float):
@@ -237,6 +361,7 @@ class Repeats:
         self._repeat = repeat
         self._usual = usual
         self._local = threading.local()
+        self._once = Once()
         self.chat = SimpleNamespace(
             completions=SimpleNamespace(create=self.create))
 
@@ -247,16 +372,38 @@ class Repeats:
             kwargs["timeout"] = max(kwargs.get("timeout") or self._usual,
                                     self._repeat)
         self._local.timed_out = None
+        asked = time.time()
+        document = current()[0]
+        # Word for word in the same document: a request of no document
+        # (anchors, a run's own questions) is sent every time.
+        key = (request_key(kwargs) if document is not None and not args
+               else None)
+        held, first = (self._once.claim(document, key) if key is not None
+                       else (None, False))
+        if held is not None and not first:
+            answer = self._once.wait(held)
+            if answer is not None:
+                trace.exchanged(kwargs, answer,
+                                times=(asked, None, time.time()), once=True)
+                return answer
+        _local.sent = None
         try:
             response = self._client.chat.completions.create(*args, **kwargs)
-        except Exception as exc:
-            # What was sent and how it ended, for the trace event that
-            # reports the request (owner decision 2026-11-05).
-            trace.exchanged(kwargs, error=exc)
-            if messages is not None and providers.timed_out(exc):
-                self._local.timed_out = list(messages)
+        except BaseException as exc:
+            if first:
+                self._once.failed(document, key, held, exc)
+            if isinstance(exc, Exception):
+                # What was sent and how it ended, for the trace event that
+                # reports the request (owner decision 2026-11-05).
+                trace.exchanged(kwargs, error=exc, times=(
+                    asked, getattr(_local, "sent", None), time.time()))
+                if messages is not None and providers.timed_out(exc):
+                    self._local.timed_out = list(messages)
             raise
-        trace.exchanged(kwargs, response)
+        if first:
+            self._once.answered(held, response)
+        trace.exchanged(kwargs, response, times=(
+            asked, getattr(_local, "sent", None), time.time()))
         return response
 
 
@@ -265,9 +412,3 @@ def repeating(client, repeat: float, usual: float):
     if isinstance(client, Repeats):
         return client
     return Repeats(client, repeat, usual)
-
-
-def serve_for(document: Optional[int]) -> None:
-    """The requests this thread sends from now on belong to *document*, until
-    it is told another; its ticket stays."""
-    _local.document = document

@@ -13208,6 +13208,12 @@
    {
     "additionalProperties": false,
     "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -13232,6 +13238,9 @@
      "ms": {
       "type": "integer"
      },
+     "once": {
+      "type": "boolean"
+     },
      "output": {
       "type": "object"
      },
@@ -13252,6 +13261,9 @@
        "type": "string"
       },
       "type": "array"
+     },
+     "sent_at": {
+      "type": "number"
      },
      "sources": {
       "items": {
@@ -13304,6 +13316,12 @@
    {
     "additionalProperties": false,
     "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -13321,6 +13339,9 @@
      },
      "ms": {
       "type": "integer"
+     },
+     "once": {
+      "type": "boolean"
      },
      "origins": {
       "type": "array"
@@ -13342,6 +13363,9 @@
      },
      "rows": {
       "type": "integer"
+     },
+     "sent_at": {
+      "type": "number"
      },
      "sources": {
       "items": {
@@ -13500,6 +13524,12 @@
      "anchor": {
       "type": "string"
      },
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -13530,6 +13560,9 @@
      "ms": {
       "type": "integer"
      },
+     "once": {
+      "type": "boolean"
+     },
      "open": {
       "type": "integer"
      },
@@ -13556,6 +13589,9 @@
      },
      "reply": {
       "type": "boolean"
+     },
+     "sent_at": {
+      "type": "number"
      },
      "shown": {
       "items": {
@@ -13794,6 +13830,12 @@
    {
     "additionalProperties": false,
     "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -13839,6 +13881,9 @@
      "ms": {
       "type": "integer"
      },
+     "once": {
+      "type": "boolean"
+     },
      "output": {
       "type": "object"
      },
@@ -13859,6 +13904,9 @@
        }
       ],
       "type": "array"
+     },
+     "sent_at": {
+      "type": "number"
      },
      "slot": {
       "type": [
@@ -14185,6 +14233,12 @@
    {
     "additionalProperties": false,
     "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -14214,6 +14268,9 @@
      "ms": {
       "type": "integer"
      },
+     "once": {
+      "type": "boolean"
+     },
      "output": {
       "type": "object"
      },
@@ -14235,6 +14292,9 @@
       "type": "integer"
      },
      "rows": {},
+     "sent_at": {
+      "type": "number"
+     },
      "t": {
       "const": "survey_ask"
      },
@@ -14252,6 +14312,12 @@
    {
     "additionalProperties": false,
     "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -14281,6 +14347,9 @@
      "ms": {
       "type": "integer"
      },
+     "once": {
+      "type": "boolean"
+     },
      "output": {
       "type": "object"
      },
@@ -14302,6 +14371,9 @@
       "type": "integer"
      },
      "rows": {},
+     "sent_at": {
+      "type": "number"
+     },
      "t": {
       "const": "read_values_ask"
      },
@@ -14320,6 +14392,12 @@
    {
     "additionalProperties": false,
     "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -14349,6 +14427,9 @@
      "ms": {
       "type": "integer"
      },
+     "once": {
+      "type": "boolean"
+     },
      "output": {
       "type": "object"
      },
@@ -14370,6 +14451,9 @@
       "type": "integer"
      },
      "rows": {},
+     "sent_at": {
+      "type": "number"
+     },
      "t": {
       "const": "read_text_ask"
      },
@@ -14388,6 +14472,12 @@
    {
     "additionalProperties": false,
     "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -14417,6 +14507,9 @@
      "ms": {
       "type": "integer"
      },
+     "once": {
+      "type": "boolean"
+     },
      "output": {
       "type": "object"
      },
@@ -14438,6 +14531,9 @@
       "type": "integer"
      },
      "rows": {},
+     "sent_at": {
+      "type": "number"
+     },
      "t": {
       "const": "comb_ask"
      },
@@ -14455,6 +14551,12 @@
    {
     "additionalProperties": false,
     "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -14484,6 +14586,9 @@
      "ms": {
       "type": "integer"
      },
+     "once": {
+      "type": "boolean"
+     },
      "output": {
       "type": "object"
      },
@@ -14505,6 +14610,9 @@
       "type": "integer"
      },
      "rows": {},
+     "sent_at": {
+      "type": "number"
+     },
      "t": {
       "const": "comb_check_ask"
      },
@@ -14522,6 +14630,12 @@
    {
     "additionalProperties": false,
     "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -14549,6 +14663,9 @@
      "names": {
       "type": "integer"
      },
+     "once": {
+      "type": "boolean"
+     },
      "output": {
       "type": "object"
      },
@@ -14560,6 +14677,9 @@
        "integer",
        "null"
       ]
+     },
+     "sent_at": {
+      "type": "number"
      },
      "t": {
       "const": "naming_ask"
@@ -14579,6 +14699,12 @@
    {
     "additionalProperties": false,
     "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -14606,6 +14732,9 @@
      "names": {
       "type": "integer"
      },
+     "once": {
+      "type": "boolean"
+     },
      "output": {
       "type": "object"
      },
@@ -14614,6 +14743,9 @@
        "integer",
        "null"
       ]
+     },
+     "sent_at": {
+      "type": "number"
      },
      "t": {
       "const": "naming_groups_ask"
@@ -14632,6 +14764,12 @@
    {
     "additionalProperties": false,
     "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -14661,6 +14799,9 @@
      "ms": {
       "type": "integer"
      },
+     "once": {
+      "type": "boolean"
+     },
      "output": {
       "type": "object"
      },
@@ -14682,6 +14823,9 @@
       "type": "integer"
      },
      "rows": {},
+     "sent_at": {
+      "type": "number"
+     },
      "t": {
       "const": "years_ask"
      },
@@ -14699,6 +14843,12 @@
    {
     "additionalProperties": false,
     "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -14728,6 +14878,9 @@
      "ms": {
       "type": "integer"
      },
+     "once": {
+      "type": "boolean"
+     },
      "output": {
       "type": "object"
      },
@@ -14749,6 +14902,9 @@
       "type": "integer"
      },
      "rows": {},
+     "sent_at": {
+      "type": "number"
+     },
      "t": {
       "const": "phrase_ask"
      },
@@ -14766,6 +14922,12 @@
    {
     "additionalProperties": false,
     "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -14795,6 +14957,9 @@
      "ms": {
       "type": "integer"
      },
+     "once": {
+      "type": "boolean"
+     },
      "output": {
       "type": "object"
      },
@@ -14816,6 +14981,9 @@
       "type": "integer"
      },
      "rows": {},
+     "sent_at": {
+      "type": "number"
+     },
      "t": {
       "const": "frame_ask"
      },
@@ -14833,6 +15001,12 @@
    {
     "additionalProperties": false,
     "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -14862,6 +15036,9 @@
      "ms": {
       "type": "integer"
      },
+     "once": {
+      "type": "boolean"
+     },
      "output": {
       "type": "object"
      },
@@ -14883,6 +15060,9 @@
       "type": "integer"
      },
      "rows": {},
+     "sent_at": {
+      "type": "number"
+     },
      "t": {
       "const": "review_ask"
      },
@@ -14900,6 +15080,12 @@
    {
     "additionalProperties": false,
     "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
      "attempt": {
       "type": "integer"
      },
@@ -14929,6 +15115,9 @@
      "ms": {
       "type": "integer"
      },
+     "once": {
+      "type": "boolean"
+     },
      "output": {
       "type": "object"
      },
@@ -14950,6 +15139,9 @@
       "type": "integer"
      },
      "rows": {},
+     "sent_at": {
+      "type": "number"
+     },
      "t": {
       "const": "compute_ask"
      },

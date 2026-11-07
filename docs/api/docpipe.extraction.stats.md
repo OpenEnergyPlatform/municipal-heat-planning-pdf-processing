@@ -24,12 +24,30 @@ numbers a report and the ontology side can act on:
 - the open questions of the compute step, per kind and how they ended;
 - the survey flow: requests, tokens and second rounds per stage, the
   survey's passages, the readings per reason unread, and the combing's
-  coordinates open, filled and exhausted.
+  coordinates open, filled and exhausted;
+- how many requests were with the server at once, on average and at most,
+  and the seconds they spent with it and waiting for a place, all and per
+  stage; and per stage the requests answered with the answer of the same
+  request sent before, which went out once (owner decision 2026-11-07).
 
 Every count says what it counts. Read from the harvest files and the trace
 directories named; written to `<harvest dir>/stats/<pass>-<run start>.json`.
 
 ## Functions
+
+### at_once
+
+```python
+def at_once(timed: list) -> dict
+```
+
+How many requests were with the server at once (owner decision
+2026-11-07): the mean over the time from the first one sent to the last
+answer, and the most at one moment; and the seconds they were with the
+server and waited for a place in the run's queue, all and per stage.
+*timed* is [(stage, event)] of the events that report a request sent,
+whatever their kind. One without its times (a trace from before
+2026-11-07) counts in none of these; one no queue held waited no time.
 
 ### from_harvest
 

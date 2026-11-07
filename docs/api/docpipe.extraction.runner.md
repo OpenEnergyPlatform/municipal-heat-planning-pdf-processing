@@ -2425,7 +2425,9 @@ request answering alone on four GPUs for half an hour.
 
 *harvest_document* returns (written, failures). *stop* (SIGTERM) ends the
 loop at once without waiting for what is open; *halted* only stops new
-documents from starting, and the open ones are waited for.
+documents from starting, and the open ones are waited for. A document
+that is done, written or not, has the answers kept for its requests
+forgotten (`scheduler.read_out`).
 
 Returns (done, written, failures).
 

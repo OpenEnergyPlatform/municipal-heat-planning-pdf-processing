@@ -37,7 +37,8 @@ def test_requests_and_tokens_are_counted_per_stage(tmp_path):
     assert out["survey"]["requests"] == 1
     # By construction: a stage that asked nothing counts nothing.
     assert out["comb"] == {"requests": 0, "prompt_tokens": 0,
-                           "completion_tokens": 0, "second_rounds": 0}
+                           "completion_tokens": 0, "second_rounds": 0,
+                           "answered_once": 0}
 
 
 def test_only_an_event_with_corrections_is_a_second_round(tmp_path):
@@ -186,7 +187,8 @@ def test_every_ask_kind_is_counted_under_its_stage(tmp_path):
         "requests_by_stage"]
     assert out["phrase"]["requests"] == 1
     assert out["compute"] == {"requests": 2, "prompt_tokens": 107,
-                              "completion_tokens": 20, "second_rounds": 0}
+                              "completion_tokens": 20, "second_rounds": 0,
+                              "answered_once": 0}
     assert out["novel"]["requests"] == 1
     assert out["review"]["requests"] == 0
     assert "rows" not in out and "" not in out
@@ -265,3 +267,100 @@ def test_the_trace_schema_takes_the_search_and_the_completion():
                    {k: v for k, v in done.items() if k != "open"}):
         with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(broken, trace)
+
+
+# Promise: the requests with the server at once are their seconds with it
+# over the time from the first sending to the last answer, AND the most at one
+# moment, AND an answer and a sending at the same moment do not overlap; by
+# construction, two requests that overlap and two that follow each other.
+def test_requests_at_once_are_their_mean_and_their_most(tmp_path):
+    overlap = traced(
+        tmp_path,
+        ask("comb_ask", asked_at=0.0, sent_at=0.0, answered_at=10.0),
+        ask("comb_ask", asked_at=5.0, sent_at=5.0, answered_at=15.0))[
+        "requests_at_once"]
+    assert overlap["most"] == 2
+    assert overlap["mean"] == round(20 / 15, 2)
+    follow = traced(
+        tmp_path,
+        ask("comb_ask", asked_at=0.0, sent_at=0.0, answered_at=10.0),
+        ask("comb_ask", asked_at=10.0, sent_at=10.0, answered_at=20.0))[
+        "requests_at_once"]
+    assert follow["most"] == 1 and follow["mean"] == 1.0
+
+
+# Promise: a request waited for a place from its asking to its sending AND was
+# with the server from its sending to its answer, per stage; one no queue held
+# waited none; by construction, an error that ended without an answer was
+# with the server too, and an event without times counts in none.
+def test_waiting_and_serving_are_counted_per_stage(tmp_path):
+    out = traced(
+        tmp_path,
+        ask("read_values_ask", asked_at=0.0, sent_at=4.0, answered_at=10.0),
+        ask("survey_ask", asked_at=0.0, answered_at=3.0),
+        {"t": "error", "where": "comb", "kind": "exception", "attempt": 1,
+         "asked_at": 1.0, "sent_at": 1.0, "answered_at": 2.0},
+        ask("read_values_ask"))["requests_at_once"]
+    assert out["by_stage"]["read_values"] == {
+        "seconds_with_the_server": 6.0, "seconds_waiting_for_a_place": 4.0}
+    assert out["by_stage"]["survey"] == {
+        "seconds_with_the_server": 3.0, "seconds_waiting_for_a_place": 0.0}
+    assert out["by_stage"]["comb"]["seconds_with_the_server"] == 1.0
+    assert out["seconds_waiting_for_a_place"] == 4.0
+    untimed = traced(tmp_path, ask("read_values_ask"))["requests_at_once"]
+    assert untimed == {"mean": 0.0, "most": 0, "seconds_with_the_server": 0.0,
+                       "seconds_waiting_for_a_place": 0.0, "by_stage": {}}
+
+
+# Promise: every event that reports a request with its times counts, whatever
+# its kind, under its stage: `<stage>_ask` names it, an error says where it
+# was, any other is its own; by construction, requests of the frame, the
+# rows and a field beside one of the comb, all four out at one moment.
+def test_every_request_with_its_times_counts_whatever_its_kind(tmp_path):
+    out = traced(
+        tmp_path,
+        ask("comb_ask", asked_at=0.0, sent_at=0.0, answered_at=10.0),
+        {"t": "frame", "attempt": 1, "prompt_tokens": 9, "asked_at": 0.0,
+         "sent_at": 2.0, "answered_at": 6.0},
+        {"t": "rows", "attempt": 1, "prompt_tokens": 9, "asked_at": 1.0,
+         "sent_at": 1.0, "answered_at": 4.0},
+        {"t": "field", "slot": "year", "stage": "own", "attempt": 1,
+         "prompt_tokens": 9, "asked_at": 3.0, "answered_at": 5.0})[
+        "requests_at_once"]
+    assert set(out["by_stage"]) == {"comb", "frame", "rows", "field"}
+    assert out["by_stage"]["frame"] == {
+        "seconds_with_the_server": 4.0, "seconds_waiting_for_a_place": 2.0}
+    assert out["most"] == 4
+
+
+# Promise: an answer given again (`once`) is no request, adds no tokens AND
+# was not with the server; by construction, beside a request that was.
+def test_an_answer_given_again_is_no_request_and_not_with_the_server(
+        tmp_path):
+    out = traced(
+        tmp_path,
+        ask("comb_ask", asked_at=0.0, sent_at=0.0, answered_at=10.0),
+        ask("comb_ask", once=True, prompt_tokens=None,
+            completion_tokens=None, asked_at=1.0, answered_at=9.0))
+    assert out["requests_by_stage"]["comb"]["requests"] == 1
+    assert out["requests_by_stage"]["comb"]["answered_once"] == 1
+    assert out["requests_by_stage"]["comb"]["prompt_tokens"] == 100
+    assert out["requests_at_once"]["most"] == 1
+    assert out["requests_at_once"]["seconds_with_the_server"] == 10.0
+
+
+# Promise: the trace record takes a request's times and `once`; by
+# construction, a time that is no number is refused.
+def test_the_trace_schema_takes_the_times_and_once_of_a_request():
+    record = {"t": "comb_ask", "doc": 1, "attempt": 1, "ms": 3,
+              "prompt_tokens": None, "completion_tokens": None,
+              "input": {}, "output": {}, "asked_at": 1.5, "sent_at": 1.6,
+              "answered_at": 2.0, "once": True}
+    record_schema = schema.trace_schema()
+    jsonschema.validate(record, record_schema)
+    jsonschema.validate({"t": "error", "doc": 1, "where": "comb",
+                         "kind": "exception", "attempt": 1, "head": "",
+                         "tail": "", "asked_at": 1.5, "answered_at": 2.0},
+                        record_schema)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({**record, "asked_at": "soon"}, record_schema)
