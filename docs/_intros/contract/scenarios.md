@@ -70,10 +70,10 @@ it as a plain nullable string with no `x-options`, stating in the
 (`docpipe/extraction/schema.py`). The scenario is no list: `scenario_label`
 and the `scenario` axis on the four parameters above are free text marked
 `merged`, the name as the publication prints it with its quote. The axis is
-typed as a string, or the one `out:` entry the spec lists beside the names
-(`out:status_quo`), published under `x-options` without an `enum`; the page
-says "What it may answer beside a name" and the table "string, or 1 out:
-entry beside".
+typed as a string, or one of the two `out:` entries the spec lists beside the
+names (`out:status_quo`, `out:several`), published under `x-options` without an
+`enum`; the page says "What it may answer beside a name" and the table "string,
+or 2 out: entries beside".
 
 What the list holds is decided once, before harvest starts, by
 `document_axes` in `profiles/scenarios/extraction.py`. It narrows the 249

@@ -1,7 +1,8 @@
 """The entries a coordinate of names takes beside them (spec `beside`, owner
 decision 2026-11-07): the scenarios profile's "status quo" for a value of a
 past or the current year, which belongs to no scenario, as KWP's closed list
-has "Bestand".
+has "Bestand", and its "several scenarios" for a value stated for several
+scenarios that the text shown does not name one by one.
 
 Promise: an axis of names may list out: entries beside its names AND only an
 axis of names, AND only out: entries; a request shows them with their meaning
@@ -61,7 +62,7 @@ def test_only_an_axis_of_names_takes_out_entries_beside_them():
 def test_the_request_shows_the_entry_with_its_meaning_and_asks_its_wording():
     shown = reading.coordinate_shown(SLOT, unstated=False)
     assert shown["kind"] == fields.TEXT
-    assert list(shown["options"]) == ["status quo"]
+    assert list(shown["options"]) == ["status quo", "several scenarios"]
     assert fields.UNSTATED not in shown["options"]
     schema = reading.answer_schema(SLOT, unstated=False)
     assert "value_raw" in schema["anyOf"][0]["properties"]

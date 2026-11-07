@@ -156,7 +156,7 @@ def test_a_scenario_is_read_as_printed_and_a_name_its_quote_lacks_is_not():
     # (owner decision 2026-11-07).
     assert payload["coordinates"]["scenario"]["kind"] == fields.TEXT
     assert set(payload["coordinates"]["scenario"]["options"]) == {
-        "status quo"}
+        "status quo", "several scenarios"}
     claim = read.claims[0]
     assert (claim["scenario_state"], claim["scenario"]) == (READ, "CurPol")
     assert claim["scenario_quote"] == NAMED["scenario"]["quote"]

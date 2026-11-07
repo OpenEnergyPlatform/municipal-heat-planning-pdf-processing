@@ -74,10 +74,10 @@ it as a plain nullable string with no `x-options`, stating in the
 (`docpipe/extraction/schema.py`). The scenario is no list: `scenario_label`
 and the `scenario` axis on the four parameters above are free text marked
 `merged`, the name as the publication prints it with its quote. The axis is
-typed as a string, or the one `out:` entry the spec lists beside the names
-(`out:status_quo`), published under `x-options` without an `enum`; the page
-says "What it may answer beside a name" and the table "string, or 1 out:
-entry beside".
+typed as a string, or one of the two `out:` entries the spec lists beside the
+names (`out:status_quo`, `out:several`), published under `x-options` without an
+`enum`; the page says "What it may answer beside a name" and the table "string,
+or 2 out: entries beside".
 
 What the list holds is decided once, before harvest starts, by
 `document_axes` in `profiles/scenarios/extraction.py`. It narrows the 249
@@ -955,10 +955,12 @@ Axis 'scenario' of Scenario description. A name the document prints, or one of t
 
 The prompt's own wording:
 
-> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario". A value the document states for a study, its model, a figure, a table, a group of scenarios or all of them holds for each of their scenarios: give their names, or, where they stand nowhere in what you were shown, the name of the study or the group as the document prints it, such as the study's title or "the high-ambition scenarios". A value its own passage reports for a past or the current year, measured, observed or balanced, such as "in 2017 emissions were", "today" or "between 2005 and 2015", belongs to no scenario: answer "status quo", with the words of its own quote that show it as value_raw.
+> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario". Where the document states the value for several scenarios, give their names where they stand in what you were shown; where they do not, as for a study with several scenarios, a figure, a table, a group the document describes or all of its scenarios, answer "several scenarios", with the words of the quote that name them as value_raw. A value its own passage reports for a past or the current year, measured, observed or balanced, such as "in 2017 emissions were", "today" or "between 2005 and 2015", belongs to no scenario: answer "status quo", with the words of its own quote that show it as value_raw.
 
-<details><summary>What it may answer beside a name (1)</summary>
+<details><summary>What it may answer beside a name (2)</summary>
 
+- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value is given to no scenario of its own.
+  - also written: all scenarios
 - **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
   - also written: historical, base year
 
@@ -1293,10 +1295,12 @@ Axis 'scenario' of Scenario region. A name the document prints, or one of the en
 
 The prompt's own wording:
 
-> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario". A value the document states for a study, its model, a figure, a table, a group of scenarios or all of them holds for each of their scenarios: give their names, or, where they stand nowhere in what you were shown, the name of the study or the group as the document prints it, such as the study's title or "the high-ambition scenarios". A value its own passage reports for a past or the current year, measured, observed or balanced, such as "in 2017 emissions were", "today" or "between 2005 and 2015", belongs to no scenario: answer "status quo", with the words of its own quote that show it as value_raw.
+> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario". Where the document states the value for several scenarios, give their names where they stand in what you were shown; where they do not, as for a study with several scenarios, a figure, a table, a group the document describes or all of its scenarios, answer "several scenarios", with the words of the quote that name them as value_raw. A value its own passage reports for a past or the current year, measured, observed or balanced, such as "in 2017 emissions were", "today" or "between 2005 and 2015", belongs to no scenario: answer "status quo", with the words of its own quote that show it as value_raw.
 
-<details><summary>What it may answer beside a name (1)</summary>
+<details><summary>What it may answer beside a name (2)</summary>
 
+- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value is given to no scenario of its own.
+  - also written: all scenarios
 - **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
   - also written: historical, base year
 
@@ -1530,10 +1534,12 @@ Axis 'scenario' of Scenario type. A name the document prints, or one of the entr
 
 The prompt's own wording:
 
-> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario". A value the document states for a study, its model, a figure, a table, a group of scenarios or all of them holds for each of their scenarios: give their names, or, where they stand nowhere in what you were shown, the name of the study or the group as the document prints it, such as the study's title or "the high-ambition scenarios". A value its own passage reports for a past or the current year, measured, observed or balanced, such as "in 2017 emissions were", "today" or "between 2005 and 2015", belongs to no scenario: answer "status quo", with the words of its own quote that show it as value_raw.
+> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario". Where the document states the value for several scenarios, give their names where they stand in what you were shown; where they do not, as for a study with several scenarios, a figure, a table, a group the document describes or all of its scenarios, answer "several scenarios", with the words of the quote that name them as value_raw. A value its own passage reports for a past or the current year, measured, observed or balanced, such as "in 2017 emissions were", "today" or "between 2005 and 2015", belongs to no scenario: answer "status quo", with the words of its own quote that show it as value_raw.
 
-<details><summary>What it may answer beside a name (1)</summary>
+<details><summary>What it may answer beside a name (2)</summary>
 
+- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value is given to no scenario of its own.
+  - also written: all scenarios
 - **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
   - also written: historical, base year
 
@@ -1801,10 +1807,12 @@ Axis 'scenario' of Scenario year. A name the document prints, or one of the entr
 
 The prompt's own wording:
 
-> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario". A value the document states for a study, its model, a figure, a table, a group of scenarios or all of them holds for each of their scenarios: give their names, or, where they stand nowhere in what you were shown, the name of the study or the group as the document prints it, such as the study's title or "the high-ambition scenarios". A value its own passage reports for a past or the current year, measured, observed or balanced, such as "in 2017 emissions were", "today" or "between 2005 and 2015", belongs to no scenario: answer "status quo", with the words of its own quote that show it as value_raw.
+> Which scenario of this publication does the value refer to? Its name as the document prints it, such as "Current Policies" or "the NDC scenario". Where the document states the value for several scenarios, give their names where they stand in what you were shown; where they do not, as for a study with several scenarios, a figure, a table, a group the document describes or all of its scenarios, answer "several scenarios", with the words of the quote that name them as value_raw. A value its own passage reports for a past or the current year, measured, observed or balanced, such as "in 2017 emissions were", "today" or "between 2005 and 2015", belongs to no scenario: answer "status quo", with the words of its own quote that show it as value_raw.
 
-<details><summary>What it may answer beside a name (1)</summary>
+<details><summary>What it may answer beside a name (2)</summary>
 
+- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value is given to no scenario of its own.
+  - also written: all scenarios
 - **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
   - also written: historical, base year
 

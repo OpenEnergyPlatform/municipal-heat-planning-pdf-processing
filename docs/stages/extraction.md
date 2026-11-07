@@ -420,8 +420,10 @@ stands in its quote; it is stored as the `out:` key with the wording in
 `<axis>_raw` (`pipeline.merge_field`, `pipeline.answer_in_quote`). A name stays a
 name: its own quote must print it, whatever wording stands beside it, and its
 raw is the name itself. The naming takes no `out:` entry as a name
-(`naming.read_name`). The scenarios profile lists one, `out:status_quo`, the
-way kwp's closed list has "Bestand".
+(`naming.read_name`). The scenarios profile lists two: `out:status_quo`, the
+way kwp's closed list has "Bestand", and `out:several`, for a value stated for
+several scenarios that the text shown does not name one by one, which then goes
+to no search and to no scenario of the graph (owner decision 2026-11-07).
 
 Which of a document's names mean the same thing is not asked while it is
 read. Once the document is folded, the naming step (`naming.py`, prompts

@@ -1925,7 +1925,7 @@
           "type": "text",
           "merged": "scenario",
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". A value the document states for a study, its model, a figure, a table, a group of scenarios or all of them holds for each of their scenarios: give their names, or, where they stand nowhere in what you were shown, the name of the study or the group as the document prints it, such as the study's title or \"the high-ambition scenarios\". A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
+          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". Where the document states the value for several scenarios, give their names where they stand in what you were shown; where they do not, as for a study with several scenarios, a figure, a table, a group the document describes or all of its scenarios, answer \"several scenarios\", with the words of the quote that name them as value_raw. A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
           "beside": {
             "out:status_quo": {
               "label": "status quo",
@@ -1934,6 +1934,13 @@
                 "base year"
               ],
               "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
+            },
+            "out:several": {
+              "label": "several scenarios",
+              "spellings": [
+                "all scenarios"
+              ],
+              "definition": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value is given to no scenario of its own."
             }
           },
           "kg": {
@@ -1987,7 +1994,7 @@
           "type": "text",
           "merged": "scenario",
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". A value the document states for a study, its model, a figure, a table, a group of scenarios or all of them holds for each of their scenarios: give their names, or, where they stand nowhere in what you were shown, the name of the study or the group as the document prints it, such as the study's title or \"the high-ambition scenarios\". A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
+          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". Where the document states the value for several scenarios, give their names where they stand in what you were shown; where they do not, as for a study with several scenarios, a figure, a table, a group the document describes or all of its scenarios, answer \"several scenarios\", with the words of the quote that name them as value_raw. A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
           "beside": {
             "out:status_quo": {
               "label": "status quo",
@@ -1996,6 +2003,13 @@
                 "base year"
               ],
               "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
+            },
+            "out:several": {
+              "label": "several scenarios",
+              "spellings": [
+                "all scenarios"
+              ],
+              "definition": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value is given to no scenario of its own."
             }
           },
           "kg": {
@@ -2040,7 +2054,7 @@
           "type": "text",
           "merged": "scenario",
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". A value the document states for a study, its model, a figure, a table, a group of scenarios or all of them holds for each of their scenarios: give their names, or, where they stand nowhere in what you were shown, the name of the study or the group as the document prints it, such as the study's title or \"the high-ambition scenarios\". A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
+          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". Where the document states the value for several scenarios, give their names where they stand in what you were shown; where they do not, as for a study with several scenarios, a figure, a table, a group the document describes or all of its scenarios, answer \"several scenarios\", with the words of the quote that name them as value_raw. A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
           "beside": {
             "out:status_quo": {
               "label": "status quo",
@@ -2049,6 +2063,13 @@
                 "base year"
               ],
               "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
+            },
+            "out:several": {
+              "label": "several scenarios",
+              "spellings": [
+                "all scenarios"
+              ],
+              "definition": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value is given to no scenario of its own."
             }
           },
           "kg": {
@@ -2116,7 +2137,7 @@
           "type": "text",
           "merged": "scenario",
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". A value the document states for a study, its model, a figure, a table, a group of scenarios or all of them holds for each of their scenarios: give their names, or, where they stand nowhere in what you were shown, the name of the study or the group as the document prints it, such as the study's title or \"the high-ambition scenarios\". A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
+          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". Where the document states the value for several scenarios, give their names where they stand in what you were shown; where they do not, as for a study with several scenarios, a figure, a table, a group the document describes or all of its scenarios, answer \"several scenarios\", with the words of the quote that name them as value_raw. A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
           "beside": {
             "out:status_quo": {
               "label": "status quo",
@@ -2125,6 +2146,13 @@
                 "base year"
               ],
               "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
+            },
+            "out:several": {
+              "label": "several scenarios",
+              "spellings": [
+                "all scenarios"
+              ],
+              "definition": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value is given to no scenario of its own."
             }
           },
           "kg": {
