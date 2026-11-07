@@ -159,8 +159,10 @@ def wording_key(row: dict) -> str
 ```
 
 The plan's words for what tells two numbers on one identity apart: the
-number's own subject, the head of its column, the whole a share is part
-of, and the two coordinates that fold onto one class.
+number's own subject, the whole a share is part of, and the two
+coordinates that fold onto one class. Two numbers of one table row are
+told apart by the coordinates each was read with (owner decision
+2026-11-07: no head of a column).
 
 "Wirtschaftlich genutzte Gebäude" and "Öffentliche Gebäude" are both
 OEO_00000405 and are not one number, and neither are "Bis 1918" and

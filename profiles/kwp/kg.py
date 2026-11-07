@@ -604,8 +604,10 @@ def _precision(row: dict) -> int:
 
 def wording_key(row: dict) -> str:
     """The plan's words for what tells two numbers on one identity apart: the
-    number's own subject, the head of its column, the whole a share is part
-    of, and the two coordinates that fold onto one class.
+    number's own subject, the whole a share is part of, and the two
+    coordinates that fold onto one class. Two numbers of one table row are
+    told apart by the coordinates each was read with (owner decision
+    2026-11-07: no head of a column).
 
     "Wirtschaftlich genutzte Gebäude" and "Öffentliche Gebäude" are both
     OEO_00000405 and are not one number, and neither are "Bis 1918" and
@@ -613,7 +615,7 @@ def wording_key(row: dict) -> str:
     apart, and it is what the node is named by when they collide.
     """
     return " / ".join(str(row.get(key) or "").strip()
-                      for key in ("subject", "head", "whole", "carrier_raw",
+                      for key in ("subject", "whole", "carrier_raw",
                                   "sector_raw")
                       ).strip(" /")
 
@@ -812,6 +814,10 @@ def evidence_comment(row: dict, document: str, *,
     lines = [ttl_comment(" · ".join(x for x in what if x))] if any(what) else []
     if row.get("quote"):
         lines.append(ttl_comment(f'"{row["quote"]}"'))
+    elif row.get("reading"):
+        # No text states the number: what was read off the figure stands
+        # where the quote would (owner decision 2026-11-07).
+        lines.append(ttl_comment(f"Read off the figure: {row['reading']}"))
     lines.append(ttl_comment(", ".join(where)))
     aggregation = row.get("aggregation")
     if aggregation:

@@ -324,6 +324,9 @@ class Values:
             "unit": row.get("unit"),
             "coordinates": coordinates,
             "quote": row.get("quote"),
+            # A number no text states, read off its figure: what was read
+            # stands where its quote would (owner decision 2026-11-07).
+            **({"reading": row["reading"]} if row.get("reading") else {}),
             "page": provenance.get("page"),
             "source": {key: provenance.get(key) for key in
                        ("owner_kind", "owner_id", "title", "section_number",

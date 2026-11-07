@@ -129,7 +129,7 @@ def one_passage(context: list):
 
 def tuple_slots(spec) -> dict:
     """{group name: its slots} for every group the survey reads."""
-    return {group.name: fields.frame_slots(spec, group.coordinates)
+    return {group.name: fields.frame_slots(spec, group.paired)
             for group in spec.groups_read_in("survey")}
 
 
@@ -158,7 +158,7 @@ def groups_shown(spec) -> dict:
     each coordinate with its list where it has one."""
     shown: dict = {}
     for group in spec.groups_read_in("survey"):
-        slots = fields.frame_slots(spec, group.coordinates)
+        slots = fields.frame_slots(spec, group.paired)
         shown[group.name] = {
             "where": group.where,
             "coordinates": {slot.name: (listed(slot) if slot.is_closed

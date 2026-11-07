@@ -1226,6 +1226,55 @@ def named_year(slot, given, wording: Optional[str], quote: str,
     return None
 
 
+def printed_only(slot, answer: dict) -> Optional[str]:
+    """The print a coordinate whose answer may be the print itself keeps
+    where its list has no entry for it (`fields.Slot.keeps_print`, the unit):
+    the wording of an answer with no entry, or of one whose answer is no
+    entry of the list; None for any other answer, which is read as before."""
+    if not getattr(slot, "keeps_print", False) or not isinstance(answer, dict):
+        return None
+    given = answer.get("value")
+    wording = answer.get("value_raw")
+    wording = wording.strip() if isinstance(wording, str) else ""
+    if given is None or (isinstance(given, str) and not given.strip()):
+        return wording or None
+    if not isinstance(given, str) or given.strip() == UNSTATED             or option_named(slot, given) is not None:
+        return None
+    return wording or given.strip()
+
+
+def _print_read(row, slot, printed: str, answer: dict, sources: list,
+                window: Optional[tuple], not_shown: str,
+                not_in_quote: str) -> Optional[dict]:
+    """*printed*, the print of a coordinate with no entry for it, read onto
+    *row* by the two checks every answer passes (its quote stands in a shown
+    source, long enough, and holds the print): None when read, else the
+    failure, as `merge_field` records one."""
+    quote = answer.get("quote")
+    found = next((s for s in sources if isinstance(quote, str)
+                  and quote_in(s.text or "", quote)), None)
+    base = {"row": row.label, "given": answer.get("value"), "raw": printed,
+            "quote": quote}
+    row.claim[f"{slot.name}_state"] = UNBACKED
+    if found is None:
+        return {**base, "why": "quote_not_in_source", "reason": say(not_shown)}
+    if len(quote.strip()) < MIN_QUOTE_CHARS:
+        return {**base, "why": "quote_too_short",
+                "reason": say("quote_too_short", minimum=MIN_QUOTE_CHARS)}
+    if flat(printed).casefold() not in flat(quote).casefold():
+        return {**base, "why": "answer_not_in_quote",
+                "reason": say("answer_not_in_quote", answer=printed)
+                + say(not_in_quote, unstated=UNSTATED)}
+    row.claim[f"{slot.name}_state"] = READ
+    row.claim[slot.name] = None
+    row.claim[f"{slot.name}_raw"] = printed
+    row.claim[f"{slot.name}_quote"] = quote
+    row.claim[f"{slot.name}_source"] = [found.owner_kind, found.owner_id]
+    if window is not None:
+        row.claim[f"{slot.name}_window"] = list(window)
+    return None
+
+
 def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 *, window: Optional[tuple] = None,
                 bases: Optional[list] = None,
@@ -1313,6 +1362,20 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             # coordinate, not to whoever answered most recently.
             continue
         given = answer.get("value")
+        printed = printed_only(slot, answer)
+        if printed is not None:
+            # The unit as the plan prints it where no entry of its list fits
+            # (owner decision 2026-11-07: no unit is refused): read when its
+            # quote stands in what was shown and holds the print, the entry
+            # left empty, and converted once the list has an entry for it.
+            got = _print_read(row, slot, printed, answer, sources, window,
+                              not_shown, not_in_quote)
+            if got is None:
+                filled += 1
+            else:
+                failed.append(got)
+                unbacked += 1
+            continue
         if given is None or (isinstance(given, str) and not given.strip()):
             noticed = answer.get("value_raw")
             if isinstance(noticed, str) and noticed.strip():

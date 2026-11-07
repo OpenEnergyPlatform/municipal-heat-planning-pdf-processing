@@ -33,9 +33,10 @@ tier `TIER_TEXT` (`trust.py:133-142`). On the 559 tuples the levels were
 cut at, 527 came out of a table or figure image, so image origin alone is
 not a warning (`trust.py:44-46`).
 
-A value falls below `B` in one of two ways. It is a `C` when a coordinate
-was not read, `exhausted` or `unanswered`, and nothing speaks against what
-was read: a gap to fill. It is a `D` when something speaks against the
+A value falls below `B` in one of two ways. It is a `C` when a coordinate was not read, `exhausted` or `unanswered`, or
+when the number is one only a figure's image shows, read off it with no quote
+(`read_off`, owner decision 2026-11-07; it was a `D`), and nothing speaks
+against what was read: a gap to fill. It is a `D` when something speaks against the
 reading: an `unbacked` coordinate, a computed number, a
 second reading that came to something else, or a contested identity
 (`reasons`, `trust.py:89-121`; the split is in `trust`, `trust.py:135-138`).
@@ -49,8 +50,7 @@ make (`trust.py:33-36`).
 Every `C` and every `D` carries at least one reason, and the reasons form a
 closed list: a reason nobody can enumerate is a reason nobody can count
 (`trust.py:27-31`). A coordinate contributes `exhausted:<axis>`,
-`unbacked:<axis>` or `unanswered:<axis>` (`trust.py:106-107`); `exhausted`
-and `unanswered` make a `C`, `unbacked` a `D`. A row's own `flags`
+`unbacked:<axis>` or `unanswered:<axis>` (`trust.py:106-107`); `exhausted` and `unanswered` make a `C`, `unbacked` a `D`. The flag `read_off` is the one flag reason that makes a `C`. A row's own `flags`
 contribute `computed`, `catalogue`, `not_located` or
 `review:disagree` (`FLAG_REASONS`, `trust.py`), each of them a `D`;
 `catalogue` marks a value a profile looked up in an open catalogue record
@@ -108,8 +108,9 @@ finds the same string (`trust.py:185-189`).
 
 `trust.py` defines two more public functions. `document_summary`, called
 from seven modules including `runner.py`, `review.py` and `topup_parameter.py`,
-builds the `kind: summary` line a harvest file ends with: counts of tuples by
-level, by reason and by image origin (`trust.py:245-283`). It is written
+builds the `kind: summary` line a harvest file ends with: counts of tuples by level, by reason and by image origin, and `unlisted_units`,
+the units numbers were read with that are no entry of their parameter's list,
+per printed unit (`trust.py:245-283`). It is written
 before a conflict or a second reading exists, so its levels are the floor: a
 value counted there as an `A`, `B` or `C` can still become a `D`. The pass
 that appends a parameter builds it again over every tuple and refusal the file now holds;
@@ -148,8 +149,8 @@ threshold anybody tuned.
      description (a model's reading of a picture), or out of a
      document whose pages had no text layer and were transcribed page
      by page
-  C  open: a coordinate nobody read, and nothing speaks against what
-     was read
+  C  open: a coordinate nobody read, or a number read off a figure's
+     image that no text prints, and nothing speaks against what was read
   D  in doubt: a coordinate that could not be backed, a computed
      number, a value looked up in a catalogue, a contested identity, a
      second reading that came to something else
@@ -197,6 +198,7 @@ A closed list, because a reason nobody can enumerate is a reason nobody can coun
 - `^catalogue$`
 - `^computed$`
 - `^not_located$`
+- `^read_off$`
 - `^review:disagree$`
 - `^conflict$`
 - `^page_transcribed$`
@@ -209,6 +211,7 @@ A closed list, because a reason nobody can enumerate is a reason nobody can coun
 | `catalogue` | `catalogue` |
 | `computed` | `computed` |
 | `not_located` | `not_located` |
+| `read_off` | `read_off` |
 | `review:disagree` | `review:disagree` |
 
 ## The marks of a trust line

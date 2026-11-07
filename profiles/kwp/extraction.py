@@ -347,10 +347,21 @@ PHRASES = {
         'der Passage, nenne stattdessen den nächsten Wert, den du noch nicht '
         'genannt hast, oder antworte {{"value":null}}, wenn keiner mehr '
         'kommt.'),
-    "head_not_in_table": (
-        'Der Kopf {head!r} steht in keiner Kopfzeile der Tabelle. Schreib '
-        'den Kopf der Spalte des Werts Zeichen für Zeichen, wie er dort '
-        'steht.'),
+    "quote_not_unique": (
+        'Dein "quote" {quote!r} steht mehr als einmal in dem, was du '
+        'bekommen hast, und sagt so nicht, welche Zahl du meinst. Nenne '
+        'diesen Wert noch einmal mit einem "quote", das dort nur einmal '
+        'steht und den Wert einmal enthält, etwa mit den Wörtern oder Zellen '
+        'daneben.'),
+    "value_not_once": (
+        'Dein "quote" {quote!r} enthält {value} mehr als einmal und sagt so '
+        'nicht, welche davon du meinst. Nenne diesen Wert noch einmal mit '
+        'einem "quote", das ihn genau einmal enthält.'),
+    # die eigene Suche des Modells nach einer Kennzahl, nach den gezeigten ids
+    "place_unknown": (
+        'Kein Treffer und keine Passage dieses Gesprächs hat die id {id!r}. '
+        'Nenne jede Passage, die du gefunden hast, mit der id, unter der sie '
+        'gezeigt wurde.'),
     "shorter_field": (
         'Fasse Zeilen mit derselben Antwort in "groups" zusammen und '
         'zitiere nur die kurze Stelle, an der die Angabe steht.'),

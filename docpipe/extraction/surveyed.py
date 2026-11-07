@@ -1,9 +1,10 @@
 """
 surveyed.py: One document harvested from its survey.
 
-The survey of the whole plan (survey.py), the reading of every parameter in
-the passages it named (reading.py) and the combing for what the reading left
-open (combing.py). The run folds what they read, works out what the profile
+The survey of the whole plan (survey.py), the plan's years and settings
+(years.py, settings.py), the reading of every parameter in the passages it
+named (reading.py) and the conversation for what the reading left open
+(combing.py). The run folds what they read, works out what the profile
 computes and writes the file with its stamp, as it writes every harvest.
 
 A parameter the survey of the whole plan named no passage for is searched
@@ -13,7 +14,10 @@ reads it down that list, one passage a round and every such parameter in the
 same round, until a reading of it comes back with a value the check takes or
 the list ends (owner decisions 2026-11-05, `sought_walk`). A reading sees
 only its passage (owner decision 2026-11-05: no tools in reading, the walk
-reads the list). What a publication says of itself (the profile's FRONT_PAGE_PARAMETERS) is read from its first
+reads the list). A parameter the walk read no value of, its list ended or
+the search found no passage for it, is searched for by the model itself,
+with the combing's tools, and every passage it names is read the same way
+(owner decision 2026-11-07, `seeking.FreeSearch`). What a publication says of itself (the profile's FRONT_PAGE_PARAMETERS) is read from its first
 page on as well, page by page, until a title came, whatever the survey
 named (owner decisions 2026-11-05, `front_walk`): the first page with a
 title is its title page, and a chapter that presents other studies comes
@@ -170,7 +174,8 @@ def taken_values(read) -> list:
     out: list = []
     for claim in read.claims:
         passage = source_of(read.batch, claim)
-        if value_refused(claim, parameter, passage.text or "") is None:
+        if value_refused(claim, parameter, passage.text or "",
+                         passage.owner_kind) is None:
             out.append(passage)
     return out
 
@@ -227,6 +232,14 @@ def sought_walk(found: Found, lists: dict, read: Callable,
         walking = {uri: listed for uri, listed in walking.items()
                    if uri not in valued and step < len(listed)}
     return walked, reads
+
+
+def unvalued(uris: list, reads: list) -> list:
+    """The parameters of *uris* that no Read of *reads* holds a value of
+    the check takes (`taken_values`), in the order of *uris*."""
+    valued = {read.batch.parameter.uri for read in reads
+              if taken_values(read)}
+    return [uri for uri in uris if uri not in valued]
 
 
 def walks_of(sought: Found) -> dict:
@@ -369,7 +382,11 @@ class SurveyedHarvest:
     and target years (`years.PlanYears`), None where the spec dates nothing
     by them; *title_page_of(document_id, passages)* the line of the title
     page that names the plan's own place, None where the profile shows none
-    (owner decisions 2026-11-06).
+    (owner decisions 2026-11-06). *make_settings(spec)* is the request for
+    what the plan settles for all its values (`settings.PlanSettings`),
+    *make_seeker(spec)* the model's own search for a parameter whose walk
+    found no value (`seeking.FreeSearch`), each None where the profile
+    writes no prompt for it (owner decisions 2026-11-07).
     """
 
     def __init__(self, spec, make_survey: Callable, make_reader: Callable,
@@ -378,7 +395,9 @@ class SurveyedHarvest:
                  halted: Optional[Callable] = None, front=(),
                  title: Optional[str] = None,
                  make_years: Optional[Callable] = None,
-                 title_page_of: Optional[Callable] = None):
+                 title_page_of: Optional[Callable] = None,
+                 make_settings: Optional[Callable] = None,
+                 make_seeker: Optional[Callable] = None):
         self.spec = spec
         self.make_survey = make_survey
         self.make_reader = make_reader
@@ -392,6 +411,8 @@ class SurveyedHarvest:
         self.make_years = make_years or (lambda spec: None)
         self.title_page_of = title_page_of or (lambda document_id, passages:
                                                None)
+        self.make_settings = make_settings or (lambda spec: None)
+        self.make_seeker = make_seeker or (lambda spec: None)
         self._made: dict = {}
         self._lock = threading.Lock()
 
@@ -420,6 +441,14 @@ class SurveyedHarvest:
         return self._once(("years", id(spec)), spec,
                           lambda: self.make_years(spec))
 
+    def settings_of(self, spec):
+        return self._once(("settings", id(spec)), spec,
+                          lambda: self.make_settings(spec))
+
+    def seeker_of(self, spec):
+        return self._once(("seeker", id(spec)), spec,
+                          lambda: self.make_seeker(spec))
+
     def __call__(self, document_id: int, *, only=(), scope: str = "",
                  passages: Optional[list] = None,
                  also: Optional[Found] = None) -> Optional[Taken]:
@@ -441,19 +470,24 @@ class SurveyedHarvest:
             found = joined(found, also)
         if self.halted():
             return None
-        # Once per plan: its base and target years, each with its quote, and
-        # the line of its title page that names its own place (owner
-        # decisions 2026-11-06).
+        # Once per plan: its base and target years, each with its quote, the
+        # line of its title page that names its own place (owner decisions
+        # 2026-11-06), and what it settles for all its values (owner
+        # decision 2026-11-07).
         asker = self.years_of(spec)
         bases = (asker(document_id, shown, frame_pairs(found), budget)
                  if asker is not None else None)
         title_page = self.title_page_of(document_id, sources)
+        settler = self.settings_of(spec)
+        settings = (settler(document_id, shown, budget)
+                    if settler is not None else None)
         if self.halted():
             return None
         # Only what this plan has: without them the reading dates by the
         # survey's pairs and shows no title line, as before.
         plan = {key: value for key, value in (("bases", bases),
-                                              ("title_page", title_page))
+                                              ("title_page", title_page),
+                                              ("settings", settings))
                 if value is not None}
 
         def read(survey: Found) -> list:
@@ -495,10 +529,34 @@ class SurveyedHarvest:
                 return None
             sought, more = walk
             reads = reads + more
+            # A parameter the walk read no value of is searched for by the
+            # model itself; each passage it names is read and is one of the
+            # parameter's sources (owner decision 2026-11-07).
+            seeker = self.seeker_of(spec)
+            for uri in (unvalued([p.uri for p in missing], more)
+                        if seeker is not None else ()):
+                parameter = spec.by_uri[uri]
+                walked = [owner[1:] for owner in sought.walked
+                          if owner[0] == uri]
+                places = seeker(document_id, parameter, shown, walked,
+                                budget)
+                if self.halted():
+                    return None
+                if not places:
+                    continue
+                survey = carried(found)
+                merge(survey, [Answer((s.owner_kind, s.owner_id), [uri])
+                               for s in places])
+                merge(sought, [Answer((s.owner_kind, s.owner_id), [uri])
+                               for s in places])
+                reads = reads + read(survey)
+                if self.halted():
+                    return None
         if comber is not None:
             combed = comber(document_id, reads, shown, frame_pairs(found),
                             budget, **({"bases": bases} if bases is not None
-                                       else {}))
+                                       else {}),
+                            title_page=title_page, settings=settings)
             if self.halted():
                 return None
         return taken_of(document_id, spec, found, reads, combed, shown,

@@ -4,58 +4,57 @@
 
 reading.py: The values of one parameter in the passages the survey named for
 it, one value per request: rounds name the values of a passage one by one,
-then each value is asked once per group of the spec for that group's
-coordinates.
+then each value is asked its coordinates one by one, each a message of the
+value's own conversation.
 
-Step 3 of the rebuilt harvest (owner decisions 2026-11-04 and 2026-11-05).
-Every request has one task and reads exactly one value. A table is read like
-a section: the model repeats each value as the passage prints it, quoted by
-its sentence or its table row, and for a number in a table also the head of
-its column as printed, which tells two equal numbers of one row apart. Code
-reads no number by its place.
+Step 3 of the rebuilt harvest (owner decisions 2026-11-04, 2026-11-05 and
+2026-11-07). Every request has one task and reads exactly one value. A table
+is read like a section: the model repeats each value as the passage prints
+it, with a quote that pins it down, and code takes nothing from where it
+stands (owner decision 2026-11-07: "streich diese ganze Code Logik").
 
 A round shows the parameter in short (its `brief`), the whole passage (a table
 with its title, its head and all its rows, or the survey's piece of a
-section), the text around a table or figure and the values already read, and
-asks for the next value not yet read, until the model says there is none. A
-value may stand in any passage the round showed: the passage, its heading or
-the text around it; it is read from the one its quote stands in, which joins
-the reading's batch, so the fold checks it there (`pipeline.route_claims`).
-The requests that read have no tools; only the combing has (owner decision
-2026-11-05, ticket 26: no reading of 2,231 in an eight-plan probe used them). A value the check refuses (its quote in no passage
-shown, its number not in its quote, whatever else the fold refuses of the
-value and its quote, such as an answer its quote does not hold or one off
-its closed list (`verify.value_refused`), a quote over several table rows
-that print it, a head no head line prints) is asked once more with the
-reason; one named again is asked once more, and named again it ends the
-rounds.
+section), the text around a table or figure, the line of the title page and
+the table the passage may continue, and asks for the next value not yet read,
+until the model says there is none. A value may stand in any passage the
+round showed; it is read from the one its quote stands in, which joins the
+reading's batch, so the fold checks it there (`pipeline.route_claims`). Its
+quote stands in what was shown exactly once and holds the value exactly
+once, each counted where it stands for itself and not as part of a longer
+name or number (`verify.times_quoted`, `verify.times_stated`):
+"410.662,44 | 1.109 | 6%" pins down the 1.109 of its row. A value the check
+refuses (its quote in no passage shown, its number not in its quote, whatever
+else the fold refuses of the value and its quote (`verify.value_refused`), a
+quote that does not pin it down) is asked once more with the reason; one
+named again is asked once more, and named again it ends the rounds. No
+request that reads has tools.
 
-A number in a table takes its column from its head, else from the one cell of
-its row that prints it, and a head that prints exactly one year of the
-document's pairs is its year, read off the head line and not asked
-(`pipeline.with_head`, owner decision 2026-11-03); where exactly one pair has
-that year, the pair's scenario is the value's too (`pipeline.head_pair`).
-Then every group of the spec (`Spec.groups`, `groups_of`) is asked for this
-one value, its coordinates still open only, in the order of the spec, all in
-one conversation (owner decisions 2026-11-07, `thread.py`): the first message
-shows the passage and the value, each group's message brings the words of
-that group and its coordinates only, and the model sees what it answered for
-the groups before. A first message begins with what is the same for every
-request of its parameter and group (the parameter, in full only where the
-group classifies, its questions with their lists), then what is the same in
-a plan (its base and target years), then the passage, and the value comes
-last, marked, with what is already read of it, so a server reads each shared
-beginning once (owner decision 2026-11-05, ticket 26). The system prompt is
-what every group is told and the part of each field the first message
-carries; only a group that asks a frame coordinate is shown the pairs and the
-plan's base and target years. The rounds of a passage's values are a
-conversation as well: each later round asks for the next value after the
-answer it follows. A correction and the second reading go after the answer
-they are about, in its conversation.
+A number a figure only draws, as a bar, a segment, an area or a point of a
+curve, is a value of the plan and an estimate (owner decisions 2026-11-05 and
+2026-11-07). Where a figure's image goes with the request, every value of the
+round says whether the image only draws it; one no shown text states is read
+off the image, its reading in place of a quote, and that reading is its
+evidence (`verify.read_off`), trust level C.
 
-Every coordinate asked is answered: the grammar of a group request requires
-each of them, and "the passage does not say" is one of the answers
-(`fields.UNSTATED`).
+Then the value's coordinates are asked one by one, in the order of the spec's
+groups and of the coordinates in each (`Spec.groups`, `groups_of`), all in
+one conversation (owner decision 2026-11-07: "Die Fragen A, B und C sind ja
+eigentlich mehrere Fragen und sollten dann auch nacheinander gestellt
+werden"): the first message shows the passage and the value, each later one
+brings the words of the coordinate's group and that coordinate only, and the
+model sees what it answered before. A coordinate the spec derives from the
+unit is not asked where the unit question chose an entry of the parameter's
+list, and is asked where it chose none (owner decision 2026-11-07: where it
+does not follow by itself, the model tries). The system prompt is what every
+message is told and the part of each field the first message carries; only a
+frame coordinate is shown the survey's pairs, only the year the plan's base
+and target years. The rounds of a passage's values are a conversation as
+well: each later round asks for the next value after the answer it follows.
+A correction goes after the answer it is about, in its conversation.
+
+Every coordinate asked is answered: the grammar requires it, and "the
+passage does not say" is one of the answers (`fields.UNSTATED`).
 
 A coordinate whose answer is the name the document gives a thing, such as
 a scenario, is read as the document prints it (`fields.Slot.merged`). A
@@ -69,20 +68,17 @@ row of its name, a changed name to the next row still open, a further name
 to a row of its own (`routed`, owner decisions 2026-11-07). Which names
 mean the same thing is asked once the document is read (`naming.py`).
 
-A find of the second reading whose quote stands only in the section before
-or after the value's place is asked about once more: does that place speak
-about the value (`Judge`, owner decision 2026-11-07)? A "no" takes it out,
-and the coordinate goes to the combing open.
-
 Nothing is checked here beyond what the harvest checks everywhere. Every
 coordinate goes through `pipeline.merge_field` and every value through
 `fold_batch`. What that check refuses is asked once more with its reason,
 named by its coordinate; a coordinate the reply left out is asked for by
 name. A frame coordinate still open takes the survey's tuple of the passage,
-with its quote, where the survey named one (window `frame`). A coordinate no
-reply answered ends `unanswered`. A request too long for the model's window
-is split: a table into halves of its rows, until a single row is a hole of
-its own (`Read.lost`).
+with its quote, where the survey named one (window `frame`). What is still
+open then is asked in a conversation of its own, with the answers so far,
+the sections around the value's place and the rest of the plan
+(`combing.py`). A request too long for the model's window is split: a table
+into halves of its rows, until a single row is a hole of its own
+(`Read.lost`).
 
 Author: Felix Vossel
 
@@ -258,11 +254,7 @@ Fields:
 - `corrected: int = 0`: corrections asked
 - `failed: dict = field(default_factory=dict)`: what the check refused of the first replies, by reason
 - `unanswered: int = 0`: coordinates no reply answered
-- `probes: list = field(default_factory=list)`: Per claim, in its order: the sentences its group replies wrote to the coordinates they found unstated, as the plan would print them, {coordinate: sentence}, which the combing ranks with. Not on the claim: no sentence enters the harvest.
-- `near: int = 0`: Requests of the second reading, which asked the coordinates the first left open once more with the sections around the value's place, and the coordinates they read (owner decision 2026-11-06).
-- `near_read: int = 0`
-- `judged: int = 0`: Finds of the second reading quoted from the sections around the value's place that the check was asked about, and those it said do not speak about the value (owner decision 2026-11-07).
-- `turned: int = 0`
+- `probes: list = field(default_factory=list)`: Per claim, in its order: the sentences its replies wrote to the coordinates they found unstated, as the plan would print them, {coordinate: sentence}, which the combing ranks with. Not on the claim: no sentence enters the harvest.
 
 ### Reader
 
@@ -277,23 +269,23 @@ Two kinds of request, each with one task and one value (owner
 decisions 2026-11-04 and 2026-11-05), each the reply as a dict, CUT, or
 None, and each a message of a conversation (`thread.Thread`, owner
 decisions 2026-11-07): *ask_values(source, parameter, context, read,
-thread, follow)* the first value of a passage not among *read*, or,
-with *follow*, what follows the answer of *thread*: the next value, a
-correction; *ask_text(source, parameter, group, slots, row, context,
-thread, follow)* one group's coordinates of that value: the first
-message of the value's conversation, the message of its next group, or,
-with *follow*, a correction or its second reading. *context* is what
+thread, follow, drawn)* the first value of a passage not among *read*,
+or, with *follow*, what follows the answer of *thread*: the next value,
+a correction; with *drawn* the request sends the figure's image and
+takes a value read off it. *ask_text(source, parameter, group, slots,
+row, context, thread, follow)* one coordinate of that value (*slots*,
+one): the first message of the value's conversation, the message of
+its next coordinate, or, with *follow*, a correction. *context* is what
 the first message shows beside its passage.
 *shown_with(source)* is what a coordinate's quote may stand in besides
 the passage: the heading it stands under (`heading_of`); so may what
 the value has read, as its request shows it (`known_shown`).
 *known(claim, asked)* is what a value has read in the plan's words
-(`runner.row_context`). *pool* reads passages side by side. No request
-of the reading has tools (owner decision 2026-11-05, ticket 26).
-*check(payload, shape, document_id, source, group, example, thread,
-follow)*, where given, asks of a find of the second reading quoted from
-a section around the value's place whether that place speaks about the
-value (`Judge`, owner decision 2026-11-07).
+(`runner.row_context`). *drawn(source)* says whether a request about
+*source* sends a figure's image, which a value only the image shows is
+read off (owner decisions 2026-11-05 and 2026-11-07); None sends none.
+*pool* reads passages side by side. No request of the reading has
+tools (owner decision 2026-11-05, ticket 26).
 
 #### Reader.\_\_init\_\_
 
@@ -302,7 +294,8 @@ def __init__(self, spec, ask_values: Callable, ask_text: Callable,
              frame_slots: list, *, shown_with: Optional[Callable] = None,
              bases: Optional[Callable] = None,
              known: Optional[Callable] = None,
-             pool=None, trace=None, check: Optional[Callable] = None)
+             drawn: Optional[Callable] = None,
+             pool=None, trace=None)
 ```
 
 #### Reader.context_of
@@ -328,17 +321,18 @@ def read(self, document_id: int, parameter, source: Source,
          shown: Optional[Source] = None,
          budget: Optional[int] = None, *,
          bases: Optional[list] = None,
-         title_page: Optional[Source] = None) -> Read
+         title_page: Optional[Source] = None,
+         settings: Optional[list] = None) -> Read
 ```
 
 *source* is the passage a value is verified against, *shown* the
 piece of it the requests show, *budget* two pages of the plan, which
 the text around a table or figure fits (`around_of`). The values in
-rounds (`_values`), each placed in its table (`_placed`), then each
-group of the spec for each value (`_value_group`), then what that
-left open once more with the plan around the value (`_near`).
-*bases* are the plan's years (else those of *pairs*), *title_page*
-its title page's line (`Reader.__call__`).
+rounds (`_values`), then each coordinate of the spec for each value,
+one message each in the order of the groups (`_value_group`); what
+that leaves open is asked in a conversation of its own
+(`combing.Comber`). *bases* are the plan's years (else those of
+*pairs*), *title_page* its title page's line (`Reader.__call__`).
 
 ## Functions
 
@@ -390,7 +384,29 @@ def slots_of(spec, parameter) -> list
 ```
 
 The coordinates a value of *parameter* is read with: its unit, then
-every axis the spec does not decide.
+every axis, one the spec derives from the unit included, which is asked
+where the unit question chose no entry of the parameter's list
+(`derived_by_unit`).
+
+### derived_by_unit
+
+```python
+def derived_by_unit(claim: dict, parameter) -> bool
+```
+
+Does the spec decide the coordinates it derives from the unit for this
+value: the unit question read an entry of the parameter's list? Where it
+read the print without one, the model is asked them (owner decision
+2026-11-07: "wo es nicht automatisch geht, soll es das LLM versuchen").
+
+### in_group_order
+
+```python
+def in_group_order(group, group_slots: list) -> list
+```
+
+A group's coordinates in the order its spec entry names them: the
+order their questions are asked in, one message each.
 
 ### groups_of
 
@@ -615,6 +631,25 @@ a passage a quote may stand in; whether the table continues it is the
 model's reading (owner decisions 2026-11-06 and 2026-11-07). None for
 any other passage.
 
+### settings_shown
+
+```python
+def settings_shown(settings: list) -> list
+```
+
+The plan's settings as a request shows them: what each is about, what
+it settles and its quote (`settings.PlanSettings`, owner decision
+2026-11-07).
+
+### settings_evidence
+
+```python
+def settings_evidence(settings: list, passages: dict) -> list
+```
+
+The quotes of the plan's settings, each a passage a quote may stand
+in under the passage it was read from.
+
 ### beside_of
 
 ```python
@@ -629,10 +664,11 @@ title and head of the table *source* may continue (`table_before_of`).
 ### more_schema
 
 ```python
-def more_schema() -> dict
+def more_schema(gets: tuple = GETS) -> dict
 ```
 
-The asks a reply may carry under "more".
+The asks a reply may carry under "more": any of *gets*, by default
+every one.
 
 ### first_line
 
@@ -689,29 +725,20 @@ list.
 def source_shown(source: Source) -> dict
 ```
 
-### with_head_asked
-
-```python
-def with_head_asked(parameter, source: Source) -> bool
-```
-
-Does a value of *parameter* in *source* name the head of its column?
-A number in a table: the head tells two equal numbers of one row apart
-and dates the number (owner decision 2026-11-05).
-
 ### shown_value
 
 ```python
 def shown_value(claim: dict) -> dict
 ```
 
-A value as a request shows it: its value, wording, quote and head.
+A value as a request shows it: its value, wording and quote, or for
+one read off a figure the sentence of what was read.
 
 ### values_payload
 
 ```python
 def values_payload(source: Source, parameter, context: dict,
-                   read: list = ()) -> dict
+                   read: list = (), drawn: bool = False) -> dict
 ```
 
 The first message of the values of a passage: the parameter in
@@ -725,41 +752,51 @@ continue after it (`beside_of`). The next value, and a value the check
 refused, are asked after the answer in the same conversation (owner
 decisions 2026-11-07); *read*, the values named so far, stands only in
 a conversation begun anew because the old one no longer fit the
-model's window (`Reader._rounds`).
+model's window (`Reader._rounds`). With *drawn*, a figure whose image
+goes with the request says so ("image"), and the system prompt tells how
+a number only the image shows is read off it.
 
 ### values_response_format
 
 ```python
-def values_response_format(parameter, head: bool = False) -> dict
+def values_response_format(parameter, drawn: bool = False) -> dict
 ```
 
 The next value of the passage as the reply itself, with no wrapper
 (owner decision 2026-11-06): its value and quote, its printed wording
 only where the value is an entry of a list or a number (a free text value
-is its own wording, `verify.wording_of`), and with *head* the head of its
-column; {"value": null} where no further value stands in it. A category
-value is one of its entries, or "" where the model is unsure of them.
+is its own wording, `verify.wording_of`); {"value": null} where no
+further value stands in it. A category value is one of its entries, or
+"" where the model is unsure of them. With *drawn*, a figure whose image
+goes with the request: always whether the image only draws the number
+(`drawn`), and in place of a quote the sentence of what was read off the
+image where no shown text states it (`reading`, owner decisions
+2026-11-05 and 2026-11-07).
 
 ### values_example
 
 ```python
-def values_example(parameter, head: bool = False) -> dict
+def values_example(parameter, drawn: bool = False) -> dict
 ```
 
 The reply of a value request as its example shows it: a value read,
 with exactly the keys `values_response_format` asks for this parameter
-and this passage, in its order (owner decision 2026-11-06). The reply
-that names no further value stays in the prompt's rule line.
+and this passage, in its order (owner decision 2026-11-06): a printed
+value, so with *drawn* one the image does not only draw. The reply that
+names no further value stays in the prompt's rule line, and one read off
+an image in the part about the image.
 
 ### claim_of
 
 ```python
-def claim_of(reply, head: bool = False) -> Optional[dict]
+def claim_of(reply, drawn: bool = False) -> Optional[dict]
 ```
 
 The value a round's reply names, as a row's claim, or None where it
-names none: {"value": null}, or no object. A table row quoted with
-others is cut to the one row that prints the number (`narrow_quote`).
+names none: {"value": null}, or no object. Where the request sent the
+image (*drawn*), whether the image only draws the number, and a reading
+in place of a missing quote, which the switch `read_off` makes the
+value's evidence (`verify.read_off`).
 
 ### same_value
 
@@ -768,37 +805,7 @@ def same_value(a: dict, b: dict) -> bool
 ```
 
 Do two claims name the same value: the same number or wording, in the
-same quote, under the same head?
-
-### head_matches
-
-```python
-def head_matches(table: str, cell: int, cells: int, head: str) -> bool
-```
-
-Does *head* name the head of this column: its words on one head line,
-or all of them as `column_head` joins them?
-
-### column_of
-
-```python
-def column_of(source: Source, claim: dict) -> Optional[tuple]
-```
-
-(column, cells of its row) of a number in a table, 1-based, or None:
-the one column whose head is the head the model wrote and whose cell in
-the quoted row prints the number, else the one cell of the row that
-prints it (`pipeline.cell_index`). None where neither is certain: a
-wrong column is worse than none.
-
-### head_in_table
-
-```python
-def head_in_table(source: Source, head: str) -> bool
-```
-
-Does any head line of the table print *head* over one of its
-columns?
+same quote, read off the same way?
 
 ### passage_of
 
@@ -832,28 +839,20 @@ passage, a number its quote does not print (the harvest's own
 
 ```python
 def round_failure(claim: dict, shown: list, read: list,
-                  parameter) -> Optional[tuple]
+                  parameter, kind: str = "section") -> Optional[tuple]
 ```
 
 (kind, reason) of what the check refuses of a round's value of
 *parameter*, or None: a value already read (`REPEATED`), the value
 itself (`VALUE`: its quote in no passage of *shown*, its number not in
-its quote, what the fold refuses of the value and its quote
-(`verify.value_refused`), a number quoted over several rows of its
-table that print it), or a head no head line of its table prints
-(`HEAD`). The fold's refusal is told in its own words: what the fold
-refuses, the model hears while it can still answer (owner decision
-2026-11-05).
-
-### head_in_before
-
-```python
-def head_in_before(source: Source, head: str) -> bool
-```
-
-Does a head line of the table *source* may continue print *head*
-(`table_before_of`)? Its head is the continuation's, where the model
-reads it as one (owner decision 2026-11-06).
+its quote, what the fold refuses of the value and its quote,
+`verify.value_refused`), or a quote that does not pin the value down
+(`UNIQUE`, owner decision 2026-11-07: it stands in what *shown* holds
+more than once, or holds the value more than once). Of a value read off
+a figure of *kind*, the passage the round reads, only the value itself
+(`verify.read_off`). The fold's refusal is told in its own words: what
+the fold refuses, the model hears while it can still answer (owner
+decision 2026-11-05).
 
 ### text_payload
 
@@ -872,12 +871,9 @@ passage, the text around a table or figure and, for a frame group, the
 survey's pairs of the passage (`group_context`); the value last, with
 its quote and, under "read", what is already read of it in the plan's
 words. The line of the title page stands with the plan's years, the
-table the passage may continue after it (`beside_of`), and, in the second
-reading of a value no conversation stands for, the sections before and
-after its place (`near_of`). A request for every value of a table at once
-says so ("whole_table", `Reader._near_table`). It is the first message
-of the value's conversation: its next group, a correction and its
-second reading follow the answer (`group_payload`, owner decisions
+table the passage may continue after it (`beside_of`). It is the first
+message of the value's conversation: its next coordinate and a
+correction follow the answer (`group_payload`, owner decisions
 2026-11-07).
 
 ### group_payload

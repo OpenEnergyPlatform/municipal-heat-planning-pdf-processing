@@ -287,8 +287,7 @@ def from_traces(trace_dirs: Iterable[Path],
                     readings["readings"] += 1
                     if event.get("unread"):
                         unread_why[str(event.get("why"))] += 1
-                    for key in ("values", "unanswered", "judged",
-                                "turned"):
+                    for key in ("values", "unanswered"):
                         readings[key] += _int(event, key)
                     refused_first.update(
                         {str(w): n for w, n in
@@ -298,7 +297,8 @@ def from_traces(trace_dirs: Iterable[Path],
                     combed["passages"] += 1
                     for key in ("open", "filled", "exhausted", "hits",
                                 "fetched", "searched", "missed", "listed",
-                                "judged", "turned"):
+                                "judged", "turned", "near", "near_read",
+                                "anew"):
                         combed[key] += _int(event, key)
     return {
         # The maps of places: documents mapped and how many completely,
@@ -358,20 +358,17 @@ def from_traces(trace_dirs: Iterable[Path],
             "answers_not_taken": surveyed["dropped"],
             "passages_by_parameter": dict(survey_by_parameter)},
         # Readings (one passage for one parameter), the readings that came to
-        # no reply per reason, values read, coordinates left unanswered, the
-        # check's refusals of the first answer per reason, and the requests
-        # that asked whether a section around a value's place a find of its
-        # second reading was quoted from speaks about the value, and the
-        # places they said do not (owner decision 2026-11-07). A reading has
-        # no tools (ticket 26), so it fetches and searches nothing.
+        # no reply per reason, values read, coordinates left unanswered and
+        # the check's refusals of the first answer per reason. A reading has
+        # no tools (ticket 26), so it fetches and searches nothing, and it
+        # checks no find: the second reading is the second conversation's
+        # (owner decisions 2026-11-07).
         "reading": {
             "readings": readings["readings"],
             "unread_by_reason": dict(unread_why),
             "values": readings["values"],
             "coordinates_unanswered": readings["unanswered"],
-            "refused_first_by_reason": dict(refused_first),
-            "check_requests": readings["judged"],
-            "finds_turned": readings["turned"]},
+            "refused_first_by_reason": dict(refused_first)},
         # Combed passages (one passage for one parameter), coordinates open
         # when combed, filled and left exhausted, hits shown, passages
         # fetched, hit lists the model asked for, lists of the next
@@ -390,7 +387,14 @@ def from_traces(trace_dirs: Iterable[Path],
             "lists_added": combed["listed"],
             "asks_not_found": combed["missed"],
             "check_requests": combed["judged"],
-            "finds_turned": combed["turned"]},
+            "finds_turned": combed["turned"],
+            # Its second reading with the sections around the value's place:
+            # the messages, the coordinates they read, and the conversations
+            # begun anew where one outgrew the model's window (owner
+            # decisions 2026-11-07).
+            "second_reading_messages": combed["near"],
+            "second_reading_read": combed["near_read"],
+            "begun_anew": combed["anew"]},
     }
 
 

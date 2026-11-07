@@ -183,6 +183,7 @@ UI = {
     "reason_unanswered": "{axis}: the model gave no answer",
     "reason_conflict": "another reading of the same value differs",
     "reason_computed": "computed, not read",
+    "reason_read_off": "read off the figure, an estimate",
     "reason_catalogue": "looked up in a catalogue, not read",
     "reason_not_located": "the quote was not found on its page",
     "reason_review_disagree": "a review disagrees",

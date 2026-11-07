@@ -197,8 +197,7 @@ an edge. `settle` resolves every row minting one identity together: the
 same number twice is one node, counted `duplicate`, and marked `corroborated`
 only where a second passage prints it (`place`: one passage read twice is one
 statement, whatever its quotes, owner decision 2026-11-05);
-different numbers under different plan wording (`wording_key`: `subject`,
-`head`, `whole`, `carrier_raw`, `sector_raw`) split into a node per wording,
+different numbers under different plan wording (`wording_key`: `subject`, `whole`, `carrier_raw`, `sector_raw`; no column head, owner decision 2026-11-07) split into a node per wording,
 named by it, counted `split:wording`; failing that, a reading within `ROUNDING_TOLERANCE`
 (2%) of another loses to the more precise one, counted
 `conflict:rounding`; failing that, the lower trust level (`A` best, `D` worst)
@@ -218,8 +217,7 @@ technology as no edge. Nine carrier classes
 plans name constantly sit outside OEO's `energy carrier` root, so
 `kg.outside_root` keeps their edge, counted, not lost. The inventory
 part's IRI segment is `inventoryanalysis`. Above
-each value node, `evidence_comment` writes its wording, quote,
-location and rendered trust line as Turtle comments, since target
+each value node, `evidence_comment` writes its wording, quote (for a number read off a figure, the reading in its place), location and rendered trust line as Turtle comments, since target
 shapes are `sh:closed` with no triples toggle.
 
 `make_strict_serializer` writes the same graph a second time as

@@ -59,6 +59,17 @@ Fields:
 
 ## Functions
 
+### read_off
+
+```python
+def read_off(raw: dict, owner_kind: str) -> bool
+```
+
+Is this a figure's value read off its image: the switch the reading
+sets where its request sent the image (`read_off`), and the sentence of
+what was read (`reading`)? Then that sentence is the evidence of the
+number, and neither quote check applies to it.
+
 ### decimal_mark
 
 ```python
@@ -119,6 +130,26 @@ def quote_in(source: str, quote: str) -> bool
 ```
 
 Whitespace-collapsed literal containment — corrections.py semantics.
+
+### times_quoted
+
+```python
+def times_quoted(texts: list, quote: str) -> int
+```
+
+How often *quote* stands in the texts a request showed, each place
+once where it stands for itself (owner decision 2026-11-07: a value's
+quote pins it down, so it stands in what was shown exactly once).
+
+### times_stated
+
+```python
+def times_stated(raw: dict, parameter: Parameter, quote: str) -> int
+```
+
+How often a value stands in its quote for itself: a number as a number
+of its own, a wording where no letter or digit runs on from it ("OECD"
+in "non-OECD" is no second one). The same split `value_in_quote` makes.
 
 ### computed_in_output
 
@@ -223,18 +254,20 @@ rebuilds it from the source (owner decision 2026-11-05).
 ### value_refused
 
 ```python
-def value_refused(raw: dict, parameter: Parameter,
-                  source_text: str) -> Optional[str]
+def value_refused(raw: dict, parameter: Parameter, source_text: str,
+                  owner_kind: str = "section") -> Optional[str]
 ```
 
 Why the fold would refuse a value read before its coordinates, or
 None: what `verify_tuple` checks of the value itself (its type, its
 entry of a closed list) and of its quote (long enough, standing in
-*source_text*, holding the value), in its words. Not the unit and not
-the axes, which a reading asks after the value and checks as it reads
-them (`pipeline.merge_field`). A reading asks it of each value while
-the model can still answer (`reading.round_failure`), and the walk down
-a search's list of what it read (`surveyed.sought_walk`), so both hold a
-value to the check the fold applies (owner decisions 2026-11-05).
+*source_text*, holding the value), in its words; of a value read off a
+figure of *owner_kind* (`read_off`) only the value itself. Not the unit
+and not the axes, which a reading asks after the value and checks as it
+reads them (`pipeline.merge_field`). A reading asks it of each value
+while the model can still answer (`reading.round_failure`), and the walk
+down a search's list of what it read (`surveyed.sought_walk`), so both
+hold a value to the check the fold applies (owner decisions
+2026-11-05).
 
 [Back to the index](../README.md)

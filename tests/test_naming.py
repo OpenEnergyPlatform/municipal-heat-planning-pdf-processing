@@ -95,10 +95,11 @@ def read_of(parameter, values, groups=None, spec=None):
     given = {name: (list(reply) if isinstance(reply, list) else [reply])
              for name, reply in (groups or {}).items()}
 
-    def ask_values(source, parameter, context, read, thread, follow=None):
+    def ask_values(source, parameter, context, read, thread, follow=None,
+                   drawn=False):
         payload = ({**follow, "follows": True} if follow is not None
                    else reading.values_payload(source, parameter, context,
-                                               read))
+                                               read, drawn))
         calls.append(("values", payload,
                       reading.values_response_format(parameter)))
         return answered(thread, values[min(sum(1 for c in calls
@@ -215,7 +216,9 @@ def test_a_correction_for_one_of_several_scenarios_names_its_name():
 
 
 def test_the_combing_makes_one_row_per_scenario_for_the_reading():
-    claim = {"source": "Q1", "value": "2030", "quote": Y2030["quote"],
+    # The conversation shows no passage, only the value's quote and what it
+    # read: the quote of the value holds the names here.
+    claim = {"source": "Q1", "value": "2030", "quote": TEXT.text,
              "scenario_state": fields.SAID_UNSTATED}
     batch = Batch(7, YEAR, [WorkItem(7, YEAR, TEXT)], spec=SPEC)
     read = reading.Read(batch, [claim], probes=[{"scenario": "a sentence"}])
@@ -227,7 +230,7 @@ def test_the_combing_makes_one_row_per_scenario_for_the_reading():
         == [("CurPol", READ), ("NDC", READ)]
     assert read.probes == [{"scenario": "a sentence"}] * 2
     # A pass over a stored harvest re-reads its row in place: the first.
-    stored = {"source": "Q1", "value": "2030", "quote": Y2030["quote"],
+    stored = {"source": "Q1", "value": "2030", "quote": TEXT.text,
               "scenario_state": fields.SAID_UNSTATED}
     claims = [stored]
     combed = combing.Comber(SPEC, lambda *a, **k: reply, None,
@@ -876,7 +879,9 @@ def combing_asks(*replies):
 
 
 def year_open(**given):
-    return {"source": "Q1", "value": "2030", "quote": Y2030["quote"],
+    # The conversation shows the value's quote and not its passage, so the
+    # quote holds the names the answers quote.
+    return {"source": "Q1", "value": "2030", "quote": TEXT.text,
             "scenario_state": fields.SAID_UNSTATED, **given}
 
 
@@ -931,7 +936,7 @@ def test_the_combing_shows_every_name_read_so_far_once():
         ask, asked = combing_asks({"more": []})
         combing.Comber(spec, ask, None, lambda claim, names: {})(
             7, [labels, years], passages, [])
-        first = [payload for payload in asked if "row" in payload]
+        first = [payload for payload in asked if "passage" in payload]
         assert len(first) == 1
         assert first[0].get("names") == shown
         if shown:

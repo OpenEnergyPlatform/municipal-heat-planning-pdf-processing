@@ -117,7 +117,7 @@ FLAG_PATTERN = (
     r"^(mapped:[a-z_]+:[\s\S]*->[\s\S]*|unmapped:[a-z_]+:[\s\S]*"
     r"|period:unstated"
     r"|review:(agree|disagree|unbacked)"
-    r"|computed|catalogue|not_located)$")
+    r"|computed|catalogue|not_located|read_off)$")
 
 # The fifteen families a refusal reason belongs to. Every one is raised in
 # verify.py or pipeline.py and none is composed at runtime from user text.
@@ -126,7 +126,6 @@ REFUSAL_REASONS = [
     r"^claim names no source$",
     r"^tuple is not an object$",
     r"^value is not a number$",
-    r"^unit .* not in units_accepted \(.*\)$",
     r"^a (text|category) parameter needs a non-empty string value$",
     r"^required axis '.*' (missing|is empty)$",
     r"^axis '.*': .* (not in vocabulary and axis is required"
@@ -402,10 +401,31 @@ def _tuple_schema(spec, parameter) -> dict:
                                      "the read value it was looked up "
                                      "with; the flag catalogue goes with "
                                      "it."},
+        "drawn": {"type": "boolean",
+                  "description": "A figure's value only: whether its image "
+                                 "only draws the number (a bar, a segment, an "
+                                 "area, a point of a curve) rather than "
+                                 "printing it, as the reading said. True sets "
+                                 "the flag read_off."},
+        "read_off": {"const": True,
+                     "description": "The number stands in no text and was "
+                                    "read off the figure's image: the "
+                                    "reading is its evidence in place of a "
+                                    "quote, and the flag read_off goes with "
+                                    "it, a reason of level C (owner "
+                                    "decisions 2026-11-05 and 2026-11-07)."},
+        "reading": {"type": "string", "minLength": 1,
+                    "description": "What was read off the figure's image: "
+                                   "the element, the number and the unit of "
+                                   "its axis. Present only with read_off."},
     }
-    required = ["kind", "parameter", "parameter_state", "quote", "tier",
+    required = ["kind", "parameter", "parameter_state", "tier",
                 "provenance", "value"]
-    rules: list = []
+    # A value read off a figure has its reading in place of a quote; every
+    # other value has its quote.
+    rules: list = [{"if": {"required": ["read_off"]},
+                    "then": {"required": ["reading"]},
+                    "else": {"required": ["quote"]}}]
     if parameter.is_numeric:
         units = ", ".join(sorted(parameter.units_accepted))
         props["value"] = {
@@ -419,16 +439,28 @@ def _tuple_schema(spec, parameter) -> dict:
         props.update(_slot_properties(
             "unit", unit_slot,
             f"The unit: one entry of units_accepted ({units}), read as a "
-            f"coordinate with its own passage. Which entry the document's "
-            f"wording means is the model's reading; the wording itself is "
-            f"never looked up. "))
+            f"coordinate with its own passage, or null where the unit the "
+            f"plan prints means none of them: then unit_raw holds it, the "
+            f"flag unmapped:unit:<print> goes with it and the value has no "
+            f"value_target (owner decision 2026-11-07: a unit is never "
+            f"refused). Which entry the document's wording means is the "
+            f"model's reading; the wording itself is never looked up. "))
         props["value_target"] = {
             "type": "number",
             "description": f"value x factor(unit), in the spec's unit_target "
                            f"{parameter.unit_target}. This is the number the "
-                           f"graph carries."}
-        required += ["unit", "unit_state", "value_target"]
-        rules.append(_slot_rules("unit", unit_slot))
+                           f"graph carries; absent where the unit is no "
+                           f"entry of units_accepted."}
+        required += ["unit", "unit_state"]
+        # Read as an entry and converted, or read as the plan prints it,
+        # without an entry and unconverted.
+        unit_rule = _slot_rules("unit", unit_slot)
+        unit_rule["then"] = {"anyOf": [
+            {"properties": {"unit": {"type": "string"}},
+             "required": ["unit", "value_target"]},
+            {"properties": {"unit": {"type": "null"}},
+             "required": ["unit", "unit_raw"]}]}
+        rules.append(unit_rule)
     else:
         props["value"] = {
             "type": "string", "minLength": 1,
@@ -639,6 +671,17 @@ def harvest_schema(spec) -> dict:
                         "description": "Values read out of a table or "
                                        "figure image rather than the "
                                        "document's text."},
+                    "unlisted_units": {
+                        "type": "object",
+                        "description": "The units numbers were read with "
+                                       "that are no entry of their "
+                                       "parameter's list, as the plan prints "
+                                       "them, counted: read and not "
+                                       "converted, until the list grows and "
+                                       "a top-up asks them again (owner "
+                                       "decision 2026-11-07). Absent in a "
+                                       "file written before.",
+                        "additionalProperties": {"type": "integer"}},
                 },
                 "required": ["kind", "document_id", "tuples", "refusals",
                              "levels", "reasons", "image_origin"],
@@ -788,13 +831,13 @@ def stamp_schema() -> dict:
         },
         "patternProperties": {
             "^extraction/(harvest|queries|anchors|rows|field|phrase|frame"
-            "|survey|read_values|read_text|comb|match)$":
+            "|survey|read_values|read_text|comb|match|settings|seek)$":
                 {**sha, "description": "sha256 of the prompt file; `harvest` "
                                        "is in stamps of an older release; "
                                        "`survey`, `read_values`, "
-                                       "`read_text`, `comb` and `match` "
-                                       "are the prompts of the survey "
-                                       "flow"},
+                                       "`read_text`, `comb`, `match`, "
+                                       "`settings` and `seek` are the "
+                                       "prompts of the survey flow"},
             "^question_text/[^/]+$": {
                 "type": "array", "items": {"type": "string"},
                 "description": "The sentence THIS document was searched "
@@ -857,8 +900,8 @@ def stamp_schema() -> dict:
 # search sentences, the frame, the review and the compute step
 # (`runner._asked`).
 ASK_STAGES = ("survey", "read_values", "read_text", "comb", "comb_check",
-              "naming", "naming_groups", "years", "phrase", "frame",
-              "review", "compute")
+              "naming", "naming_groups", "years", "settings", "seek_free",
+              "phrase", "frame", "review", "compute")
 
 
 def trace_schema() -> dict:
@@ -1105,16 +1148,7 @@ def trace_schema() -> dict:
                  "corrected": {"type": "integer"}, "failed": by_field,
                  "unanswered": {"type": "integer"},
                  "unread": {"type": "boolean"},
-                 "why": {"enum": ["cut_off", "no_answer"]},
-                 # The second reading (owner decision 2026-11-06): its
-                 # requests and the coordinates they read; the requests that
-                 # asked whether the section a find was quoted from speaks
-                 # about the value, and the places they said do not (owner
-                 # decision 2026-11-07).
-                 "near": {"type": "integer"},
-                 "near_read": {"type": "integer"},
-                 "judged": {"type": "integer"},
-                 "turned": {"type": "integer"}},
+                 "why": {"enum": ["cut_off", "no_answer"]}},
         # The comb of what a reading left open (combing.py): per value and
         # group, the coordinates open and how many the requests filled.
         "comb": {"parameter": {"type": "string"},
@@ -1132,6 +1166,13 @@ def trace_schema() -> dict:
                  # whose round asked for nothing new while a coordinate was
                  # unfound (owner decision 2026-11-06: the search runs empty).
                  "listed": {"type": "integer"},
+                 # The second reading, with the sections before and after
+                 # the value's place (owner decisions 2026-11-07): its
+                 # messages and the coordinates they read; and how often the
+                 # conversation outgrew the model's window and began anew.
+                 "near": {"type": "integer"},
+                 "near_read": {"type": "integer"},
+                 "anew": {"type": "integer"},
                  # The other values of the table that took the answers
                  # combed for this one, its frame open on all of them.
                  "table_rows": {"type": "integer"},
@@ -1156,6 +1197,24 @@ def trace_schema() -> dict:
                  "kind": {"enum": ["section", "table", "figure"]},
                  "owner": {"type": "integer"},
                  "rank": {"type": "integer", "minimum": 1}},
+        # What the plan settles for all its values, asked once per plan
+        # (settings.py): the settings taken, the requests, the hits listed,
+        # the passages fetched and the settings refused.
+        "settings": {"settings": {"type": "integer"},
+                     "asked": {"type": "integer"},
+                     "hits": {"type": "integer"},
+                     "fetched": {"type": "integer"},
+                     "refused": {"type": "integer"}},
+        # The model's own search for a parameter whose walk read no value
+        # (seeking.py): the passages walked before, the requests, the
+        # passages it named, those it fetched and the ids it named that no
+        # hit or passage of the conversation has.
+        "seek_free": {"parameter": {"type": "string"},
+                      "walked": {"type": "integer"},
+                      "asked": {"type": "integer"},
+                      "found": {"type": "integer"},
+                      "fetched": {"type": "integer"},
+                      "unknown": {"type": "integer"}},
         "seek_probe": {"parameter": {"type": "string"},
                        "per": {"enum": ["document", "run"]},
                        "text": {"type": "string"}},
@@ -1205,6 +1264,11 @@ def trace_schema() -> dict:
                            "value"},
         "years_ask": {"corrections", "parameter", "owner", "kind", "rows",
                       "passages", "figure", "group", "round", "value"},
+        "settings_ask": {"corrections", "parameter", "owner", "kind", "rows",
+                         "passages", "figure", "group", "round", "value"},
+        "seek_free_ask": {"corrections", "parameter", "owner", "kind",
+                          "rows", "passages", "figure", "group", "round",
+                          "value"},
         "naming": {"things", "several", "groups", "asked"},
         # A search sentence, the frame, the review and the compute step say
         # their attempt and what it cost; a parameter where they have one.
@@ -1212,9 +1276,9 @@ def trace_schema() -> dict:
                             "rows", "passages", "figure", "group", "round",
                             "value"}
            for stage in ("phrase", "frame", "review", "compute")},
-        "comb": {"group", "listed", "table_rows", "judged", "turned"},
-        "read": {"corrected", "failed", "unanswered", "unread", "why",
-                 "near", "near_read", "judged", "turned"},
+        "comb": {"group", "listed", "table_rows", "judged", "turned",
+                 "anew"},
+        "read": {"corrected", "failed", "unanswered", "unread", "why"},
         "completion": {"filled", "id", "key", "matched"},
     }
     # Optional on every event: what the run could not always know. Requiring

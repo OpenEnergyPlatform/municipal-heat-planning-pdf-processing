@@ -1,35 +1,43 @@
-"""Only values with a coordinate still open are combed, one request per
-value and group of the spec with an open coordinate, which shows that one
-row AND reads its answers at the top of the reply, AND shows the group's
-words for where a plan prints it and asks only the group's open
-coordinates; the search ranks the plan with the sentences the
-reading wrote to the coordinates asked, AND it shows the best 15 sections, 20
-tables and 20 figures of that ranking as a list of hits, the passage itself
-and its section left out, AND none of the sentences; without a sentence no
-list is shown and the model searches itself with "similar", AND that search
-lists the plan's passages nearest to its own sentence, AND the request does
-not show that sentence. A coordinate answered
-from anything the request showed of the plan (a fetched hit, a hit's line or
-title, a wording the value has read) is read and cites the passage it was
-shown with in window `retrieval`, AND one quoting what the request never
-showed is not read AND is told so in the names of what the request shows,
-AND one whose quote lacks its answer is told to fix it or leave the
-coordinate out, never offered "not stated", which the reading still offers.
-The combing offers no "not stated": its grammar requires no coordinate and
-takes no UNSTATED, AND its options leave it out. A coordinate the reply
-leaves out, or gives as UNSTATED all the same, is not asked for again, AND
-a round that asks for nothing new while one is unfound gets the next
-passages of the ranking, of the plan in its order where there is none,
+"""The coordinates the reading left open are asked in a NEW conversation per
+value (owner decisions 2026-11-04 to 2026-11-07), and only values with a
+coordinate still open are combed. The conversation's first message shows the
+value, its answers so far with their quotes and the place's title, AND NOT the
+passage itself, which the whole-table conversation alone shows; each later
+message carries only what is new.
+
+First the second reading: the sections before and after the value's place are
+shown once, AND each open coordinate but the one printed with the number
+itself is asked on its own, one message after another, in the order of the
+spec's groups, AND its answer may be "not stated", AND a find from those
+sections cites them in window `near`.
+
+Then the search, for each coordinate still open that another passage can
+state: the first message of a search shows the hits of a ranking with the
+sentence written to it, as a list of the best 15 sections, 20 tables and 20
+figures, the passage itself and its section left out, AND none of the
+sentences, AND lets the model only fetch those hits; later messages may also
+search; without a sentence no list is shown and the model searches itself
+with "similar", AND that search lists the plan's passages nearest to its own
+sentence. A coordinate answered from anything the conversation showed of the
+plan (a fetched hit, a hit's line or title, the quote of an answer read) is
+read and cites the passage it was shown with in window `retrieval`, AND one
+quoting what was never shown is not read AND is told so in the names of what
+the conversation shows, AND one whose quote lacks its answer is told to fix it
+or leave the coordinate out, never offered "not stated", which the second
+reading offers. The search offers no "not stated": its grammar requires no
+coordinate and takes no UNSTATED, AND its options leave it out. A coordinate
+the reply leaves out, or gives as UNSTATED all the same, is not asked for
+again, AND a round that asks for nothing new while one is unfound gets the
+next passages of the ranking, of the plan in its order where there is none,
 until every passage was listed, AND only then does it end unstated; a find
 ends the listing; one whose request no longer fits before that ends
-exhausted. One given in another form than asked (a bare word where an
-object with "value" is asked) is asked for again as given in the wrong
-form and ends unanswered; a coordinate read before is never touched; and a
-first request that does not fit leaves every open coordinate exhausted. The
-rounds of one value's search are one conversation (owner decisions
-2026-11-07): only its first message shows the row and the coordinates, AND
-each message after an answer brings only what is new since, AND together
-the messages list every passage once.
+exhausted. One given in another form than asked is asked for again as given
+in the wrong form and ends unanswered; a coordinate read before is never
+touched; and a request that does not fit leaves the searched coordinates
+exhausted.
+
+A table whose frame is open on all its values is asked once, with the table
+shown, AND every value of it takes the answers with their quotes.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -59,22 +67,33 @@ SPEC = load_spec(json.loads((Path(__file__).resolve().parent.parent
                             .read_text(encoding="utf-8")))
 EMISSION = SPEC.by_uri["emission"]
 SLOTS = [slot.name for slot in reading.slots_of(SPEC, EMISSION)]
-GROUPS = reading.groups_of(SPEC, reading.slots_of(SPEC, EMISSION))
-YEAR_GROUP = next(group for group, slots in GROUPS
-                  if "year" in {slot.name for slot in slots})
 UNSTATED = fields.UNSTATED
+# What the spec says of each coordinate, read from the spec itself.
+ORDER = [name for group in SPEC.groups.values() for name in group.coordinates
+         if name in SLOTS]
+PRINTED = {name for group in SPEC.groups.values()
+           for name in group.own_value if name in SLOTS}
+SEARCHED = [name for group in SPEC.groups.values()
+            for name in group.coordinates if name in SLOTS
+            and name not in group.own_value
+            and name not in group.own_passage]
 
 OWN = Source("section", 6, "Bilanz\nEs fielen rund 300 t CO2 an.",
              {"document_id": 7, "section_title": "Bilanz"})
+NEXT = Source("section", 7, "Weiter\nDazu steht hier nichts.",
+              {"document_id": 7, "section_title": "Weiter"})
 HIT = Source("section", 8, "Ausblick\nDie Werte gelten für das Jahr 2030.",
              {"document_id": 7, "section_title": "Ausblick"})
-PASSAGES = {("section", 6): OWN, ("section", 8): HIT}
+# The section after OWN is NEXT, which the second reading shows; HIT is the
+# one the search finds.
+PASSAGES = {("section", 6): OWN, ("section", 7): NEXT, ("section", 8): HIT}
 
 
 def claim(**states):
     """A value of OWN: its unit and carrier read, the rest as *states*."""
     out = {"source": "Q1", "value": 300, "quote": "rund 300 t CO2",
            "unit": "t CO2", "unit_state": fields.READ,
+           "unit_quote": "rund 300 t CO2", "unit_source": ["section", 6],
            "carrier": "Erdgas", "carrier_state": fields.READ}
     for name in SLOTS:
         out.setdefault(f"{name}_state", fields.SAID_UNSTATED)
@@ -82,22 +101,50 @@ def claim(**states):
     return out
 
 
-def reads(*claims, probes=()):
-    """The reading of OWN with *claims*, each with the sentences its group
+def only(*names, **more):
+    """A value of OWN whose coordinates *names* alone are open."""
+    out = claim(**{name: fields.READ for name in SLOTS
+                   if name not in names})
+    out.update({f"{name}_state": fields.SAID_UNSTATED for name in names})
+    out.update(more)
+    return out
+
+
+def reads(*claims, probes=(), source=OWN):
+    """The reading of *source* with *claims*, each with the sentences its
     replies wrote to what they found unstated, in *probes* by its order."""
-    batch = Batch(7, EMISSION, [WorkItem(7, EMISSION, OWN)])
+    batch = Batch(7, EMISSION, [WorkItem(7, EMISSION, source)])
     return [reading.Read(batch, list(claims), probes=list(probes))]
 
 
-def comber(*replies, ranked=(HIT,), ranking=True, known=None):
-    asked, searched = [], []
+def comber(replies=None, ranked=(HIT,), ranking=True, known=None):
+    """A Comber whose requests are answered by *replies*, {(kind,
+    coordinate): [reply, ...]}, the n-th request of that kind about that
+    coordinate by the n-th reply, the last one again after that; kind is
+    "near" (the second reading) or "comb" (the search). A request without a
+    reply says "not stated" in the second reading and finds nothing in the
+    search. Returns it with the messages it was asked (a follow-up as its
+    message shows it), the grammar each was asked in, and the searches
+    made."""
+    asked, shapes, searched, counts = [], [], [], {}
 
     def ask(payload, shape, document_id, source, group=None, example=None,
             thread=None, follow=None):
-        # A follow-up as its message shows it (owner decisions 2026-11-07).
         asked.append(payload if follow is None
                      else {**follow, "follows": True})
-        return answered(thread, replies[min(len(asked), len(replies)) - 1])
+        schema = shape["json_schema"]
+        kind = "near" if schema["name"] == "near_reply" else "comb"
+        name = next(key for key in schema["schema"]["properties"]
+                    if key != "more")
+        shapes.append((kind, name, shape))
+        key = (kind, name)
+        counts[key] = counts.get(key, 0) + 1
+        given = (replies or {}).get(key)
+        if given is None:
+            reply = {name: {"value": UNSTATED}} if kind == "near" else {}
+        else:
+            reply = given[min(counts[key], len(given)) - 1]
+        return answered(thread, reply)
 
     def rank(document_id, probes, exclude):
         searched.append((probes, set(exclude)))
@@ -106,19 +153,14 @@ def comber(*replies, ranked=(HIT,), ranking=True, known=None):
 
     made = combing.Comber(SPEC, ask, rank if ranking else None,
                           known or (lambda claim, names: {}))
+    made.shapes = shapes
     return made, asked, searched
-
-
-def everything(**given):
-    out = {name: {"value": UNSTATED} for name in SLOTS}
-    out.update(given)
-    return out
 
 
 def conversations(asked) -> list:
     """The messages of *asked* by conversation, each list beginning with the
     message that shows the value (the comber asks in order without a pool):
-    the rounds of a search are one conversation (owner decisions
+    the rounds of a value are one conversation (owner decisions
     2026-11-07)."""
     out = []
     for payload in asked:
@@ -133,41 +175,129 @@ def lists_of(asked) -> list:
     return [one for payload in asked for one in payload.get("hits") or ()]
 
 
+def asked_of(asked) -> list:
+    """The coordinate each message of *asked* that asks one names."""
+    return [name for payload in asked
+            for name in (payload.get("coordinates") or ())]
+
+
 YEAR = {"value": 2030, "quote": "gelten für das Jahr 2030"}
 # What a reading that found the year unstated wrote to it.
 SAID = {"year": "Die Emissionen gelten für das Jahr 2022."}
 
 
-def test_only_values_with_an_open_coordinate_are_combed_once_per_group():
-    made, asked, _ = comber({})
-    read = reads(claim(), claim(**{name: fields.READ for name in SLOTS}))
+def test_only_values_with_an_open_coordinate_are_combed_in_one_conversation():
+    made, asked, _ = comber()
+    read = reads(claim(), only())
     done = made(7, read, PASSAGES, [])
-    # The unit read, the number's group has nothing open another passage
-    # could state: what it counts its own passage says, a word like "ca."
-    # the number itself (owner decision 2026-11-06).
-    assert [d.group for d in done] == ["frame", "context"]
-    assert all(d.rows == 1 for d in done)
-    firsts = [one[0] for one in conversations(asked)]
-    assert len(firsts) == 2
-    assert not any({"subject", "qualifier", "aggregation"}
-                   & set(payload["coordinates"]) for payload in firsts)
-    # One row per request, shown without a label (owner decision
-    # 2026-11-06), by the first message of its conversation; a message that
-    # follows an answer shows neither the row nor the coordinates again
-    # (owner decisions 2026-11-07).
-    assert all("rows" not in payload and "row" not in payload["row"]
-               for payload in firsts)
-    follows = [payload for payload in asked if payload.get("follows")]
-    assert follows and not any(
-        {"row", "coordinates", "parameter", "passage"} & set(payload)
-        for payload in follows)
-    # A value open in one group only is combed in that group alone.
-    made, asked, _ = comber({})
-    done = made(7, reads(claim(**{name: fields.READ for name in SLOTS
-                                  if name != "year"})), PASSAGES, [])
-    assert [d.group for d in done] == [YEAR_GROUP.name]
-    assert set(asked[0]["coordinates"]) == {"year"}
-    assert asked[0]["where"] == YEAR_GROUP.where
+    # The value with nothing open is not combed; the other is one
+    # conversation, however many coordinates are open.
+    assert len(done) == 1 and done[0].rows == 1
+    assert len(conversations(asked)) == 1
+    # The coordinate the number's own print holds is not asked.
+    open_ = [name for name in ORDER if name not in ("unit", "carrier")
+             and name not in PRINTED]
+    assert done[0].open == len(open_)
+    # None is asked of a value that has none open.
+    made, asked, _ = comber()
+    assert made(7, reads(only()), PASSAGES, []) == [] and asked == []
+    # The failure by construction: a coordinate open makes a conversation.
+    made, asked, _ = comber()
+    assert len(made(7, reads(only("year")), PASSAGES, [])) == 1 and asked
+
+
+def test_each_message_asks_one_coordinate_in_the_order_of_the_spec():
+    made, asked, _ = comber()
+    made(7, reads(claim()), PASSAGES, [])
+    near = list(dict.fromkeys(name for kind, name, _shape in made.shapes
+                              if kind == "near"))
+    comb = list(dict.fromkeys(name for kind, name, _shape in made.shapes
+                              if kind == "comb"))
+    open_ = [name for name in ORDER if name not in ("unit", "carrier")]
+    # The second reading asks all but the coordinate the number's own print
+    # holds, in the order of the groups; the search then those another
+    # passage can state, in the same order.
+    assert near == [name for name in open_ if name not in PRINTED]
+    assert comb == [name for name in open_ if name in SEARCHED]
+    assert PRINTED and not set(PRINTED) & set(near + comb)
+    assert all(len(payload["coordinates"]) == 1 for payload in asked
+               if "coordinates" in payload)
+
+
+def test_the_first_message_shows_the_value_and_its_answers_and_not_the_passage():
+    made, asked, _ = comber()
+    made(7, reads(only("year", "scenario")), PASSAGES, [])
+    (conversation,) = conversations(asked)
+    first, later = conversation[0], conversation[1:]
+    assert first["value"]["value"] == 300
+    assert first["value"]["quote"] == "rund 300 t CO2"
+    assert first["read"]["unit"] == {"value": "t CO2",
+                                     "quote": "rund 300 t CO2"}
+    assert first["passage"]["title"] == "Bilanz"
+    # The passage itself is not shown: its quote and answers pin it down.
+    assert "source" not in first and OWN.text not in json.dumps(
+        first, ensure_ascii=False)
+    # Each message after brings only what is new, neither the value nor the
+    # parameter again.
+    assert later and not any({"value", "read", "parameter", "passage",
+                              "source"} & set(payload) for payload in later)
+    # The failure by construction: the whole-table conversation shows the
+    # passage.
+    batch = Batch(7, EMISSION, [WorkItem(7, EMISSION, TABLE)])
+    gas, oil = frame_open(), dict(frame_open(), value=27,
+                                  quote="| Heizöl | 27 |")
+    made, asked, _ = comber()
+    made(7, [reading.Read(batch, [gas, oil], probes=[{}, {}])],
+         {("table", 11): TABLE, **PASSAGES}, [])
+    assert "source" in conversations(asked)[0][0]
+
+
+def test_the_second_reading_shows_the_sections_around_and_cites_them():
+    before = Source("section", 5, "Einleitung\nDie Werte gelten ab 1999.",
+                    {"document_id": 7, "section_title": "Einleitung"})
+    plan = {("section", 5): before, **PASSAGES}
+    ask = {("near", "year"): [{"year": {
+        "value": 2030, "quote": "Die Werte gelten ab 1999."}}]}
+    made, asked, _ = comber()
+    read = reads(only("year"))
+    made(7, read, plan, [])
+    first = asked[0]
+    assert (first["before"], first["after"]) == (before.text, NEXT.text)
+    assert list(first["coordinates"]) == ["year"]
+    # "not stated" is an answer of the second reading.
+    (kind, _name, shape), = made.shapes[:1]
+    assert kind == "near" and UNSTATED in json.dumps(shape)
+    # A find from the section before is read and cites it in window near.
+    year = {"year": {"value": 1999, "quote": "Die Werte gelten ab 1999."}}
+    made, asked, _ = comber({("near", "year"): [year]})
+    read = reads(only("year"))
+    (done,) = made(7, read, plan, [])
+    value = read[0].claims[0]
+    assert value["year"] == 1999 and value["year_state"] == fields.READ
+    assert value["year_source"] == ["section", 5]
+    assert list(value["year_window"]) == ["near", 1]
+    assert (done.near, done.near_read) == (1, 1)
+    # Read in the second reading, the search is not asked for it.
+    assert not any(kind == "comb" for kind, _n, _s in made.shapes)
+    # The failure by construction: a plan without a section around the place
+    # has no second reading, and shows no section.
+    made, asked, _ = comber()
+    (done,) = made(7, reads(only("year")), {("section", 6): OWN}, [])
+    assert done.near == 0
+    assert not any(key in payload for payload in asked
+                   for key in ("before", "after"))
+
+
+def test_the_second_reading_may_write_the_sentence_the_search_ranks_with():
+    sentence = "Die Werte gelten für das Jahr 2030."
+    said = {"year": {"value": UNSTATED, "probe": sentence}}
+    made, asked, searched = comber({("near", "year"): [said]})
+    made(7, reads(only("year")), PASSAGES, [])
+    assert [probes for probes, _ in searched] == [[sentence]]
+    # The failure by construction: no sentence, nothing ranked.
+    made, asked, searched = comber()
+    made(7, reads(only("year")), PASSAGES, [])
+    assert searched == []
 
 
 def test_a_request_shows_one_row_and_its_answers_stand_at_the_top():
@@ -176,13 +306,36 @@ def test_a_request_shows_one_row_and_its_answers_stand_at_the_top():
     schema = combing.comb_response_format(slots)["json_schema"]["schema"]
     assert set(schema["properties"]) == {*SLOTS, "more"}
     more = [{"get": "hit", "id": "H1"}]
-    assert combing.as_rows(dict(everything(year=YEAR), more=more), "R2") == {
-        "rows": [dict(everything(year=YEAR), row="R2")], "more": more}
+    assert combing.as_rows(dict({"year": YEAR}, more=more), "R2") == {
+        "rows": [{"year": YEAR, "row": "R2"}], "more": more}
     assert combing.as_rows(reading.CUT, "R2") is reading.CUT
     # Two values are two requests, never one.
-    made, _, _ = comber({})
+    made, _, _ = comber()
     with pytest.raises(ValueError, match="one row"):
         made.comb(7, EMISSION, OWN, slots, [claim(), claim()], PASSAGES, [])
+
+
+def gets_of(shape) -> list:
+    return shape["json_schema"]["schema"]["properties"]["more"]["items"][
+        "properties"]["get"]["enum"]
+
+
+def test_the_first_search_message_only_lists_hits_and_later_ones_may_search():
+    made, asked, _ = comber(
+        {("comb", "year"): [{"more": [{"get": "hit", "id": "H1"}]},
+                            {"more": [{"get": "hit", "id": "H1"}]}]})
+    made(7, reads(only("year"), probes=[SAID]), PASSAGES, [])
+    comb = [shape for kind, _name, shape in made.shapes if kind == "comb"]
+    # The first message lets the model fetch the hits it was shown, nothing
+    # else; the message after it may search itself.
+    assert gets_of(comb[0]) == list(combing.FIRST_GETS) == ["hit"]
+    assert set(gets_of(comb[1])) == set(reading.GETS)
+    # The failure by construction: without a list nothing is there to
+    # fetch, and the model searches itself at once.
+    made, asked, _ = comber(ranked=())
+    made(7, reads(only("year")), PASSAGES, [])
+    first = [shape for kind, _name, shape in made.shapes if kind == "comb"][0]
+    assert set(gets_of(first)) == set(reading.GETS)
 
 
 def test_the_search_shows_the_best_of_each_kind_as_a_list_without_its_own():
@@ -194,59 +347,66 @@ def test_the_search_shows_the_best_of_each_kind_as_a_list_without_its_own():
     assert kinds.count("section") == 15 and kinds.count("table") == 20
     assert kinds.count("figure") == 3
     assert shown == [s for s in ranked if s in shown]
-    made, asked, searched = comber({}, ranked=(OWN, HIT))
-    made(7, reads(claim(), probes=[SAID]), PASSAGES, [])
-    assert searched[0][1] == {("section", 6)}
-    listed = asked[0]["hits"][0]["hits"]
+    made, asked, searched = comber(ranked=(OWN, NEXT, HIT))
+    made(7, reads(only("year"), probes=[SAID]), PASSAGES, [])
+    # What the conversation shows (the value's place, the section next to
+    # it) is not listed as a hit.
+    assert searched[0][1] >= {("section", 6), ("section", 7)}
+    listed = lists_of(asked)[0]["hits"]
     assert [(hit["id"], hit["title"]) for hit in listed] == [("H1", "Ausblick")]
     assert listed[0]["line"] == "Die Werte gelten für das Jahr 2030."
 
 
 def test_a_coordinate_answered_from_a_fetched_hit_is_read_and_cites_it():
-    made, asked, _ = comber(
-        dict(everything(), more=[{"get": "hit", "id": "H1"}]),
-        everything(year=YEAR))
-    read = reads(claim(), probes=[SAID])
+    made, asked, _ = comber({("comb", "year"): [
+        {"more": [{"get": "hit", "id": "H1"}]}, {"year": YEAR}]})
+    read = reads(only("year"), probes=[SAID])
     done = made(7, read, PASSAGES, [])[0]
     value = read[0].claims[0]
     assert value["year"] == 2030 and value["year_state"] == fields.READ
     assert value["year_source"] == ["section", 8]
     assert list(value["year_window"]) == ["retrieval", 1]
     assert done.fetched == 1 and done.filled == 1
-    assert [m["text"] for m in asked[1]["more"]] == [HIT.text]
+    (fetched,) = [p for p in asked if p.get("more")]
+    assert [m["text"] for m in fetched["more"]] == [HIT.text]
 
 
-def test_the_combing_offers_no_not_stated():
+def test_the_search_offers_no_not_stated_and_the_second_reading_does():
     # Owner decision 2026-11-06: the run, not the model, says the plan does
-    # not state a coordinate. Neither the grammar nor the options offer it.
+    # not state a coordinate. Neither the search's grammar nor its options
+    # offer it.
     slots = reading.slots_of(SPEC, EMISSION)
     schema = combing.comb_response_format(slots)["json_schema"]["schema"]
     assert "required" not in schema
-    text = json.dumps(schema)
-    assert UNSTATED not in text
+    assert UNSTATED not in json.dumps(schema)
     year = schema["properties"]["year"]["properties"]["value"]
     assert year == {"type": "integer"}
-    made, asked, _ = comber({})
+    made, asked, _ = comber()
     made(7, reads(claim()), PASSAGES, [])
-    shown = [entry for one in conversations(asked)
-             for entry in one[0]["coordinates"].values()]
-    assert any("options" in entry for entry in shown)
-    assert all(UNSTATED not in entry.get("options", {}) for entry in shown)
-    # The failure by construction: the reading still offers it.
-    assert UNSTATED in json.dumps(reading.answer_schema(slots[0]))
+    kinds = [kind for kind, _name, _shape in made.shapes]
+    shown = [(kind, entry) for kind, payload in zip(kinds, asked)
+             for entry in (payload.get("coordinates") or {}).values()]
+    searched = [entry for kind, entry in shown if kind == "comb"]
+    assert any("options" in entry for entry in searched)
+    assert all(UNSTATED not in entry.get("options", {}) for entry in searched)
+    # The failure by construction: the second reading offers it, in what it
+    # shows and in its grammar.
+    assert any(UNSTATED in entry.get("options", {})
+               for kind, entry in shown if kind == "near")
+    near = combing.near_response_format(slots[:1])["json_schema"]["schema"]
+    assert UNSTATED in json.dumps(near)
     assert UNSTATED in reading.coordinate_shown(
         next(slot for slot in slots if slot.is_closed))["options"]
 
 
-def test_a_quote_from_nothing_the_request_showed_is_not_read():
+def test_a_quote_from_nothing_the_conversation_showed_is_not_read():
     # Without a sentence no list is shown: the passage that prints the year
-    # is in the plan, but the request never showed it, and with every
-    # coordinate found it lists nothing more.
-    made, asked, _ = comber(everything(year=YEAR))
-    read = reads(claim(scenario=fields.READ))
+    # is in the plan, but the conversation never showed it.
+    made, asked, _ = comber({("comb", "year"): [{"year": YEAR}]})
+    read = reads(only("year"))
     made(7, read, PASSAGES, [])
     assert read[0].claims[0]["year_state"] == fields.UNBACKED
-    # Told in the names of what a combing request shows (owner decision
+    # Told in the names of what the conversation shows (owner decision
     # 2026-11-06), not in those of another request.
     (again,) = [p for p in asked if p.get("corrections")]
     assert again["corrections"] == [{"coordinate": "year",
@@ -258,8 +418,8 @@ def test_a_quote_from_nothing_the_request_showed_is_not_read():
 def test_a_quote_from_a_hit_s_line_is_read_and_cites_the_hit():
     # Not fetched: the line the list shows is enough (owner decision
     # 2026-11-05: whatever a request shows of a plan may be quoted).
-    made, _, _ = comber(everything(year=YEAR))
-    read = reads(claim(), probes=[SAID])
+    made, _, _ = comber({("comb", "year"): [{"year": YEAR}]})
+    read = reads(only("year"), probes=[SAID])
     done = made(7, read, PASSAGES, [])
     value = read[0].claims[0]
     assert value["year"] == 2030 and value["year_state"] == fields.READ
@@ -269,52 +429,49 @@ def test_a_quote_from_a_hit_s_line_is_read_and_cites_the_hit():
     # The rest of the hit's passage was not shown and does not count.
     later = Source("section", 8, "Ausblick\nDie Werte gelten ab sofort.\n"
                    "Sie gelten für das Jahr 2030.", HIT.provenance)
-    made, asked, _ = comber(everything(year=YEAR),
+    made, asked, _ = comber({("comb", "year"): [{"year": YEAR}]},
                             ranked=(later,))
-    read = reads(claim(), probes=[SAID])
+    read = reads(only("year"), probes=[SAID])
     made(7, read, {**PASSAGES, ("section", 8): later}, [])
-    assert asked[0]["hits"][0]["hits"][0]["line"] == "Die Werte gelten ab sofort."
+    assert lists_of(asked)[0]["hits"][0]["line"] == "Die Werte gelten ab sofort."
     assert read[0].claims[0]["year_state"] == fields.UNBACKED
 
 
 def test_a_quote_from_a_hit_s_title_is_read_and_cites_the_hit():
     titled = Source("table", 9, "| Erdgas | 300 |",
                     {"document_id": 7, "title": "Tabelle 4: Emissionen 2030"})
-    made, _, _ = comber(
-        everything(year={
-            "value": 2030, "quote": "Tabelle 4: Emissionen 2030"}),
+    made, _, _ = comber({("comb", "year"): [{"year": {
+        "value": 2030, "quote": "Tabelle 4: Emissionen 2030"}}]},
         ranked=(titled,))
-    read = reads(claim(), probes=[SAID])
+    read = reads(only("year"), probes=[SAID])
     made(7, read, {**PASSAGES, ("table", 9): titled}, [])
     value = read[0].claims[0]
     assert value["year_state"] == fields.READ
     assert value["year_source"] == ["table", 9]
 
 
-def read_elsewhere():
-    """A value whose scenario was read in a passage the combing does not
-    show."""
-    out = claim(scenario=fields.READ)
-    out.update(scenario_raw="Szenario Trend 2030",
-               scenario_source=["section", 8])
-    return out
-
-
-def test_a_quote_from_a_wording_the_value_has_read_cites_where_it_was_read():
-    # Its wording is shown under "known" and may be quoted.
-    reply = everything(year={
-        "value": 2030, "quote": "Szenario Trend 2030"})
-    made, asked, _ = comber(reply, known=lambda claim, names: {
-        "scenario": claim["scenario_raw"]})
-    read = reads(read_elsewhere())
+def test_a_quote_from_an_answer_the_value_has_read_cites_where_it_was_read():
+    # The quote of an answer is shown with the answers so far and may be
+    # quoted, citing the passage it was read in.
+    def read_elsewhere(quote):
+        out = only("year")
+        out.update(scenario_raw="Szenario Trend", scenario="Trend",
+                   scenario_quote=quote, scenario_source=["section", 8])
+        return out
+    reply = {("comb", "year"): [{"year": {
+        "value": 2030, "quote": "Szenario Trend 2030"}}]}
+    made, asked, _ = comber(reply)
+    read = reads(read_elsewhere("Szenario Trend 2030"))
     made(7, read, PASSAGES, [])
     value = read[0].claims[0]
-    assert asked[0]["row"]["known"] == {"scenario": "Szenario Trend 2030"}
+    assert asked[0]["read"]["scenario"] == {"value": "Szenario Trend",
+                                            "quote": "Szenario Trend 2030"}
     assert value["year_state"] == fields.READ
     assert value["year_source"] == ["section", 8]
-    # Not shown, it does not count.
+    # The failure by construction: an answer whose quote lacks the year
+    # shows no such passage, and the same quote stands nowhere.
     made, _, _ = comber(reply)
-    read = reads(read_elsewhere())
+    read = reads(read_elsewhere("Szenario Trend"))
     made(7, read, PASSAGES, [])
     assert read[0].claims[0]["year_state"] == fields.UNBACKED
 
@@ -325,17 +482,12 @@ SECTIONS = [Source("section", 100 + i,
 PLAN = {**PASSAGES, **{(s.owner_kind, s.owner_id): s for s in SECTIONS}}
 
 
-def year_only():
-    """A value of OWN whose year alone is open."""
-    return claim(**{name: fields.READ for name in SLOTS if name != "year"})
-
-
 def test_an_unfound_coordinate_lists_the_plan_to_its_end_then_is_unstated():
     # A reply that finds nothing and asks for nothing: never asked for it
     # again, the next passages of the ranking instead, until every passage
     # was listed (owner decision 2026-11-06: the search runs empty).
-    made, asked, _ = comber({}, ranked=SECTIONS)
-    read = reads(year_only(), probes=[SAID])
+    made, asked, _ = comber(ranked=SECTIONS)
+    read = reads(only("year"), probes=[SAID])
     (done,) = made(7, read, PLAN, [])
     assert read[0].claims[0]["year_state"] == fields.SAID_UNSTATED
     lists = lists_of(asked)
@@ -344,30 +496,34 @@ def test_an_unfound_coordinate_lists_the_plan_to_its_end_then_is_unstated():
     assert len(listed) == len(set(listed))       # each passage listed once
     assert [len(one["hits"]) for one in lists] == [15, 5]
     # Each message brings only the list that is new since the answer it
-    # follows (owner decisions 2026-11-07).
-    assert [p.get("follows", False) for p in asked] == [False, True]
-    assert [len(p["hits"]) for p in asked] == [1, 1]
+    # follows (owner decisions 2026-11-07): the second reading's, then the
+    # search's two lists.
+    assert [p.get("follows", False) for p in asked] == [False, True, True]
+    assert [len(p["hits"]) for p in asked if "hits" in p] == [1, 1]
     # The sentences ranked with are not shown (owner decision 2026-11-06).
     assert all(set(one) == {"hits"} for one in lists)
-    assert done.asked == 2 and done.listed == 1
+    assert done.asked == 3 and done.listed == 1
     assert all("corrections" not in payload for payload in asked)
     # The failure by construction: a find on the second list ends it, read.
     found = {"year": {"value": 2017, "quote": "gelten für das Jahr 2017"}}
-    made, asked, _ = comber({}, found, {}, ranked=SECTIONS)
-    read = reads(year_only(), probes=[SAID])
+    made, asked, _ = comber({("comb", "year"): [{}, found]}, ranked=SECTIONS)
+    read = reads(only("year"), probes=[SAID])
     (done,) = made(7, read, PLAN, [])
     value = read[0].claims[0]
     assert value["year_state"] == fields.READ
     assert value["year_source"] == ["section", 117]
-    assert done.asked == 2 and done.listed == 1
+    assert done.asked == 3 and done.listed == 1
 
 
 def test_without_a_ranking_the_plan_is_listed_in_its_order():
-    made, asked, _ = comber({})
-    read = reads(year_only())
+    made, asked, _ = comber()
+    read = reads(only("year"))
     (done,) = made(7, read, PLAN, [])
-    assert "hits" not in asked[0]
-    order = [s.text.split("\n")[0] for s in PLAN.values() if s is not OWN]
+    search = [p for p in asked if "coordinates" in p][1:]
+    assert search and "hits" not in search[0]
+    # The section the second reading showed is not listed again.
+    order = [s.text.split("\n")[0] for s in PLAN.values()
+             if s not in (OWN, NEXT)]
     listed = [hit["title"] for one in lists_of(asked) for hit in one["hits"]]
     assert listed == ["Ausblick"] + [f"S{i}" for i in range(15)] \
         + [f"S{i}" for i in range(15, 20)]
@@ -380,8 +536,9 @@ def test_unstated_from_the_model_is_no_answer_and_the_listing_goes_on():
     # The model writes "not stated" all the same, as an object or a bare
     # word: no answer, not asked for again, and the plan is listed on.
     for said in ({"value": UNSTATED}, UNSTATED, [{"value": UNSTATED}]):
-        made, asked, _ = comber({"year": said}, ranked=SECTIONS)
-        read = reads(year_only(), probes=[SAID])
+        made, asked, _ = comber({("comb", "year"): [{"year": said}]},
+                                ranked=SECTIONS)
+        read = reads(only("year"), probes=[SAID])
         (done,) = made(7, read, PLAN, [])
         assert read[0].claims[0]["year_state"] == fields.SAID_UNSTATED
         assert done.listed == 1
@@ -389,14 +546,15 @@ def test_unstated_from_the_model_is_no_answer_and_the_listing_goes_on():
 
 
 def test_a_request_that_no_longer_fits_while_listing_leaves_it_exhausted():
-    made, _, _ = comber({}, reading.CUT, ranked=SECTIONS)
-    read = reads(year_only(), probes=[SAID])
+    made, _, _ = comber({("comb", "year"): [{}, reading.CUT]},
+                        ranked=SECTIONS)
+    read = reads(only("year"), probes=[SAID])
     (done,) = made(7, read, PLAN, [])
     assert read[0].claims[0]["year_state"] == fields.EXHAUSTED
     assert done.exhausted == 1
     # The failure by construction: the same listing that fits ends unstated.
-    made, _, _ = comber({}, {}, ranked=SECTIONS)
-    read = reads(year_only(), probes=[SAID])
+    made, _, _ = comber({("comb", "year"): [{}, {}]}, ranked=SECTIONS)
+    read = reads(only("year"), probes=[SAID])
     made(7, read, PLAN, [])
     assert read[0].claims[0]["year_state"] == fields.SAID_UNSTATED
 
@@ -404,16 +562,18 @@ def test_a_request_that_no_longer_fits_while_listing_leaves_it_exhausted():
 def test_an_answer_in_another_form_is_asked_again_as_such_then_unanswered():
     # A bare year where {"value": 2030, "quote": ...} is asked: a find, so
     # the listing ends, and the correction names the form.
-    made, asked, _ = comber({"year": 2030})
-    read = reads(year_only(), probes=[SAID])
+    made, asked, _ = comber({("comb", "year"): [{"year": 2030}]})
+    read = reads(only("year"), probes=[SAID])
     (done,) = made(7, read, PASSAGES, [])
-    assert asked[1]["corrections"] == [{"coordinate": "year",
-                                        "what": say("wrong_shape")}]
+    (again,) = [p for p in asked if p.get("corrections")]
+    assert again["corrections"] == [{"coordinate": "year",
+                                     "what": say("wrong_shape")}]
     assert read[0].claims[0]["year_state"] == fields.UNANSWERED
-    assert done.asked == 2 and done.listed == 0
+    assert done.corrected == 1 and done.listed == 0
     # The failure by construction: given in the form asked, it is read.
-    made, asked, _ = comber({"year": 2030}, {"year": YEAR})
-    read = reads(year_only(), probes=[SAID])
+    made, asked, _ = comber({("comb", "year"): [{"year": 2030},
+                                                {"year": YEAR}]})
+    read = reads(only("year"), probes=[SAID])
     made(7, read, PASSAGES, [])
     assert read[0].claims[0]["year_state"] == fields.READ
 
@@ -422,10 +582,11 @@ def test_a_quote_without_its_answer_is_told_to_be_fixed_or_left_out():
     # The quote stands in the hit's line but lacks the year: asked again,
     # with no "not stated" offered (owner decision 2026-11-06).
     lacking = {"year": {"value": 2030, "quote": "Die Werte gelten für das"}}
-    made, asked, _ = comber(lacking, {})
-    read = reads(year_only(), probes=[SAID])
+    made, asked, _ = comber({("comb", "year"): [lacking, {}]})
+    read = reads(only("year"), probes=[SAID])
     made(7, read, PASSAGES, [])
-    (told,) = [one["what"] for one in asked[1]["corrections"]
+    (again,) = [p for p in asked if p.get("corrections")]
+    (told,) = [one["what"] for one in again["corrections"]
                if one["coordinate"] == "year"]
     # A year may be named by the plan's word ("Basisjahr"): that way first.
     assert told.startswith(say("answer_not_in_quote", answer=2030))
@@ -433,7 +594,7 @@ def test_a_quote_without_its_answer_is_told_to_be_fixed_or_left_out():
     assert UNSTATED not in told
     assert read[0].claims[0]["year_state"] == fields.UNBACKED
     # The failure by construction: where a request offers "not stated", as
-    # the reading's do, the same check offers it.
+    # the second reading does, the same check offers it.
     slot = next(s for s in reading.slots_of(SPEC, EMISSION)
                 if s.name == "year")
     got = merge_field([Row(label="R1", item_index=0, claim={})], [HIT], slot,
@@ -442,79 +603,92 @@ def test_a_quote_without_its_answer_is_told_to_be_fixed_or_left_out():
 
 
 def test_a_coordinate_read_before_is_never_touched():
-    made, _, _ = comber(
-        everything(carrier={"value": "Heizöl", "quote": "Ausblick"}))
+    made, _, _ = comber({("comb", "carrier"): [{"carrier": {
+        "value": "Heizöl", "quote": "Ausblick"}}]})
     read = reads(claim())
     made(7, read, PASSAGES, [])
     value = read[0].claims[0]
     assert value["carrier"] == "Erdgas" and value["carrier_state"] == fields.READ
 
 
-def test_a_request_that_does_not_fit_leaves_every_open_coordinate_exhausted():
-    made, _, _ = comber(reading.CUT)
-    read = reads(claim())
+def test_a_request_that_does_not_fit_leaves_the_searched_coordinates_exhausted():
+    made, _, _ = comber({("comb", "year"): [reading.CUT],
+                         ("comb", "carrier"): [reading.CUT]})
+    read = reads(only("year", "carrier"))
     done = made(7, read, PASSAGES, [])[0]
     value = read[0].claims[0]
     assert value["year_state"] == fields.EXHAUSTED
-    assert value["carrier_state"] == fields.READ
-    assert done.exhausted == done.open
+    assert value["carrier_state"] == fields.EXHAUSTED
+    assert done.exhausted == done.open == 2
+    # The failure by construction: a coordinate read before is left alone.
+    made, _, _ = comber({("comb", "year"): [reading.CUT]})
+    read = reads(only("year"))
+    done = made(7, read, PASSAGES, [])[0]
+    assert read[0].claims[0]["carrier_state"] == fields.READ
+    assert done.exhausted == done.open == 1
 
 
 def test_the_search_ranks_with_the_sentences_of_the_coordinates_asked():
-    made, asked, searched = comber({})
-    made(7, reads(claim(), probes=[dict(SAID, unit="In t CO2 je Jahr.")]),
-         PASSAGES, [])
-    # The year group alone has a sentence; the unit is read, not asked.
+    made, asked, searched = comber(ranked=SECTIONS)
+    made(7, reads(only("year", "sector"),
+                  probes=[dict(SAID, unit="In t CO2 je Jahr.")]), PLAN, [])
+    # The year alone has a sentence; the unit is read, not asked.
     assert [probes for probes, _ in searched] == [[SAID["year"]]]
-    (framed,) = [one for one in conversations(asked)
-                 if "year" in one[0]["coordinates"]]
-    (listed,) = framed[0]["hits"]
+    search = [(name, payload) for (kind, name, _), payload
+              in zip(made.shapes, asked) if kind == "comb"]
+    year = [payload for name, payload in search if name == "year"][0]
+    (listed,) = year["hits"]
     # Ranked with it, the list does not show it: the run wrote it, the plan
     # does not print it (owner decision 2026-11-06); no message does.
     assert set(listed) == {"hits"} and listed["hits"]
     assert SAID["year"] not in json.dumps(asked, ensure_ascii=False)
-    # A group without a sentence starts without a list, and what it lists
-    # later is the plan in its order.
-    others = [one for one in conversations(asked)
-              if "year" not in one[0]["coordinates"]]
-    # The context group; the number's has nothing to comb (its unit read).
-    assert len(others) == 1 and "hits" not in others[0][0]
-    assert lists_of(others[0])
-    assert all(set(one) == {"hits"} for one in lists_of(others[0]))
+    # A coordinate without a sentence starts without a list, and what it
+    # lists later is the plan in its order.
+    sector = [payload for name, payload in search if name == "sector"][0]
+    assert "hits" not in sector
+    later = [one for payload in asked[asked.index(sector) + 1:]
+             for one in payload.get("hits") or ()]
+    assert later and all(set(one) == {"hits"} for one in later)
 
 
 def test_without_a_sentence_the_model_searches_itself_with_its_own():
-    made, asked, searched = comber(
-        dict(everything(),
-             more=[{"get": "similar", "text": "Werte für das Jahr 2030"}]),
-        dict(everything(), more=[{"get": "hit", "id": "H1"}]),
-        everything(year=YEAR))
-    read = reads(claim())
+    made, asked, searched = comber({("comb", "year"): [
+        {"more": [{"get": "similar", "text": "Werte für das Jahr 2030"}]},
+        {"more": [{"get": "hit", "id": "H1"}]},
+        {"year": YEAR}]})
+    read = reads(only("year"))
     made(7, read, PASSAGES, [])
-    assert "hits" not in asked[0]
-    assert searched[0] == (["Werte für das Jahr 2030"], {("section", 6)})
-    (listed,) = asked[1]["hits"]
+    search = [p for (kind, _n, _s), p in zip(made.shapes, asked)
+              if kind == "comb"]
+    assert "hits" not in search[0]
+    assert searched[0] == (["Werte für das Jahr 2030"],
+                           {("section", 6), ("section", 7)})
+    (listed,) = search[1]["hits"]
     # Its hits, not its sentence (owner decision 2026-11-06).
     assert set(listed) == {"hits"}
-    assert "Werte für das Jahr 2030" not in json.dumps(asked[1],
+    assert "Werte für das Jahr 2030" not in json.dumps(search[1],
                                                        ensure_ascii=False)
     assert [hit["title"] for hit in listed["hits"]] == ["Ausblick"]
     value = read[0].claims[0]
     assert value["year"] == 2030 and value["year_state"] == fields.READ
     # Where the run ranks nothing, the search finds nothing, and the plan is
     # listed in its order: here its one other passage.
-    made, asked, _ = comber(
-        dict(everything(),
-             more=[{"get": "similar", "text": "Werte für das Jahr 2030"}]),
+    made, asked, _ = comber({("comb", "year"): [
+        {"more": [{"get": "similar", "text": "Werte für das Jahr 2030"}]}]},
         ranking=False)
-    done = made(7, reads(claim()), PASSAGES, [])
-    assert all(d.missed == 1 and d.asked == 2 and d.hits == 1
-               and d.listed == 1 for d in done)
+    (done,) = made(7, reads(only("year")), PASSAGES, [])
+    assert done.missed == 1 and done.hits == 1 and done.listed == 1
 
 
 TABLE = Source("table", 11, "Tabelle 3: Emissionen\n| Träger | t CO2 |\n"
                "| --- | --- |\n| Erdgas | 300 |\n| Heizöl | 27 |",
                {"document_id": 7, "page": 3})
+FRAME = ("scenario", "year", "period_start")
+
+
+def frame_open(**more):
+    """A value of TABLE whose frame alone is open."""
+    return only(*FRAME, **more)
 
 
 def test_a_table_s_frame_open_on_every_value_is_combed_once_for_all():
@@ -522,27 +696,48 @@ def test_a_table_s_frame_open_on_every_value_is_combed_once_for_all():
     # frame in its head and rows is combed once, and every value of it takes
     # the answers with their quotes.
     batch = Batch(7, EMISSION, [WorkItem(7, EMISSION, TABLE)])
-    gas = claim()
-    oil = dict(claim(), value=27, quote="| Heizöl | 27 |")
+    gas = frame_open()
+    oil = dict(frame_open(), value=27, quote="| Heizöl | 27 |")
     read = [reading.Read(batch, [gas, oil], probes=[SAID, SAID])]
-    made, asked, _ = comber(everything(year=YEAR))
-    done = made(7, read, {("table", 11): TABLE, ("section", 8): HIT}, [])
-    framed = [one[0] for one in conversations(asked)
-              if "year" in one[0]["coordinates"]]
-    # Said beside the row, where the prompt's part for it is sent with it
-    # (owner decisions 2026-11-07).
-    assert len(framed) == 1 and framed[0]["whole_table"] is True
-    assert "whole_table" not in framed[0]["row"]
-    assert [d.table_rows for d in done if d.group == "frame"] == [1]
+    made, asked, _ = comber({("comb", "year"): [{"year": YEAR}]})
+    plan = {("table", 11): TABLE, **PASSAGES}
+    done = made(7, read, plan, [])
+    conversation = conversations(asked)
+    # One conversation for the whole table, showing it and saying so.
+    assert len(conversation) == 1
+    first = conversation[0][0]
+    assert first["whole_table"] is True
+    assert first["source"]["text"] == TABLE.text
+    assert "whole_table" not in first["value"]
+    assert [d.table_rows for d in done] == [1]
     assert [(c["year"], c["year_state"]) for c in (gas, oil)] == [
         (2030, fields.READ)] * 2
     assert oil["year_source"] == gas["year_source"] == ["section", 8]
+    assert oil["year_quote"] == gas["year_quote"] == YEAR["quote"]
     assert list(oil["year_window"]) == ["table", 2]
-    # A value of the table that read its frame: each is combed on its own.
-    read = [reading.Read(batch, [claim(), dict(claim(year=fields.READ,
-                                                     scenario=fields.READ),
-                                               value=27)],
-                         probes=[SAID, {}])]
-    made, asked, _ = comber(everything(year=YEAR))
-    made(7, read, {("table", 11): TABLE, ("section", 8): HIT}, [])
+    # The failure by construction: a value of the table that read its frame
+    # is combed on its own, and no table is asked for.
+    read = [reading.Read(batch, [frame_open(), dict(
+        only("sector"), value=27, quote="| Heizöl | 27 |")],
+        probes=[SAID, {}])]
+    made, asked, _ = comber({("comb", "year"): [{"year": YEAR}]})
+    made(7, read, plan, [])
     assert asked and not any("whole_table" in p for p in asked)
+    assert "source" not in conversations(asked)[0][0]
+
+
+def test_a_value_the_table_conversation_leaves_open_is_combed_on_its_own():
+    # The table's answers are for the coordinates open on all its values; a
+    # coordinate open on one value only is asked of that value.
+    batch = Batch(7, EMISSION, [WorkItem(7, EMISSION, TABLE)])
+    gas = frame_open()
+    oil = dict(only(*FRAME, "sector"), value=27, quote="| Heizöl | 27 |")
+    read = [reading.Read(batch, [gas, oil], probes=[{}, {}])]
+    made, asked, _ = comber()
+    done = made(7, read, {("table", 11): TABLE, **PASSAGES}, [])
+    assert len(done) == 2 and len(conversations(asked)) == 2
+    whole = [c for c in conversations(asked) if c[0].get("whole_table")]
+    assert len(whole) == 1
+    own = [c for c in conversations(asked) if not c[0].get("whole_table")]
+    assert {name for p in own[0] for name in p.get("coordinates", ())} \
+        == {"sector"}

@@ -821,6 +821,7 @@ def reason_words() -> dict:
             "unanswered": T["reason_unanswered"],
             "conflict": T["reason_conflict"],
             "computed": T["reason_computed"],
+            "read_off": T["reason_read_off"],
             "catalogue": T["reason_catalogue"],
             "not_located": T["reason_not_located"],
             "review:disagree": T["reason_review_disagree"],
@@ -861,12 +862,15 @@ def _value_line(value: dict) -> str:
 
 
 def _value_details(value: dict) -> list:
-    """The coordinates by name and the reasons of the level, in words."""
+    """The coordinates by name, what was read off a figure where no text
+    states the number, and the reasons of the level, in words."""
     names = axis_names()
     lines = [f"{names.get(axis, axis)}: {_coordinate_text(entry)}"
              for axis, entry in (value.get("coordinates") or {}).items()
              if axis not in NOT_A_COORDINATE
              and entry.get("value") not in (None, "")]
+    if value.get("reading"):
+        lines.append(f"{T['read_off']}: {value['reading']}")
     lines += [_reason(reason) for reason in value.get("reasons") or []]
     return lines
 

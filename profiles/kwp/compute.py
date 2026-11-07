@@ -218,8 +218,10 @@ def take_whole(share: dict, claim: dict, source, spec):
     """A whole the request found in a passage no row of it holds, as a
     Number, or why it is not one. *source* is the passage its quote stands
     in, of all the request showed. Read like any number (`verify_tuple`: its
-    quote in the passage, its value in the quote, its unit one the parameter
-    accepts), its quantity like any coordinate (`answer_in_quote`), and its
+    quote in the passage, its value in the quote), its unit an entry the
+    parameter converts (owner decision 2026-11-07: a number whose unit is no
+    entry is read and not converted, and no input of a computation until
+    the list grows), its quantity like any coordinate (`answer_in_quote`), and its
     year, scenario and area the share's, since a whole has to have them. It
     stands only in the request, as an input, and is no row of its own (owner
     decision 2026-11-05)."""
@@ -234,6 +236,9 @@ def take_whole(share: dict, claim: dict, source, spec):
                            owner_kind=source.owner_kind)
     if isinstance(outcome, Refusal):
         return outcome.reason
+    if outcome.tuple.get("value_target") is None:
+        return (f"unit {claim.get('unit')!r} is no entry of units_accepted "
+                f"({', '.join(sorted(parameter.units_accepted))})")
     row = dict(outcome.tuple)
     slot = quantity_slot(parameter)
     if row.get("quantity") is not None and slot is not None and answer_in_quote(

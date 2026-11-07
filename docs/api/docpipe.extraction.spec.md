@@ -163,6 +163,16 @@ Fields:
 - `full_definition: bool = False`: Whether its requests show a parameter's full definition rather than its `brief` (spec: "definition": "full"): the group that classifies a value needs every distinction the definition draws, the others only what a value of the parameter is (owner decision 2026-11-05, ticket 26).
 - `own_passage: tuple = ()`: Coordinates only the value's own passage states, such as what the number counts: asked again with the passages around it, never searched for in the rest of the plan (spec: "own_passage", owner decision 2026-11-06).
 - `own_value: tuple = ()`: Coordinates printed with the number itself, such as "ca." or "bis zu": read once with the value, its "not stated" an answer that nothing qualifies the number, never asked again (spec: "own_value", owner decision 2026-11-06).
+- `pair: tuple = ()`: Of a group the survey reads, the coordinates it reads per passage as one pair (spec: "pair", all of them where it names none): the frame's scenario and year, while the beginning of a period the value is a mean over stands in the same group and is read per value only (owner decision 2026-11-07), so the frame keeps its one year.
+
+#### Group.paired
+
+```python
+@property
+def paired(self) -> tuple
+```
+
+The coordinates the survey reads per passage.
 
 #### Group.asked_near
 

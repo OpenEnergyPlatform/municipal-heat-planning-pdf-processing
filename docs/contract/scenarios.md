@@ -194,6 +194,10 @@ Why values are not an A, counted. A closed list: a reason nobody can enumerate i
 
 ### `tuples`
 
+### `unlisted_units`
+
+The units numbers were read with that are no entry of their parameter's list, as the plan prints them, counted: read and not converted, until the list grows and a top-up asks them again (owner decision 2026-11-07). Absent in a file written before.
+
 ## `publication_abstract`
 
 How the row becomes a node:
@@ -218,6 +222,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
 
 ### `flags`
 
@@ -287,6 +295,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `tier`
 
 text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
@@ -310,6 +326,8 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `publication_author`
 
@@ -337,6 +355,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
 
 ### `flags`
 
@@ -406,6 +428,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `tier`
 
 text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
@@ -429,6 +459,8 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `publication_date`
 
@@ -454,6 +486,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
 
 ### `flags`
 
@@ -523,6 +559,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `tier`
 
 text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
@@ -547,6 +591,8 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
 ## `publication_doi`
 
 How the row becomes a node:
@@ -565,6 +611,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
 
 ### `flags`
 
@@ -634,6 +684,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `tier`
 
 text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
@@ -657,6 +715,8 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `publication_title`
 
@@ -683,6 +743,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
 
 ### `flags`
 
@@ -752,6 +816,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `tier`
 
 text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
@@ -776,6 +848,8 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
 ## `scenario_abstract`
 
 How the row becomes a node:
@@ -794,6 +868,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
 
 ### `flags`
 
@@ -862,6 +940,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 ### `range`
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `scenario`
 
@@ -986,6 +1072,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
@@ -1054,6 +1144,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `tier`
 
 text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
@@ -1082,6 +1180,8 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
 ## `scenario_region`
 
 How the row becomes a node:
@@ -1106,6 +1206,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
 
 ### `flags`
 
@@ -1174,6 +1278,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 ### `range`
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `scenario`
 
@@ -1332,6 +1444,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
@@ -1399,6 +1515,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 ### `range`
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `scenario`
 
@@ -1591,6 +1715,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
@@ -1658,6 +1786,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 ### `range`
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `scenario`
 
@@ -1774,6 +1910,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
@@ -1842,6 +1982,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `tier`
 
 text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
@@ -1865,6 +2013,8 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `study_descriptor`
 
@@ -1890,6 +2040,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
 
 ### `flags`
 
@@ -1958,6 +2112,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 ### `range`
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -2068,6 +2230,8 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 
 [stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
 ## `study_funder`
 
 How the row becomes a node:
@@ -2088,6 +2252,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
 
 ### `flags`
 
@@ -2157,6 +2325,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `tier`
 
 text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
@@ -2181,6 +2357,8 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
 ## `study_organisation`
 
 How the row becomes a node:
@@ -2201,6 +2379,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
 
 ### `flags`
 
@@ -2270,6 +2452,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `tier`
 
 text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
@@ -2293,6 +2483,8 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `study_project_name`
 
@@ -2319,6 +2511,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
 
 ### `flags`
 
@@ -2388,6 +2584,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `tier`
 
 text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
@@ -2411,6 +2615,8 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `study_sector`
 
@@ -2436,6 +2642,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
 
 ### `flags`
 
@@ -2504,6 +2714,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 ### `range`
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -2598,7 +2816,7 @@ use. The main greenhouse gas emitted from adipic acid production is nitrous oxid
 - **CRF sector (IPCC 2006): aerosols** → `https://openenergyplatform.org/ontology/oeo/OEO_00010371` — The CRF sector (IPCC 2006) 'aerosols' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:
 Most aerosol packages now contain hydrocarbon (HC) as propellants but, in a small fraction of the total, HFCs and PFCs may be used as propellants or solvents. Emissions from aerosols usually occur shortly after production, on average six months after sale. During the use of aerosols, 100% of the chemical is emitted. The 5 main sources are metered dose inhalers (MDIs), personal care products (e.g. hair care, deodorant, shaving cream), household products (e.g. air-fresheners, oven and fabric cleaners), industrial products (e.g. special cleaning sprays such as those for operating electrical contact, lubricants, pipe-freezers) and other general products (e.g. silly string, tire inflators, claxons), although in some regions the use of such general products is restricted. The HFCs currently used as propellants are HFC 134a, HFC 227ea, and HFC 152a. The substance HFC 43 10mee and a PFC, perfluorohexane, are used as solvents in industrial aerosol products.
 - **CRF sector (IPCC 2006): agricultural soils** → `https://openenergyplatform.org/ontology/oeo/OEO_00010182` — The CRF sector (IPCC 2006) 'agricultural soils' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories
-- **CRF sector (IPCC 2006): agriculture** → `https://openenergyplatform.org/ontology/oeo/OEO_00010047`
+- **CRF sector (IPCC 2006): agriculture** → `https://openenergyplatform.org/ontology/oeo/OEO_00010047` — The CRF sector (IPCC 2006) 'agriculture' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories.
 - **CRF sector (IPCC 2006): agriculture - other** → `https://openenergyplatform.org/ontology/oeo/OEO_00010188` — The CRF sector (IPCC 2006) 'agriculture - other' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories
 - **CRF sector (IPCC 2006): agriculture, forestry and fishing** → `https://openenergyplatform.org/ontology/oeo/OEO_00010054` — The CRF sector (IPCC 2006) 'agriculture, forestry and fishing' is an energy demand sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:
 Emissions from fuel combustion in agriculture, forestry, fishing and fishing industries such as fish farms.
@@ -2876,6 +3094,8 @@ It is equivalent to the CRF sector (IPCC 2006): land use, land-use change and fo
 
 [stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
 ## `study_sector_division`
 
 How the row becomes a node:
@@ -2900,6 +3120,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
 
 ### `flags`
 
@@ -2968,6 +3192,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 ### `range`
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -3059,6 +3291,8 @@ NACE is a four-digit classification providing the framework for collecting and p
 
 [stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
 ## `study_technology`
 
 How the row becomes a node:
@@ -3083,6 +3317,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
 
 ### `flags`
 
@@ -3151,6 +3389,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 ### `range`
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -3267,6 +3513,8 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 
 [stage, index] of the window 'value' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
 ## The stamp
 
 One `<document>.stamp.json` beside each harvest file, closed like the records (`additionalProperties: false`).
@@ -3283,7 +3531,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 | `producers` | Every pass that wrote into this harvest, in order: the harvest, then each top-up that rewrote the file, each pass that appended a new parameter, each remap that carried a key forward and each review that changed a row. Entries are only ever added, so a position is stable: a coordinate a top-up re-read points at its entry with `<axis>_producer`. `model` above names the first only. Recorded and never compared. |
 | `spec` | sha256 of extraction_spec.json. A record, not a verdict: it moves on a comment, an indent or a graph annotation, none of which any question is asked through. Compared, it would outvote every key below it. |
 | `^axis/[^/]+/[^/]+$` | What this coordinate asks and what it may answer: the question and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else. |
-| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame\|survey\|read_values\|read_text\|comb\|match)$` | sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_values`, `read_text`, `comb` and `match` are the prompts of the survey flow |
+| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame\|survey\|read_values\|read_text\|comb\|match\|settings\|seek)$` | sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_values`, `read_text`, `comb`, `match`, `settings` and `seek` are the prompts of the survey flow |
 | `^parameter/[^/]+$` | What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale. Those have keys of their own. |
 | `^question_text/[^/]+$` | The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here: the generator prompt, the model, and the annotation inside parameter/. |
 | `^review/(prompt\|model)$` | What read this document a second time. Recorded and never compared: the review does not decide whether the harvest is current, and comparing it would report every reviewed document stale the day the review prompt changes. |
@@ -3294,7 +3542,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 
 One event per line; `t` names it and `doc` the document. An event that reports a model request carries it as sent (`input`) and what came back (`output`); a text the requests repeat is a `piece` they refer to. Read by scripts/trace_report.py.
 
-35 record kinds, told apart by `t`:
+39 record kinds, told apart by `t`:
 
 - `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
 - `anchor`: `doc`, `parameter`, `text`
@@ -3319,15 +3567,19 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `naming_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `places`, `prompt_tokens`, `sent_at`
 - `naming_groups_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `prompt_tokens`, `sent_at`
 - `years_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
+- `settings_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
+- `seek_free_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `phrase_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `frame_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `review_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `compute_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `naming`: `asked`, `doc`, `groups`, `kind`, `names`, `several`, `things`, `why`
-- `read`: `asked`, `corrected`, `doc`, `failed`, `judged`, `kind`, `near`, `near_read`, `owner`, `parameter`, `turned`, `unanswered`, `unread`, `values`, `why`
-- `comb`: `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `judged`, `kind`, `listed`, `missed`, `open`, `owner`, `parameter`, `rows`, `searched`, `table_rows`, `turned`
+- `read`: `asked`, `corrected`, `doc`, `failed`, `kind`, `owner`, `parameter`, `unanswered`, `unread`, `values`, `why`
+- `comb`: `anew`, `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `judged`, `kind`, `listed`, `missed`, `near`, `near_read`, `open`, `owner`, `parameter`, `rows`, `searched`, `table_rows`, `turned`
 - `years`: `asked`, `base`, `doc`, `fetched`, `hits`, `refused`, `target`
 - `seek`: `doc`, `kind`, `owner`, `parameter`, `rank`
+- `settings`: `asked`, `doc`, `fetched`, `hits`, `refused`, `settings`
+- `seek_free`: `asked`, `doc`, `fetched`, `found`, `parameter`, `unknown`, `walked`
 - `seek_probe`: `doc`, `parameter`, `per`, `text`
 - `completion`: `detail`, `doc`, `filled`, `id`, `key`, `matched`, `open`, `outcome`
 - `piece`: `doc`, `id`, `text`

@@ -21,8 +21,8 @@ threshold anybody tuned.
      description (a model's reading of a picture), or out of a
      document whose pages had no text layer and were transcribed page
      by page
-  C  open: a coordinate nobody read, and nothing speaks against what
-     was read
+  C  open: a coordinate nobody read, or a number read off a figure's
+     image that no text prints, and nothing speaks against what was read
   D  in doubt: a coordinate that could not be backed, a computed
      number, a value looked up in a catalogue, a contested identity, a
      second reading that came to something else

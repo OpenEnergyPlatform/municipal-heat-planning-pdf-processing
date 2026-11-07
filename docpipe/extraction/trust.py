@@ -18,8 +18,8 @@ threshold anybody tuned.
      description (a model's reading of a picture), or out of a
      document whose pages had no text layer and were transcribed page
      by page
-  C  open: a coordinate nobody read, and nothing speaks against what
-     was read
+  C  open: a coordinate nobody read, or a number read off a figure's
+     image that no text prints, and nothing speaks against what was read
   D  in doubt: a coordinate that could not be backed, a computed
      number, a value looked up in a catalogue, a contested identity, a
      second reading that came to something else
@@ -89,7 +89,11 @@ CATALOGUE = "catalogue"
 # check.
 FLAG_REASONS = {"computed": "computed",
                 "not_located": "not_located", CATALOGUE: CATALOGUE,
-                REVIEW_DISAGREE: "review:disagree"}
+                REVIEW_DISAGREE: "review:disagree", "read_off": "read_off"}
+# A number a figure only draws, read off its image, is an estimate the plan
+# does not print: a C and not a D (owner decision 2026-11-07, „Das ist dann
+# Trustlevel C“), so a printed number of the same coordinates still wins.
+OPEN_REASONS = ("read_off",)
 
 
 def reasons(row: dict, *, conflict: bool = False,
@@ -133,7 +137,8 @@ def trust(row: dict, *, conflict: bool = False, transcribed: bool = False,
     why = reasons(row, conflict=conflict, transcribed=transcribed)
     hard = [r for r in why if r != "page_transcribed"]
     image = row.get("tier") != TIER_TEXT
-    if any(r.partition(":")[0] not in OPEN_STATES for r in hard):
+    if any(r.partition(":")[0] not in OPEN_STATES and r not in OPEN_REASONS
+           for r in hard):
         level = LEVEL_D
     elif hard:
         level = LEVEL_C
@@ -272,16 +277,24 @@ def document_summary(document_id, tuples, refusals) -> dict:
     levels = dict.fromkeys(LEVELS, 0)
     why: dict = {}
     image = 0
+    # The units a number was read with that are no entry of its list, as
+    # the plan prints them: read and not converted, until the list grows
+    # and a top-up asks them again (owner decision 2026-11-07).
+    unlisted: dict = {}
     for row in tuples:
         verdict = trust(row)
         levels[verdict["level"]] += 1
         image += bool(verdict["image_origin"])
         for reason in verdict["reasons"]:
             why[reason] = why.get(reason, 0) + 1
+        printed = row.get("unit_raw")
+        if row.get("unit") is None and isinstance(printed, str)                 and printed.strip():
+            unlisted[printed.strip()] = unlisted.get(printed.strip(), 0) + 1
     return {"document_id": document_id, "tuples": len(tuples),
             "refusals": len(refusals), "levels": levels,
             "reasons": {k: why[k] for k in sorted(why)},
-            "image_origin": image}
+            "image_origin": image,
+            "unlisted_units": {k: unlisted[k] for k in sorted(unlisted)}}
 
 
 # What a whole PARAMETER came to in one document, as against what one

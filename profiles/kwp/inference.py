@@ -227,6 +227,7 @@ UI = {
     "reason_unanswered": "{axis}: das Modell hat nicht geantwortet",
     "reason_conflict": "eine andere Lesung desselben Werts weicht ab",
     "reason_computed": "berechnet, nicht gelesen",
+    "reason_read_off": "aus der Abbildung abgelesen, ein Schätzwert",
     "reason_catalogue": "aus einem Katalog nachgeschlagen, nicht gelesen",
     "reason_not_located": "das Zitat wurde auf seiner Seite nicht gefunden",
     "reason_review_disagree": "eine Prüfung widerspricht",

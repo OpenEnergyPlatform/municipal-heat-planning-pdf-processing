@@ -46,6 +46,24 @@ TIER_VISUAL = "visual_source"
 # a model's reading of a picture.
 TEXT_KINDS = ("section",)
 
+# A number a figure only draws, as a bar, a segment, an area or a point of a
+# curve, is a value of the plan and an estimate (owner decisions 2026-11-05
+# and 2026-11-07: the model may and should read it off the image where no
+# text states it, trust level C). Its flag is a reason of its own
+# (`trust.FLAG_REASONS`), set on a value read off the image and on one whose
+# quoted number the image only draws.
+READ_OFF = "read_off"
+
+
+def read_off(raw: dict, owner_kind: str) -> bool:
+    """Is this a figure's value read off its image: the switch the reading
+    sets where its request sent the image (`read_off`), and the sentence of
+    what was read (`reading`)? Then that sentence is the evidence of the
+    number, and neither quote check applies to it."""
+    reading = raw.get("reading") if isinstance(raw, dict) else None
+    return (owner_kind == "figure" and raw.get("read_off") is True
+            and isinstance(reading, str) and bool(reading.strip()))
+
 _WS = re.compile(r"\s+")
 # A number as it appears in running text: digits with optional grouping and
 # one decimal part, German or international. Whitespace never joins two
@@ -209,6 +227,80 @@ def quote_in(source: str, quote: str) -> bool:
     return flat(quote) in flat(source)
 
 
+# What joins a name or a number to more of itself: "SSP5-3.4-OS",
+# "non-OECD", "11.109", "1.109,5". A stretch with a letter or a digit right
+# beside it, or one of these and then a letter or a digit, is part of a
+# longer name or number, not the thing itself.
+_JOINERS = "-._/,"
+
+
+def _alone(text: str, start: int, end: int) -> bool:
+    """Does text[start:end] stand for itself, not as part of a longer name or
+    number? Only an end that is a letter or a digit can run on."""
+    def runs_on(at: int, step: int) -> bool:
+        if not 0 <= at < len(text):
+            return False
+        if text[at].isalnum():
+            return True
+        beyond = at + step
+        return (text[at] in _JOINERS and 0 <= beyond < len(text)
+                and text[beyond].isalnum())
+    first, last = text[start:start + 1], text[end - 1:end]
+    return not ((first.isalnum() and runs_on(start - 1, -1))
+                or (last.isalnum() and runs_on(end, 1)))
+
+
+def _times_alone(text: str, needle: str) -> int:
+    """How often *needle* stands in *text* for itself (`_alone`)."""
+    if not needle:
+        return 0
+    count, at = 0, text.find(needle)
+    while at != -1:
+        if _alone(text, at, at + len(needle)):
+            count += 1
+        at = text.find(needle, at + 1)
+    return count
+
+
+def times_quoted(texts: list, quote: str) -> int:
+    """How often *quote* stands in the texts a request showed, each place
+    once where it stands for itself (owner decision 2026-11-07: a value's
+    quote pins it down, so it stands in what was shown exactly once)."""
+    wanted = flat(quote or "")
+    return sum(_times_alone(flat(text or ""), wanted) for text in texts)
+
+
+def _times_number(quote: str, value) -> int:
+    """How often the number *value* stands in *quote* as a number of its
+    own: each printed number once, a longer one ("11.109", "1.109,5") not
+    this one, a sign part of the number (owner decision 2026-11-01)."""
+    wanted = None if isinstance(value, bool) else canonical_number(value)
+    if wanted is None:
+        return 0
+    text = flat(quote or "")
+    if wanted.startswith("-"):
+        return sum(1 for m in _SIGNED.finditer(text)
+                   if canonical_number(m.group(1)) == wanted[1:])
+    count = sum(1 for m in _NUMBER.finditer(text)
+                if canonical_number(m.group(0)) == wanted)
+    count += sum(1 for m in _SPACE_GROUPED.finditer(text)
+                 if canonical_number(m.group(0)) == wanted)
+    count += sum(1 for m in _DATED_YEAR.finditer(text)
+                 if m.group(1) == wanted)
+    return count
+
+
+def times_stated(raw: dict, parameter: Parameter, quote: str) -> int:
+    """How often a value stands in its quote for itself: a number as a number
+    of its own, a wording where no letter or digit runs on from it ("OECD"
+    in "non-OECD" is no second one). The same split `value_in_quote` makes."""
+    if parameter.is_numeric:
+        return _times_number(quote, raw.get("value"))
+    wording = wording_of(raw, parameter)
+    return _times_alone(flat(quote or "").casefold(),
+                        flat(str(wording or "")).casefold())
+
+
 @dataclass
 class Verified:
     tuple: dict
@@ -235,11 +327,11 @@ def _check_value(raw: dict, parameter: Parameter, flags: list, *,
             return None, Refusal(raw, "value is not a number")
         if not with_unit:
             return out, None
-        # units_accepted is a closed list, so the unit is a choice: one entry,
-        # read by the unit question with its own passage, and the document's
-        # own spelling beside it. The spelling is evidence and is never
-        # looked up -- a spelling table stood here once and let 3,324 tuples
-        # of corpus_m5 carry an entry their wording contradicts.
+        # The unit as the plan prints it, and the entry of units_accepted the
+        # unit question chose for it by its meaning, with its own passage.
+        # The spelling is evidence and is never looked up -- a spelling table
+        # stood here once and let 3,324 tuples of corpus_m5 carry an entry
+        # their wording contradicts.
         chosen = raw.get("unit")
         wording = raw.get("unit_raw")
         wording = (wording.strip() if isinstance(wording, str)
@@ -247,13 +339,17 @@ def _check_value(raw: dict, parameter: Parameter, flags: list, *,
         unit = chosen if isinstance(chosen, str) and chosen.strip() else None
         factor = parameter.unit_factor(unit)
         if factor is None:
-            # No entry, or one this parameter does not list. The reason names
-            # the wording the document wrote, because that is what a reader
-            # of the refusals is after: which units the plans use that no
-            # list holds.
+            # No entry, or one this parameter does not list: no unit is
+            # refused (owner decision 2026-11-07). The number stays with the
+            # unit as the plan prints it and without a converted value; the
+            # conversions are completed before the graph is written, and the
+            # flag counts which units the plans use that no list holds.
             named = wording or raw.get("unit_seen") or unit
-            return None, Refusal(raw, f"unit {named!r} not in units_accepted "
-                                      f"({', '.join(parameter.units_accepted)})")
+            if named:
+                out["unit_raw"] = named
+                flags.append(f"unmapped:unit:{named}")
+            out["unit"] = None
+            return out, None
         if wording and wording != unit:
             out["unit_raw"] = wording
         out["unit"] = unit
@@ -514,25 +610,36 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                                     f"{list(axis.enum or ())}")
 
     quote = raw.get("quote")
-    if not isinstance(quote, str) or len(quote) < MIN_QUOTE_CHARS:
-        return Refusal(raw, QUOTE_TOO_SHORT)
-    if not quote_in(source_text, quote):
-        return Refusal(raw, QUOTE_NOT_FOUND)
-    if not value_in_quote(raw, parameter, quote):
-        # `is True`, not truthy: "computed" is a switch that decides WHICH
-        # evidence check applies, and the string "nein" would have opened the
-        # door it exists to keep shut.
-        if raw.get("computed") is True and computed_in_output(raw, parameter):
-            # The document prints the inputs and the sandbox printed the
-            # result. Both halves of the evidence are on the tuple.
-            if not computed_from_inputs(raw):
-                return Refusal(raw, f"value {raw.get('value')!r} does not "
-                                    f"follow from its inputs")
-            flags.append("computed")
-        else:
-            return Refusal(raw, not_in_quote(raw))
+    if read_off(raw, owner_kind):
+        # No text states the number: the sentence of what was read off the
+        # figure is its evidence, and the flag says it is an estimate.
+        flags.append(READ_OFF)
+    else:
+        if not isinstance(quote, str) or len(quote) < MIN_QUOTE_CHARS:
+            return Refusal(raw, QUOTE_TOO_SHORT)
+        if not quote_in(source_text, quote):
+            return Refusal(raw, QUOTE_NOT_FOUND)
+        if not value_in_quote(raw, parameter, quote):
+            # `is True`, not truthy: "computed" is a switch that decides
+            # WHICH evidence check applies, and the string "nein" would have
+            # opened the door it exists to keep shut.
+            if raw.get("computed") is True \
+                    and computed_in_output(raw, parameter):
+                # The document prints the inputs and the sandbox printed the
+                # result. Both halves of the evidence are on the tuple.
+                if not computed_from_inputs(raw):
+                    return Refusal(raw, f"value {raw.get('value')!r} does "
+                                        f"not follow from its inputs")
+                flags.append("computed")
+            else:
+                return Refusal(raw, not_in_quote(raw))
+        if raw.get("drawn") is True and owner_kind == "figure":
+            # The figure description estimated a number the image only
+            # draws, and the quote holds that estimate.
+            flags.append(READ_OFF)
 
     if (parameter.is_numeric and parameter.integrated
+            and value_fields.get("unit") is not None
             and not parameter.names_period(value_fields.get("unit"))):
         # The entry the unit question chose says in the spec that it names no
         # period. The period is part of that reading, because a passage
@@ -581,22 +688,26 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
     return Verified(tuple=out, tier=tier, flags=flags, rects=rects)
 
 
-def value_refused(raw: dict, parameter: Parameter,
-                  source_text: str) -> Optional[str]:
+def value_refused(raw: dict, parameter: Parameter, source_text: str,
+                  owner_kind: str = "section") -> Optional[str]:
     """Why the fold would refuse a value read before its coordinates, or
     None: what `verify_tuple` checks of the value itself (its type, its
     entry of a closed list) and of its quote (long enough, standing in
-    *source_text*, holding the value), in its words. Not the unit and not
-    the axes, which a reading asks after the value and checks as it reads
-    them (`pipeline.merge_field`). A reading asks it of each value while
-    the model can still answer (`reading.round_failure`), and the walk down
-    a search's list of what it read (`surveyed.sought_walk`), so both hold a
-    value to the check the fold applies (owner decisions 2026-11-05)."""
+    *source_text*, holding the value), in its words; of a value read off a
+    figure of *owner_kind* (`read_off`) only the value itself. Not the unit
+    and not the axes, which a reading asks after the value and checks as it
+    reads them (`pipeline.merge_field`). A reading asks it of each value
+    while the model can still answer (`reading.round_failure`), and the walk
+    down a search's list of what it read (`surveyed.sought_walk`), so both
+    hold a value to the check the fold applies (owner decisions
+    2026-11-05)."""
     if not isinstance(raw, dict):
         return "tuple is not an object"
     _resolved, refusal = _check_value(raw, parameter, [], with_unit=False)
     if refusal is not None:
         return refusal.reason
+    if read_off(raw, owner_kind):
+        return None
     quote = raw.get("quote")
     if not isinstance(quote, str) or len(quote) < MIN_QUOTE_CHARS:
         return QUOTE_TOO_SHORT

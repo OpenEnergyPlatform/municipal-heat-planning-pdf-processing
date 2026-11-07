@@ -199,10 +199,19 @@ PHRASES = {
         '"value_raw". If the passage holds no such value, name the next value '
         'you have not named yet instead, or answer {{"value":null}} if none '
         'is left.'),
-    "head_not_in_table": (
-        'The head {head!r} stands on no head line of the table. Write the '
-        'head of the value\'s column character for character as it stands '
-        'there.'),
+    "quote_not_unique": (
+        'Your "quote" {quote!r} stands more than once in what you were '
+        'shown, so it does not say which number you mean. Name this value '
+        'again with a "quote" that stands there only once and prints the '
+        'value once, for instance with the words or cells beside it.'),
+    "value_not_once": (
+        'Your "quote" {quote!r} prints {value} more than once, so it does '
+        'not say which of them you mean. Name this value again with a '
+        '"quote" that prints it exactly once.'),
+    # the model's own search for a parameter, by the ids it was shown
+    "place_unknown": (
+        'No hit and no passage of this conversation has the id {id!r}. Name '
+        'each passage you found by the id it was shown under.'),
     "shorter_field": (
         'Put rows with the same answer together in "groups" and quote '
         'only the short place where the field stands.'),

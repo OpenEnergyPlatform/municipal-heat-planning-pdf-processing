@@ -1,6 +1,6 @@
 """Every parameter is read like text, a table too: its rounds name each value
-with a quote, a name in a table as a number in a section, AND only a number
-in a table writes the head of its column; a value quoted where no passage
+with a quote, a name in a table as a number in a section, AND a number in a
+table writes no column head (owner decision 2026-11-07); a value quoted where no passage
 shown prints it is asked again with the reason. A category parameter's
 request shows its entries, without the answer that the passage does not say
 it, AND its grammar takes for a value exactly one entry, or "" where the
@@ -43,7 +43,7 @@ KWP = spec_of("kwp")
 EMISSION = KWP.by_uri["emission"]
 PLANNER = KWP.by_uri["planning_organisation"]
 FRAME = [slot for group in KWP.groups_read_in("survey")
-         for slot in fields.frame_slots(KWP, group.coordinates)]
+         for slot in fields.frame_slots(KWP, group.paired)]
 
 SCENARIOS = spec_of("scenarios")
 DIVISION = SCENARIOS.by_uri["study_sector_division"]
@@ -64,15 +64,17 @@ ELSEWHERE = dict(NAMED, quote="Die Klimaschutzagentur Nord hat erstellt")
 
 
 def asked_for(parameter, *replies):
-    """Each values request reading *parameter* in TABLE, as (whether its
-    grammar asks a head, the corrections it carried), and what the reading
-    came to: the n-th request answered by the n-th of *replies*, the last
+    """Each values request reading *parameter* in TABLE, as (the keys its
+    grammar takes for a value, the corrections it carried), and what the
+    reading came to: the n-th request answered by the n-th of *replies*, the last
     one again after that."""
     asked = []
 
-    def ask_values(source, parameter, context, read, thread, follow=None):
-        asked.append((reading.with_head_asked(parameter, source),
-                      (follow or {}).get("corrections")))
+    def ask_values(source, parameter, context, read, thread, follow=None,
+                   drawn=False):
+        keys = reading.values_response_format(parameter)["json_schema"][
+            "schema"]["anyOf"][0]["properties"]
+        asked.append((set(keys), (follow or {}).get("corrections")))
         return answered(thread, replies[min(len(asked), len(replies)) - 1])
 
     read = reading.Reader(KWP, ask_values, lambda *a, **k: {}, FRAME).read(
@@ -80,15 +82,20 @@ def asked_for(parameter, *replies):
     return asked, read
 
 
-def test_a_table_is_read_by_name_and_only_a_number_writes_its_head():
+def test_a_table_is_read_by_name_and_by_number_and_neither_writes_a_head():
     asked, read = asked_for(EMISSION, {
-        "value": 27, "quote": "| Heizöl | 27 |", "head": "t CO2"},
-        {"value": None})
-    assert [head for head, _ in asked] == [True, True]
+        "value": 27, "quote": "| Heizöl | 27 |"}, {"value": None})
     assert [c["value"] for c in read.claims] == [27]
+    assert "head" not in read.claims[0]
+    assert all("head" not in keys for keys, _ in asked)
     asked, read = asked_for(PLANNER, NAMED, {"value": None})
-    assert [head for head, _ in asked] == [False, False]
     assert [c["value"] for c in read.claims] == [NAMED["value"]]
+    assert all("head" not in keys for keys, _ in asked)
+    # the failure by construction: a head the model writes is no key of the
+    # grammar
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({"value": 27, "quote": "| Heizöl | 27 |",
+                             "head": "t CO2"}, grammar(EMISSION))
 
 
 def test_a_wording_in_a_table_is_quoted_from_the_table_or_asked_again():

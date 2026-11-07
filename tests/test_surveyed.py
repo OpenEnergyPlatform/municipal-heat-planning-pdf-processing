@@ -310,15 +310,15 @@ def test_a_pass_combs_a_coordinate_in_its_own_passage_first():
     assert [(c[0], c[2]) for c in calls] == [(ONE, [first]),
                                              (THREE, [second])]
     assert all(c[1] == ["year"] and c[3]["coordinates"] == ["year"]
-               and "year" in c[3]["group"].coordinates
                and c[3]["own"] and c[3]["bases"] == (("status_quo", 2022),)
                for c in calls)
-    # Coordinates of two groups: one request per group, each its share.
+    # Coordinates of two groups: one conversation per value (owner decision
+    # 2026-11-07), asking both.
     calls.clear()
     sweep(batch, rows, [slots["year"], slots["carrier"]])
     assert [(c[0], c[1], c[3]["coordinates"]) for c in calls] == [
-        (ONE, ["year"], ["year"]), (ONE, ["carrier"], ["carrier"]),
-        (THREE, ["year"], ["year"]), (THREE, ["carrier"], ["carrier"])]
+        (ONE, ["year", "carrier"], ["year", "carrier"]),
+        (THREE, ["year", "carrier"], ["year", "carrier"])]
 
 
 def comber(*replies, ranked=()):
@@ -360,12 +360,15 @@ def test_a_named_coordinate_is_asked_whatever_its_state_in_its_own_passage():
     claim = stored_row()
     made.comb(7, EMISSION, ONE, [carrier], [claim], SHOWN, [], None,
               coordinates=["carrier"], own=True)
-    assert asked[0]["row"]["open"] == ["carrier"]
+    assert list(asked[0]["coordinates"]) == ["carrier"]
+    # What the older question read there stands no more: not among the
+    # answers shown, and the passage itself is shown.
+    assert "carrier" not in asked[0]["read"]
     assert [m["text"] for m in asked[0]["more"]] == [ONE.text]
-    # Not named and read: not asked.
+    # Not named and read: not asked at all.
     made, asked = comber({})
     made.comb(7, EMISSION, ONE, [carrier], [stored_row()], SHOWN, [], None)
-    assert asked[0]["row"]["open"] == [] and "more" not in asked[0]
+    assert asked == []
 
 
 def test_the_passages_read_before_are_listed_and_a_stored_row_ranks_none():
@@ -373,13 +376,16 @@ def test_the_passages_read_before_are_listed_and_a_stored_row_ranks_none():
                 if s.name == "year")
     made, asked = comber({"rows": []}, ranked=(TWO, THREE))
     made.comb(7, EMISSION, ONE, [year], [stored_row()], SHOWN, [], None,
-              first=[THREE])
-    assert [hit["title"] for hit in asked[0]["hits"][0]["hits"]] \
-        == ["Ausblick"]
+              first=[TWO])
+    # The second reading's message shows the section after the value's
+    # place; the search's first message lists the passage read before.
+    search = [p for p in asked if "coordinates" in p][1]
+    assert [hit["title"] for hit in search["hits"][0]["hits"]] == ["Lasten"]
     # A stored row carries no sentence: no list, the model searches itself.
     made, asked = comber({"rows": []}, ranked=(TWO, THREE))
     made.comb(7, EMISSION, ONE, [year], [stored_row()], SHOWN, [], None)
-    assert "hits" not in asked[0]
+    search = [p for p in asked if "coordinates" in p][1]
+    assert "hits" not in search
 
 
 def test_a_request_whose_last_attempt_hit_a_429_leaves_its_document_unserved(
@@ -510,7 +516,8 @@ class SearchOnly:
         self.searched.append(list(probes))
         return list(self.ranked.get(probes[0], ()))
 
-    def __call__(self, document_id, reads, shown, pairs, budget):
+    def __call__(self, document_id, reads, shown, pairs, budget, *,
+                 title_page=None, settings=None, **_):
         return []
 
 

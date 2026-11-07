@@ -1017,7 +1017,8 @@
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010047": {
           "label": "CRF sector (IPCC 2006): agriculture",
-          "spellings": []
+          "spellings": [],
+          "definition": "The CRF sector (IPCC 2006) 'agriculture' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories."
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010048": {
           "label": "CRF sector (IPCC 2006): land use, land-use change and forestry",
@@ -1928,7 +1929,10 @@
           "beside": {
             "out:status_quo": {
               "label": "status quo",
-              "spellings": ["historical", "base year"],
+              "spellings": [
+                "historical",
+                "base year"
+              ],
               "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
             }
           },
@@ -1987,7 +1991,10 @@
           "beside": {
             "out:status_quo": {
               "label": "status quo",
-              "spellings": ["historical", "base year"],
+              "spellings": [
+                "historical",
+                "base year"
+              ],
               "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
             }
           },
@@ -2037,7 +2044,10 @@
           "beside": {
             "out:status_quo": {
               "label": "status quo",
-              "spellings": ["historical", "base year"],
+              "spellings": [
+                "historical",
+                "base year"
+              ],
               "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
             }
           },
@@ -2110,7 +2120,10 @@
           "beside": {
             "out:status_quo": {
               "label": "status quo",
-              "spellings": ["historical", "base year"],
+              "spellings": [
+                "historical",
+                "base year"
+              ],
               "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
             }
           },

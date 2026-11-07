@@ -1,13 +1,13 @@
-"""The check of a comb find (combing.py, owner decision 2026-11-07).
+"""The check of a find of the combing (combing.py, owner decision 2026-11-07).
 
 Promise: a find quoted from a passage other than the value's own and its
-section gets one more request that asks whether that place speaks about the
-value, AND a "no" takes the find out, so the search goes on, AND the message
-after it says why, once, in the same conversation, AND a "yes" keeps it; a
-find from the value's own passage gets no such request, AND neither does one
-the check of its quote and answer refuses anyway; a find given again is not
-asked about twice; and a reply that answers neither "yes" nor "no" is asked
-once more, told why.
+section, in the second reading or in the search, gets one more request that
+asks whether that place speaks about the value, AND a "no" takes the find
+out, so the search goes on, AND the message after it says why, once, in the
+same conversation, AND a "yes" keeps it; a find from the value's own passage
+gets no such request, AND neither does one the check of its quote and answer
+refuses anyway; a find given again is not asked about twice; and a reply that
+answers neither "yes" nor "no" is asked once more, told why.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it.
@@ -49,9 +49,9 @@ PLAN = {("section", 6): OWN,
 SAID = {"year": "Die Emissionen gelten für das Jahr 2022."}
 
 
-def year_open():
+def year_open(quote: str = "rund 300 t CO2"):
     """A value of OWN whose year alone is open."""
-    out = {"source": "Q1", "value": 300, "quote": "rund 300 t CO2",
+    out = {"source": "Q1", "value": 300, "quote": quote,
            "unit": "t CO2"}
     for name in SLOTS:
         out[f"{name}_state"] = fields.READ
@@ -75,15 +75,23 @@ def from_section(i: int) -> dict:
 
 
 def comber(replies: list, verdicts: list, checked_too: bool = True,
-           sections: list = SECTIONS):
-    asked, checked = [], []
+           sections: list = SECTIONS, near: list = ()):
+    """*replies* answer the search for the year in turn, *near* the second
+    reading's question for it (not stated where none is given), *verdicts*
+    the check."""
+    asked, checked, counts = [], [], {}
 
     def ask(payload, shape, document_id, source, group=None, example=None,
             thread=None, follow=None):
         # A follow-up as its message shows it (owner decisions 2026-11-07).
         asked.append(payload if follow is None
                      else {**follow, "follows": True})
-        return answered(thread, replies[min(len(asked), len(replies)) - 1])
+        kind = "near" if shape["json_schema"]["name"] == "near_reply"             else "comb"
+        counts[kind] = counts.get(kind, 0) + 1
+        given = list(near) if kind == "near" else replies
+        if not given:
+            return answered(thread, {"year": {"value": fields.UNSTATED}})
+        return answered(thread, given[min(counts[kind], len(given)) - 1])
 
     def check(payload, shape, document_id, source, group=None, example=None,
               thread=None, follow=None):
@@ -101,9 +109,9 @@ def comber(replies: list, verdicts: list, checked_too: bool = True,
     return made, asked, checked
 
 
-def combed(made, plan: dict = PLAN):
+def combed(made, plan: dict = PLAN, **given):
     batch = Batch(7, EMISSION, [WorkItem(7, EMISSION, OWN)])
-    read = [reading.Read(batch, [year_open()], probes=[SAID])]
+    read = [reading.Read(batch, [year_open(**given)], probes=[SAID])]
     (done,) = made(7, read, plan, [])
     return read[0].claims[0], done
 
@@ -127,7 +135,9 @@ def test_a_no_takes_the_find_out_and_the_search_goes_on_told_why():
     assert value["year"] == 2017 and value["year_source"] == ["section", 117]
     assert done.turned == 1 and done.judged == 2 and done.listed == 1
     assert "corrections" not in asked[0]
-    assert told(asked[1]["corrections"], "year") == [say(
+    (again,) = [p for p in asked if p.get("corrections")]
+    assert again is asked[2]
+    assert told(again["corrections"], "year") == [say(
         "not_about_value", answer=2003)]
     # The failure by construction: without the check the first find stands.
     made, _, _ = comber([from_section(3)], [], checked_too=False)
@@ -142,9 +152,9 @@ def test_a_find_turned_and_given_again_is_not_asked_about_twice():
     # listed to its end and the year is unstated.
     assert len(checked) == 1 and done.turned == 1
     assert value["year_state"] == fields.SAID_UNSTATED
-    assert all(told(payload["corrections"], "year")
-               == [say("not_about_value", answer=2003)]
-               for payload in asked[1:])
+    assert len(asked) > 2 and all(
+        told(payload["corrections"], "year")
+        == [say("not_about_value", answer=2003)] for payload in asked[2:])
 
 
 def test_a_turned_find_is_told_once_in_its_conversation():
@@ -161,18 +171,23 @@ def test_a_turned_find_is_told_once_in_its_conversation():
     value, done = combed(made, plan)
     assert value["year_state"] == fields.SAID_UNSTATED
     assert len(checked) == 1 and done.turned == 1
-    assert [p.get("follows", False) for p in asked] == [False, True, True]
-    assert [p for p in asked if p.get("corrections")] == [asked[1]]
-    assert told(asked[1]["corrections"], "year") == [say(
+    # The second reading's message, then the search's three lists.
+    assert [p.get("follows", False) for p in asked] == [False, True, True,
+                                                        True]
+    assert [p for p in asked if p.get("corrections")] == [asked[2]]
+    assert told(asked[2]["corrections"], "year") == [say(
         "not_about_value", answer=2003)]
-    assert [len(one["hits"]) for p in asked for one in p["hits"]] == [
-        15, 15, 10]
+    assert [len(one["hits"]) for p in asked
+            for one in p.get("hits", ())] == [15, 15, 9]   # S0: not again
 
 
 def test_a_find_from_the_value_s_own_passage_is_not_checked():
-    own = year(2022, "Es fielen im Jahr 2022 rund 300 t CO2 an.")
+    # The value's own quote is shown with it, and a year it prints is the
+    # value's own place.
+    quote = "Es fielen im Jahr 2022 rund 300 t CO2"
+    own = year(2022, quote)
     made, _, checked = comber([own], [{"about": "no"}])
-    value, done = combed(made)
+    value, done = combed(made, quote=quote)
     assert checked == [] and done.judged == 0
     assert value["year"] == 2022 and value["year_source"] == ["section", 6]
     # The failure by construction: a find from another passage is checked.
@@ -253,3 +268,39 @@ def test_the_check_is_asked_once_per_quote_whatever_the_find_names():
     judge(year, {"value": 2003, "quote": "Die Werte gelten für die Jahre "
                                          "2003"}, [OWN, place], row)
     assert len(asked) == 2
+
+
+# Promise: a find of the second reading quoted from a section around the
+# value's place is asked about once, AND a "yes" keeps it, AND a "no" takes it
+# out and the coordinate stays open for the search, which is asked on; by
+# construction, the same find without the check, and the "no".
+def test_a_find_of_the_second_reading_is_checked_and_kept_on_yes():
+    near = [year(2000, "Die Werte gelten für das Jahr 2000.")]
+    made, asked, checked = comber([], [{"about": "yes"}], near=near)
+    value, done = combed(made)
+    assert value["year"] == 2000 and value["year_state"] == fields.READ
+    assert value["year_source"] == ["section", 100]
+    assert list(value["year_window"]) == ["near", 1]
+    assert (done.judged, done.turned) == (1, 0)
+    assert checked[0]["answer"]["value"] == 2000
+    assert checked[0]["place"]["text"] == SECTIONS[0].text
+    # Read there, the search is not asked for it.
+    assert not any(p.get("hits") for p in asked)
+
+
+def test_a_find_of_the_second_reading_the_check_says_no_to_goes_to_the_search():
+    near = [year(2000, "Die Werte gelten für das Jahr 2000.")]
+    made, asked, checked = comber([from_section(5)],
+                                  [{"about": "no"}, {"about": "yes"}],
+                                  near=near)
+    value, done = combed(made)
+    # The turned find is no find; the search found another and it was kept.
+    assert value["year"] == 2005 and value["year_source"] == ["section", 105]
+    assert list(value["year_window"]) == ["retrieval", 1]
+    assert (done.judged, done.turned) == (2, 1)
+    assert [one["answer"]["value"] for one in checked] == [2000, 2005]
+    # The failure by construction: without the check the second reading's
+    # find stands.
+    made, _, _ = comber([from_section(5)], [], checked_too=False, near=near)
+    value, _ = combed(made)
+    assert value["year"] == 2000 and list(value["year_window"]) == ["near", 1]

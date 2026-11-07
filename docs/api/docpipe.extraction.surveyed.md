@@ -4,9 +4,10 @@
 
 surveyed.py: One document harvested from its survey.
 
-The survey of the whole plan (survey.py), the reading of every parameter in
-the passages it named (reading.py) and the combing for what the reading left
-open (combing.py). The run folds what they read, works out what the profile
+The survey of the whole plan (survey.py), the plan's years and settings
+(years.py, settings.py), the reading of every parameter in the passages it
+named (reading.py) and the conversation for what the reading left open
+(combing.py). The run folds what they read, works out what the profile
 computes and writes the file with its stamp, as it writes every harvest.
 
 A parameter the survey of the whole plan named no passage for is searched
@@ -16,7 +17,10 @@ reads it down that list, one passage a round and every such parameter in the
 same round, until a reading of it comes back with a value the check takes or
 the list ends (owner decisions 2026-11-05, `sought_walk`). A reading sees
 only its passage (owner decision 2026-11-05: no tools in reading, the walk
-reads the list). What a publication says of itself (the profile's FRONT_PAGE_PARAMETERS) is read from its first
+reads the list). A parameter the walk read no value of, its list ended or
+the search found no passage for it, is searched for by the model itself,
+with the combing's tools, and every passage it names is read the same way
+(owner decision 2026-11-07, `seeking.FreeSearch`). What a publication says of itself (the profile's FRONT_PAGE_PARAMETERS) is read from its first
 page on as well, page by page, until a title came, whatever the survey
 named (owner decisions 2026-11-05, `front_walk`): the first page with a
 title is its title page, and a chapter that presents other studies comes
@@ -90,7 +94,11 @@ title among them. *make_years(spec)* is the request for the plan's base
 and target years (`years.PlanYears`), None where the spec dates nothing
 by them; *title_page_of(document_id, passages)* the line of the title
 page that names the plan's own place, None where the profile shows none
-(owner decisions 2026-11-06).
+(owner decisions 2026-11-06). *make_settings(spec)* is the request for
+what the plan settles for all its values (`settings.PlanSettings`),
+*make_seeker(spec)* the model's own search for a parameter whose walk
+found no value (`seeking.FreeSearch`), each None where the profile
+writes no prompt for it (owner decisions 2026-11-07).
 
 #### SurveyedHarvest.\_\_init\_\_
 
@@ -101,7 +109,9 @@ def __init__(self, spec, make_survey: Callable, make_reader: Callable,
              halted: Optional[Callable] = None, front=(),
              title: Optional[str] = None,
              make_years: Optional[Callable] = None,
-             title_page_of: Optional[Callable] = None)
+             title_page_of: Optional[Callable] = None,
+             make_settings: Optional[Callable] = None,
+             make_seeker: Optional[Callable] = None)
 ```
 
 #### SurveyedHarvest.survey_of
@@ -126,6 +136,18 @@ def comber_of(self, spec)
 
 ```python
 def years_of(self, spec)
+```
+
+#### SurveyedHarvest.settings_of
+
+```python
+def settings_of(self, spec)
+```
+
+#### SurveyedHarvest.seeker_of
+
+```python
+def seeker_of(self, spec)
 ```
 
 ### ParameterPass
@@ -260,6 +282,15 @@ place in the list, in the order the walk read it (`walks_of`).
 *seen(uri, owner, rank)* hears of each passage before it is read,
 *rank* its place in the list, from 1. None where *halted()* stopped the
 walk.
+
+### unvalued
+
+```python
+def unvalued(uris: list, reads: list) -> list
+```
+
+The parameters of *uris* that no Read of *reads* holds a value of
+the check takes (`taken_values`), in the order of *uris*.
 
 ### walks_of
 

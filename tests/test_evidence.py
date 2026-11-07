@@ -135,12 +135,26 @@ def test_typographic_marks_and_spacing_do_not_make_a_second_sentence():
     {"quote": "| Erdgas |"},                          # too short
     {"quote": "| Heizöl | 126.656.132 | 520.465.057 |",  # not in the source
      "value": 777},
-    {"unit": "Liter"},                                # not an accepted unit
     {"value": "viel"},                                # not a number
 ])
 def test_a_value_that_fails_either_check_is_refused(over):
     assert isinstance(verify_tuple(claim(**over), PARAMETER, SOURCE,
                                    owner_kind="table"), Refusal)
+
+
+def test_a_unit_no_list_holds_is_kept_as_printed_and_never_refused():
+    # Owner decision 2026-11-07: a unit is never refused. The number stays
+    # with the unit the plan prints and without a converted value; by
+    # construction, an entry of the list is converted.
+    got = verify_tuple(claim(unit="Liter", unit_raw="Liter"), PARAMETER,
+                       SOURCE, owner_kind="table")
+    assert isinstance(got, Verified)
+    assert got.tuple["unit"] is None and got.tuple["unit_raw"] == "Liter"
+    assert "value_target" not in got.tuple
+    assert "unmapped:unit:Liter" in got.flags
+    listed = verify_tuple(claim(), PARAMETER, SOURCE, owner_kind="table")
+    assert isinstance(listed, Verified)
+    assert listed.tuple.get("value_target") is not None
 
 
 def test_a_computed_value_needs_the_run_that_printed_it():
@@ -357,7 +371,11 @@ def test_a_value_is_checked_before_its_coordinates_as_the_fold_checks_it():
 def test_a_number_is_not_refused_for_the_unit_read_after_it():
     text = "Im Jahr 2022 wurden rund 300 GWh Erdgas verbraucht."
     number = {"value": 300, "quote": "rund 300 GWh Erdgas"}
-    assert isinstance(verify_tuple(number, PARAMETER, text), Refusal)
+    # No unit read is no refusal either (owner decision 2026-11-07): the
+    # number stays, unconverted.
+    kept = verify_tuple(number, PARAMETER, text)
+    assert isinstance(kept, Verified) and kept.tuple["unit"] is None
+    assert "value_target" not in kept.tuple
     assert value_refused(number, PARAMETER, text) is None
     # the failure by construction: a number its quote does not print
     wrong = dict(number, value=301)

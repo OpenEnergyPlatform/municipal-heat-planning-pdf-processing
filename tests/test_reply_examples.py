@@ -31,13 +31,15 @@ TABLE = Source(owner_kind="table", owner_id=7, provenance={},
 
 
 def requests(spec):
-    """(parameter, group, its slots) of every reading request the spec
-    makes."""
+    """(parameter, group, [slot]) of every reading request the spec makes:
+    one coordinate in each (owner decision 2026-11-07), in the order of the
+    spec's groups and of each group's coordinates."""
     out = []
     for parameter in spec.parameters:
         for group, slots in reading.groups_of(
                 spec, reading.slots_of(spec, parameter)):
-            out.append((parameter, group, slots))
+            for slot in reading.in_group_order(group, slots):
+                out.append((parameter, group, [slot]))
     return out
 
 
@@ -72,16 +74,19 @@ def test_a_reading_example_has_exactly_its_requests_keys_in_order():
 
 
 def test_one_fixed_example_misses_the_keys_of_other_requests():
-    # The context example of 3a2e963 showed five coordinates; a heat load
-    # request asks one more, and 183 of 184 such replies left it out.
-    fixed = dict.fromkeys(["quantity", "carrier", "sector", "technology",
-                           "spatial_scope"], {})
+    # The context example of 3a2e963 showed five coordinates where a request
+    # asks another; with one coordinate to a request, the example of one
+    # coordinate is not the reply of the next.
     heat_load = KWP.by_uri["heat_load"]
-    context = [slots for parameter, group, slots in requests(KWP)
-               if parameter is heat_load and group.name == "context"][0]
-    properties = schema(reading.text_response_format(context))["properties"]
-    assert not keys_match(fixed, properties)
-    assert keys_match(reading.text_example(context), properties)
+    asked = [slots[0] for parameter, group, slots in requests(KWP)
+             if parameter is heat_load and group.name == "context"]
+    assert len(asked) > 1
+    fixed = reading.text_example([asked[0]])
+    for other in asked[1:]:
+        properties = schema(reading.text_response_format([other]))[
+            "properties"]
+        assert not keys_match(fixed, properties), other.name
+        assert keys_match(reading.text_example([other]), properties)
 
 
 def test_every_coordinate_of_an_example_is_read():
@@ -124,31 +129,40 @@ def test_a_comb_example_has_exactly_its_requests_keys_in_order():
         for slot in slots:
             assert keys_match(example[slot.name],
                               one_of(properties[slot.name])["properties"])
-    # One coordinate fewer is another request with another example.
-    slots = ALL[0][2]
-    if len(slots) > 1:
-        assert not keys_match(combing.comb_example(slots[1:]), schema(
-            combing.comb_response_format(slots))["properties"])
+    # Another coordinate is another request with another example.
+    first, second = ALL[0][2], ALL[1][2]
+    assert not keys_match(combing.comb_example(second), schema(
+        combing.comb_response_format(first))["properties"])
 
 
 @pytest.mark.parametrize("spec", [KWP, SCENARIOS], ids=["kwp", "scenarios"])
-@pytest.mark.parametrize("head", [False, True])
-def test_a_value_example_has_exactly_its_requests_keys_in_order(spec, head):
+@pytest.mark.parametrize("drawn", [False, True])
+def test_a_value_example_has_exactly_its_requests_keys_in_order(spec, drawn):
     for parameter in spec.parameters:
         entry = schema(reading.values_response_format(
-            parameter, head))["anyOf"][0]
-        example = reading.values_example(parameter, head)
-        assert keys_match(example, entry["properties"]), parameter.uri
+            parameter, drawn))["anyOf"][0]
+        example = reading.values_example(parameter, drawn)
+        # The example shows the printed form; the sentence read off an image
+        # in place of a quote is the alternative of the "quote" it shows
+        # (`values_example`).
+        keys = {key: value for key, value in entry["properties"].items()
+                if key != "reading"}
+        assert keys_match(example, keys), parameter.uri
+        assert ("reading" in entry["properties"]) == drawn, parameter.uri
         assert isinstance(example["value"], float) == bool(
             parameter.is_numeric), parameter.uri
 
 
-def test_a_value_example_shows_a_head_only_for_a_value_that_asks_one():
+def test_a_value_example_shows_drawn_only_for_a_request_that_sends_an_image():
     numeric = next(p for p in KWP.parameters if p.is_numeric)
-    head = reading.with_head_asked(numeric, TABLE)
-    assert head
-    assert "head" in reading.values_example(numeric, head)
-    assert "head" not in reading.values_example(numeric, False)
+    assert reading.values_example(numeric, True)["drawn"] is False
+    assert "drawn" not in reading.values_example(numeric, False)
+    # the failure by construction: an example without the image's key is not
+    # the reply of a request that sends one
+    entry = schema(reading.values_response_format(numeric, True))[
+        "anyOf"][0]["properties"]
+    assert not keys_match(reading.values_example(numeric, False),
+                          {k: v for k, v in entry.items() if k != "reading"})
 
 
 @pytest.mark.parametrize("spec", [KWP, SCENARIOS], ids=["kwp", "scenarios"])

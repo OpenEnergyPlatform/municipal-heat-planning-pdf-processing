@@ -12,7 +12,6 @@ import pytest
 from docpipe.extraction import fields, pipeline, runner, schema, stats
 from docpipe.extraction.pipeline import Row, Source
 from docpipe.extraction.spec import load as load_spec
-from profiles.kwp import kg
 
 SPEC = load_spec(json.loads(
     (Path(__file__).resolve().parent.parent / "profiles" / "kwp"
@@ -191,32 +190,6 @@ def test_a_number_of_another_column_keeps_the_pair_of_its_year():
            {"year": 2022, "scenario": "target"})
     rows, _orphans = listed([27, 28, 27], pairs=two, frame={"year": 2045})
     assert rows[0].pair is None and rows[0].claim["year"] == 2022
-
-
-def graph_row(value, **more):
-    return {"quantity": "OEO_00050016", "year": 2045, "value": value,
-            "value_target": float(value), "subject": "Wohnen",
-            "quote": WOHNEN, "scenario": "target", "tier": "text_located",
-            "flags": [], **more}
-
-
-def settled(*rows):
-    iri = kg._value_iri("part", rows[0])
-    return kg.settle(iri, list(rows), "part", keep_open=False)
-
-
-def test_two_numbers_of_one_row_are_two_nodes_by_their_heads():
-    kept, lost, _marks = settled(graph_row(120, head="Erdgas"),
-                                 graph_row(80, head="Wärmenetze"))
-    assert sorted(r["value"] for r in kept.values()) == [80, 120]
-    assert not lost["conflict"]
-
-
-def test_two_numbers_of_one_head_still_disagree():
-    kept, lost, _marks = settled(graph_row(120, head="Erdgas"),
-                                 graph_row(80, head="Erdgas"))
-    assert kept == {}
-    assert lost["conflict"] == 2
 
 
 # -- what prints a frame -----------------------------------------------------

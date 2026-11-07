@@ -153,6 +153,10 @@ class Slot:
     # one row per name, and which of the document's names mean the same thing
     # is asked once the document is read (`naming.py`).
     merged: Optional[str] = None
+    # Whether an answer may be the print itself where the list has no entry
+    # for it: the unit, which is never refused (owner decision 2026-11-07,
+    # `pipeline.printed_only`).
+    keeps_print: bool = False
 
     @property
     def is_closed(self) -> bool:
@@ -177,17 +181,15 @@ class Slot:
         # The two keys are protocol, the same English pair in every profile
         # (a prompt that names them names these); the gloss of UNSTATED is
         # the profile's prose.
+        # Each entry by its meaning only (owner decision 2026-11-07: the
+        # answer is the entry the plan's words mean, never the nearest
+        # spelling); the spellings stay in the spec for the check of an
+        # answer that gives no wording (`pipeline.answer_in_quote`).
         words = wording.phrases()
-        means, spellings = words["option_means"], words["option_spellings"]
-        if any(opt.definition for opt in self.options):
-            out = {opt.label: {means: opt.definition,
-                               spellings: list(opt.synonyms)}
-                   if opt.definition else {spellings: list(opt.synonyms)}
-                   for opt in self.options}
-            out[UNSTATED] = {means: words["unstated_means"]}
-            return out
-        out = {opt.label: list(opt.synonyms) for opt in self.options}
-        out[UNSTATED] = [words["unstated_spelling"]]
+        means = words["option_means"]
+        out = {opt.label: {means: opt.definition} if opt.definition else {}
+               for opt in self.options}
+        out[UNSTATED] = {means: words["unstated_means"]}
         return out
 
 
@@ -217,8 +219,11 @@ def value_schema(slot: Slot, unstated: bool = True) -> dict:
     find out of its reply, and the run, not the model, says the plan does not
     state it once every passage was listed (owner decision 2026-11-06)."""
     if slot.is_closed:
+        # A unit may be left without an entry where none fits; its print
+        # is its answer then (`Slot.keeps_print`).
         return {"enum": [label for label in slot.answerable()
-                         if unstated or label != UNSTATED]}
+                         if unstated or label != UNSTATED]
+                + ([""] if slot.keeps_print else [])}
     if slot.kind == NUMBER:
         if not unstated:
             return {"type": "integer"}
@@ -364,7 +369,8 @@ def unit_slot(spec, parameter: Optional[Parameter] = None) -> Optional[Slot]:
                 question=spec.unit_question,
                 options=tuple(Option(label=unit, uri=unit,
                                      definition=", ".join(labels))
-                              for unit, labels in belongs.items()))
+                              for unit, labels in belongs.items()),
+                keeps_print=True)
 
 
 def asked_slots(parameter: Parameter) -> list:

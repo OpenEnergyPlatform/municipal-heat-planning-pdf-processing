@@ -40,9 +40,11 @@ appended its row (`--top-up-parameters`); the harvest writes none, so a
 missing key means the harvest read it (`docpipe/extraction/schema.py:212` to
 `293`). The rest belong to the row itself: `kind`, `quote`,
 `tier`, `flags`, `provenance`, `computed`, `compute`, `unit` and
-`unit_raw` (empty for a wording); only the value additionally carries
-`value_target` for a numeric parameter, or `value_raw` and `value_uri`
-for a wording (`docpipe/extraction/schema.py:313` to `384`).
+`unit_raw` (empty for a wording); only the value additionally carries `value_target` for a numeric parameter
+whose unit chose an entry (a printed unit that is no entry leaves `unit` and
+`value_target` empty and flags `unmapped:unit:<print>`), `reading` for a number
+read off a figure in place of a quote, or `value_raw` and `value_uri` for a
+wording (`docpipe/extraction/schema.py:313` to `384`).
 
 Two keys on a coordinate say more than its plain description does.
 `x-question` is the sentence, in German, the model was actually asked

@@ -1764,11 +1764,13 @@ How many answers a conversation holds.
 ### shows_in_full
 
 ```python
-def shows_in_full(first: dict, parameter) -> bool
+def shows_in_full(thread, parameter) -> bool
 ```
 
-Has the first message of a conversation shown *parameter* with its
-full definition?
+Has a message of this conversation shown *parameter* with its full
+definition? A coordinate that classifies is shown it once, with the
+first of them that is asked (owner decision 2026-11-07: one coordinate
+per message).
 
 ### make_reader
 
@@ -1781,12 +1783,13 @@ when the profile writes no prompts for it or its spec names no groups.
 Two kinds of request, each with one task and one value (owner decisions
 2026-11-04 and 2026-11-05), each a message of a conversation (owner
 decisions 2026-11-07, `thread.py`): the values of a passage, the next
-one after each answer, and one value's coordinates, each group of the
-spec a message with its own words (`thread.Parts.group`). A system
+one after each answer, and one value's coordinates, one coordinate per
+message with the words of its group (`thread.Parts.group`). A system
 prompt holds what its kind of request is told and the part of each
 field its first message carries. A figure goes with its crop, in the
-first message. Neither request has tools (owner decision 2026-11-05,
-ticket 26).
+first message, and a value only the crop shows is read off it (owner
+decisions 2026-11-05 and 2026-11-07). Neither request has tools (owner
+decision 2026-11-05, ticket 26).
 
 ### check_asker
 
@@ -1832,7 +1835,8 @@ the sought search's sentences (`make_seek_probes`).
 def frame_slots_of(spec: Spec) -> list
 ```
 
-The coordinates the survey reads per passage, its frame.
+The coordinates the survey reads per passage, its frame: the pair of
+each group it reads (`spec.Group.paired`).
 
 ### dates_by_plan
 
@@ -1853,6 +1857,28 @@ The request for a plan's base and target years, once per plan
 (`years.PlanYears`, owner decision 2026-11-06), or None where the spec's
 frame has no year or the profile writes no prompt for it. *rank* is the
 plan best first for a sentence the model writes ("similar").
+
+### make_settings
+
+```python
+def make_settings(spec: Spec, rank: Optional[Callable] = None)
+```
+
+The request for what a plan settles for all its values, once per plan
+(`settings.PlanSettings`, owner decision 2026-11-07), or None where the
+profile writes no prompt for it. *rank* is the plan best first for a
+sentence the model writes ("similar").
+
+### make_seeker
+
+```python
+def make_seeker(spec: Spec, rank: Optional[Callable] = None)
+```
+
+The model's own search for a parameter whose walk down its list read
+no value (`seeking.FreeSearch`, owner decision 2026-11-07), or None
+where the profile writes no prompt for it. *rank* is the plan best first
+for a sentence the model writes ("similar").
 
 ### title_line
 

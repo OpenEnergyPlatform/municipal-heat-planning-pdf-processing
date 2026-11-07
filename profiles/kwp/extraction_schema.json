@@ -190,9 +190,6 @@
         "pattern": "^value is not a number$"
        },
        {
-        "pattern": "^unit .* not in units_accepted \\(.*\\)$"
-       },
-       {
         "pattern": "^a (text|category) parameter needs a non-empty string value$"
        },
        {
@@ -318,6 +315,9 @@
          "pattern": "^not_located$"
         },
         {
+         "pattern": "^read_off$"
+        },
+        {
          "pattern": "^review:disagree$"
         },
         {
@@ -338,6 +338,13 @@
      },
      "tuples": {
       "type": "integer"
+     },
+     "unlisted_units": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "description": "The units numbers were read with that are no entry of their parameter's list, as the plan prints them, counted: read and not converted, until the list grows and a top-up asks them again (owner decision 2026-11-07). Absent in a file written before.",
+      "type": "object"
      }
     },
     "required": [
@@ -354,6 +361,23 @@
    "tuple_building_count": {
     "additionalProperties": false,
     "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     },
      {
       "else": {
        "properties": {
@@ -376,13 +400,29 @@
        ]
       },
       "then": {
-       "properties": {
-        "unit": {
-         "type": "string"
+       "anyOf": [
+        {
+         "properties": {
+          "unit": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "unit",
+          "value_target"
+         ]
+        },
+        {
+         "properties": {
+          "unit": {
+           "type": "null"
+          }
+         },
+         "required": [
+          "unit",
+          "unit_raw"
+         ]
         }
-       },
-       "required": [
-        "unit"
        ]
       }
      },
@@ -415,6 +455,38 @@
        },
        "required": [
         "quantity"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "what": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "what_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "what_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "what": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "what"
        ]
       }
      },
@@ -645,6 +717,38 @@
      {
       "else": {
        "properties": {
+        "period_start": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "period_start_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "period_start_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "period_start": {
+         "type": "integer"
+        }
+       },
+       "required": [
+        "period_start"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
         "scenario": {
          "type": "null"
         }
@@ -771,7 +875,7 @@
         "uri": "OEO_00140072"
        }
       },
-      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst?\nNormalfall \"integral\" (Jahressumme).\n\"maximum\": Spitzenlast, Höchstwert.\n\"arithmetic mean\": Durchschnitt je Gebäude oder Jahr.\n\"instantaneous\": Momentanwert."
+      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Wähle den Eintrag nach seiner Bedeutung (\"means\"), nicht nach einem Wort der Stelle. Der Normalfall ist \"integral\", eine Jahressumme."
      },
      "aggregation_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.",
@@ -931,12 +1035,14 @@
         "uri": "OEO_00000439"
        },
        "Abwärme": {
+        "meaning": "Abwärme: Wärmeenergie, die bei einem Energieumwandlungsprozess entsteht und ungenutzt an die Umwelt abgegeben wird.",
         "spellings": [
          "unvermeidbare Abwärme"
         ],
         "uri": "OEO_00010114"
        },
        "Biogas": {
+        "meaning": "Biogas: Durch anaerobe Vergärung entstehendes Gasgemisch aus hauptsächlich Methan und Kohlendioxid, das als Brennstoff dient.",
         "spellings": [
          "aufbereitetes Biogas",
          "Klärgas",
@@ -946,6 +1052,7 @@
         "uri": "OEO_00000074"
        },
        "Biomasse": {
+        "meaning": "Biomasse: Stoff pflanzlichen oder tierischen Ursprungs und damit biogener Herkunft.",
         "spellings": [
          "pflanzliche Biomasse",
          "landwirtschaftliche Biomasse"
@@ -953,18 +1060,22 @@
         "uri": "OEO_00010214"
        },
        "Biomethan": {
+        "meaning": "Biomethan: Aus Biogas durch Abtrennung von Kohlendioxid gewonnenes Gasgemisch aus hauptsächlich Methan, das als Brennstoff dient.",
         "uri": "OEO_00010215"
        },
        "Braunkohle": {
+        "meaning": "Braunkohle: Nicht backende Kohle mit einem Brennwert unter 17 435 kJ/kg und über 31 % flüchtigen Bestandteilen.",
         "uri": "OEO_00000251"
        },
        "Erdgas": {
+        "meaning": "Erdgas: Gasgemisch aus unterirdischen Lagerstätten, das hauptsächlich aus Methan besteht.",
         "spellings": [
          "Gas"
         ],
         "uri": "OEO_00000292"
        },
        "Fernwärme": {
+        "meaning": "Fernwärme: Leitungsgebundene Wärmelieferung an Wohn- oder Gewerbegebäude.",
         "spellings": [
          "Wärmenetze",
          "Wärmenetz",
@@ -977,6 +1088,7 @@
         "uri": "OEO_00320011"
        },
        "Geothermie": {
+        "meaning": "Geothermie: Wärmeenergie, die aus dem Inneren der Erdkruste freigesetzt wird.",
         "spellings": [
          "Erdwärme",
          "oberflächennahe Geothermie",
@@ -988,12 +1100,14 @@
         "uri": "OEO_00000191"
        },
        "Heizöl": {
+        "meaning": "Heizöl: Gasöl für industrielle und gewerbliche Zwecke, auch schwere Gasöle, die als petrochemische Rohstoffe dienen.",
         "spellings": [
          "Öl"
         ],
         "uri": "OEO_00000211"
        },
        "Holz": {
+        "meaning": "Holz: Biomasse von Bäumen in festem Aggregatzustand, die als Brennstoff genutzt werden kann.",
         "spellings": [
          "Holzpellets",
          "Pellets",
@@ -1004,10 +1118,11 @@
         "uri": "OEO_00000449"
        },
        "Kohle": {
+        "meaning": "Kohle: Brennbares schwarzes bis schwarzbraunes Sedimentgestein, das in Flözen entstanden ist.",
         "uri": "OEO_00000088"
        },
        "Siedlungsabfälle": {
-        "meaning": "A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.",
+        "meaning": "Siedlungsabfälle: Abfallbrennstoff aus Haushalten oder nicht-industriellen gewerblichen Tätigkeiten.",
         "spellings": [
          "Abfall",
          "thermische Abfallverwertung"
@@ -1015,6 +1130,7 @@
         "uri": "OEO_00000290"
        },
        "Solarthermie": {
+        "meaning": "Solarthermie: Wärmeenergie, die als Ergebnis einer solarthermischen Energieumwandlung entsteht.",
         "spellings": [
          "solare Wärme"
         ],
@@ -1031,6 +1147,7 @@
         "uri": "out:other"
        },
        "Steinkohle": {
+        "meaning": "Steinkohle: Kohle mit einem Brennwert über 23 865 kJ/kg und einer mittleren Vitrinitreflexion von mindestens 0,6.",
         "uri": "OEO_00000204"
        },
        "Strom": {
@@ -1064,6 +1181,7 @@
         "uri": "OEO_00000056"
        },
        "Wasserstoff": {
+        "meaning": "Wasserstoff: Stoff mit der chemischen Formel H2, der gasförmig vorliegt und als Brennstoff verwendet werden kann.",
         "spellings": [
          "H2"
         ],
@@ -1088,6 +1206,7 @@
         "uri": "OEO_00010223"
        },
        "biogener Festbrennstoff": {
+        "meaning": "Biogener Festbrennstoff: Organisches, nicht fossiles Material biologischen Ursprungs, das zur Wärme- oder Stromerzeugung genutzt werden kann.",
         "spellings": [
          "biogene Festbrennstoffe",
          "sonstige biogene Festbrennstoffe"
@@ -1104,10 +1223,11 @@
         "uri": "OEO_00000356"
        },
        "industrielle Abwärme": {
+        "meaning": "Industrielle Abwärme: Abwärme, die als Energieausgabe eines industriellen Prozesses entsteht.",
         "uri": "OEO_00310004"
        },
        "landwirtschaftlicher Abfallbrennstoff": {
-        "meaning": "An angricultural waste fuel is waste fuel produced by agriculture.",
+        "meaning": "Landwirtschaftlicher Abfallbrennstoff: Abfallbrennstoff aus der Landwirtschaft.",
         "spellings": [
          "tierische Exkremente",
          "Gülle",
@@ -1125,6 +1245,7 @@
         "uri": "OEO_00140104"
        },
        "synthetische Gase": {
+        "meaning": "Synthetische Gase: Synthetischer Brennstoff, der unter Normalbedingungen gasförmig ist.",
         "spellings": [
          "grüne Gase",
          "E-Gas",
@@ -1133,7 +1254,7 @@
         "uri": "OEO_00010155"
        }
       },
-      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welcher Energieträger? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung (\"means\") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift.\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nIst die eigene Tabelle oder der eigene Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet), ist die Antwort \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\"."
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
@@ -1243,10 +1364,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -1333,6 +1458,107 @@
      },
      "parameter_window": {
       "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "period_start": {
+      "description": "Axis 'period_start' of Gebäudeanzahl. null unless period_start_state is 'read' or 'derived'.",
+      "type": [
+       "integer",
+       "null"
+      ],
+      "x-question": "Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht."
+     },
+     "period_start_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('period_start_raw'). 'period_start_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "period_start_link_source": {
+      "description": "Which source 'period_start_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "period_start_producer": {
+      "description": "Who re-read 'period_start': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "period_start_quote": {
+      "description": "The verbatim passage carrying 'period_start'. Present exactly when period_start_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "period_start_raw": {
+      "description": "The document's own wording 'period_start' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "period_start_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'period_start': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "period_start_seen": {
+      "description": "A wording the model noticed for 'period_start' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "period_start_source": {
+      "description": "Which source the passage for 'period_start' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "period_start_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'period_start' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "period_start_window": {
+      "description": "[stage, index] of the window 'period_start' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1652,6 +1878,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "scenario": {
       "description": "Axis 'scenario' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.",
       "enum": [
@@ -1914,7 +2149,7 @@
         "uri": "OEO_00000422"
        }
       },
-      "x-question": "Welcher Verbrauchssektor?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: \"Wohnen\", \"Wohngebäude\" = Private Haushalte; \"GHD/Kommune\", \"Gewerbe\", \"wirtschaftlich genutzte Gebäude\" = GHD.\nGEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\", \"Plangebiet\" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.\nZeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf) = \"Summe\".\nEbenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\").\nGesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist keine Summe über Sektoren.\n\"Einfamilienhaus\", \"Mehrfamilienhaus\" = Private Haushalte.\nEigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Energieträger\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welcher Verbrauchssektor? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung (\"means\") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle.\nEin Gebiet ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\", \"Plangebiet\" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.\n\"Summe\" gilt für alle Verbraucher zusammen: eine Zeile oder Spalte, die ausdrücklich über alle Sektoren summiert, ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"), oder eine Zahl, deren eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt ist, nur nach anderem (Energieträger, Gebiet); dann zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\nDie Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist keine Summe über Sektoren.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Energieträger\"."
      },
      "sector_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
@@ -2476,7 +2711,7 @@
       ]
      },
      "unit": {
-      "description": "The unit: one entry of units_accepted (Gebäude), read as a coordinate with its own passage. Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
+      "description": "The unit: one entry of units_accepted (Gebäude), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
       "enum": [
        "Gebäude",
        null
@@ -2491,7 +2726,7 @@
         "uri": "Gebäude"
        }
       },
-      "x-question": "Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: \"Gigawattstunden\" ist GWh, \"t CO₂-Äq.\" ist t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" sind kWh und GWh, \"1.700 kg CO2\" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann \"value\" weg und gib die Einheit wörtlich in \"value_raw\". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden (\"Anzahl Gebäude\", \"Wohngebäude\") hat die Einheit Gebäude."
+      "x-question": "Welche Einheit hat diese Zahl? Schreib in \"value_raw\" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in \"value\" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: \"Gigawattstunden\" meint GWh, \"t CO₂-Äq.\" t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" kWh und GWh, \"1.700 kg CO2\" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel), ist \"value\" \"\", und \"value_raw\" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden (\"Anzahl Gebäude\", \"Wohngebäude\") hat die Einheit Gebäude."
      },
      "unit_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.",
@@ -2591,8 +2826,109 @@
       "type": "number"
      },
      "value_target": {
-      "description": "value x factor(unit), in the spec's unit_target UO_0000189. This is the number the graph carries.",
+      "description": "value x factor(unit), in the spec's unit_target UO_0000189. This is the number the graph carries; absent where the unit is no entry of units_accepted.",
       "type": "number"
+     },
+     "what": {
+      "description": "Axis 'what' of Gebäudeanzahl. null unless what_state is 'read' or 'derived'.",
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-question": "Was ist diese Zahl? Antworte mit der Bezeichnung, die der Plan genau dieser Zahl gibt, Zeichen für Zeichen: in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz, etwa „Theoretische Geothermiepotenziale“ oder „Wärmebedarf“. Die Bezeichnung einer anderen Zahl derselben Stelle, etwa einer Summe darüber, ist keine Antwort. Nennt die Stelle keine Bezeichnung, sagt der Plan es nicht."
+     },
+     "what_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('what_raw'). 'what_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "what_link_source": {
+      "description": "Which source 'what_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "what_producer": {
+      "description": "Who re-read 'what': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "what_quote": {
+      "description": "The verbatim passage carrying 'what'. Present exactly when what_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "what_raw": {
+      "description": "The document's own wording 'what' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "what_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'what': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "what_seen": {
+      "description": "A wording the model noticed for 'what' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "what_source": {
+      "description": "Which source the passage for 'what' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "what_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'what' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "what_window": {
+      "description": "[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "year": {
       "description": "Axis 'year' of Gebäudeanzahl. null unless year_state is 'read' or 'derived'.",
@@ -2707,15 +3043,15 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value",
      "unit",
      "unit_state",
-     "value_target",
      "quantity",
      "quantity_state",
+     "what",
+     "what_state",
      "subject",
      "subject_state",
      "qualifier",
@@ -2730,6 +3066,8 @@
      "technology_state",
      "year",
      "year_state",
+     "period_start",
+     "period_start_state",
      "scenario",
      "scenario_state",
      "spatial_scope",
@@ -2757,6 +3095,23 @@
     "allOf": [
      {
       "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     },
+     {
+      "else": {
        "properties": {
         "unit": {
          "type": "null"
@@ -2777,13 +3132,29 @@
        ]
       },
       "then": {
-       "properties": {
-        "unit": {
-         "type": "string"
+       "anyOf": [
+        {
+         "properties": {
+          "unit": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "unit",
+          "value_target"
+         ]
+        },
+        {
+         "properties": {
+          "unit": {
+           "type": "null"
+          }
+         },
+         "required": [
+          "unit",
+          "unit_raw"
+         ]
         }
-       },
-       "required": [
-        "unit"
        ]
       }
      },
@@ -2816,6 +3187,38 @@
        },
        "required": [
         "quantity"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "what": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "what_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "what_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "what": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "what"
        ]
       }
      },
@@ -3046,6 +3449,38 @@
      {
       "else": {
        "properties": {
+        "period_start": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "period_start_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "period_start_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "period_start": {
+         "type": "integer"
+        }
+       },
+       "required": [
+        "period_start"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
         "scenario": {
          "type": "null"
         }
@@ -3172,7 +3607,7 @@
         "uri": "OEO_00140072"
        }
       },
-      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst?\nNormalfall \"integral\" (Jahressumme).\n\"maximum\": Spitzenlast, Höchstwert.\n\"arithmetic mean\": Durchschnitt je Gebäude oder Jahr.\n\"instantaneous\": Momentanwert."
+      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Wähle den Eintrag nach seiner Bedeutung (\"means\"), nicht nach einem Wort der Stelle. Der Normalfall ist \"integral\", eine Jahressumme."
      },
      "aggregation_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.",
@@ -3332,12 +3767,14 @@
         "uri": "OEO_00000439"
        },
        "Abwärme": {
+        "meaning": "Abwärme: Wärmeenergie, die bei einem Energieumwandlungsprozess entsteht und ungenutzt an die Umwelt abgegeben wird.",
         "spellings": [
          "unvermeidbare Abwärme"
         ],
         "uri": "OEO_00010114"
        },
        "Biogas": {
+        "meaning": "Biogas: Durch anaerobe Vergärung entstehendes Gasgemisch aus hauptsächlich Methan und Kohlendioxid, das als Brennstoff dient.",
         "spellings": [
          "aufbereitetes Biogas",
          "Klärgas",
@@ -3347,6 +3784,7 @@
         "uri": "OEO_00000074"
        },
        "Biomasse": {
+        "meaning": "Biomasse: Stoff pflanzlichen oder tierischen Ursprungs und damit biogener Herkunft.",
         "spellings": [
          "pflanzliche Biomasse",
          "landwirtschaftliche Biomasse"
@@ -3354,18 +3792,22 @@
         "uri": "OEO_00010214"
        },
        "Biomethan": {
+        "meaning": "Biomethan: Aus Biogas durch Abtrennung von Kohlendioxid gewonnenes Gasgemisch aus hauptsächlich Methan, das als Brennstoff dient.",
         "uri": "OEO_00010215"
        },
        "Braunkohle": {
+        "meaning": "Braunkohle: Nicht backende Kohle mit einem Brennwert unter 17 435 kJ/kg und über 31 % flüchtigen Bestandteilen.",
         "uri": "OEO_00000251"
        },
        "Erdgas": {
+        "meaning": "Erdgas: Gasgemisch aus unterirdischen Lagerstätten, das hauptsächlich aus Methan besteht.",
         "spellings": [
          "Gas"
         ],
         "uri": "OEO_00000292"
        },
        "Fernwärme": {
+        "meaning": "Fernwärme: Leitungsgebundene Wärmelieferung an Wohn- oder Gewerbegebäude.",
         "spellings": [
          "Wärmenetze",
          "Wärmenetz",
@@ -3378,6 +3820,7 @@
         "uri": "OEO_00320011"
        },
        "Geothermie": {
+        "meaning": "Geothermie: Wärmeenergie, die aus dem Inneren der Erdkruste freigesetzt wird.",
         "spellings": [
          "Erdwärme",
          "oberflächennahe Geothermie",
@@ -3389,12 +3832,14 @@
         "uri": "OEO_00000191"
        },
        "Heizöl": {
+        "meaning": "Heizöl: Gasöl für industrielle und gewerbliche Zwecke, auch schwere Gasöle, die als petrochemische Rohstoffe dienen.",
         "spellings": [
          "Öl"
         ],
         "uri": "OEO_00000211"
        },
        "Holz": {
+        "meaning": "Holz: Biomasse von Bäumen in festem Aggregatzustand, die als Brennstoff genutzt werden kann.",
         "spellings": [
          "Holzpellets",
          "Pellets",
@@ -3405,10 +3850,11 @@
         "uri": "OEO_00000449"
        },
        "Kohle": {
+        "meaning": "Kohle: Brennbares schwarzes bis schwarzbraunes Sedimentgestein, das in Flözen entstanden ist.",
         "uri": "OEO_00000088"
        },
        "Siedlungsabfälle": {
-        "meaning": "A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.",
+        "meaning": "Siedlungsabfälle: Abfallbrennstoff aus Haushalten oder nicht-industriellen gewerblichen Tätigkeiten.",
         "spellings": [
          "Abfall",
          "thermische Abfallverwertung"
@@ -3416,6 +3862,7 @@
         "uri": "OEO_00000290"
        },
        "Solarthermie": {
+        "meaning": "Solarthermie: Wärmeenergie, die als Ergebnis einer solarthermischen Energieumwandlung entsteht.",
         "spellings": [
          "solare Wärme"
         ],
@@ -3432,6 +3879,7 @@
         "uri": "out:other"
        },
        "Steinkohle": {
+        "meaning": "Steinkohle: Kohle mit einem Brennwert über 23 865 kJ/kg und einer mittleren Vitrinitreflexion von mindestens 0,6.",
         "uri": "OEO_00000204"
        },
        "Strom": {
@@ -3465,6 +3913,7 @@
         "uri": "OEO_00000056"
        },
        "Wasserstoff": {
+        "meaning": "Wasserstoff: Stoff mit der chemischen Formel H2, der gasförmig vorliegt und als Brennstoff verwendet werden kann.",
         "spellings": [
          "H2"
         ],
@@ -3489,6 +3938,7 @@
         "uri": "OEO_00010223"
        },
        "biogener Festbrennstoff": {
+        "meaning": "Biogener Festbrennstoff: Organisches, nicht fossiles Material biologischen Ursprungs, das zur Wärme- oder Stromerzeugung genutzt werden kann.",
         "spellings": [
          "biogene Festbrennstoffe",
          "sonstige biogene Festbrennstoffe"
@@ -3505,10 +3955,11 @@
         "uri": "OEO_00000356"
        },
        "industrielle Abwärme": {
+        "meaning": "Industrielle Abwärme: Abwärme, die als Energieausgabe eines industriellen Prozesses entsteht.",
         "uri": "OEO_00310004"
        },
        "landwirtschaftlicher Abfallbrennstoff": {
-        "meaning": "An angricultural waste fuel is waste fuel produced by agriculture.",
+        "meaning": "Landwirtschaftlicher Abfallbrennstoff: Abfallbrennstoff aus der Landwirtschaft.",
         "spellings": [
          "tierische Exkremente",
          "Gülle",
@@ -3526,6 +3977,7 @@
         "uri": "OEO_00140104"
        },
        "synthetische Gase": {
+        "meaning": "Synthetische Gase: Synthetischer Brennstoff, der unter Normalbedingungen gasförmig ist.",
         "spellings": [
          "grüne Gase",
          "E-Gas",
@@ -3534,7 +3986,7 @@
         "uri": "OEO_00010155"
        }
       },
-      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welcher Energieträger? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung (\"means\") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift.\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nIst die eigene Tabelle oder der eigene Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet), ist die Antwort \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\"."
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
@@ -3644,10 +4096,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -3734,6 +4190,107 @@
      },
      "parameter_window": {
       "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "period_start": {
+      "description": "Axis 'period_start' of Emissionen. null unless period_start_state is 'read' or 'derived'.",
+      "type": [
+       "integer",
+       "null"
+      ],
+      "x-question": "Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht."
+     },
+     "period_start_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('period_start_raw'). 'period_start_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "period_start_link_source": {
+      "description": "Which source 'period_start_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "period_start_producer": {
+      "description": "Who re-read 'period_start': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "period_start_quote": {
+      "description": "The verbatim passage carrying 'period_start'. Present exactly when period_start_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "period_start_raw": {
+      "description": "The document's own wording 'period_start' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "period_start_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'period_start': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "period_start_seen": {
+      "description": "A wording the model noticed for 'period_start' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "period_start_source": {
+      "description": "Which source the passage for 'period_start' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "period_start_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'period_start' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "period_start_window": {
+      "description": "[stage, index] of the window 'period_start' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -4128,6 +4685,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "scenario": {
       "description": "Axis 'scenario' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.",
       "enum": [
@@ -4390,7 +4956,7 @@
         "uri": "OEO_00000422"
        }
       },
-      "x-question": "Welcher Verbrauchssektor?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: \"Wohnen\", \"Wohngebäude\" = Private Haushalte; \"GHD/Kommune\", \"Gewerbe\", \"wirtschaftlich genutzte Gebäude\" = GHD.\nGEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\", \"Plangebiet\" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.\nZeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf) = \"Summe\".\nEbenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\").\nGesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist keine Summe über Sektoren.\n\"Einfamilienhaus\", \"Mehrfamilienhaus\" = Private Haushalte.\nEigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Energieträger\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welcher Verbrauchssektor? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung (\"means\") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle.\nEin Gebiet ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\", \"Plangebiet\" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.\n\"Summe\" gilt für alle Verbraucher zusammen: eine Zeile oder Spalte, die ausdrücklich über alle Sektoren summiert, ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"), oder eine Zahl, deren eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt ist, nur nach anderem (Energieträger, Gebiet); dann zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\nDie Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist keine Summe über Sektoren.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Energieträger\"."
      },
      "sector_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
@@ -4952,7 +5518,7 @@
       ]
      },
      "unit": {
-      "description": "The unit: one entry of units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, kg, kg CO2, kg CO2/a, kg CO2eq, kg CO2eq/a, kg/a, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/a, t/a CO2eq, tCO2, tCO2/a), read as a coordinate with its own passage. Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
+      "description": "The unit: one entry of units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, kg, kg CO2, kg CO2/a, kg CO2eq, kg CO2eq/a, kg/a, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/a, t/a CO2eq, tCO2, tCO2/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
       "enum": [
        "Tonnen",
        "Tonnen CO2",
@@ -5202,7 +5768,7 @@
         "uri": "tCO2/a"
        }
       },
-      "x-question": "Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: \"Gigawattstunden\" ist GWh, \"t CO₂-Äq.\" ist t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" sind kWh und GWh, \"1.700 kg CO2\" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann \"value\" weg und gib die Einheit wörtlich in \"value_raw\". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden (\"Anzahl Gebäude\", \"Wohngebäude\") hat die Einheit Gebäude."
+      "x-question": "Welche Einheit hat diese Zahl? Schreib in \"value_raw\" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in \"value\" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: \"Gigawattstunden\" meint GWh, \"t CO₂-Äq.\" t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" kWh und GWh, \"1.700 kg CO2\" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel), ist \"value\" \"\", und \"value_raw\" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden (\"Anzahl Gebäude\", \"Wohngebäude\") hat die Einheit Gebäude."
      },
      "unit_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.",
@@ -5302,8 +5868,109 @@
       "type": "number"
      },
      "value_target": {
-      "description": "value x factor(unit), in the spec's unit_target OEO_00010137. This is the number the graph carries.",
+      "description": "value x factor(unit), in the spec's unit_target OEO_00010137. This is the number the graph carries; absent where the unit is no entry of units_accepted.",
       "type": "number"
+     },
+     "what": {
+      "description": "Axis 'what' of Emissionen. null unless what_state is 'read' or 'derived'.",
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-question": "Was ist diese Zahl? Antworte mit der Bezeichnung, die der Plan genau dieser Zahl gibt, Zeichen für Zeichen: in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz, etwa „Theoretische Geothermiepotenziale“ oder „Wärmebedarf“. Die Bezeichnung einer anderen Zahl derselben Stelle, etwa einer Summe darüber, ist keine Antwort. Nennt die Stelle keine Bezeichnung, sagt der Plan es nicht."
+     },
+     "what_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('what_raw'). 'what_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "what_link_source": {
+      "description": "Which source 'what_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "what_producer": {
+      "description": "Who re-read 'what': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "what_quote": {
+      "description": "The verbatim passage carrying 'what'. Present exactly when what_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "what_raw": {
+      "description": "The document's own wording 'what' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "what_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'what': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "what_seen": {
+      "description": "A wording the model noticed for 'what' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "what_source": {
+      "description": "Which source the passage for 'what' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "what_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'what' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "what_window": {
+      "description": "[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "year": {
       "description": "Axis 'year' of Emissionen. null unless year_state is 'read' or 'derived'.",
@@ -5418,15 +6085,15 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value",
      "unit",
      "unit_state",
-     "value_target",
      "quantity",
      "quantity_state",
+     "what",
+     "what_state",
      "subject",
      "subject_state",
      "qualifier",
@@ -5441,6 +6108,8 @@
      "technology_state",
      "year",
      "year_state",
+     "period_start",
+     "period_start_state",
      "scenario",
      "scenario_state",
      "spatial_scope",
@@ -5468,6 +6137,23 @@
     "allOf": [
      {
       "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     },
+     {
+      "else": {
        "properties": {
         "unit": {
          "type": "null"
@@ -5488,13 +6174,29 @@
        ]
       },
       "then": {
-       "properties": {
-        "unit": {
-         "type": "string"
+       "anyOf": [
+        {
+         "properties": {
+          "unit": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "unit",
+          "value_target"
+         ]
+        },
+        {
+         "properties": {
+          "unit": {
+           "type": "null"
+          }
+         },
+         "required": [
+          "unit",
+          "unit_raw"
+         ]
         }
-       },
-       "required": [
-        "unit"
        ]
       }
      },
@@ -5527,6 +6229,38 @@
        },
        "required": [
         "quantity"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "what": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "what_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "what_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "what": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "what"
        ]
       }
      },
@@ -5757,6 +6491,38 @@
      {
       "else": {
        "properties": {
+        "period_start": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "period_start_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "period_start_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "period_start": {
+         "type": "integer"
+        }
+       },
+       "required": [
+        "period_start"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
         "scenario": {
          "type": "null"
         }
@@ -5883,7 +6649,7 @@
         "uri": "OEO_00140072"
        }
       },
-      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst?\nNormalfall \"integral\" (Jahressumme).\n\"maximum\": Spitzenlast, Höchstwert.\n\"arithmetic mean\": Durchschnitt je Gebäude oder Jahr.\n\"instantaneous\": Momentanwert."
+      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Wähle den Eintrag nach seiner Bedeutung (\"means\"), nicht nach einem Wort der Stelle. Der Normalfall ist \"integral\", eine Jahressumme."
      },
      "aggregation_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.",
@@ -6043,12 +6809,14 @@
         "uri": "OEO_00000439"
        },
        "Abwärme": {
+        "meaning": "Abwärme: Wärmeenergie, die bei einem Energieumwandlungsprozess entsteht und ungenutzt an die Umwelt abgegeben wird.",
         "spellings": [
          "unvermeidbare Abwärme"
         ],
         "uri": "OEO_00010114"
        },
        "Biogas": {
+        "meaning": "Biogas: Durch anaerobe Vergärung entstehendes Gasgemisch aus hauptsächlich Methan und Kohlendioxid, das als Brennstoff dient.",
         "spellings": [
          "aufbereitetes Biogas",
          "Klärgas",
@@ -6058,6 +6826,7 @@
         "uri": "OEO_00000074"
        },
        "Biomasse": {
+        "meaning": "Biomasse: Stoff pflanzlichen oder tierischen Ursprungs und damit biogener Herkunft.",
         "spellings": [
          "pflanzliche Biomasse",
          "landwirtschaftliche Biomasse"
@@ -6065,18 +6834,22 @@
         "uri": "OEO_00010214"
        },
        "Biomethan": {
+        "meaning": "Biomethan: Aus Biogas durch Abtrennung von Kohlendioxid gewonnenes Gasgemisch aus hauptsächlich Methan, das als Brennstoff dient.",
         "uri": "OEO_00010215"
        },
        "Braunkohle": {
+        "meaning": "Braunkohle: Nicht backende Kohle mit einem Brennwert unter 17 435 kJ/kg und über 31 % flüchtigen Bestandteilen.",
         "uri": "OEO_00000251"
        },
        "Erdgas": {
+        "meaning": "Erdgas: Gasgemisch aus unterirdischen Lagerstätten, das hauptsächlich aus Methan besteht.",
         "spellings": [
          "Gas"
         ],
         "uri": "OEO_00000292"
        },
        "Fernwärme": {
+        "meaning": "Fernwärme: Leitungsgebundene Wärmelieferung an Wohn- oder Gewerbegebäude.",
         "spellings": [
          "Wärmenetze",
          "Wärmenetz",
@@ -6089,6 +6862,7 @@
         "uri": "OEO_00320011"
        },
        "Geothermie": {
+        "meaning": "Geothermie: Wärmeenergie, die aus dem Inneren der Erdkruste freigesetzt wird.",
         "spellings": [
          "Erdwärme",
          "oberflächennahe Geothermie",
@@ -6100,12 +6874,14 @@
         "uri": "OEO_00000191"
        },
        "Heizöl": {
+        "meaning": "Heizöl: Gasöl für industrielle und gewerbliche Zwecke, auch schwere Gasöle, die als petrochemische Rohstoffe dienen.",
         "spellings": [
          "Öl"
         ],
         "uri": "OEO_00000211"
        },
        "Holz": {
+        "meaning": "Holz: Biomasse von Bäumen in festem Aggregatzustand, die als Brennstoff genutzt werden kann.",
         "spellings": [
          "Holzpellets",
          "Pellets",
@@ -6116,10 +6892,11 @@
         "uri": "OEO_00000449"
        },
        "Kohle": {
+        "meaning": "Kohle: Brennbares schwarzes bis schwarzbraunes Sedimentgestein, das in Flözen entstanden ist.",
         "uri": "OEO_00000088"
        },
        "Siedlungsabfälle": {
-        "meaning": "A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.",
+        "meaning": "Siedlungsabfälle: Abfallbrennstoff aus Haushalten oder nicht-industriellen gewerblichen Tätigkeiten.",
         "spellings": [
          "Abfall",
          "thermische Abfallverwertung"
@@ -6127,6 +6904,7 @@
         "uri": "OEO_00000290"
        },
        "Solarthermie": {
+        "meaning": "Solarthermie: Wärmeenergie, die als Ergebnis einer solarthermischen Energieumwandlung entsteht.",
         "spellings": [
          "solare Wärme"
         ],
@@ -6143,6 +6921,7 @@
         "uri": "out:other"
        },
        "Steinkohle": {
+        "meaning": "Steinkohle: Kohle mit einem Brennwert über 23 865 kJ/kg und einer mittleren Vitrinitreflexion von mindestens 0,6.",
         "uri": "OEO_00000204"
        },
        "Strom": {
@@ -6176,6 +6955,7 @@
         "uri": "OEO_00000056"
        },
        "Wasserstoff": {
+        "meaning": "Wasserstoff: Stoff mit der chemischen Formel H2, der gasförmig vorliegt und als Brennstoff verwendet werden kann.",
         "spellings": [
          "H2"
         ],
@@ -6200,6 +6980,7 @@
         "uri": "OEO_00010223"
        },
        "biogener Festbrennstoff": {
+        "meaning": "Biogener Festbrennstoff: Organisches, nicht fossiles Material biologischen Ursprungs, das zur Wärme- oder Stromerzeugung genutzt werden kann.",
         "spellings": [
          "biogene Festbrennstoffe",
          "sonstige biogene Festbrennstoffe"
@@ -6216,10 +6997,11 @@
         "uri": "OEO_00000356"
        },
        "industrielle Abwärme": {
+        "meaning": "Industrielle Abwärme: Abwärme, die als Energieausgabe eines industriellen Prozesses entsteht.",
         "uri": "OEO_00310004"
        },
        "landwirtschaftlicher Abfallbrennstoff": {
-        "meaning": "An angricultural waste fuel is waste fuel produced by agriculture.",
+        "meaning": "Landwirtschaftlicher Abfallbrennstoff: Abfallbrennstoff aus der Landwirtschaft.",
         "spellings": [
          "tierische Exkremente",
          "Gülle",
@@ -6237,6 +7019,7 @@
         "uri": "OEO_00140104"
        },
        "synthetische Gase": {
+        "meaning": "Synthetische Gase: Synthetischer Brennstoff, der unter Normalbedingungen gasförmig ist.",
         "spellings": [
          "grüne Gase",
          "E-Gas",
@@ -6245,7 +7028,7 @@
         "uri": "OEO_00010155"
        }
       },
-      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welcher Energieträger? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung (\"means\") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift.\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nIst die eigene Tabelle oder der eigene Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet), ist die Antwort \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\"."
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
@@ -6355,10 +7138,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -6445,6 +7232,107 @@
      },
      "parameter_window": {
       "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "period_start": {
+      "description": "Axis 'period_start' of Energieverbrauch. null unless period_start_state is 'read' or 'derived'.",
+      "type": [
+       "integer",
+       "null"
+      ],
+      "x-question": "Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht."
+     },
+     "period_start_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('period_start_raw'). 'period_start_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "period_start_link_source": {
+      "description": "Which source 'period_start_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "period_start_producer": {
+      "description": "Who re-read 'period_start': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "period_start_quote": {
+      "description": "The verbatim passage carrying 'period_start'. Present exactly when period_start_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "period_start_raw": {
+      "description": "The document's own wording 'period_start' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "period_start_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'period_start': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "period_start_seen": {
+      "description": "A wording the model noticed for 'period_start' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "period_start_source": {
+      "description": "Which source the passage for 'period_start' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "period_start_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'period_start' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "period_start_window": {
+      "description": "[stage, index] of the window 'period_start' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -6915,6 +7803,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "scenario": {
       "description": "Axis 'scenario' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.",
       "enum": [
@@ -7177,7 +8074,7 @@
         "uri": "OEO_00000422"
        }
       },
-      "x-question": "Welcher Verbrauchssektor?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: \"Wohnen\", \"Wohngebäude\" = Private Haushalte; \"GHD/Kommune\", \"Gewerbe\", \"wirtschaftlich genutzte Gebäude\" = GHD.\nGEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\", \"Plangebiet\" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.\nZeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf) = \"Summe\".\nEbenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\").\nGesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist keine Summe über Sektoren.\n\"Einfamilienhaus\", \"Mehrfamilienhaus\" = Private Haushalte.\nEigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Energieträger\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welcher Verbrauchssektor? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung (\"means\") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle.\nEin Gebiet ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\", \"Plangebiet\" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.\n\"Summe\" gilt für alle Verbraucher zusammen: eine Zeile oder Spalte, die ausdrücklich über alle Sektoren summiert, ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"), oder eine Zahl, deren eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt ist, nur nach anderem (Energieträger, Gebiet); dann zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\nDie Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist keine Summe über Sektoren.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Energieträger\"."
      },
      "sector_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
@@ -7739,7 +8636,7 @@
       ]
      },
      "unit": {
-      "description": "The unit: one entry of units_accepted (GWh, GWh/a, MWh, MWh/a, Millionen kWh, Mio. kWh, Mio. kWh/a, Mrd. kWh, TWh, TWh/a, kWh, kWh/a), read as a coordinate with its own passage. Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
+      "description": "The unit: one entry of units_accepted (GWh, GWh/a, MWh, MWh/a, Millionen kWh, Mio. kWh, Mio. kWh/a, Mrd. kWh, TWh, TWh/a, kWh, kWh/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
       "enum": [
        "kWh",
        "kWh/a",
@@ -7809,7 +8706,7 @@
         "uri": "kWh/a"
        }
       },
-      "x-question": "Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: \"Gigawattstunden\" ist GWh, \"t CO₂-Äq.\" ist t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" sind kWh und GWh, \"1.700 kg CO2\" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann \"value\" weg und gib die Einheit wörtlich in \"value_raw\". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden (\"Anzahl Gebäude\", \"Wohngebäude\") hat die Einheit Gebäude."
+      "x-question": "Welche Einheit hat diese Zahl? Schreib in \"value_raw\" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in \"value\" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: \"Gigawattstunden\" meint GWh, \"t CO₂-Äq.\" t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" kWh und GWh, \"1.700 kg CO2\" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel), ist \"value\" \"\", und \"value_raw\" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden (\"Anzahl Gebäude\", \"Wohngebäude\") hat die Einheit Gebäude."
      },
      "unit_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.",
@@ -7909,8 +8806,109 @@
       "type": "number"
      },
      "value_target": {
-      "description": "value x factor(unit), in the spec's unit_target OEO_00050008. This is the number the graph carries.",
+      "description": "value x factor(unit), in the spec's unit_target OEO_00050008. This is the number the graph carries; absent where the unit is no entry of units_accepted.",
       "type": "number"
+     },
+     "what": {
+      "description": "Axis 'what' of Energieverbrauch. null unless what_state is 'read' or 'derived'.",
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-question": "Was ist diese Zahl? Antworte mit der Bezeichnung, die der Plan genau dieser Zahl gibt, Zeichen für Zeichen: in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz, etwa „Theoretische Geothermiepotenziale“ oder „Wärmebedarf“. Die Bezeichnung einer anderen Zahl derselben Stelle, etwa einer Summe darüber, ist keine Antwort. Nennt die Stelle keine Bezeichnung, sagt der Plan es nicht."
+     },
+     "what_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('what_raw'). 'what_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "what_link_source": {
+      "description": "Which source 'what_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "what_producer": {
+      "description": "Who re-read 'what': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "what_quote": {
+      "description": "The verbatim passage carrying 'what'. Present exactly when what_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "what_raw": {
+      "description": "The document's own wording 'what' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "what_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'what': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "what_seen": {
+      "description": "A wording the model noticed for 'what' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "what_source": {
+      "description": "Which source the passage for 'what' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "what_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'what' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "what_window": {
+      "description": "[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "year": {
       "description": "Axis 'year' of Energieverbrauch. null unless year_state is 'read' or 'derived'.",
@@ -8025,15 +9023,15 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value",
      "unit",
      "unit_state",
-     "value_target",
      "quantity",
      "quantity_state",
+     "what",
+     "what_state",
      "subject",
      "subject_state",
      "qualifier",
@@ -8048,6 +9046,8 @@
      "technology_state",
      "year",
      "year_state",
+     "period_start",
+     "period_start_state",
      "scenario",
      "scenario_state",
      "spatial_scope",
@@ -8075,6 +9075,23 @@
     "allOf": [
      {
       "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     },
+     {
+      "else": {
        "properties": {
         "unit": {
          "type": "null"
@@ -8095,13 +9112,29 @@
        ]
       },
       "then": {
-       "properties": {
-        "unit": {
-         "type": "string"
+       "anyOf": [
+        {
+         "properties": {
+          "unit": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "unit",
+          "value_target"
+         ]
+        },
+        {
+         "properties": {
+          "unit": {
+           "type": "null"
+          }
+         },
+         "required": [
+          "unit",
+          "unit_raw"
+         ]
         }
-       },
-       "required": [
-        "unit"
        ]
       }
      },
@@ -8134,6 +9167,38 @@
        },
        "required": [
         "quantity"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "what": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "what_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "what_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "what": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "what"
        ]
       }
      },
@@ -8332,6 +9397,38 @@
      {
       "else": {
        "properties": {
+        "period_start": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "period_start_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "period_start_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "period_start": {
+         "type": "integer"
+        }
+       },
+       "required": [
+        "period_start"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
         "scenario": {
          "type": "null"
         }
@@ -8450,7 +9547,7 @@
         "uri": "OEO_00140072"
        }
       },
-      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Bei Leistung eine echte Frage, keine Formsache.\n\"maximum\": Spitzenlast, Höchstlast, Auslegungsfall.\n\"integral\": Summe über mehrere Anlagen oder ein Gebiet, erkennbar an Zeile oder Spalte \"Summe\", \"Gesamt\", \"insgesamt\".\n\"arithmetic mean\": Durchschnitt (\"Ø\", \"mittlere Leistung\").\nLeistung einer EINZELNEN Anlage ist keines davon: steht in Quelle, Abschnitt und Satz davor nichts zur Zusammenfassung, \"out:unstated\", keine Schätzung."
+      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Bei Leistung eine echte Frage, keine Formsache. Wähle den Eintrag nach seiner Bedeutung (\"means\"), nicht nach einem Wort der Stelle: eine Spitzenlast oder ein Auslegungsfall ist ein Höchstwert, die Leistung mehrerer Anlagen oder eines Gebiets zusammen eine Summe, eine mittlere Leistung ein Mittel.\nDie Leistung einer EINZELNEN Anlage ist keines davon: steht in Quelle, Abschnitt und Satz davor nichts zur Zusammenfassung, sagt der Plan es nicht, keine Schätzung."
      },
      "aggregation_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.",
@@ -8610,12 +9707,14 @@
         "uri": "OEO_00000439"
        },
        "Abwärme": {
+        "meaning": "Abwärme: Wärmeenergie, die bei einem Energieumwandlungsprozess entsteht und ungenutzt an die Umwelt abgegeben wird.",
         "spellings": [
          "unvermeidbare Abwärme"
         ],
         "uri": "OEO_00010114"
        },
        "Biogas": {
+        "meaning": "Biogas: Durch anaerobe Vergärung entstehendes Gasgemisch aus hauptsächlich Methan und Kohlendioxid, das als Brennstoff dient.",
         "spellings": [
          "aufbereitetes Biogas",
          "Klärgas",
@@ -8625,6 +9724,7 @@
         "uri": "OEO_00000074"
        },
        "Biomasse": {
+        "meaning": "Biomasse: Stoff pflanzlichen oder tierischen Ursprungs und damit biogener Herkunft.",
         "spellings": [
          "pflanzliche Biomasse",
          "landwirtschaftliche Biomasse"
@@ -8632,18 +9732,22 @@
         "uri": "OEO_00010214"
        },
        "Biomethan": {
+        "meaning": "Biomethan: Aus Biogas durch Abtrennung von Kohlendioxid gewonnenes Gasgemisch aus hauptsächlich Methan, das als Brennstoff dient.",
         "uri": "OEO_00010215"
        },
        "Braunkohle": {
+        "meaning": "Braunkohle: Nicht backende Kohle mit einem Brennwert unter 17 435 kJ/kg und über 31 % flüchtigen Bestandteilen.",
         "uri": "OEO_00000251"
        },
        "Erdgas": {
+        "meaning": "Erdgas: Gasgemisch aus unterirdischen Lagerstätten, das hauptsächlich aus Methan besteht.",
         "spellings": [
          "Gas"
         ],
         "uri": "OEO_00000292"
        },
        "Fernwärme": {
+        "meaning": "Fernwärme: Leitungsgebundene Wärmelieferung an Wohn- oder Gewerbegebäude.",
         "spellings": [
          "Wärmenetze",
          "Wärmenetz",
@@ -8656,6 +9760,7 @@
         "uri": "OEO_00320011"
        },
        "Geothermie": {
+        "meaning": "Geothermie: Wärmeenergie, die aus dem Inneren der Erdkruste freigesetzt wird.",
         "spellings": [
          "Erdwärme",
          "oberflächennahe Geothermie",
@@ -8667,12 +9772,14 @@
         "uri": "OEO_00000191"
        },
        "Heizöl": {
+        "meaning": "Heizöl: Gasöl für industrielle und gewerbliche Zwecke, auch schwere Gasöle, die als petrochemische Rohstoffe dienen.",
         "spellings": [
          "Öl"
         ],
         "uri": "OEO_00000211"
        },
        "Holz": {
+        "meaning": "Holz: Biomasse von Bäumen in festem Aggregatzustand, die als Brennstoff genutzt werden kann.",
         "spellings": [
          "Holzpellets",
          "Pellets",
@@ -8683,10 +9790,11 @@
         "uri": "OEO_00000449"
        },
        "Kohle": {
+        "meaning": "Kohle: Brennbares schwarzes bis schwarzbraunes Sedimentgestein, das in Flözen entstanden ist.",
         "uri": "OEO_00000088"
        },
        "Siedlungsabfälle": {
-        "meaning": "A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.",
+        "meaning": "Siedlungsabfälle: Abfallbrennstoff aus Haushalten oder nicht-industriellen gewerblichen Tätigkeiten.",
         "spellings": [
          "Abfall",
          "thermische Abfallverwertung"
@@ -8694,6 +9802,7 @@
         "uri": "OEO_00000290"
        },
        "Solarthermie": {
+        "meaning": "Solarthermie: Wärmeenergie, die als Ergebnis einer solarthermischen Energieumwandlung entsteht.",
         "spellings": [
          "solare Wärme"
         ],
@@ -8710,6 +9819,7 @@
         "uri": "out:other"
        },
        "Steinkohle": {
+        "meaning": "Steinkohle: Kohle mit einem Brennwert über 23 865 kJ/kg und einer mittleren Vitrinitreflexion von mindestens 0,6.",
         "uri": "OEO_00000204"
        },
        "Strom": {
@@ -8743,6 +9853,7 @@
         "uri": "OEO_00000056"
        },
        "Wasserstoff": {
+        "meaning": "Wasserstoff: Stoff mit der chemischen Formel H2, der gasförmig vorliegt und als Brennstoff verwendet werden kann.",
         "spellings": [
          "H2"
         ],
@@ -8767,6 +9878,7 @@
         "uri": "OEO_00010223"
        },
        "biogener Festbrennstoff": {
+        "meaning": "Biogener Festbrennstoff: Organisches, nicht fossiles Material biologischen Ursprungs, das zur Wärme- oder Stromerzeugung genutzt werden kann.",
         "spellings": [
          "biogene Festbrennstoffe",
          "sonstige biogene Festbrennstoffe"
@@ -8783,10 +9895,11 @@
         "uri": "OEO_00000356"
        },
        "industrielle Abwärme": {
+        "meaning": "Industrielle Abwärme: Abwärme, die als Energieausgabe eines industriellen Prozesses entsteht.",
         "uri": "OEO_00310004"
        },
        "landwirtschaftlicher Abfallbrennstoff": {
-        "meaning": "An angricultural waste fuel is waste fuel produced by agriculture.",
+        "meaning": "Landwirtschaftlicher Abfallbrennstoff: Abfallbrennstoff aus der Landwirtschaft.",
         "spellings": [
          "tierische Exkremente",
          "Gülle",
@@ -8804,6 +9917,7 @@
         "uri": "OEO_00140104"
        },
        "synthetische Gase": {
+        "meaning": "Synthetische Gase: Synthetischer Brennstoff, der unter Normalbedingungen gasförmig ist.",
         "spellings": [
          "grüne Gase",
          "E-Gas",
@@ -8812,7 +9926,7 @@
         "uri": "OEO_00010155"
        }
       },
-      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welcher Energieträger? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung (\"means\") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift.\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nIst die eigene Tabelle oder der eigene Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet), ist die Antwort \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\"."
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
@@ -8922,10 +10036,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -9012,6 +10130,107 @@
      },
      "parameter_window": {
       "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "period_start": {
+      "description": "Axis 'period_start' of Leistung. null unless period_start_state is 'read' or 'derived'.",
+      "type": [
+       "integer",
+       "null"
+      ],
+      "x-question": "Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht."
+     },
+     "period_start_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('period_start_raw'). 'period_start_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "period_start_link_source": {
+      "description": "Which source 'period_start_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "period_start_producer": {
+      "description": "Who re-read 'period_start': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "period_start_quote": {
+      "description": "The verbatim passage carrying 'period_start'. Present exactly when period_start_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "period_start_raw": {
+      "description": "The document's own wording 'period_start' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "period_start_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'period_start': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "period_start_seen": {
+      "description": "A wording the model noticed for 'period_start' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "period_start_source": {
+      "description": "Which source the passage for 'period_start' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "period_start_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'period_start' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "period_start_window": {
+      "description": "[stage, index] of the window 'period_start' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -9459,6 +10678,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "scenario": {
       "description": "Axis 'scenario' of Leistung. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.",
       "enum": [
@@ -9721,7 +10949,7 @@
         "uri": "OEO_00000422"
        }
       },
-      "x-question": "Welcher Verbrauchssektor?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: \"Wohnen\", \"Wohngebäude\" = Private Haushalte; \"GHD/Kommune\", \"Gewerbe\", \"wirtschaftlich genutzte Gebäude\" = GHD.\nGEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\", \"Plangebiet\" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.\nZeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf) = \"Summe\".\nEbenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\").\nGesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist keine Summe über Sektoren.\n\"Einfamilienhaus\", \"Mehrfamilienhaus\" = Private Haushalte.\nEigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Energieträger\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welcher Verbrauchssektor? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung (\"means\") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle.\nEin Gebiet ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\", \"Plangebiet\" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.\n\"Summe\" gilt für alle Verbraucher zusammen: eine Zeile oder Spalte, die ausdrücklich über alle Sektoren summiert, ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"), oder eine Zahl, deren eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt ist, nur nach anderem (Energieträger, Gebiet); dann zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\nDie Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist keine Summe über Sektoren.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Energieträger\"."
      },
      "sector_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
@@ -10073,7 +11301,7 @@
       ]
      },
      "unit": {
-      "description": "The unit: one entry of units_accepted (GW, MW, MWth, kW, kWth), read as a coordinate with its own passage. Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
+      "description": "The unit: one entry of units_accepted (GW, MW, MWth, kW, kWth), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
       "enum": [
        "kW",
        "kWth",
@@ -10108,7 +11336,7 @@
         "uri": "kWth"
        }
       },
-      "x-question": "Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: \"Gigawattstunden\" ist GWh, \"t CO₂-Äq.\" ist t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" sind kWh und GWh, \"1.700 kg CO2\" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann \"value\" weg und gib die Einheit wörtlich in \"value_raw\". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden (\"Anzahl Gebäude\", \"Wohngebäude\") hat die Einheit Gebäude."
+      "x-question": "Welche Einheit hat diese Zahl? Schreib in \"value_raw\" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in \"value\" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: \"Gigawattstunden\" meint GWh, \"t CO₂-Äq.\" t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" kWh und GWh, \"1.700 kg CO2\" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel), ist \"value\" \"\", und \"value_raw\" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden (\"Anzahl Gebäude\", \"Wohngebäude\") hat die Einheit Gebäude."
      },
      "unit_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.",
@@ -10208,8 +11436,109 @@
       "type": "number"
      },
      "value_target": {
-      "description": "value x factor(unit), in the spec's unit_target OEO_00390001. This is the number the graph carries.",
+      "description": "value x factor(unit), in the spec's unit_target OEO_00390001. This is the number the graph carries; absent where the unit is no entry of units_accepted.",
       "type": "number"
+     },
+     "what": {
+      "description": "Axis 'what' of Leistung. null unless what_state is 'read' or 'derived'.",
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-question": "Was ist diese Zahl? Antworte mit der Bezeichnung, die der Plan genau dieser Zahl gibt, Zeichen für Zeichen: in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz, etwa „Theoretische Geothermiepotenziale“ oder „Wärmebedarf“. Die Bezeichnung einer anderen Zahl derselben Stelle, etwa einer Summe darüber, ist keine Antwort. Nennt die Stelle keine Bezeichnung, sagt der Plan es nicht."
+     },
+     "what_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('what_raw'). 'what_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "what_link_source": {
+      "description": "Which source 'what_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "what_producer": {
+      "description": "Who re-read 'what': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "what_quote": {
+      "description": "The verbatim passage carrying 'what'. Present exactly when what_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "what_raw": {
+      "description": "The document's own wording 'what' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "what_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'what': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "what_seen": {
+      "description": "A wording the model noticed for 'what' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "what_source": {
+      "description": "Which source the passage for 'what' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "what_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'what' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "what_window": {
+      "description": "[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "year": {
       "description": "Axis 'year' of Leistung. null unless year_state is 'read' or 'derived'.",
@@ -10324,15 +11653,15 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value",
      "unit",
      "unit_state",
-     "value_target",
      "quantity",
      "quantity_state",
+     "what",
+     "what_state",
      "subject",
      "subject_state",
      "qualifier",
@@ -10345,6 +11674,8 @@
      "sector_state",
      "year",
      "year_state",
+     "period_start",
+     "period_start_state",
      "scenario",
      "scenario_state",
      "spatial_scope",
@@ -10369,6 +11700,25 @@
    },
    "tuple_planning_organisation": {
     "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     }
+    ],
     "properties": {
      "catalogue": {
       "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
@@ -10385,10 +11735,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -10516,6 +11870,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
       "enum": [
@@ -10554,7 +11917,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value"
@@ -10573,6 +11935,23 @@
    "tuple_share": {
     "additionalProperties": false,
     "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     },
      {
       "else": {
        "properties": {
@@ -10595,13 +11974,29 @@
        ]
       },
       "then": {
-       "properties": {
-        "unit": {
-         "type": "string"
+       "anyOf": [
+        {
+         "properties": {
+          "unit": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "unit",
+          "value_target"
+         ]
+        },
+        {
+         "properties": {
+          "unit": {
+           "type": "null"
+          }
+         },
+         "required": [
+          "unit",
+          "unit_raw"
+         ]
         }
-       },
-       "required": [
-        "unit"
        ]
       }
      },
@@ -10634,6 +12029,38 @@
        },
        "required": [
         "quantity"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "what": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "what_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "what_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "what": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "what"
        ]
       }
      },
@@ -10864,6 +12291,38 @@
      {
       "else": {
        "properties": {
+        "period_start": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "period_start_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "period_start_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "period_start": {
+         "type": "integer"
+        }
+       },
+       "required": [
+        "period_start"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
         "scenario": {
          "type": "null"
         }
@@ -10992,12 +12451,14 @@
         "uri": "OEO_00000439"
        },
        "Abwärme": {
+        "meaning": "Abwärme: Wärmeenergie, die bei einem Energieumwandlungsprozess entsteht und ungenutzt an die Umwelt abgegeben wird.",
         "spellings": [
          "unvermeidbare Abwärme"
         ],
         "uri": "OEO_00010114"
        },
        "Biogas": {
+        "meaning": "Biogas: Durch anaerobe Vergärung entstehendes Gasgemisch aus hauptsächlich Methan und Kohlendioxid, das als Brennstoff dient.",
         "spellings": [
          "aufbereitetes Biogas",
          "Klärgas",
@@ -11007,6 +12468,7 @@
         "uri": "OEO_00000074"
        },
        "Biomasse": {
+        "meaning": "Biomasse: Stoff pflanzlichen oder tierischen Ursprungs und damit biogener Herkunft.",
         "spellings": [
          "pflanzliche Biomasse",
          "landwirtschaftliche Biomasse"
@@ -11014,18 +12476,22 @@
         "uri": "OEO_00010214"
        },
        "Biomethan": {
+        "meaning": "Biomethan: Aus Biogas durch Abtrennung von Kohlendioxid gewonnenes Gasgemisch aus hauptsächlich Methan, das als Brennstoff dient.",
         "uri": "OEO_00010215"
        },
        "Braunkohle": {
+        "meaning": "Braunkohle: Nicht backende Kohle mit einem Brennwert unter 17 435 kJ/kg und über 31 % flüchtigen Bestandteilen.",
         "uri": "OEO_00000251"
        },
        "Erdgas": {
+        "meaning": "Erdgas: Gasgemisch aus unterirdischen Lagerstätten, das hauptsächlich aus Methan besteht.",
         "spellings": [
          "Gas"
         ],
         "uri": "OEO_00000292"
        },
        "Fernwärme": {
+        "meaning": "Fernwärme: Leitungsgebundene Wärmelieferung an Wohn- oder Gewerbegebäude.",
         "spellings": [
          "Wärmenetze",
          "Wärmenetz",
@@ -11038,6 +12504,7 @@
         "uri": "OEO_00320011"
        },
        "Geothermie": {
+        "meaning": "Geothermie: Wärmeenergie, die aus dem Inneren der Erdkruste freigesetzt wird.",
         "spellings": [
          "Erdwärme",
          "oberflächennahe Geothermie",
@@ -11049,12 +12516,14 @@
         "uri": "OEO_00000191"
        },
        "Heizöl": {
+        "meaning": "Heizöl: Gasöl für industrielle und gewerbliche Zwecke, auch schwere Gasöle, die als petrochemische Rohstoffe dienen.",
         "spellings": [
          "Öl"
         ],
         "uri": "OEO_00000211"
        },
        "Holz": {
+        "meaning": "Holz: Biomasse von Bäumen in festem Aggregatzustand, die als Brennstoff genutzt werden kann.",
         "spellings": [
          "Holzpellets",
          "Pellets",
@@ -11065,10 +12534,11 @@
         "uri": "OEO_00000449"
        },
        "Kohle": {
+        "meaning": "Kohle: Brennbares schwarzes bis schwarzbraunes Sedimentgestein, das in Flözen entstanden ist.",
         "uri": "OEO_00000088"
        },
        "Siedlungsabfälle": {
-        "meaning": "A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.",
+        "meaning": "Siedlungsabfälle: Abfallbrennstoff aus Haushalten oder nicht-industriellen gewerblichen Tätigkeiten.",
         "spellings": [
          "Abfall",
          "thermische Abfallverwertung"
@@ -11076,6 +12546,7 @@
         "uri": "OEO_00000290"
        },
        "Solarthermie": {
+        "meaning": "Solarthermie: Wärmeenergie, die als Ergebnis einer solarthermischen Energieumwandlung entsteht.",
         "spellings": [
          "solare Wärme"
         ],
@@ -11092,6 +12563,7 @@
         "uri": "out:other"
        },
        "Steinkohle": {
+        "meaning": "Steinkohle: Kohle mit einem Brennwert über 23 865 kJ/kg und einer mittleren Vitrinitreflexion von mindestens 0,6.",
         "uri": "OEO_00000204"
        },
        "Strom": {
@@ -11125,6 +12597,7 @@
         "uri": "OEO_00000056"
        },
        "Wasserstoff": {
+        "meaning": "Wasserstoff: Stoff mit der chemischen Formel H2, der gasförmig vorliegt und als Brennstoff verwendet werden kann.",
         "spellings": [
          "H2"
         ],
@@ -11149,6 +12622,7 @@
         "uri": "OEO_00010223"
        },
        "biogener Festbrennstoff": {
+        "meaning": "Biogener Festbrennstoff: Organisches, nicht fossiles Material biologischen Ursprungs, das zur Wärme- oder Stromerzeugung genutzt werden kann.",
         "spellings": [
          "biogene Festbrennstoffe",
          "sonstige biogene Festbrennstoffe"
@@ -11165,10 +12639,11 @@
         "uri": "OEO_00000356"
        },
        "industrielle Abwärme": {
+        "meaning": "Industrielle Abwärme: Abwärme, die als Energieausgabe eines industriellen Prozesses entsteht.",
         "uri": "OEO_00310004"
        },
        "landwirtschaftlicher Abfallbrennstoff": {
-        "meaning": "An angricultural waste fuel is waste fuel produced by agriculture.",
+        "meaning": "Landwirtschaftlicher Abfallbrennstoff: Abfallbrennstoff aus der Landwirtschaft.",
         "spellings": [
          "tierische Exkremente",
          "Gülle",
@@ -11186,6 +12661,7 @@
         "uri": "OEO_00140104"
        },
        "synthetische Gase": {
+        "meaning": "Synthetische Gase: Synthetischer Brennstoff, der unter Normalbedingungen gasförmig ist.",
         "spellings": [
          "grüne Gase",
          "E-Gas",
@@ -11194,7 +12670,7 @@
         "uri": "OEO_00010155"
        }
       },
-      "x-question": "Welcher Energieträger?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\", \"Erdgas (netzgebunden)\" = Erdgas; \"Nahwärme\", \"Wärmenetz\" = Fernwärme.\nSummenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") = \"Summe\"; Restposition (\"Sonstige\", \"Andere\") = \"Sonstige\".\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nEigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welcher Energieträger? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung (\"means\") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift.\nBeschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt \"Summe\", solange die Stelle nicht nach Energieträgern aufteilt.\nIst die eigene Tabelle oder der eigene Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet), ist die Antwort \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Gebäudetyp\"."
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
@@ -11304,10 +12780,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -11394,6 +12874,107 @@
      },
      "parameter_window": {
       "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "period_start": {
+      "description": "Axis 'period_start' of Anteil. null unless period_start_state is 'read' or 'derived'.",
+      "type": [
+       "integer",
+       "null"
+      ],
+      "x-question": "Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht."
+     },
+     "period_start_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('period_start_raw'). 'period_start_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "period_start_link_source": {
+      "description": "Which source 'period_start_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "period_start_producer": {
+      "description": "Who re-read 'period_start': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "period_start_quote": {
+      "description": "The verbatim passage carrying 'period_start'. Present exactly when period_start_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "period_start_raw": {
+      "description": "The document's own wording 'period_start' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "period_start_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'period_start': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "period_start_seen": {
+      "description": "A wording the model noticed for 'period_start' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "period_start_source": {
+      "description": "Which source the passage for 'period_start' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "period_start_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'period_start' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "period_start_window": {
+      "description": "[stage, index] of the window 'period_start' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -11728,6 +13309,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "scenario": {
       "description": "Axis 'scenario' of Anteil. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.",
       "enum": [
@@ -11990,7 +13580,7 @@
         "uri": "OEO_00000422"
        }
       },
-      "x-question": "Welcher Verbrauchssektor?\nBezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: \"Wohnen\", \"Wohngebäude\" = Private Haushalte; \"GHD/Kommune\", \"Gewerbe\", \"wirtschaftlich genutzte Gebäude\" = GHD.\nGEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\", \"Plangebiet\" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.\nZeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf) = \"Summe\".\nEbenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\").\nGesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist keine Summe über Sektoren.\n\"Einfamilienhaus\", \"Mehrfamilienhaus\" = Private Haushalte.\nEigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): \"Summe\"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Energieträger\".\n\"known\" unter der Zeile sagt, was die Zahl schon ist."
+      "x-question": "Welcher Verbrauchssektor? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung (\"means\") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle.\nEin Gebiet ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\", \"Plangebiet\" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.\n\"Summe\" gilt für alle Verbraucher zusammen: eine Zeile oder Spalte, die ausdrücklich über alle Sektoren summiert, ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"), oder eine Zahl, deren eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt ist, nur nach anderem (Energieträger, Gebiet); dann zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.\nDie Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist keine Summe über Sektoren.\n\"value_raw\" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa \"Energieträger\"."
      },
      "sector_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
@@ -12552,7 +14142,7 @@
       ]
      },
      "unit": {
-      "description": "The unit: one entry of units_accepted (%, Prozent), read as a coordinate with its own passage. Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
+      "description": "The unit: one entry of units_accepted (%, Prozent), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
       "enum": [
        "%",
        "Prozent",
@@ -12572,7 +14162,7 @@
         "uri": "Prozent"
        }
       },
-      "x-question": "Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: \"Gigawattstunden\" ist GWh, \"t CO₂-Äq.\" ist t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" sind kWh und GWh, \"1.700 kg CO2\" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann \"value\" weg und gib die Einheit wörtlich in \"value_raw\". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden (\"Anzahl Gebäude\", \"Wohngebäude\") hat die Einheit Gebäude."
+      "x-question": "Welche Einheit hat diese Zahl? Schreib in \"value_raw\" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in \"value\" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: \"Gigawattstunden\" meint GWh, \"t CO₂-Äq.\" t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" kWh und GWh, \"1.700 kg CO2\" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel), ist \"value\" \"\", und \"value_raw\" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden (\"Anzahl Gebäude\", \"Wohngebäude\") hat die Einheit Gebäude."
      },
      "unit_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.",
@@ -12672,8 +14262,109 @@
       "type": "number"
      },
      "value_target": {
-      "description": "value x factor(unit), in the spec's unit_target UO_0000187. This is the number the graph carries.",
+      "description": "value x factor(unit), in the spec's unit_target UO_0000187. This is the number the graph carries; absent where the unit is no entry of units_accepted.",
       "type": "number"
+     },
+     "what": {
+      "description": "Axis 'what' of Anteil. null unless what_state is 'read' or 'derived'.",
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-question": "Was ist diese Zahl? Antworte mit der Bezeichnung, die der Plan genau dieser Zahl gibt, Zeichen für Zeichen: in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz, etwa „Theoretische Geothermiepotenziale“ oder „Wärmebedarf“. Die Bezeichnung einer anderen Zahl derselben Stelle, etwa einer Summe darüber, ist keine Antwort. Nennt die Stelle keine Bezeichnung, sagt der Plan es nicht."
+     },
+     "what_link_quote": {
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('what_raw'). 'what_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "what_link_source": {
+      "description": "Which source 'what_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "what_producer": {
+      "description": "Who re-read 'what': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
+     "what_quote": {
+      "description": "The verbatim passage carrying 'what'. Present exactly when what_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "what_raw": {
+      "description": "The document's own wording 'what' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "what_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'what': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "what_seen": {
+      "description": "A wording the model noticed for 'what' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "what_source": {
+      "description": "Which source the passage for 'what' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "what_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'what' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "what_window": {
+      "description": "[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "near",
+         "found",
+         "retrieval",
+         "rest",
+         "places",
+         "frame",
+         "table",
+         "base_year",
+         "target_year",
+         "head"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "whole": {
       "description": "Axis 'whole' of Anteil. null unless whole_state is 'read' or 'derived'.",
@@ -12889,15 +14580,15 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value",
      "unit",
      "unit_state",
-     "value_target",
      "quantity",
      "quantity_state",
+     "what",
+     "what_state",
      "subject",
      "subject_state",
      "qualifier",
@@ -12912,6 +14603,8 @@
      "technology_state",
      "year",
      "year_state",
+     "period_start",
+     "period_start_state",
      "scenario",
      "scenario_state",
      "spatial_scope",
@@ -12980,8 +14673,8 @@
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
-   "^extraction/(harvest|queries|anchors|rows|field|phrase|frame|survey|read_values|read_text|comb|match)$": {
-    "description": "sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_values`, `read_text`, `comb` and `match` are the prompts of the survey flow",
+   "^extraction/(harvest|queries|anchors|rows|field|phrase|frame|survey|read_values|read_text|comb|match|settings|seek)$": {
+    "description": "sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_values`, `read_text`, `comb`, `match`, `settings` and `seek` are the prompts of the survey flow",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
@@ -14906,6 +16599,164 @@
       "type": "number"
      },
      "t": {
+      "const": "settings_ask"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "input": {
+      "type": "object"
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "once": {
+      "type": "boolean"
+     },
+     "output": {
+      "type": "object"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "round": {
+      "type": "integer"
+     },
+     "rows": {},
+     "sent_at": {
+      "type": "number"
+     },
+     "t": {
+      "const": "seek_free_ask"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "input": {
+      "type": "object"
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "once": {
+      "type": "boolean"
+     },
+     "output": {
+      "type": "object"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "round": {
+      "type": "integer"
+     },
+     "rows": {},
+     "sent_at": {
+      "type": "number"
+     },
+     "t": {
       "const": "phrase_ask"
      },
      "value": {
@@ -15215,21 +17066,12 @@
       },
       "type": "object"
      },
-     "judged": {
-      "type": "integer"
-     },
      "kind": {
       "enum": [
        "section",
        "table",
        "figure"
       ]
-     },
-     "near": {
-      "type": "integer"
-     },
-     "near_read": {
-      "type": "integer"
      },
      "owner": {
       "type": "integer"
@@ -15239,9 +17081,6 @@
      },
      "t": {
       "const": "read"
-     },
-     "turned": {
-      "type": "integer"
      },
      "unanswered": {
       "type": "integer"
@@ -15272,6 +17111,9 @@
    {
     "additionalProperties": false,
     "properties": {
+     "anew": {
+      "type": "integer"
+     },
      "asked": {
       "type": "integer"
      },
@@ -15315,6 +17157,12 @@
      "missed": {
       "type": "integer"
      },
+     "near": {
+      "type": "integer"
+     },
+     "near_read": {
+      "type": "integer"
+     },
      "open": {
       "type": "integer"
      },
@@ -15354,7 +17202,9 @@
      "searched",
      "missed",
      "corrected",
-     "exhausted"
+     "exhausted",
+     "near",
+     "near_read"
     ],
     "type": "object"
    },
@@ -15437,6 +17287,82 @@
      "parameter",
      "kind",
      "rank"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "asked": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "fetched": {
+      "type": "integer"
+     },
+     "hits": {
+      "type": "integer"
+     },
+     "refused": {
+      "type": "integer"
+     },
+     "settings": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "settings"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "settings",
+     "asked",
+     "hits",
+     "fetched",
+     "refused"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "asked": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "fetched": {
+      "type": "integer"
+     },
+     "found": {
+      "type": "integer"
+     },
+     "parameter": {
+      "type": "string"
+     },
+     "t": {
+      "const": "seek_free"
+     },
+     "unknown": {
+      "type": "integer"
+     },
+     "walked": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "parameter",
+     "walked",
+     "asked",
+     "found",
+     "fetched",
+     "unknown"
     ],
     "type": "object"
    },

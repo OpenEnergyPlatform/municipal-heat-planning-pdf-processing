@@ -257,6 +257,17 @@ class Group:
     # qualifies the number, never asked again (spec: "own_value", owner
     # decision 2026-11-06).
     own_value: tuple = ()
+    # Of a group the survey reads, the coordinates it reads per passage as one
+    # pair (spec: "pair", all of them where it names none): the frame's
+    # scenario and year, while the beginning of a period the value is a mean
+    # over stands in the same group and is read per value only (owner
+    # decision 2026-11-07), so the frame keeps its one year.
+    pair: tuple = ()
+
+    @property
+    def paired(self) -> tuple:
+        """The coordinates the survey reads per passage."""
+        return self.pair or self.coordinates
 
     def asked_near(self, slots: list) -> list:
         """The slots the second reading asks again with the passages around
@@ -719,8 +730,15 @@ def _validate_groups(raw, parameters: list, asks_unit: bool) -> dict:
         if set(own["own_passage"]) & set(own["own_value"]):
             _fail(f"{path}.own_value", "a coordinate is in own_passage or "
                                        "own_value, not both")
+        pair = entry.get("pair", [])
+        if not isinstance(pair, list) or any(c not in coordinates
+                                             for c in pair):
+            _fail(f"{path}.pair", "a list of the group's coordinates")
+        if pair and read_in != "survey":
+            _fail(f"{path}.pair", "only a group the survey reads has a pair")
         groups[name] = Group(name, tuple(coordinates), read_in, where.strip(),
-                             full_definition=definition == "full", **own)
+                             full_definition=definition == "full",
+                             pair=tuple(pair), **own)
     missing = sorted(known - set(owner))
     if missing:
         _fail("spec.groups", f"in no group: {', '.join(missing)}")

@@ -758,6 +758,17 @@ the model's reading and not checked (owner decisions 2026-09-22 and
 2026-10-06): the number has to be one of the years shown. A number that
 dates both states is cited from the first, the plan's own.
 
+### printed_only
+
+```python
+def printed_only(slot, answer: dict) -> Optional[str]
+```
+
+The print a coordinate whose answer may be the print itself keeps
+where its list has no entry for it (`fields.Slot.keeps_print`, the unit):
+the wording of an answer with no entry, or of one whose answer is no
+entry of the list; None for any other answer, which is read as before.
+
 ### merge_field
 
 ```python

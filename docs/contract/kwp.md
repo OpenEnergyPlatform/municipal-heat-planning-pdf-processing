@@ -44,9 +44,11 @@ appended its row (`--top-up-parameters`); the harvest writes none, so a
 missing key means the harvest read it (`docpipe/extraction/schema.py:212` to
 `293`). The rest belong to the row itself: `kind`, `quote`,
 `tier`, `flags`, `provenance`, `computed`, `compute`, `unit` and
-`unit_raw` (empty for a wording); only the value additionally carries
-`value_target` for a numeric parameter, or `value_raw` and `value_uri`
-for a wording (`docpipe/extraction/schema.py:313` to `384`).
+`unit_raw` (empty for a wording); only the value additionally carries `value_target` for a numeric parameter
+whose unit chose an entry (a printed unit that is no entry leaves `unit` and
+`value_target` empty and flags `unmapped:unit:<print>`), `reading` for a number
+read off a figure in place of a quote, or `value_raw` and `value_uri` for a
+wording (`docpipe/extraction/schema.py:313` to `384`).
 
 Two keys on a coordinate say more than its plain description does.
 `x-question` is the sentence, in German, the model was actually asked
@@ -184,6 +186,10 @@ Why values are not an A, counted. A closed list: a reason nobody can enumerate i
 
 ### `tuples`
 
+### `unlisted_units`
+
+The units numbers were read with that are no entry of their parameter's list, as the plan prints them, counted: read and not converted, until the list grows and a top-up asks them again (owner decision 2026-11-07). Absent in a file written before.
+
 ## `building_count`
 
 How the row becomes a node:
@@ -199,11 +205,7 @@ Axis 'aggregation' of Gebäudeanzahl. A closed list; an entry beginning 'out:' i
 
 The prompt's own wording:
 
-> Wie ist der Wert über Zeit oder Raum zusammengefasst?
-Normalfall "integral" (Jahressumme).
-"maximum": Spitzenlast, Höchstwert.
-"arithmetic mean": Durchschnitt je Gebäude oder Jahr.
-"instantaneous": Momentanwert.
+> Wie ist der Wert über Zeit oder Raum zusammengefasst? Wähle den Eintrag nach seiner Bedeutung ("means"), nicht nach einem Wort der Stelle. Der Normalfall ist "integral", eine Jahressumme.
 
 <details><summary>What it may answer (5)</summary>
 
@@ -276,67 +278,64 @@ Axis 'carrier' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a 
 
 The prompt's own wording:
 
-> Welcher Energieträger?
-Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H", "Erdgas (netzgebunden)" = Erdgas; "Nahwärme", "Wärmenetz" = Fernwärme.
-Summenzeile ("Summe", "Gesamt", "alle Energieträger") = "Summe"; Restposition ("Sonstige", "Andere") = "Sonstige".
+> Welcher Energieträger? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift.
 Beschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt "Summe", solange die Stelle nicht nach Energieträgern aufteilt.
-Eigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+Ist die eigene Tabelle oder der eigene Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet), ist die Antwort "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
 "value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Gebäudetyp".
-"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (29)</summary>
 
 - **Abfallbrennstoff** → `OEO_00000439` — Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.
   - also written: Klärschlamm, EBS
-- **Abwärme** → `OEO_00010114`
+- **Abwärme** → `OEO_00010114` — Abwärme: Wärmeenergie, die bei einem Energieumwandlungsprozess entsteht und ungenutzt an die Umwelt abgegeben wird.
   - also written: unvermeidbare Abwärme
-- **Biogas** → `OEO_00000074`
+- **Biogas** → `OEO_00000074` — Biogas: Durch anaerobe Vergärung entstehendes Gasgemisch aus hauptsächlich Methan und Kohlendioxid, das als Brennstoff dient.
   - also written: aufbereitetes Biogas, Klärgas, Faulgas, Klärschlammgas
-- **Biomasse** → `OEO_00010214`
+- **Biomasse** → `OEO_00010214` — Biomasse: Stoff pflanzlichen oder tierischen Ursprungs und damit biogener Herkunft.
   - also written: pflanzliche Biomasse, landwirtschaftliche Biomasse
-- **Biomethan** → `OEO_00010215`
-- **Braunkohle** → `OEO_00000251`
-- **Erdgas** → `OEO_00000292`
+- **Biomethan** → `OEO_00010215` — Biomethan: Aus Biogas durch Abtrennung von Kohlendioxid gewonnenes Gasgemisch aus hauptsächlich Methan, das als Brennstoff dient.
+- **Braunkohle** → `OEO_00000251` — Braunkohle: Nicht backende Kohle mit einem Brennwert unter 17 435 kJ/kg und über 31 % flüchtigen Bestandteilen.
+- **Erdgas** → `OEO_00000292` — Erdgas: Gasgemisch aus unterirdischen Lagerstätten, das hauptsächlich aus Methan besteht.
   - also written: Gas
-- **Fernwärme** → `OEO_00000132`
+- **Fernwärme** → `OEO_00000132` — Fernwärme: Leitungsgebundene Wärmelieferung an Wohn- oder Gewerbegebäude.
   - also written: Wärmenetze, Wärmenetz, Nahwärme
 - **Flüssiggas** → `OEO_00320011` — Flüssiggasgemisch aus Propan und Butan, unterscheidet sich als fossiler Gasbrennstoff.
-- **Geothermie** → `OEO_00000191`
+- **Geothermie** → `OEO_00000191` — Geothermie: Wärmeenergie, die aus dem Inneren der Erdkruste freigesetzt wird.
   - also written: Erdwärme, oberflächennahe Geothermie, Tiefengeothermie, Erdwärmesonde, Erdwärmekollektor, Oberflächengeothermie
-- **Heizöl** → `OEO_00000211`
+- **Heizöl** → `OEO_00000211` — Heizöl: Gasöl für industrielle und gewerbliche Zwecke, auch schwere Gasöle, die als petrochemische Rohstoffe dienen.
   - also written: Öl
-- **Holz** → `OEO_00000449`
+- **Holz** → `OEO_00000449` — Holz: Biomasse von Bäumen in festem Aggregatzustand, die als Brennstoff genutzt werden kann.
   - also written: Holzpellets, Pellets, Hackschnitzel, Brennholz, Holzenergie
-- **Kohle** → `OEO_00000088`
-- **Siedlungsabfälle** → `OEO_00000290` — A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.
+- **Kohle** → `OEO_00000088` — Kohle: Brennbares schwarzes bis schwarzbraunes Sedimentgestein, das in Flözen entstanden ist.
+- **Siedlungsabfälle** → `OEO_00000290` — Siedlungsabfälle: Abfallbrennstoff aus Haushalten oder nicht-industriellen gewerblichen Tätigkeiten.
   - also written: Abfall, thermische Abfallverwertung
-- **Solarthermie** → `OEO_00000388`
+- **Solarthermie** → `OEO_00000388` — Solarthermie: Wärmeenergie, die als Ergebnis einer solarthermischen Energieumwandlung entsteht.
   - also written: solare Wärme
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
-- **Steinkohle** → `OEO_00000204`
+- **Steinkohle** → `OEO_00000204` — Steinkohle: Kohle mit einem Brennwert über 23 865 kJ/kg und einer mittleren Vitrinitreflexion von mindestens 0,6.
 - **Strom** → `OEO_00000139` — Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Umweltwärme** → `OEO_00000056` — In Luft, Erde oder Wasser gespeicherte Wärme, die durch Wärmepumpen genutzt wird.
   - also written: Umgebungswärme, Umgebungsluft
-- **Wasserstoff** → `OEO_00000220`
+- **Wasserstoff** → `OEO_00000220` — Wasserstoff: Stoff mit der chemischen Formel H2, der gasförmig vorliegt und als Brennstoff verwendet werden kann.
   - also written: H2
 - **anthropogene Umweltwärme** → `OEO_00140105` — Umweltwärme mit anthropogenem Ursprung, unterscheidet sich durch menschliche Entstehung.
   - also written: Abwasserwärme, Abwasser, Abwasserwärmenutzung
 - **biogener Abfallbrennstoff** → `OEO_00010223` — Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart.
   - also written: Altholz, Altholzheizung, biogene Abfälle
-- **biogener Festbrennstoff** → `OEO_00000332`
+- **biogener Festbrennstoff** → `OEO_00000332` — Biogener Festbrennstoff: Organisches, nicht fossiles Material biologischen Ursprungs, das zur Wärme- oder Stromerzeugung genutzt werden kann.
   - also written: biogene Festbrennstoffe, sonstige biogene Festbrennstoffe
 - **biogener Siedlungsabfall** → `OEO_00000356` — Siedlungsabfall mit biogenem Ursprung, unterscheidet sich durch die biologische Herkunft.
   - also written: Biogut, Gartenabfälle, Grünschnitt
-- **industrielle Abwärme** → `OEO_00310004`
-- **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — An angricultural waste fuel is waste fuel produced by agriculture.
+- **industrielle Abwärme** → `OEO_00310004` — Industrielle Abwärme: Abwärme, die als Energieausgabe eines industriellen Prozesses entsteht.
+- **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — Landwirtschaftlicher Abfallbrennstoff: Abfallbrennstoff aus der Landwirtschaft.
   - also written: tierische Exkremente, Gülle, Mist
 - **natürliche Umweltwärme** → `OEO_00140104` — Umweltwärme mit erneuerbarem Ursprung, unterscheidet sich durch natürliche Herkunft.
   - also written: Oberflächengewässer, Seethermie, Flusswärme
-- **synthetische Gase** → `OEO_00010155`
+- **synthetische Gase** → `OEO_00010155` — Synthetische Gase: Synthetischer Brennstoff, der unter Normalbedingungen gasförmig ist.
   - also written: grüne Gase, E-Gas, SNG
 
 </details>
@@ -404,6 +403,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
@@ -461,6 +464,54 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 ### `parameter_window`
 
 [stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
+### `period_start`
+
+Axis 'period_start' of Gebäudeanzahl. null unless period_start_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht.
+
+### `period_start_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('period_start_raw'). 'period_start_quote' is then the frame's passage that prints the number.
+
+### `period_start_link_source`
+
+Which source 'period_start_link_quote' was found in.
+
+### `period_start_producer`
+
+Who re-read 'period_start': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `period_start_quote`
+
+The verbatim passage carrying 'period_start'. Present exactly when period_start_state is 'read'.
+
+### `period_start_raw`
+
+The document's own wording 'period_start' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `period_start_raw_foreign`
+
+The wording does not name the option chosen for 'period_start': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `period_start_seen`
+
+A wording the model noticed for 'period_start' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `period_start_source`
+
+Which source the passage for 'period_start' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `period_start_state`
+
+How the coordinate 'period_start' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `period_start_window`
+
+[stage, index] of the window 'period_start' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 ### `provenance`
 
@@ -594,6 +645,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `scenario`
 
 Axis 'scenario' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.
@@ -671,16 +730,11 @@ Axis 'sector' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a d
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor?
-Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: "Wohnen", "Wohngebäude" = Private Haushalte; "GHD/Kommune", "Gewerbe", "wirtschaftlich genutzte Gebäude" = GHD.
-GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
-Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf) = "Summe".
-Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a").
-Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
-"Einfamilienhaus", "Mehrfamilienhaus" = Private Haushalte.
-Eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+> Welcher Verbrauchssektor? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle.
+Ein Gebiet ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
+"Summe" gilt für alle Verbraucher zusammen: eine Zeile oder Spalte, die ausdrücklich über alle Sektoren summiert, ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"), oder eine Zahl, deren eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt ist, nur nach anderem (Energieträger, Gebiet); dann zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+Die Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
 "value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Energieträger".
-"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (6)</summary>
 
@@ -965,11 +1019,11 @@ text_located: the quote sits in the document's own refined text, so it can be ch
 
 ### `unit`
 
-The unit: one entry of units_accepted (Gebäude), read as a coordinate with its own passage. Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
+The unit: one entry of units_accepted (Gebäude), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
 
 The prompt's own wording:
 
-> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
+> Welche Einheit hat diese Zahl? Schreib in "value_raw" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in "value" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: "Gigawattstunden" meint GWh, "t CO₂-Äq." t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" kWh und GWh, "1.700 kg CO2" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel), ist "value" "", und "value_raw" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
 
 <details><summary>What it may answer (1)</summary>
 
@@ -1023,7 +1077,55 @@ The number as the document prints it, with the grouping removed and a decimal po
 
 ### `value_target`
 
-value x factor(unit), in the spec's unit_target UO_0000189. This is the number the graph carries.
+value x factor(unit), in the spec's unit_target UO_0000189. This is the number the graph carries; absent where the unit is no entry of units_accepted.
+
+### `what`
+
+Axis 'what' of Gebäudeanzahl. null unless what_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Was ist diese Zahl? Antworte mit der Bezeichnung, die der Plan genau dieser Zahl gibt, Zeichen für Zeichen: in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz, etwa „Theoretische Geothermiepotenziale“ oder „Wärmebedarf“. Die Bezeichnung einer anderen Zahl derselben Stelle, etwa einer Summe darüber, ist keine Antwort. Nennt die Stelle keine Bezeichnung, sagt der Plan es nicht.
+
+### `what_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('what_raw'). 'what_quote' is then the frame's passage that prints the number.
+
+### `what_link_source`
+
+Which source 'what_link_quote' was found in.
+
+### `what_producer`
+
+Who re-read 'what': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `what_quote`
+
+The verbatim passage carrying 'what'. Present exactly when what_state is 'read'.
+
+### `what_raw`
+
+The document's own wording 'what' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `what_raw_foreign`
+
+The wording does not name the option chosen for 'what': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `what_seen`
+
+A wording the model noticed for 'what' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `what_source`
+
+Which source the passage for 'what' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `what_state`
+
+How the coordinate 'what' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `what_window`
+
+[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 ### `year`
 
@@ -1101,11 +1203,7 @@ Axis 'aggregation' of Emissionen. A closed list; an entry beginning 'out:' is a 
 
 The prompt's own wording:
 
-> Wie ist der Wert über Zeit oder Raum zusammengefasst?
-Normalfall "integral" (Jahressumme).
-"maximum": Spitzenlast, Höchstwert.
-"arithmetic mean": Durchschnitt je Gebäude oder Jahr.
-"instantaneous": Momentanwert.
+> Wie ist der Wert über Zeit oder Raum zusammengefasst? Wähle den Eintrag nach seiner Bedeutung ("means"), nicht nach einem Wort der Stelle. Der Normalfall ist "integral", eine Jahressumme.
 
 <details><summary>What it may answer (5)</summary>
 
@@ -1178,67 +1276,64 @@ Axis 'carrier' of Emissionen. A closed list; an entry beginning 'out:' is a deli
 
 The prompt's own wording:
 
-> Welcher Energieträger?
-Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H", "Erdgas (netzgebunden)" = Erdgas; "Nahwärme", "Wärmenetz" = Fernwärme.
-Summenzeile ("Summe", "Gesamt", "alle Energieträger") = "Summe"; Restposition ("Sonstige", "Andere") = "Sonstige".
+> Welcher Energieträger? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift.
 Beschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt "Summe", solange die Stelle nicht nach Energieträgern aufteilt.
-Eigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+Ist die eigene Tabelle oder der eigene Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet), ist die Antwort "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
 "value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Gebäudetyp".
-"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (29)</summary>
 
 - **Abfallbrennstoff** → `OEO_00000439` — Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.
   - also written: Klärschlamm, EBS
-- **Abwärme** → `OEO_00010114`
+- **Abwärme** → `OEO_00010114` — Abwärme: Wärmeenergie, die bei einem Energieumwandlungsprozess entsteht und ungenutzt an die Umwelt abgegeben wird.
   - also written: unvermeidbare Abwärme
-- **Biogas** → `OEO_00000074`
+- **Biogas** → `OEO_00000074` — Biogas: Durch anaerobe Vergärung entstehendes Gasgemisch aus hauptsächlich Methan und Kohlendioxid, das als Brennstoff dient.
   - also written: aufbereitetes Biogas, Klärgas, Faulgas, Klärschlammgas
-- **Biomasse** → `OEO_00010214`
+- **Biomasse** → `OEO_00010214` — Biomasse: Stoff pflanzlichen oder tierischen Ursprungs und damit biogener Herkunft.
   - also written: pflanzliche Biomasse, landwirtschaftliche Biomasse
-- **Biomethan** → `OEO_00010215`
-- **Braunkohle** → `OEO_00000251`
-- **Erdgas** → `OEO_00000292`
+- **Biomethan** → `OEO_00010215` — Biomethan: Aus Biogas durch Abtrennung von Kohlendioxid gewonnenes Gasgemisch aus hauptsächlich Methan, das als Brennstoff dient.
+- **Braunkohle** → `OEO_00000251` — Braunkohle: Nicht backende Kohle mit einem Brennwert unter 17 435 kJ/kg und über 31 % flüchtigen Bestandteilen.
+- **Erdgas** → `OEO_00000292` — Erdgas: Gasgemisch aus unterirdischen Lagerstätten, das hauptsächlich aus Methan besteht.
   - also written: Gas
-- **Fernwärme** → `OEO_00000132`
+- **Fernwärme** → `OEO_00000132` — Fernwärme: Leitungsgebundene Wärmelieferung an Wohn- oder Gewerbegebäude.
   - also written: Wärmenetze, Wärmenetz, Nahwärme
 - **Flüssiggas** → `OEO_00320011` — Flüssiggasgemisch aus Propan und Butan, unterscheidet sich als fossiler Gasbrennstoff.
-- **Geothermie** → `OEO_00000191`
+- **Geothermie** → `OEO_00000191` — Geothermie: Wärmeenergie, die aus dem Inneren der Erdkruste freigesetzt wird.
   - also written: Erdwärme, oberflächennahe Geothermie, Tiefengeothermie, Erdwärmesonde, Erdwärmekollektor, Oberflächengeothermie
-- **Heizöl** → `OEO_00000211`
+- **Heizöl** → `OEO_00000211` — Heizöl: Gasöl für industrielle und gewerbliche Zwecke, auch schwere Gasöle, die als petrochemische Rohstoffe dienen.
   - also written: Öl
-- **Holz** → `OEO_00000449`
+- **Holz** → `OEO_00000449` — Holz: Biomasse von Bäumen in festem Aggregatzustand, die als Brennstoff genutzt werden kann.
   - also written: Holzpellets, Pellets, Hackschnitzel, Brennholz, Holzenergie
-- **Kohle** → `OEO_00000088`
-- **Siedlungsabfälle** → `OEO_00000290` — A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.
+- **Kohle** → `OEO_00000088` — Kohle: Brennbares schwarzes bis schwarzbraunes Sedimentgestein, das in Flözen entstanden ist.
+- **Siedlungsabfälle** → `OEO_00000290` — Siedlungsabfälle: Abfallbrennstoff aus Haushalten oder nicht-industriellen gewerblichen Tätigkeiten.
   - also written: Abfall, thermische Abfallverwertung
-- **Solarthermie** → `OEO_00000388`
+- **Solarthermie** → `OEO_00000388` — Solarthermie: Wärmeenergie, die als Ergebnis einer solarthermischen Energieumwandlung entsteht.
   - also written: solare Wärme
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
-- **Steinkohle** → `OEO_00000204`
+- **Steinkohle** → `OEO_00000204` — Steinkohle: Kohle mit einem Brennwert über 23 865 kJ/kg und einer mittleren Vitrinitreflexion von mindestens 0,6.
 - **Strom** → `OEO_00000139` — Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Umweltwärme** → `OEO_00000056` — In Luft, Erde oder Wasser gespeicherte Wärme, die durch Wärmepumpen genutzt wird.
   - also written: Umgebungswärme, Umgebungsluft
-- **Wasserstoff** → `OEO_00000220`
+- **Wasserstoff** → `OEO_00000220` — Wasserstoff: Stoff mit der chemischen Formel H2, der gasförmig vorliegt und als Brennstoff verwendet werden kann.
   - also written: H2
 - **anthropogene Umweltwärme** → `OEO_00140105` — Umweltwärme mit anthropogenem Ursprung, unterscheidet sich durch menschliche Entstehung.
   - also written: Abwasserwärme, Abwasser, Abwasserwärmenutzung
 - **biogener Abfallbrennstoff** → `OEO_00010223` — Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart.
   - also written: Altholz, Altholzheizung, biogene Abfälle
-- **biogener Festbrennstoff** → `OEO_00000332`
+- **biogener Festbrennstoff** → `OEO_00000332` — Biogener Festbrennstoff: Organisches, nicht fossiles Material biologischen Ursprungs, das zur Wärme- oder Stromerzeugung genutzt werden kann.
   - also written: biogene Festbrennstoffe, sonstige biogene Festbrennstoffe
 - **biogener Siedlungsabfall** → `OEO_00000356` — Siedlungsabfall mit biogenem Ursprung, unterscheidet sich durch die biologische Herkunft.
   - also written: Biogut, Gartenabfälle, Grünschnitt
-- **industrielle Abwärme** → `OEO_00310004`
-- **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — An angricultural waste fuel is waste fuel produced by agriculture.
+- **industrielle Abwärme** → `OEO_00310004` — Industrielle Abwärme: Abwärme, die als Energieausgabe eines industriellen Prozesses entsteht.
+- **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — Landwirtschaftlicher Abfallbrennstoff: Abfallbrennstoff aus der Landwirtschaft.
   - also written: tierische Exkremente, Gülle, Mist
 - **natürliche Umweltwärme** → `OEO_00140104` — Umweltwärme mit erneuerbarem Ursprung, unterscheidet sich durch natürliche Herkunft.
   - also written: Oberflächengewässer, Seethermie, Flusswärme
-- **synthetische Gase** → `OEO_00010155`
+- **synthetische Gase** → `OEO_00010155` — Synthetische Gase: Synthetischer Brennstoff, der unter Normalbedingungen gasförmig ist.
   - also written: grüne Gase, E-Gas, SNG
 
 </details>
@@ -1306,6 +1401,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
@@ -1363,6 +1462,54 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 ### `parameter_window`
 
 [stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
+### `period_start`
+
+Axis 'period_start' of Emissionen. null unless period_start_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht.
+
+### `period_start_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('period_start_raw'). 'period_start_quote' is then the frame's passage that prints the number.
+
+### `period_start_link_source`
+
+Which source 'period_start_link_quote' was found in.
+
+### `period_start_producer`
+
+Who re-read 'period_start': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `period_start_quote`
+
+The verbatim passage carrying 'period_start'. Present exactly when period_start_state is 'read'.
+
+### `period_start_raw`
+
+The document's own wording 'period_start' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `period_start_raw_foreign`
+
+The wording does not name the option chosen for 'period_start': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `period_start_seen`
+
+A wording the model noticed for 'period_start' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `period_start_source`
+
+Which source the passage for 'period_start' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `period_start_state`
+
+How the coordinate 'period_start' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `period_start_window`
+
+[stage, index] of the window 'period_start' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 ### `provenance`
 
@@ -1519,6 +1666,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `scenario`
 
 Axis 'scenario' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.
@@ -1596,16 +1751,11 @@ Axis 'sector' of Emissionen. A closed list; an entry beginning 'out:' is a delib
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor?
-Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: "Wohnen", "Wohngebäude" = Private Haushalte; "GHD/Kommune", "Gewerbe", "wirtschaftlich genutzte Gebäude" = GHD.
-GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
-Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf) = "Summe".
-Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a").
-Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
-"Einfamilienhaus", "Mehrfamilienhaus" = Private Haushalte.
-Eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+> Welcher Verbrauchssektor? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle.
+Ein Gebiet ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
+"Summe" gilt für alle Verbraucher zusammen: eine Zeile oder Spalte, die ausdrücklich über alle Sektoren summiert, ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"), oder eine Zahl, deren eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt ist, nur nach anderem (Energieträger, Gebiet); dann zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+Die Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
 "value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Energieträger".
-"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (6)</summary>
 
@@ -1890,11 +2040,11 @@ text_located: the quote sits in the document's own refined text, so it can be ch
 
 ### `unit`
 
-The unit: one entry of units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, kg, kg CO2, kg CO2/a, kg CO2eq, kg CO2eq/a, kg/a, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/a, t/a CO2eq, tCO2, tCO2/a), read as a coordinate with its own passage. Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
+The unit: one entry of units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, kg, kg CO2, kg CO2/a, kg CO2eq, kg CO2eq/a, kg/a, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/a, t/a CO2eq, tCO2, tCO2/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
 
 The prompt's own wording:
 
-> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
+> Welche Einheit hat diese Zahl? Schreib in "value_raw" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in "value" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: "Gigawattstunden" meint GWh, "t CO₂-Äq." t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" kWh und GWh, "1.700 kg CO2" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel), ist "value" "", und "value_raw" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
 
 <details><summary>What it may answer (48)</summary>
 
@@ -1995,7 +2145,55 @@ The number as the document prints it, with the grouping removed and a decimal po
 
 ### `value_target`
 
-value x factor(unit), in the spec's unit_target OEO_00010137. This is the number the graph carries.
+value x factor(unit), in the spec's unit_target OEO_00010137. This is the number the graph carries; absent where the unit is no entry of units_accepted.
+
+### `what`
+
+Axis 'what' of Emissionen. null unless what_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Was ist diese Zahl? Antworte mit der Bezeichnung, die der Plan genau dieser Zahl gibt, Zeichen für Zeichen: in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz, etwa „Theoretische Geothermiepotenziale“ oder „Wärmebedarf“. Die Bezeichnung einer anderen Zahl derselben Stelle, etwa einer Summe darüber, ist keine Antwort. Nennt die Stelle keine Bezeichnung, sagt der Plan es nicht.
+
+### `what_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('what_raw'). 'what_quote' is then the frame's passage that prints the number.
+
+### `what_link_source`
+
+Which source 'what_link_quote' was found in.
+
+### `what_producer`
+
+Who re-read 'what': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `what_quote`
+
+The verbatim passage carrying 'what'. Present exactly when what_state is 'read'.
+
+### `what_raw`
+
+The document's own wording 'what' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `what_raw_foreign`
+
+The wording does not name the option chosen for 'what': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `what_seen`
+
+A wording the model noticed for 'what' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `what_source`
+
+Which source the passage for 'what' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `what_state`
+
+How the coordinate 'what' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `what_window`
+
+[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 ### `year`
 
@@ -2073,11 +2271,7 @@ Axis 'aggregation' of Energieverbrauch. A closed list; an entry beginning 'out:'
 
 The prompt's own wording:
 
-> Wie ist der Wert über Zeit oder Raum zusammengefasst?
-Normalfall "integral" (Jahressumme).
-"maximum": Spitzenlast, Höchstwert.
-"arithmetic mean": Durchschnitt je Gebäude oder Jahr.
-"instantaneous": Momentanwert.
+> Wie ist der Wert über Zeit oder Raum zusammengefasst? Wähle den Eintrag nach seiner Bedeutung ("means"), nicht nach einem Wort der Stelle. Der Normalfall ist "integral", eine Jahressumme.
 
 <details><summary>What it may answer (5)</summary>
 
@@ -2150,67 +2344,64 @@ Axis 'carrier' of Energieverbrauch. A closed list; an entry beginning 'out:' is 
 
 The prompt's own wording:
 
-> Welcher Energieträger?
-Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H", "Erdgas (netzgebunden)" = Erdgas; "Nahwärme", "Wärmenetz" = Fernwärme.
-Summenzeile ("Summe", "Gesamt", "alle Energieträger") = "Summe"; Restposition ("Sonstige", "Andere") = "Sonstige".
+> Welcher Energieträger? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift.
 Beschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt "Summe", solange die Stelle nicht nach Energieträgern aufteilt.
-Eigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+Ist die eigene Tabelle oder der eigene Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet), ist die Antwort "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
 "value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Gebäudetyp".
-"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (29)</summary>
 
 - **Abfallbrennstoff** → `OEO_00000439` — Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.
   - also written: Klärschlamm, EBS
-- **Abwärme** → `OEO_00010114`
+- **Abwärme** → `OEO_00010114` — Abwärme: Wärmeenergie, die bei einem Energieumwandlungsprozess entsteht und ungenutzt an die Umwelt abgegeben wird.
   - also written: unvermeidbare Abwärme
-- **Biogas** → `OEO_00000074`
+- **Biogas** → `OEO_00000074` — Biogas: Durch anaerobe Vergärung entstehendes Gasgemisch aus hauptsächlich Methan und Kohlendioxid, das als Brennstoff dient.
   - also written: aufbereitetes Biogas, Klärgas, Faulgas, Klärschlammgas
-- **Biomasse** → `OEO_00010214`
+- **Biomasse** → `OEO_00010214` — Biomasse: Stoff pflanzlichen oder tierischen Ursprungs und damit biogener Herkunft.
   - also written: pflanzliche Biomasse, landwirtschaftliche Biomasse
-- **Biomethan** → `OEO_00010215`
-- **Braunkohle** → `OEO_00000251`
-- **Erdgas** → `OEO_00000292`
+- **Biomethan** → `OEO_00010215` — Biomethan: Aus Biogas durch Abtrennung von Kohlendioxid gewonnenes Gasgemisch aus hauptsächlich Methan, das als Brennstoff dient.
+- **Braunkohle** → `OEO_00000251` — Braunkohle: Nicht backende Kohle mit einem Brennwert unter 17 435 kJ/kg und über 31 % flüchtigen Bestandteilen.
+- **Erdgas** → `OEO_00000292` — Erdgas: Gasgemisch aus unterirdischen Lagerstätten, das hauptsächlich aus Methan besteht.
   - also written: Gas
-- **Fernwärme** → `OEO_00000132`
+- **Fernwärme** → `OEO_00000132` — Fernwärme: Leitungsgebundene Wärmelieferung an Wohn- oder Gewerbegebäude.
   - also written: Wärmenetze, Wärmenetz, Nahwärme
 - **Flüssiggas** → `OEO_00320011` — Flüssiggasgemisch aus Propan und Butan, unterscheidet sich als fossiler Gasbrennstoff.
-- **Geothermie** → `OEO_00000191`
+- **Geothermie** → `OEO_00000191` — Geothermie: Wärmeenergie, die aus dem Inneren der Erdkruste freigesetzt wird.
   - also written: Erdwärme, oberflächennahe Geothermie, Tiefengeothermie, Erdwärmesonde, Erdwärmekollektor, Oberflächengeothermie
-- **Heizöl** → `OEO_00000211`
+- **Heizöl** → `OEO_00000211` — Heizöl: Gasöl für industrielle und gewerbliche Zwecke, auch schwere Gasöle, die als petrochemische Rohstoffe dienen.
   - also written: Öl
-- **Holz** → `OEO_00000449`
+- **Holz** → `OEO_00000449` — Holz: Biomasse von Bäumen in festem Aggregatzustand, die als Brennstoff genutzt werden kann.
   - also written: Holzpellets, Pellets, Hackschnitzel, Brennholz, Holzenergie
-- **Kohle** → `OEO_00000088`
-- **Siedlungsabfälle** → `OEO_00000290` — A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.
+- **Kohle** → `OEO_00000088` — Kohle: Brennbares schwarzes bis schwarzbraunes Sedimentgestein, das in Flözen entstanden ist.
+- **Siedlungsabfälle** → `OEO_00000290` — Siedlungsabfälle: Abfallbrennstoff aus Haushalten oder nicht-industriellen gewerblichen Tätigkeiten.
   - also written: Abfall, thermische Abfallverwertung
-- **Solarthermie** → `OEO_00000388`
+- **Solarthermie** → `OEO_00000388` — Solarthermie: Wärmeenergie, die als Ergebnis einer solarthermischen Energieumwandlung entsteht.
   - also written: solare Wärme
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
-- **Steinkohle** → `OEO_00000204`
+- **Steinkohle** → `OEO_00000204` — Steinkohle: Kohle mit einem Brennwert über 23 865 kJ/kg und einer mittleren Vitrinitreflexion von mindestens 0,6.
 - **Strom** → `OEO_00000139` — Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Umweltwärme** → `OEO_00000056` — In Luft, Erde oder Wasser gespeicherte Wärme, die durch Wärmepumpen genutzt wird.
   - also written: Umgebungswärme, Umgebungsluft
-- **Wasserstoff** → `OEO_00000220`
+- **Wasserstoff** → `OEO_00000220` — Wasserstoff: Stoff mit der chemischen Formel H2, der gasförmig vorliegt und als Brennstoff verwendet werden kann.
   - also written: H2
 - **anthropogene Umweltwärme** → `OEO_00140105` — Umweltwärme mit anthropogenem Ursprung, unterscheidet sich durch menschliche Entstehung.
   - also written: Abwasserwärme, Abwasser, Abwasserwärmenutzung
 - **biogener Abfallbrennstoff** → `OEO_00010223` — Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart.
   - also written: Altholz, Altholzheizung, biogene Abfälle
-- **biogener Festbrennstoff** → `OEO_00000332`
+- **biogener Festbrennstoff** → `OEO_00000332` — Biogener Festbrennstoff: Organisches, nicht fossiles Material biologischen Ursprungs, das zur Wärme- oder Stromerzeugung genutzt werden kann.
   - also written: biogene Festbrennstoffe, sonstige biogene Festbrennstoffe
 - **biogener Siedlungsabfall** → `OEO_00000356` — Siedlungsabfall mit biogenem Ursprung, unterscheidet sich durch die biologische Herkunft.
   - also written: Biogut, Gartenabfälle, Grünschnitt
-- **industrielle Abwärme** → `OEO_00310004`
-- **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — An angricultural waste fuel is waste fuel produced by agriculture.
+- **industrielle Abwärme** → `OEO_00310004` — Industrielle Abwärme: Abwärme, die als Energieausgabe eines industriellen Prozesses entsteht.
+- **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — Landwirtschaftlicher Abfallbrennstoff: Abfallbrennstoff aus der Landwirtschaft.
   - also written: tierische Exkremente, Gülle, Mist
 - **natürliche Umweltwärme** → `OEO_00140104` — Umweltwärme mit erneuerbarem Ursprung, unterscheidet sich durch natürliche Herkunft.
   - also written: Oberflächengewässer, Seethermie, Flusswärme
-- **synthetische Gase** → `OEO_00010155`
+- **synthetische Gase** → `OEO_00010155` — Synthetische Gase: Synthetischer Brennstoff, der unter Normalbedingungen gasförmig ist.
   - also written: grüne Gase, E-Gas, SNG
 
 </details>
@@ -2278,6 +2469,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
@@ -2335,6 +2530,54 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 ### `parameter_window`
 
 [stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
+### `period_start`
+
+Axis 'period_start' of Energieverbrauch. null unless period_start_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht.
+
+### `period_start_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('period_start_raw'). 'period_start_quote' is then the frame's passage that prints the number.
+
+### `period_start_link_source`
+
+Which source 'period_start_link_quote' was found in.
+
+### `period_start_producer`
+
+Who re-read 'period_start': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `period_start_quote`
+
+The verbatim passage carrying 'period_start'. Present exactly when period_start_state is 'read'.
+
+### `period_start_raw`
+
+The document's own wording 'period_start' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `period_start_raw_foreign`
+
+The wording does not name the option chosen for 'period_start': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `period_start_seen`
+
+A wording the model noticed for 'period_start' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `period_start_source`
+
+Which source the passage for 'period_start' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `period_start_state`
+
+How the coordinate 'period_start' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `period_start_window`
+
+[stage, index] of the window 'period_start' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 ### `provenance`
 
@@ -2508,6 +2751,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `scenario`
 
 Axis 'scenario' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.
@@ -2585,16 +2836,11 @@ Axis 'sector' of Energieverbrauch. A closed list; an entry beginning 'out:' is a
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor?
-Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: "Wohnen", "Wohngebäude" = Private Haushalte; "GHD/Kommune", "Gewerbe", "wirtschaftlich genutzte Gebäude" = GHD.
-GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
-Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf) = "Summe".
-Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a").
-Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
-"Einfamilienhaus", "Mehrfamilienhaus" = Private Haushalte.
-Eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+> Welcher Verbrauchssektor? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle.
+Ein Gebiet ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
+"Summe" gilt für alle Verbraucher zusammen: eine Zeile oder Spalte, die ausdrücklich über alle Sektoren summiert, ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"), oder eine Zahl, deren eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt ist, nur nach anderem (Energieträger, Gebiet); dann zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+Die Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
 "value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Energieträger".
-"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (6)</summary>
 
@@ -2879,11 +3125,11 @@ text_located: the quote sits in the document's own refined text, so it can be ch
 
 ### `unit`
 
-The unit: one entry of units_accepted (GWh, GWh/a, MWh, MWh/a, Millionen kWh, Mio. kWh, Mio. kWh/a, Mrd. kWh, TWh, TWh/a, kWh, kWh/a), read as a coordinate with its own passage. Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
+The unit: one entry of units_accepted (GWh, GWh/a, MWh, MWh/a, Millionen kWh, Mio. kWh, Mio. kWh/a, Mrd. kWh, TWh, TWh/a, kWh, kWh/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
 
 The prompt's own wording:
 
-> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
+> Welche Einheit hat diese Zahl? Schreib in "value_raw" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in "value" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: "Gigawattstunden" meint GWh, "t CO₂-Äq." t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" kWh und GWh, "1.700 kg CO2" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel), ist "value" "", und "value_raw" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
 
 <details><summary>What it may answer (12)</summary>
 
@@ -2948,7 +3194,55 @@ The number as the document prints it, with the grouping removed and a decimal po
 
 ### `value_target`
 
-value x factor(unit), in the spec's unit_target OEO_00050008. This is the number the graph carries.
+value x factor(unit), in the spec's unit_target OEO_00050008. This is the number the graph carries; absent where the unit is no entry of units_accepted.
+
+### `what`
+
+Axis 'what' of Energieverbrauch. null unless what_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Was ist diese Zahl? Antworte mit der Bezeichnung, die der Plan genau dieser Zahl gibt, Zeichen für Zeichen: in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz, etwa „Theoretische Geothermiepotenziale“ oder „Wärmebedarf“. Die Bezeichnung einer anderen Zahl derselben Stelle, etwa einer Summe darüber, ist keine Antwort. Nennt die Stelle keine Bezeichnung, sagt der Plan es nicht.
+
+### `what_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('what_raw'). 'what_quote' is then the frame's passage that prints the number.
+
+### `what_link_source`
+
+Which source 'what_link_quote' was found in.
+
+### `what_producer`
+
+Who re-read 'what': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `what_quote`
+
+The verbatim passage carrying 'what'. Present exactly when what_state is 'read'.
+
+### `what_raw`
+
+The document's own wording 'what' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `what_raw_foreign`
+
+The wording does not name the option chosen for 'what': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `what_seen`
+
+A wording the model noticed for 'what' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `what_source`
+
+Which source the passage for 'what' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `what_state`
+
+How the coordinate 'what' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `what_window`
+
+[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 ### `year`
 
@@ -3026,11 +3320,8 @@ Axis 'aggregation' of Leistung. A closed list; an entry beginning 'out:' is a de
 
 The prompt's own wording:
 
-> Wie ist der Wert über Zeit oder Raum zusammengefasst? Bei Leistung eine echte Frage, keine Formsache.
-"maximum": Spitzenlast, Höchstlast, Auslegungsfall.
-"integral": Summe über mehrere Anlagen oder ein Gebiet, erkennbar an Zeile oder Spalte "Summe", "Gesamt", "insgesamt".
-"arithmetic mean": Durchschnitt ("Ø", "mittlere Leistung").
-Leistung einer EINZELNEN Anlage ist keines davon: steht in Quelle, Abschnitt und Satz davor nichts zur Zusammenfassung, "out:unstated", keine Schätzung.
+> Wie ist der Wert über Zeit oder Raum zusammengefasst? Bei Leistung eine echte Frage, keine Formsache. Wähle den Eintrag nach seiner Bedeutung ("means"), nicht nach einem Wort der Stelle: eine Spitzenlast oder ein Auslegungsfall ist ein Höchstwert, die Leistung mehrerer Anlagen oder eines Gebiets zusammen eine Summe, eine mittlere Leistung ein Mittel.
+Die Leistung einer EINZELNEN Anlage ist keines davon: steht in Quelle, Abschnitt und Satz davor nichts zur Zusammenfassung, sagt der Plan es nicht, keine Schätzung.
 
 <details><summary>What it may answer (4)</summary>
 
@@ -3101,67 +3392,64 @@ Axis 'carrier' of Leistung. A closed list; an entry beginning 'out:' is a delibe
 
 The prompt's own wording:
 
-> Welcher Energieträger?
-Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H", "Erdgas (netzgebunden)" = Erdgas; "Nahwärme", "Wärmenetz" = Fernwärme.
-Summenzeile ("Summe", "Gesamt", "alle Energieträger") = "Summe"; Restposition ("Sonstige", "Andere") = "Sonstige".
+> Welcher Energieträger? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift.
 Beschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt "Summe", solange die Stelle nicht nach Energieträgern aufteilt.
-Eigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+Ist die eigene Tabelle oder der eigene Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet), ist die Antwort "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
 "value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Gebäudetyp".
-"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (29)</summary>
 
 - **Abfallbrennstoff** → `OEO_00000439` — Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.
   - also written: Klärschlamm, EBS
-- **Abwärme** → `OEO_00010114`
+- **Abwärme** → `OEO_00010114` — Abwärme: Wärmeenergie, die bei einem Energieumwandlungsprozess entsteht und ungenutzt an die Umwelt abgegeben wird.
   - also written: unvermeidbare Abwärme
-- **Biogas** → `OEO_00000074`
+- **Biogas** → `OEO_00000074` — Biogas: Durch anaerobe Vergärung entstehendes Gasgemisch aus hauptsächlich Methan und Kohlendioxid, das als Brennstoff dient.
   - also written: aufbereitetes Biogas, Klärgas, Faulgas, Klärschlammgas
-- **Biomasse** → `OEO_00010214`
+- **Biomasse** → `OEO_00010214` — Biomasse: Stoff pflanzlichen oder tierischen Ursprungs und damit biogener Herkunft.
   - also written: pflanzliche Biomasse, landwirtschaftliche Biomasse
-- **Biomethan** → `OEO_00010215`
-- **Braunkohle** → `OEO_00000251`
-- **Erdgas** → `OEO_00000292`
+- **Biomethan** → `OEO_00010215` — Biomethan: Aus Biogas durch Abtrennung von Kohlendioxid gewonnenes Gasgemisch aus hauptsächlich Methan, das als Brennstoff dient.
+- **Braunkohle** → `OEO_00000251` — Braunkohle: Nicht backende Kohle mit einem Brennwert unter 17 435 kJ/kg und über 31 % flüchtigen Bestandteilen.
+- **Erdgas** → `OEO_00000292` — Erdgas: Gasgemisch aus unterirdischen Lagerstätten, das hauptsächlich aus Methan besteht.
   - also written: Gas
-- **Fernwärme** → `OEO_00000132`
+- **Fernwärme** → `OEO_00000132` — Fernwärme: Leitungsgebundene Wärmelieferung an Wohn- oder Gewerbegebäude.
   - also written: Wärmenetze, Wärmenetz, Nahwärme
 - **Flüssiggas** → `OEO_00320011` — Flüssiggasgemisch aus Propan und Butan, unterscheidet sich als fossiler Gasbrennstoff.
-- **Geothermie** → `OEO_00000191`
+- **Geothermie** → `OEO_00000191` — Geothermie: Wärmeenergie, die aus dem Inneren der Erdkruste freigesetzt wird.
   - also written: Erdwärme, oberflächennahe Geothermie, Tiefengeothermie, Erdwärmesonde, Erdwärmekollektor, Oberflächengeothermie
-- **Heizöl** → `OEO_00000211`
+- **Heizöl** → `OEO_00000211` — Heizöl: Gasöl für industrielle und gewerbliche Zwecke, auch schwere Gasöle, die als petrochemische Rohstoffe dienen.
   - also written: Öl
-- **Holz** → `OEO_00000449`
+- **Holz** → `OEO_00000449` — Holz: Biomasse von Bäumen in festem Aggregatzustand, die als Brennstoff genutzt werden kann.
   - also written: Holzpellets, Pellets, Hackschnitzel, Brennholz, Holzenergie
-- **Kohle** → `OEO_00000088`
-- **Siedlungsabfälle** → `OEO_00000290` — A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.
+- **Kohle** → `OEO_00000088` — Kohle: Brennbares schwarzes bis schwarzbraunes Sedimentgestein, das in Flözen entstanden ist.
+- **Siedlungsabfälle** → `OEO_00000290` — Siedlungsabfälle: Abfallbrennstoff aus Haushalten oder nicht-industriellen gewerblichen Tätigkeiten.
   - also written: Abfall, thermische Abfallverwertung
-- **Solarthermie** → `OEO_00000388`
+- **Solarthermie** → `OEO_00000388` — Solarthermie: Wärmeenergie, die als Ergebnis einer solarthermischen Energieumwandlung entsteht.
   - also written: solare Wärme
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
-- **Steinkohle** → `OEO_00000204`
+- **Steinkohle** → `OEO_00000204` — Steinkohle: Kohle mit einem Brennwert über 23 865 kJ/kg und einer mittleren Vitrinitreflexion von mindestens 0,6.
 - **Strom** → `OEO_00000139` — Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Umweltwärme** → `OEO_00000056` — In Luft, Erde oder Wasser gespeicherte Wärme, die durch Wärmepumpen genutzt wird.
   - also written: Umgebungswärme, Umgebungsluft
-- **Wasserstoff** → `OEO_00000220`
+- **Wasserstoff** → `OEO_00000220` — Wasserstoff: Stoff mit der chemischen Formel H2, der gasförmig vorliegt und als Brennstoff verwendet werden kann.
   - also written: H2
 - **anthropogene Umweltwärme** → `OEO_00140105` — Umweltwärme mit anthropogenem Ursprung, unterscheidet sich durch menschliche Entstehung.
   - also written: Abwasserwärme, Abwasser, Abwasserwärmenutzung
 - **biogener Abfallbrennstoff** → `OEO_00010223` — Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart.
   - also written: Altholz, Altholzheizung, biogene Abfälle
-- **biogener Festbrennstoff** → `OEO_00000332`
+- **biogener Festbrennstoff** → `OEO_00000332` — Biogener Festbrennstoff: Organisches, nicht fossiles Material biologischen Ursprungs, das zur Wärme- oder Stromerzeugung genutzt werden kann.
   - also written: biogene Festbrennstoffe, sonstige biogene Festbrennstoffe
 - **biogener Siedlungsabfall** → `OEO_00000356` — Siedlungsabfall mit biogenem Ursprung, unterscheidet sich durch die biologische Herkunft.
   - also written: Biogut, Gartenabfälle, Grünschnitt
-- **industrielle Abwärme** → `OEO_00310004`
-- **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — An angricultural waste fuel is waste fuel produced by agriculture.
+- **industrielle Abwärme** → `OEO_00310004` — Industrielle Abwärme: Abwärme, die als Energieausgabe eines industriellen Prozesses entsteht.
+- **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — Landwirtschaftlicher Abfallbrennstoff: Abfallbrennstoff aus der Landwirtschaft.
   - also written: tierische Exkremente, Gülle, Mist
 - **natürliche Umweltwärme** → `OEO_00140104` — Umweltwärme mit erneuerbarem Ursprung, unterscheidet sich durch natürliche Herkunft.
   - also written: Oberflächengewässer, Seethermie, Flusswärme
-- **synthetische Gase** → `OEO_00010155`
+- **synthetische Gase** → `OEO_00010155` — Synthetische Gase: Synthetischer Brennstoff, der unter Normalbedingungen gasförmig ist.
   - also written: grüne Gase, E-Gas, SNG
 
 </details>
@@ -3229,6 +3517,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
@@ -3286,6 +3578,54 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 ### `parameter_window`
 
 [stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
+### `period_start`
+
+Axis 'period_start' of Leistung. null unless period_start_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht.
+
+### `period_start_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('period_start_raw'). 'period_start_quote' is then the frame's passage that prints the number.
+
+### `period_start_link_source`
+
+Which source 'period_start_link_quote' was found in.
+
+### `period_start_producer`
+
+Who re-read 'period_start': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `period_start_quote`
+
+The verbatim passage carrying 'period_start'. Present exactly when period_start_state is 'read'.
+
+### `period_start_raw`
+
+The document's own wording 'period_start' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `period_start_raw_foreign`
+
+The wording does not name the option chosen for 'period_start': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `period_start_seen`
+
+A wording the model noticed for 'period_start' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `period_start_source`
+
+Which source the passage for 'period_start' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `period_start_state`
+
+How the coordinate 'period_start' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `period_start_window`
+
+[stage, index] of the window 'period_start' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 ### `provenance`
 
@@ -3451,6 +3791,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `scenario`
 
 Axis 'scenario' of Leistung. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.
@@ -3528,16 +3876,11 @@ Axis 'sector' of Leistung. A closed list; an entry beginning 'out:' is a deliber
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor?
-Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: "Wohnen", "Wohngebäude" = Private Haushalte; "GHD/Kommune", "Gewerbe", "wirtschaftlich genutzte Gebäude" = GHD.
-GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
-Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf) = "Summe".
-Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a").
-Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
-"Einfamilienhaus", "Mehrfamilienhaus" = Private Haushalte.
-Eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+> Welcher Verbrauchssektor? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle.
+Ein Gebiet ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
+"Summe" gilt für alle Verbraucher zusammen: eine Zeile oder Spalte, die ausdrücklich über alle Sektoren summiert, ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"), oder eine Zahl, deren eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt ist, nur nach anderem (Energieträger, Gebiet); dann zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+Die Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
 "value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Energieträger".
-"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (6)</summary>
 
@@ -3733,11 +4076,11 @@ text_located: the quote sits in the document's own refined text, so it can be ch
 
 ### `unit`
 
-The unit: one entry of units_accepted (GW, MW, MWth, kW, kWth), read as a coordinate with its own passage. Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
+The unit: one entry of units_accepted (GW, MW, MWth, kW, kWth), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
 
 The prompt's own wording:
 
-> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
+> Welche Einheit hat diese Zahl? Schreib in "value_raw" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in "value" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: "Gigawattstunden" meint GWh, "t CO₂-Äq." t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" kWh und GWh, "1.700 kg CO2" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel), ist "value" "", und "value_raw" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
 
 <details><summary>What it may answer (5)</summary>
 
@@ -3795,7 +4138,55 @@ The number as the document prints it, with the grouping removed and a decimal po
 
 ### `value_target`
 
-value x factor(unit), in the spec's unit_target OEO_00390001. This is the number the graph carries.
+value x factor(unit), in the spec's unit_target OEO_00390001. This is the number the graph carries; absent where the unit is no entry of units_accepted.
+
+### `what`
+
+Axis 'what' of Leistung. null unless what_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Was ist diese Zahl? Antworte mit der Bezeichnung, die der Plan genau dieser Zahl gibt, Zeichen für Zeichen: in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz, etwa „Theoretische Geothermiepotenziale“ oder „Wärmebedarf“. Die Bezeichnung einer anderen Zahl derselben Stelle, etwa einer Summe darüber, ist keine Antwort. Nennt die Stelle keine Bezeichnung, sagt der Plan es nicht.
+
+### `what_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('what_raw'). 'what_quote' is then the frame's passage that prints the number.
+
+### `what_link_source`
+
+Which source 'what_link_quote' was found in.
+
+### `what_producer`
+
+Who re-read 'what': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `what_quote`
+
+The verbatim passage carrying 'what'. Present exactly when what_state is 'read'.
+
+### `what_raw`
+
+The document's own wording 'what' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `what_raw_foreign`
+
+The wording does not name the option chosen for 'what': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `what_seen`
+
+A wording the model noticed for 'what' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `what_source`
+
+Which source the passage for 'what' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `what_state`
+
+How the coordinate 'what' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `what_window`
+
+[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 ### `year`
 
@@ -3879,6 +4270,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
@@ -3947,6 +4342,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `tier`
 
 text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
@@ -3971,6 +4374,8 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
 ## `share`
 
 How the row becomes a node:
@@ -3986,67 +4391,64 @@ Axis 'carrier' of Anteil. A closed list; an entry beginning 'out:' is a delibera
 
 The prompt's own wording:
 
-> Welcher Energieträger?
-Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H", "Erdgas (netzgebunden)" = Erdgas; "Nahwärme", "Wärmenetz" = Fernwärme.
-Summenzeile ("Summe", "Gesamt", "alle Energieträger") = "Summe"; Restposition ("Sonstige", "Andere") = "Sonstige".
+> Welcher Energieträger? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift.
 Beschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt "Summe", solange die Stelle nicht nach Energieträgern aufteilt.
-Eigene Tabelle oder eigener Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+Ist die eigene Tabelle oder der eigene Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet), ist die Antwort "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
 "value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Gebäudetyp".
-"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (29)</summary>
 
 - **Abfallbrennstoff** → `OEO_00000439` — Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.
   - also written: Klärschlamm, EBS
-- **Abwärme** → `OEO_00010114`
+- **Abwärme** → `OEO_00010114` — Abwärme: Wärmeenergie, die bei einem Energieumwandlungsprozess entsteht und ungenutzt an die Umwelt abgegeben wird.
   - also written: unvermeidbare Abwärme
-- **Biogas** → `OEO_00000074`
+- **Biogas** → `OEO_00000074` — Biogas: Durch anaerobe Vergärung entstehendes Gasgemisch aus hauptsächlich Methan und Kohlendioxid, das als Brennstoff dient.
   - also written: aufbereitetes Biogas, Klärgas, Faulgas, Klärschlammgas
-- **Biomasse** → `OEO_00010214`
+- **Biomasse** → `OEO_00010214` — Biomasse: Stoff pflanzlichen oder tierischen Ursprungs und damit biogener Herkunft.
   - also written: pflanzliche Biomasse, landwirtschaftliche Biomasse
-- **Biomethan** → `OEO_00010215`
-- **Braunkohle** → `OEO_00000251`
-- **Erdgas** → `OEO_00000292`
+- **Biomethan** → `OEO_00010215` — Biomethan: Aus Biogas durch Abtrennung von Kohlendioxid gewonnenes Gasgemisch aus hauptsächlich Methan, das als Brennstoff dient.
+- **Braunkohle** → `OEO_00000251` — Braunkohle: Nicht backende Kohle mit einem Brennwert unter 17 435 kJ/kg und über 31 % flüchtigen Bestandteilen.
+- **Erdgas** → `OEO_00000292` — Erdgas: Gasgemisch aus unterirdischen Lagerstätten, das hauptsächlich aus Methan besteht.
   - also written: Gas
-- **Fernwärme** → `OEO_00000132`
+- **Fernwärme** → `OEO_00000132` — Fernwärme: Leitungsgebundene Wärmelieferung an Wohn- oder Gewerbegebäude.
   - also written: Wärmenetze, Wärmenetz, Nahwärme
 - **Flüssiggas** → `OEO_00320011` — Flüssiggasgemisch aus Propan und Butan, unterscheidet sich als fossiler Gasbrennstoff.
-- **Geothermie** → `OEO_00000191`
+- **Geothermie** → `OEO_00000191` — Geothermie: Wärmeenergie, die aus dem Inneren der Erdkruste freigesetzt wird.
   - also written: Erdwärme, oberflächennahe Geothermie, Tiefengeothermie, Erdwärmesonde, Erdwärmekollektor, Oberflächengeothermie
-- **Heizöl** → `OEO_00000211`
+- **Heizöl** → `OEO_00000211` — Heizöl: Gasöl für industrielle und gewerbliche Zwecke, auch schwere Gasöle, die als petrochemische Rohstoffe dienen.
   - also written: Öl
-- **Holz** → `OEO_00000449`
+- **Holz** → `OEO_00000449` — Holz: Biomasse von Bäumen in festem Aggregatzustand, die als Brennstoff genutzt werden kann.
   - also written: Holzpellets, Pellets, Hackschnitzel, Brennholz, Holzenergie
-- **Kohle** → `OEO_00000088`
-- **Siedlungsabfälle** → `OEO_00000290` — A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.
+- **Kohle** → `OEO_00000088` — Kohle: Brennbares schwarzes bis schwarzbraunes Sedimentgestein, das in Flözen entstanden ist.
+- **Siedlungsabfälle** → `OEO_00000290` — Siedlungsabfälle: Abfallbrennstoff aus Haushalten oder nicht-industriellen gewerblichen Tätigkeiten.
   - also written: Abfall, thermische Abfallverwertung
-- **Solarthermie** → `OEO_00000388`
+- **Solarthermie** → `OEO_00000388` — Solarthermie: Wärmeenergie, die als Ergebnis einer solarthermischen Energieumwandlung entsteht.
   - also written: solare Wärme
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
-- **Steinkohle** → `OEO_00000204`
+- **Steinkohle** → `OEO_00000204` — Steinkohle: Kohle mit einem Brennwert über 23 865 kJ/kg und einer mittleren Vitrinitreflexion von mindestens 0,6.
 - **Strom** → `OEO_00000139` — Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
 - **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Umweltwärme** → `OEO_00000056` — In Luft, Erde oder Wasser gespeicherte Wärme, die durch Wärmepumpen genutzt wird.
   - also written: Umgebungswärme, Umgebungsluft
-- **Wasserstoff** → `OEO_00000220`
+- **Wasserstoff** → `OEO_00000220` — Wasserstoff: Stoff mit der chemischen Formel H2, der gasförmig vorliegt und als Brennstoff verwendet werden kann.
   - also written: H2
 - **anthropogene Umweltwärme** → `OEO_00140105` — Umweltwärme mit anthropogenem Ursprung, unterscheidet sich durch menschliche Entstehung.
   - also written: Abwasserwärme, Abwasser, Abwasserwärmenutzung
 - **biogener Abfallbrennstoff** → `OEO_00010223` — Abfallbrennstoff mit biogenem Ursprung, unterscheidet sich als spezifische Abfallart.
   - also written: Altholz, Altholzheizung, biogene Abfälle
-- **biogener Festbrennstoff** → `OEO_00000332`
+- **biogener Festbrennstoff** → `OEO_00000332` — Biogener Festbrennstoff: Organisches, nicht fossiles Material biologischen Ursprungs, das zur Wärme- oder Stromerzeugung genutzt werden kann.
   - also written: biogene Festbrennstoffe, sonstige biogene Festbrennstoffe
 - **biogener Siedlungsabfall** → `OEO_00000356` — Siedlungsabfall mit biogenem Ursprung, unterscheidet sich durch die biologische Herkunft.
   - also written: Biogut, Gartenabfälle, Grünschnitt
-- **industrielle Abwärme** → `OEO_00310004`
-- **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — An angricultural waste fuel is waste fuel produced by agriculture.
+- **industrielle Abwärme** → `OEO_00310004` — Industrielle Abwärme: Abwärme, die als Energieausgabe eines industriellen Prozesses entsteht.
+- **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — Landwirtschaftlicher Abfallbrennstoff: Abfallbrennstoff aus der Landwirtschaft.
   - also written: tierische Exkremente, Gülle, Mist
 - **natürliche Umweltwärme** → `OEO_00140104` — Umweltwärme mit erneuerbarem Ursprung, unterscheidet sich durch natürliche Herkunft.
   - also written: Oberflächengewässer, Seethermie, Flusswärme
-- **synthetische Gase** → `OEO_00010155`
+- **synthetische Gase** → `OEO_00010155` — Synthetische Gase: Synthetischer Brennstoff, der unter Normalbedingungen gasförmig ist.
   - also written: grüne Gase, E-Gas, SNG
 
 </details>
@@ -4114,6 +4516,10 @@ The sandbox runs behind a computed value: {code, stdout, ok, error}, the last wi
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
@@ -4171,6 +4577,54 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 ### `parameter_window`
 
 [stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+
+### `period_start`
+
+Axis 'period_start' of Anteil. null unless period_start_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht.
+
+### `period_start_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('period_start_raw'). 'period_start_quote' is then the frame's passage that prints the number.
+
+### `period_start_link_source`
+
+Which source 'period_start_link_quote' was found in.
+
+### `period_start_producer`
+
+Who re-read 'period_start': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `period_start_quote`
+
+The verbatim passage carrying 'period_start'. Present exactly when period_start_state is 'read'.
+
+### `period_start_raw`
+
+The document's own wording 'period_start' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `period_start_raw_foreign`
+
+The wording does not name the option chosen for 'period_start': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `period_start_seen`
+
+A wording the model noticed for 'period_start' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `period_start_source`
+
+Which source the passage for 'period_start' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `period_start_state`
+
+How the coordinate 'period_start' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `period_start_window`
+
+[stage, index] of the window 'period_start' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 ### `provenance`
 
@@ -4312,6 +4766,14 @@ The passage of the owner source that contains the value, checked by whitespace-c
 
 Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
 
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
+
 ### `scenario`
 
 Axis 'scenario' of Anteil. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.
@@ -4389,16 +4851,11 @@ Axis 'sector' of Anteil. A closed list; an entry beginning 'out:' is a deliberat
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor?
-Bezeichnung in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle: "Wohnen", "Wohngebäude" = Private Haushalte; "GHD/Kommune", "Gewerbe", "wirtschaftlich genutzte Gebäude" = GHD.
-GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
-Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf) = "Summe".
-Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a").
-Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
-"Einfamilienhaus", "Mehrfamilienhaus" = Private Haushalte.
-Eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet): "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+> Welcher Verbrauchssektor? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle.
+Ein Gebiet ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
+"Summe" gilt für alle Verbraucher zusammen: eine Zeile oder Spalte, die ausdrücklich über alle Sektoren summiert, ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"), oder eine Zahl, deren eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt ist, nur nach anderem (Energieträger, Gebiet); dann zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
+Die Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
 "value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Energieträger".
-"known" unter der Zeile sagt, was die Zahl schon ist.
 
 <details><summary>What it may answer (6)</summary>
 
@@ -4683,11 +5140,11 @@ text_located: the quote sits in the document's own refined text, so it can be ch
 
 ### `unit`
 
-The unit: one entry of units_accepted (%, Prozent), read as a coordinate with its own passage. Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
+The unit: one entry of units_accepted (%, Prozent), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
 
 The prompt's own wording:
 
-> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
+> Welche Einheit hat diese Zahl? Schreib in "value_raw" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in "value" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: "Gigawattstunden" meint GWh, "t CO₂-Äq." t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" kWh und GWh, "1.700 kg CO2" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel), ist "value" "", und "value_raw" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
 
 <details><summary>What it may answer (2)</summary>
 
@@ -4742,7 +5199,55 @@ The number as the document prints it, with the grouping removed and a decimal po
 
 ### `value_target`
 
-value x factor(unit), in the spec's unit_target UO_0000187. This is the number the graph carries.
+value x factor(unit), in the spec's unit_target UO_0000187. This is the number the graph carries; absent where the unit is no entry of units_accepted.
+
+### `what`
+
+Axis 'what' of Anteil. null unless what_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Was ist diese Zahl? Antworte mit der Bezeichnung, die der Plan genau dieser Zahl gibt, Zeichen für Zeichen: in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz, etwa „Theoretische Geothermiepotenziale“ oder „Wärmebedarf“. Die Bezeichnung einer anderen Zahl derselben Stelle, etwa einer Summe darüber, ist keine Antwort. Nennt die Stelle keine Bezeichnung, sagt der Plan es nicht.
+
+### `what_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('what_raw'). 'what_quote' is then the frame's passage that prints the number.
+
+### `what_link_source`
+
+Which source 'what_link_quote' was found in.
+
+### `what_producer`
+
+Who re-read 'what': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `what_quote`
+
+The verbatim passage carrying 'what'. Present exactly when what_state is 'read'.
+
+### `what_raw`
+
+The document's own wording 'what' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `what_raw_foreign`
+
+The wording does not name the option chosen for 'what': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `what_seen`
+
+A wording the model noticed for 'what' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `what_source`
+
+Which source the passage for 'what' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `what_state`
+
+How the coordinate 'what' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `what_window`
+
+[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
 
 ### `whole`
 
@@ -4871,7 +5376,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 | `producers` | Every pass that wrote into this harvest, in order: the harvest, then each top-up that rewrote the file, each pass that appended a new parameter, each remap that carried a key forward and each review that changed a row. Entries are only ever added, so a position is stable: a coordinate a top-up re-read points at its entry with `<axis>_producer`. `model` above names the first only. Recorded and never compared. |
 | `spec` | sha256 of extraction_spec.json. A record, not a verdict: it moves on a comment, an indent or a graph annotation, none of which any question is asked through. Compared, it would outvote every key below it. |
 | `^axis/[^/]+/[^/]+$` | What this coordinate asks and what it may answer: the question and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else. |
-| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame\|survey\|read_values\|read_text\|comb\|match)$` | sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_values`, `read_text`, `comb` and `match` are the prompts of the survey flow |
+| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame\|survey\|read_values\|read_text\|comb\|match\|settings\|seek)$` | sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_values`, `read_text`, `comb`, `match`, `settings` and `seek` are the prompts of the survey flow |
 | `^parameter/[^/]+$` | What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale. Those have keys of their own. |
 | `^question_text/[^/]+$` | The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here: the generator prompt, the model, and the annotation inside parameter/. |
 | `^review/(prompt\|model)$` | What read this document a second time. Recorded and never compared: the review does not decide whether the harvest is current, and comparing it would report every reviewed document stale the day the review prompt changes. |
@@ -4882,7 +5387,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 
 One event per line; `t` names it and `doc` the document. An event that reports a model request carries it as sent (`input`) and what came back (`output`); a text the requests repeat is a `piece` they refer to. Read by scripts/trace_report.py.
 
-35 record kinds, told apart by `t`:
+39 record kinds, told apart by `t`:
 
 - `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
 - `anchor`: `doc`, `parameter`, `text`
@@ -4907,15 +5412,19 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `naming_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `places`, `prompt_tokens`, `sent_at`
 - `naming_groups_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `prompt_tokens`, `sent_at`
 - `years_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
+- `settings_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
+- `seek_free_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `phrase_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `frame_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `review_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `compute_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `naming`: `asked`, `doc`, `groups`, `kind`, `names`, `several`, `things`, `why`
-- `read`: `asked`, `corrected`, `doc`, `failed`, `judged`, `kind`, `near`, `near_read`, `owner`, `parameter`, `turned`, `unanswered`, `unread`, `values`, `why`
-- `comb`: `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `judged`, `kind`, `listed`, `missed`, `open`, `owner`, `parameter`, `rows`, `searched`, `table_rows`, `turned`
+- `read`: `asked`, `corrected`, `doc`, `failed`, `kind`, `owner`, `parameter`, `unanswered`, `unread`, `values`, `why`
+- `comb`: `anew`, `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `judged`, `kind`, `listed`, `missed`, `near`, `near_read`, `open`, `owner`, `parameter`, `rows`, `searched`, `table_rows`, `turned`
 - `years`: `asked`, `base`, `doc`, `fetched`, `hits`, `refused`, `target`
 - `seek`: `doc`, `kind`, `owner`, `parameter`, `rank`
+- `settings`: `asked`, `doc`, `fetched`, `hits`, `refused`, `settings`
+- `seek_free`: `asked`, `doc`, `fetched`, `found`, `parameter`, `unknown`, `walked`
 - `seek_probe`: `doc`, `parameter`, `per`, `text`
 - `completion`: `detail`, `doc`, `filled`, `id`, `key`, `matched`, `open`, `outcome`
 - `piece`: `doc`, `id`, `text`

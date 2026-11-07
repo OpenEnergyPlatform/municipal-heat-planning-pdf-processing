@@ -83,9 +83,13 @@ def test_what_only_a_value_s_own_passage_or_number_says_is_of_its_group():
     # aggregated only its own passage says, a word like "ca." only the
     # number itself; the combing does not look for them elsewhere.
     number, context = SPEC.groups["number"], SPEC.groups["context"]
-    assert (number.own_passage, number.own_value) == (("subject",),
-                                                      ("qualifier",))
+    # And its unit, what the number is, and the beginning of a period it is
+    # a mean over: read again beside it, never searched elsewhere (owner
+    # decisions 2026-11-07).
+    assert (number.own_passage, number.own_value) == (
+        ("unit", "what", "subject"), ("qualifier",))
     assert context.own_passage == ("aggregation",)
+    assert SPEC.groups["frame"].own_passage == ("period_start",)
     raw = with_groups(lambda g: g["number"].update(own_passage=["year"]))
     with pytest.raises(SpecError, match="group's coordinates"):
         load_spec(raw)

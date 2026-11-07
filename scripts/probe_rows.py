@@ -292,12 +292,20 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
         made.pool = pool
         return made
 
+    # The plan's years, the line of its title page, its settings and the
+    # model's own search for a parameter the walk read no value of, as the
+    # run asks them (`runner.harvest`).
     whole = surveyed.SurveyedHarvest(
         spec, made_survey, made_reader, made_comber,
         lambda document: every(document, set()),
         runner.make_page_count(args.db), spec_for=specs.__getitem__,
         front=own,
-        title=profile.component("extraction", "FRONT_PAGE_TITLE"))
+        title=profile.component("extraction", "FRONT_PAGE_TITLE"),
+        make_years=lambda doc_spec: runner.make_years(doc_spec, rank),
+        title_page_of=runner.make_title_page(args.db, profile),
+        make_settings=lambda doc_spec: runner.make_settings(doc_spec, rank),
+        make_seeker=lambda doc_spec: (runner.make_seeker(doc_spec, rank)
+                                      if rank is not None else None))
     names = sorted({slot.name for parameter in spec.parameters
                     for slot in fields.axis_slots(parameter)}
                    | {"unit", "parameter", "value"})

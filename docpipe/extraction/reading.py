@@ -1,58 +1,57 @@
 """
 reading.py: The values of one parameter in the passages the survey named for
 it, one value per request: rounds name the values of a passage one by one,
-then each value is asked once per group of the spec for that group's
-coordinates.
+then each value is asked its coordinates one by one, each a message of the
+value's own conversation.
 
-Step 3 of the rebuilt harvest (owner decisions 2026-11-04 and 2026-11-05).
-Every request has one task and reads exactly one value. A table is read like
-a section: the model repeats each value as the passage prints it, quoted by
-its sentence or its table row, and for a number in a table also the head of
-its column as printed, which tells two equal numbers of one row apart. Code
-reads no number by its place.
+Step 3 of the rebuilt harvest (owner decisions 2026-11-04, 2026-11-05 and
+2026-11-07). Every request has one task and reads exactly one value. A table
+is read like a section: the model repeats each value as the passage prints
+it, with a quote that pins it down, and code takes nothing from where it
+stands (owner decision 2026-11-07: "streich diese ganze Code Logik").
 
 A round shows the parameter in short (its `brief`), the whole passage (a table
 with its title, its head and all its rows, or the survey's piece of a
-section), the text around a table or figure and the values already read, and
-asks for the next value not yet read, until the model says there is none. A
-value may stand in any passage the round showed: the passage, its heading or
-the text around it; it is read from the one its quote stands in, which joins
-the reading's batch, so the fold checks it there (`pipeline.route_claims`).
-The requests that read have no tools; only the combing has (owner decision
-2026-11-05, ticket 26: no reading of 2,231 in an eight-plan probe used them). A value the check refuses (its quote in no passage
-shown, its number not in its quote, whatever else the fold refuses of the
-value and its quote, such as an answer its quote does not hold or one off
-its closed list (`verify.value_refused`), a quote over several table rows
-that print it, a head no head line prints) is asked once more with the
-reason; one named again is asked once more, and named again it ends the
-rounds.
+section), the text around a table or figure, the line of the title page and
+the table the passage may continue, and asks for the next value not yet read,
+until the model says there is none. A value may stand in any passage the
+round showed; it is read from the one its quote stands in, which joins the
+reading's batch, so the fold checks it there (`pipeline.route_claims`). Its
+quote stands in what was shown exactly once and holds the value exactly
+once, each counted where it stands for itself and not as part of a longer
+name or number (`verify.times_quoted`, `verify.times_stated`):
+"410.662,44 | 1.109 | 6%" pins down the 1.109 of its row. A value the check
+refuses (its quote in no passage shown, its number not in its quote, whatever
+else the fold refuses of the value and its quote (`verify.value_refused`), a
+quote that does not pin it down) is asked once more with the reason; one
+named again is asked once more, and named again it ends the rounds. No
+request that reads has tools.
 
-A number in a table takes its column from its head, else from the one cell of
-its row that prints it, and a head that prints exactly one year of the
-document's pairs is its year, read off the head line and not asked
-(`pipeline.with_head`, owner decision 2026-11-03); where exactly one pair has
-that year, the pair's scenario is the value's too (`pipeline.head_pair`).
-Then every group of the spec (`Spec.groups`, `groups_of`) is asked for this
-one value, its coordinates still open only, in the order of the spec, all in
-one conversation (owner decisions 2026-11-07, `thread.py`): the first message
-shows the passage and the value, each group's message brings the words of
-that group and its coordinates only, and the model sees what it answered for
-the groups before. A first message begins with what is the same for every
-request of its parameter and group (the parameter, in full only where the
-group classifies, its questions with their lists), then what is the same in
-a plan (its base and target years), then the passage, and the value comes
-last, marked, with what is already read of it, so a server reads each shared
-beginning once (owner decision 2026-11-05, ticket 26). The system prompt is
-what every group is told and the part of each field the first message
-carries; only a group that asks a frame coordinate is shown the pairs and the
-plan's base and target years. The rounds of a passage's values are a
-conversation as well: each later round asks for the next value after the
-answer it follows. A correction and the second reading go after the answer
-they are about, in its conversation.
+A number a figure only draws, as a bar, a segment, an area or a point of a
+curve, is a value of the plan and an estimate (owner decisions 2026-11-05 and
+2026-11-07). Where a figure's image goes with the request, every value of the
+round says whether the image only draws it; one no shown text states is read
+off the image, its reading in place of a quote, and that reading is its
+evidence (`verify.read_off`), trust level C.
 
-Every coordinate asked is answered: the grammar of a group request requires
-each of them, and "the passage does not say" is one of the answers
-(`fields.UNSTATED`).
+Then the value's coordinates are asked one by one, in the order of the spec's
+groups and of the coordinates in each (`Spec.groups`, `groups_of`), all in
+one conversation (owner decision 2026-11-07: "Die Fragen A, B und C sind ja
+eigentlich mehrere Fragen und sollten dann auch nacheinander gestellt
+werden"): the first message shows the passage and the value, each later one
+brings the words of the coordinate's group and that coordinate only, and the
+model sees what it answered before. A coordinate the spec derives from the
+unit is not asked where the unit question chose an entry of the parameter's
+list, and is asked where it chose none (owner decision 2026-11-07: where it
+does not follow by itself, the model tries). The system prompt is what every
+message is told and the part of each field the first message carries; only a
+frame coordinate is shown the survey's pairs, only the year the plan's base
+and target years. The rounds of a passage's values are a conversation as
+well: each later round asks for the next value after the answer it follows.
+A correction goes after the answer it is about, in its conversation.
+
+Every coordinate asked is answered: the grammar requires it, and "the
+passage does not say" is one of the answers (`fields.UNSTATED`).
 
 A coordinate whose answer is the name the document gives a thing, such as
 a scenario, is read as the document prints it (`fields.Slot.merged`). A
@@ -66,20 +65,17 @@ row of its name, a changed name to the next row still open, a further name
 to a row of its own (`routed`, owner decisions 2026-11-07). Which names
 mean the same thing is asked once the document is read (`naming.py`).
 
-A find of the second reading whose quote stands only in the section before
-or after the value's place is asked about once more: does that place speak
-about the value (`Judge`, owner decision 2026-11-07)? A "no" takes it out,
-and the coordinate goes to the combing open.
-
 Nothing is checked here beyond what the harvest checks everywhere. Every
 coordinate goes through `pipeline.merge_field` and every value through
 `fold_batch`. What that check refuses is asked once more with its reason,
 named by its coordinate; a coordinate the reply left out is asked for by
 name. A frame coordinate still open takes the survey's tuple of the passage,
-with its quote, where the survey named one (window `frame`). A coordinate no
-reply answered ends `unanswered`. A request too long for the model's window
-is split: a table into halves of its rows, until a single row is a hole of
-its own (`Read.lost`).
+with its quote, where the survey named one (window `frame`). What is still
+open then is asked in a conversation of its own, with the answers so far,
+the sections around the value's place and the rest of the plan
+(`combing.py`). A request too long for the model's window is split: a table
+into halves of its rows, until a single row is a hole of its own
+(`Read.lost`).
 
 Author: Felix Vossel
 """
@@ -95,14 +91,12 @@ from typing import Callable, Optional
 
 from . import fields, lookup
 from .thread import CORRECTIONS, Thread
-from .pipeline import (CELL, READ, YEAR_STATES, Batch, Row, Source, WorkItem,
-                       answer_in_quote, cell_index, column_head, head_cells,
-                       head_pair, in_several_rows, mark_unanswered,
-                       merge_field, narrow_quote, option_named,
-                       printed_lines, row_label, window_around, with_head)
+from .pipeline import (READ, YEAR_STATES, Batch, Row, Source, WorkItem,
+                       answer_in_quote, mark_unanswered, merge_field,
+                       option_named, printed_lines, row_label, window_around)
 from .verify import (MIN_QUOTE_CHARS, canonical_number, flat,
-                     number_outside_quote, numbers_in, quote_in,
-                     value_refused)
+                     number_outside_quote, quote_in, read_off, times_quoted,
+                     times_stated, value_refused)
 from .wording import say
 
 # The values of a passage, one per round; one group's coordinates of one of
@@ -128,15 +122,15 @@ NOT_SHOWN = "quote_not_in_passage"
 
 # What a message that follows an answer in the same conversation carries
 # (owner decisions 2026-11-07, `thread.py`): the ask for the next value of a
-# passage, what the check refused of the answer, and, in the second reading,
-# the coordinates asked again beside the sections before and after the
-# value's place (`NEAR`).
+# passage, what the check refused of the answer, and, in the conversation for
+# what the reading left open (`combing.py`), the coordinate asked next.
 NEXT = "next"
 COORDINATES = "coordinates"
 
 # Why the check refused a round's value, as `Read.failed` counts it: the value
-# itself, its head, or a value already read.
-VALUE, HEAD, REPEATED = "value", "head", "repeated"
+# itself, a quote that does not pin it down (owner decision 2026-11-07), or a
+# value already read.
+VALUE, UNIQUE, REPEATED = "value", "unique", "repeated"
 
 # The request that asks of a find whether the place it was quoted from
 # speaks about its value, where the value's own request did not show that
@@ -224,12 +218,31 @@ def halves(view: Source) -> list:
 
 def slots_of(spec, parameter) -> list:
     """The coordinates a value of *parameter* is read with: its unit, then
-    every axis the spec does not decide."""
+    every axis, one the spec derives from the unit included, which is asked
+    where the unit question chose no entry of the parameter's list
+    (`derived_by_unit`)."""
     out = []
     unit = fields.unit_slot(spec, parameter) if parameter.is_numeric else None
     if unit is not None:
         out.append(unit)
-    return out + fields.asked_slots(parameter)
+    return out + fields.axis_slots(parameter)
+
+
+def derived_by_unit(claim: dict, parameter) -> bool:
+    """Does the spec decide the coordinates it derives from the unit for this
+    value: the unit question read an entry of the parameter's list? Where it
+    read the print without one, the model is asked them (owner decision
+    2026-11-07: "wo es nicht automatisch geht, soll es das LLM versuchen")."""
+    return (claim.get(f"{fields.UNIT}_state") == READ
+            and parameter.unit_factor(claim.get(fields.UNIT)) is not None)
+
+
+def in_group_order(group, group_slots: list) -> list:
+    """A group's coordinates in the order its spec entry names them: the
+    order their questions are asked in, one message each."""
+    order = list(group.coordinates)
+    return sorted(group_slots, key=lambda slot: order.index(slot.name)
+                  if slot.name in order else len(order))
 
 
 def groups_of(spec, slots: list) -> list:
@@ -249,7 +262,7 @@ def group_context(context: dict, group_slots: list, frame_slots: list,
     the survey's pairs and the plan's years only where the group asks a
     frame coordinate."""
     names = {slot.name for slot in group_slots}
-    shown = {key: context[key] for key in ("around",) + BESIDE
+    shown = {key: context[key] for key in ("around", "settings") + BESIDE
              if context.get(key)}
     if names & {slot.name for slot in frame_slots}:
         shown["known"] = context.get("known") or []
@@ -484,16 +497,16 @@ def around_of(source: Source, passages: dict,
     return replace(section, text=text)
 
 
-# What the second reading of a value shows beside its passage, the sections
-# before and after its place (owner decision 2026-11-06), and what any reading
-# request shows beside it: the line of the title page that names the plan's
-# own place, and the title and head of the table right before a table, which
-# it may continue.
+# What the second reading of a value shows beside it, the sections before and
+# after its place (owner decisions 2026-11-06 and 2026-11-07, `combing.py`),
+# and what any reading request shows beside a passage: the line of the title
+# page that names the plan's own place, and the title and head of the table
+# right before a table, which it may continue.
 NEAR = ("before", "after")
 # The fields of the follow-ups each kind of reading request sends, whose
 # words its prompt holds (`runner.FOLLOWS`).
 VALUE_FOLLOWS = (NEXT, CORRECTIONS)
-TEXT_FOLLOWS = (CORRECTIONS, *NEAR, COORDINATES)
+TEXT_FOLLOWS = (CORRECTIONS,)
 BESIDE = ("title_page", "table_before")
 
 
@@ -547,6 +560,23 @@ def table_before_of(source: Source) -> Optional[Source]:
     return Source(kind, at, before["text"], {"owner_kind": kind})
 
 
+def settings_shown(settings: list) -> list:
+    """The plan's settings as a request shows them: what each is about, what
+    it settles and its quote (`settings.PlanSettings`, owner decision
+    2026-11-07)."""
+    return [{key: one[key] for key in ("about", "value", "quote")
+             if one.get(key)} for one in settings or ()
+            if isinstance(one, dict)]
+
+
+def settings_evidence(settings: list, passages: dict) -> list:
+    """The quotes of the plan's settings, each a passage a quote may stand
+    in under the passage it was read from."""
+    return [piece for one in settings or () if isinstance(one, dict)
+            for piece in shown_as(passage_at(passages, one.get("source")),
+                                  one.get("quote"))]
+
+
 def beside_of(source: Source, title_page: Optional[Source]) -> tuple:
     """({key: text} a reading request shows beside *source*, [the passages
     a coordinate's quote may stand in for them]): the line of the title page
@@ -578,11 +608,12 @@ END, UNKNOWN = "end", "unknown"
 SEARCHED_WITH = ("query", "similar", "pattern")
 
 
-def more_schema() -> dict:
-    """The asks a reply may carry under "more"."""
+def more_schema(gets: tuple = GETS) -> dict:
+    """The asks a reply may carry under "more": any of *gets*, by default
+    every one."""
     return {"type": "array", "items": {
         "type": "object",
-        "properties": {"get": {"enum": list(GETS)},
+        "properties": {"get": {"enum": list(gets)},
                        "id": {"type": "string"},
                        "pattern": {"type": "string"},
                        "text": {"type": "string"}},
@@ -837,21 +868,16 @@ def source_shown(source: Source) -> dict:
             "section": provenance.get("section_title"), "text": source.text}
 
 
-def with_head_asked(parameter, source: Source) -> bool:
-    """Does a value of *parameter* in *source* name the head of its column?
-    A number in a table: the head tells two equal numbers of one row apart
-    and dates the number (owner decision 2026-11-05)."""
-    return bool(parameter.is_numeric) and source.owner_kind == "table"
-
-
 def shown_value(claim: dict) -> dict:
-    """A value as a request shows it: its value, wording, quote and head."""
-    return {key: claim[key] for key in ("value", "value_raw", "quote", "head")
+    """A value as a request shows it: its value, wording and quote, or for
+    one read off a figure the sentence of what was read."""
+    return {key: claim[key] for key in ("value", "value_raw", "quote",
+                                        "reading")
             if claim.get(key) not in (None, "") or key == "value"}
 
 
 def values_payload(source: Source, parameter, context: dict,
-                   read: list = ()) -> dict:
+                   read: list = (), drawn: bool = False) -> dict:
     """The first message of the values of a passage: the parameter in
     short, a category parameter with its entries (`value_classes`), first,
     the same in every conversation of the parameter; then the passage and
@@ -863,7 +889,9 @@ def values_payload(source: Source, parameter, context: dict,
     refused, are asked after the answer in the same conversation (owner
     decisions 2026-11-07); *read*, the values named so far, stands only in
     a conversation begun anew because the old one no longer fit the
-    model's window (`Reader._rounds`)."""
+    model's window (`Reader._rounds`). With *drawn*, a figure whose image
+    goes with the request says so ("image"), and the system prompt tells how
+    a number only the image shows is read off it."""
     classes = value_classes(parameter)
     return {"parameter": {**parameter_shown(parameter, full=False),
                           **({"value_classes": classes} if classes
@@ -871,18 +899,23 @@ def values_payload(source: Source, parameter, context: dict,
             **({"title_page": context["title_page"]}
                if context.get("title_page") else {}),
             "source": source_shown(source),
+            **({"image": True} if drawn else {}),
             **{key: context[key] for key in ("around", "table_before")
                if context.get(key)},
             **({"read": list(read)} if read else {})}
 
 
-def values_response_format(parameter, head: bool = False) -> dict:
+def values_response_format(parameter, drawn: bool = False) -> dict:
     """The next value of the passage as the reply itself, with no wrapper
     (owner decision 2026-11-06): its value and quote, its printed wording
     only where the value is an entry of a list or a number (a free text value
-    is its own wording, `verify.wording_of`), and with *head* the head of its
-    column; {"value": null} where no further value stands in it. A category
-    value is one of its entries, or "" where the model is unsure of them."""
+    is its own wording, `verify.wording_of`); {"value": null} where no
+    further value stands in it. A category value is one of its entries, or
+    "" where the model is unsure of them. With *drawn*, a figure whose image
+    goes with the request: always whether the image only draws the number
+    (`drawn`), and in place of a quote the sentence of what was read off the
+    image where no shown text states it (`reading`, owner decisions
+    2026-11-05 and 2026-11-07)."""
     classes = value_classes(parameter)
     if parameter.is_numeric:
         value = {"type": "number"}
@@ -894,10 +927,13 @@ def values_response_format(parameter, head: bool = False) -> dict:
     if parameter.is_numeric or classes:
         properties["value_raw"] = {"type": "string"}
     properties["quote"] = {"type": "string"}
-    if head:
-        properties["head"] = {"type": "string"}
+    required = ["value", "quote"]
+    if drawn:
+        properties["drawn"] = {"type": "boolean"}
+        properties["reading"] = {"type": "string"}
+        required = ["value", "drawn"]
     entry = {"type": "object", "properties": properties,
-             "required": ["value", "quote"], "additionalProperties": False}
+             "required": required, "additionalProperties": False}
     end = {"type": "object", "properties": {"value": {"type": "null"}},
            "required": ["value"], "additionalProperties": False}
     # "value" at the top as well: a reply without it is asked again
@@ -912,33 +948,43 @@ def values_response_format(parameter, head: bool = False) -> dict:
 NUMBER_SAID = 12.5
 
 
-def values_example(parameter, head: bool = False) -> dict:
+def values_example(parameter, drawn: bool = False) -> dict:
     """The reply of a value request as its example shows it: a value read,
     with exactly the keys `values_response_format` asks for this parameter
-    and this passage, in its order (owner decision 2026-11-06). The reply
-    that names no further value stays in the prompt's rule line."""
+    and this passage, in its order (owner decision 2026-11-06): a printed
+    value, so with *drawn* one the image does not only draw. The reply that
+    names no further value stays in the prompt's rule line, and one read off
+    an image in the part about the image."""
     entry = {"value": NUMBER_SAID if parameter.is_numeric else fields.SAID}
     if parameter.is_numeric or value_classes(parameter):
         entry["value_raw"] = fields.SAID
     entry["quote"] = fields.SAID
-    if head:
-        entry["head"] = fields.SAID
+    if drawn:
+        entry["drawn"] = False
     return entry
 
 
-def claim_of(reply, head: bool = False) -> Optional[dict]:
+def claim_of(reply, drawn: bool = False) -> Optional[dict]:
     """The value a round's reply names, as a row's claim, or None where it
-    names none: {"value": null}, or no object. A table row quoted with
-    others is cut to the one row that prints the number (`narrow_quote`)."""
+    names none: {"value": null}, or no object. Where the request sent the
+    image (*drawn*), whether the image only draws the number, and a reading
+    in place of a missing quote, which the switch `read_off` makes the
+    value's evidence (`verify.read_off`)."""
     if not isinstance(reply, dict) or reply.get("value") is None:
         return None
     claim = {"source": "Q1", "value": reply.get("value"),
              "quote": reply.get("quote")}
     if reply.get("value_raw"):
         claim["value_raw"] = reply["value_raw"]
-    if head and isinstance(reply.get("head"), str) and reply["head"].strip():
-        claim["head"] = reply["head"].strip()
-    return narrow_quote(claim)
+    if drawn:
+        if isinstance(reply.get("drawn"), bool):
+            claim["drawn"] = reply["drawn"]
+        reading, quote = reply.get("reading"), reply.get("quote")
+        if isinstance(reading, str) and reading.strip() \
+                and not (isinstance(quote, str) and quote.strip()):
+            claim.pop("quote")
+            claim.update(reading=reading.strip(), read_off=True)
+    return claim
 
 
 def _same_text(a, b) -> bool:
@@ -947,58 +993,14 @@ def _same_text(a, b) -> bool:
 
 def same_value(a: dict, b: dict) -> bool:
     """Do two claims name the same value: the same number or wording, in the
-    same quote, under the same head?"""
+    same quote, read off the same way?"""
     left, right = a.get("value"), b.get("value")
     numbers = canonical_number(left), canonical_number(right)
     same = numbers[0] == numbers[1] if None not in numbers \
         else _same_text(left, right)
     return (same and _same_text(a.get("value_raw"), b.get("value_raw"))
             and _same_text(a.get("quote"), b.get("quote"))
-            and _same_text(a.get("head"), b.get("head")))
-
-
-def head_matches(table: str, cell: int, cells: int, head: str) -> bool:
-    """Does *head* name the head of this column: its words on one head line,
-    or all of them as `column_head` joins them?"""
-    words = [w for _line, w in head_cells(table, cell, cells)]
-    joined = column_head(table, cell, cells)
-    return any(_same_text(head, w) for w in words) or (
-        joined is not None and _same_text(head, joined))
-
-
-def column_of(source: Source, claim: dict) -> Optional[tuple]:
-    """(column, cells of its row) of a number in a table, 1-based, or None:
-    the one column whose head is the head the model wrote and whose cell in
-    the quoted row prints the number, else the one cell of the row that
-    prints it (`pipeline.cell_index`). None where neither is certain: a
-    wrong column is worse than none."""
-    if source.owner_kind != "table":
-        return None
-    lines = printed_lines(claim.get("quote"))
-    if len(lines) != 1:
-        return None
-    cells = cells_of(lines[0])
-    head = claim.get("head")
-    wanted = canonical_number(claim.get("value"))
-    if head and wanted is not None:
-        found = [c for c in range(1, len(cells) + 1)
-                 if head_matches(source.text, c, len(cells), head)
-                 and wanted in numbers_in(cells[c - 1])]
-        if len(found) == 1:
-            return (found[0], len(cells))
-    return cell_index(claim.get("quote"), claim.get("value"))
-
-
-def head_in_table(source: Source, head: str) -> bool:
-    """Does any head line of the table print *head* over one of its
-    columns?"""
-    grid = grid_of(source.text)
-    if grid is None:
-        return False
-    return any(head_matches(source.text, c, grid.columns, head)
-               for c in range(1, grid.columns + 1)) or any(
-        _same_text(head, cell) for line in grid.heads
-        for cell in cells_of(line))
+            and _same_text(a.get("reading"), b.get("reading")))
 
 
 def passage_of(claim: dict, shown: list) -> Optional[Source]:
@@ -1035,21 +1037,27 @@ def value_failure(claim: dict, source: Source) -> Optional[str]:
 
 
 def round_failure(claim: dict, shown: list, read: list,
-                  parameter) -> Optional[tuple]:
+                  parameter, kind: str = "section") -> Optional[tuple]:
     """(kind, reason) of what the check refuses of a round's value of
     *parameter*, or None: a value already read (`REPEATED`), the value
     itself (`VALUE`: its quote in no passage of *shown*, its number not in
-    its quote, what the fold refuses of the value and its quote
-    (`verify.value_refused`), a number quoted over several rows of its
-    table that print it), or a head no head line of its table prints
-    (`HEAD`). The fold's refusal is told in its own words: what the fold
-    refuses, the model hears while it can still answer (owner decision
-    2026-11-05)."""
+    its quote, what the fold refuses of the value and its quote,
+    `verify.value_refused`), or a quote that does not pin the value down
+    (`UNIQUE`, owner decision 2026-11-07: it stands in what *shown* holds
+    more than once, or holds the value more than once). Of a value read off
+    a figure of *kind*, the passage the round reads, only the value itself
+    (`verify.read_off`). The fold's refusal is told in its own words: what
+    the fold refuses, the model hears while it can still answer (owner
+    decision 2026-11-05)."""
     if any(same_value(claim, other) for other in read):
         named = claim.get("value")
         return REPEATED, say("value_already_read",
                              value=json.dumps(named, ensure_ascii=False),
-                             quote=claim.get("quote"))
+                             quote=claim.get("quote") or claim.get("reading"))
+    if read_off(claim, kind):
+        refused = value_refused(claim, parameter, "", owner_kind=kind)
+        return (VALUE, say("value_rejected", reason=refused)) if refused \
+            else None
     passage = passage_of(claim, shown)
     if passage is None:
         return VALUE, say(NOT_SHOWN)
@@ -1059,28 +1067,13 @@ def round_failure(claim: dict, shown: list, read: list,
     refused = value_refused(claim, parameter, passage.text or "")
     if refused:
         return VALUE, say("value_rejected", reason=refused)
-    table = bool(parameter.is_numeric) and passage.owner_kind == "table"
-    if table and in_several_rows(claim):
-        return VALUE, say("value_in_several_rows", values=json.dumps(
-            [{"value": claim.get("value"), "quote": claim.get("quote")}],
-            ensure_ascii=False))
-    if table and claim.get("head") and not head_in_table(
-            passage, claim["head"]) and not head_in_before(passage,
-                                                           claim["head"]):
-        return HEAD, say("head_not_in_table", head=claim["head"])
+    quote = claim["quote"]
+    if times_quoted([source.text for source in shown], quote) > 1:
+        return UNIQUE, say("quote_not_unique", quote=quote)
+    if times_stated(claim, parameter, quote) > 1:
+        return UNIQUE, say("value_not_once", value=json.dumps(
+            claim.get("value"), ensure_ascii=False), quote=quote)
     return None
-
-
-def head_in_before(source: Source, head: str) -> bool:
-    """Does a head line of the table *source* may continue print *head*
-    (`table_before_of`)? Its head is the continuation's, where the model
-    reads it as one (owner decision 2026-11-06)."""
-    before = table_before_of(source)
-    if before is None:
-        return False
-    return any(_same_text(head, cell)
-               for line in (before.text or "").splitlines()
-               if line.count("|") >= 2 for cell in cells_of(line))
 
 
 # -- one group's coordinates of one value ---------------------------------------
@@ -1097,12 +1090,9 @@ def text_payload(source: Source, parameter, slots: list, row: Row,
     survey's pairs of the passage (`group_context`); the value last, with
     its quote and, under "read", what is already read of it in the plan's
     words. The line of the title page stands with the plan's years, the
-    table the passage may continue after it (`beside_of`), and, in the second
-    reading of a value no conversation stands for, the sections before and
-    after its place (`near_of`). A request for every value of a table at once
-    says so ("whole_table", `Reader._near_table`). It is the first message
-    of the value's conversation: its next group, a correction and its
-    second reading follow the answer (`group_payload`, owner decisions
+    table the passage may continue after it (`beside_of`). It is the first
+    message of the value's conversation: its next coordinate and a
+    correction follow the answer (`group_payload`, owner decisions
     2026-11-07)."""
     value = shown_value(row.claim)
     if context.get("read"):
@@ -1115,13 +1105,12 @@ def text_payload(source: Source, parameter, slots: list, row: Row,
                   if key in context},
                **({"title_page": context["title_page"]}
                   if context.get("title_page") else {}),
+               **({"settings": context["settings"]}
+                  if context.get("settings") else {}),
                "source": source_shown(source),
-               **{key: context[key]
-                  for key in ("around", "table_before") + NEAR
+               **{key: context[key] for key in ("around", "table_before")
                   if context.get(key)},
                **({"known": context["known"]} if "known" in context
-                  else {}),
-               **({"whole_table": True} if context.get("whole_table")
                   else {}),
                "value": value}
     return payload
@@ -1585,21 +1574,11 @@ class Read:
     # what the check refused of the first replies, by reason
     failed: dict = field(default_factory=dict)
     unanswered: int = 0           # coordinates no reply answered
-    # Per claim, in its order: the sentences its group replies wrote to the
+    # Per claim, in its order: the sentences its replies wrote to the
     # coordinates they found unstated, as the plan would print them,
     # {coordinate: sentence}, which the combing ranks with. Not on the claim:
     # no sentence enters the harvest.
     probes: list = field(default_factory=list)
-    # Requests of the second reading, which asked the coordinates the first
-    # left open once more with the sections around the value's place, and
-    # the coordinates they read (owner decision 2026-11-06).
-    near: int = 0
-    near_read: int = 0
-    # Finds of the second reading quoted from the sections around the
-    # value's place that the check was asked about, and those it said do not
-    # speak about the value (owner decision 2026-11-07).
-    judged: int = 0
-    turned: int = 0
 
 
 @dataclass
@@ -1681,30 +1660,31 @@ class Reader:
     decisions 2026-11-04 and 2026-11-05), each the reply as a dict, CUT, or
     None, and each a message of a conversation (`thread.Thread`, owner
     decisions 2026-11-07): *ask_values(source, parameter, context, read,
-    thread, follow)* the first value of a passage not among *read*, or,
-    with *follow*, what follows the answer of *thread*: the next value, a
-    correction; *ask_text(source, parameter, group, slots, row, context,
-    thread, follow)* one group's coordinates of that value: the first
-    message of the value's conversation, the message of its next group, or,
-    with *follow*, a correction or its second reading. *context* is what
+    thread, follow, drawn)* the first value of a passage not among *read*,
+    or, with *follow*, what follows the answer of *thread*: the next value,
+    a correction; with *drawn* the request sends the figure's image and
+    takes a value read off it. *ask_text(source, parameter, group, slots,
+    row, context, thread, follow)* one coordinate of that value (*slots*,
+    one): the first message of the value's conversation, the message of
+    its next coordinate, or, with *follow*, a correction. *context* is what
     the first message shows beside its passage.
     *shown_with(source)* is what a coordinate's quote may stand in besides
     the passage: the heading it stands under (`heading_of`); so may what
     the value has read, as its request shows it (`known_shown`).
     *known(claim, asked)* is what a value has read in the plan's words
-    (`runner.row_context`). *pool* reads passages side by side. No request
-    of the reading has tools (owner decision 2026-11-05, ticket 26).
-    *check(payload, shape, document_id, source, group, example, thread,
-    follow)*, where given, asks of a find of the second reading quoted from
-    a section around the value's place whether that place speaks about the
-    value (`Judge`, owner decision 2026-11-07).
+    (`runner.row_context`). *drawn(source)* says whether a request about
+    *source* sends a figure's image, which a value only the image shows is
+    read off (owner decisions 2026-11-05 and 2026-11-07); None sends none.
+    *pool* reads passages side by side. No request of the reading has
+    tools (owner decision 2026-11-05, ticket 26).
     """
 
     def __init__(self, spec, ask_values: Callable, ask_text: Callable,
                  frame_slots: list, *, shown_with: Optional[Callable] = None,
                  bases: Optional[Callable] = None,
                  known: Optional[Callable] = None,
-                 pool=None, trace=None, check: Optional[Callable] = None):
+                 drawn: Optional[Callable] = None,
+                 pool=None, trace=None):
         self.spec = spec
         self.ask_values = ask_values
         self.ask_text = ask_text
@@ -1712,21 +1692,25 @@ class Reader:
         self.shown_with = shown_with or (lambda source: [])
         self.bases = bases or (lambda pairs: [])
         self.known = known or (lambda claim, asked: {})
+        self.drawn = drawn or (lambda source: False)
         self.pool = pool
         self.trace = trace
-        self.check = check
 
     def __call__(self, document_id: int, found, passages: dict,
                  budget: Optional[int] = None, *,
                  bases: Optional[list] = None,
-                 title_page: Optional[Source] = None) -> list:
+                 title_page: Optional[Source] = None,
+                 settings: Optional[list] = None) -> list:
         """One Read per parameter and passage the survey named for it. A
         section or figure longer than *budget* characters, two pages of the
         plan, is read in pieces of that size (`survey.pieces`). *bases* are
         the plan's base and target years as one request per plan read them
         (`years.PlanYears`), else those of the survey's pairs; *title_page*
         the line of its title page that names its own place, which every
-        request shows (owner decisions 2026-11-06)."""
+        request shows (owner decisions 2026-11-06); *settings* what the plan
+        settles for all its values (`settings.PlanSettings`), which every
+        request about a value's coordinates shows and may quote (owner
+        decision 2026-11-07)."""
         from .survey import pieces
 
         pairs: list = []
@@ -1755,7 +1739,7 @@ class Reader:
             return self.read(document_id, parameter, source,
                              found.tuples_at(owner, "frame"), pairs, passages,
                              shown=shown, budget=budget, bases=bases,
-                             title_page=title_page)
+                             title_page=title_page, settings=settings)
         if self.pool is None:
             return [one(job) for job in jobs]
         return list(self.pool.map(one, jobs))
@@ -1781,15 +1765,16 @@ class Reader:
              shown: Optional[Source] = None,
              budget: Optional[int] = None, *,
              bases: Optional[list] = None,
-             title_page: Optional[Source] = None) -> Read:
+             title_page: Optional[Source] = None,
+             settings: Optional[list] = None) -> Read:
         """*source* is the passage a value is verified against, *shown* the
         piece of it the requests show, *budget* two pages of the plan, which
         the text around a table or figure fits (`around_of`). The values in
-        rounds (`_values`), each placed in its table (`_placed`), then each
-        group of the spec for each value (`_value_group`), then what that
-        left open once more with the plan around the value (`_near`).
-        *bases* are the plan's years (else those of *pairs*), *title_page*
-        its title page's line (`Reader.__call__`)."""
+        rounds (`_values`), then each coordinate of the spec for each value,
+        one message each in the order of the groups (`_value_group`); what
+        that leaves open is asked in a conversation of its own
+        (`combing.Comber`). *bases* are the plan's years (else those of
+        *pairs*), *title_page* its title page's line (`Reader.__call__`)."""
         shown = shown or source
         slots = slots_of(self.spec, parameter)
         # The reading's spec rides on the batch, so the fold checks a value
@@ -1800,6 +1785,11 @@ class Reader:
         bases = list(bases) if bases is not None else self.bases(pairs)
         context, around, beside = self.context_of(source, tuples, passages,
                                                   budget, title_page)
+        if settings:
+            # What the plan settles for all its values, shown with each
+            # value's coordinates, and quotable there.
+            context["settings"] = settings_shown(settings)
+            beside = list(beside) + settings_evidence(settings, passages)
         result = Read(batch, [])
         # What a coordinate's quote may stand in besides what a request
         # shows of the passage: its heading, the text around it, the frame.
@@ -1837,29 +1827,35 @@ class Reader:
                            values=0, unread=True, why=result.why,
                            asked=result.asked)
             return result
-        for row in rows:
-            self._placed(job, row)
         job.made = len(rows)
         groups = groups_of(self.spec, slots)
         grouped: list = []
         for row in rows:
-            # A value stated for several names of a coordinate that may name
-            # several is one row per name, and each asks the groups after it
+            # One message per coordinate, in the order of the groups and of
+            # each group's coordinates (owner decision 2026-11-07). A value
+            # stated for several names of a coordinate that may name several
+            # is one row per name, and each asks the coordinates after it
             # alone.
             each = [row]
             for group, group_slots in groups:
-                each += [made for one in list(each)
-                         for made in self._value_group(job, one, group,
-                                                       group_slots)]
+                for slot in in_group_order(group, group_slots):
+                    each += [made for one in list(each)
+                             if not (slot.derive
+                                     and derived_by_unit(one.claim, parameter))
+                             for made in self._value_group(job, one, group,
+                                                           [slot])]
             grouped.extend(each)
         rows = grouped
         evidence = list(views) + fixed + list(beside) + frames
+        # What the spec derives from the unit, where the unit question chose
+        # an entry; where it chose none, the coordinate was asked.
         for axis in fields.axis_slots(parameter):
-            fields.apply_derived(rows, axis)
+            fields.apply_derived([row for row in rows
+                                  if derived_by_unit(row.claim, parameter)],
+                                 axis)
         inherit(rows, [s for s in self.frame_slots
                        if s.name in {x.name for x in slots}],
                 tuples, pairs, evidence)
-        rows = rows + self._near(job, rows)
         link_ranges(rows, slots)
         result.unanswered = mark_unanswered(rows, slots)
         result.claims = [row.claim for row in rows]
@@ -1869,157 +1865,8 @@ class Reader:
                        kind=source.owner_kind, owner=source.owner_id,
                        values=len(rows), asked=result.asked,
                        corrected=result.corrected, failed=result.failed,
-                       unanswered=result.unanswered, near=result.near,
-                       near_read=result.near_read,
-                       **({"judged": result.judged, "turned": result.turned}
-                          if result.judged else {}))
+                       unanswered=result.unanswered)
         return result
-
-    def _near(self, job: _Job, rows: list) -> list:
-        """The second reading (owner decision 2026-11-06): a coordinate the
-        first reading left open (`is_open`), which the passage, its section
-        and its heading did not state, is asked once more with the sections
-        before and after the value's place (`near_of`), but for those
-        printed with the number itself (`Group.asked_near`): in the value's
-        conversation, every open coordinate of every group in one message
-        after its answers (`_near_value`, owner decisions 2026-11-07); where
-        no conversation stands for the value, as a first message per group.
-        A table's frame left open on every one of its values, a table that
-        prints no frame in its head and rows, is asked once for all of them,
-        and each takes the answer with its quote (`_near_table`). Nothing is
-        asked where the plan has no section around the place. [The rows
-        made for further names of a value]."""
-        near = near_of(job.source, job.order, job.budget)
-        if not near or not rows:
-            return []
-        groups = groups_of(self.spec, job.slots)
-        done: set = set()
-        for group, group_slots in groups:
-            slots = group.asked_near(group_slots)
-            if (job.source.owner_kind == "table" and group.read_in == "survey"
-                    and len(rows) > 1 and not any(several(s) for s in slots)):
-                common = [s for s in slots
-                          if all(is_open(row.claim, s) for row in rows)]
-                if common and self._near_table(job, rows, group, common,
-                                               near):
-                    done |= {slot.name for slot in common}
-        made: list = []
-        for row in list(rows):
-            thread = job.threads.get(row.label)
-            if thread is not None and thread.begun:
-                asked = [s for group, group_slots in groups
-                         for s in group.asked_near(group_slots)
-                         if s.name not in done and is_open(row.claim, s)]
-                if asked:
-                    made += self._near_value(job, row, asked, near)
-                continue
-            for group, group_slots in groups:
-                asked = [s for s in group.asked_near(group_slots)
-                         if s.name not in done and is_open(row.claim, s)]
-                if asked:
-                    made += self._value_group(job, row, group, asked,
-                                              near=near)
-        return made
-
-    def _near_value(self, job: _Job, row: Row, asked: list,
-                    near: dict) -> list:
-        """The second reading of one value in its conversation (owner
-        decisions 2026-11-06 and 2026-11-07): the sections before and after
-        its place and the coordinates still open (*asked*), of every group,
-        in one message after its answers; what the check refuses asked once
-        more after that answer. [The rows made for further names]."""
-        result = job.result
-        view = job.views.get(row.label, job.shown)
-        read = self.known(row.claim, [slot.name for slot in asked])
-        follow = {**{key: piece.text for key, piece in near.items()},
-                  COORDINATES: {slot.name: coordinate_shown(slot)
-                                for slot in asked}}
-
-        def ask(one: Row, told: dict):
-            return spread(self.ask_text(view, job.parameter, None, asked,
-                                        one, {}, job.threads[one.label],
-                                        told), asked)
-        reply = ask(row, follow)
-        result.asked += 1
-        result.near += 1
-        if not isinstance(reply, dict):
-            return []
-        evidence = ([view] + job.fixed + job.extra + job.frames
-                    + list(near.values())
-                    + known_shown(row.claim, read, job.passages))
-        judge = self._judge(job, row, None, asked, read, near)
-        reply, turned = judge(reply)
-        made = self._settled(job, row, reply, asked, ask, evidence,
-                             window=("near", 1), judge=judge, turned=turned)
-        result.near_read += sum(
-            1 for one in [row] + made for slot in asked
-            if one.claim.get(f"{slot.name}_state") == READ)
-        return made
-
-    def _near_table(self, job: _Job, rows: list, group, slots: list,
-                    near: dict) -> bool:
-        """One request of the second reading for the open frame of every
-        value of a table (owner decisions 2026-11-02 and 2026-11-06): the
-        table and the plan around it shown once, the first value as the one
-        asked, the request saying the answer holds for the whole table. Each
-        value takes the answer with its quote through the field check, what
-        it refuses asked once more. False where no readable reply came, and
-        the values are then asked one by one."""
-        first = rows[0]
-        view = job.views.get(first.label, job.shown)
-        base = group_context(job.context, slots, self.frame_slots, job.bases)
-        context = {**base, **{key: piece.text for key, piece in near.items()},
-                   "whole_table": True}
-        result = job.result
-        thread = Thread()
-
-        def ask(follow: Optional[dict] = None):
-            result.asked += 1
-            result.near += 1
-            return self.ask_text(view, job.parameter, group, slots, first,
-                                 context, thread, follow)
-        reply = ask()
-        if not isinstance(reply, dict):
-            return False
-        evidence = ([view] + job.fixed + job.extra + job.frames
-                    + list(near.values()))
-        judge = self._judge(job, first, group, slots, {}, near)
-        reply, turned = judge(reply)
-        labels = [row.label for row in rows]
-
-        def taken(answers: dict) -> list:
-            failed = []
-            for slot in slots:
-                entry = answers.get(slot.name)
-                if not isinstance(entry, dict):
-                    continue
-                got = merge_field(rows, evidence, slot,
-                                  {"groups": [dict(answer_of(entry),
-                                                   rows=labels)]},
-                                  window=("table", 1), bases=job.bases,
-                                  not_shown=NOT_SHOWN)
-                result.near_read += got["filled"]
-                failed.extend((slot.name, "value", failure)
-                              for failure in got["failed"])
-            return failed
-        for row in rows:
-            self._probed(job, row, reply, slots)
-        failed = taken(reply)
-        # A find the check took out goes to the combing, not asked again.
-        corrections = [one for one in value_corrections(first, failed, slots,
-                                                        reply)
-                       if one["coordinate"] not in turned]
-        result.failed = dict(collections.Counter(result.failed)
-                             + refused_of(failed))
-        if corrections:
-            result.corrected += len(corrections)
-            again = ask({CORRECTIONS: corrections})
-            if isinstance(again, dict):
-                again, _ = judge(again)
-                for row in rows:
-                    self._probed(job, row, again, slots)
-                taken(again)
-        return True
 
     @staticmethod
     def _probed(job: _Job, row: Row, reply: dict, asked: list) -> None:
@@ -2074,7 +1921,7 @@ class Reader:
         decision 2026-11-05). A conversation that no longer fits the model's
         window begins anew, showing the values named so far."""
         result = job.result
-        head = with_head_asked(job.parameter, view)
+        drawn = bool(self.drawn(view))
         shows = {key: job.context[key] for key in ("around",) + BESIDE
                  if job.context.get(key)}
         shown = job.passages_shown()
@@ -2084,7 +1931,8 @@ class Reader:
 
         def ask(follow: Optional[dict] = None):
             return self.ask_values(view, job.parameter, dict(shows),
-                                   list(read), threads[-1], follow)
+                                   list(read), threads[-1], follow,
+                                   drawn=drawn)
         first = True
         while True:
             reply = ask({NEXT: None} if threads[-1].begun else None)
@@ -2100,11 +1948,11 @@ class Reader:
                     return CUT if reply == CUT else None
                 break
             first = False
-            claim = claim_of(reply, head)
+            claim = claim_of(reply, drawn)
             if claim is None:
                 break
             failure = round_failure(claim, shown, [r.claim for r in rows],
-                                    job.parameter)
+                                    job.parameter, view.owner_kind)
             if failure is not None:
                 kind, reason = failure
                 result.failed = dict(collections.Counter(result.failed)
@@ -2113,19 +1961,16 @@ class Reader:
                 again = ask({CORRECTIONS: [{**shown_value(claim),
                                             "what": reason}]})
                 result.asked += 1
-                claim = claim_of(again, head)
+                claim = claim_of(again, drawn)
                 if claim is None:
                     break
                 failure = round_failure(claim, shown,
                                         [r.claim for r in rows],
-                                        job.parameter)
+                                        job.parameter, view.owner_kind)
                 if failure is not None and failure[0] == REPEATED:
                     break
-                if failure is not None and failure[0] == HEAD:
-                    # Asked once: a head no head line prints says nothing of
-                    # the column, and the number's own cell may still.
-                    claim.pop("head", None)
-            passage = passage_of(claim, shown)
+            passage = passage_of(claim, shown) if claim.get("quote") \
+                else (view if read_off(claim, view.owner_kind) else None)
             if passage is not None:
                 claim["source"] = job.label_of(passage)
             rows.append(Row(label=row_label(start + len(rows)), item_index=0,
@@ -2133,54 +1978,16 @@ class Reader:
             read.append(shown_value(claim))
         return rows
 
-    def _placed(self, job: _Job, row: Row) -> None:
-        """A number in a table placed in its column: the head over it on the
-        claim, and the year that head names read off the head line
-        (`pipeline.with_head`); where exactly one pair of the document has
-        that year, the pair's other frame coordinates, through the field
-        check with the pair's quotes (`pipeline.head_pair`). The table is the
-        one the value is read from."""
-        own = source_of(job.result.batch, row.claim)
-        if own.owner_kind != "table" or not job.parameter.is_numeric:
-            row.claim.pop("head", None)
-            return
-        claim = dict(row.claim)
-        cell = column_of(own, claim)
-        claim.pop("head", None)
-        if cell is not None:
-            claim[CELL] = cell
-        row.claim = with_head(claim, own, tuple(job.pairs),
-                              self.frame_slots)
-        found = head_pair(row.claim, tuple(job.pairs), None, self.frame_slots)
-        if found is None:
-            return
-        pair, index = found
-        for slot in self.frame_slots:
-            if row.claim.get(f"{slot.name}_state") == READ \
-                    or slot.name not in {s.name for s in job.slots}:
-                continue
-            source = tuple(pair.get(f"{slot.name}_source") or ())
-            shown = [job.passages[source]] if source in job.passages else []
-            answer = {"value": pair.get(slot.name),
-                      "quote": pair.get(f"{slot.name}_quote")}
-            if pair.get(f"{slot.name}_raw"):
-                answer["value_raw"] = pair[f"{slot.name}_raw"]
-            merge_field([row], shown + job.frames, slot,
-                        {"groups": [dict(answer, rows=[row.label])]},
-                        window=("frame", index + 1))
-
     def _value_group(self, job: _Job, row: Row, group,
-                     group_slots: list, near: Optional[dict] = None) -> list:
-        """One group's coordinates of one value, those still open only, in a
-        message of the value's conversation (owner decisions 2026-11-07):
-        its first message, or the next after the answers of the groups
-        before; what the check refuses asked once more after that answer,
-        by its coordinate. A reply that names several things for a
+                     group_slots: list) -> list:
+        """One coordinate of one value (*group_slots*, of *group*), where it
+        is still open, in a message of the value's conversation (owner
+        decisions 2026-11-07): its first message, or the next after the
+        answers before; what the check refuses asked once more after that
+        answer, by its coordinate. A reply that names several things for a
         coordinate that may name several makes one row per name
         (`answers_each`), each checked and asked once more on its own: [the
-        rows made beside *row*]. With *near* ({"before", "after"}: Source,
-        `near_of`) it is the second reading of a value no conversation
-        stands for, which shows those sections too and may quote them."""
+        rows made beside *row*]."""
         asked = [slot for slot in group_slots
                  if row.claim.get(f"{slot.name}_state") != READ]
         if not asked:
@@ -2188,10 +1995,8 @@ class Reader:
         result = job.result
         view = job.views.get(row.label, job.shown)
         base = group_context(job.context, asked, self.frame_slots, job.bases)
-        if near:
-            base.update({key: piece.text for key, piece in near.items()})
         read = self.known(row.claim, [slot.name for slot in asked])
-        window = ("near", 1) if near else ("own", 1)
+        window = ("own", 1)
         context = {**base, **({"read": read} if read else {})}
         if row.label in job.branched:
             # A further name of a value its conversation's answers do not
@@ -2206,50 +2011,14 @@ class Reader:
                                         follow), asked)
         reply = ask(row)
         result.asked += 1
-        if near:
-            result.near += 1
         if not isinstance(reply, dict):
             return []
         # What the value has read is shown too, and may be quoted (owner
         # decision 2026-11-05), and so is what stands beside the passage.
         evidence = ([view] + job.fixed + job.extra + job.frames
-                    + list((near or {}).values())
                     + known_shown(row.claim, read, job.passages))
-        judge = self._judge(job, row, group, asked, read, near)
-        reply, turned = judge(reply)
-        made = self._settled(job, row, reply, asked, ask, evidence,
-                             window=window, judge=judge, turned=turned)
-        if near:
-            result.near_read += sum(
-                1 for one in [row] + made for slot in asked
-                if one.claim.get(f"{slot.name}_state") == READ)
-        return made
-
-    def _judge(self, job: _Job, row: Row, group, asked: list, read: dict,
-               near: Optional[dict]) -> Callable:
-        """reply -> (reply, {coordinate: answers taken out}): with *near*,
-        the second reading, each find whose quote stands only in the
-        section before or after the value's place is asked about once more,
-        and one whose place the check says does not speak about the value
-        is taken out (`Judge`, owner decision 2026-11-07); else nothing."""
-        if self.check is None or not near:
-            return lambda reply: (reply, {})
-        shown_near = list(near.values())
-        own = {(s.owner_kind, s.owner_id)
-               for s in [job.source, job.shown] + job.fixed + job.extra
-               + job.frames + list(job.views.values())} - {
-            (s.owner_kind, s.owner_id) for s in shown_near}
-        judge = Judge(self.check, job.document_id,
-                      check_shown(job.source, job.parameter), own,
-                      job.source, group, job.passages, job.budget,
-                      job.result)
-        evidence = ([job.views.get(row.label, job.shown)] + job.fixed
-                    + job.extra + job.frames + shown_near
-                    + known_shown(row.claim, read, job.passages))
-        shown_row = {**shown_value(row.claim), "known": read,
-                     "open": [slot.name for slot in asked]}
-        return lambda reply: turned_out(reply, asked, judge, evidence,
-                                        shown_row)
+        return self._settled(job, row, reply, asked, ask, evidence,
+                             window=window)
 
     def _settled(self, job: _Job, row: Row, reply: dict, asked: list,
                  ask: Callable, evidence: list, window: tuple = ("own", 1),

@@ -2,79 +2,85 @@
 
 `docpipe/extraction/combing.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-combing.py: The coordinates the reading left open, looked for in the rest of
-the plan. Step 4 of the rebuilt harvest (owner decisions 2026-11-04).
+combing.py: The coordinates the reading left open, asked in a conversation of
+their own: first with the sections around the value's place, then in the
+rest of the plan. Step 4 of the rebuilt harvest (owner decisions 2026-11-04
+to 2026-11-07).
 
-The reading asks a value's coordinates in its own passage and the text
-around it, then once more with the sections before and after it. What is
-still open after it (a coordinate the passage does not state, one whose
-answer did not hold, one no reply answered) is looked for here, per value
-and group of the spec that still has an open coordinate (owner decisions
-2026-11-04 and 2026-11-05: every request one task and one value), the
-group's words for where a plan prints it shown. Only what another passage
-can state is looked for (`Group.combed`, owner decision 2026-11-06): what a
-number counts and how it is aggregated says its own passage, and a word like
-"ca." the number itself. A table that prints no frame in its head and rows,
-its frame open on every one of its values, is combed once, for its first
-value, and the others take the answers with their quotes (`taken_by`, owner
-decisions 2026-11-02 and 2026-11-06). The search ranks the plan with the sentences the reading
-wrote to the coordinates it found unstated, as the plan would print them
-(owner decision 2026-11-05: HyDE, `Read.probes`), those of the coordinates
-asked here; the best sections, tables and figures of that ranking are shown
-as a list of titles and first lines, without the sentences: they are the
-run's own writing, not the plan's, and the model quoted them as the plan's
-(owner decision 2026-11-06). Where no coordinate asked has a
-sentence, one whose answer did not hold or that no reply answered, the
-request shows no list and the model searches itself (owner decision
-2026-11-05), with the reading's own tools: a hit by its id, the next or the
-previous section, a table or figure by its placeholder, a pattern, a
-sentence of its own ("similar"). It answers each open coordinate it finds
-with its quote and leaves out what it does not find: the combing offers no
-"not stated" (owner decision 2026-11-06, after a probe in which the model
-ended its search with it at once), and one the model writes all the same
-is no answer (`found`).
+The reading asks a value's coordinates in its own passage, one message each
+(`reading.py`). What it leaves open (a coordinate the passage does not
+state, one whose answer did not hold, one no reply answered) is asked here,
+in a NEW conversation per value, not in the value's reading conversation
+(owner decision 2026-11-07: „Es wird neues Gespräch, mit den bisherigen
+Antworten / Ergebnissen“, to spare the context). Its first message shows the
+value with its quote, its answers so far with their quotes, the title and
+heading of its place, the line of the title page, the table it may continue,
+the plan's settings and the coordinate asked; never the passage itself
+(owner decision 2026-11-07: „Ohne die Tabelle“), which the value's quote and
+answers pin down. Every request carries its document, so the run orders and
+dedupes it with the document's other requests.
 
-A round that asks for nothing new while a coordinate is still unfound gets
-the next passages of the ranking, as many of each kind as the first list,
-or of the plan in its order where there is no ranking, until every passage
-of the plan was listed (owner decision 2026-11-06: the search runs empty).
-The rounds are one conversation (owner decisions 2026-11-07, `thread.py`):
-the first message shows the value, the coordinates asked and the first
-hits; each later one follows the answer before it and brings only what is
-new, what the model fetched, the next hits, what could not be fetched, and
-what was wrong, a find the check turned told once. A value whose open
-coordinate may name several things, such as a scenario, is shown every name
-of that kind read in the plan so far, each once, so the model can give all
-of them a value holds for at once (`names_read`, owner decision 2026-11-07);
-each still needs a quote that holds it.
-Only then is a coordinate no reply found `unstated`, a finding about the
-plan; one whose request no longer fits the model's window before that ends
-`exhausted`, a finding about the run.
+First the second reading (owner decision 2026-11-06): the sections before
+and after the value's place (`reading.near_of`) are shown once, and each open
+coordinate is asked on its own, one message after another, all but those
+printed with the number itself (`Group.asked_near`). Its answer may be "not
+stated", with the sentence of how the plan would print it (`probe`). A find
+quoted from those sections is asked about once more: does that place speak
+about the value (`reading.Judge`, owner decision 2026-11-07)?
 
-Nothing is checked here. Every answer goes through `merge_field`, and what it
-refuses is asked once more with the reason, which offers no "not stated"
-either: a quote that lacks its answer is to be fixed or the coordinate left
-out (`NOT_IN_QUOTE`). Where the reply made several rows, what it refuses on
-any of them is asked in ONE message after that answer, naming each refused
-name with its quote (`reading.told_once`, owner decision 2026-11-07), and
-each answer goes to the row of its name, a changed name to the next row
-still open, a further name to a row of its own (`reading.routed`). Its quote may stand in whatever
-the request showed of the plan (owner decision 2026-11-05): a passage the
-model fetched, a hit's line or title, the title or heading of a passage, the
-value's passage and its section, a wording the value has read. The
-coordinate then cites the passage that piece was shown with. A coordinate
-the reply names in another form than asked is asked for once more in the
-form asked, and ends `unanswered` where that reply does not give it.
+Then the search, for each coordinate still open that another passage can
+state (`Group.combed`): what a number counts and how it is aggregated says
+its own passage, and a word like "ca." the number itself (owner decision
+2026-11-06). One coordinate after another: its first message shows the hits
+of a search with the sentence the reading wrote to it, as the plan would
+print it (owner decision 2026-11-05: HyDE, `Read.probes`), as a list of titles
+and first lines, without the sentence: it is the run's own writing, not the
+plan's, and the model quoted it as the plan's (owner decision 2026-11-06).
+That message lets the model fetch hits only; from its next message on it may
+also search itself (owner decision 2026-11-07: „erst die retrievals
+durchgehen und dann kann es agentisch suchen“), with the reading's own
+tools: a hit by its id, the next or the previous section, a table or figure
+by its placeholder, a pattern, a sentence of its own ("similar"). Where no
+sentence was written, there is no list, and it searches itself at once. It
+answers the coordinate where it finds it and leaves it out where it does not:
+the search offers no "not stated" (owner decision 2026-11-06), and one the
+model writes all the same is no answer (`found`). A round that asks for
+nothing new while the coordinate is unfound gets the next passages of the
+ranking, as many of each kind as the first list, or of the plan in its order
+where there is no ranking, until every passage of the plan was listed (owner
+decision 2026-11-06: the search runs empty). Only then is it `unstated`, a
+finding about the plan; one whose request no longer fits the model's window
+before that is `exhausted`, a finding about the run. A conversation that no
+longer fits begins anew for the next coordinate. A find quoted from a passage
+other than the value's own, its section and its heading is checked as the
+second reading's are.
 
-A pass over a stored harvest combs with the same requests
+A table that prints no frame in its head and rows, its frame open on every
+one of its values, gets one such conversation for the whole table, which
+shows the table: its answers hold for every value of it, which take them
+with their quotes (`taken_by`, owner decisions 2026-11-02 and 2026-11-06).
+A value whose open coordinate may name several things, such as a scenario,
+is shown every name of that kind read in the plan so far, each once, so the
+model can give all of them a value holds for at once (`names_read`, owner
+decision 2026-11-07); each still needs a quote that holds it, and each makes
+a row of its own (`reading.answers_each`).
+
+Nothing is checked here beyond what the harvest checks everywhere. Every
+answer goes through `merge_field`, and what it refuses is asked once more in
+ONE message after that answer, with the reason; in the search, a quote that
+lacks its answer is to be fixed or the coordinate left out (`NOT_IN_QUOTE`).
+Its quote may stand in whatever the conversation showed of the plan (owner
+decision 2026-11-05): a section around the value, a passage the model
+fetched, a hit's line or title, the title or heading of the value's place,
+the quote of the value or of one of its answers, the plan's settings.
+
+A pass over a stored harvest asks with the same conversation
 (`Comber.comb_groups`): the coordinates it names (*coordinates*) whatever
-their state, one request per value and group, the value's own passage and
-its section
-shown first (*own*), since the reading that asked them there ran under an
-older question, the years of the stored rows
-(*bases*), and the passages a harvest before read the coordinate in listed
-(*first*). A stored row carries no sentence, so the model searches the rest
-of the plan itself.
+their state, the value's own passage and its section shown first (*own*),
+since the reading that asked them there ran under an older question, the
+years of the stored rows (*bases*), and the passages a harvest before read
+the coordinate in listed (*first*). A stored row carries no sentence, so the
+model searches the rest of the plan itself.
 
 Author: Felix Vossel
 
@@ -86,6 +92,7 @@ What `__all__` names, and where each name is defined:
 - `CHECK_FOLLOWS` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
 - `CHECK_PROMPT_ID` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
 - `COMB_PROMPT_ID`
+- `FIRST_GETS`
 - `NOT_ABOUT` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
 - `OPEN`
 - `SHOWN` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
@@ -103,7 +110,8 @@ What `__all__` names, and where each name is defined:
 class Combed
 ```
 
-What combing the open coordinates of one value came to.
+What one conversation for the open coordinates of one value came
+to.
 
 Fields:
 
@@ -113,6 +121,8 @@ Fields:
 - `open: int`: coordinates open before
 - `filled: int = 0`: read by this step
 - `asked: int = 0`
+- `near: int = 0`: requests of the second reading
+- `near_read: int = 0`: coordinates it read
 - `hits: int = 0`: hits of the search shown
 - `fetched: int = 0`
 - `searched: int = 0`
@@ -120,11 +130,11 @@ Fields:
 - `corrected: int = 0`
 - `exhausted: int = 0`
 - `listed: int = 0`: lists of the next passages the run added
-- `group: Optional[str] = None`: the group of the spec asked
 - `made: list = field(default_factory=list)`: rows made beside the value, one per further name it was stated for
-- `table_rows: int = 0`: the other values of its table that took the answers combed for this one, its frame open on all of them (owner decision 2026-11-06)
+- `table_rows: int = 0`: the other values of its table that took the answers asked for this one, its frame open on all of them (owner decision 2026-11-06)
 - `judged: int = 0`: finds quoted from a passage other than the value's own the check was asked about, and those it said do not speak about the value (owner decision 2026-11-07)
 - `turned: int = 0`
+- `anew: int = 0`: conversations begun anew because the one before outgrew the window
 
 ### Comber
 
@@ -133,21 +143,22 @@ class Comber
 ```
 
 (document_id, reads, passages, pairs, budget) -> [Combed], one per
-read value and group of the spec with an open coordinate.
+read value with an open coordinate and one per table whose frame is
+open on every one of its values.
 
 *ask(payload, shape, document_id, source, group, example, thread,
 follow)* is one message of a conversation (`thread.Thread`): the first
 shows *payload*, a later one carries *follow*, what is new since the
 answer it follows (`FOLLOWS`); the reply as a dict, CUT, or None,
-*group* the name of the group of the spec it asks, for its trace,
-*example* the reply its prompt shows (`comb_example`).
+*group* None, *example* the reply its prompt shows.
 *rank(document_id, probes, exclude)* is the plan's passages best first
 for the search sentences *probes* (`runner.make_more_sources`): the
-reading's sentences, and the model's own under "similar". *known(claim, asked)* is what a row has read in the
-plan's words (`runner.row_context`). *check(payload, shape, document_id,
-source, group, example, thread, follow)*, where given, is the request
-that asks of a find quoted from a passage other than the value's own
-and its section whether that place speaks about the value
+reading's sentences, and the model's own under "similar".
+*known(claim, asked)* is what a row has read in the plan's words
+(`runner.row_context`), which the check shows. *check(payload, shape,
+document_id, source, group, example, thread, follow)*, where given, is
+the request that asks of a find quoted from a passage other than the
+value's own and its section whether that place speaks about the value
 (`CHECK_PROMPT_ID`, owner decision 2026-11-07), a reply that names
 neither answer told so after it.
 
@@ -170,10 +181,9 @@ def comb_groups(self, document_id: int, parameter, source, slots: list,
                 first: Optional[list] = None) -> list
 ```
 
-`comb` once per value of *claims* and group of the spec that has
-something to ask of it: with *coordinates* the group's share of
-them, else a coordinate open on the value. [Combed], one per value
-and group asked.
+`comb` once per value of *claims* that has something to ask: with
+*coordinates* those of them *slots* has, whatever their state, else
+a coordinate open on the value. [Combed], one per value asked.
 
 #### Comber.comb
 
@@ -183,48 +193,34 @@ def comb(self, document_id: int, parameter, source, slots: list,
          budget: Optional[int] = None, *,
          coordinates: Optional[list] = None, own: bool = False,
          bases: Optional[tuple] = None,
-         first: Optional[list] = None, group=None,
+         first: Optional[list] = None,
          probes: Optional[dict] = None, split: bool = False,
          whole_table: int = 0,
-         names_so_far: Optional[list] = None) -> Combed
+         names_so_far: Optional[list] = None,
+         title_page=None, settings: Optional[list] = None) -> Combed
 ```
 
-The open coordinates of *claims*, values of *parameter* read in
-*source*, answered in place; with *coordinates* those of every row,
-open or not. *own* shows *source* and its section before the first
-request, *bases* are the years a row may name by a word (instead of
-those of *pairs*), *first* passages listed before the search's
-hits, *group* the group of the spec *slots* belong to, whose words
-for where a plan prints them the request shows, *probes* the
-sentences the reading wrote to coordinates it found unstated
-({coordinate: sentence}), which the search ranks with. A round that
-asks for nothing new while a coordinate is unfound lists the next
-passages of that ranking, or of the plan in its order, until every
-passage was listed; a coordinate still unfound then is unstated,
-one whose request no longer fit before is exhausted. With
-*split*, a value the reply states for several names of a coordinate
-that may name several (`reading.several`) is one row per name
+The coordinates of the one value *claims* holds, read from
+*source*, that its reading left open, asked in one conversation of
+their own: with *coordinates* those of *slots* whatever their state,
+else those still open. First each that the second reading asks once
+more with the sections around the value's place, then each that the
+rest of the plan can state, searched for one after another (module
+docstring). *own* shows *source* and its section in the first
+message, *bases* are the years a row may name by a word (instead of
+those of *pairs*), *first* passages listed before the hits of the
+first coordinate searched, *probes* the sentences the reading wrote
+to coordinates it found unstated ({coordinate: sentence}), which the
+search ranks with. *whole_table* is how many other values of the
+value's table take the answers (`taken_by`): the conversation shows
+the table and says so ("whole_table"). *names_so_far* are the names
+read in the plan so far for a coordinate asked that may name several
+things (`names_read`). With *split*, a value the reply states for
+several names of such a coordinate is one row per name
 (`reading.answers_each`, owner decision 2026-11-06), each a copy of
-the value's row in `Combed.made` and asked again on its own; without
-it, as in a pass over a stored harvest that re-reads each stored row
-in place, the first name.
-
-Each request shows one row (owner decision 2026-11-06): *claims* is
-one value's claim, and a row made for a further name is asked again
-on its own. The reply carries that row's answers at its top, with no
-row label (`comb_response_format`, `as_rows`). *whole_table* is how
-many other values of the value's table take the answers (`taken_by`),
-which the request says ("whole_table"). *names_so_far* are the names
-read in the plan so far for a coordinate asked that may name
-several things (`names_read`), which the first message shows
-("names").
-
-What the check refuses, on the value's row or on rows its reply made
-for further names, is asked in ONE message after that reply, naming
-each refused name with its quote (`reading.told_once`); each answer
-goes to the row of its name, a changed name to the next row still
-open, a further name to a row of its own (`reading.routed`, owner
-decisions 2026-11-07).
+the value's row in `Combed.made`; without it, as in a pass over a
+stored harvest that re-reads each stored row in place, the first
+name. *title_page* and *settings* are shown in the first message.
 
 ## Functions
 
@@ -239,13 +235,24 @@ The coordinates of a value still open after its reading.
 ### comb_response_format
 
 ```python
-def comb_response_format(slots: list) -> dict
+def comb_response_format(slots: list, gets: tuple = GETS) -> dict
 ```
 
-The coordinates asked of the one row a request shows that the reply
-found, at the top of the reply with no wrapper and no row label (owner
-decision 2026-11-06), none required and none UNSTATED, and what the
-reply asks of the rest of the plan.
+The coordinates a search message asks of the one value it is about,
+as far as the reply found them, at the top of the reply with no wrapper
+and no row label (owner decision 2026-11-06), none required and none
+UNSTATED, and what the reply asks of the rest of the plan: any of
+*gets* (`FIRST_GETS` in the first message of a coordinate's search).
+
+### near_response_format
+
+```python
+def near_response_format(slots: list) -> dict
+```
+
+The coordinate a message of the second reading asks of its value:
+required, "not stated" one of its answers, with the sentence of how the
+plan would print it (`probe`), which the search ranks with.
 
 ### found
 
@@ -255,7 +262,7 @@ def found(answer) -> bool
 
 Does *answer*, a reply's entry for one coordinate, name something: an
 answer that is not UNSTATED, alone or in a list? An entry the reply left
-out, one without a value, and UNSTATED name nothing: the combing does
+out, one without a value, and UNSTATED name nothing: the search does
 not offer it, and one the model writes all the same is no answer (owner
 decision 2026-11-06). A name in another form than asked names something,
 and is asked for once more in the form asked.
@@ -266,7 +273,7 @@ and is asked for once more in the form asked.
 def finds(reply, slots: list)
 ```
 
-*reply* (`as_rows`) as the combing reads it: each row's entries that
+*reply* (`as_rows`) as the search reads it: each row's entries that
 name nothing (`found`) taken out, and each list without its entries
 that name nothing. Anything but an object is left as it is.
 
@@ -276,10 +283,19 @@ that name nothing. Anything but an object is left as it is.
 def comb_example(slots: list) -> dict
 ```
 
-The reply of a combing request as its example shows it: exactly the
-coordinates this request asks, in its order, each read
-(`reading.entry_example`), then what it asks of the rest of the plan,
-as `comb_response_format` has them (owner decision 2026-11-06).
+The reply of a search message as its example shows it: exactly the
+coordinates it asks, in its order, each read (`reading.entry_example`),
+then what it asks of the rest of the plan, as `comb_response_format`
+has them (owner decision 2026-11-06).
+
+### near_example
+
+```python
+def near_example(slots: list) -> dict
+```
+
+The reply of a message of the second reading as its example shows
+it: exactly the coordinate it asks, read.
 
 ### as_rows
 
@@ -302,5 +318,18 @@ def names_read(spec, reads: list) -> dict
 thing the spec merges (`naming.merged_slots`), as a value or as a
 coordinate, each once, in the order the reading read them (owner
 decision 2026-11-07: "Alle gelesenen Namen").
+
+### answers_shown
+
+```python
+def answers_shown(claim: dict) -> dict
+```
+
+{coordinate: {"value", "quote"}}: what a value has read so far, each
+coordinate the plan's wording (or the answer itself where it has none)
+with the quote it was read from, the unit included; what the spec
+derived is its decision and says nothing the plan printed (owner
+decision 2026-11-07: the conversation for what is open begins with the
+answers so far).
 
 [Back to the index](../README.md)

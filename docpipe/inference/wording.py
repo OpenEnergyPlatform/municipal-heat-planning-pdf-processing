@@ -74,7 +74,7 @@ UI_REQUIRED = frozenset({
     "values_no_store", "values_no_parameter", "values_no_values",
     "values_where", "values_used", "values_details",
     "reason_exhausted", "reason_unbacked", "reason_unanswered",
-    "reason_conflict", "reason_computed",
+    "reason_conflict", "reason_computed", "reason_read_off",
     "reason_catalogue",
     "reason_not_located", "reason_review_disagree", "reason_page_transcribed",
     "route", "route_help", "route_auto", "route_harvest", "route_graph",

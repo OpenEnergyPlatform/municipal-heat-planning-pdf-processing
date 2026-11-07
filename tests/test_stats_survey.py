@@ -156,7 +156,7 @@ def test_the_trace_schema_takes_the_new_kinds_and_refuses_a_broken_one():
                          "kind": "table", "owner": 2, "rows": 1, "open": 1,
                          "filled": 0, "asked": 1, "hits": 0, "fetched": 0,
                          "searched": 0, "missed": 0, "corrected": 0,
-                         "exhausted": 1}, trace)
+                         "exhausted": 1, "near": 1, "near_read": 0}, trace)
     read = {"t": "read", "doc": 1, "parameter": "p", "kind": "table",
             "owner": 2, "values": 0, "unread": True, "why": "cut_off",
             "asked": 1}
@@ -366,18 +366,23 @@ def test_the_trace_schema_takes_the_times_and_once_of_a_request():
         jsonschema.validate({**record, "asked_at": "soon"}, record_schema)
 
 
-# Promise: the read event takes the check of its second reading, AND the
-# stats count its requests and the places it said do not speak about the
-# value (owner decision 2026-11-07); by construction, a read event without
-# them and a count that is no number.
-def test_the_check_of_the_second_reading_is_traced_and_counted(tmp_path):
-    record = {"t": "read", "doc": 1, "parameter": "p", "kind": "section",
-              "owner": 6, "values": 1, "asked": 3, "judged": 2, "turned": 1}
+# Promise: the second reading is the second conversation's (owner decisions
+# 2026-11-07): the comb event takes its messages and the coordinates they
+# read, AND the stats count them; the read event takes no check any more;
+# by construction, a read event with a check and a count that is no number.
+def test_the_second_reading_is_traced_and_counted_with_the_combing(tmp_path):
+    record = {"t": "comb", "doc": 1, "parameter": "p", "kind": "section",
+              "owner": 6, "rows": 1, "open": 2, "filled": 1, "asked": 3,
+              "hits": 0, "fetched": 0, "searched": 0, "missed": 0,
+              "corrected": 0, "exhausted": 0, "near": 2, "near_read": 1}
     jsonschema.validate(record, schema.trace_schema())
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate({**record, "turned": "one"},
-                            schema.trace_schema())
-    out = traced(tmp_path, record,
-                 {"t": "read", "parameter": "p", "kind": "section",
-                  "owner": 7, "values": 1, "asked": 1})["reading"]
-    assert (out["check_requests"], out["finds_turned"]) == (2, 1)
+        jsonschema.validate({**record, "near": "two"}, schema.trace_schema())
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({"t": "read", "doc": 1, "parameter": "p",
+                             "kind": "section", "owner": 6, "values": 1,
+                             "asked": 3, "judged": 2}, schema.trace_schema())
+    out = traced(tmp_path, record, {**record, "owner": 7, "near": 1,
+                                    "near_read": 0})["combing"]
+    assert (out["second_reading_messages"],
+            out["second_reading_read"]) == (3, 1)

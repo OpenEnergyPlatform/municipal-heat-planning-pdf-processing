@@ -607,6 +607,10 @@ def _evidence_comment(row: dict, document: str) -> list:
     lines = []
     if row.get("quote"):
         lines.append(_ttl_comment(f"“{row['quote']}”"))
+    elif row.get("reading"):
+        # No text states the value: what was read off the figure stands
+        # where the quote would (owner decision 2026-11-07).
+        lines.append(_ttl_comment(f"Read off the figure: {row['reading']}"))
     lines.append(_ttl_comment(", ".join(where)))
     if row.get("flags"):
         lines.append(_ttl_comment("flags: " + ", ".join(row["flags"])))

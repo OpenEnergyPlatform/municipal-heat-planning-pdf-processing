@@ -190,9 +190,6 @@
         "pattern": "^value is not a number$"
        },
        {
-        "pattern": "^unit .* not in units_accepted \\(.*\\)$"
-       },
-       {
         "pattern": "^a (text|category) parameter needs a non-empty string value$"
        },
        {
@@ -318,6 +315,9 @@
          "pattern": "^not_located$"
         },
         {
+         "pattern": "^read_off$"
+        },
+        {
          "pattern": "^review:disagree$"
         },
         {
@@ -338,6 +338,13 @@
      },
      "tuples": {
       "type": "integer"
+     },
+     "unlisted_units": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "description": "The units numbers were read with that are no entry of their parameter's list, as the plan prints them, counted: read and not converted, until the list grows and a top-up asks them again (owner decision 2026-11-07). Absent in a file written before.",
+      "type": "object"
      }
     },
     "required": [
@@ -353,6 +360,25 @@
    },
    "tuple_publication_abstract": {
     "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     }
+    ],
     "properties": {
      "catalogue": {
       "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
@@ -369,10 +395,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -500,6 +530,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
       "enum": [
@@ -538,7 +577,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value"
@@ -555,6 +593,25 @@
    },
    "tuple_publication_author": {
     "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     }
+    ],
     "properties": {
      "catalogue": {
       "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
@@ -571,10 +628,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -702,6 +763,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
       "enum": [
@@ -740,7 +810,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value"
@@ -765,6 +834,25 @@
    },
    "tuple_publication_date": {
     "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     }
+    ],
     "properties": {
      "catalogue": {
       "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
@@ -781,10 +869,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -912,6 +1004,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
       "enum": [
@@ -950,7 +1051,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value"
@@ -969,6 +1069,25 @@
    },
    "tuple_publication_doi": {
     "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     }
+    ],
     "properties": {
      "catalogue": {
       "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
@@ -985,10 +1104,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -1116,6 +1239,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
       "enum": [
@@ -1154,7 +1286,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value"
@@ -1171,6 +1302,25 @@
    },
    "tuple_publication_title": {
     "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     }
+    ],
     "properties": {
      "catalogue": {
       "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
@@ -1187,10 +1337,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -1318,6 +1472,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
       "enum": [
@@ -1356,7 +1519,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value"
@@ -1376,6 +1538,23 @@
    "tuple_scenario_abstract": {
     "additionalProperties": false,
     "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     },
      {
       "else": {
        "properties": {
@@ -1425,10 +1604,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -1555,6 +1738,15 @@
       "maxItems": 2,
       "minItems": 2,
       "type": "array"
+     },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
      },
      "scenario": {
       "description": "Axis 'scenario' of Scenario description. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.",
@@ -1726,7 +1918,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value",
@@ -1744,6 +1935,25 @@
    },
    "tuple_scenario_label": {
     "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     }
+    ],
     "properties": {
      "catalogue": {
       "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
@@ -1760,10 +1970,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -1891,6 +2105,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
       "enum": [
@@ -1938,7 +2161,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value"
@@ -1962,6 +2184,23 @@
    "tuple_scenario_region": {
     "additionalProperties": false,
     "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     },
      {
       "else": {
        "properties": {
@@ -2011,10 +2250,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -2141,6 +2384,15 @@
       "maxItems": 2,
       "minItems": 2,
       "type": "array"
+     },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
      },
      "scenario": {
       "description": "Axis 'scenario' of Scenario region. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.",
@@ -2401,7 +2653,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value",
@@ -2423,6 +2674,23 @@
    "tuple_scenario_type": {
     "additionalProperties": false,
     "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     },
      {
       "else": {
        "properties": {
@@ -2472,10 +2740,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -2602,6 +2874,15 @@
       "maxItems": 2,
       "minItems": 2,
       "type": "array"
+     },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
      },
      "scenario": {
       "description": "Axis 'scenario' of Scenario type. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.",
@@ -2999,7 +3280,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value",
@@ -3020,6 +3300,23 @@
    "tuple_scenario_year": {
     "additionalProperties": false,
     "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     },
      {
       "else": {
        "properties": {
@@ -3069,10 +3366,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -3199,6 +3500,15 @@
       "maxItems": 2,
       "minItems": 2,
       "type": "array"
+     },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
      },
      "scenario": {
       "description": "Axis 'scenario' of Scenario year. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.",
@@ -3370,7 +3680,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value",
@@ -3391,6 +3700,25 @@
    },
    "tuple_study_acronym": {
     "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     }
+    ],
     "properties": {
      "catalogue": {
       "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
@@ -3407,10 +3735,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -3538,6 +3870,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
       "enum": [
@@ -3576,7 +3917,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value"
@@ -3592,6 +3932,25 @@
    },
    "tuple_study_descriptor": {
     "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     }
+    ],
     "properties": {
      "catalogue": {
       "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
@@ -3608,10 +3967,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -3738,6 +4101,15 @@
       "maxItems": 2,
       "minItems": 2,
       "type": "array"
+     },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -4069,7 +4441,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value"
@@ -4087,6 +4458,25 @@
    },
    "tuple_study_funder": {
     "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     }
+    ],
     "properties": {
      "catalogue": {
       "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
@@ -4103,10 +4493,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -4234,6 +4628,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
       "enum": [
@@ -4272,7 +4675,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value"
@@ -4296,6 +4698,25 @@
    },
    "tuple_study_organisation": {
     "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     }
+    ],
     "properties": {
      "catalogue": {
       "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
@@ -4312,10 +4733,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -4443,6 +4868,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
       "enum": [
@@ -4481,7 +4915,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value"
@@ -4505,6 +4938,25 @@
    },
    "tuple_study_project_name": {
     "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     }
+    ],
     "properties": {
      "catalogue": {
       "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
@@ -4521,10 +4973,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -4652,6 +5108,15 @@
       "minItems": 2,
       "type": "array"
      },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
+     },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
       "enum": [
@@ -4690,7 +5155,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value"
@@ -4709,6 +5173,25 @@
    },
    "tuple_study_sector": {
     "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     }
+    ],
     "properties": {
      "catalogue": {
       "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
@@ -4725,10 +5208,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -4855,6 +5342,15 @@
       "maxItems": 2,
       "minItems": 2,
       "type": "array"
+     },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -5158,6 +5654,7 @@
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010182"
        },
        "CRF sector (IPCC 2006): agriculture": {
+        "meaning": "The CRF sector (IPCC 2006) 'agriculture' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories.",
         "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00010047"
        },
        "CRF sector (IPCC 2006): agriculture - other": {
@@ -5811,7 +6308,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value"
@@ -5829,6 +6325,25 @@
    },
    "tuple_study_sector_division": {
     "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     }
+    ],
     "properties": {
      "catalogue": {
       "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
@@ -5845,10 +6360,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -5975,6 +6494,15 @@
       "maxItems": 2,
       "minItems": 2,
       "type": "array"
+     },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -6207,7 +6735,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value"
@@ -6225,6 +6752,25 @@
    },
    "tuple_study_technology": {
     "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "required": [
+        "quote"
+       ]
+      },
+      "if": {
+       "required": [
+        "read_off"
+       ]
+      },
+      "then": {
+       "required": [
+        "reading"
+       ]
+      }
+     }
+    ],
     "properties": {
      "catalogue": {
       "description": "The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.",
@@ -6241,10 +6787,14 @@
       "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
       "type": "boolean"
      },
+     "drawn": {
+      "description": "A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.",
+      "type": "boolean"
+     },
      "flags": {
       "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|period:unstated|review:(agree|disagree|unbacked)|computed|catalogue|not_located|read_off)$",
        "type": "string"
       },
       "type": "array"
@@ -6371,6 +6921,15 @@
       "maxItems": 2,
       "minItems": 2,
       "type": "array"
+     },
+     "read_off": {
+      "const": true,
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+     },
+     "reading": {
+      "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
+      "minLength": 1,
+      "type": "string"
      },
      "tier": {
       "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
@@ -6744,7 +7303,6 @@
      "kind",
      "parameter",
      "parameter_state",
-     "quote",
      "tier",
      "provenance",
      "value"
@@ -6842,8 +7400,8 @@
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
-   "^extraction/(harvest|queries|anchors|rows|field|phrase|frame|survey|read_values|read_text|comb|match)$": {
-    "description": "sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_values`, `read_text`, `comb` and `match` are the prompts of the survey flow",
+   "^extraction/(harvest|queries|anchors|rows|field|phrase|frame|survey|read_values|read_text|comb|match|settings|seek)$": {
+    "description": "sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_values`, `read_text`, `comb`, `match`, `settings` and `seek` are the prompts of the survey flow",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
@@ -8768,6 +9326,164 @@
       "type": "number"
      },
      "t": {
+      "const": "settings_ask"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "input": {
+      "type": "object"
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "once": {
+      "type": "boolean"
+     },
+     "output": {
+      "type": "object"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "round": {
+      "type": "integer"
+     },
+     "rows": {},
+     "sent_at": {
+      "type": "number"
+     },
+     "t": {
+      "const": "seek_free_ask"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "corrections": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "figure": {},
+     "group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "input": {
+      "type": "object"
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "once": {
+      "type": "boolean"
+     },
+     "output": {
+      "type": "object"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passages": {},
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "round": {
+      "type": "integer"
+     },
+     "rows": {},
+     "sent_at": {
+      "type": "number"
+     },
+     "t": {
       "const": "phrase_ask"
      },
      "value": {
@@ -9077,21 +9793,12 @@
       },
       "type": "object"
      },
-     "judged": {
-      "type": "integer"
-     },
      "kind": {
       "enum": [
        "section",
        "table",
        "figure"
       ]
-     },
-     "near": {
-      "type": "integer"
-     },
-     "near_read": {
-      "type": "integer"
      },
      "owner": {
       "type": "integer"
@@ -9101,9 +9808,6 @@
      },
      "t": {
       "const": "read"
-     },
-     "turned": {
-      "type": "integer"
      },
      "unanswered": {
       "type": "integer"
@@ -9134,6 +9838,9 @@
    {
     "additionalProperties": false,
     "properties": {
+     "anew": {
+      "type": "integer"
+     },
      "asked": {
       "type": "integer"
      },
@@ -9177,6 +9884,12 @@
      "missed": {
       "type": "integer"
      },
+     "near": {
+      "type": "integer"
+     },
+     "near_read": {
+      "type": "integer"
+     },
      "open": {
       "type": "integer"
      },
@@ -9216,7 +9929,9 @@
      "searched",
      "missed",
      "corrected",
-     "exhausted"
+     "exhausted",
+     "near",
+     "near_read"
     ],
     "type": "object"
    },
@@ -9299,6 +10014,82 @@
      "parameter",
      "kind",
      "rank"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "asked": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "fetched": {
+      "type": "integer"
+     },
+     "hits": {
+      "type": "integer"
+     },
+     "refused": {
+      "type": "integer"
+     },
+     "settings": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "settings"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "settings",
+     "asked",
+     "hits",
+     "fetched",
+     "refused"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "asked": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "fetched": {
+      "type": "integer"
+     },
+     "found": {
+      "type": "integer"
+     },
+     "parameter": {
+      "type": "string"
+     },
+     "t": {
+      "const": "seek_free"
+     },
+     "unknown": {
+      "type": "integer"
+     },
+     "walked": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "parameter",
+     "walked",
+     "asked",
+     "found",
+     "fetched",
+     "unknown"
     ],
     "type": "object"
    },

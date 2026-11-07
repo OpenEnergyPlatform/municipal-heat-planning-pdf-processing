@@ -28,7 +28,7 @@ the page are in every line.
 
 | way | what it is |
 |---|---|
-| `export` | `--what values` (the default): one line per value, CSV or JSON lines; a coordinate is three columns (what was read, its label, its state), and its quote is appended after the others. `--what states`: one line per document and parameter. `--what refusals`: one line per claim that was refused |
+| `export` | `--what values` (the default): one line per value, CSV or JSON lines; a coordinate is three columns (what was read, its label, its state), and its quote is appended after the others, then, for a number read off a figure, what was read (`reading`). `--what states`: one line per document and parameter. `--what refusals`: one line per claim that was refused |
 | `serve --http` | a read-only JSON API: `/documents`, `/parameters`, `/values`, `/values/<id>`, `/states`, `/coverage`, `/refusals` and `/search`; nothing can be written through it |
 | `serve --mcp` | the same eight questions as tools of a Model Context Protocol server on standard input and output: `list_documents`, `list_parameters`, `find_values`, `get_value`, `get_states`, `get_coverage`, `find_refusals` and `search` |
 | the chat | answers a question for a number from the same store, finding its values by meaning (the vectors `docpipe values-index` makes of them) or, without those, by closed questions over `find` (see [asking the corpus](inference.md)) |

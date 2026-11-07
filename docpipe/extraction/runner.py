@@ -92,6 +92,8 @@ from . import naming as naming_map
 from . import places as places_map
 from . import reading as reading_map
 from . import replies
+from . import seeking as seeking_map
+from . import settings as settings_map
 from . import survey as survey_map
 from . import surveyed as surveyed_map
 from . import thread as thread_map
@@ -383,10 +385,12 @@ FRAME_PROMPT_ID = "extraction/frame"
 PROMPT_IDS = (QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID, ROWS_PROMPT_ID,
               FIELD_PROMPT_ID, PHRASE_PROMPT_ID, FRAME_PROMPT_ID)
 # The prompts of a harvest from the survey (survey.py, reading.py,
-# combing.py), the run's own wherever the profile writes them and its spec
-# names groups (`surveyed_flow`).
+# combing.py, settings.py, seeking.py), the run's own wherever the profile
+# writes them and its spec names groups (`surveyed_flow`).
 SURVEY_PROMPT_IDS = (survey_map.SURVEY_PROMPT_ID, *reading_map.PROMPT_IDS,
-                     combing_map.COMB_PROMPT_ID, reading_map.CHECK_PROMPT_ID)
+                     combing_map.COMB_PROMPT_ID, reading_map.CHECK_PROMPT_ID,
+                     settings_map.SETTINGS_PROMPT_ID,
+                     seeking_map.SEEK_PROMPT_ID)
 # Which of the two flows this run harvests with: "survey" or "fieldwise".
 # `main` sets it; stamps and producers record it and the prompts it sends,
 # and nothing compares either.
@@ -2057,6 +2061,8 @@ FOLLOWS = {
     reading_map.CHECK_PROMPT_ID: reading_map.CHECK_FOLLOWS,
     survey_map.SURVEY_PROMPT_ID: survey_map.FOLLOWS,
     years_map.YEARS_PROMPT_ID: years_map.FOLLOWS,
+    settings_map.SETTINGS_PROMPT_ID: settings_map.FOLLOWS,
+    seeking_map.SEEK_PROMPT_ID: seeking_map.FOLLOWS,
     naming_map.NAMING_PROMPT_ID: naming_map.FOLLOWS,
     naming_map.GROUPS_PROMPT_ID: naming_map.FOLLOWS,
     computing.COMPUTE_PROMPT_ID: computing.FOLLOWS,
@@ -2109,11 +2115,22 @@ def answers_in(thread) -> int:
                if message.get("role") == "assistant")
 
 
-def shows_in_full(first: dict, parameter) -> bool:
-    """Has the first message of a conversation shown *parameter* with its
-    full definition?"""
-    shown = (first or {}).get("parameter") or {}
-    return shown.get("definition") == parameter.description
+def shows_in_full(thread, parameter) -> bool:
+    """Has a message of this conversation shown *parameter* with its full
+    definition? A coordinate that classifies is shown it once, with the
+    first of them that is asked (owner decision 2026-11-07: one coordinate
+    per message)."""
+    wanted = json.dumps(parameter.description, ensure_ascii=False)[1:-1]
+    for message in thread.messages:
+        if message.get("role") != "user":
+            continue
+        content = message.get("content")
+        texts = [content] if isinstance(content, str) else [
+            part.get("text", "") for part in content or ()
+            if isinstance(part, dict)]
+        if any(wanted in (text or "") for text in texts):
+            return True
+    return False
 
 
 def make_reader(spec: Spec, image_root: Optional[Path] = None):
@@ -2122,12 +2139,13 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
     Two kinds of request, each with one task and one value (owner decisions
     2026-11-04 and 2026-11-05), each a message of a conversation (owner
     decisions 2026-11-07, `thread.py`): the values of a passage, the next
-    one after each answer, and one value's coordinates, each group of the
-    spec a message with its own words (`thread.Parts.group`). A system
+    one after each answer, and one value's coordinates, one coordinate per
+    message with the words of its group (`thread.Parts.group`). A system
     prompt holds what its kind of request is told and the part of each
     field its first message carries. A figure goes with its crop, in the
-    first message. Neither request has tools (owner decision 2026-11-05,
-    ticket 26)."""
+    first message, and a value only the crop shows is read off it (owner
+    decisions 2026-11-05 and 2026-11-07). Neither request has tools (owner
+    decision 2026-11-05, ticket 26)."""
     if not spec.groups:
         return None
     try:
@@ -2136,44 +2154,54 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
     except (FileNotFoundError, LookupError):
         return None
     client = _client()
-    frame_slots = [slot for group in spec.groups_read_in("survey")
-                   for slot in fields.frame_slots(spec, group.coordinates)]
+    frame_slots = frame_slots_of(spec)
     from docpipe.profile import active_profile
     states = year_states_of(active_profile())
 
     def document_of(source) -> int:
         return int((source.provenance or {}).get("document_id") or 0)
 
+    def image_of(source) -> Optional[dict]:
+        """The crop that goes with a request about *source*: a figure's, or
+        None."""
+        if source.owner_kind == "figure" and source.image_path \
+                and ATTACH_IMAGES:
+            return _image_part(str(image_root / source.image_path)
+                               if image_root else source.image_path)
+        return None
+
+    def drawn(source) -> bool:
+        """Does a request about *source* send a figure's image, so a value
+        only the image shows is read off it?"""
+        return image_of(source) is not None
+
     def content_of(source, text: str):
         """The user message of a request about *source*: its payload, and a
         figure's crop beside it."""
-        if source.owner_kind == "figure" and source.image_path \
-                and ATTACH_IMAGES:
-            part = _image_part(str(image_root / source.image_path)
-                               if image_root else source.image_path)
-            if part is not None:
-                return [{"type": "text", "text": text}, part]
+        part = image_of(source)
+        if part is not None:
+            return [{"type": "text", "text": text}, part]
         return text
 
-    def ask_values(source, parameter, context, read, thread, follow=None):
+    def ask_values(source, parameter, context, read, thread, follow=None,
+                   drawn=False):
         # The first message shows the passage; what follows an answer is the
         # ask for the next value or a correction (owner decisions
         # 2026-11-07).
-        head = reading_map.with_head_asked(parameter, source)
-        example = reading_map.values_example(parameter, head)
+        example = reading_map.values_example(parameter, drawn)
         if thread.begun:
             prompt = values_parts.prompt
             conversation = thread.then(values_parts.follow_up(follow,
                                                               example))
         else:
             payload = reading_map.values_payload(source, parameter, context,
-                                                 read)
+                                                 read, drawn)
             prompt = values_parts.system(payload)
             conversation = [{"role": "user", "content": content_of(
                 source, json.dumps(payload, ensure_ascii=False, indent=2))}]
         return ask_in_grammar(
             client, prompt, conversation,
-            reading_map.values_response_format(parameter, head),
+            reading_map.values_response_format(parameter, drawn),
             document_of(source), "read_values", "value", example=example,
             thread=thread, parameter=parameter.uri, kind=source.owner_kind,
             owner=source.owner_id, round=answers_in(thread) + 1,
@@ -2182,9 +2210,9 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
     def ask_text(source, parameter, group, slots, row, context, thread,
                  follow=None):
         # The first message of a value's conversation shows the passage and
-        # the value with the words of its first group; each next group is a
-        # message with its own words; a correction and the second reading
-        # follow the answer they are about (owner decisions 2026-11-07).
+        # the value with its first coordinate in the words of its group;
+        # each next coordinate is a message of its own; a correction follows
+        # the answer it is about (owner decisions 2026-11-07).
         example = reading_map.text_example(slots)
         if follow is not None:
             prompt = text_parts.prompt
@@ -2193,7 +2221,7 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
             payload = reading_map.group_payload(
                 parameter, slots, group.where, context,
                 full=group.full_definition and not shows_in_full(
-                    thread.first, parameter))
+                    thread, parameter))
             prompt = text_parts.prompt
             conversation = thread.then(worded(
                 text_parts.group(group.name, example), payload))
@@ -2219,8 +2247,7 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
         spec, ask_values, ask_text, frame_slots,
         shown_with=reading_map.heading_of,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
-        known=row_context, pool=AHEAD, trace=trace.event,
-        check=check_asker(client))
+        known=row_context, drawn=drawn, pool=AHEAD, trace=trace.event)
 
 
 def check_asker(client, parts=None) -> Optional[Callable]:
@@ -2322,8 +2349,7 @@ def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
     except (FileNotFoundError, LookupError):
         return None
     client = _client()
-    frame_slots = [slot for group in spec.groups_read_in("survey")
-                   for slot in fields.frame_slots(spec, group.coordinates)]
+    frame_slots = frame_slots_of(spec)
     from docpipe.profile import active_profile
     states = year_states_of(active_profile())
 
@@ -2354,9 +2380,10 @@ def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
 
 
 def frame_slots_of(spec: Spec) -> list:
-    """The coordinates the survey reads per passage, its frame."""
+    """The coordinates the survey reads per passage, its frame: the pair of
+    each group it reads (`spec.Group.paired`)."""
     return [slot for group in spec.groups_read_in("survey")
-            for slot in fields.frame_slots(spec, group.coordinates)]
+            for slot in fields.frame_slots(spec, group.paired)]
 
 
 def dates_by_plan(spec: Spec) -> bool:
@@ -2394,6 +2421,58 @@ def make_years(spec: Spec, rank: Optional[Callable] = None):
             corrections=told(follow))
     return years_map.PlanYears(ask, frame_slots_of(spec), states, rank=rank,
                                trace=trace.event)
+
+
+def make_settings(spec: Spec, rank: Optional[Callable] = None):
+    """The request for what a plan settles for all its values, once per plan
+    (`settings.PlanSettings`, owner decision 2026-11-07), or None where the
+    profile writes no prompt for it. *rank* is the plan best first for a
+    sentence the model writes ("similar")."""
+    try:
+        parts = parts_of(settings_map.SETTINGS_PROMPT_ID)
+    except (FileNotFoundError, LookupError):
+        return None
+    client = _client()
+
+    def ask(payload, document_id, thread=None, follow=None):
+        # The rounds are one conversation, each later message what is new
+        # since the answer before (owner decisions 2026-11-07).
+        thread = thread if thread is not None else thread_map.Thread()
+        example = settings_map.example()
+        prompt, conversation = threaded(parts, thread, payload, follow,
+                                        example=example)
+        return ask_in_grammar(
+            client, prompt, conversation, settings_map.response_format(),
+            document_id, "settings", "settings", example=example,
+            thread=thread, round=answers_in(thread) + 1,
+            corrections=told(follow))
+    return settings_map.PlanSettings(ask, rank=rank, trace=trace.event)
+
+
+def make_seeker(spec: Spec, rank: Optional[Callable] = None):
+    """The model's own search for a parameter whose walk down its list read
+    no value (`seeking.FreeSearch`, owner decision 2026-11-07), or None
+    where the profile writes no prompt for it. *rank* is the plan best first
+    for a sentence the model writes ("similar")."""
+    try:
+        parts = parts_of(seeking_map.SEEK_PROMPT_ID)
+    except (FileNotFoundError, LookupError):
+        return None
+    client = _client()
+
+    def ask(payload, document_id, thread=None, follow=None):
+        # The rounds are one conversation, each later message what is new
+        # since the answer before (owner decisions 2026-11-07).
+        thread = thread if thread is not None else thread_map.Thread()
+        example = seeking_map.example()
+        prompt, conversation = threaded(parts, thread, payload, follow,
+                                        example=example)
+        return ask_in_grammar(
+            client, prompt, conversation, seeking_map.response_format(),
+            document_id, "seek_free", "places", example=example,
+            thread=thread, parameter=thread.first["parameter"]["key"],
+            round=answers_in(thread) + 1, corrections=told(follow))
+    return seeking_map.FreeSearch(ask, rank=rank, trace=trace.event)
 
 
 def title_line(passages: list, name: Optional[str],
@@ -8931,7 +9010,9 @@ def main(argv: Optional[list] = None) -> int:
             spec_for=spec_for, front=own,
             title=profile.component("extraction", "FRONT_PAGE_TITLE"),
             make_years=lambda doc_spec: make_years(doc_spec, rank),
-            title_page_of=make_title_page(args.db, profile))
+            title_page_of=make_title_page(args.db, profile),
+            make_settings=lambda doc_spec: make_settings(doc_spec, rank),
+            make_seeker=lambda doc_spec: make_seeker(doc_spec, rank))
 
     def pass_sweep():
         """What a pass over a stored harvest re-reads a coordinate with: the
