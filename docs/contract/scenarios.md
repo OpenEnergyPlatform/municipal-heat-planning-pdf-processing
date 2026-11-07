@@ -962,7 +962,7 @@ The prompt's own wording:
 - **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value is given to no scenario of its own.
   - also written: all scenarios
 - **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
-  - also written: historical, base year
+  - also written: historical
 
 </details>
 
@@ -1302,7 +1302,7 @@ The prompt's own wording:
 - **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value is given to no scenario of its own.
   - also written: all scenarios
 - **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
-  - also written: historical, base year
+  - also written: historical
 
 </details>
 
@@ -1541,7 +1541,7 @@ The prompt's own wording:
 - **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value is given to no scenario of its own.
   - also written: all scenarios
 - **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
-  - also written: historical, base year
+  - also written: historical
 
 </details>
 
@@ -1814,7 +1814,7 @@ The prompt's own wording:
 - **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value is given to no scenario of its own.
   - also written: all scenarios
 - **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
-  - also written: historical, base year
+  - also written: historical
 
 </details>
 

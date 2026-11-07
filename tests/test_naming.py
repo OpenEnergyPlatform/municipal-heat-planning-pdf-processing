@@ -398,11 +398,11 @@ def passages_of(names):
             for index, name in enumerate(names)}
 
 
-def turns(per_name=None):
+def turns(per_name=None, shorts=()):
     """What the model answers about each name in turn: a reply as it is
     (a dict), or the names it gives in the numbers the request showed, a
-    name the request did not show as it is; a name with nothing left gives
-    itself."""
+    name the request did not show as it is, and whether it is one of the
+    short names *shorts*; a name with nothing left gives itself."""
     left = {name: list(replies) for name, replies in (per_name or {}).items()}
 
     def answer(name, payload):
@@ -411,7 +411,8 @@ def turns(per_name=None):
         given = replies.pop(0) if replies else [name]
         if isinstance(given, dict):
             return given
-        return {"means": [number.get(one, one) for one in given]}
+        return {"means": [number.get(one, one) for one in given],
+                "short": name in shorts}
     return answer
 
 
@@ -491,7 +492,8 @@ def test_every_name_is_asked_on_its_own_with_its_places_and_its_candidates():
         assert all(f"We call it {other} here" not in places
                    for other in names if other != own)
         # Its example is its own reply: the name alone.
-        assert example == {"means": [payload["name"]["number"]]}
+        assert example == {"means": [payload["name"]["number"]],
+                           "short": False}
     assert [row.get("value_means") for row in rows
             if row["parameter"] == "scenario_label"] == [[LCEO], [LCEO],
                                                           [TECH]]
@@ -539,25 +541,31 @@ def test_one_name_asks_nothing():
 def test_the_reply_names_numbers_shown_under_means():
     schema = naming.response_format(["N1", "N2"])["json_schema"]["schema"]
     strict, decode = strict_schema.strict(schema)
-    for whole in ({"means": ["N1"]}, {"means": ["N2", "N1"]}):
+    for whole in ({"means": ["N1"], "short": False},
+                  {"means": ["N2", "N1"], "short": True}):
         for form in (schema, strict):
             jsonschema.validate(whole, form)
         assert decode(whole) == whole
     # A reply without "means", with a name where numbers belong, or with a
     # key beside it, is no reply in either form.
-    for wrong in ({}, {"means": None}, {"means": [LCEO]},
-                  {"means": ["N1"], "note": ["N1"]}, {"N1": ["N1"]}):
+    for wrong in ({}, {"means": None, "short": False},
+                  {"means": [LCEO], "short": False}, {"means": ["N1"]},
+                  {"means": ["N1"], "short": False, "note": ["N1"]},
+                  {"N1": ["N1"]}):
         for form in (schema, strict):
             with pytest.raises(jsonschema.ValidationError):
                 jsonschema.validate(wrong, form)
     # An empty list: the server's grammar refuses it, a hosted API's has no
     # minimum, so the naming asks it again.
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate({"means": []}, schema)
+        jsonschema.validate({"means": [], "short": False}, schema)
     numbers = {LCEO: "N1", ZERO: "N2"}
-    assert naming.means_of({"means": ["N2", "N1"]}, numbers) == (
-        [ZERO, LCEO], None)
-    assert naming.means_of({"means": []}, numbers) == (None, {
+    assert naming.means_of({"means": ["N2", "N1"], "short": True},
+                           numbers) == (([ZERO, LCEO], True), None)
+    # the failure by construction: no "short", asked again by its key
+    assert naming.means_of({"means": ["N2"]}, numbers) == (
+        None, {"what": say("key_missing", key="short")})
+    assert naming.means_of({"means": [], "short": False}, numbers) == (None, {
         "value": [], "what": say("name_not_listed", name="means",
                                  given="[]")})
 
@@ -645,7 +653,8 @@ def test_a_request_over_all_names_that_does_not_fit_is_asked_for_each_half():
 def test_a_wrong_reply_is_asked_again_with_its_reason_then_means_itself():
     names = [LCEO, ZERO]
     made, asked, _, _, _ = namer(turns({LCEO: [[LCEO, ZERO]],
-                                        ZERO: [{"means": ["Zero"]}, [LCEO]]}))
+                                        ZERO: [{"means": ["Zero"],
+                                                "short": False}, [LCEO]]}))
     assert made(7, rows_of(*names), passages_of(names))["scenario"][ZERO] \
         == [LCEO]
     again = [payload for payload, _ in asked if payload.get("corrections")]
@@ -662,7 +671,8 @@ def test_a_wrong_reply_is_asked_again_with_its_reason_then_means_itself():
     assert again["corrections"] == {"what": say("key_missing", key="means")}
     # Wrong twice: asked twice only, and the name means itself.
     made, asked, _, _, _ = namer(turns({
-        LCEO: [[LCEO, ZERO]], ZERO: [{"means": ["Zero"]}, {"means": [LCEO]}]}))
+        LCEO: [[LCEO, ZERO]], ZERO: [{"means": ["Zero"], "short": False},
+                                     {"means": [LCEO], "short": False}]}))
     assert made(7, rows_of(*names), passages_of(names))["scenario"][ZERO] \
         == [ZERO]
     assert [payload["name"]["name"] for payload, _ in asked].count(ZERO) == 2
@@ -942,3 +952,30 @@ def test_the_combing_shows_every_name_read_so_far_once():
         if shown:
             assert combing.names_read(spec, [labels, years]) == {
                 "scenario": shown}
+
+
+# Promise: a name the naming answers as a short name marks its rows
+# `value_short`, AND the graph writes that printed short name as its
+# scenario's acronym; a scenario without one keeps its name as acronym
+# (owner decision 2026-11-07).
+def test_a_printed_short_name_is_the_acronym_of_its_scenario():
+    from pathlib import Path
+    from profiles.scenarios import kg
+    long, short = "Distributed Generation", "ENTSO-E DG"
+
+    def graph_of(shorts):
+        rows = [{"parameter": "publication_title", "value": "Net-zero EU",
+                 "quote": "Net-zero EU"}] + rows_of(long, short)
+        made, _, _, _, _ = namer(turns({long: [[long, short]],
+                                        short: [[short, long]]},
+                                       shorts=shorts))
+        made(7, rows, passages_of([long, short]))
+        marked = [row["value"] for row in rows if row.get("value_short")]
+        turtle = kg.make_serializer(Path("no-such.db"))("doc", rows)
+        return marked, turtle
+    marked, turtle = graph_of({short})
+    assert marked == [short]
+    assert f'dc:acronym "{short}"' in turtle
+    # the failure by construction: no short name, the name is the acronym
+    marked, turtle = graph_of(set())
+    assert marked == [] and f'dc:acronym "{long}"' in turtle

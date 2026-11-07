@@ -52,7 +52,7 @@
     {
       "uri": "publication_title",
       "label": "Publication title",
-      "description": "The full title of the document. In most PDFs it is the heading of the first section and stands as the first line above the list of authors; otherwise in the head of the first page. The value is the whole title line. Not the running head, not the name of the series, not the name of the publisher. Only this document's own title, never that of a study, report or article it cites, presents or compares.",
+      "description": "The title of this document, the study report: the whole title as the document prints it. Only this document's own title, never that of a study, report or article it cites, presents or compares.",
       "value_type": "text",
       "example": {
         "source": "Global Energy and Climate Outlook 2023: Transforming Energy Systems for a Net Zero Future. JRC Science for Policy Report.",
@@ -77,7 +77,7 @@
     {
       "uri": "publication_author",
       "label": "Author",
-      "description": "An author of the document, one tuple each, spelled as the document prints it: a person the document names as its author, on the title page or wherever it lists its authors. Where the document names no person as its author, the institution it names as its own author or issuer, on the cover or in the imprint. No editors, no one only thanked in the acknowledgements, and never the authors or the publisher of a study, report or article the document cites, presents or compares.",
+      "description": "An author of this document, one tuple each, spelled as the document prints it: whoever wrote this document. Never the authors or the publisher of a study, report or article the document cites, presents or compares.",
       "value_type": "text",
       "example": {
         "source": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P., Garaffa, R., Després, J.",
@@ -112,7 +112,7 @@
     {
       "uri": "publication_date",
       "label": "Publication year",
-      "description": "The year the document was published, four digits and exactly as it stands in the document: imprint, title page or citation note. Not the year of the data, not a year projected in the text, and never the year of a study, report or article the document cites, presents or compares.",
+      "description": "The year this document was published in, four digits and exactly as it stands in the document. Not the year of the data, not a year projected in the text, and never the year of a study, report or article the document cites, presents or compares.",
       "value_type": "text",
       "example": {
         "source": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619.",
@@ -137,7 +137,7 @@
     {
       "uri": "publication_doi",
       "label": "DOI",
-      "description": "The Digital Object Identifier of the document, as it stands in the imprint or the citation note. Only the DOI itself, without the prefix doi: and without the URL before it. Never the DOI of a study, report, article or dataset the document cites, presents, compares or uses.",
+      "description": "The Digital Object Identifier of this document. Only the DOI itself, without the prefix doi: and without the URL before it. Never the DOI of a study, report, article or dataset the document cites, presents, compares or uses.",
       "value_type": "text",
       "example": {
         "source": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619.",
@@ -160,7 +160,7 @@
     {
       "uri": "publication_abstract",
       "label": "Abstract",
-      "description": "The summary of the document, word for word and complete, as it stands under the heading Abstract, Summary or Executive Summary. Do not write a summary of your own.",
+      "description": "A summary of this document and its study, word for word and complete as the document prints it. Do not write a summary of your own.",
       "value_type": "text",
       "example": {
         "source": "Abstract This report presents the results of the 2023 edition of the Global Energy and Climate Outlook, which assesses the implications of current climate pledges for the global energy system.",
@@ -183,7 +183,7 @@
     {
       "uri": "study_organisation",
       "label": "Involved organisation",
-      "description": "An institution that took part in producing the document: an author's affiliation, the publishing institute, the commissioned body. One tuple per institution, spelled as in the document.",
+      "description": "An organisation in which this document was created, one tuple per organisation, spelled as in the document.",
       "value_type": "text",
       "example": {
         "source": "European Commission, Joint Research Centre (JRC), Seville, Spain, and Potsdam Institute for Climate Impact Research (PIK).",
@@ -217,7 +217,7 @@
     {
       "uri": "study_funder",
       "label": "Funder",
-      "description": "A body that funded the work, named in a section on funding, support or acknowledgements. Only who pays, not who contributed to the content.",
+      "description": "A funder of the work: a body that supports it by giving money. Only who pays, not who contributed to the content.",
       "value_type": "text",
       "example": {
         "source": "This work was funded by the German Federal Ministry of Education and Research under grant 01LA1809A.",
@@ -247,7 +247,7 @@
     {
       "uri": "study_project_name",
       "label": "Project name",
-      "description": "The full name of the research project within which the study or the scenarios were produced. Only where the document explicitly names a project as its frame; not the title of the document.",
+      "description": "The name of the study this document reports on, as the document prints it. A study is a project with the goal to methodologically investigate something. The title of this document is the report's, not the study's name.",
       "value_type": "text",
       "example": {
         "source": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020.",
@@ -272,7 +272,7 @@
     {
       "uri": "study_acronym",
       "label": "Project acronym",
-      "description": "The short name of the research project, mostly in brackets after the full project name or as a header. Only the acronym of the project, not that of a model and not that of an institution.",
+      "description": "The short name (acronym) of the study this document reports on, as the document prints it. Not that of a model and not that of an institution.",
       "value_type": "text",
       "example": {
         "source": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020.",
@@ -294,7 +294,7 @@
     {
       "uri": "study_descriptor",
       "label": "Topic keyword",
-      "description": "A topic the study examines, chosen from value_classes. These are the keywords the OEKG allows for a study; the spellings beside them come from the ontology itself. Take a keyword only where the text shows it as a subject of the study: what it calculates, compares or assesses. A term that only comes up in passing, say as background in the introduction, is not a topic of the study. 'none of these keywords' means the text names a topic of the study but no keyword covers it; that is a finding and is counted. value_raw takes the document's wording. One tuple per keyword; a study may carry several.",
+      "description": "A keyword that describes the study, chosen from value_classes. These are the keywords the OEKG allows for a study; the spellings beside them come from the ontology itself. 'none of these keywords' means the text names a topic of the study but no keyword covers it; that is a finding and is counted. value_raw takes the document's wording. One tuple per keyword; a study may carry several.",
       "value_type": "category",
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000143": {
@@ -512,7 +512,7 @@
     {
       "uri": "study_sector_division",
       "label": "Sector division",
-      "description": "The sector division the study's sectors follow: the scheme a reporting format, a statistic or a law sets for which sectors there are and where each one ends, chosen from value_classes. Such schemes are the CRF of the IPCC guidelines for national greenhouse gas inventories, NACE, an energy balance or the annex of the German Climate Protection Act (KSG). A division is never a sector: 'transport', 'industry', 'households', 'power sector' and every other sector the study covers belong to the field Covered sector, and a list of sectors names no division, however long it is. Answer only where the text names the scheme by which its sectors, emissions or energy flows are delimited or reported ('reported in the CRF categories', 'the source categories of the 2006 IPCC Guidelines', 'NACE sections'), and take the most specific entry the text supports: 'CRF sectors (IPCC 2006)' for the 2006 Guidelines or CRF tables from 2015 on, 'CRF sectors (IPCC 1996)' for the Revised 1996 Guidelines or CRF tables until 2014, 'CRF sector division' for the CRF without its version. Guidelines cited for emission factors, for a method or in the references name no division. A scheme the text names that no entry matches, such as a model's own sectors, is 'none of these divisions'; 'sector division' is the class of them all and no answer for a text that names none. value_raw takes the document's wording of the scheme. One tuple per division.",
+      "description": "A sector division the study is based on, chosen from value_classes: a specific way to subdivide a system, such as the CRF of the IPCC guidelines for national greenhouse gas inventories, NACE, an energy balance, the annex of the German Climate Protection Act (KSG) or the study's own list of sectors. A sector itself is no division. Take the most specific entry the text supports: 'CRF sectors (IPCC 2006)' for the 2006 Guidelines or CRF tables from 2015 on, 'CRF sectors (IPCC 1996)' for the Revised 1996 Guidelines or CRF tables until 2014, 'CRF sector division' for the CRF without its version. A division no entry matches, such as a model's own sectors, is 'none of these divisions'. value_raw takes the document's wording of the division. One tuple per division.",
       "value_type": "category",
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000368": {
@@ -636,7 +636,7 @@
     {
       "uri": "study_sector",
       "label": "Covered sector",
-      "description": "A sector the study covers, chosen from value_classes. These are the sectors the OEKG allows for this field; many belong to a particular sector division and carry its name in front (CRF, KSG, NC/BR, RED). Take a sector of such a division only where the text names that division; otherwise the general sector, such as 'transport sector' or 'industry sector'. A sector is covered when the study models it or reports results for it, not when it is only mentioned. 'none of these sectors' means the text names a sector that none of the classes matches. value_raw takes the document's wording. One tuple per sector.",
+      "description": "A sector the study covers, chosen from value_classes. These are the sectors the OEKG allows for this field; many belong to a particular sector division and carry its name in front (CRF, KSG, NC/BR, RED). Take the most specific class the text supports. 'none of these sectors' means the text names a sector that none of the classes matches. value_raw takes the document's wording. One tuple per sector.",
       "value_type": "category",
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000367": {
@@ -1480,7 +1480,7 @@
     {
       "uri": "study_technology",
       "label": "Covered technology",
-      "description": "A technology the study covers, chosen from value_classes. These are the technology classes the OEKG allows for this field. Take the most specific class the text supports: where it says offshore wind, that is 'offshore wind power technology' and not merely 'wind power technology'. A technology is covered when the study models it or reports results for it, not when it is only mentioned. 'none of these technologies' means the text names a technology that none of the classes matches; that is a finding and is counted. value_raw takes the document's wording. One tuple per technology.",
+      "description": "A technology the study covers, chosen from value_classes. These are the technology classes the OEKG allows for this field. Take the most specific class the text supports: where it says offshore wind, that is 'offshore wind power technology' and not merely 'wind power technology'. 'none of these technologies' means the text names a technology that none of the classes matches; that is a finding and is counted. value_raw takes the document's wording. One tuple per technology.",
       "value_type": "category",
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000407": {
@@ -1756,7 +1756,7 @@
     {
       "uri": "scenario_label",
       "label": "Scenario name",
-      "description": "A scenario of this publication by the name the document prints, word for word: a run or pathway the study computes or compares. One tuple per scenario, for EVERY one the passage names. The name of a table, figure or section, a finding, a parameter or assumption a scenario changes, and the word 'scenarios' itself name none and get no tuple. Leaving a named scenario out is the only wrong answer.",
+      "description": "A scenario of this publication by the name the document prints, word for word. A scenario contains statements about a possible future development based on a coherent and internally consistent set of assumptions and their motivation. One tuple per scenario, for EVERY one the passage names. The name of a table, figure or section, a finding, a parameter or assumption a scenario changes, and the word 'scenarios' itself name none and get no tuple. Leaving a named scenario out is the only wrong answer.",
       "value_type": "text",
       "example": {
         "source": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway.",
@@ -1930,8 +1930,7 @@
             "out:status_quo": {
               "label": "status quo",
               "spellings": [
-                "historical",
-                "base year"
+                "historical"
               ],
               "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
             },
@@ -1987,7 +1986,7 @@
     {
       "uri": "scenario_abstract",
       "label": "Scenario description",
-      "description": "The description of what a single scenario assumes or depicts, word for word from the document. Only where the sentence clearly refers to a named scenario whose name stands in the same passage.",
+      "description": "The description of what a single scenario assumes or depicts, word for word from the document.",
       "value_type": "text",
       "axes": {
         "scenario": {
@@ -1999,8 +1998,7 @@
             "out:status_quo": {
               "label": "status quo",
               "spellings": [
-                "historical",
-                "base year"
+                "historical"
               ],
               "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
             },
@@ -2059,8 +2057,7 @@
             "out:status_quo": {
               "label": "status quo",
               "spellings": [
-                "historical",
-                "base year"
+                "historical"
               ],
               "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
             },
@@ -2130,7 +2127,7 @@
     {
       "uri": "scenario_year",
       "label": "Scenario year",
-      "description": "A year for which a scenario reports results or up to which it runs, four digits and word for word from the document. One tuple per year. Not the publication year and not the base year of the data.",
+      "description": "A year of the period a scenario investigates, its scenario horizon, four digits and word for word from the document: a year the document states as part of the time the scenario looks at. One tuple per year.",
       "value_type": "text",
       "axes": {
         "scenario": {
@@ -2142,8 +2139,7 @@
             "out:status_quo": {
               "label": "status quo",
               "spellings": [
-                "historical",
-                "base year"
+                "historical"
               ],
               "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
             },

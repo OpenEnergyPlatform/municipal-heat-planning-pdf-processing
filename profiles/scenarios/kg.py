@@ -281,9 +281,6 @@ _SHAPED = {"studyreport": CLS_REPORT, "scenariobundle": CLS_BUNDLE,
 # and which must occur is the shapes' to say; that a document has one report
 # and one bundle is this serializer's structure.
 DOCUMENT_NODES = ("studyreport", "scenariobundle")
-# A field filled from another where the document gives none: the bundle is
-# labelled with the title where no project is named, so it is never missing.
-FALLBACK = {"study_project_name": "publication_title"}
 # Every path a node of each shaped class is written with.
 WRITTEN = {
     "studyreport": (P_LABEL, P_AUTHOR, P_PUBDATE, P_DOI),
@@ -762,8 +759,7 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
                     contested[key] = others
 
         missing = [k for k in bound.required
-                   if not (chosen.get(k) or by_param.get(k)
-                           or chosen.get(FALLBACK.get(k)))]
+                   if not (chosen.get(k) or by_param.get(k))]
         if "publication_title" not in chosen:
             log.info("kg: %s: no title extracted — nothing to serialize", name)
             return None
@@ -972,8 +968,18 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
                 # Mirjam: with no long name beside the acronym, both carry the
                 # same string. That is the usual case in this corpus.
                 block.append(f"    {P_LABEL} {ttl_literal(ident)} ;")
-            if settles(iri, P_SCENARIO_ACRONYM, ident):
-                block.append(f"    {P_SCENARIO_ACRONYM} {ttl_literal(ident)} ;")
+            # The short name the document prints for this scenario, as the
+            # naming called it (`value_short`, owner decision 2026-11-07);
+            # where it prints none, Mirjam's rule above.
+            shorts = [row for row in rows_for("scenario_label", scenario=norm)
+                      if row.get("value_short")]
+            acronym = shorts[0]["value"] if shorts else ident
+            if settles(iri, P_SCENARIO_ACRONYM, acronym):
+                if shorts:
+                    block += evidence_for(
+                        iri, P_SCENARIO_ACRONYM,
+                        [row for row in shorts if row["value"] == acronym])
+                block.append(f"    {P_SCENARIO_ACRONYM} {ttl_literal(acronym)} ;")
 
             # The types the model chose from the shapes' own list, each with
             # the passage it read them in. On top of that Mirjam asks every IAM
@@ -1026,7 +1032,7 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
             block[-1] = block[-1].rstrip(" ;") + " ."
             scenario_nodes.append(NL.join(block) + NL)
             scenarios.append({
-                "label": ident, "acronym": ident,
+                "label": ident, "acronym": acronym,
                 "abstract": best,
                 "types": list(types) + [OEO_BASE + IAM_SCENARIO],
                 "regions": list(regions),
@@ -1036,9 +1042,12 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
         std: list = [f"<{bundle}>", f"    a oeo:{CLS_BUNDLE} ;"]
         if "scenariobundle" in bound.uuid_on:
             std.append(f"    {P_UUID} {ttl_literal(uuid_of(bundle))} ;")
-        if settles(bundle, P_LABEL, chosen.get("study_project_name") or title):
+        # The bundle's name is the study's name as the document prints it;
+        # where it prints none the label stays unwritten (owner decision
+        # 2026-11-07). The title only keys the bundle's IRI.
+        if chosen.get("study_project_name")                 and settles(bundle, P_LABEL, chosen["study_project_name"]):
             std.append(f"    {P_LABEL} "
-                       f"{ttl_literal(chosen.get('study_project_name') or title)} ;")
+                       f"{ttl_literal(chosen['study_project_name'])} ;")
         if chosen.get("study_acronym") \
                 and settles(bundle, P_ACRONYM, chosen["study_acronym"]):
             std.append(f"    {P_ACRONYM} {ttl_literal(chosen['study_acronym'])} ;")
@@ -1129,7 +1138,8 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
         parts += evidence_nodes
         study = {
             "document": name,
-            "bundle": {"label": chosen.get("study_project_name") or title,
+            "bundle": {"key": chosen.get("study_project_name") or title,
+                       "label": chosen.get("study_project_name"),
                        "acronym": chosen.get("study_acronym"),
                        "abstract": chosen.get("publication_abstract"),
                        "organisations": org_labels, "funders": funder_labels,

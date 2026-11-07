@@ -197,6 +197,46 @@ def test_a_node_two_documents_describe_keeps_the_first_value_of_a_single_path():
                                                              "Paper B"}
 
 
+# Promise: a bundle is labelled with the study name the document prints, AND
+# where it prints none the bundle carries no label, never the report's title
+# (owner decision 2026-11-07); two such papers stay two bundles in the upload
+# body, which then names no label.
+def bundle_labels(rows):
+    serializer = kg.make_serializer(Path("no-such.db"), model=oekg())
+    graph = Graph().parse(data=serializer("doc", rows), format="turtle")
+    label = URIRef("http://www.w3.org/2000/01/rdf-schema#label")
+    bundle = next(graph.subjects(predicate=None,
+                                 object=URIRef(OEO + "OEO_00020227")))
+    return [str(o) for o in graph.objects(bundle, label)]
+
+
+def test_a_bundle_is_labelled_only_by_the_study_name_the_document_prints():
+    title = {"parameter": "publication_title", "value": "Net-zero EU",
+             "quote": "Net-zero EU"}
+    named = {"parameter": "study_project_name", "value": "ENGAGE",
+             "quote": "the ENGAGE project"}
+    assert bundle_labels([title, named]) == ["ENGAGE"]
+    # the failure by construction: no study name, and the title stays the
+    # report's
+    assert bundle_labels([title]) == []
+
+
+def test_papers_without_a_study_name_stay_apart_and_name_no_bundle_label():
+    from profiles.scenarios import oekg_api
+
+    def study(doc, title):
+        return {"document": doc,
+                "bundle": {"key": title, "label": None, "acronym": None,
+                           "abstract": None, "organisations": [],
+                           "funders": [], "tags": {}},
+                "report": {"label": title, "authors": [],
+                           "publication_date": None, "doi": None},
+                "scenarios": []}
+    merged = oekg_api.merge([study("a", "Paper A"), study("b", "Paper B")])
+    assert len(merged) == 2
+    assert all("label" not in oekg_api.body(one, {}) for one in merged)
+
+
 # Promise: a title, date or DOI read on page 1 or on the first page the title
 # was read on goes before one read anywhere else, AND without such a row the
 # value most rows read still wins (owner decision 2026-11-05).

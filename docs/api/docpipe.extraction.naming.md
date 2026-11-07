@@ -31,7 +31,9 @@ passage that overlap shown once, and beside it its candidates under their
 numbers with their quotes. The model answers with numbers, never copying a
 name: every name of the same thing, its own included, or, where the name
 stands for several things ("the EC LTS scenarios"), the names of each of
-them without its own. Two names are one thing only where each gives the
+them without its own. Beside them it says whether the name is a short name
+of its thing ("ENTSO-E DG" beside "Distributed Generation", owner decision
+2026-11-07); such a row is marked `<coordinate>_short`. Two names are one thing only where each gives the
 other, and a thing is called by its first name; a name of several things
 stands for each of them (`meanings`). A name with no candidate asks nothing
 and means itself. Each row keeps the name it was read as and gets the names
@@ -85,14 +87,16 @@ def __init__(self, spec, ask: Callable, trace: Optional[Callable] = None,
 ```python
 def answered(self, document_id: int, kind: str, order: list,
              names: dict, passages: dict,
-             noted: Optional[dict] = None) -> dict
+             noted: Optional[dict] = None,
+             short: Optional[set] = None) -> dict
 ```
 
 {name: [names it gave]} of the names *order*: one request per name
 against its candidates (`candidates`, owner decision 2026-11-06); a
 name with none, or that no reply answered, is left out and means
 itself (`meanings`). *noted* gets how many `groups` the request over
-all names gave and how many names were `asked`.
+all names gave and how many names were `asked`, *short* the names
+answered as a short name.
 
 ## Functions
 
@@ -258,7 +262,8 @@ def response_format(numbers: list) -> dict
 ```
 
 The numbers of the names the name asked means, under `MEANT`: its
-own, another's or several, each one of *numbers*.
+own, another's or several, each one of *numbers*; under `SHORT` whether
+the name asked is a short name of its thing.
 
 ### example_of
 
@@ -276,11 +281,12 @@ request's example is its own reply).
 def means_of(reply, numbers: dict) -> tuple
 ```
 
-([names the name asked means], None) of a naming *reply*
-({"means": [numbers]}) whose list holds only numbers the request showed,
-turned back into names; (None, what was wrong) of any other: a reply
-without "means" (`key_missing`), or one whose list is empty or names a
-number the request did not show (`name_not_listed`).
+(([names the name asked means], short), None) of a naming *reply*
+({"means": [numbers], "short": bool}) whose list holds only numbers the
+request showed, turned back into names; (None, what was wrong) of any
+other: a reply without "means" or "short" (`key_missing`), or one whose
+list is empty or names a number the request did not show
+(`name_not_listed`).
 
 ### meanings
 
@@ -300,11 +306,13 @@ itself.
 ### mark
 
 ```python
-def mark(rows: list, slots: dict, meant: dict) -> int
+def mark(rows: list, slots: dict, meant: dict,
+         short: Optional[dict] = None) -> int
 ```
 
 Each row's names under `<key>_means` (`VALUE`: `value_means`): the
-names of the things it means (*meant*, {kind: {name: [names]}}). How
-many names were marked.
+names of the things it means (*meant*, {kind: {name: [names]}}); a row
+whose name the naming called a short name (*short*, {kind: {names}})
+gets `<key>_short`. How many names were marked.
 
 [Back to the index](../README.md)

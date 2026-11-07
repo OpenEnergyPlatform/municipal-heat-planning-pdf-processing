@@ -12,6 +12,7 @@ Answer with exactly one JSON object on one line, with no text or code block befo
 * A name that stands for several scenarios, such as "the 2 °C scenarios": the numbers of the names of each of them, without its own.
 * Decide by what the places and quotes say of the scenarios, not by how the names are spelled.
 * Answer with the numbers from "names", never with the names themselves.
+* "short": true where the name under "name" is a short name of its scenario, such as "ENTSO-E DG" beside "Distributed Generation", otherwise false.
 
 <!-- follow-up: corrections -->
 Your last answer has a mistake, under "what". Answer again and fix it.

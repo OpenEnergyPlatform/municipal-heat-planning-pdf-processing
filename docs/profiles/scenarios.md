@@ -207,7 +207,7 @@ This profile uses the second mechanism once: `scenario_region`'s value is
 parameter), picking from a narrowed slice of the OEKG's 249 study regions.
 A scenario is not a list at all, apart from two entries beside the names: the
 `scenario` axis lists `out:status_quo` under `"beside"` (label "status quo",
-spellings "historical" and "base year"), a value of a past or the current year,
+spelling "historical"), a value of a past or the current year,
 measured, observed or balanced, which belongs to no scenario, as KWP's closed
 list has "Bestand", and `out:several` (label "several scenarios", spelling "all
 scenarios"), a value stated for several scenarios that the text shown does not
@@ -388,7 +388,10 @@ Reading the answers (`naming.meanings`): an answer holding the name gives the
 other names of its scenario, and so does an answer of one other name alone; two
 names are one scenario only where each gives the other, and a scenario is called
 by its first name in the document's order. An answer of several names without
-the name itself stands for each of their scenarios and is never joined. On the
+the name itself stands for each of their scenarios and is never joined. Each
+answer also says whether the name is a short name of its scenario ("ENTSO-E DG"
+beside "Distributed Generation"); its rows are marked `value_short` (owner
+decision 2026-11-07). On the
 answers of the probe this reading gives 12 groups of names with no visible
 error. The `naming` event also carries `groups` (groups the request over all
 names gave) and `asked` (names asked against candidates).
@@ -466,7 +469,9 @@ with no path segment at all (`COLLECTIONS`, `kg.py`, lines 61 to 69).
 One document mints exactly one study report and one scenario bundle. The
 report's IRI comes from the resolved title; the bundle's comes from
 `study_project_name` where the document names a project, and from the
-title again where it does not (`kg.py`, `_make_builder`). A node carries
+title again where it does not (`kg.py`, `_make_builder`). That title only
+keys the IRI: the bundle is labelled with the study's name the document
+prints and with nothing where it prints none (owner decision 2026-11-07). A node carries
 a has-uuid triple where its shape has that path: today the report and the
 factsheet, not the bundle, whose `StudyShape` names none (`bind`,
 `uuid_on`).
@@ -533,8 +538,11 @@ row contributes no factsheet, comment or number. A row whose scenario is the
 graph by choice" and not under "no scenario to hang them on", and its year or
 region becomes no scenario's year or region. A name of several scenarios
 stands for each of them, so one row lands on several factsheets. A
-factsheet's `rdfs:label` and `dc:acronym` are both the name the scenario is
-called by (`kg.py`, the factsheet block of `_make_builder`). Every factsheet
+factsheet's `rdfs:label` is the name the scenario is called by; its
+`dc:acronym` is the short name the document prints for it, as the naming
+answered it (`value_short`, owner decision 2026-11-07), and that same name
+where the document prints none (`kg.py`, the factsheet block of
+`_make_builder`). Every factsheet
 also carries a fixed `OEO_00020517` annotation (`IAM_SCENARIO`; owner
 decision 2026-11-06: kept) on top of whatever `scenario_type` classes the
 model read off the text.
@@ -727,10 +735,11 @@ purpose.
 The first is one bundle per project. The Turtle mints a bundle from its
 label, so two papers of one project are one bundle with two reports there,
 while the body of each paper alone would make two bundles of one study.
-`merge` joins the documents whose bundle label is the same (compared
-through `kg.normalise`, as the Turtle mints it) into one request with
-several study reports. The oldest paper leads: its spelling labels the
-bundle and its abstract is the bundle's, of which the shapes allow one;
+`merge` joins the documents whose bundle key is the same (the project's
+name, else the title, compared through `kg.normalise`, as the Turtle mints
+it) into one request with several study reports. The oldest paper leads:
+its spelling of the project's name labels the bundle (no label where no
+paper prints one) and its abstract is the bundle's, of which the shapes allow one;
 the acronym is the one most of the documents give, and the tags,
 organisations and funders of the others are added to its own, two
 spellings of one name counting once. Documents
@@ -783,8 +792,8 @@ a factsheet or an author node is built (`kg.py`, lines 632 to 634). Any
 other field the shapes demand on the report or the bundle, a date, an
 author, an acronym or one of the tags, is not refused this way, only
 named in the per-document summary line as a missing required field
-(`bind`, `required`); the bundle's label never is, since it falls back to
-the title (`FALLBACK`).
+(`bind`, `required`); so is the bundle's label where the document prints
+no study name, since nothing stands in for it (owner decision 2026-11-07).
 
 A scenario name absent from its own quoted passage is refused as an
 identity for every scenario-scope parameter alike: `scenario_names()`

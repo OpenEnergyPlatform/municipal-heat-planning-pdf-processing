@@ -1874,7 +1874,9 @@ no candidate asks nothing and means itself.
 the other names of its thing, and so does an answer of one other name alone; two
 names are one thing only where each gives the other, and a thing is called by
 its first name in the document's order. An answer of several names without the
-name itself stands for each of their things and is never joined. Applied to the
+name itself stands for each of their things and is never joined. Each answer
+also says whether the name is a short name of its thing (`short`); such a row is
+marked `<coordinate>_short` (owner decision 2026-11-07). Applied to the
 answers of the probe, this reading gives 12 groups of names with no visible
 error. The answer quotes nothing, since each name keeps the quote it was read
 with.

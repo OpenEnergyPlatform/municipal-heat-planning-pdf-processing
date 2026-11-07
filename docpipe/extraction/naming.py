@@ -28,7 +28,9 @@ passage that overlap shown once, and beside it its candidates under their
 numbers with their quotes. The model answers with numbers, never copying a
 name: every name of the same thing, its own included, or, where the name
 stands for several things ("the EC LTS scenarios"), the names of each of
-them without its own. Two names are one thing only where each gives the
+them without its own. Beside them it says whether the name is a short name
+of its thing ("ENTSO-E DG" beside "Distributed Generation", owner decision
+2026-11-07); such a row is marked `<coordinate>_short`. Two names are one thing only where each gives the
 other, and a thing is called by its first name; a name of several things
 stands for each of them (`meanings`). A name with no candidate asks nothing
 and means itself. Each row keeps the name it was read as and gets the names
@@ -326,6 +328,10 @@ def groups_of(reply, numbers: dict) -> tuple:
 
 
 MEANT = "means"
+# Whether the name asked is a short name of its thing (owner decision
+# 2026-11-07).
+SHORT = "short"
+SHORTENED = "_short"
 
 
 def payload(kind: str, name: str, places: list, numbers: dict,
@@ -344,12 +350,14 @@ def payload(kind: str, name: str, places: list, numbers: dict,
 
 def response_format(numbers: list) -> dict:
     """The numbers of the names the name asked means, under `MEANT`: its
-    own, another's or several, each one of *numbers*."""
+    own, another's or several, each one of *numbers*; under `SHORT` whether
+    the name asked is a short name of its thing."""
     schema = {"type": "object",
               "properties": {MEANT: {
                   "type": "array", "minItems": 1,
-                  "items": {"type": "string", "enum": list(numbers)}}},
-              "required": [MEANT], "additionalProperties": False}
+                  "items": {"type": "string", "enum": list(numbers)}},
+                  SHORT: {"type": "boolean"}},
+              "required": [MEANT, SHORT], "additionalProperties": False}
     return {"type": "json_schema",
             "json_schema": {"name": "naming_reply", "schema": schema}}
 
@@ -358,22 +366,25 @@ def example_of(numbers: dict, name: str) -> dict:
     """The reply the prompt shows for the request about *name*: the name
     meaning itself, in its own number (owner decision 2026-11-06: every
     request's example is its own reply)."""
-    return {MEANT: [numbers[name]]}
+    return {MEANT: [numbers[name]], SHORT: False}
 
 
 def means_of(reply, numbers: dict) -> tuple:
-    """([names the name asked means], None) of a naming *reply*
-    ({"means": [numbers]}) whose list holds only numbers the request showed,
-    turned back into names; (None, what was wrong) of any other: a reply
-    without "means" (`key_missing`), or one whose list is empty or names a
-    number the request did not show (`name_not_listed`)."""
+    """(([names the name asked means], short), None) of a naming *reply*
+    ({"means": [numbers], "short": bool}) whose list holds only numbers the
+    request showed, turned back into names; (None, what was wrong) of any
+    other: a reply without "means" or "short" (`key_missing`), or one whose
+    list is empty or names a number the request did not show
+    (`name_not_listed`)."""
     name_of = {number: one for one, number in numbers.items()}
-    if not isinstance(reply, dict) or MEANT not in reply:
-        return None, {"what": say("key_missing", key=MEANT)}
+    for key in (MEANT, SHORT):
+        if not isinstance(reply, dict) or key not in reply:
+            return None, {"what": say("key_missing", key=key)}
     given = reply[MEANT]
     if isinstance(given, list) and given and all(
             isinstance(one, str) and one in name_of for one in given):
-        return list(dict.fromkeys(name_of[one] for one in given)), None
+        return (list(dict.fromkeys(name_of[one] for one in given)),
+                reply[SHORT] is True), None
     return None, {"value": given, "what": say(
         "name_not_listed", name=MEANT,
         given=json.dumps(given, ensure_ascii=False))}
@@ -429,10 +440,12 @@ def meanings(order: list, answers: dict) -> dict:
     return {name: things(name, frozenset()) for name in order}
 
 
-def mark(rows: list, slots: dict, meant: dict) -> int:
+def mark(rows: list, slots: dict, meant: dict,
+         short: Optional[dict] = None) -> int:
     """Each row's names under `<key>_means` (`VALUE`: `value_means`): the
-    names of the things it means (*meant*, {kind: {name: [names]}}). How
-    many names were marked."""
+    names of the things it means (*meant*, {kind: {name: [names]}}); a row
+    whose name the naming called a short name (*short*, {kind: {names}})
+    gets `<key>_short`. How many names were marked."""
     marked = 0
     for row in rows:
         for key, kind in (slots.get(row.get("parameter")) or {}).items():
@@ -441,6 +454,8 @@ def mark(rows: list, slots: dict, meant: dict) -> int:
             if things:
                 row[f"{key}{MEANS}"] = list(things)
                 marked += 1
+            if read and read[0] in ((short or {}).get(kind) or ()):
+                row[f"{key}{SHORTENED}"] = True
     return marked
 
 
@@ -473,11 +488,13 @@ class Namer:
 
     def __call__(self, document_id: int, rows: list, passages: dict) -> dict:
         meant: dict = {}
+        short: dict = {}
         for kind, names in names_of(rows, self.slots).items():
             order = list(names)
             noted: dict = {}
+            short[kind] = set()
             answers = self.answered(document_id, kind, order, names, passages,
-                                    noted)
+                                    noted, short[kind])
             meant[kind] = meanings(order, answers)
             if self.trace is not None:
                 things = {thing for each in meant[kind].values()
@@ -486,17 +503,19 @@ class Namer:
                            things=len(things),
                            several=sum(1 for each in meant[kind].values()
                                        if len(each) > 1), **noted)
-        mark(rows, self.slots, meant)
+        mark(rows, self.slots, meant, short)
         return meant
 
     def answered(self, document_id: int, kind: str, order: list,
                  names: dict, passages: dict,
-                 noted: Optional[dict] = None) -> dict:
+                 noted: Optional[dict] = None,
+                 short: Optional[set] = None) -> dict:
         """{name: [names it gave]} of the names *order*: one request per name
         against its candidates (`candidates`, owner decision 2026-11-06); a
         name with none, or that no reply answered, is left out and means
         itself (`meanings`). *noted* gets how many `groups` the request over
-        all names gave and how many names were `asked`."""
+        all names gave and how many names were `asked`, *short* the names
+        answered as a short name."""
         noted = {} if noted is None else noted
         if len(order) < 2:
             return {}
@@ -521,7 +540,9 @@ class Namer:
             got = [one(name) for name in order]
         else:
             got = list(self.pool.map(one, order))
-        return {name: means for name, means in got if means}
+        if short is not None:
+            short.update(name for name, means in got if means and means[1])
+        return {name: means[0] for name, means in got if means}
 
     def _grouped(self, document_id: int, kind: str, among: list,
                  quotes: dict) -> list:
@@ -569,8 +590,9 @@ class Namer:
                                                            NEIGHBOURS))}
 
     def _means(self, document_id: int, kind: str, name: str, among: list,
-               places: list, quotes: dict) -> Optional[list]:
-        """[the names *name* gave] of the names *among*, it among them: one
+               places: list, quotes: dict) -> Optional[tuple]:
+        """([the names *name* gave], short) of the names *among*, it among
+        them, and whether it is a short name of its thing: one
         request, and one more where the reply was wrong; None where neither
         answered. A request that does not fit is asked against each half of
         the other names, and the halves' answers are joined (`_halves`)."""
@@ -594,11 +616,12 @@ class Namer:
         return None
 
     def _halves(self, document_id: int, kind: str, name: str, among: list,
-                places: list, quotes: dict) -> Optional[list]:
+                places: list, quotes: dict) -> Optional[tuple]:
         """The answers about *name* against each half of the other names,
         joined into one answer as a request over all of them would have
         given it: a half that gives the name alone has nothing of its thing
-        and adds nothing. None where no half answered."""
+        and adds nothing; the name is short where a half says so. None where
+        no half answered."""
         others = [one for one in among if one != name]
         if len(others) < 2:
             if self.trace is not None:
@@ -607,15 +630,16 @@ class Namer:
             return None
         half = len(others) // 2
         joined: list = []
-        answered = False
+        answered = short = False
         for part in (others[:half], others[half:]):
             got = self._means(document_id, kind, name, [name] + part, places,
                               quotes)
             if not got:
                 continue
             answered = True
-            if got != [name]:
-                joined.extend(one for one in got if one not in joined)
+            short = short or got[1]
+            if got[0] != [name]:
+                joined.extend(one for one in got[0] if one not in joined)
         if not answered:
             return None
-        return joined or [name]
+        return joined or [name], short

@@ -108,14 +108,16 @@ def merge(studies: list) -> list
 
 One study per bundle: the documents of one project, together.
 
-kg.py mints a bundle from its label, so two papers of one project already
-are one bundle with two reports in the Turtle. A create is one body per
-bundle, and the body of each paper alone would make several bundles of
-one study. The oldest paper leads: its spelling labels the bundle and
-its abstract is the bundle's, of which the shapes allow one. An acronym
-is the one most of the documents give.
+kg.py mints a bundle from its key, the project's name or else the
+title, so two papers of one project already are one bundle with two
+reports in the Turtle. A create is one body per bundle, and the body of
+each paper alone would make several bundles of one study. The oldest
+paper leads: its spelling of the project's name labels the bundle (no
+label where no paper prints one) and its abstract is the bundle's, of
+which the shapes allow one. An acronym is the one most of the documents
+give.
 
-The label alone decides, as it does in the Turtle. An acronym two
+The key alone decides, as it does in the Turtle. An acronym two
 documents share does not: a harvest pairs a project's name with another
 project's acronym often enough (a paper thanks two projects) that
 joining on it would chain unrelated papers into one bundle. Such a pair
