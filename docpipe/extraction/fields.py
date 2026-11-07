@@ -496,6 +496,28 @@ def parameter_undecidable(spec, claim: dict) -> bool:
                 if p.is_numeric and unit in p.units_accepted]
 
 
+def derived_by_unit(claim: dict, parameter) -> bool:
+    """Does the spec decide the coordinates it derives from the unit for this
+    value: the unit question read an entry of the parameter's list? Where it
+    read the print without one, the model is asked them (owner decision
+    2026-11-07: "wo es nicht automatisch geht, soll es das LLM versuchen")."""
+    return (claim.get(f"{UNIT}_state") == READ
+            and parameter.unit_factor(claim.get(UNIT)) is not None)
+
+
+def derives(slot, claim: dict, parameter) -> bool:
+    """Does the spec set *slot* for this value instead of asking it: the
+    unit decides it (`derived_by_unit`), and the coordinate the spec names in
+    `unless_read` was not read. "im Mittel der Jahre 2019 bis 2021" in MWh/a
+    is a mean and no annual sum, so where the plan names the start of a span
+    the aggregation is asked (owner decision 2026-11-07: "Wenn es nach OEO
+    ein Mittelwert ist, dann ist es ein Mittelwert")."""
+    if not slot.derive or not derived_by_unit(claim, parameter):
+        return False
+    unless = slot.derive.get("unless_read")
+    return not (unless and claim.get(f"{unless}_state") == READ)
+
+
 def apply_derived(rows: list, slot: Slot) -> int:
     """Write a derived coordinate onto every row that has none. Returns how many.
 

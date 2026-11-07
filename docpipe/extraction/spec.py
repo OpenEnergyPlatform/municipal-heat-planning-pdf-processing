@@ -387,6 +387,17 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
         if not isinstance(vocabulary, dict) or derive.get("value") not in vocabulary:
             _fail(path, f"derive.value {derive.get('value')!r} is not a key of "
                         f"this axis' vocabulary")
+        # A value whose own reading says what the unit would only assume --
+        # a mean over a span of years is no annual sum -- is asked instead
+        # (owner decision 2026-11-07: "Wenn es nach OEO ein Mittelwert ist,
+        # dann ist es ein Mittelwert").
+        unless = derive.get("unless_read")
+        if unless is not None and (not isinstance(unless, str)
+                                   or not unless.strip()):
+            _fail(path, "derive.unless_read names a coordinate")
+        extra = set(derive) - {"from", "value", "unless_read"}
+        if extra:
+            _fail(path, f"derive has no key {sorted(extra)}")
     kinds = sum(x is not None for x in (vocabulary, axis_type, enum)) + int(dynamic)
     if kinds != 1:
         _fail(path, "an axis is exactly one of: vocabulary, type, enum, dynamic")
@@ -608,6 +619,11 @@ def _validate_parameter(path: str, raw) -> Parameter:
         _fail(f"{path}.axes", "must be an object of axis name -> definition")
     axes = {name: _validate_axis(f"{path}.axes.{name}", name, a)
             for name, a in axes_raw.items()}
+    for name, axis in axes.items():
+        unless = (axis.derive or {}).get("unless_read")
+        if unless is not None and unless not in axes:
+            _fail(f"{path}.axes.{name}.derive",
+                  f"unless_read {unless!r} is not an axis of this parameter")
     example = _validate_example(f"{path}.example", raw.get("example"),
                                 value_type, units)
     if raw.get("kg") is not None:

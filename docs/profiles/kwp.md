@@ -87,13 +87,15 @@ numeric and share one shape: `energy_consumption`, `emission`, `heat_load`,
 `share` and `building_count`, each a `float` value carrying its own unit
 family and landing on a `value` node in the graph. The last,
 `planning_organisation`, is a `text` value with no unit at all, landing on an
-`organisation` node.
+`organisation` node, or, where its one axis `role` says the organisation is the
+plan's own municipality, on that municipality's node (see
+[The knowledge graph](#the-knowledge-graph)).
 
 | parameter | value type | unit family | unit target | accepted spellings |
 |---|---|---|---|---|
-| `energy_consumption` | `float` | energy (kWh to TWh) | `OEO_00050008` | 12 |
+| `energy_consumption` | `float` | energy (kJ to PJ, kWh to TWh) | `OEO_00050008` | 22 |
 | `emission` | `float` | mass, CO2 equivalent | `OEO_00010137` | 48 |
-| `heat_load` | `float` | power (kW to GW) | `OEO_00390001` | 5 |
+| `heat_load` | `float` | power (kW to GW, kWel, MWel, kWp, MWp) | `OEO_00390001` | 9 |
 | `share` | `float` | percent | `UO_0000187` | 2 |
 | `building_count` | `float` | a count of buildings | `UO_0000189` | 1 |
 | `planning_organisation` | `text` | none | none | none |
@@ -109,8 +111,8 @@ holds no building count yet, so the strict graph leaves it out, and the
 compute step, which adds only amounts over a span, does not sum it. An
 integrated parameter's units each say whether they name a
 period, `names_period`, and the loader refuses an entry that does not say
-(`spec._validate_unit_entry`): of the 12 entries of `energy_consumption` and the
-48 of `emission`, 34 say true ("kWh/a") and 26 say false ("kWh"), and the
+(`spec._validate_unit_entry`): of the 22 entries of `energy_consumption` and the
+48 of `emission`, 39 say true ("kWh/a") and 31 say false ("kWh"), and the
 entries of `heat_load` and `building_count` stay bare factors. The verifier
 flags `period:unstated` from that
 statement alone, and it reaches no request and no stamp key, so changing one
@@ -121,18 +123,34 @@ a closed vocabulary except `year`, a plain integer:
 
 | axis | kind | vocabulary size | of which `out:` |
 |---|---|---|---|
-| `carrier` | vocabulary | 29 | 2 |
-| `sector` | vocabulary | 6 | 1 |
-| `scenario` | vocabulary | 4 | 1 |
+| `carrier` | vocabulary | 137 | 2 |
+| `sector` | vocabulary | 17 | 2 |
+| `scenario` | vocabulary | 3 | 0 |
 | `spatial_scope` | vocabulary | 2 | 0 |
 | `year` | integer | (not applicable) | (not applicable) |
 
-`energy_consumption`, `emission`, `share` and `building_count` have a sixth,
-`technology`, a
-heat generation technology class (10 entries, 2 of them `out:`); the data
+All five have a sixth, `technology`, a
+heat generation technology class (12 entries, 2 of them `out:`); the data
 schema leaves it optional, so it is read from the value's own passage alone
 and a number the plan does not split by technology is `out:total` and writes
 no edge.
+
+The spec demands no more than the ontology (OEO) and the graph schema (MHPKG)
+demand. The closed lists offer every class under OEO's energy carrier (126),
+plus the declared heat classes outside that root, for `carrier`; every class
+under sector (15) and `out:other` for `sector`; every class under heat
+generation technology (10, coal and combustion based added) for `technology`.
+An entry new to a list has a German label and the OEO definition verbatim, and
+no spellings. `energy_consumption` offers energy value and all its subclasses
+(energy consumption value, gross inland, gross national electricity, electrical
+energy amount, import and export, energy storage content and capacity, areal
+energy density); `emission` adds emission value, greenhouse gas emission value
+and emission factor value; `heat_load` adds power rating, power capacity,
+declared net and nameplate capacity, block size and areal power density, with
+instantaneous in its aggregation list; `share` offers every fraction value
+subclass and efficiency value, and a share of buildings, areas or costs is a
+share. `energy_consumption` also accepts kJ, MJ, GJ, TJ and PJ, with or without
+"/a", converted into MWh.
 
 `quantity` and `aggregation`, the two axes that carry a parameter's own
 answer space, differ by parameter, and `heat_load` differs from the two
@@ -140,10 +158,10 @@ amounts in how its aggregation is decided:
 
 | parameter | `quantity` size (`out:`) | `aggregation` size (`out:`) | `aggregation` derived |
 |---|---|---|---|
-| `energy_consumption` | 21 (6) | 5 (0) | yes, from the unit |
-| `emission` | 9 (7) | 5 (0) | yes, from the unit |
-| `heat_load` | 18 (4) | 4 (0) | no, asked |
-| `share` | 2 (1) | none | no axis |
+| `energy_consumption` | 29 (3) | 5 (0) | yes, from the unit unless `period_start` was read |
+| `emission` | 11 (6) | 5 (0) | yes, from the unit unless `period_start` was read |
+| `heat_load` | 24 (2) | 5 (0) | no, asked |
+| `share` | 16 (1) | none | no axis |
 | `building_count` | 1 (0), derived from the unit | 5 (0) | yes, from the unit (instantaneous) |
 
 An axis or a parameter answer beginning `out:` is a deliberate non-class,
@@ -153,11 +171,11 @@ carries when a passage genuinely does not state it is `out:unstated`
 rides the same prefix so a serializer can refuse every one of them by
 shape rather than by a second, hand-kept list
 (`profiles/kwp/kg.py:95` to `104`, `is_class`). Much of `quantity`'s own
-list is such an entry: a share expressed as a percentage, a per-person or
-per-area figure, a useful energy, a generation or a saving the ontology has
-no class for yet, and a residual catch-all, so the model can name what a
-number really is instead of forcing it onto the nearest real class;
-`carrier`, `sector` and `scenario` offer one or two of the same kind each.
+list that is left is such an entry: a share expressed as a percentage, a
+per-person or per-area figure, a cumulative, avoided or captured emission, and
+a residual catch-all, so the model can name what a number really is instead of
+forcing it onto the nearest real class; `carrier` and `sector` offer two of
+the same kind each (`out:total`, `out:other`), `scenario` none.
 A potential is a class: the energy and the power list offer OEO's thirteen,
 potential, flow and stock potential, and the theoretical, technological,
 economic, developable and sustainable kind of each, and the model takes the
@@ -184,12 +202,15 @@ Two of the numeric parameters decide their `aggregation` on their own
 rather than asking, carried as the `derived` state
 (`docpipe/extraction/fields.py:68` to `75`; [glossary](../glossary.md)):
 every unit `energy_consumption` or `emission` accepts names a span, so
-their aggregation is always the closed list's integral entry, never asked
-(`docpipe/extraction/spec.py:94` to `104`, `Axis.derive`). Before this was
+their aggregation is the closed list's integral entry, never asked, unless
+`period_start` was read (`docpipe/extraction/spec.py:381` to `400`,
+`Axis.derive`, whose block carries `"unless_read": "period_start"`; the key
+must name an axis of the same parameter, and `fields.derives` applies it): a
+plan that names the start of a span states a mean over years, and a mean is a
+mean (owner decision 2026-11-07), so there the aggregation is asked. Before this was
 derived, all 452 aggregation answers the model gave for these two
 parameters over one plan were that same entry every time, evidenced
-only by the unit string the request had itself just handed over
-(`docpipe/extraction/spec.py:99` to `101`). `heat_load`'s aggregation is
+only by the unit string the request had itself just handed over. `heat_load`'s aggregation is
 not derived, since a watt is not integrated over a span the way a
 watt-hour is: this axis is asked instead, with evidence allowed one page
 away, and a peak load can come back distinct from an average one.
@@ -226,10 +247,11 @@ row belongs in this run's graph at all: `SLICE = {"quantity":
 kept_quantities(), "year": None}` (`profiles/kwp/extraction.py`). The year
 closes no row and stands there for its order: every axis behind it reads with
 the year in `known`. The quantity keeps every real class of the spec's
-quantity lists, and the four entries the ontology has no class for yet
-(`READ_IN_FULL`: useful energy, generation, saving, avoided emission), which
-are read on every axis into the harvest and reach the graph once a class
-exists (owner decision 2026-11-03). Every other entry beginning `out:`
+quantity lists, and the one entry the ontology has no class for yet
+(`READ_IN_FULL`: avoided emission), which is read on every axis into the
+harvest and reaches the graph once a class exists (owner decision 2026-11-03).
+Useful energy, generation and saving left that list on 2026-11-07: each has an
+energy unit, so each is an OEO energy value, which the list offers. Every other entry beginning `out:`
 closes its row. Asking this axis first and
 alone is cheaper when a row fails it, three requests spent rather than
 eight, and on a 20-plan draft it dropped 1,554 of 6,763 harvested tuples
@@ -366,8 +388,14 @@ section names what is specific to kwp's own graph.
 | municipality | `mhpo:MHPO_00020017` | AGS alone |
 | a scenario part (status quo, trend, target) | one of three MHPO classes, from the spec's own scenario map | AGS, publication date and the part's own path segment |
 | value | the row's own `quantity` class (`a oeo:<quantity>`); in the strict graph also the schema's value class it falls under | the value identity tuple, below |
-| planning organisation | `oeo:OEO_00030022` | the normalised office name |
+| planning organisation | `oeo:OEO_00030022` | the normalised office name of a row with role `planner`; a row with role `municipality` mints none |
 | a named sub area | the spec's plan-area class | AGS plus the normalised area wording |
+
+`planning_organisation` (label "Planerstellende Organisation") has one axis,
+`role`, `planner` or `municipality`, read from its own passage in the `context`
+group. A `municipality` row links `has_organisation` to the plan's municipality
+node and mints no organisation, since MHPKG does not count a municipality acting
+as planning authority as a second entity; planners are minted as before.
 
 The plan node carries its publication date, its planning-organisation
 edges, and a `has part` edge to every scenario part with a surviving
@@ -433,12 +461,18 @@ was read, in our classes. `<graph>.strict.ttl` (the profile's
 class the part holds, every required slot, and carrier, sector and technology
 from the schema's own lists; a plan with no target-scenario value is left
 out. Each refusal is counted as `mhpkg:<reason>` (`class`, `area`,
-`no_slot:<slot>`, `missing:<slot>`, `off_list:<slot>`). Both files are
+`no_slot:<slot>`, `missing:<slot>`, `off_list:<slot>`). A class outside the schema
+stays in the full graph and the strict graph refuses it under those reasons. A
+value without `aggregation` is written without that edge, never set to a year's
+sum, and the strict graph refuses it as `missing:<slot>` where the schema's class
+requires one; a value without `spatial_scope` is kept in the full graph and
+refused by the strict one as `area`. Both files are
 SHACL-validated against the refreshed shapes.
 
 What the serializer refuses, briefly (in full on
 [stages/graph.md](../stages/graph.md)): a row failing the quantity,
-scenario, spatial scope, year or aggregation gate, quantity checked
+scenario, year or aggregation-list gate, or whose spatial scope is neither the
+municipality nor a named sub area, quantity checked
 first so a row closed on it is never counted against the scenario too;
 a document with no resolvable AGS or date; a second document claiming
 an already-claimed AGS and date pair; several rows at one value
@@ -518,11 +552,11 @@ Read from `profiles/kwp/extraction_schema.json` by `scripts/build_docs.py`. Each
 
 | parameter | value | axes | graph node |
 |---|---|---|---|
-| `building_count` | number | `aggregation` (5 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `period_start` (integer), `qualifier` (5 options), `quantity` (1 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `technology` (10 options), `unit` (1 options), `what` (string), `year` (integer) | `value` |
-| `emission` | number | `aggregation` (5 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `period_start` (integer), `qualifier` (5 options), `quantity` (9 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `technology` (10 options), `unit` (48 options), `what` (string), `year` (integer) | `value` |
-| `energy_consumption` | number | `aggregation` (5 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `period_start` (integer), `qualifier` (5 options), `quantity` (21 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `technology` (10 options), `unit` (12 options), `what` (string), `year` (integer) | `value` |
-| `heat_load` | number | `aggregation` (4 options), `carrier` (29 options), `parameter` (one of the spec's parameters), `period_start` (integer), `qualifier` (5 options), `quantity` (18 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `unit` (5 options), `what` (string), `year` (integer) | `value` |
-| `planning_organisation` | string | `parameter` (one of the spec's parameters) | `organisation` |
-| `share` | number | `carrier` (29 options), `parameter` (one of the spec's parameters), `period_start` (integer), `qualifier` (5 options), `quantity` (2 options), `scenario` (4 options), `sector` (6 options), `spatial_scope` (2 options), `subject` (string), `technology` (10 options), `unit` (2 options), `what` (string), `whole` (string), `year` (integer) | `value` |
+| `building_count` | number | `aggregation` (5 options), `carrier` (137 options), `parameter` (one of the spec's parameters), `period_start` (integer), `qualifier` (5 options), `quantity` (1 options), `scenario` (3 options), `sector` (17 options), `spatial_scope` (2 options), `subject` (string), `technology` (12 options), `unit` (1 options), `what` (string), `year` (integer) | `value` |
+| `emission` | number | `aggregation` (5 options), `carrier` (137 options), `parameter` (one of the spec's parameters), `period_start` (integer), `qualifier` (5 options), `quantity` (11 options), `scenario` (3 options), `sector` (17 options), `spatial_scope` (2 options), `subject` (string), `technology` (12 options), `unit` (48 options), `what` (string), `year` (integer) | `value` |
+| `energy_consumption` | number | `aggregation` (5 options), `carrier` (137 options), `parameter` (one of the spec's parameters), `period_start` (integer), `qualifier` (5 options), `quantity` (29 options), `scenario` (3 options), `sector` (17 options), `spatial_scope` (2 options), `subject` (string), `technology` (12 options), `unit` (22 options), `what` (string), `year` (integer) | `value` |
+| `heat_load` | number | `aggregation` (5 options), `carrier` (137 options), `parameter` (one of the spec's parameters), `period_start` (integer), `qualifier` (5 options), `quantity` (24 options), `scenario` (3 options), `sector` (17 options), `spatial_scope` (2 options), `subject` (string), `technology` (12 options), `unit` (9 options), `what` (string), `year` (integer) | `value` |
+| `planning_organisation` | string | `parameter` (one of the spec's parameters), `role` (2 options) | `organisation` |
+| `share` | number | `carrier` (137 options), `parameter` (one of the spec's parameters), `period_start` (integer), `qualifier` (5 options), `quantity` (16 options), `scenario` (3 options), `sector` (17 options), `spatial_scope` (2 options), `subject` (string), `technology` (12 options), `unit` (2 options), `what` (string), `whole` (string), `year` (integer) | `value` |
 
 [Back to the index](../README.md)

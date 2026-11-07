@@ -218,6 +218,16 @@ what it was down to a carriage return (`jsonl.lines`). A line that is not
 JSON, or is JSON and no record, is kept as it stands and counted. An empty
 line is not a record and is not kept.
 
+### split_derived
+
+```python
+def split_derived(rows: list, slot, parameter) -> tuple
+```
+
+(rows the spec sets *slot* for, rows that are asked it): the unit
+decides the coordinate unless the plan read what `unless_read` names
+(`fields.derives`), as in the harvest.
+
 ### top_up_file
 
 ```python

@@ -150,10 +150,8 @@ def typed_as(row: dict, schema_class: Optional[str] = None) -> str:
 AGGREGATIONS = {uri for par in _SPEC["parameters"]
                 if "aggregation" in par.get("axes", {})
                 for uri in par["axes"]["aggregation"]["vocabulary"]}
-# The parameters that have one. A share has none: it is a ratio, and the
-# schema gives its class no aggregation slot.
-AGGREGATED = {par["uri"] for par in _SPEC["parameters"]
-              if "aggregation" in par.get("axes", {})}
+
+
 def _predicate(name: str) -> str:
     """The predicate the spec's `kg` block gives this axis, qualified.
 
@@ -328,6 +326,8 @@ def _total_class(axis: str) -> Optional[str]:
 TOTAL_CLASS = {axis: _total_class(axis) for axis in ("carrier", "sector")}
 
 ORGANISATION = "planning_organisation"
+# Which body an organisation row is: the plan's own municipality or another.
+ROLE = "role"
 CLS_ORGANISATION = _class(ORGANISATION)                    # oeo: organisation
 CLS_PLAN_AREA = qualified(_parent_class("spatial_scope", "sub_area"))
 P_ORGANISATION = _edge_from_plan(ORGANISATION)             # oeo: has organisation
@@ -902,11 +902,17 @@ def make_serializer(db_path: Path, strict: bool = False):
             skipped[reason] = skipped.get(reason, 0) + n
 
         offices: dict = {}
+        # The plan's own municipality as the body that made it. The MHPKG
+        # schema: "A municipality acting as planning authority is NOT a
+        # second entity", so it is the municipality node and is not minted.
+        by_municipality = False
         kept = []
         for row in rows:
             if row.get("parameter") == ORGANISATION:
                 label = row.get("value")
-                if isinstance(label, str) and normalise(label):
+                if row.get(ROLE) == "municipality":
+                    by_municipality = True
+                elif isinstance(label, str) and normalise(label):
                     offices.setdefault(normalise(label), display_name(label))
                 continue
             # Which OEO class this number is, the model chose from the class
@@ -933,25 +939,24 @@ def make_serializer(db_path: Path, strict: bool = False):
                 # for it.
                 skip("scenario_unread" if not row.get("scenario")
                      else f"scenario:{row['scenario']}")
-            elif scope not in ("municipality", "sub_area"):
+            elif scope is not None and scope not in ("municipality",
+                                                     "sub_area"):
+                # The schema relates no value to an area, so a value whose
+                # area the plan does not say is kept in the full graph (owner
+                # decision 2026-11-07, no more than ontology and graph
+                # demand); the strict graph keeps the municipality's alone.
                 skip("spatial_scope")
             elif scope == "sub_area" and not area:
                 # Two unnamed sub-areas are one node and one is silently lost.
                 skip("sub_area_unnamed")
             elif not isinstance(row.get("year"), int):
                 skip("year")
-            elif not row.get("aggregation") \
-                    and row.get("parameter") in AGGREGATED:
-                # No aggregation, no node. It used to become a year's sum by
-                # default, which is a claim about the value that nothing in
-                # the document made: a peak load written down as an annual
-                # total is wrong in a way no reader can see. The two amount
-                # parameters derive `integral` from the unit, so a miss there
-                # is the row the derivation could not reach. `heat_load` asks
-                # instead -- a watt is not integrated over a span -- so this
-                # counter is dominated by power rows whose source never
-                # worded the aggregation.
-                skip("aggregation_missing")
+            # A value without an aggregation is written without that edge:
+            # neither the ontology nor the full graph demands one, and the
+            # strict graph refuses it where the schema's class requires it
+            # (`strict_refusal`, missing:has_aggregation_type). It is never
+            # set to a year's sum by default, which would be a claim nothing
+            # in the document made (owner decision 2026-11-07).
             elif row.get("aggregation") \
                     and row["aggregation"] not in AGGREGATIONS:
                 skip(f"aggregation:{row['aggregation']}")
@@ -1038,8 +1043,10 @@ def make_serializer(db_path: Path, strict: bool = False):
             f"<{part_iri[key]}>" for key in PARTS if key in by_part)
 
         office_edge = ""
-        if office_iris:
-            refs = " ,\n        ".join(f"<{i}>" for i in office_iris)
+        makers = list(office_iris) + ([municipality_iri] if by_municipality
+                                      else [])
+        if makers:
+            refs = " ,\n        ".join(f"<{i}>" for i in makers)
             office_edge = f"\n    {P_ORGANISATION} {refs} ;"
 
         parts = []
@@ -1173,8 +1180,8 @@ WHERE {{
   ?value a ?quantity ;
          {P_NUMBER} ?number ;
          {P_UNIT} ?unit ;
-         {P_AGGREGATION} ?aggregation ;
          {P_YEAR} ?year .
+  OPTIONAL {{ ?value {P_AGGREGATION} ?aggregation }}
   OPTIONAL {{ ?value {P_CARRIER}|{P_SECTOR}|{P_TECHNOLOGY} ?about }}
   FILTER (?plan = ?PLAN)
 ##CONSTRAINTS##

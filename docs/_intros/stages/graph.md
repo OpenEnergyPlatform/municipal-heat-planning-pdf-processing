@@ -167,12 +167,18 @@ decision on a field the row no longer has is neither found nor counted.
 ### kwp: gating, identity and rendering the plan
 
 `profiles/kwp/kg.py`'s `serializer` pulls `planning_organisation` rows
-into a normalised `offices` dict; every other row passes a gate,
+into a normalised `offices` dict, except a row whose `role` is `municipality`,
+which mints no organisation and links `has_organisation` to the plan's
+municipality node (MHPKG: a municipality acting as planning authority is not a
+second entity); every other row passes a gate,
 `quantity` checked first: `quantity` a class in `UNIT_TARGET`,
 `scenario` a key of `PARTS` (`status_quo`, `trend`, `target`),
-`spatial_scope` `municipality` or a named `sub_area`, `year` an `int`,
-`aggregation` present and known. A row failing any gate is dropped and
-counted by reason; quantity first, so a row closed on it is counted
+`spatial_scope` `municipality`, a named `sub_area` or not read, `year` an
+`int`, `aggregation`, where present, known. A row failing any gate is dropped
+and counted by reason; a value without `aggregation` is written without that
+edge (the reason `aggregation_missing` is gone) and one without `spatial_scope`
+is kept in the full graph, the strict graph refusing them (owner decision
+2026-11-07: no more than the ontology and the graph schema demand); quantity first, so a row closed on it is counted
 `not_a_class:<quantity>` and never reaches the scenario check.
 Before the reorder it counted `scenario_unread` as well, about 37,300 of
 corpus_m5's 42,882, a gate decision reported as a reading failure.
@@ -211,7 +217,8 @@ MHPKG schema's slots (`refers to energy carrier`, `refers to sector`,
 `profiles/kwp/mhpkg.py`), its year an `xsd:integer` literal on
 `has scenario year value`, with no year node. A total sector (`out:total`)
 is written as the schema's parent sector `OEO_00000128`, a total carrier or
-technology as no edge. Nine carrier classes
+technology as no edge. A class outside the schema stays in the full graph;
+the strict graph refuses it. Nine carrier classes
 plans name constantly sit outside OEO's `energy carrier` root, so
 `kg.outside_root` keeps their edge, counted, not lost. The inventory
 part's IRI segment is `inventoryanalysis`. Above
@@ -236,7 +243,7 @@ and `aggregation`, both part of a value's identity, are left out: no
 edge links a value to its area, and aggregation is returned rather
 than constrained. `VALUE_QUERY`, a SPARQL template built from the
 serializer's predicate constants, selects a value's quantity, number,
-unit, year, aggregation and plan part, gathering every carrier, sector
+unit, year, aggregation (optional in the query) and plan part, gathering every carrier, sector
 and technology object into one `abouts` string. `value_bindings` turns a
 coordinate dict into `##CONSTRAINTS##` lines and a `{variable: (kind,
 value)}` binding map, one line per bound axis, dropping an `out:`

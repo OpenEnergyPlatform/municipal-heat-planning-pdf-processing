@@ -386,18 +386,7 @@ def slots_of(spec, parameter) -> list
 The coordinates a value of *parameter* is read with: its unit, then
 every axis, one the spec derives from the unit included, which is asked
 where the unit question chose no entry of the parameter's list
-(`derived_by_unit`).
-
-### derived_by_unit
-
-```python
-def derived_by_unit(claim: dict, parameter) -> bool
-```
-
-Does the spec decide the coordinates it derives from the unit for this
-value: the unit question read an entry of the parameter's list? Where it
-read the print without one, the model is asked them (owner decision
-2026-11-07: "wo es nicht automatisch geht, soll es das LLM versuchen").
+(`fields.derived_by_unit`).
 
 ### in_group_order
 

@@ -416,6 +416,14 @@ def read_harvest(path) -> Stored:
     return stored
 
 
+def split_derived(rows: list, slot, parameter) -> tuple:
+    """(rows the spec sets *slot* for, rows that are asked it): the unit
+    decides the coordinate unless the plan read what `unless_read` names
+    (`fields.derives`), as in the harvest."""
+    decided = [r for r in rows if fields.derives(slot, r, parameter)]
+    return decided, [r for r in rows if not any(r is d for d in decided)]
+
+
 def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
                 only=None) -> Counter:
     """Re-sweep one harvest file's moved coordinates, then carry its stamp."""
@@ -476,10 +484,13 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
             if not mine:
                 continue
             if slot.derive:
-                # No request: the spec decides this coordinate. Reopening is
-                # what makes apply_derived write, because it skips a row that
-                # already carries a state.
-                rows = [Row(row_label(i), 0, r) for i, r in enumerate(mine)]
+                # No request where the spec decides this coordinate
+                # (`fields.derives`); a row it does not decide for is asked
+                # below. Reopening is what makes apply_derived write, because
+                # it skips a row that already carries a state.
+                decided, asked = split_derived(mine, slot, parameter)
+                rows = [Row(row_label(i), 0, r)
+                        for i, r in enumerate(decided)]
                 for entry in rows:
                     reopen(entry.claim, slot)
                 stats["derived"] += fields.apply_derived(rows, slot)
@@ -488,7 +499,9 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
                 for entry in rows:
                     if f"{slot.name}_state" in entry.claim:
                         point(entry.claim, slot, position)
-                continue
+                if not asked:
+                    continue
+                mine = asked
             got, refused = _sweep_one(mine, parameter, slot, doc_spec, deps,
                                       stats, bases=bases, position=position)
             demoted.extend(refused)

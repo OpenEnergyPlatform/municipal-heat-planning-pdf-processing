@@ -330,7 +330,10 @@ A correction follows in the same conversation. The unit is asked first: the
 model copies the printed unit into `unit_raw` and picks the entry of the
 parameter's list it means, or `""` where none fits, and it is never refused. The
 coordinates the spec derives from a unit are derived only where an entry was
-chosen; where none was, they are asked like the others. `what` is the number's
+chosen; where none was, they are asked like the others, and a derive block with
+`unless_read` names an axis of the same parameter that, once read, makes the
+coordinate asked instead (`fields.derives`, in the harvest and in a top-up: kwp reads `aggregation` that way
+where `period_start` was read). `what` is the number's
 own name in the plan's words, `period_start` the first year of a multi-year
 period; both are harvest-only for now, read here and in the second reading and
 never searched. The scenarios profile has no number coordinates (no unit,

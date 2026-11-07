@@ -318,6 +318,30 @@ ambiguous, because the kwp spec's two numeric unit lists share no
 spelling. They cost 178 of 853 field requests, 20.9 percent, and every
 one of the five answers they produced was refused afterwards anyway.
 
+### derived_by_unit
+
+```python
+def derived_by_unit(claim: dict, parameter) -> bool
+```
+
+Does the spec decide the coordinates it derives from the unit for this
+value: the unit question read an entry of the parameter's list? Where it
+read the print without one, the model is asked them (owner decision
+2026-11-07: "wo es nicht automatisch geht, soll es das LLM versuchen").
+
+### derives
+
+```python
+def derives(slot, claim: dict, parameter) -> bool
+```
+
+Does the spec set *slot* for this value instead of asking it: the
+unit decides it (`derived_by_unit`), and the coordinate the spec names in
+`unless_read` was not read. "im Mittel der Jahre 2019 bis 2021" in MWh/a
+is a mean and no annual sum, so where the plan names the start of a span
+the aggregation is asked (owner decision 2026-11-07: "Wenn es nach OEO
+ein Mittelwert ist, dann ist es ein Mittelwert").
+
 ### apply_derived
 
 ```python

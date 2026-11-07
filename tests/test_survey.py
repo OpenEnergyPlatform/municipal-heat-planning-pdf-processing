@@ -88,7 +88,9 @@ def test_what_only_a_value_s_own_passage_or_number_says_is_of_its_group():
     # decisions 2026-11-07).
     assert (number.own_passage, number.own_value) == (
         ("unit", "what", "subject"), ("qualifier",))
-    assert context.own_passage == ("aggregation",)
+    # Which body made the plan, the municipality itself or another, only the
+    # passage that names it says (owner decision 2026-11-07).
+    assert context.own_passage == ("aggregation", "role")
     assert SPEC.groups["frame"].own_passage == ("period_start",)
     raw = with_groups(lambda g: g["number"].update(own_passage=["year"]))
     with pytest.raises(SpecError, match="group's coordinates"):

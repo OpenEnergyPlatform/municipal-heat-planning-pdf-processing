@@ -220,21 +220,12 @@ def slots_of(spec, parameter) -> list:
     """The coordinates a value of *parameter* is read with: its unit, then
     every axis, one the spec derives from the unit included, which is asked
     where the unit question chose no entry of the parameter's list
-    (`derived_by_unit`)."""
+    (`fields.derived_by_unit`)."""
     out = []
     unit = fields.unit_slot(spec, parameter) if parameter.is_numeric else None
     if unit is not None:
         out.append(unit)
     return out + fields.axis_slots(parameter)
-
-
-def derived_by_unit(claim: dict, parameter) -> bool:
-    """Does the spec decide the coordinates it derives from the unit for this
-    value: the unit question read an entry of the parameter's list? Where it
-    read the print without one, the model is asked them (owner decision
-    2026-11-07: "wo es nicht automatisch geht, soll es das LLM versuchen")."""
-    return (claim.get(f"{fields.UNIT}_state") == READ
-            and parameter.unit_factor(claim.get(fields.UNIT)) is not None)
 
 
 def in_group_order(group, group_slots: list) -> list:
@@ -1840,8 +1831,7 @@ class Reader:
             for group, group_slots in groups:
                 for slot in in_group_order(group, group_slots):
                     each += [made for one in list(each)
-                             if not (slot.derive
-                                     and derived_by_unit(one.claim, parameter))
+                             if not fields.derives(slot, one.claim, parameter)
                              for made in self._value_group(job, one, group,
                                                            [slot])]
             grouped.extend(each)
@@ -1851,7 +1841,7 @@ class Reader:
         # an entry; where it chose none, the coordinate was asked.
         for axis in fields.axis_slots(parameter):
             fields.apply_derived([row for row in rows
-                                  if derived_by_unit(row.claim, parameter)],
+                                  if fields.derives(axis, row.claim, parameter)],
                                  axis)
         inherit(rows, [s for s in self.frame_slots
                        if s.name in {x.name for x in slots}],

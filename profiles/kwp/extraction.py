@@ -34,9 +34,10 @@ SPEC_PATH = Path(__file__).with_name("extraction_spec.json")
 #
 # Quantities of their own the ontology has no class for yet are read on every
 # axis into the harvest, and reach the graph once a class does (owner decision
-# 2026-11-03). Every other out: entry still closes its row.
-READ_IN_FULL = ("out:useful_energy", "out:generation", "out:saving",
-                "out:avoided")
+# 2026-11-03). Every other out: entry still closes its row. Generation, useful
+# energy and a saving left this list on 2026-11-07: each has an energy unit,
+# so each is an OEO energy value, and the list offers that class.
+READ_IN_FULL = ("out:avoided",)
 
 
 def kept_quantities() -> tuple:
