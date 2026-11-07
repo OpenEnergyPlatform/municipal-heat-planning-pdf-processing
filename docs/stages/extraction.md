@@ -669,7 +669,8 @@ own (`FRONT_PAGE_PARAMETERS`) with one written for this document from what
 it says of itself (`document_context`), any other with one written once per
 run from its label, description and the names of its list (`phrase_payload`),
 and with its label only where no sentence could be written. Each sentence is
-traced as `seek_probe`. Every passage the walk read is one of the
+traced as `seek_probe`. A document's own sentence is asked in its turn, the
+run's before every document (see The adaptive request limit). Every passage the walk read is one of the
 parameter's sources, so a reading there that came to nothing leaves the
 parameter `exhausted` and not `unstated`. A survey of part of a plan (a pass
 over a stored harvest) searches nothing. The walk keeps each parameter's
@@ -1514,7 +1515,11 @@ no adaptive limit at all, the pools alone deciding as before.
 While the limit is on, every model request of the run goes through one
 dispatcher thread and one queue (`scheduler.py`), served oldest document first,
 a document's rank being the order in which it first asked; a request that
-belongs to no document, the run's anchors, goes before every document. The limit still
+belongs to no document, the run's anchors and the one search sentence a run
+writes for a parameter and keeps for every document, goes before every
+document. A search sentence written for one document waits in that
+document's turn, although a thread of a pool sends it (`runner.document_anchor`,
+owner decision 2026-11-07). The limit still
 decides how many requests are open. A request's timeout starts when it is sent,
 not while it waits, and a waiting request can be withdrawn (`Ticket`), after
 which it is never sent. A request that timed out is repeated with the time of

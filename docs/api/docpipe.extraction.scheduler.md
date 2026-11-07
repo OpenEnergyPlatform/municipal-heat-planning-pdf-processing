@@ -93,7 +93,8 @@ class Scheduler
 Requests in, sent in the order of their document, as the limit allows.
 
 *limit* is an `AdaptiveLimit`. A request without a document (anchors,
-the frame's warm-up) goes before every document: everything waits on it.
+the search sentence a run shares, the frame's warm-up) goes before every
+document: everything waits on it.
 
 #### Scheduler.\_\_init\_\_
 

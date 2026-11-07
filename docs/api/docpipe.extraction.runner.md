@@ -1538,7 +1538,9 @@ pulls such a sentence toward the title page and away from the passage
 that states the value. *write(parameter, context)* writes the sentences,
 one phrase request (`document_anchor`) where not given. A parameter no
 sentence could be written for gets none, and the search falls back to
-its label.
+its label. A document's own sentence is sent in that document's turn, the
+run's before every document, since every document waits on it
+(`document_anchor`, *shared*; owner decision 2026-11-07).
 
 ### document_anchor
 
@@ -1546,7 +1548,8 @@ its label.
 def document_anchor(spec: Spec, context: Optional[dict] = None,
                     client=None, prompt=None,
                     frame: Optional[dict] = None,
-                    document_id: Optional[int] = None) -> dict
+                    document_id: Optional[int] = None,
+                    shared: bool = False) -> dict
 ```
 
 {parameter uri: [one sentence]} — the probe THIS document is searched with.
@@ -1572,6 +1575,14 @@ A parameter whose sentence could not be written is left out rather than
 filled with the label. `plan_document` says out loud when it plans without
 anchors, and a probe that is a bare label is the "silently worse
 retrieval" this whole stage exists to end.
+
+Each request is sent for *document_id*, in that document's turn, with
+the ticket of the thread that asked (`_for`), although a thread of the
+pool below sends it: such a thread belongs to no document, and a request
+of none goes before every document. A *shared* sentence, the one the run
+keeps for every document (`make_seek_probes`), is sent for none, as
+everything every document waits on is; *document_id* still notes its
+failures and traces it (owner decision 2026-11-07).
 
 ### years_in_sources
 

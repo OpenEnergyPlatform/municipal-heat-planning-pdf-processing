@@ -114,3 +114,27 @@ def test_a_document_done_forgets_its_answers_written_or_failed():
     ask(1)
     ask(2)
     assert sorted(sent) == [1, 1, 2, 2]
+
+
+SAID = json.dumps({"phrase": "Der Plan nennt seinen Waermebedarf."})
+
+
+# Promise: a search sentence written for one document is sent for that
+# document, AND the sentence the run keeps for every document is sent for
+# none; by construction, the document's own sentence asked from a thread of
+# no document, and the run's asked first from a thread that belongs to a
+# document (owner decision 2026-11-07).
+def test_a_search_sentence_is_sent_for_the_document_it_is_written_for(
+        monkeypatch):
+    documents = recording(monkeypatch, SAID, SAID)
+    own, other = SPEC.parameters[0], SPEC.parameters[1]
+    probes = runner.make_seek_probes(own={own.uri},
+                                     context_of=lambda document: {})
+    with scheduler.on_behalf(None):
+        assert probes(own, 4)
+    with scheduler.on_behalf(8):
+        assert probes(other, 8)
+        assert probes(other, 9)               # kept for the run, not asked
+        after = scheduler.current()[0]
+    assert documents == [4, None]
+    assert after == 8

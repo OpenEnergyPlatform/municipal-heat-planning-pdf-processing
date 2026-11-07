@@ -1461,18 +1461,20 @@ def make_seek_probes(own=(), context_of: Optional[Callable] = None,
     that states the value. *write(parameter, context)* writes the sentences,
     one phrase request (`document_anchor`) where not given. A parameter no
     sentence could be written for gets none, and the search falls back to
-    its label.
+    its label. A document's own sentence is sent in that document's turn, the
+    run's before every document, since every document waits on it
+    (`document_anchor`, *shared*; owner decision 2026-11-07).
     """
     own = set(own or ())
     lock = threading.Lock()
     made: dict = {}
 
-    def phrase(parameter, context, document_id):
+    def phrase(parameter, context, document_id, shared=False):
         if write is not None:
             return list(write(parameter, context) or [])
         return document_anchor(SimpleNamespace(parameters=[parameter]),
-                               context, document_id=document_id
-                               ).get(parameter.uri, [])
+                               context, document_id=document_id,
+                               shared=shared).get(parameter.uri, [])
 
     def probes(parameter, document_id) -> list:
         if parameter.uri in own:
@@ -1482,7 +1484,8 @@ def make_seek_probes(own=(), context_of: Optional[Callable] = None,
         else:
             with lock:
                 if parameter.uri not in made:
-                    made[parameter.uri] = phrase(parameter, None, document_id)
+                    made[parameter.uri] = phrase(parameter, None, document_id,
+                                                 shared=True)
                 sentences = made[parameter.uri]
             per = "run"
         for text in sentences:
@@ -1495,7 +1498,8 @@ def make_seek_probes(own=(), context_of: Optional[Callable] = None,
 def document_anchor(spec: Spec, context: Optional[dict] = None,
                     client=None, prompt=None,
                     frame: Optional[dict] = None,
-                    document_id: Optional[int] = None) -> dict:
+                    document_id: Optional[int] = None,
+                    shared: bool = False) -> dict:
     """{parameter uri: [one sentence]} — the probe THIS document is searched with.
 
     The QA app turns a question into one short statement before it searches,
@@ -1519,11 +1523,21 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
     filled with the label. `plan_document` says out loud when it plans without
     anchors, and a probe that is a bare label is the "silently worse
     retrieval" this whole stage exists to end.
+
+    Each request is sent for *document_id*, in that document's turn, with
+    the ticket of the thread that asked (`_for`), although a thread of the
+    pool below sends it: such a thread belongs to no document, and a request
+    of none goes before every document. A *shared* sentence, the one the run
+    keeps for every document (`make_seek_probes`), is sent for none, as
+    everything every document waits on is; *document_id* still notes its
+    failures and traces it (owner decision 2026-11-07).
     """
     prompt = prompt if prompt is not None else prompts.load(PHRASE_PROMPT_ID)
     client = _repeating(client or _client())
     context = {k: v for k, v in (context or {}).items()
                if isinstance(v, str) and v.strip()}
+    behalf = (None, None) if shared else (document_id,
+                                          scheduler.current()[1])
 
     def one(parameter):
         payload = json.dumps(phrase_payload(parameter, context, frame),
@@ -1535,17 +1549,18 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
         for attempt in range(1, MAX_RETRIES + 1):
             started = time.time()
             try:
-                response = client.chat.completions.create(
-                    model=LLM_MODEL,
-                    temperature=retry_temperature(
-                        float(prompt.meta.get("temperature", 0)), faults),
-                    max_tokens=limit,
-                    messages=[{"role": "system", "content": prompt.text},
-                              *conversation],
-                    extra_body=request_extras(),
-                    **providers.formatted("llm", "phrase_reply",
-                                          replies.phrase()),
-                )
+                with scheduler.on_behalf(*behalf):
+                    response = client.chat.completions.create(
+                        model=LLM_MODEL,
+                        temperature=retry_temperature(
+                            float(prompt.meta.get("temperature", 0)), faults),
+                        max_tokens=limit,
+                        messages=[{"role": "system", "content": prompt.text},
+                                  *conversation],
+                        extra_body=request_extras(),
+                        **providers.formatted("llm", "phrase_reply",
+                                              replies.phrase()),
+                    )
                 failures.answered()
                 token_usage.reply(response, LLM_MODEL)
                 _asked("phrase", document_id, response, attempt=attempt,
