@@ -516,9 +516,21 @@ class SearchOnly:
         self.searched.append(list(probes))
         return list(self.ranked.get(probes[0], ()))
 
-    def __call__(self, document_id, reads, shown, pairs, budget, *,
-                 title_page=None, settings=None, **_):
+    def session(self, document_id, shown, pairs, budget, bases=None, **_):
+        return CombsNothing()
+
+
+class CombsNothing:
+    """A combing session that combs nothing (`combing.Session`)."""
+
+    def add(self, read):
+        pass
+
+    def finish(self, reads):
         return []
+
+    def cancel(self):
+        pass
 
 
 def sought_harvest(found, ranked, reads=None, halt_after=None):
@@ -529,7 +541,7 @@ def sought_harvest(found, ranked, reads=None, halt_after=None):
     asked, hits = [], []
 
     def make_reader(spec):
-        def run(document_id, found, shown, budget):
+        def run(document_id, found, shown, budget, **_):
             named = {p.uri: found.passages_of(p.uri) for p in spec.parameters
                      if found.passages_of(p.uri)}
             asked.append(named)

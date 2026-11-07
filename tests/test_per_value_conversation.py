@@ -394,8 +394,10 @@ class NoRanking:
     def rank(self, document_id, probes, exclude):
         return []
 
-    def __call__(self, document_id, reads, shown, pairs, budget, **plan):
-        return []
+    def session(self, document_id, shown, pairs, budget, bases=None,
+                **plan):
+        return combing.Session(combing.Comber(SPEC, None, None, None),
+                               document_id, shown, pairs, budget, bases)
 
 
 def free_harvest(places):

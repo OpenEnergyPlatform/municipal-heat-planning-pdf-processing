@@ -264,6 +264,30 @@ request says. Its first wording asked for null instead, and in the next probe
 62 of 113 readings with a refused value ended on their correction (23 of 41
 before).
 
+With a pool the values of a passage are not read one after another (owner
+decision 2026-11-07, "Der Ablauf passt so, bauen"). `Reader.__call__` runs each
+passage's rounds (`Reader._start`, the conversation that names the values, one
+per answer, unchanged), then the conversation of EACH value it named as a task
+of its own (`Reader._coordinates`), side by side with the other values of the
+same passage and with other passages, then what ends the passage
+(`Reader._finish`). No task waits for another: only the calling thread waits and
+hands in a passage's next tasks (`Reader._side_by_side`), and a failing task
+takes back every task not begun, as a pool's map does. Inside a value's
+conversation nothing changed: one coordinate a message, in the order of the
+groups. A value read as no value of its parameter (`value_not_kept`,
+`Reader._again`) is asked for once more when EVERY value of its passage is
+done, in the order of the values, so the rounds' conversation gets the same
+messages as when the values went one after another. The state the values of a
+passage share (the counts `asked`, `corrected` and `failed`, the copies for
+further names) goes through `_Job.lock` and `_Job.count`. Every request has the
+wording it had before; only the labels of rows made for further names may be
+numbered differently. `Reader.read`, with no pool, runs the same steps one after
+another. `Reader.__call__` takes `on_read(read)`, called on the calling thread
+the moment a passage's Read is done (the combing uses it, see below). Measured
+in a probe before: only 8.9 of 18 requests were in flight on average, and a
+table of 61 values (819 to 858 questions) was asked one value after another,
+13 minutes at one request.
+
 A value may stand in any text the round showed: the passage itself, the heading
 of its section or the text around it (owner decision 2026-11-05). It is read
 from the one its quote stands in (`reading.passage_of`), which joins the
@@ -439,7 +463,7 @@ its thirteen publication and study fields, "this publication" or "another
 work". Their groups come first, so each is its value's first coordinate. A
 value read with another entry (`fields.kept` False) is asked nothing after it,
 its other coordinates `out_of_slice`, in the reading (`Reader._coordinates`)
-and in the combing (`Comber.comb`). It is asked for once more in the
+and in the combing (`Comber.comb`). It is asked for once more, when every value of its passage is done, in the
 conversation of the rounds its passage was read in, with the follow-up
 `wrong`: its value and quote, and that it was read wrongly
 (`value_not_kept`); a value named instead is checked as a round's value is and
@@ -518,7 +542,15 @@ example per prompt, a one-plan probe showed this clearly:
 
 A prompt with the place and no example is not sent. The error is raised before
 the first request.
-`scripts/probe_rows.py --documents ... --survey --read` runs both steps.
+`scripts/probe_rows.py --documents ... --survey --read` runs both steps; with
+`--comb` it runs the combing too. There `--parallel` counts requests with the
+model at once, held by the run's own queue (`scheduler.Scheduler`) with a limit
+that does not move (`runner.start_fixed_limit`), and the probe's threads are as
+many as the run may have requests open (`throttle.MAXIMUM`,
+`EXTRACT_LIMIT_MAX`), so a conversation that waits for its search holds no
+place; a search waited about 7.3 s on average for the embedding model on the CPU
+of a probe job. In a corpus run nothing changes there: its search
+runs on the GPU and its queue already exists (owner decision 2026-11-07).
 
 ### Combing what the reading left open
 
@@ -663,6 +695,24 @@ One whose request no longer fit the model's window before that ends
 `exhausted`, a finding about the run. The ranking is handed in:
 `make_more_sources` in a harvest.
 
+The combing begins while the plan is still read (owner decision 2026-11-07).
+`combing.Session` (made by `Comber.session`) takes a passage's combing up the
+moment its reading is done (`Session.add`, handed in as `on_read` by
+`surveyed.SurveyedHarvest`): per Read, the jobs of its tables first (a table
+whose frame is open on every one of its values, `Comber.plan`), the jobs of its
+values once those are done, since a value of a table shows the frame its table
+took (`taken_by`). A value whose open coordinate is shown every name of its
+kind read in the plan (`Comber.shows_names`, `combing.names_read`; a scenario in
+the scenarios profile, no coordinate of kwp) waits for `Session.finish(reads)`,
+which comes when the whole plan is read, the front walk, the sought walk and
+the model's own search included, so its list is the whole one. `finish` returns
+the `Combed` in the order `Comber.__call__` always gave (every table's, then
+every value's, Read by Read) and joins the rows each made to their Read.
+`Session.cancel()` takes back every job not begun; `SurveyedHarvest` cancels
+when a document stops early (halted or an error). `Comber.__call__` is a Session
+every Read was added to. Before, the combing began only after the whole plan was
+read, the tables of all Reads first as a barrier.
+
 A table whose frame coordinate (scenario, year, `period_start`) is open on all
 its values gets this conversation once for the whole table, not once per row
 (`Combed.table_rows`, owner decisions 2026-11-06 and 2026-11-07); the first
@@ -745,7 +795,7 @@ groups and lacks one of them is broken, and the run stops at the start and names
 the prompt, for every run and every probe, as `spec.load` stops at a broken group
 (owner decision 2026-11-04). It used to harvest field by field instead, saying
 so only in a log line. A spec without groups is harvested field by field as
-before, so the two flows stand side by side until every profile has moved. Per document the run surveys, asks the plan's years and settings, reads and combs (`surveyed.SurveyedHarvest`), then folds, runs
+before, so the two flows stand side by side until every profile has moved. Per document the run surveys, asks the plan's years and settings, reads and combs (`surveyed.SurveyedHarvest`; the combing of a passage begins as soon as its reading is done), then folds, runs
 the compute step and writes the file with its stamp as for any harvest. This
 flow writes no anchors, sends no frame request, builds no map of places and has
 no slice gate (owner decision 2026-11-04): a number is asked for its

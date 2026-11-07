@@ -53,6 +53,14 @@ and target years. The rounds of a passage's values are a conversation as
 well: each later round asks for the next value after the answer it follows.
 A correction goes after the answer it is about, in its conversation.
 
+With a pool, the conversations of a passage's values run side by side once
+its rounds have named them, as the passages do, and none waits for another
+(owner decision 2026-11-07: every place stays taken to the end). A value
+read as no value of its parameter is asked for once more when every value of
+its passage is done, in the order of the values, so the rounds' conversation
+gets the messages it got when the values went one after another. A passage
+read goes to *on_read* the moment it is done, where its combing begins.
+
 Every coordinate asked is answered: the grammar requires it, and "the
 passage does not say" is one of the answers (`fields.UNSTATED`).
 
@@ -284,8 +292,9 @@ the value has read, as its request shows it (`known_shown`).
 (`runner.row_context`). *drawn(source)* says whether a request about
 *source* sends a figure's image, which a value only the image shows is
 read off (owner decisions 2026-11-05 and 2026-11-07); None sends none.
-*pool* reads passages side by side. No request of the reading has
-tools (owner decision 2026-11-05, ticket 26).
+*pool* reads passages side by side, and the values of a passage side by
+side once its rounds have named them (owner decision 2026-11-07). No
+request of the reading has tools (owner decision 2026-11-05, ticket 26).
 
 #### Reader.\_\_init\_\_
 
@@ -333,6 +342,8 @@ one message each in the order of the groups (`_value_group`); what
 that leaves open is asked in a conversation of its own
 (`combing.Comber`). *bases* are the plan's years (else those of
 *pairs*), *title_page* its title page's line (`Reader.__call__`).
+The values one after another: the steps `Reader.__call__` runs side
+by side with a pool.
 
 ## Functions
 

@@ -50,6 +50,14 @@ and target years. The rounds of a passage's values are a conversation as
 well: each later round asks for the next value after the answer it follows.
 A correction goes after the answer it is about, in its conversation.
 
+With a pool, the conversations of a passage's values run side by side once
+its rounds have named them, as the passages do, and none waits for another
+(owner decision 2026-11-07: every place stays taken to the end). A value
+read as no value of its parameter is asked for once more when every value of
+its passage is done, in the order of the values, so the rounds' conversation
+gets the messages it got when the values went one after another. A passage
+read goes to *on_read* the moment it is done, where its combing begins.
+
 Every coordinate asked is answered: the grammar requires it, and "the
 passage does not say" is one of the answers (`fields.UNSTATED`).
 
@@ -86,6 +94,8 @@ import copy
 import json
 import re
 import sys
+import threading
+from concurrent.futures import FIRST_COMPLETED, wait
 from dataclasses import dataclass, field, replace
 from typing import Callable, Optional
 
@@ -1614,20 +1624,42 @@ class _Job:
     # the rounds of the piece each value was read in, by its label, which a
     # value read as no value of its parameter is asked again in (`_again`)
     rounds: dict = field(default_factory=dict)
+    # the spec's groups of the parameter's coordinates (`groups_of`)
+    groups: list = field(default_factory=list)
+    # the survey's frame tuples of the passage, and each piece of it that a
+    # round answered (`_values`)
+    tuples: list = field(default_factory=list)
+    read_in: list = field(default_factory=list)
+    # What the conversations of the passage's values share while they run
+    # side by side (`Reader.__call__`): the counts of the reading and the
+    # labels, pieces, sentences and conversations of the copies.
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def count(self, asked: int = 0, corrected: int = 0,
+              failed: Optional[collections.Counter] = None) -> None:
+        """Adds what one value's conversation asked, corrected and refused
+        to the reading's counts (`Read`)."""
+        with self.lock:
+            self.result.asked += asked
+            self.result.corrected += corrected
+            if failed:
+                self.result.failed = dict(
+                    collections.Counter(self.result.failed) + failed)
 
     def clone(self, row: Row) -> Row:
         """A copy of *row* under a label of its own, for one more name of
         a value the reply names several of (`answers_each`): the piece it
         was read in, its sentences and its conversation so far go with it,
         the conversation as a branch of its own."""
-        label = row_label(self.made)
-        self.made += 1
-        self.views[label] = self.views.get(row.label, self.shown)
-        if row.label in self.probes:
-            self.probes[label] = dict(self.probes[row.label])
-        if row.label in self.threads:
-            self.threads[label] = self.threads[row.label].branch()
-            self.branched.add(label)
+        with self.lock:
+            label = row_label(self.made)
+            self.made += 1
+            self.views[label] = self.views.get(row.label, self.shown)
+            if row.label in self.probes:
+                self.probes[label] = dict(self.probes[row.label])
+            if row.label in self.threads:
+                self.threads[label] = self.threads[row.label].branch()
+                self.branched.add(label)
         return Row(label=label, item_index=row.item_index,
                    claim=copy.deepcopy(row.claim))
 
@@ -1686,8 +1718,9 @@ class Reader:
     (`runner.row_context`). *drawn(source)* says whether a request about
     *source* sends a figure's image, which a value only the image shows is
     read off (owner decisions 2026-11-05 and 2026-11-07); None sends none.
-    *pool* reads passages side by side. No request of the reading has
-    tools (owner decision 2026-11-05, ticket 26).
+    *pool* reads passages side by side, and the values of a passage side by
+    side once its rounds have named them (owner decision 2026-11-07). No
+    request of the reading has tools (owner decision 2026-11-05, ticket 26).
     """
 
     def __init__(self, spec, ask_values: Callable, ask_text: Callable,
@@ -1711,7 +1744,8 @@ class Reader:
                  budget: Optional[int] = None, *,
                  bases: Optional[list] = None,
                  title_page: Optional[Source] = None,
-                 settings: Optional[list] = None) -> list:
+                 settings: Optional[list] = None,
+                 on_read: Optional[Callable] = None) -> list:
         """One Read per parameter and passage the survey named for it. A
         section or figure longer than *budget* characters, two pages of the
         plan, is read in pieces of that size (`survey.pieces`). *bases* are
@@ -1721,7 +1755,9 @@ class Reader:
         request shows (owner decisions 2026-11-06); *settings* what the plan
         settles for all its values (`settings.PlanSettings`), which every
         request about a value's coordinates shows and may quote (owner
-        decision 2026-11-07)."""
+        decision 2026-11-07). *on_read(read)* takes each Read the moment it
+        is done, on the calling thread (`combing.Session.add`). The Reads
+        come back in the order of the parameters and their passages."""
         from .survey import pieces
 
         pairs: list = []
@@ -1744,16 +1780,82 @@ class Reader:
                 else:
                     jobs.append((parameter, source, source))
 
-        def one(job):
+        def start(job):
             parameter, source, shown = job
             owner = (source.owner_kind, source.owner_id)
-            return self.read(document_id, parameter, source,
-                             found.tuples_at(owner, "frame"), pairs, passages,
-                             shown=shown, budget=budget, bases=bases,
-                             title_page=title_page, settings=settings)
-        if self.pool is None:
-            return [one(job) for job in jobs]
-        return list(self.pool.map(one, jobs))
+            return self._start(document_id, parameter, source,
+                               found.tuples_at(owner, "frame"), pairs,
+                               passages, shown=shown, budget=budget,
+                               bases=bases, title_page=title_page,
+                               settings=settings)
+        if self.pool is not None:
+            return self._side_by_side(jobs, start, on_read)
+        reads = []
+        for one in jobs:
+            job, rows = start(one)
+            got = job.result if rows is None else self._finish(
+                job, rows, [self._coordinates(job, row) for row in rows])
+            if on_read is not None:
+                on_read(got)
+            reads.append(got)
+        return reads
+
+    def _side_by_side(self, jobs: list, start: Callable,
+                      on_read: Optional[Callable]) -> list:
+        """The Reads of *jobs* on the pool, in their order: the rounds of
+        each passage (`_start`), then the conversation of each value they
+        named (`_coordinates`), then what ends the passage (`_finish`), each
+        a task of its own that waits for no other. Only the calling thread
+        waits, and hands in a passage's next tasks when its last ones are
+        done; a task that fails takes back every task not yet begun, as a
+        pool's map does."""
+        reads: list = [None] * len(jobs)
+        open_values: dict = {}
+        pending: dict = {}
+
+        def submit(step, index, task, *args) -> None:
+            pending[self.pool.submit(task, *args)] = (step, index)
+        for index, one in enumerate(jobs):
+            submit("rounds", index, start, one)
+        try:
+            while pending:
+                done, _ = wait(list(pending), return_when=FIRST_COMPLETED)
+                for future in done:
+                    step, index = pending.pop(future)
+                    got = future.result()
+                    if step == "rounds":
+                        job, rows = got
+                        if rows:
+                            open_values[index] = (job, rows,
+                                                  [None] * len(rows),
+                                                  [len(rows)])
+                            for at, row in enumerate(rows):
+                                submit(("value", at), index,
+                                       self._coordinates, job, row)
+                            continue
+                        if rows is not None:
+                            submit("finish", index, self._finish, job,
+                                   rows, [])
+                            continue
+                        got = job.result
+                    elif step != "finish":
+                        job, rows, eaches, left = open_values[index]
+                        eaches[step[1]] = got
+                        left[0] -= 1
+                        if left[0]:
+                            continue
+                        del open_values[index]
+                        submit("finish", index, self._finish, job, rows,
+                               eaches)
+                        continue
+                    reads[index] = got
+                    if on_read is not None:
+                        on_read(got)
+        except BaseException:
+            for future in pending:
+                future.cancel()
+            raise
+        return reads
 
     def context_of(self, source: Source, tuples: list, passages: dict,
                    budget: Optional[int] = None,
@@ -1785,7 +1887,27 @@ class Reader:
         one message each in the order of the groups (`_value_group`); what
         that leaves open is asked in a conversation of its own
         (`combing.Comber`). *bases* are the plan's years (else those of
-        *pairs*), *title_page* its title page's line (`Reader.__call__`)."""
+        *pairs*), *title_page* its title page's line (`Reader.__call__`).
+        The values one after another: the steps `Reader.__call__` runs side
+        by side with a pool."""
+        job, rows = self._start(document_id, parameter, source, tuples,
+                                pairs, passages, shown, budget, bases=bases,
+                                title_page=title_page, settings=settings)
+        if rows is None:
+            return job.result
+        return self._finish(job, rows,
+                            [self._coordinates(job, row) for row in rows])
+
+    def _start(self, document_id: int, parameter, source: Source,
+               tuples: list, pairs: list, passages: dict,
+               shown: Optional[Source] = None,
+               budget: Optional[int] = None, *,
+               bases: Optional[list] = None,
+               title_page: Optional[Source] = None,
+               settings: Optional[list] = None) -> tuple:
+        """(the passage's job, the rows its rounds named): the values of the
+        passage in rounds (`_values`). The rows are None where no round came
+        to anything; the job's Read is then final (`Read.unread`)."""
         shown = shown or source
         slots = slots_of(self.spec, parameter)
         # The reading's spec rides on the batch, so the fold checks a value
@@ -1826,7 +1948,8 @@ class Reader:
         job = _Job(document_id, parameter, source, shown, slots, context,
                    bases, fixed, frames, merged, passages, result,
                    pairs=list(pairs), extra=list(beside),
-                   order=list(passages.values()), budget=budget)
+                   order=list(passages.values()), budget=budget,
+                   groups=groups_of(self.spec, slots), tuples=list(tuples))
         rows, views = self._values(job)
         if not views:
             result.unread = True
@@ -1837,30 +1960,49 @@ class Reader:
                            kind=source.owner_kind, owner=source.owner_id,
                            values=0, unread=True, why=result.why,
                            asked=result.asked)
-            return result
+            return job, None
         job.made = len(rows)
-        groups = groups_of(self.spec, slots)
+        job.read_in = list(views)
+        return job, rows
+
+    def _finish(self, job: _Job, rows: list, eaches: list) -> Read:
+        """The Read of *job* once every value its rounds named (*rows*) has
+        been asked its coordinates (*eaches*, per row the rows its
+        conversation came to): a value read as no value of its parameter is
+        asked for once more, in the order of the values (`_again`, owner
+        decision 2026-11-07), then what the spec derives, what the frame
+        gives, the ranges, and what no reply answered."""
+        slots = job.slots
+        before = [slot for group, group_slots in job.groups
+                  for slot in in_group_order(group, group_slots)]
         grouped: list = []
-        for row in rows:
-            grouped.extend(self._coordinates(job, row, groups))
+        for each in eaches:
+            for one in list(each):
+                if fields.closed(before, one.claim):
+                    for named in self._again(job, one, before):
+                        each = each + self._coordinates(job, named)
+            grouped.extend(each)
         rows = grouped
-        evidence = list(views) + fixed + list(beside) + frames
+        evidence = list(job.read_in) + job.fixed + job.extra + job.frames
         # What the spec derives from the unit, where the unit question chose
         # an entry; where it chose none, the coordinate was asked.
-        for axis in fields.axis_slots(parameter):
+        for axis in fields.axis_slots(job.parameter):
             fields.apply_derived([row for row in rows
-                                  if fields.derives(axis, row.claim, parameter)],
+                                  if fields.derives(axis, row.claim,
+                                                    job.parameter)],
                                  axis)
         inherit(rows, [s for s in self.frame_slots
                        if s.name in {x.name for x in slots}],
-                tuples, pairs, evidence)
+                job.tuples, job.pairs, evidence)
         link_ranges(rows, slots)
+        result = job.result
         result.unanswered = mark_unanswered(rows, slots)
         result.claims = [row.claim for row in rows]
         result.probes = [job.probes.get(row.label, {}) for row in rows]
         if self.trace is not None:
-            self.trace("read", document_id, parameter=parameter.uri,
-                       kind=source.owner_kind, owner=source.owner_id,
+            self.trace("read", job.document_id,
+                       parameter=job.parameter.uri,
+                       kind=job.source.owner_kind, owner=job.source.owner_id,
                        values=len(rows), asked=result.asked,
                        corrected=result.corrected, failed=result.failed,
                        unanswered=result.unanswered)
@@ -1876,8 +2018,9 @@ class Reader:
             entry = reply.get(slot.name)
             probe = entry.get("probe") if isinstance(entry, dict) else None
             if isinstance(probe, str) and probe.strip():
-                job.probes.setdefault(row.label, {})[slot.name] = \
-                    probe.strip()
+                with job.lock:
+                    job.probes.setdefault(row.label, {})[slot.name] = \
+                        probe.strip()
 
     def _values(self, job: _Job) -> tuple:
         """(rows, [each piece shown]) of the passage, its values read in
@@ -1908,8 +2051,7 @@ class Reader:
             views.append(view)
         return rows, views
 
-    def _coordinates(self, job: _Job, row: Row, groups: list,
-                     again: bool = True) -> list:
+    def _coordinates(self, job: _Job, row: Row) -> list:
         """[*row* and the rows made beside it], each coordinate asked in
         one message, in the order of the groups and of each group's
         coordinates (owner decision 2026-11-07). A value stated for several
@@ -1917,12 +2059,11 @@ class Reader:
         each asks the coordinates after it alone. A coordinate with an entry
         a value must have (`fields.kept`) that reads a row as no value of
         its parameter closes the coordinates after it, which are never
-        asked (`out_of_slice`); with *again* the value is asked for once
-        more (`_again`), and a value named instead asks its coordinates
-        without it."""
+        asked (`out_of_slice`); the value is asked for once more when every
+        value of the passage is done (`_finish`)."""
         each = [row]
         before: list = []
-        for group, group_slots in groups:
+        for group, group_slots in job.groups:
             for slot in in_group_order(group, group_slots):
                 for one in list(each):
                     if fields.closed(before, one.claim):
@@ -1933,12 +2074,6 @@ class Reader:
                         continue
                     each += self._value_group(job, one, group, [slot])
                 before.append(slot)
-        if again:
-            for one in list(each):
-                if fields.closed(before, one.claim):
-                    for named in self._again(job, one, before):
-                        each += self._coordinates(job, named, groups,
-                                                  again=False)
         return each
 
     def _again(self, job: _Job, row: Row, slots: list) -> list:
@@ -1954,11 +2089,9 @@ class Reader:
             return []
         slot = next(one for one in slots
                     if fields.kept(one, row.claim) is False)
-        result = job.result
         reply = rounds.ask({WRONG: {**shown_value(row.claim), "what": say(
             "value_not_kept", given=row.claim.get(slot.name))}})
-        result.asked += 1
-        result.corrected += 1
+        job.count(asked=1, corrected=1)
         claim = claim_of(reply, rounds.drawn) if isinstance(reply, dict) \
             else None
         if claim is None:
@@ -2064,7 +2197,6 @@ class Reader:
                  if row.claim.get(f"{slot.name}_state") != READ]
         if not asked:
             return []
-        result = job.result
         view = job.views.get(row.label, job.shown)
         base = group_context(job.context, asked, self.frame_slots, job.bases)
         read = self.known(row.claim, [slot.name for slot in asked])
@@ -2075,14 +2207,15 @@ class Reader:
             # show alone: shown again with what it has read.
             context["value"] = {**shown_value(row.claim),
                                 **({"read": read} if read else {})}
-        job.threads.setdefault(row.label, Thread())
+        with job.lock:
+            job.threads.setdefault(row.label, Thread())
 
         def ask(one: Row, follow: Optional[dict] = None):
             return spread(self.ask_text(view, job.parameter, group, asked,
                                         one, context, job.threads[one.label],
                                         follow), asked)
         reply = ask(row)
-        result.asked += 1
+        job.count(asked=1)
         if not isinstance(reply, dict):
             return []
         # What the value has read is shown too, and may be quoted (owner
@@ -2109,7 +2242,6 @@ class Reader:
         *window* is where the answer was read: the value's own request, or
         ("near", 1) for the second reading. *ask(row, follow)* sends a
         message in *row*'s conversation. [The rows made beside *row*]."""
-        result = job.result
         turned = turned or {}
         replies = answers_each(reply, asked)
         rows = [row] + [job.clone(row) for _ in replies[1:]]
@@ -2118,8 +2250,7 @@ class Reader:
             self._probed(job, one, answer, asked)
             failed = job.merged([one], {slot.name: value_replies(
                 answer, slot, one.label, window) for slot in asked}, evidence)
-            result.failed = dict(collections.Counter(result.failed)
-                                 + refused_of(failed))
+            job.count(failed=refused_of(failed))
             told = [entry for entry in value_corrections(one, failed, asked,
                                                          answer)
                     if entry["coordinate"] not in turned
@@ -2130,8 +2261,7 @@ class Reader:
             return rows[1:]
         given = {one.label: answer for one, answer in zip(rows, replies)}
         told = told_once(corrections, given, asked, named=len(rows) > 1)
-        result.corrected += len(told)
-        result.asked += 1
+        job.count(asked=1, corrected=len(told))
         again = ask(row, {CORRECTIONS: told})
         if not isinstance(again, dict):
             return rows[1:]

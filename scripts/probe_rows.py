@@ -251,10 +251,16 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
         return [source for source in passages.get(document, ())
                 if (source.owner_kind, source.owner_id) not in exclude]
 
+    # --parallel requests with the model at once, held by the run's queue:
+    # a conversation that waits for its search holds no place (owner
+    # decision 2026-11-07). The conversations may be as many as the run may
+    # have requests open.
+    from docpipe.extraction import throttle
+    runner.start_fixed_limit(args.parallel)
+    pool = ThreadPoolExecutor(max(args.parallel, throttle.MAXIMUM))
     # Which names of a document mean the same thing, asked once it is folded,
     # as the run asks it; None for a spec that merges none.
     namer = runner.make_namer(spec, lambda document: every(document, set()))
-    pool = ThreadPoolExecutor(args.parallel)
     rank = seek = None
     profile = active_profile()
     own = profile.component("extraction", "FRONT_PAGE_PARAMETERS") or ()
@@ -459,7 +465,10 @@ def main() -> int:
     parser.add_argument("--documents",
                         help="with --whole: every passage of these "
                              "documents, comma-separated ids")
-    parser.add_argument("--parallel", type=int, default=2)
+    parser.add_argument("--parallel", type=int, default=2,
+                        help="requests at once; with --survey, requests "
+                             "with the model at once, however many "
+                             "conversations are open")
     parser.add_argument("--image-root", type=Path, default=None)
     parser.add_argument("--whole", action="store_true",
                         help="also the frame and every coordinate")

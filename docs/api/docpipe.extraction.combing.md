@@ -65,6 +65,12 @@ model can give all of them a value holds for at once (`names_read`, owner
 decision 2026-11-07); each still needs a quote that holds it, and each makes
 a row of its own (`reading.answers_each`).
 
+A passage is combed the moment its reading is done, while the rest of the
+plan is still read (`Session`, owner decision 2026-11-07: every place stays
+taken to the end): its tables first, then its values. A value shown every
+name read in the plan waits until the whole plan is read, so its list is
+the whole one.
+
 Nothing is checked here beyond what the harvest checks everywhere. Every
 answer goes through `merge_field`, and what it refuses is asked once more in
 ONE message after that answer, with the reason; in the search, a quote that
@@ -169,6 +175,52 @@ def __init__(self, spec, ask: Callable, rank: Optional[Callable],
              known: Callable, *, bases: Optional[Callable] = None,
              pool=None, trace=None, check: Optional[Callable] = None)
 ```
+
+#### Comber.session
+
+```python
+def session(self, document_id: int, passages: dict, pairs: list,
+            budget: Optional[int] = None,
+            bases: Optional[list] = None, *, title_page=None,
+            settings: Optional[list] = None) -> "Session"
+```
+
+The combing of one document, begun before its reading
+(`Session`).
+
+#### Comber.plan
+
+```python
+def plan(self, read) -> tuple
+```
+
+([table jobs], [value jobs]) of one Read: a job per table whose
+frame is open on every one of its values, asked for its first value,
+and a job per value with a coordinate still open besides those its
+table's job asks.
+
+#### Comber.shows_names
+
+```python
+@staticmethod
+def shows_names(job) -> bool
+```
+
+Is *job* a value's whose open coordinate is shown every name of
+its kind read in the plan (`names_read`)? A table's never is: what
+it asks for all its values names one thing (`several`).
+
+#### Comber.comb_job
+
+```python
+def comb_job(self, job, session: "Session",
+             read_so_far: Optional[dict] = None)
+```
+
+The Combed of one job of `plan` in *session*'s document: the
+conversation of its value, shown the names *read_so_far* where its
+open coordinate may name several things; a table's answers then go
+to its other values (`taken_by`).
 
 #### Comber.comb_groups
 

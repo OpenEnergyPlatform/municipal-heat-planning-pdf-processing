@@ -1618,6 +1618,18 @@ def start_limit() -> None
 
 Steer the requests by the server's queue unless EXTRACT_LIMIT_ADAPTIVE=0.
 
+### start_fixed_limit
+
+```python
+def start_fixed_limit(requests: int) -> None
+```
+
+The run's one queue (`SCHEDULER`), with a limit of *requests* open at
+once that does not move: a probe's places (owner decision 2026-11-07,
+the places count requests with the model, not the conversations open,
+so one that waits for its search holds none). Every client made after
+this sends through it (`_client`).
+
 ### start_counting
 
 ```python

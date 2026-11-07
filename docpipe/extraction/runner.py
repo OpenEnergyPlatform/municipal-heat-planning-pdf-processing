@@ -1741,6 +1741,19 @@ def start_limit() -> None:
                  LIMIT.maximum)
 
 
+def start_fixed_limit(requests: int) -> None:
+    """The run's one queue (`SCHEDULER`), with a limit of *requests* open at
+    once that does not move: a probe's places (owner decision 2026-11-07,
+    the places count requests with the model, not the conversations open,
+    so one that waits for its search holds none). Every client made after
+    this sends through it (`_client`)."""
+    global LIMIT, SCHEDULER
+    from . import throttle
+    LIMIT = throttle.AdaptiveLimit(start=requests, minimum=requests,
+                                   maximum=requests)
+    SCHEDULER = scheduler.Scheduler(LIMIT)
+
+
 class PromptCounter:
     """The prompt of a request counted with the served model's own tokenizer.
 

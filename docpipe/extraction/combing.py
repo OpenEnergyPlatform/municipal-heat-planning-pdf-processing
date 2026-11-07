@@ -62,6 +62,12 @@ model can give all of them a value holds for at once (`names_read`, owner
 decision 2026-11-07); each still needs a quote that holds it, and each makes
 a row of its own (`reading.answers_each`).
 
+A passage is combed the moment its reading is done, while the rest of the
+plan is still read (`Session`, owner decision 2026-11-07: every place stays
+taken to the end): its tables first, then its values. A value shown every
+name read in the plan waits until the whole plan is read, so its list is
+the whole one.
+
 Nothing is checked here beyond what the harvest checks everywhere. Every
 answer goes through `merge_field`, and what it refuses is asked once more in
 ONE message after that answer, with the reason; in the search, a quote that
@@ -84,6 +90,8 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import copy
+import threading
+from concurrent.futures import Future, wait
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Callable, Optional
@@ -373,6 +381,128 @@ def taken_by(first: dict, others: list, names: list) -> None:
                 claim[f"{name}_window"] = ["table", 2]
 
 
+class Session:
+    """The combing of one document while it is read (owner decision
+    2026-11-07: every place stays taken to the end).
+
+    *add(read)* begins a Read's combing the moment its reading is done:
+    its tables' jobs at once, its values' once those are done, since a value
+    of a table shows the frame its table took. A value shown every name of
+    its kind read in the plan (`Comber.shows_names`) waits for *finish(reads)*,
+    which comes when the whole plan is read: it asks those, waits for every
+    job and gives [Combed] as `Comber.__call__` does, every table's and then
+    every value's, Read by Read, the rows each made joined to their Read.
+    With the comber's pool the jobs run side by side and only *finish*
+    waits; without one each runs at once. *cancel()* takes back every job
+    not begun, and none is begun after it.
+    """
+
+    def __init__(self, comber: "Comber", document_id: int, passages: dict,
+                 pairs: list, budget: Optional[int] = None,
+                 bases: Optional[list] = None, *, title_page=None,
+                 settings: Optional[list] = None):
+        self.comber = comber
+        self.document_id = document_id
+        self.passages = passages
+        self.pairs = pairs
+        self.budget = budget
+        self.bases = bases
+        self.title_page = title_page
+        self.settings = settings
+        self._lock = threading.Condition()
+        self._plans: dict = {}      # id(read): (tables, values)
+        self._futures: dict = {}    # id(job): its Combed to come
+        self._held: list = []
+        self._waiting = 0           # Reads whose values wait for tables
+        self._cancelled = False
+
+    def _start(self, job, read_so_far: Optional[dict] = None) -> None:
+        if self.comber.pool is None:
+            future: Future = Future()
+            future.set_result(self.comber.comb_job(job, self, read_so_far))
+        else:
+            future = self.comber.pool.submit(self.comber.comb_job, job, self,
+                                             read_so_far)
+        with self._lock:
+            self._futures[id(job)] = future
+
+    def add(self, read) -> None:
+        """Begins the combing of *read*, once."""
+        with self._lock:
+            if id(read) in self._plans or self._cancelled:
+                return
+            tables, values = self.comber.plan(read)
+            self._plans[id(read)] = (read, tables, values)
+            self._held += [job for job in values
+                           if self.comber.shows_names(job)]
+            now = [job for job in values
+                   if not self.comber.shows_names(job)]
+            if tables and self.comber.pool is not None:
+                self._waiting += 1
+        if not tables or self.comber.pool is None:
+            for job in tables + now:
+                self._start(job)
+            return
+        left = [len(tables)]
+
+        def table_done(_future) -> None:
+            with self._lock:
+                left[0] -= 1
+                if left[0]:
+                    return
+                go = not self._cancelled
+            try:
+                for job in now if go else ():
+                    self._start(job)
+            finally:
+                with self._lock:
+                    self._waiting -= 1
+                    self._lock.notify_all()
+        for job in tables:
+            self._start(job)
+            self._futures[id(job)].add_done_callback(table_done)
+
+    def finish(self, reads: list) -> list:
+        """[Combed] of every Read of *reads*, once the whole plan is read
+        (a Read not added yet is added now)."""
+        for read in reads:
+            self.add(read)
+        # Every table done first: a value of one shows its table's frame.
+        with self._lock:
+            while self._waiting:
+                self._lock.wait()
+        read_so_far = names_read(self.comber.spec, reads)
+        for job in list(self._held):
+            self._start(job, read_so_far)
+        plans = [self._plans[id(read)] for read in reads]
+        jobs = ([job for _read, tables, _values in plans for job in tables]
+                + [job for _read, _tables, values in plans for job in values])
+        try:
+            combed = [self._futures[id(job)].result() for job in jobs]
+        except BaseException:
+            self.cancel()
+            raise
+        # A value asked for several names is one row per name (owner
+        # decision 2026-11-06): the rows made join their value's reading.
+        for job, result in zip(jobs, combed):
+            read, index = job[0], job[4]
+            probes = read.probes[index] if index < len(read.probes) else {}
+            if result.made:
+                read.probes = list(read.probes) + [{}] * max(
+                    0, len(read.claims) - len(read.probes))
+                read.claims.extend(row.claim for row in result.made)
+                read.probes.extend(dict(probes) for _ in result.made)
+        return combed
+
+    def cancel(self) -> None:
+        """Takes back every job not begun; none is begun after this."""
+        with self._lock:
+            self._cancelled = True
+            futures = list(self._futures.values())
+        for future in futures:
+            future.cancel()
+
+
 class Comber:
     """(document_id, reads, passages, pairs, budget) -> [Combed], one per
     read value with an open coordinate and one per table whose frame is
@@ -429,81 +559,98 @@ class Comber:
         conversations run first. *bases* are the plan's years
         (`years.PlanYears`), else those of *pairs*; *title_page* the line of
         the plan's title page, *settings* what the plan settles for all its
-        values (`settings.PlanSettings`), both shown to every conversation."""
+        values (`settings.PlanSettings`), both shown to every conversation.
+        The same as a `Session` every Read was added to."""
+        session = self.session(document_id, passages, pairs, budget, bases,
+                               title_page=title_page, settings=settings)
+        for read in reads:
+            session.add(read)
+        return session.finish(reads)
+
+    def session(self, document_id: int, passages: dict, pairs: list,
+                budget: Optional[int] = None,
+                bases: Optional[list] = None, *, title_page=None,
+                settings: Optional[list] = None) -> "Session":
+        """The combing of one document, begun before its reading
+        (`Session`)."""
+        return Session(self, document_id, passages, pairs, budget, bases,
+                       title_page=title_page, settings=settings)
+
+    def plan(self, read) -> tuple:
+        """([table jobs], [value jobs]) of one Read: a job per table whose
+        frame is open on every one of its values, asked for its first value,
+        and a job per value with a coordinate still open besides those its
+        table's job asks."""
         tables: list = []
         values: list = []
-        for read in reads:
-            parameter = read.batch.parameter
-            asked = self._asked(parameter)
-            slots = [slot for slot, _group in asked]
-            by_table: dict = {}
-            for index, claim in enumerate(read.claims):
-                source = source_of(read.batch, claim)
-                if source.owner_kind == "table":
-                    by_table.setdefault(source.owner_id, []).append(
-                        (index, claim, source))
-            taken: dict = {}
-            for owner, entries in by_table.items():
-                if len(entries) < 2:
-                    continue
-                common = [slot for slot, group in asked
-                          if group.read_in == "survey" and not several(slot)
-                          and all(claim.get(f"{slot.name}_state") in OPEN
-                                  for _i, claim, _s in entries)]
-                if not common:
-                    continue
-                index, claim, source = entries[0]
-                tables.append((read, parameter, source, common, index,
-                               [one for _i, one, _s in entries[1:]]))
-                for i, _claim, _source in entries:
-                    taken.setdefault(i, set()).update(s.name for s in common)
-            for index, claim in enumerate(read.claims):
-                names = set(open_of(claim, slots)) - taken.get(index, set())
-                if names:
-                    values.append((read, parameter,
-                                   source_of(read.batch, claim),
-                                   [slot for slot in slots
-                                    if slot.name in names], index, []))
+        parameter = read.batch.parameter
+        asked = self._asked(parameter)
+        slots = [slot for slot, _group in asked]
+        by_table: dict = {}
+        for index, claim in enumerate(read.claims):
+            source = source_of(read.batch, claim)
+            if source.owner_kind == "table":
+                by_table.setdefault(source.owner_id, []).append(
+                    (index, claim, source))
+        taken: dict = {}
+        for owner, entries in by_table.items():
+            if len(entries) < 2:
+                continue
+            common = [slot for slot, group in asked
+                      if group.read_in == "survey" and not several(slot)
+                      and all(claim.get(f"{slot.name}_state") in OPEN
+                              for _i, claim, _s in entries)]
+            if not common:
+                continue
+            index, claim, source = entries[0]
+            tables.append((read, parameter, source, common, index,
+                           [one for _i, one, _s in entries[1:]]))
+            for i, _claim, _source in entries:
+                taken.setdefault(i, set()).update(s.name for s in common)
+        for index, claim in enumerate(read.claims):
+            names = set(open_of(claim, slots)) - taken.get(index, set())
+            if names:
+                values.append((read, parameter,
+                               source_of(read.batch, claim),
+                               [slot for slot in slots
+                                if slot.name in names], index, []))
+        return tables, values
 
-        read_so_far = names_read(self.spec, reads)
+    @staticmethod
+    def shows_names(job) -> bool:
+        """Is *job* a value's whose open coordinate is shown every name of
+        its kind read in the plan (`names_read`)? A table's never is: what
+        it asks for all its values names one thing (`several`)."""
+        read, _parameter, _source, slots, index, others = job
+        claim = read.claims[index]
+        return not others and any(several(slot)
+                                  and slot.name in open_of(claim, slots)
+                                  for slot in slots)
 
-        def one(job):
-            read, parameter, source, slots, index, others = job
-            claim = read.claims[index]
-            probes = read.probes[index] if index < len(read.probes) else {}
-            shown = list(dict.fromkeys(
-                name for slot in slots if several(slot)
-                and slot.name in open_of(claim, slots)
-                for name in read_so_far.get(slot.merged, ())))
-            result = self.comb(document_id, parameter, source, slots,
-                               [claim], passages, pairs, budget,
-                               probes=probes, split=not others,
-                               bases=tuple(bases) if bases is not None
-                               else None, whole_table=len(others),
-                               names_so_far=shown, title_page=title_page,
-                               settings=settings)
-            if others:
-                taken_by(claim, others, [slot.name for slot in slots])
-            return result
-
-        def run(jobs: list) -> list:
-            if self.pool is None:
-                return [one(job) for job in jobs]
-            return list(self.pool.map(one, jobs))
-        # The tables first: a value of one shows the frame its table took.
-        combed = run(tables)
-        combed += run(values)
-        # A value asked for several names is one row per name (owner
-        # decision 2026-11-06): the rows made join their value's reading.
-        for job, result in zip(tables + values, combed):
-            read, index = job[0], job[4]
-            probes = read.probes[index] if index < len(read.probes) else {}
-            if result.made:
-                read.probes = list(read.probes) + [{}] * max(
-                    0, len(read.claims) - len(read.probes))
-                read.claims.extend(row.claim for row in result.made)
-                read.probes.extend(dict(probes) for _ in result.made)
-        return combed
+    def comb_job(self, job, session: "Session",
+                 read_so_far: Optional[dict] = None):
+        """The Combed of one job of `plan` in *session*'s document: the
+        conversation of its value, shown the names *read_so_far* where its
+        open coordinate may name several things; a table's answers then go
+        to its other values (`taken_by`)."""
+        read, parameter, source, slots, index, others = job
+        claim = read.claims[index]
+        probes = read.probes[index] if index < len(read.probes) else {}
+        shown = list(dict.fromkeys(
+            name for slot in slots if several(slot)
+            and slot.name in open_of(claim, slots)
+            for name in (read_so_far or {}).get(slot.merged, ())))
+        result = self.comb(session.document_id, parameter, source, slots,
+                           [claim], session.passages, session.pairs,
+                           session.budget, probes=probes, split=not others,
+                           bases=tuple(session.bases)
+                           if session.bases is not None else None,
+                           whole_table=len(others), names_so_far=shown,
+                           title_page=session.title_page,
+                           settings=session.settings)
+        if others:
+            taken_by(claim, others, [slot.name for slot in slots])
+        return result
 
     def comb_groups(self, document_id: int, parameter, source, slots: list,
                     claims: list, passages: dict, pairs: list,

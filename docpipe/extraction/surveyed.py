@@ -490,77 +490,92 @@ class SurveyedHarvest:
                                               ("settings", settings))
                 if value is not None}
 
+        comber = self.comber_of(spec)
+        # Each passage read is combed the moment its reading is done, while
+        # the rest of the plan is read (`combing.Session`, owner decision
+        # 2026-11-07: every place stays taken to the end); what has not
+        # begun when the document stops early is taken back.
+        session = (comber.session(document_id, shown, frame_pairs(found),
+                                  budget, bases, title_page=title_page,
+                                  settings=settings)
+                   if comber is not None else None)
+        hand_on = {} if session is None else {"on_read": session.add}
+
         def read(survey: Found) -> list:
             return self.reader_of(spec)(document_id, survey, shown, budget,
-                                        **plan)
-        reads = read(found)
-        if self.halted():
-            return None
-        front = Found(True)
-        uris = [parameter.uri for parameter in spec.parameters
-                if parameter.uri in self.front
-                and (not only or parameter.uri in only)]
-        # Only after a survey of the whole plan, as the walk below.
-        if passages is None and also is None and self.title in uris:
-            walk = front_walk(found, reads, sources, uris, self.title, read,
-                              self.halted)
-            if walk is None or self.halted():
-                return None
-            front, more = walk
-            reads = reads + more
-        combed: list = []
-        comber = self.comber_of(spec)
-        sought = Found(True)
-        # Only after a survey of the whole plan: a survey of some passages
-        # names none for a parameter the rest of the plan may hold.
-        if comber is not None and passages is None and also is None:
-            missing = [parameter for parameter in spec.parameters
-                       if (not only or parameter.uri in only)
-                       and not found.passages_of(parameter.uri)]
-            lists = sought_lists(comber.rank, document_id, missing,
-                                 getattr(comber, "seek", None))
-
-            def seen(uri, owner, rank):
-                if comber.trace is not None:
-                    comber.trace("seek", document_id, parameter=uri,
-                                 kind=owner[0], owner=owner[1], rank=rank)
-            walk = sought_walk(found, lists, read, seen, self.halted)
-            if walk is None or self.halted():
-                return None
-            sought, more = walk
-            reads = reads + more
-            # A parameter the walk read no value of is searched for by the
-            # model itself; each passage it names is read and is one of the
-            # parameter's sources (owner decision 2026-11-07).
-            seeker = self.seeker_of(spec)
-            for uri in (unvalued([p.uri for p in missing], more)
-                        if seeker is not None else ()):
-                parameter = spec.by_uri[uri]
-                walked = [owner[1:] for owner in sought.walked
-                          if owner[0] == uri]
-                places = seeker(document_id, parameter, shown, walked,
-                                budget)
-                if self.halted():
-                    return None
-                if not places:
-                    continue
-                survey = carried(found)
-                merge(survey, [Answer((s.owner_kind, s.owner_id), [uri])
-                               for s in places])
-                merge(sought, [Answer((s.owner_kind, s.owner_id), [uri])
-                               for s in places])
-                reads = reads + read(survey)
-                if self.halted():
-                    return None
-        if comber is not None:
-            combed = comber(document_id, reads, shown, frame_pairs(found),
-                            budget, **({"bases": bases} if bases is not None
-                                       else {}),
-                            title_page=title_page, settings=settings)
+                                        **plan, **hand_on)
+        finished = False
+        try:
+            reads = read(found)
             if self.halted():
                 return None
-        return taken_of(document_id, spec, found, reads, combed, shown,
-                        sought, front)
+            front = Found(True)
+            uris = [parameter.uri for parameter in spec.parameters
+                    if parameter.uri in self.front
+                    and (not only or parameter.uri in only)]
+            # Only after a survey of the whole plan, as the walk below.
+            if passages is None and also is None and self.title in uris:
+                walk = front_walk(found, reads, sources, uris, self.title,
+                                  read, self.halted)
+                if walk is None or self.halted():
+                    return None
+                front, more = walk
+                reads = reads + more
+            combed: list = []
+            sought = Found(True)
+            # Only after a survey of the whole plan: a survey of some
+            # passages names none for a parameter the rest of the plan may
+            # hold.
+            if comber is not None and passages is None and also is None:
+                missing = [parameter for parameter in spec.parameters
+                           if (not only or parameter.uri in only)
+                           and not found.passages_of(parameter.uri)]
+                lists = sought_lists(comber.rank, document_id, missing,
+                                     getattr(comber, "seek", None))
+
+                def seen(uri, owner, rank):
+                    if comber.trace is not None:
+                        comber.trace("seek", document_id, parameter=uri,
+                                     kind=owner[0], owner=owner[1],
+                                     rank=rank)
+                walk = sought_walk(found, lists, read, seen, self.halted)
+                if walk is None or self.halted():
+                    return None
+                sought, more = walk
+                reads = reads + more
+                # A parameter the walk read no value of is searched for by
+                # the model itself; each passage it names is read and is one
+                # of the parameter's sources (owner decision 2026-11-07).
+                seeker = self.seeker_of(spec)
+                for uri in (unvalued([p.uri for p in missing], more)
+                            if seeker is not None else ()):
+                    parameter = spec.by_uri[uri]
+                    walked = [owner[1:] for owner in sought.walked
+                              if owner[0] == uri]
+                    places = seeker(document_id, parameter, shown, walked,
+                                    budget)
+                    if self.halted():
+                        return None
+                    if not places:
+                        continue
+                    survey = carried(found)
+                    merge(survey, [Answer((s.owner_kind, s.owner_id), [uri])
+                                   for s in places])
+                    merge(sought, [Answer((s.owner_kind, s.owner_id), [uri])
+                                   for s in places])
+                    reads = reads + read(survey)
+                    if self.halted():
+                        return None
+            if session is not None:
+                combed = session.finish(reads)
+                if self.halted():
+                    return None
+            finished = True
+            return taken_of(document_id, spec, found, reads, combed, shown,
+                            sought, front)
+        finally:
+            if session is not None and not finished:
+                session.cancel()
 
 
 def take_found(whole: SurveyedHarvest, document_id: int, kept: list,
