@@ -42,7 +42,11 @@ The rounds are one conversation (owner decisions 2026-11-07, `thread.py`):
 the first message shows the value, the coordinates asked and the first
 hits; each later one follows the answer before it and brings only what is
 new, what the model fetched, the next hits, what could not be fetched, and
-what was wrong, a find the check turned told once.
+what was wrong, a find the check turned told once. A value whose open
+coordinate may name several things, such as a scenario, is shown every name
+of that kind read in the plan so far, each once, so the model can give all
+of them a value holds for at once (`names_read`, owner decision 2026-11-07);
+each still needs a quote that holds it.
 Only then is a coordinate no reply found `unstated`, a finding about the
 plan; one whose request no longer fits the model's window before that ends
 `exhausted`, a finding about the run.
@@ -50,7 +54,11 @@ plan; one whose request no longer fits the model's window before that ends
 Nothing is checked here. Every answer goes through `merge_field`, and what it
 refuses is asked once more with the reason, which offers no "not stated"
 either: a quote that lacks its answer is to be fixed or the coordinate left
-out (`NOT_IN_QUOTE`). Its quote may stand in whatever
+out (`NOT_IN_QUOTE`). Where the reply made several rows, what it refuses on
+any of them is asked in ONE message after that answer, naming each refused
+name with its quote (`reading.told_once`, owner decision 2026-11-07), and
+each answer goes to the row of its name, a changed name to the next row
+still open, a further name to a row of its own (`reading.routed`). Its quote may stand in whatever
 the request showed of the plan (owner decision 2026-11-05): a passage the
 model fetched, a hit's line or title, the title or heading of a passage, the
 value's passage and its section, a wording the value has read. The
@@ -74,12 +82,16 @@ Author: Felix Vossel
 
 What `__all__` names, and where each name is defined:
 
-- `ABOUT`
-- `CHECK_PROMPT_ID`
+- `ABOUT` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
+- `CHECK_FOLLOWS` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
+- `CHECK_PROMPT_ID` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
 - `COMB_PROMPT_ID`
-- `NOT_ABOUT`
+- `NOT_ABOUT` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
 - `OPEN`
 - `SHOWN` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
+- `check_example` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
+- `check_response_format` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
+- `place_text` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
 - `shown_hits` from [docpipe.extraction.reading](docpipe.extraction.reading.md)
 
 ## Classes
@@ -173,7 +185,8 @@ def comb(self, document_id: int, parameter, source, slots: list,
          bases: Optional[tuple] = None,
          first: Optional[list] = None, group=None,
          probes: Optional[dict] = None, split: bool = False,
-         whole_table: int = 0) -> Combed
+         whole_table: int = 0,
+         names_so_far: Optional[list] = None) -> Combed
 ```
 
 The open coordinates of *claims*, values of *parameter* read in
@@ -201,7 +214,17 @@ one value's claim, and a row made for a further name is asked again
 on its own. The reply carries that row's answers at its top, with no
 row label (`comb_response_format`, `as_rows`). *whole_table* is how
 many other values of the value's table take the answers (`taken_by`),
-which the request says ("whole_table").
+which the request says ("whole_table"). *names_so_far* are the names
+read in the plan so far for a coordinate asked that may name
+several things (`names_read`), which the first message shows
+("names").
+
+What the check refuses, on the value's row or on rows its reply made
+for further names, is asked in ONE message after that reply, naming
+each refused name with its quote (`reading.told_once`); each answer
+goes to the row of its name, a changed name to the next row still
+open, a further name to a row of its own (`reading.routed`, owner
+decisions 2026-11-07).
 
 ## Functions
 
@@ -258,33 +281,6 @@ coordinates this request asks, in its order, each read
 (`reading.entry_example`), then what it asks of the rest of the plan,
 as `comb_response_format` has them (owner decision 2026-11-06).
 
-### check_response_format
-
-```python
-def check_response_format() -> dict
-```
-
-What the check of a find answers: whether the place it was quoted
-from speaks about the value, one of `ABOUT`.
-
-### check_example
-
-```python
-def check_example() -> dict
-```
-
-The reply of a check as its example shows it.
-
-### place_text
-
-```python
-def place_text(text: str, quote: str, budget: Optional[int]) -> str
-```
-
-The text of the place a check shows: whole where it fits *budget*
-characters, else the stretch of *budget* around *quote*, so the quote
-stands in what is shown.
-
 ### as_rows
 
 ```python
@@ -296,14 +292,15 @@ as the rows the step folds: its answers under that row's *label*, its
 requests for more beside them. Anything but an object is left as it
 is.
 
-### shown_corrections
+### names_read
 
 ```python
-def shown_corrections(corrections: list, label: str) -> Optional[dict]
+def names_read(spec, reads: list) -> dict
 ```
 
-What a request asked again is told of its one row: the coordinates
-under "what", and where a correction names it the name and quote it was
-given; None where nothing was wrong with that row.
+{kind: [name]}: every name read in the plan so far for a kind of
+thing the spec merges (`naming.merged_slots`), as a value or as a
+coordinate, each once, in the order the reading read them (owner
+decision 2026-11-07: "Alle gelesenen Namen").
 
 [Back to the index](../README.md)

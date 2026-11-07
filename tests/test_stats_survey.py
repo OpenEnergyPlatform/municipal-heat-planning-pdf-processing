@@ -364,3 +364,20 @@ def test_the_trace_schema_takes_the_times_and_once_of_a_request():
                         record_schema)
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate({**record, "asked_at": "soon"}, record_schema)
+
+
+# Promise: the read event takes the check of its second reading, AND the
+# stats count its requests and the places it said do not speak about the
+# value (owner decision 2026-11-07); by construction, a read event without
+# them and a count that is no number.
+def test_the_check_of_the_second_reading_is_traced_and_counted(tmp_path):
+    record = {"t": "read", "doc": 1, "parameter": "p", "kind": "section",
+              "owner": 6, "values": 1, "asked": 3, "judged": 2, "turned": 1}
+    jsonschema.validate(record, schema.trace_schema())
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({**record, "turned": "one"},
+                            schema.trace_schema())
+    out = traced(tmp_path, record,
+                 {"t": "read", "parameter": "p", "kind": "section",
+                  "owner": 7, "values": 1, "asked": 1})["reading"]
+    assert (out["check_requests"], out["finds_turned"]) == (2, 1)

@@ -63,12 +63,19 @@ names the values one per message of one conversation per passage, each after
 the answer before, with `value`, `value_raw` (only for an entry of a list) and
 quote, and `extraction/read_text` answers for each value, in a conversation of
 its own, the scenario it refers to by the name the publication prints, with
-its quote; a correction follows the answer it is about (owner decisions
-2026-11-07, see [extraction](../stages/extraction.md)). The value
+its quote; a correction follows the answer it is about, and what the check
+refuses on the rows one reply made is asked in one message after that reply
+(owner decisions 2026-11-07, see [extraction](../stages/extraction.md)). Both
+prompts, and `comb`, say after their first line "Before you answer, check what
+the definition excludes." (prompt only, no check). The value
 of `scenario_label` and the `scenario` axis are `merged: "scenario"` in the
 spec (owner decisions 2026-11-06, see [extraction](../stages/extraction.md)):
 a scenario is read as free text, the name as the publication prints it, and a
-value the publication states for several scenarios is one row per name. Once
+value the publication states for several scenarios is one row per name; names
+the publication gives in one place may share one quote,
+`{"value": [names], "quote": ...}`, which must hold each name and is spread
+into one answer per name at once, each checked on its own (`read_text` and
+`comb` show this form; owner decision 2026-11-07). Once
 the document is folded, `extraction/naming_groups` and `extraction/naming` put
 together the names read that mean the same scenario (below). `read_text`
 shows both forms of an answer, a scenario named and one the passage does not
@@ -83,9 +90,15 @@ model gives what it found and leaves out the rest, `{}` is a valid reply, and a
 coordinate left out is not asked for again; its rounds are one conversation,
 each later message bringing only what is new. A find quoted from a passage
 other than the value's own and its section is checked first by
-`extraction/comb_check`, which asks whether the passage is about this value;
-on "no" the find is dropped, the search goes on and its next message says why
-once (owner decisions 2026-11-07, see [extraction](../stages/extraction.md)). It ends `unstated` only after every
+`extraction/comb_check`, which asks whether the passage is about this value,
+once per coordinate and quote; the second reading's finds quoted from the
+section before or after the value's place are asked about the same way;
+on "no" the find is dropped: the search goes on and its next message says
+why once, and after the second reading the coordinate goes open to the
+combing (owner decisions 2026-11-07, see [extraction](../stages/extraction.md)). The comb request for a scenario
+shows under `names` every scenario name read in the publication so far, so
+the model can give all a value holds for; each still needs a quote that
+contains it. It ends `unstated` only after every
 passage of the publication was listed; a coordinate the reply gave in another
 form is told `wrong_shape`. No field of this profile holds numbers, so a table is read
 by `read_values` and `read_text` too, as a table is in every profile, and a

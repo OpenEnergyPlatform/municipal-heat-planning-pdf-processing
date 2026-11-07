@@ -3,6 +3,7 @@ temperature: 0
 max_tokens: 6144
 ---
 Gib für den Wert unter "value" jede Angabe aus "coordinates" an, so wie der Plan sie für DIESEN Wert nennt.
+Prüfe vor der Antwort, was die Definition ausschließt.
 Nimm nur Text aus "source" und der Überschrift ihres Abschnitts. Was nur das Bild einer Abbildung zeigt, ist kein Text. Über eine Zahl in einer Tabelle sprechen ihre Zeile, der Kopf ihrer Spalte und der Titel der Tabelle.
 Antworte mit genau einer Zeile JSON, mit einem Eintrag je Angabe:
 * "value" ist bei einer Liste ("options") genau einer ihrer Schlüssel, sonst die Angabe selbst. "value_raw" ist das Wort des Plans, wo es nicht der Schlüssel ist.

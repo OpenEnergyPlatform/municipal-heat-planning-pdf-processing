@@ -57,9 +57,19 @@ each of them, and "the passage does not say" is one of the answers
 A coordinate whose answer is the name the document gives a thing, such as
 a scenario, is read as the document prints it (`fields.Slot.merged`). A
 value the passage states for several of them is one row per name, each
-checked on its own (`answers_each`, owner decision 2026-11-06); a
-correction for one of them names its name. Which names mean the same thing
-is asked once the document is read (`naming.py`).
+checked on its own (`answers_each`, owner decision 2026-11-06); names that
+stand in one place may share one quote, which must hold each of them
+(`spread`, owner decision 2026-11-07). What the check refuses on any of the
+rows one answer made is asked once more in ONE message after that answer,
+naming each refused name with its quote, and each answer of it goes to the
+row of its name, a changed name to the next row still open, a further name
+to a row of its own (`routed`, owner decisions 2026-11-07). Which names
+mean the same thing is asked once the document is read (`naming.py`).
+
+A find of the second reading whose quote stands only in the section before
+or after the value's place is asked about once more: does that place speak
+about the value (`Judge`, owner decision 2026-11-07)? A "no" takes it out,
+and the coordinate goes to the combing open.
 
 Nothing is checked here beyond what the harvest checks everywhere. Every
 coordinate goes through `pipeline.merge_field` and every value through
@@ -86,12 +96,13 @@ from typing import Callable, Optional
 from . import fields, lookup
 from .thread import CORRECTIONS, Thread
 from .pipeline import (CELL, READ, YEAR_STATES, Batch, Row, Source, WorkItem,
-                       cell_index, column_head, head_cells, head_pair,
-                       in_several_rows, mark_unanswered, merge_field,
-                       narrow_quote, option_named, printed_lines, row_label,
-                       window_around, with_head)
-from .verify import (canonical_number, flat, number_outside_quote, numbers_in,
-                     quote_in, value_refused)
+                       answer_in_quote, cell_index, column_head, head_cells,
+                       head_pair, in_several_rows, mark_unanswered,
+                       merge_field, narrow_quote, option_named,
+                       printed_lines, row_label, window_around, with_head)
+from .verify import (MIN_QUOTE_CHARS, canonical_number, flat,
+                     number_outside_quote, numbers_in, quote_in,
+                     value_refused)
 from .wording import say
 
 # The values of a passage, one per round; one group's coordinates of one of
@@ -126,6 +137,20 @@ COORDINATES = "coordinates"
 # Why the check refused a round's value, as `Read.failed` counts it: the value
 # itself, its head, or a value already read.
 VALUE, HEAD, REPEATED = "value", "head", "repeated"
+
+# The request that asks of a find whether the place it was quoted from
+# speaks about its value, where the value's own request did not show that
+# place: a passage the combing fetched or listed, or a section before or
+# after the value's place in its second reading (owner decisions 2026-11-07,
+# after a probe in which the model took the scenario of a neighbouring
+# sentence: "The green marker indicates projections of EC LTS Baseline for
+# 2030" for years of other figures). Its answers, and the reason a find it
+# says "no" to is not taken. The check is told what was wrong with its
+# answer.
+CHECK_PROMPT_ID = "extraction/comb_check"
+ABOUT = ("yes", "no")
+NOT_ABOUT = "not_about_value"
+CHECK_FOLLOWS = (CORRECTIONS,)
 
 
 def shown_hits(ranked: list) -> list:
@@ -266,8 +291,10 @@ def answer_schema(slot, probe: bool = False, unstated: bool = True) -> dict:
     writes to a coordinate its passage does not state, as the plan would
     print it, which the combing searches with (owner decision 2026-11-05:
     HyDE). A coordinate that may name several things (`several`) takes a
-    list of such answers too. Without *unstated* its answer is never
-    UNSTATED (`fields.value_schema`)."""
+    list of such answers too, and an answer that names several of them with
+    one quote, its names under "value" (owner decision 2026-11-07: one
+    quote for several names; `spread`). Without *unstated* its answer is
+    never UNSTATED (`fields.value_schema`)."""
     properties = {"value": fields.value_schema(slot, unstated)}
     if fields.wording_asked(slot):
         properties["value_raw"] = {"type": "string"}
@@ -277,8 +304,17 @@ def answer_schema(slot, probe: bool = False, unstated: bool = True) -> dict:
     one = {"type": "object", "properties": properties,
            "required": ["value"], "additionalProperties": False}
     if several(slot):
-        return {"anyOf": [one, {"type": "array", "items": one,
-                                "minItems": 1}]}
+        shared = {"type": "object",
+                  "properties": {
+                      "value": {"type": "array",
+                                "items": fields.value_schema(slot, False),
+                                "minItems": 2},
+                      "quote": {"type": "string"}},
+                  "required": ["value", "quote"],
+                  "additionalProperties": False}
+        return {"anyOf": [one, shared,
+                          {"type": "array", "items": {"anyOf": [one, shared]},
+                           "minItems": 1}]}
     return one
 
 
@@ -297,20 +333,59 @@ def entry_example(slot) -> dict:
     return entry
 
 
+def names_several(given) -> bool:
+    """Does a coordinate's answer name several things: a list, or an answer
+    whose names share one quote?"""
+    return isinstance(given, list) or (
+        isinstance(given, dict) and isinstance(given.get("value"), list))
+
+
+def entries_of(given) -> list:
+    """A coordinate's answer as single answers: each entry of a list, and an
+    answer that names several things with one quote (owner decision
+    2026-11-07) once per name, each with that quote."""
+    out = []
+    for one in (given if isinstance(given, list) else [given]):
+        names = one.get("value") if isinstance(one, dict) else None
+        if isinstance(names, list):
+            rest = {key: value for key, value in one.items() if key != "value"}
+            out.extend({**rest, "value": name} for name in names)
+        else:
+            out.append(one)
+    return out
+
+
+def spread(reply, slots: list):
+    """*reply* with each coordinate that may name several things
+    (`several`) and names several as a list of single answers
+    (`entries_of`): what follows a reply -- the check of a find, the rows of
+    a value -- reads one name with its quote. Anything else is left as it
+    is."""
+    if not isinstance(reply, dict):
+        return reply
+    out = dict(reply)
+    for slot in slots:
+        if several(slot) and names_several(reply.get(slot.name)):
+            out[slot.name] = entries_of(reply[slot.name])
+    return out
+
+
 def answers_each(reply, slots: list) -> list:
     """The reply for one value as one reply per row (owner decision
     2026-11-06): a coordinate that may name several things (`several`) and
-    names a list of them gives one reply per name, with every other
-    coordinate's answer the same on each; an empty list is no answer. Any
-    other reply is the one reply."""
+    names several of them, in a list or with one quote for several
+    (`entries_of`), gives one reply per name, with every other coordinate's
+    answer the same on each; an empty list is no answer. Any other reply is
+    the one reply."""
     if not isinstance(reply, dict):
         return [reply]
     out = [reply]
     for slot in slots:
         given = reply.get(slot.name)
-        if not several(slot) or not isinstance(given, list):
+        if not several(slot) or not names_several(given):
             continue
-        each = [one for one in given if isinstance(one, dict)] or [None]
+        each = [one for one in entries_of(given)
+                if isinstance(one, dict)] or [None]
         out = [{**one, slot.name: answer} for one in out for answer in each]
     return out
 
@@ -1174,6 +1249,248 @@ def named_corrections(corrections: list, reply: dict, slots: list) -> list:
     return out
 
 
+def told_once(corrections: dict, given: dict, slots: list,
+              named: bool) -> list:
+    """What ONE message after an answer tells of the rows it made (owner
+    decision 2026-11-07: one follow-up per reply): each row's corrections
+    (*corrections*, {row label: [{coordinate, what}]}) in the order of the
+    rows, with *named* those of a coordinate that named several things
+    naming the name and quote that row was given (*given*, {row label: its
+    answer}; `named_corrections`), each correction told once."""
+    out = []
+    for label, told in corrections.items():
+        if named:
+            told = named_corrections(told, given.get(label), slots)
+        for entry in told:
+            if entry not in out:
+                out.append(entry)
+    return out
+
+
+def routed(answers: list, rows: list, corrections: dict, given: dict,
+           slots: list) -> list:
+    """[(row or None, answer, {coordinate})]: where each answer of a
+    follow-up (`answers_each`) goes, and which of its coordinates (owner
+    decisions 2026-11-07). An answer for a coordinate that may name several
+    things goes to the row its name was refused on, a changed name to the
+    next such row still open (they differ only in the name refused), and a
+    name for none of them to a row of its own (None); one that repeats
+    another row's answer unchanged corrects nothing. A row corrected on the
+    other coordinates takes them from the first answer, which holds them
+    for every name. *corrections* is {row label: [{coordinate, ...}]},
+    *given* {row label: the answer it got before}."""
+    answers = [one for one in answers if isinstance(one, dict)]
+    if not answers:
+        return []
+    names = [slot.name for slot in slots if several(slot)]
+
+    def entry(answer, name):
+        one = (answer or {}).get(name)
+        return one if isinstance(one, dict) else {}
+
+    def named(answer) -> tuple:
+        return tuple(entry(answer, name).get("value") for name in names)
+
+    def quoted(answer) -> tuple:
+        return tuple((entry(answer, name).get("value"),
+                      entry(answer, name).get("quote")) for name in names)
+
+    def told(row) -> set:
+        return {one.get("coordinate")
+                for one in corrections.get(row.label) or ()}
+
+    refused = [row for row in rows if told(row) & set(names)]
+    out = [(row, answers[0], told(row)) for row in rows
+           if row.label in corrections and row not in refused]
+    if not names:
+        return out
+    kept = {quoted(given.get(row.label)) for row in rows
+            if row not in refused}
+    waiting = list(refused)
+    leftover = []
+    for answer in answers:
+        if quoted(answer) in kept:
+            continue
+        match = next((row for row in waiting
+                      if named(given.get(row.label)) == named(answer)), None)
+        if match is None:
+            leftover.append(answer)
+            continue
+        waiting.remove(match)
+        out.append((match, answer, told(match)))
+    for answer in leftover:
+        if waiting:
+            row = waiting.pop(0)
+            out.append((row, answer, told(row)))
+        else:
+            out.append((None, answer, {slot.name for slot in slots}))
+    # A row whose name came back from no answer still takes the corrections
+    # of the other coordinates.
+    out.extend((row, answers[0], told(row) - set(names)) for row in waiting
+               if told(row) - set(names))
+    return out
+
+
+def cleared(claim: dict, names: list) -> dict:
+    """*claim* with the coordinates *names* open again: a row of its own
+    for a further name starts from a copy of its value."""
+    for name in names:
+        for suffix in fields.COORDINATE_KEYS:
+            claim.pop(f"{name}{suffix}", None)
+    return claim
+
+
+# -- whether a place speaks about a value ---------------------------------------
+
+def check_response_format() -> dict:
+    """What the check of a find answers: whether the place it was quoted
+    from speaks about the value, one of `ABOUT`."""
+    schema = {"type": "object",
+              "properties": {"about": {"enum": list(ABOUT)}},
+              "required": ["about"], "additionalProperties": False}
+    return {"type": "json_schema",
+            "json_schema": {"name": "comb_check", "schema": schema}}
+
+
+def check_example() -> dict:
+    """The reply of a check as its example shows it."""
+    return {"about": ABOUT[0]}
+
+
+def place_text(text: str, quote: str, budget: Optional[int]) -> str:
+    """The text of the place a check shows: whole where it fits *budget*
+    characters, else the stretch of *budget* around *quote*, so the quote
+    stands in what is shown."""
+    text = text or ""
+    if not budget or len(text) <= budget:
+        return text
+    words = [re.escape(word) for word in (quote or "").split()]
+    hit = re.search(r"\s+".join(words), text) if words else None
+    start = max(0, (hit.start() if hit else 0)
+                - max(0, budget - (len(hit.group(0)) if hit else 0)) // 2)
+    return text[start:start + budget]
+
+
+def check_shown(source: Source, parameter) -> dict:
+    """The value's passage and parameter as the check shows them."""
+    return {"passage": {"kind": source.owner_kind,
+                        "title": lookup.title_of(source),
+                        "section": (source.provenance or {}).get(
+                            "section_title")},
+            "parameter": {"key": parameter.uri, "label": parameter.label,
+                          "definition": parameter.description}}
+
+
+class Judge:
+    """Whether the place a find was quoted from speaks about its value
+    (`CHECK_PROMPT_ID`, owner decisions 2026-11-07), for one value: asked
+    where the quote stands in a passage the value's own request did not show
+    (*own*: the owners of those it did), never where the check of quote and
+    answer refuses the find anyway (`merge_field`). Asked once per
+    coordinate and quote, whatever name the find gives: the question is
+    about the place (owner decision 2026-11-07); a reply that names neither
+    answer is asked once more, told why. *check(payload, shape,
+    document_id, source, group, example, thread, follow)* is the request,
+    *shown* the value's passage and parameter as it shows them
+    (`check_shown`), *counts* what counts its requests (`judged`) and the
+    places it said do not speak about the value (`turned`)."""
+
+    def __init__(self, check: Callable, document_id: int, shown: dict,
+                 own: set, source: Source, group, passages: dict,
+                 budget: Optional[int], counts) -> None:
+        self.check = check
+        self.document_id = document_id
+        self.shown = shown
+        self.own = own
+        self.source = source
+        self.group = group
+        self.passages = passages
+        self.budget = budget
+        self.counts = counts
+        self.verdicts: dict = {}
+
+    def __call__(self, slot, one: dict, evidence: list,
+                 row: dict) -> Optional[str]:
+        """What the check says of the find *one* for *slot*: "yes" or "no"
+        where its quote stands first in a passage of *evidence* other than
+        the value's own; None where it stands in one of those, where the
+        check of its quote and answer would refuse it, or where no reply
+        gave one of `ABOUT`. *row* is the value as the check shows it."""
+        value, quote = one.get("value"), one.get("quote")
+        if not isinstance(quote, str) or len(quote.strip()) < MIN_QUOTE_CHARS:
+            return None
+        wording = one.get("value_raw")
+        wording = wording.strip() if isinstance(wording, str) \
+            and wording.strip() else None
+        if not answer_in_quote(slot, value, wording, quote):
+            return None
+        cited = next((s for s in evidence if quote_in(s.text or "", quote)),
+                     None)
+        if cited is None or (cited.owner_kind, cited.owner_id) in self.own:
+            return None
+        key = (slot.name, quote)
+        if key in self.verdicts:
+            return self.verdicts[key]
+        place = self.passages.get((cited.owner_kind, cited.owner_id)) \
+            or cited
+        payload = {**self.shown, "row": row,
+                   "coordinate": {slot.name: coordinate_shown(
+                       slot, unstated=False)},
+                   "answer": {k: one[k] for k in ("value", "value_raw",
+                                                  "quote")
+                              if one.get(k) not in (None, "")},
+                   "place": {"kind": place.owner_kind,
+                             "title": lookup.title_of(place),
+                             "section": (place.provenance or {}).get(
+                                 "section_title"),
+                             "text": place_text(place.text, quote,
+                                                self.budget)}}
+        verdict, follow = None, None
+        thread = Thread()
+        for _ in range(2):
+            reply = self.check(payload, check_response_format(),
+                               self.document_id, self.source,
+                               group=getattr(self.group, "name", self.group),
+                               example=check_example(), thread=thread,
+                               follow=follow)
+            self.counts.judged += 1
+            about = reply.get("about") if isinstance(reply, dict) else None
+            if about in ABOUT or not isinstance(reply, dict):
+                verdict = about if about in ABOUT else None
+                break
+            follow = {CORRECTIONS: {"what": {"about": say(
+                "verdict_not_an_option", given=about)}}}
+        self.verdicts[key] = verdict
+        if verdict == ABOUT[1]:
+            self.counts.turned += 1
+        return verdict
+
+
+def turned_out(reply, slots: list, judge: Optional[Judge], evidence: list,
+               row: dict) -> tuple:
+    """(*reply* without each find whose place the check says does not speak
+    about the value (`Judge`), {coordinate: [the answers taken out]})."""
+    if judge is None or not isinstance(reply, dict):
+        return reply, {}
+    out, turned = dict(reply), {}
+    for slot in slots:
+        given = reply.get(slot.name)
+        if given is None:
+            continue
+        kept = []
+        for one in (given if isinstance(given, list) else [given]):
+            if isinstance(one, dict) \
+                    and judge(slot, one, evidence, row) == ABOUT[1]:
+                turned.setdefault(slot.name, []).append(one.get("value"))
+                continue
+            kept.append(one)
+        if kept:
+            out[slot.name] = kept if isinstance(given, list) else kept[0]
+        else:
+            out.pop(slot.name)
+    return out, turned
+
+
 # -- one parameter in one passage ----------------------------------------------
 
 def same(slot, a, b) -> bool:
@@ -1278,6 +1595,11 @@ class Read:
     # the coordinates they read (owner decision 2026-11-06).
     near: int = 0
     near_read: int = 0
+    # Finds of the second reading quoted from the sections around the
+    # value's place that the check was asked about, and those it said do not
+    # speak about the value (owner decision 2026-11-07).
+    judged: int = 0
+    turned: int = 0
 
 
 @dataclass
@@ -1372,13 +1694,17 @@ class Reader:
     *known(claim, asked)* is what a value has read in the plan's words
     (`runner.row_context`). *pool* reads passages side by side. No request
     of the reading has tools (owner decision 2026-11-05, ticket 26).
+    *check(payload, shape, document_id, source, group, example, thread,
+    follow)*, where given, asks of a find of the second reading quoted from
+    a section around the value's place whether that place speaks about the
+    value (`Judge`, owner decision 2026-11-07).
     """
 
     def __init__(self, spec, ask_values: Callable, ask_text: Callable,
                  frame_slots: list, *, shown_with: Optional[Callable] = None,
                  bases: Optional[Callable] = None,
                  known: Optional[Callable] = None,
-                 pool=None, trace=None):
+                 pool=None, trace=None, check: Optional[Callable] = None):
         self.spec = spec
         self.ask_values = ask_values
         self.ask_text = ask_text
@@ -1388,6 +1714,7 @@ class Reader:
         self.known = known or (lambda claim, asked: {})
         self.pool = pool
         self.trace = trace
+        self.check = check
 
     def __call__(self, document_id: int, found, passages: dict,
                  budget: Optional[int] = None, *,
@@ -1543,7 +1870,9 @@ class Reader:
                        values=len(rows), asked=result.asked,
                        corrected=result.corrected, failed=result.failed,
                        unanswered=result.unanswered, near=result.near,
-                       near_read=result.near_read)
+                       near_read=result.near_read,
+                       **({"judged": result.judged, "turned": result.turned}
+                          if result.judged else {}))
         return result
 
     def _near(self, job: _Job, rows: list) -> list:
@@ -1607,8 +1936,9 @@ class Reader:
                                 for slot in asked}}
 
         def ask(one: Row, told: dict):
-            return self.ask_text(view, job.parameter, None, asked, one, {},
-                                 job.threads[one.label], told)
+            return spread(self.ask_text(view, job.parameter, None, asked,
+                                        one, {}, job.threads[one.label],
+                                        told), asked)
         reply = ask(row, follow)
         result.asked += 1
         result.near += 1
@@ -1617,15 +1947,14 @@ class Reader:
         evidence = ([view] + job.fixed + job.extra + job.frames
                     + list(near.values())
                     + known_shown(row.claim, read, job.passages))
-        replies = answers_each(reply, asked)
-        rows = [row] + [job.clone(row) for _ in replies[1:]]
-        for one, answer in zip(rows, replies):
-            self._answered(job, one, answer, asked, ask, evidence, view,
-                           named=len(rows) > 1, window=("near", 1))
+        judge = self._judge(job, row, None, asked, read, near)
+        reply, turned = judge(reply)
+        made = self._settled(job, row, reply, asked, ask, evidence,
+                             window=("near", 1), judge=judge, turned=turned)
         result.near_read += sum(
-            1 for one in rows for slot in asked
+            1 for one in [row] + made for slot in asked
             if one.claim.get(f"{slot.name}_state") == READ)
-        return rows[1:]
+        return made
 
     def _near_table(self, job: _Job, rows: list, group, slots: list,
                     near: dict) -> bool:
@@ -1654,6 +1983,8 @@ class Reader:
             return False
         evidence = ([view] + job.fixed + job.extra + job.frames
                     + list(near.values()))
+        judge = self._judge(job, first, group, slots, {}, near)
+        reply, turned = judge(reply)
         labels = [row.label for row in rows]
 
         def taken(answers: dict) -> list:
@@ -1674,13 +2005,17 @@ class Reader:
         for row in rows:
             self._probed(job, row, reply, slots)
         failed = taken(reply)
-        corrections = value_corrections(first, failed, slots, reply)
+        # A find the check took out goes to the combing, not asked again.
+        corrections = [one for one in value_corrections(first, failed, slots,
+                                                        reply)
+                       if one["coordinate"] not in turned]
         result.failed = dict(collections.Counter(result.failed)
                              + refused_of(failed))
         if corrections:
             result.corrected += len(corrections)
             again = ask({CORRECTIONS: corrections})
             if isinstance(again, dict):
+                again, _ = judge(again)
                 for row in rows:
                     self._probed(job, row, again, slots)
                 taken(again)
@@ -1866,8 +2201,9 @@ class Reader:
         job.threads.setdefault(row.label, Thread())
 
         def ask(one: Row, follow: Optional[dict] = None):
-            return self.ask_text(view, job.parameter, group, asked, one,
-                                 context, job.threads[one.label], follow)
+            return spread(self.ask_text(view, job.parameter, group, asked,
+                                        one, context, job.threads[one.label],
+                                        follow), asked)
         reply = ask(row)
         result.asked += 1
         if near:
@@ -1879,47 +2215,98 @@ class Reader:
         evidence = ([view] + job.fixed + job.extra + job.frames
                     + list((near or {}).values())
                     + known_shown(row.claim, read, job.passages))
-        replies = answers_each(reply, asked)
-        rows = [row] + [job.clone(row) for _ in replies[1:]]
-        for one, answer in zip(rows, replies):
-            self._answered(job, one, answer, asked, ask, evidence, view,
-                           named=len(rows) > 1, window=window)
+        judge = self._judge(job, row, group, asked, read, near)
+        reply, turned = judge(reply)
+        made = self._settled(job, row, reply, asked, ask, evidence,
+                             window=window, judge=judge, turned=turned)
         if near:
             result.near_read += sum(
-                1 for one in rows for slot in asked
+                1 for one in [row] + made for slot in asked
                 if one.claim.get(f"{slot.name}_state") == READ)
-        return rows[1:]
+        return made
 
-    def _answered(self, job: _Job, row: Row, reply: dict, asked: list,
-                  ask: Callable, evidence: list, view: Source,
-                  named: bool = False, window: tuple = ("own", 1)) -> None:
-        """*reply*'s answers onto *row*; what the check refuses asked once
-        more by its coordinate. With *named*, *row* is one of several a reply
-        made of one value: its correction names the name it was given and
-        its quote (`named_corrections`), and a reply that names several again
-        counts with its first. *window* is where the answer was read: the
-        value's own request, or ("near", 1) for the second reading.
-        *ask(row, follow)* sends a message in *row*'s conversation."""
+    def _judge(self, job: _Job, row: Row, group, asked: list, read: dict,
+               near: Optional[dict]) -> Callable:
+        """reply -> (reply, {coordinate: answers taken out}): with *near*,
+        the second reading, each find whose quote stands only in the
+        section before or after the value's place is asked about once more,
+        and one whose place the check says does not speak about the value
+        is taken out (`Judge`, owner decision 2026-11-07); else nothing."""
+        if self.check is None or not near:
+            return lambda reply: (reply, {})
+        shown_near = list(near.values())
+        own = {(s.owner_kind, s.owner_id)
+               for s in [job.source, job.shown] + job.fixed + job.extra
+               + job.frames + list(job.views.values())} - {
+            (s.owner_kind, s.owner_id) for s in shown_near}
+        judge = Judge(self.check, job.document_id,
+                      check_shown(job.source, job.parameter), own,
+                      job.source, group, job.passages, job.budget,
+                      job.result)
+        evidence = ([job.views.get(row.label, job.shown)] + job.fixed
+                    + job.extra + job.frames + shown_near
+                    + known_shown(row.claim, read, job.passages))
+        shown_row = {**shown_value(row.claim), "known": read,
+                     "open": [slot.name for slot in asked]}
+        return lambda reply: turned_out(reply, asked, judge, evidence,
+                                        shown_row)
+
+    def _settled(self, job: _Job, row: Row, reply: dict, asked: list,
+                 ask: Callable, evidence: list, window: tuple = ("own", 1),
+                 judge: Optional[Callable] = None,
+                 turned: Optional[dict] = None) -> list:
+        """*reply*, the answer to a message of *row*'s conversation, onto
+        the rows it makes: one per name of a coordinate that may name
+        several things (`answers_each`), each checked on its own. What the
+        check refuses on any of them is asked once more in ONE message after
+        that answer (owner decision 2026-11-07: one follow-up per reply),
+        where the answer made several rows naming the name and quote each
+        was given (`told_once`); each answer of it goes to the row of its
+        name, a changed name to the next row still open, a further name to
+        a row of its own (`routed`). A coordinate whose find the check took
+        out (*turned*, `_judge`) is not asked again: it goes to the combing.
+        *window* is where the answer was read: the value's own request, or
+        ("near", 1) for the second reading. *ask(row, follow)* sends a
+        message in *row*'s conversation. [The rows made beside *row*]."""
         result = job.result
-        answers = reply
-        self._probed(job, row, answers, asked)
-        failed = job.merged([row], {slot.name: value_replies(answers, slot,
-                                                             row.label,
-                                                             window)
-                                    for slot in asked}, evidence)
-        corrections = value_corrections(row, failed, asked, reply)
-        result.failed = dict(collections.Counter(result.failed)
-                             + refused_of(failed))
+        turned = turned or {}
+        replies = answers_each(reply, asked)
+        rows = [row] + [job.clone(row) for _ in replies[1:]]
+        corrections: dict = {}
+        for one, answer in zip(rows, replies):
+            self._probed(job, one, answer, asked)
+            failed = job.merged([one], {slot.name: value_replies(
+                answer, slot, one.label, window) for slot in asked}, evidence)
+            result.failed = dict(collections.Counter(result.failed)
+                                 + refused_of(failed))
+            told = [entry for entry in value_corrections(one, failed, asked,
+                                                         answer)
+                    if entry["coordinate"] not in turned
+                    or one.claim.get(f"{entry['coordinate']}_state")]
+            if told:
+                corrections[one.label] = told
         if not corrections:
-            return
-        if named:
-            corrections = named_corrections(corrections, reply, asked)
-        result.corrected += len(corrections)
+            return rows[1:]
+        given = {one.label: answer for one, answer in zip(rows, replies)}
+        told = told_once(corrections, given, asked, named=len(rows) > 1)
+        result.corrected += len(told)
         result.asked += 1
-        again = ask(row, {CORRECTIONS: corrections})
-        if isinstance(again, dict):
-            again = answers_each(again, asked)[0]
-            self._probed(job, row, again, asked)
-            job.merged([row], {slot.name: value_replies(again, slot,
-                                                        row.label, window)
-                               for slot in asked}, evidence)
+        again = ask(row, {CORRECTIONS: told})
+        if not isinstance(again, dict):
+            return rows[1:]
+        if judge is not None:
+            again, _ = judge(again)
+        made = []
+        names = [slot.name for slot in asked if several(slot)]
+        for target, answer, coordinates in routed(
+                answers_each(again, asked), rows, corrections, given, asked):
+            if target is None:
+                # A further name: a row of its own, a copy of the value.
+                target = job.clone(row)
+                cleared(target.claim, names)
+                made.append(target)
+            self._probed(job, target, answer, asked)
+            job.merged([target], {slot.name: value_replies(
+                answer, slot, target.label, window) for slot in asked
+                if slot.name in coordinates}, evidence)
+        return rows[1:] + made

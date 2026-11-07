@@ -1273,3 +1273,76 @@ def test_a_correction_names_the_ways_that_pass_in_its_request():
                       not_in_quote="or_leave_out")
     assert got["failed"][0]["reason"] == say(
         "answer_not_in_quote_text", answer="Schule") + say("or_leave_out")
+
+
+# -- the check of a find of the second reading (owner decision 2026-11-07) ------
+
+OWN_YEAR = Source("section", 6, "Bilanz\nEs fielen im Jahr 2022 rund 300 t "
+                  "CO2 an.", {"document_id": 7, "section_title": "Bilanz"})
+AROUND_PLAN = {("section", 6): OWN_YEAR, ("section", 8): AFTER}
+YEAR_OWN = {"value": 2022, "quote": "Es fielen im Jahr 2022 rund 300 t CO2"}
+
+
+def checking(*verdicts):
+    """A check that answers *verdicts* in turn, and what it was asked."""
+    asked = []
+
+    def check(payload, shape, document_id, source, group=None, example=None,
+              thread=None, follow=None):
+        asked.append(payload)
+        return verdicts[min(len(asked), len(verdicts)) - 1]
+    return check, asked
+
+
+def near_read(near, *verdicts, first=None):
+    """The reading of a value of OWN_YEAR whose frame its first reading left
+    unstated (*first* its reply), the second reading answered *near*, with
+    a check answering *verdicts* where any are given."""
+    check, asked = checking(*verdicts) if verdicts else (None, [])
+    read, calls = read_of(OWN_YEAR, values=(BARE_300, {"value": None}),
+                          groups={"frame": [first or frame()],
+                                  "near": [near]},
+                          passages=AROUND_PLAN, check=check)
+    return read.claims[0], read, calls, asked
+
+
+# Promise: a find of the second reading quoted from a section around the
+# value's place is asked about once, AND a "yes" keeps it, AND a find from
+# the value's own passage is not asked about; by construction, the year
+# quoted from each.
+def test_a_near_find_from_a_section_around_is_checked_and_kept_on_yes():
+    claim, read, _, asked = near_read(unstated_but(year=YEAR_AFTER),
+                                      {"about": "yes"})
+    assert claim["year_state"] == "read"
+    assert claim["year_source"] == ["section", 8]
+    assert [one["answer"]["value"] for one in asked] == [2030]
+    assert asked[0]["place"]["text"] == AFTER.text
+    assert asked[0]["row"]["quote"] == BARE_300["quote"]
+    assert (read.judged, read.turned) == (1, 0)
+    claim, read, _, asked = near_read(unstated_but(year=YEAR_OWN),
+                                      {"about": "no"})
+    assert asked == [] and claim["year"] == 2022
+    assert claim["year_state"] == "read"
+
+
+# Promise: a "no" takes the find out, AND the coordinate stays open for the
+# combing, AND it is not asked again in the reading; by construction, the
+# reading without the check, and a year no first reply answered.
+def test_a_near_find_the_check_says_no_to_goes_open_to_the_combing():
+    claim, read, calls, asked = near_read(unstated_but(year=YEAR_AFTER),
+                                          {"about": "no"})
+    assert len(asked) == 1 and read.turned == 1
+    assert claim.get("year") is None
+    assert claim["year_state"] in (fields.SAID_UNSTATED, fields.UNBACKED,
+                                   fields.UNANSWERED)
+    alone, _, _, _ = near_read(unstated_but(year=YEAR_AFTER))
+    assert alone["year"] == 2030 and alone["year_state"] == "read"
+    # The frame no first reply answered: the year has no state before the
+    # second reading, and the find the check took out is not asked for.
+    claim, read, calls, asked = near_read(unstated_but(year=YEAR_AFTER),
+                                          {"about": "no"},
+                                          first=reading.CUT)
+    assert len(asked) == 1
+    assert claim["year_state"] == fields.UNANSWERED
+    assert not [one for _task, told in corrections_of(calls)
+                for one in told if one.get("coordinate") == "year"]

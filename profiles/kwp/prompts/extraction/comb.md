@@ -3,6 +3,7 @@ temperature: 0
 max_tokens: 6144
 ---
 Finde in anderen Passagen des Plans jede Angabe unter "coordinates", die dem Wert unter "row" in seiner eigenen Passage fehlt, und antworte aus den Passagen, die dir gezeigt wurden.
+Prüfe vor der Antwort, was die Definition ausschließt.
 Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
 {{example}}
 

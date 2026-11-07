@@ -3,6 +3,7 @@ temperature: 0
 max_tokens: 8192
 ---
 Extract the first value in publication order that matches the definition in "parameter" and belongs to this publication, its study or its scenarios. Take one list entry per request.
+Before you answer, check what the definition excludes.
 Use only text from "source" and its section heading; what only a figure's image shows is no text. Skip references, footnotes, citations, passages that present, review or compare other works, and every value attributed to other works.
 Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks! If no eligible value remains, return {"value":null}. For a match, answer in this form:
 {{example}}

@@ -4912,7 +4912,7 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `review_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `compute_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `naming`: `asked`, `doc`, `groups`, `kind`, `names`, `several`, `things`, `why`
-- `read`: `asked`, `corrected`, `doc`, `failed`, `kind`, `near`, `near_read`, `owner`, `parameter`, `unanswered`, `unread`, `values`, `why`
+- `read`: `asked`, `corrected`, `doc`, `failed`, `judged`, `kind`, `near`, `near_read`, `owner`, `parameter`, `turned`, `unanswered`, `unread`, `values`, `why`
 - `comb`: `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `judged`, `kind`, `listed`, `missed`, `open`, `owner`, `parameter`, `rows`, `searched`, `table_rows`, `turned`
 - `years`: `asked`, `base`, `doc`, `fetched`, `hits`, `refused`, `target`
 - `seek`: `doc`, `kind`, `owner`, `parameter`, `rank`

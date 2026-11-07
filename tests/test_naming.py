@@ -43,6 +43,7 @@ Each promise has a case that breaks it by construction beside the one that
 keeps it."""
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import jsonschema
 import pytest
@@ -728,3 +729,211 @@ def test_the_graph_puts_a_row_on_each_scenario_its_name_means():
                                 LIFE: set(), BOTH: {"2050"}}
     assert kg.scenario_names(dict(year, scenario_quote="nothing like it")) \
         == []
+
+
+# -- one quote for several names, one follow-up per reply, the names read so
+# far (owner decisions 2026-11-07) -------------------------------------------
+
+SHARED = {"value": ["CurPol", "NDC"],
+          "quote": "the Current Policies scenario (CurPol) and the NDC "
+                   "scenario"}
+
+
+# Promise: an answer may name several scenarios with one quote, AND it stands
+# for one answer per name, each with that quote, AND the grammar takes it
+# for a coordinate that may name several things only, AND only with its
+# quote; by construction, a list of such an answer and a single one, a
+# shared answer without a quote, and a coordinate that is not merged.
+def test_names_that_share_one_quote_are_one_answer_each_with_that_quote():
+    slot = scenario_slot(SPEC)
+    schema = reading.answer_schema(slot)
+    jsonschema.validate(SHARED, schema)
+    jsonschema.validate([SHARED, NAMED["scenario"]], schema)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({"value": ["CurPol", "NDC"]}, schema)
+    plain = scenario_slot(unmerged_spec())
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(SHARED, reading.answer_schema(plain))
+    each = [{"scenario": {"value": name, "quote": SHARED["quote"]}}
+            for name in SHARED["value"]]
+    assert reading.answers_each({"scenario": SHARED}, [slot]) == each
+    assert reading.answers_each({"scenario": [SHARED, NAMED["scenario"]]},
+                                [slot]) == each + [NAMED]
+    assert reading.answers_each({"scenario": SHARED}, [plain]) \
+        == [{"scenario": SHARED}]
+
+
+# Promise: a value read with one quote for several names is one row per
+# name, each read with that quote, AND a name the shared quote lacks is
+# refused on its row alone and asked once more by its name; by construction,
+# a quote that holds both names and one that holds one.
+def test_a_shared_quote_reads_each_name_it_holds_and_refuses_the_others():
+    read, _ = read_of(YEAR, (Y2030, {"value": None}),
+                      groups={"scenario": {"scenario": SHARED}})
+    assert [(c["scenario"], c["scenario_state"], c["scenario_quote"])
+            for c in read.claims] == [("CurPol", READ, SHARED["quote"]),
+                                      ("NDC", READ, SHARED["quote"])]
+    half = {"value": ["CurPol", "Current Policies"],
+            "quote": "Results for the CurPol scenario"}
+    read, calls = read_of(YEAR, (Y2030, {"value": None}),
+                          groups={"scenario": {"scenario": half}})
+    assert [(c.get("scenario"), c["scenario_state"]) for c in read.claims] \
+        == [("CurPol", READ), (None, fields.UNBACKED)]
+    told = [one for payload in follow_ups(calls)
+            for one in payload["corrections"]]
+    assert [(one["value"], one["quote"]) for one in told] == [
+        ("Current Policies", "Results for the CurPol scenario")]
+
+
+FIRST = {"scenario": [
+    {"value": "CurPol", "quote": "Results for the CurPol scenario"},
+    # A quote in no passage, and a name its quote lacks: both refused.
+    {"value": "NDC", "quote": "the NDC pathway of another study"},
+    {"value": "Current Policies", "quote": "the CurPol scenario"}]}
+CHANGED = {"value": "Current Policies scenario",
+           "quote": "the Current Policies scenario (CurPol)"}
+NDC_FIXED = {"value": "NDC", "quote": "the NDC scenario"}
+CP_FIXED = {"value": "Current Policies",
+            "quote": "the Current Policies scenario"}
+CURPOL_AGAIN = FIRST["scenario"][0]
+
+
+def follow_ups(calls, task: str = "scenario") -> list:
+    """The messages of *task* that carry corrections."""
+    return [payload for name, payload, _shape in calls
+            if name == task and payload.get("corrections")]
+
+
+# Promise: what the check refuses on the rows one answer made is asked in ONE
+# message after that answer, naming each refused name with its quote, AND
+# each answer goes to the row of its name whatever its place in the reply,
+# AND a name for none of them is a row of its own, AND an answer that
+# repeats an accepted one unchanged makes no row; by construction, the names
+# answered out of order, a further name and a repeat.
+def test_one_follow_up_names_every_refused_name_and_each_finds_its_row():
+    again = {"scenario": [CHANGED, NDC_FIXED, CURPOL_AGAIN, CP_FIXED]}
+    read, calls = read_of(YEAR, (Y2030, {"value": None}),
+                          groups={"scenario": [FIRST, again]})
+    (asked,) = follow_ups(calls)
+    assert [(one["coordinate"], one["value"], one["quote"])
+            for one in asked["corrections"]] == [
+        ("scenario", "NDC", "the NDC pathway of another study"),
+        ("scenario", "Current Policies", "the CurPol scenario")]
+    assert [(c["scenario"], c["scenario_state"]) for c in read.claims] == [
+        ("CurPol", READ), ("NDC", READ), ("Current Policies", READ),
+        ("Current Policies scenario", READ)]
+    assert read.claims[1]["scenario_quote"] == "the NDC scenario"
+
+
+# Promise: a changed name goes to the next row of a refused name still open;
+# by construction, the reply names one refused name as before and the other
+# under another name, before it.
+def test_a_changed_name_goes_to_the_next_refused_row_still_open():
+    again = {"scenario": [CHANGED, NDC_FIXED]}
+    read, calls = read_of(YEAR, (Y2030, {"value": None}),
+                          groups={"scenario": [FIRST, again]})
+    assert len(follow_ups(calls)) == 1
+    assert [(c["scenario"], c["scenario_state"]) for c in read.claims] == [
+        ("CurPol", READ), ("NDC", READ), ("Current Policies scenario", READ)]
+
+
+# Promise: a row corrected on another coordinate takes it from a follow-up's
+# first answer, AND so does a refused row whose name came back from no
+# answer, AND an unchanged repeat corrects no name; by construction, a
+# coordinate beside the names.
+def test_a_follow_up_s_answers_go_to_the_coordinates_each_row_was_told():
+    names = SimpleNamespace(name="scenario", merged="scenario")
+    other = SimpleNamespace(name="region", merged=None)
+    rows = [reading.Row(label=f"R{i}", item_index=0, claim={})
+            for i in range(3)]
+    given = {"R0": {"scenario": {"value": "A", "quote": "qa"}},
+             "R1": {"scenario": {"value": "B", "quote": "qb"}},
+             "R2": {"scenario": {"value": "C", "quote": "qc"}}}
+    corrections = {"R0": [{"coordinate": "region"}],
+                   "R1": [{"coordinate": "scenario"},
+                          {"coordinate": "region"}]}
+    repeat = {"scenario": {"value": "A", "quote": "qa"}, "region": "EU"}
+    fixed = {"scenario": {"value": "B", "quote": "qb2"}, "region": "EU"}
+    out = reading.routed([repeat, fixed], rows, corrections, given,
+                         [names, other])
+    assert [(row.label, answer, coordinates)
+            for row, answer, coordinates in out] == [
+        ("R0", repeat, {"region"}), ("R1", fixed, {"scenario", "region"})]
+    out = reading.routed([repeat], rows, corrections, given, [names, other])
+    assert [(row.label, coordinates) for row, _answer, coordinates in out] \
+        == [("R0", {"region"}), ("R1", {"region"})]
+
+
+def combing_asks(*replies):
+    """An ask that answers *replies* in turn, and what it was sent."""
+    asked = []
+
+    def ask(payload, shape, document_id, source, group=None, example=None,
+            thread=None, follow=None):
+        asked.append(payload if follow is None else follow)
+        return answered(thread, replies[min(len(asked), len(replies)) - 1])
+    return ask, asked
+
+
+def year_open(**given):
+    return {"source": "Q1", "value": "2030", "quote": Y2030["quote"],
+            "scenario_state": fields.SAID_UNSTATED, **given}
+
+
+# Promise: the combing asks what it refuses on the rows its reply made in ONE
+# message after that reply, naming each refused name with its quote, AND
+# each answer goes to the row of its name, AND a further name is a row of
+# its own that joins the reading; by construction, two names refused and
+# three given back.
+def test_the_combing_asks_once_for_every_refused_name():
+    batch = Batch(7, YEAR, [WorkItem(7, YEAR, TEXT)], spec=SPEC)
+    read = reading.Read(batch, [year_open()], probes=[{}])
+    ask, asked = combing_asks(FIRST, {"scenario": [CHANGED, NDC_FIXED,
+                                                   CP_FIXED]})
+    passages = {(TEXT.owner_kind, TEXT.owner_id): TEXT}
+    combing.Comber(SPEC, ask, None, lambda claim, names: {})(
+        7, [read], passages, [])
+    told = [payload for payload in asked if payload.get("corrections")]
+    assert len(told) == 1
+    assert [(one["value"], one["quote"]) for one in told[0]["corrections"]] \
+        == [("NDC", "the NDC pathway of another study"),
+            ("Current Policies", "the CurPol scenario")]
+    assert [(c["scenario"], c["scenario_state"]) for c in read.claims] == [
+        ("CurPol", READ), ("NDC", READ), ("Current Policies", READ),
+        ("Current Policies scenario", READ)]
+    assert len(read.probes) == len(read.claims)
+
+
+# Promise: a combing request for a coordinate that may name several things
+# shows every name read in the plan so far, each once, in the order read, as
+# a value and as a coordinate (owner decision 2026-11-07), AND one for a
+# coordinate that names no such thing shows none; by construction, a name
+# read twice, and the scenario not merged.
+def test_the_combing_shows_every_name_read_so_far_once():
+    read_too = [year_open(scenario=name, scenario_state=READ,
+                          scenario_quote=quote)
+                for name, quote in (("CurPol", "the CurPol scenario"),
+                                    ("Current Policies",
+                                     "the Current Policies scenario"))]
+    passages = {(TEXT.owner_kind, TEXT.owner_id): TEXT}
+    for spec, shown in ((SPEC, ["CurPol", "NDC", "Current Policies"]),
+                        (unmerged_spec(), None)):
+        label, year = (spec.by_uri[uri] for uri in ("scenario_label",
+                                                     "scenario_year"))
+        labels = reading.Read(Batch(7, label, [WorkItem(7, label, TEXT)],
+                                    spec=spec), [
+            {"source": "Q1", "value": "CurPol",
+             "quote": "the CurPol scenario"},
+            {"source": "Q1", "value": "NDC", "quote": "the NDC scenario"}])
+        years = reading.Read(Batch(7, year, [WorkItem(7, year, TEXT)],
+                                   spec=spec),
+                             [year_open(), *read_too], probes=[{}, {}, {}])
+        ask, asked = combing_asks({"more": []})
+        combing.Comber(spec, ask, None, lambda claim, names: {})(
+            7, [labels, years], passages, [])
+        first = [payload for payload in asked if "row" in payload]
+        assert len(first) == 1
+        assert first[0].get("names") == shown
+        if shown:
+            assert combing.names_read(spec, [labels, years]) == {
+                "scenario": shown}

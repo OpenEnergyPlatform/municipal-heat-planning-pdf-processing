@@ -386,7 +386,7 @@ PROMPT_IDS = (QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID, ROWS_PROMPT_ID,
 # combing.py), the run's own wherever the profile writes them and its spec
 # names groups (`surveyed_flow`).
 SURVEY_PROMPT_IDS = (survey_map.SURVEY_PROMPT_ID, *reading_map.PROMPT_IDS,
-                     combing_map.COMB_PROMPT_ID, combing_map.CHECK_PROMPT_ID)
+                     combing_map.COMB_PROMPT_ID, reading_map.CHECK_PROMPT_ID)
 # Which of the two flows this run harvests with: "survey" or "fieldwise".
 # `main` sets it; stamps and producers record it and the prompts it sends,
 # and nothing compares either.
@@ -2054,7 +2054,7 @@ FOLLOWS = {
     reading_map.READ_VALUES_PROMPT_ID: reading_map.VALUE_FOLLOWS,
     reading_map.READ_TEXT_PROMPT_ID: reading_map.TEXT_FOLLOWS,
     combing_map.COMB_PROMPT_ID: combing_map.FOLLOWS,
-    combing_map.CHECK_PROMPT_ID: combing_map.CHECK_FOLLOWS,
+    reading_map.CHECK_PROMPT_ID: reading_map.CHECK_FOLLOWS,
     survey_map.SURVEY_PROMPT_ID: survey_map.FOLLOWS,
     years_map.YEARS_PROMPT_ID: years_map.FOLLOWS,
     naming_map.NAMING_PROMPT_ID: naming_map.FOLLOWS,
@@ -2219,7 +2219,36 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
         spec, ask_values, ask_text, frame_slots,
         shown_with=reading_map.heading_of,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
-        known=row_context, pool=AHEAD, trace=trace.event)
+        known=row_context, pool=AHEAD, trace=trace.event,
+        check=check_asker(client))
+
+
+def check_asker(client, parts=None) -> Optional[Callable]:
+    """The request that asks of a find whether the place it was quoted from
+    speaks about its value (`reading.Judge`, owner decisions 2026-11-07),
+    the same for a find of the second reading and one of the combing; None
+    where the profile writes no prompt for it. *parts* is the prompt cut at
+    its parts where the caller has it."""
+    if parts is None:
+        try:
+            parts = parts_of(reading_map.CHECK_PROMPT_ID)
+        except (FileNotFoundError, LookupError):
+            return None
+
+    def check(payload, shape, document_id, source, group=None, example=None,
+              thread=None, follow=None):
+        # A find quoted from a passage the value's own request did not show:
+        # does that place speak about the value?
+        thread = thread if thread is not None else thread_map.Thread()
+        prompt, conversation = threaded(parts, thread, payload, follow,
+                                        example=example)
+        return ask_in_grammar(
+            client, prompt, conversation, shape, document_id, "comb_check",
+            "about", example=example, thread=thread,
+            parameter=thread.first["parameter"]["key"],
+            kind=source.owner_kind, owner=source.owner_id, group=group,
+            corrections=told(follow))
+    return check
 
 
 def make_namer(spec: Spec, passages_of: Callable) -> Optional[Callable]:
@@ -2289,7 +2318,7 @@ def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
     try:
         comb_parts, check_parts = (parts_of(prompt_id) for prompt_id in
                                    (combing_map.COMB_PROMPT_ID,
-                                    combing_map.CHECK_PROMPT_ID))
+                                    reading_map.CHECK_PROMPT_ID))
     except (FileNotFoundError, LookupError):
         return None
     client = _client()
@@ -2313,24 +2342,11 @@ def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
             kind=source.owner_kind, owner=source.owner_id, group=group,
             round=answers_in(thread) + 1, corrections=told(follow))
 
-    def check(payload, shape, document_id, source, group=None, example=None,
-              thread=None, follow=None):
-        # A find quoted from a passage other than the value's own: does that
-        # place speak about the value (owner decision 2026-11-07)?
-        thread = thread if thread is not None else thread_map.Thread()
-        prompt, conversation = threaded(check_parts, thread, payload, follow,
-                                        example=example)
-        return ask_in_grammar(
-            client, prompt, conversation, shape, document_id, "comb_check",
-            "about", example=example, thread=thread,
-            parameter=thread.first["parameter"]["key"],
-            kind=source.owner_kind, owner=source.owner_id, group=group,
-            corrections=told(follow))
-
     comber = combing_map.Comber(
         spec, ask, rank, row_context,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
-        pool=AHEAD, trace=trace.event, check=check)
+        pool=AHEAD, trace=trace.event,
+        check=check_asker(client, check_parts))
     # The sentences the search for a parameter the survey named no passage
     # for ranks with (`make_seek_probes`); None searches with its label.
     comber.seek = seek

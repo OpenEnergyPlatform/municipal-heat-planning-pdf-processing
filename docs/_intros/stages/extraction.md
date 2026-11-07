@@ -275,7 +275,15 @@ coordinate of every group of the value (`Reader._near_value`, owner decisions
 per group. A table read
 whole by the survey asks its open frame once for all its rows
 (`Reader._near_table`). The trace's `read` event counts the requests (`near`)
-and the coordinates they filled (`near_read`).
+and the coordinates they filled (`near_read`). A find of this second reading
+whose quote stands (first) in the section before or after the value's place,
+and not in what the first reading showed, is asked about once more, as a find
+of the combing is: does that place speak about the value (`reading.Judge`,
+`Reader._judge`, the check below; owner decision 2026-11-07)? A "no" takes
+the find out, the coordinate is not asked again in the reading (`_settled`)
+and goes open to the combing; the `read` event carries the requests as
+`judged` and the places turned as `turned`. `runner.check_asker` builds the
+request for the reading and the combing alike.
 
 A correction names every way that passes in its request (owner decision
 2026-11-06): an answer its quote does not hold is told to give the plan's own
@@ -303,9 +311,17 @@ it, in the plan's words, `runner.row_context`). Each further group is a message
 with its own words and only its coordinates (`reading.group_payload`): the
 parameter in full where the group classifies, the plan's years and the survey's
 pairs for a frame group. A correction, and the second reading beside the
-neighbouring passages, follow in the same conversation. A row made for a
-further name branches the conversation (`Thread.branch`) and shows its value
-again. The groups of the kwp spec stand in the order number, frame, context.
+neighbouring passages, follow in the same conversation. What the check refuses
+on any of the rows one reply made (one row per name of a coordinate that may
+name several things) is asked once more in ONE message after that reply, naming
+each refused name with its quote where the reply made several rows
+(`reading.told_once`, `Reader._settled`; owner decision 2026-11-07); before,
+each row was asked in a request of its own. Each answer of that follow-up goes
+to the row of its name, a changed name to the next refused row still open,
+and a further name becomes a row of its own; an answer that repeats an
+accepted row's answer unchanged corrects nothing, and a row corrected on
+another coordinate takes it from the first answer (`reading.routed`). The
+groups of the kwp spec stand in the order number, frame, context.
 A coordinate's `value_raw` is asked only where the coordinate is a closed list
 or a number (`fields.wording_asked`, `reading.answer_schema`); a free-text
 answer is its own wording, and the row keeps it beside the answer as
@@ -353,9 +369,18 @@ refuses `merged` on anything but a free-text axis or a free-text value, and a
 merged coordinate is never read in the survey (`survey.md` names no field of
 it). A value its passage states for several names of such a coordinate, as
 `"scenario": [{...}, {...}]`, is one row per name, each checked on its own
-(`reading.answers_each`; `reading.several` follows `merged`); a row the check
-refuses is asked once more alone, and the correction names the name and quote
-it was given (`reading.named_corrections`, `combing.named_rows`). The rows the
+(`reading.answers_each`; `reading.several` follows `merged`). Names that stand
+in one place may share one quote, `{"value": [names], "quote": ...}` with at
+least two names, no `value_raw`, and a quote that holds each name
+(`reading.answer_schema`; owner decision 2026-11-07): right after a reply
+arrives it is spread into one answer per name with that quote
+(`reading.spread`, `reading.entries_of`), so every check and every row reads
+one name with its quote, and each name is still checked on its own (answer in
+its quote, quote in a shown passage); no new check. Only the scenarios
+prompts `read_text` and `comb` show this form. The rows a reply made that the
+check refuses are asked once more in one message (`reading.told_once`, see
+above), the correction naming the name and quote it was given
+(`reading.named_corrections`). The rows the
 combing makes join their value's reading (`Combed.made`). A pass over a
 stored harvest re-reads each stored row in place and takes the first name.
 Asked for one name, a value of several scenarios was left without one: on one
@@ -475,7 +500,14 @@ with the reading's tools (`reading.Gathered`: a hit by its id, the next or the
 previous section, a table or figure by its placeholder, a pattern, a sentence
 of its own), each group with its own, and gives each open
 coordinate of the group it found, with its value and quote, and leaves out
-what it did not find (owner decision 2026-11-06). The combing does not offer
+what it did not find (owner decision 2026-11-06). A request for a coordinate
+that may name several things shows under `names` every name of that kind read
+in the plan so far, as a parameter value (such as `scenario_label`) and as a
+coordinate, each once, in reading order (`combing.names_read`, with
+`naming.merged_slots` and `naming.read_name`), so the model can give all
+scenarios a value holds for at once; each still needs a quote that contains
+it. A pass over a stored harvest shows none (owner decision 2026-11-07). The
+combing does not offer
 "not stated": its reply grammar requires no coordinate and takes no
 `out:unstated`, and the options of a closed list it shows leave that entry
 out (`reading.coordinate_shown(slot, unstated=False)`,
@@ -495,10 +527,17 @@ filled 153 of 272. A request shows that one row under
 `row`, with no list of rows and no row label, and the reply carries the asked
 coordinates at its top with `more` beside them, no `rows` wrapper and no label
 (`combing.comb_response_format`, read back as the row by `combing.as_rows`,
-owner decision 2026-11-06); a correction is told as one object for that row,
-`{"what": {...}}` (`combing.shown_corrections`), after the answer it is about,
-and a row made for a further name of a coordinate that may name several is
-asked on in a branch of the conversation. The answers go through
+owner decision 2026-11-06); the combing's corrections have the reading's
+form, a list of
+`{"coordinate", "what"}` (plus `"value"` and `"quote"` for a refused name),
+told after the answer they are about; a find the check turned is told once as
+such an entry. The combing has one conversation per value and no branches:
+what the check refuses on the value's row or on rows its reply made for
+further names is asked in ONE message after that reply (`reading.told_once`),
+each answer goes to the row of its name, a changed name to the next row still
+open, and a further name to a row of its own, made by `Comber._another` where
+the value is split (not in a pass over a stored harvest; `reading.routed`,
+`Comber.comb`; owner decisions 2026-11-07). The answers go through
 `merge_field` in window `retrieval`, a coordinate read before is never
 touched, and what the check refuses or the reply leaves out is asked once
 more (a coordinate the reply gave in another form than asked, such as a bare
@@ -530,29 +569,35 @@ was listed (owner decision 2026-11-06: the search runs empty;
 `reading.gather(..., then=...)`, `Gathered.unfit`, `Gathered.listed`). Only
 then does a coordinate no reply found end `unstated`, a finding about the plan.
 
-**The check of a find** (`combing.Comber._verdict`, prompt
-`extraction/comb_check`, `combing.CHECK_PROMPT_ID`, owner decision
+**The check of a find** (`reading.Judge`, prompt `extraction/comb_check`,
+`reading.CHECK_PROMPT_ID`, built by `runner.check_asker`, owner decision
 2026-11-07, both profiles). A find whose quote stands in a passage the request
-showed other than the value's own and its section gets one more request. It
+showed other than the value's own and its section gets one more request; so
+does a find of the reading's second reading (see above) whose quote stands in
+the section before or after the value's place. It
 shows the value's passage, the row, the coordinate's question, the answer and
 the place, the passage the quote stands in, whole or cut to the budget around
-the quote (`combing.place_text`), and asks `{"about": "yes"|"no"}`
-(`combing.ABOUT`, `combing.check_response_format`, `combing.check_example`).
-On "no" the find is taken out of the reply (reason `combing.NOT_ABOUT`,
+the quote (`reading.place_text`), and asks `{"about": "yes"|"no"}`
+(`reading.ABOUT`, `reading.check_response_format`, `reading.check_example`).
+On "no" the find is taken out of the reply (reason `reading.NOT_ABOUT`,
 `not_about_value`), the search goes on as for a coordinate left out, listing
 the next passages until every passage was shown, and the next message of the
 search tells the reason once under `corrections`, after the answer it
 follows, not in every later request. On "yes" the find stands. A find quoted
 from the value's own passage or its section is not checked, nor one that
 `merge_field` would refuse anyway (quote too short, quote shown nowhere, answer
-not in the quote); the same coordinate, answer and quote is asked about once.
+not in the quote); the same coordinate and quote is asked about once,
+whatever name or answer the find gives, and the answer holds for every name
+quoted from there (owner decision 2026-11-07, "einmal je Zitat"). The prompt
+is worded for a find of the second reading as well as of the search.
 A reply naming neither word is asked once more, told why, after its answer
 (`verdict_not_an_option`, a `corrections` follow-up); without a verdict the
 find stands. A probe showed why: the model attached the scenario of a neighbouring sentence to years of
 other figures, and picked single scenarios out of lists. The trace stage is
-`comb_check` (`schema.ASK_STAGES`); the `comb` event carries `judged`, the check
-requests, and `turned`, the finds the check said "no" to, which `stats.py`
-reports as `check_requests` and `finds_turned`; `estimate.TRACED` is derived
+`comb_check` (`schema.ASK_STAGES`); the `comb` and the `read` events carry
+`judged`, the check requests, and `turned`, the places the check said do not
+speak about the value, which `stats.py` reports in its `reading` and `combing`
+blocks as `check_requests` and `finds_turned`; `estimate.TRACED` is derived
 from `ASK_STAGES`, so `naming_groups_ask`, `years_ask` and `comb_check_ask` are
 counted.
 One whose request no longer fit the model's window before that ends
@@ -686,7 +731,8 @@ The server's window is measured over the prompts of this flow
 its kind, `read_values_ask`, `read_text_ask`, `comb_ask`, `comb_check_ask`, `naming_groups_ask` and `naming_ask`, each with its
 `group` where the request has one: `read_values_ask` carries `round`,
 `read_text_ask` carries `group` and `value`, and the `comb` event carries
-`group` and `listed`, the hit lists the run added. The requests for a search sentence, the frame, the review and
+`group` and `listed`, the hit lists the run added; the `read` event also
+carries `judged` and `turned`, the check's requests and the places it turned. The requests for a search sentence, the frame, the review and
 the compute step write `phrase_ask`, `frame_ask`, `review_ask` and
 `compute_ask` (`runner._asked`, one per reply, with its tokens). `stats.py`
 writes per run the requests per stage, every `<stage>_ask` kind under its

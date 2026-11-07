@@ -60,9 +60,19 @@ each of them, and "the passage does not say" is one of the answers
 A coordinate whose answer is the name the document gives a thing, such as
 a scenario, is read as the document prints it (`fields.Slot.merged`). A
 value the passage states for several of them is one row per name, each
-checked on its own (`answers_each`, owner decision 2026-11-06); a
-correction for one of them names its name. Which names mean the same thing
-is asked once the document is read (`naming.py`).
+checked on its own (`answers_each`, owner decision 2026-11-06); names that
+stand in one place may share one quote, which must hold each of them
+(`spread`, owner decision 2026-11-07). What the check refuses on any of the
+rows one answer made is asked once more in ONE message after that answer,
+naming each refused name with its quote, and each answer of it goes to the
+row of its name, a changed name to the next row still open, a further name
+to a row of its own (`routed`, owner decisions 2026-11-07). Which names
+mean the same thing is asked once the document is read (`naming.py`).
+
+A find of the second reading whose quote stands only in the section before
+or after the value's place is asked about once more: does that place speak
+about the value (`Judge`, owner decision 2026-11-07)? A "no" takes it out,
+and the coordinate goes to the combing open.
 
 Nothing is checked here beyond what the harvest checks everywhere. Every
 coordinate goes through `pipeline.merge_field` and every value through
@@ -201,6 +211,33 @@ The asks of one reply resolved (`lookup`), each passage cut to
 came of them the request has not shown yet: an ask for something
 shown already, or for nothing, ends the gathering.
 
+### Judge
+
+```python
+class Judge
+```
+
+Whether the place a find was quoted from speaks about its value
+(`CHECK_PROMPT_ID`, owner decisions 2026-11-07), for one value: asked
+where the quote stands in a passage the value's own request did not show
+(*own*: the owners of those it did), never where the check of quote and
+answer refuses the find anyway (`merge_field`). Asked once per
+coordinate and quote, whatever name the find gives: the question is
+about the place (owner decision 2026-11-07); a reply that names neither
+answer is asked once more, told why. *check(payload, shape,
+document_id, source, group, example, thread, follow)* is the request,
+*shown* the value's passage and parameter as it shows them
+(`check_shown`), *counts* what counts its requests (`judged`) and the
+places it said do not speak about the value (`turned`).
+
+#### Judge.\_\_init\_\_
+
+```python
+def __init__(self, check: Callable, document_id: int, shown: dict,
+             own: set, source: Source, group, passages: dict,
+             budget: Optional[int], counts) -> None
+```
+
 ### Read
 
 ```python
@@ -224,6 +261,8 @@ Fields:
 - `probes: list = field(default_factory=list)`: Per claim, in its order: the sentences its group replies wrote to the coordinates they found unstated, as the plan would print them, {coordinate: sentence}, which the combing ranks with. Not on the claim: no sentence enters the harvest.
 - `near: int = 0`: Requests of the second reading, which asked the coordinates the first left open once more with the sections around the value's place, and the coordinates they read (owner decision 2026-11-06).
 - `near_read: int = 0`
+- `judged: int = 0`: Finds of the second reading quoted from the sections around the value's place that the check was asked about, and those it said do not speak about the value (owner decision 2026-11-07).
+- `turned: int = 0`
 
 ### Reader
 
@@ -251,6 +290,10 @@ the value has read, as its request shows it (`known_shown`).
 *known(claim, asked)* is what a value has read in the plan's words
 (`runner.row_context`). *pool* reads passages side by side. No request
 of the reading has tools (owner decision 2026-11-05, ticket 26).
+*check(payload, shape, document_id, source, group, example, thread,
+follow)*, where given, asks of a find of the second reading quoted from
+a section around the value's place whether that place speaks about the
+value (`Judge`, owner decision 2026-11-07).
 
 #### Reader.\_\_init\_\_
 
@@ -259,7 +302,7 @@ def __init__(self, spec, ask_values: Callable, ask_text: Callable,
              frame_slots: list, *, shown_with: Optional[Callable] = None,
              bases: Optional[Callable] = None,
              known: Optional[Callable] = None,
-             pool=None, trace=None)
+             pool=None, trace=None, check: Optional[Callable] = None)
 ```
 
 #### Reader.context_of
@@ -405,8 +448,10 @@ only where `fields.wording_asked`; with *probe* also the sentence a reply
 writes to a coordinate its passage does not state, as the plan would
 print it, which the combing searches with (owner decision 2026-11-05:
 HyDE). A coordinate that may name several things (`several`) takes a
-list of such answers too. Without *unstated* its answer is never
-UNSTATED (`fields.value_schema`).
+list of such answers too, and an answer that names several of them with
+one quote, its names under "value" (owner decision 2026-11-07: one
+quote for several names; `spread`). Without *unstated* its answer is
+never UNSTATED (`fields.value_schema`).
 
 ### entry_example
 
@@ -422,6 +467,37 @@ included, and its quote. No probe: that is the sentence of an unstated
 entry, which the prompt's rule line shows. A coordinate that may name
 several things shows one, the form a list repeats.
 
+### names_several
+
+```python
+def names_several(given) -> bool
+```
+
+Does a coordinate's answer name several things: a list, or an answer
+whose names share one quote?
+
+### entries_of
+
+```python
+def entries_of(given) -> list
+```
+
+A coordinate's answer as single answers: each entry of a list, and an
+answer that names several things with one quote (owner decision
+2026-11-07) once per name, each with that quote.
+
+### spread
+
+```python
+def spread(reply, slots: list)
+```
+
+*reply* with each coordinate that may name several things
+(`several`) and names several as a list of single answers
+(`entries_of`): what follows a reply -- the check of a find, the rows of
+a value -- reads one name with its quote. Anything else is left as it
+is.
+
 ### answers_each
 
 ```python
@@ -430,9 +506,10 @@ def answers_each(reply, slots: list) -> list
 
 The reply for one value as one reply per row (owner decision
 2026-11-06): a coordinate that may name several things (`several`) and
-names a list of them gives one reply per name, with every other
-coordinate's answer the same on each; an empty list is no answer. Any
-other reply is the one reply.
+names several of them, in a list or with one quote for several
+(`entries_of`), gives one reply per name, with every other coordinate's
+answer the same on each; an empty list is no answer. Any other reply is
+the one reply.
 
 ### known_of
 
@@ -910,6 +987,92 @@ def named_corrections(corrections: list, reply: dict, slots: list) -> list
 (`answers_each`): each correction of a coordinate that named several
 things names the name this row was given, and its quote, so the request
 asks again for that one.
+
+### told_once
+
+```python
+def told_once(corrections: dict, given: dict, slots: list,
+              named: bool) -> list
+```
+
+What ONE message after an answer tells of the rows it made (owner
+decision 2026-11-07: one follow-up per reply): each row's corrections
+(*corrections*, {row label: [{coordinate, what}]}) in the order of the
+rows, with *named* those of a coordinate that named several things
+naming the name and quote that row was given (*given*, {row label: its
+answer}; `named_corrections`), each correction told once.
+
+### routed
+
+```python
+def routed(answers: list, rows: list, corrections: dict, given: dict,
+           slots: list) -> list
+```
+
+[(row or None, answer, {coordinate})]: where each answer of a
+follow-up (`answers_each`) goes, and which of its coordinates (owner
+decisions 2026-11-07). An answer for a coordinate that may name several
+things goes to the row its name was refused on, a changed name to the
+next such row still open (they differ only in the name refused), and a
+name for none of them to a row of its own (None); one that repeats
+another row's answer unchanged corrects nothing. A row corrected on the
+other coordinates takes them from the first answer, which holds them
+for every name. *corrections* is {row label: [{coordinate, ...}]},
+*given* {row label: the answer it got before}.
+
+### cleared
+
+```python
+def cleared(claim: dict, names: list) -> dict
+```
+
+*claim* with the coordinates *names* open again: a row of its own
+for a further name starts from a copy of its value.
+
+### check_response_format
+
+```python
+def check_response_format() -> dict
+```
+
+What the check of a find answers: whether the place it was quoted
+from speaks about the value, one of `ABOUT`.
+
+### check_example
+
+```python
+def check_example() -> dict
+```
+
+The reply of a check as its example shows it.
+
+### place_text
+
+```python
+def place_text(text: str, quote: str, budget: Optional[int]) -> str
+```
+
+The text of the place a check shows: whole where it fits *budget*
+characters, else the stretch of *budget* around *quote*, so the quote
+stands in what is shown.
+
+### check_shown
+
+```python
+def check_shown(source: Source, parameter) -> dict
+```
+
+The value's passage and parameter as the check shows them.
+
+### turned_out
+
+```python
+def turned_out(reply, slots: list, judge: Optional[Judge], evidence: list,
+               row: dict) -> tuple
+```
+
+(*reply* without each find whose place the check says does not speak
+about the value (`Judge`), {coordinate: [the answers taken out]}).
 
 ### same
 

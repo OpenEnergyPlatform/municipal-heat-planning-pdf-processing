@@ -179,10 +179,6 @@ def test_a_request_shows_one_row_and_its_answers_stand_at_the_top():
     assert combing.as_rows(dict(everything(year=YEAR), more=more), "R2") == {
         "rows": [dict(everything(year=YEAR), row="R2")], "more": more}
     assert combing.as_rows(reading.CUT, "R2") is reading.CUT
-    # A correction names its row, and a request is told only its own.
-    told = [{"row": "R2", "what": {"year": "x"}}]
-    assert combing.shown_corrections(told, "R2") == {"what": {"year": "x"}}
-    assert combing.shown_corrections(told, "R1") is None
     # Two values are two requests, never one.
     made, _, _ = comber({})
     with pytest.raises(ValueError, match="one row"):
@@ -253,7 +249,8 @@ def test_a_quote_from_nothing_the_request_showed_is_not_read():
     # Told in the names of what a combing request shows (owner decision
     # 2026-11-06), not in those of another request.
     (again,) = [p for p in asked if p.get("corrections")]
-    assert again["corrections"] == {"what": {"year": say("quote_not_shown")}}
+    assert again["corrections"] == [{"coordinate": "year",
+                                     "what": say("quote_not_shown")}]
     # A message after the answer it corrects (owner decisions 2026-11-07).
     assert again["follows"] and "coordinates" not in again
 
@@ -410,7 +407,8 @@ def test_an_answer_in_another_form_is_asked_again_as_such_then_unanswered():
     made, asked, _ = comber({"year": 2030})
     read = reads(year_only(), probes=[SAID])
     (done,) = made(7, read, PASSAGES, [])
-    assert asked[1]["corrections"] == {"what": {"year": say("wrong_shape")}}
+    assert asked[1]["corrections"] == [{"coordinate": "year",
+                                        "what": say("wrong_shape")}]
     assert read[0].claims[0]["year_state"] == fields.UNANSWERED
     assert done.asked == 2 and done.listed == 0
     # The failure by construction: given in the form asked, it is read.
@@ -427,7 +425,8 @@ def test_a_quote_without_its_answer_is_told_to_be_fixed_or_left_out():
     made, asked, _ = comber(lacking, {})
     read = reads(year_only(), probes=[SAID])
     made(7, read, PASSAGES, [])
-    told = asked[1]["corrections"]["what"]["year"]
+    (told,) = [one["what"] for one in asked[1]["corrections"]
+               if one["coordinate"] == "year"]
     # A year may be named by the plan's word ("Basisjahr"): that way first.
     assert told.startswith(say("answer_not_in_quote", answer=2030))
     assert told.endswith(say(combing.NOT_IN_QUOTE, unstated=UNSTATED))

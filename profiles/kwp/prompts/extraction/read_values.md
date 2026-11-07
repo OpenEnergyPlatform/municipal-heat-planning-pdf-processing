@@ -3,6 +3,7 @@ temperature: 0
 max_tokens: 8192
 ---
 Nenne den ersten Wert der Kennzahl aus "parameter", der in der Reihenfolge des Plans in dieser Passage steht.
+Prüfe vor der Antwort, was die Definition ausschließt.
 Nimm nur Text aus "source" und der Überschrift ihres Abschnitts; was nur das Bild einer Abbildung zeigt, ist kein Text.
 Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! Steht kein Wert der Kennzahl in der Passage, antworte {"value":null}, sonst in dieser Form:
 {{example}}

@@ -1788,6 +1788,18 @@ field its first message carries. A figure goes with its crop, in the
 first message. Neither request has tools (owner decision 2026-11-05,
 ticket 26).
 
+### check_asker
+
+```python
+def check_asker(client, parts=None) -> Optional[Callable]
+```
+
+The request that asks of a find whether the place it was quoted from
+speaks about its value (`reading.Judge`, owner decisions 2026-11-07),
+the same for a find of the second reading and one of the combing; None
+where the profile writes no prompt for it. *parts* is the prompt cut at
+its parts where the caller has it.
+
 ### make_namer
 
 ```python

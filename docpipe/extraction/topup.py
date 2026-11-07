@@ -62,13 +62,11 @@ from .verify import Refusal, quote_in, verify_tuple
 
 log = logging.getLogger(__name__)
 
-# Every key one coordinate owns on a claim -- `schema._slot_properties`. Taking
+# Every key one coordinate owns on a claim (`fields.COORDINATE_KEYS`). Taking
 # a coordinate off means taking all of them: `merge_field` short-circuits on
 # `<name>_state` alone, but a leftover `_quote` or `_source` would then be
 # evidence for an answer nobody gave.
-SLOT_KEYS = ("", "_state", "_raw", "_raw_foreign", "_quote", "_source",
-             "_window", "_seen", "_link_quote", "_link_source", "_means",
-             fields.PRODUCER)
+SLOT_KEYS = fields.COORDINATE_KEYS
 
 # A coordinate that was read stays read unless the sweep reads it again.
 KEEP_READ = (fields.READ, fields.DERIVED)

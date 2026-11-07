@@ -97,6 +97,15 @@ OUT_OF_SLICE = "out_of_slice"
 PRODUCER = "_producer"
 BY_HARVEST, BY_PASS, BY_UNKNOWN = "harvest", "pass", "unknown"
 
+# Every key one coordinate owns on a claim (`schema._slot_properties`): its
+# answer and state, its wording, its quote and the passage that holds it,
+# where it was read, what the model saw where it found it unstated, its link,
+# the names of what it means (`naming.MEANS`) and the pass that read it.
+# Taking a coordinate off, or copying it whole, means all of them.
+COORDINATE_KEYS = ("", "_state", "_raw", "_raw_foreign", "_quote", "_source",
+                   "_window", "_seen", "_link_quote", "_link_source",
+                   "_means", PRODUCER)
+
 
 def reader_of(row: dict, name: str, producers) -> tuple:
     """(who, index, entry) for the coordinate `name` of a stored row.

@@ -15215,6 +15215,9 @@
       },
       "type": "object"
      },
+     "judged": {
+      "type": "integer"
+     },
      "kind": {
       "enum": [
        "section",
@@ -15236,6 +15239,9 @@
      },
      "t": {
       "const": "read"
+     },
+     "turned": {
+      "type": "integer"
      },
      "unanswered": {
       "type": "integer"

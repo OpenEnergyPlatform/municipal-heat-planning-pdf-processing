@@ -287,7 +287,8 @@ def from_traces(trace_dirs: Iterable[Path],
                     readings["readings"] += 1
                     if event.get("unread"):
                         unread_why[str(event.get("why"))] += 1
-                    for key in ("values", "unanswered"):
+                    for key in ("values", "unanswered", "judged",
+                                "turned"):
                         readings[key] += _int(event, key)
                     refused_first.update(
                         {str(w): n for w, n in
@@ -357,15 +358,20 @@ def from_traces(trace_dirs: Iterable[Path],
             "answers_not_taken": surveyed["dropped"],
             "passages_by_parameter": dict(survey_by_parameter)},
         # Readings (one passage for one parameter), the readings that came to
-        # no reply per reason, values read, coordinates left unanswered and
-        # the check's refusals of the first answer per reason. A reading has
+        # no reply per reason, values read, coordinates left unanswered, the
+        # check's refusals of the first answer per reason, and the requests
+        # that asked whether a section around a value's place a find of its
+        # second reading was quoted from speaks about the value, and the
+        # places they said do not (owner decision 2026-11-07). A reading has
         # no tools (ticket 26), so it fetches and searches nothing.
         "reading": {
             "readings": readings["readings"],
             "unread_by_reason": dict(unread_why),
             "values": readings["values"],
             "coordinates_unanswered": readings["unanswered"],
-            "refused_first_by_reason": dict(refused_first)},
+            "refused_first_by_reason": dict(refused_first),
+            "check_requests": readings["judged"],
+            "finds_turned": readings["turned"]},
         # Combed passages (one passage for one parameter), coordinates open
         # when combed, filled and left exhausted, hits shown, passages
         # fetched, hit lists the model asked for, lists of the next

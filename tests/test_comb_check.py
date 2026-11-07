@@ -14,6 +14,7 @@ keeps it.
 """
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from docpipe.extraction import combing, fields, reading
 from docpipe.extraction.pipeline import Batch, Source, WorkItem
@@ -56,6 +57,13 @@ def year_open():
         out[f"{name}_state"] = fields.READ
     out["year_state"] = fields.SAID_UNSTATED
     return out
+
+
+def told(corrections: list, name: str) -> list:
+    """What the corrections of a follow-up say of the coordinate *name*:
+    each is {coordinate, what} (owner decisions 2026-11-07)."""
+    return [one["what"] for one in corrections or ()
+            if one.get("coordinate") == name]
 
 
 def year(value: int, quote: str) -> dict:
@@ -119,8 +127,8 @@ def test_a_no_takes_the_find_out_and_the_search_goes_on_told_why():
     assert value["year"] == 2017 and value["year_source"] == ["section", 117]
     assert done.turned == 1 and done.judged == 2 and done.listed == 1
     assert "corrections" not in asked[0]
-    assert asked[1]["corrections"]["what"]["year"] == say(
-        "not_about_value", answer=2003)
+    assert told(asked[1]["corrections"], "year") == [say(
+        "not_about_value", answer=2003)]
     # The failure by construction: without the check the first find stands.
     made, _, _ = comber([from_section(3)], [], checked_too=False)
     value, _ = combed(made)
@@ -134,8 +142,8 @@ def test_a_find_turned_and_given_again_is_not_asked_about_twice():
     # listed to its end and the year is unstated.
     assert len(checked) == 1 and done.turned == 1
     assert value["year_state"] == fields.SAID_UNSTATED
-    assert all(payload["corrections"]["what"]["year"]
-               == say("not_about_value", answer=2003)
+    assert all(told(payload["corrections"], "year")
+               == [say("not_about_value", answer=2003)]
                for payload in asked[1:])
 
 
@@ -155,8 +163,8 @@ def test_a_turned_find_is_told_once_in_its_conversation():
     assert len(checked) == 1 and done.turned == 1
     assert [p.get("follows", False) for p in asked] == [False, True, True]
     assert [p for p in asked if p.get("corrections")] == [asked[1]]
-    assert asked[1]["corrections"]["what"]["year"] == say(
-        "not_about_value", answer=2003)
+    assert told(asked[1]["corrections"], "year") == [say(
+        "not_about_value", answer=2003)]
     assert [len(one["hits"]) for p in asked for one in p["hits"]] == [
         15, 15, 10]
 
@@ -181,10 +189,10 @@ def test_a_find_the_check_of_quote_and_answer_refuses_is_not_checked():
         made, asked, checked = comber([wrong], [{"about": "no"}])
         value, done = combed(made)
         assert checked == [] and done.judged == 0
-        told = [payload["corrections"]["what"]["year"] for payload in asked
-                if payload.get("corrections")]
-        assert told and say("not_about_value",
-                            answer=wrong["year"]["value"]) not in told
+        said = [what for payload in asked
+                for what in told(payload.get("corrections"), "year")]
+        assert said and say("not_about_value",
+                            answer=wrong["year"]["value"]) not in said
         assert value["year_state"] != fields.READ
 
 
@@ -217,3 +225,31 @@ def test_a_long_place_is_shown_around_its_quote():
     shown = combing.place_text(text, "Die Werte gelten für das Jahr 2003.", 100)
     assert len(shown) == 100 and "Die Werte gelten für das Jahr 2003." in shown
     assert combing.place_text("kurz", "kurz", 100) == "kurz"
+
+
+# Promise: the check is asked once per coordinate and quote, whatever the
+# find gives for it, AND its answer holds for each (owner decision
+# 2026-11-07); by construction, two years from one quote and one from
+# another.
+def test_the_check_is_asked_once_per_quote_whatever_the_find_names():
+    asked = []
+
+    def check(payload, shape, document_id, source, group=None, example=None,
+              thread=None, follow=None):
+        asked.append(payload)
+        return {"about": "no"}
+    counts = SimpleNamespace(judged=0, turned=0)
+    year = next(slot for slot in reading.slots_of(SPEC, EMISSION)
+                if slot.name == "year")
+    quote = "Die Werte gelten für die Jahre 2003 und 2004."
+    place = Source("section", 103, f"S3\n{quote}", {})
+    judge = reading.Judge(check, 7, reading.check_shown(OWN, EMISSION),
+                          {("section", 6)}, OWN, None,
+                          {("section", 103): place}, None, counts)
+    row = {"value": 300}
+    assert [judge(year, {"value": value, "quote": quote}, [OWN, place], row)
+            for value in (2003, 2004)] == ["no", "no"]
+    assert len(asked) == 1 and (counts.judged, counts.turned) == (1, 1)
+    judge(year, {"value": 2003, "quote": "Die Werte gelten für die Jahre "
+                                         "2003"}, [OWN, place], row)
+    assert len(asked) == 2

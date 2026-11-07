@@ -1107,9 +1107,14 @@ def trace_schema() -> dict:
                  "unread": {"type": "boolean"},
                  "why": {"enum": ["cut_off", "no_answer"]},
                  # The second reading (owner decision 2026-11-06): its
-                 # requests and the coordinates they read.
+                 # requests and the coordinates they read; the requests that
+                 # asked whether the section a find was quoted from speaks
+                 # about the value, and the places they said do not (owner
+                 # decision 2026-11-07).
                  "near": {"type": "integer"},
-                 "near_read": {"type": "integer"}},
+                 "near_read": {"type": "integer"},
+                 "judged": {"type": "integer"},
+                 "turned": {"type": "integer"}},
         # The comb of what a reading left open (combing.py): per value and
         # group, the coordinates open and how many the requests filled.
         "comb": {"parameter": {"type": "string"},
@@ -1209,7 +1214,7 @@ def trace_schema() -> dict:
            for stage in ("phrase", "frame", "review", "compute")},
         "comb": {"group", "listed", "table_rows", "judged", "turned"},
         "read": {"corrected", "failed", "unanswered", "unread", "why",
-                 "near", "near_read"},
+                 "near", "near_read", "judged", "turned"},
         "completion": {"filled", "id", "key", "matched"},
     }
     # Optional on every event: what the run could not always know. Requiring
