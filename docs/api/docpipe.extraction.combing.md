@@ -38,6 +38,11 @@ A round that asks for nothing new while a coordinate is still unfound gets
 the next passages of the ranking, as many of each kind as the first list,
 or of the plan in its order where there is no ranking, until every passage
 of the plan was listed (owner decision 2026-11-06: the search runs empty).
+The rounds are one conversation (owner decisions 2026-11-07, `thread.py`):
+the first message shows the value, the coordinates asked and the first
+hits; each later one follows the answer before it and brings only what is
+new, what the model fetched, the next hits, what could not be fetched, and
+what was wrong, a find the check turned told once.
 Only then is a coordinate no reply found `unstated`, a finding about the
 plan; one whose request no longer fits the model's window before that ends
 `exhausted`, a finding about the run.
@@ -118,18 +123,21 @@ class Comber
 (document_id, reads, passages, pairs, budget) -> [Combed], one per
 read value and group of the spec with an open coordinate.
 
-*ask(payload, shape, document_id, source, group, example)* is one
-request: the reply as a dict, CUT, or None, *group* the name of the group
-of the spec it asks, for its trace, *example* the reply its prompt shows
-(`comb_example`). *rank(document_id, probes, exclude)* is the plan's
-passages best first for the search sentences *probes*
-(`runner.make_more_sources`): the reading's sentences, and the model's
-own under "similar". *known(claim, asked)* is what a row has read in the
+*ask(payload, shape, document_id, source, group, example, thread,
+follow)* is one message of a conversation (`thread.Thread`): the first
+shows *payload*, a later one carries *follow*, what is new since the
+answer it follows (`FOLLOWS`); the reply as a dict, CUT, or None,
+*group* the name of the group of the spec it asks, for its trace,
+*example* the reply its prompt shows (`comb_example`).
+*rank(document_id, probes, exclude)* is the plan's passages best first
+for the search sentences *probes* (`runner.make_more_sources`): the
+reading's sentences, and the model's own under "similar". *known(claim, asked)* is what a row has read in the
 plan's words (`runner.row_context`). *check(payload, shape, document_id,
-source, group, example)*, where given, is the request that asks of a
-find quoted from a passage other than the value's own and its section
-whether that place speaks about the value (`CHECK_PROMPT_ID`, owner
-decision 2026-11-07).
+source, group, example, thread, follow)*, where given, is the request
+that asks of a find quoted from a passage other than the value's own
+and its section whether that place speaks about the value
+(`CHECK_PROMPT_ID`, owner decision 2026-11-07), a reply that names
+neither answer told so after it.
 
 #### Comber.\_\_init\_\_
 

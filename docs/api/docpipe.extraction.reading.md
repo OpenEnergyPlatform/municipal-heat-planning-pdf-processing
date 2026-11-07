@@ -36,15 +36,22 @@ document's pairs is its year, read off the head line and not asked
 (`pipeline.with_head`, owner decision 2026-11-03); where exactly one pair has
 that year, the pair's scenario is the value's too (`pipeline.head_pair`).
 Then every group of the spec (`Spec.groups`, `groups_of`) is asked for this
-one value, its coordinates still open only. A request begins with what is the
-same for every request of its parameter and group (the parameter, in full
-only where the group classifies, its questions with their lists), then what
-is the same in a plan (its base and target years), then the passage, and the
-value comes last, marked, with what is already read of it, so a server reads
-each shared beginning once (owner decision 2026-11-05, ticket 26). Each group
-has its own system prompt, its section of the prompt (`group_prompts`), and
-its own correction round, and only a group that asks a frame coordinate is
-shown the pairs and the plan's base and target years.
+one value, its coordinates still open only, in the order of the spec, all in
+one conversation (owner decisions 2026-11-07, `thread.py`): the first message
+shows the passage and the value, each group's message brings the words of
+that group and its coordinates only, and the model sees what it answered for
+the groups before. A first message begins with what is the same for every
+request of its parameter and group (the parameter, in full only where the
+group classifies, its questions with their lists), then what is the same in
+a plan (its base and target years), then the passage, and the value comes
+last, marked, with what is already read of it, so a server reads each shared
+beginning once (owner decision 2026-11-05, ticket 26). The system prompt is
+what every group is told and the part of each field the first message
+carries; only a group that asks a frame coordinate is shown the pairs and the
+plan's base and target years. The rounds of a passage's values are a
+conversation as well: each later round asks for the next value after the
+answer it follows. A correction and the second reading go after the answer
+they are about, in its conversation.
 
 Every coordinate asked is answered: the grammar of a group request requires
 each of them, and "the passage does not say" is one of the answers
@@ -128,9 +135,30 @@ Fields:
 def context(self) -> dict
 ```
 
-What the request shows of the gathering so far, as it stands
-now: a later round adds to the gathering, not to a request sent.
-Each hit list without what it was searched with (`SEARCHED_WITH`).
+What a first message shows of the gathering so far: the passages
+fetched under "more", the hit lists under "hits", each without what
+it was searched with (`SEARCHED_WITH`), and what could not be
+fetched under "not_found".
+
+#### Gathered.mark
+
+```python
+def mark(self) -> tuple
+```
+
+Where the gathering stands: how many passages it showed, hit
+lists it made and misses it noted, for what a later message brings
+anew (`since`).
+
+#### Gathered.since
+
+```python
+def since(self, mark: tuple) -> dict
+```
+
+What the gathering added after *mark*, as `context` shows it: a
+later round of a search brings only what is new, after the answer
+it follows (owner decisions 2026-11-07).
 
 #### Gathered.listed
 
@@ -206,13 +234,17 @@ class Reader
 (document_id, survey, passages) -> [Read], one per parameter and
 passage the survey named for it.
 
-Two requests, each with one task and one value (owner decisions
-2026-11-04 and 2026-11-05), each the reply as a dict, CUT, or None:
-*ask_values(source, parameter, context, read, corrections)* the next
-value of a passage not among *read*; *ask_text(source, parameter, group,
-slots, row, context, corrections)* one group's coordinates of that
-value. *context* is what the request shows beside its passage,
-*corrections* None the first time and what was wrong the second.
+Two kinds of request, each with one task and one value (owner
+decisions 2026-11-04 and 2026-11-05), each the reply as a dict, CUT, or
+None, and each a message of a conversation (`thread.Thread`, owner
+decisions 2026-11-07): *ask_values(source, parameter, context, read,
+thread, follow)* the first value of a passage not among *read*, or,
+with *follow*, what follows the answer of *thread*: the next value, a
+correction; *ask_text(source, parameter, group, slots, row, context,
+thread, follow)* one group's coordinates of that value: the first
+message of the value's conversation, the message of its next group, or,
+with *follow*, a correction or its second reading. *context* is what
+the first message shows beside its passage.
 *shown_with(source)* is what a coordinate's quote may stand in besides
 the passage: the heading it stands under (`heading_of`); so may what
 the value has read, as its request shows it (`known_shown`).
@@ -543,13 +575,15 @@ def gather(ask: Callable, reply: dict, gathered: Gathered, order: list,
 ```
 
 (the reply that stands, the requests made): what each reply asks of
-the rest of the plan is fetched and the request sent again, until a round
-asks for nothing the request has not shown or the request no longer fits
-the model's window (`Gathered.unfit`). The reply before such a round
-stands. *then(reply)*, where given, is asked when a round asks for
-nothing new: True when it showed the request something new, which sends
-it again (the combing lists the next passages of its ranking, owner
-decision 2026-11-06).
+the rest of the plan is fetched and *ask()* sends the next round, a
+message after that reply bringing what is new (owner decisions
+2026-11-07: the rounds are one conversation), until a round asks for
+nothing the conversation has not shown or it no longer fits the model's
+window (`Gathered.unfit`). The reply before such a round stands.
+*then(reply)*, where given, is asked when a round asks for nothing new:
+True when it showed the request something new, which sends it again
+(the combing lists the next passages of its ranking, owner decision
+2026-11-06).
 
 ### parameter_shown
 
@@ -599,20 +633,22 @@ A value as a request shows it: its value, wording, quote and head.
 ### values_payload
 
 ```python
-def values_payload(source: Source, parameter, context: dict, read: list,
-                   corrections: Optional[list] = None) -> dict
+def values_payload(source: Source, parameter, context: dict,
+                   read: list = ()) -> dict
 ```
 
-One round of the values of a passage: the parameter in short, a
-category parameter with its entries (`value_classes`), first, the same
-in every round of the parameter; then the passage and the text around a
-table or figure, the same in every round of the passage; the values
-already read (*read*) last; with *corrections* the value of the round
-the check refused, asked once more (ticket 26: what requests share
+The first message of the values of a passage: the parameter in
+short, a category parameter with its entries (`value_classes`), first,
+the same in every conversation of the parameter; then the passage and
+the text around a table or figure (ticket 26: what requests share
 stands first). Nothing of the value's coordinates. The line of the
 title page that names the plan's own place stands before the passage,
 the same in a plan; the title and head of the table the passage may
-continue after it (`beside_of`).
+continue after it (`beside_of`). The next value, and a value the check
+refused, are asked after the answer in the same conversation (owner
+decisions 2026-11-07); *read*, the values named so far, stands only in
+a conversation begun anew because the old one no longer fit the
+model's window (`Reader._rounds`).
 
 ### values_response_format
 
@@ -746,9 +782,7 @@ reads it as one (owner decision 2026-11-06).
 
 ```python
 def text_payload(source: Source, parameter, slots: list, row: Row,
-                 where: str, context: dict,
-                 corrections: Optional[list] = None,
-                 full: bool = False) -> dict
+                 where: str, context: dict, full: bool = False) -> dict
 ```
 
 One group's request for one value, what its requests share first
@@ -760,11 +794,32 @@ group, the plan's base and target years, the same in a plan; then the
 passage, the text around a table or figure and, for a frame group, the
 survey's pairs of the passage (`group_context`); the value last, with
 its quote and, under "read", what is already read of it in the plan's
-words; with *corrections* the same request asked once more. The line of
-the title page stands with the plan's years, the table the passage may
-continue after it (`beside_of`), and in a second reading the sections
-before and after the value's place (`near_of`). A request for every
-value of a table at once says so ("whole_table", `Reader._near_table`).
+words. The line of the title page stands with the plan's years, the
+table the passage may continue after it (`beside_of`), and, in the second
+reading of a value no conversation stands for, the sections before and
+after its place (`near_of`). A request for every value of a table at once
+says so ("whole_table", `Reader._near_table`). It is the first message
+of the value's conversation: its next group, a correction and its
+second reading follow the answer (`group_payload`, owner decisions
+2026-11-07).
+
+### group_payload
+
+```python
+def group_payload(parameter, slots: list, where: str, context: dict,
+                  full: bool = False) -> dict
+```
+
+The message that asks the next group of a value in its conversation
+(owner decision 2026-11-07: one conversation per value, each group a
+message of its own): the group's coordinates and the spec's words for
+where a plan prints them, the parameter's full definition where the
+group classifies (*full*) and the conversation has not shown it, and for
+a frame group the plan's base and target years and the survey's pairs of
+the passage (`group_context`). The passage and the value stand in the
+first message; a row the conversation goes on for that its answers do
+not show, a further name a reply gave (`_Job.clone`), is shown again
+with what it has read ("value").
 
 ### text_response_format
 
@@ -786,21 +841,6 @@ the coordinates this request asks, in its order, each read
 (`entry_example`). The model writes the keys its example shows: with one
 example per prompt, 183 of 184 heat load requests left out the
 "aggregation" it did not show (owner decision 2026-11-06).
-
-### group_prompts
-
-```python
-def group_prompts(prompt, groups) -> dict
-```
-
-{group name: the prompt its requests send}: what stands before the
-first section (`GROUP_SECTION`) is every group's, then the group's own
-section (owner decision 2026-11-05, ticket 26: one system prompt per kind
-of request, with only its rules). A prompt without sections is every
-group's as it is, the one prompt of a profile with one group. A prompt
-with sections has one for each of *groups* and none for any other group:
-a group without its rules, or rules no group reads, raises LookupError,
-which the run raises at its start (`runner.surveyed_flow`).
 
 ### answer_of
 

@@ -90,10 +90,11 @@ class Survey
 
 document_id -> Found.
 
-*ask(context, document_id, corrections)* is one request: the reply as a
-dict, CUT, or None when it could not be read. A reply with something not
-taken is asked once more with what was wrong (`corrections_of`), and
-what either reply backs is taken. *passages_of(document_id)* is every
+*ask(context, document_id, thread, follow)* is one message of a
+conversation (`thread.Thread`): the reply as a dict, CUT, or None when
+it could not be read. A reply with something not taken is followed by
+what was wrong (`corrections_of`, owner decisions 2026-11-07), and what
+either reply backs is taken. *passages_of(document_id)* is every
 passage of the document in its order, *pages_of(document_id)* its page
 count. *pool* runs a document's requests side by side (None: one after
 another). *store* is where surveys are kept, *scope* the name of a
@@ -201,15 +202,15 @@ def key_of(prompt_text: str, parameters: dict, groups: dict,
 ### payload
 
 ```python
-def payload(context: list, parameters: dict, groups: dict,
-            corrections: Optional[list] = None) -> dict
+def payload(context: list, parameters: dict, groups: dict) -> dict
 ```
 
 One request: its one passage under "source", without an id, the
 title and head of the table right before it, which a table may continue
 ("table_before", `lookup.continued`, owner decision 2026-11-06), the
-parameters and the groups; with *corrections* the same request asked
-once more.
+parameters and the groups. What was wrong with its answer follows that
+answer in the same conversation (`FOLLOWS`, owner decisions
+2026-11-07).
 
 ### corrections_of
 

@@ -11,6 +11,21 @@ READOFF_MARKER = "read off"
 READOFF_NOTE = ("(Note: some values were read off from figures – estimates, "
                 "reading errors possible.)")
 
+# How a statement about a number the code printed, or one read off a
+# requested image, is given: told in the message that brings the output or
+# the image, not before (owner decision 2026-11-07: each request is told what
+# it is to do).
+_COMPUTED = (' A statement about a calculated number is {"statement": "...", '
+             '"basis": "computed", "index": <int of the excerpt that holds the '
+             'input values>, "quote": "<verbatim sentence or table row from '
+             'that excerpt with the input values>", "run": <number of the run '
+             'under "Already executed" whose output printed the number>}. '
+             'Never give a calculated number with basis "text".')
+_READ_OFF = (' Give what you read as {"statement": "...", "basis": "image", '
+             '"block": "p17_img1", "reading": "..."}, with the id of the image '
+             'instead of an index.')
+
+
 PHRASES = {
     "task_heading": "User's task",
     "history_heading": ("Conversation so far (use it ONLY to resolve references in the "
@@ -35,17 +50,18 @@ PHRASES = {
     "compute_heading": "Already executed",
     "compute_guide": ("Give the final answer in the prescribed JSON format — or, only "
                       "if truly necessary, another "
-                      '{"action":"python","code":...}.'),
+                      '{"action":"python","code":...}.' + _COMPUTED),
     "compute_guide_final": ("Give the final answer NOW, in the prescribed JSON format "
-                            "(NO more action objects)."),
+                            "(NO more action objects)." + _COMPUTED),
 
     "image_heading": "Requested figures (see images)",
     "image_uncaptioned": "no caption",
     "image_unavailable": "image unavailable",
     "image_guide": ("Read the value off the image and give the final answer — or, only "
-                    'if truly necessary, another {"action":"image","id":"..."}.'),
+                    'if truly necessary, another {"action":"image","id":"..."}.'
+                    + _READ_OFF),
     "image_guide_final": ("Give the final answer NOW, in the prescribed JSON format "
-                          "(NO more action objects)."),
+                          "(NO more action objects)." + _READ_OFF),
     "image_part": "Image for excerpt index={index}",
 
     "readoff_heading": "To read off (per the pre-check)",

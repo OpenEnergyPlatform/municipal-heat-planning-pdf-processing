@@ -94,6 +94,7 @@ from . import reading as reading_map
 from . import replies
 from . import survey as survey_map
 from . import surveyed as surveyed_map
+from . import thread as thread_map
 from . import years as years_map
 from . import scheduler
 from . import scratch
@@ -1958,11 +1959,18 @@ def system_text(prompt, example: Optional[dict]) -> str:
 
 def ask_in_grammar(client, prompt, conversation: list, shape: dict,
                    document_id: int, where: str, key: str,
-                   example: Optional[dict] = None, **noted):
+                   example: Optional[dict] = None,
+                   thread: Optional[thread_map.Thread] = None, **noted):
     """One request of the rebuilt harvest: the reply as a dict, "cut_off"
     when it did not fit its room, or None when it could not be read. The
     prompt shows *example*, the reply this request asks for
     (`system_text`).
+
+    With *thread* the request is one message of a conversation (owner
+    decisions 2026-11-07): a follow-up is sent under the system prompt the
+    conversation began with, and the answer that stands is kept in it with
+    every message sent, so the next follow-up goes after it
+    (`thread.Thread`).
 
     Asked again with the cause when the reply is no JSON object, or one
     without a key its schema requires (`_lacking`), as every request of the
@@ -1978,7 +1986,8 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
     client = _repeating(client)
     temperature = float(prompt.meta.get("temperature", 0))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
-    text = system_text(prompt, example)
+    text = (thread.system if thread is not None and thread.begun
+            else system_text(prompt, example))
     failures = Failures(document_id)
     faults = 0
     for attempt in range(1, MAX_RETRIES + 1):
@@ -2008,6 +2017,12 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
             answer = _loads_object(reply.message.content)
             lacking = _lacking(answer, shape)
             if isinstance(answer, dict) and lacking is None:
+                if thread is not None:
+                    thread.system = text
+                    thread.messages = [
+                        *conversation,
+                        {"role": "assistant",
+                         "content": reply.message.content or ""}]
                 return answer
             faults += 1
             cause, correction = _reply_fault(reply, limit,
@@ -2032,23 +2047,94 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
     return None
 
 
+# The fields each prompt's follow-ups carry, whose words its file must hold
+# (`thread.cut`, owner decisions 2026-11-07): a run whose prompt lacks them
+# stops at its start (`surveyed_flow`).
+FOLLOWS = {
+    reading_map.READ_VALUES_PROMPT_ID: reading_map.VALUE_FOLLOWS,
+    reading_map.READ_TEXT_PROMPT_ID: reading_map.TEXT_FOLLOWS,
+    combing_map.COMB_PROMPT_ID: combing_map.FOLLOWS,
+    combing_map.CHECK_PROMPT_ID: combing_map.CHECK_FOLLOWS,
+    survey_map.SURVEY_PROMPT_ID: survey_map.FOLLOWS,
+    years_map.YEARS_PROMPT_ID: years_map.FOLLOWS,
+    naming_map.NAMING_PROMPT_ID: naming_map.FOLLOWS,
+    naming_map.GROUPS_PROMPT_ID: naming_map.FOLLOWS,
+    computing.COMPUTE_PROMPT_ID: computing.FOLLOWS,
+}
+
+
+def parts_of(prompt_id: str, spec: Optional[Spec] = None, profile=None):
+    """The prompt *prompt_id* cut at its parts (`thread.cut`): with *spec*,
+    the reading's groups must each have theirs, and every field its
+    follow-ups carry (`FOLLOWS`) its words. LookupError where it does not
+    fit."""
+    prompt = prompts.load(prompt_id, profile)
+    groups = (spec.groups.values() if spec is not None
+              and prompt_id == reading_map.READ_TEXT_PROMPT_ID else None)
+    return thread_map.cut(prompt, groups, follows=FOLLOWS.get(prompt_id, ()))
+
+
+def threaded(parts, thread, payload: Optional[dict] = None,
+             follow: Optional[dict] = None, content=None,
+             example: Optional[dict] = None) -> tuple:
+    """(prompt, conversation) of one message of *thread* (owner decisions
+    2026-11-07): a follow-up (*follow*) goes after the answer that stands,
+    in the words of the parts its fields need, with the reply the request
+    asks for (*example*) where they show one; a first message shows
+    *payload* (as *content* where given, such as a figure with its crop)
+    under the system prompt of what every request of its kind is told and
+    the part of each field it carries."""
+    if follow is not None:
+        return parts.prompt, thread.then(parts.follow_up(follow, example))
+    thread.first = payload
+    if content is None:
+        content = json.dumps(payload, ensure_ascii=False, indent=2)
+    return parts.system(payload), [{"role": "user", "content": content}]
+
+
+def told(follow: Optional[dict]) -> int:
+    """How many corrections a follow-up carries, for the trace."""
+    return len((follow or {}).get(thread_map.CORRECTIONS) or ())
+
+
+def worded(words: str, payload: dict) -> str:
+    """A message: its words, then what it shows as JSON."""
+    data = json.dumps(payload, ensure_ascii=False, indent=2)
+    return f"{words}\n\n{data}" if words else data
+
+
+def answers_in(thread) -> int:
+    """How many answers a conversation holds."""
+    return sum(1 for message in thread.messages
+               if message.get("role") == "assistant")
+
+
+def shows_in_full(first: dict, parameter) -> bool:
+    """Has the first message of a conversation shown *parameter* with its
+    full definition?"""
+    shown = (first or {}).get("parameter") or {}
+    return shown.get("definition") == parameter.description
+
+
 def make_reader(spec: Spec, image_root: Optional[Path] = None):
     """The reading of one parameter's passages (`reading.Reader`), or None
     when the profile writes no prompts for it or its spec names no groups.
-    Two requests, each with one task and one value (owner decisions
-    2026-11-04 and 2026-11-05): the next value of a passage, and one
-    group's coordinates of one value, each group with its own system prompt
-    (`reading.group_prompts`). A figure goes with its crop. Neither request
-    has tools (owner decision 2026-11-05, ticket 26)."""
+    Two kinds of request, each with one task and one value (owner decisions
+    2026-11-04 and 2026-11-05), each a message of a conversation (owner
+    decisions 2026-11-07, `thread.py`): the values of a passage, the next
+    one after each answer, and one value's coordinates, each group of the
+    spec a message with its own words (`thread.Parts.group`). A system
+    prompt holds what its kind of request is told and the part of each
+    field its first message carries. A figure goes with its crop, in the
+    first message. Neither request has tools (owner decision 2026-11-05,
+    ticket 26)."""
     if not spec.groups:
         return None
     try:
-        values_prompt = prompts.load(reading_map.READ_VALUES_PROMPT_ID)
-        text_prompt = prompts.load(reading_map.READ_TEXT_PROMPT_ID)
+        values_parts = parts_of(reading_map.READ_VALUES_PROMPT_ID)
+        text_parts = parts_of(reading_map.READ_TEXT_PROMPT_ID, spec)
     except (FileNotFoundError, LookupError):
         return None
-    text_prompts = reading_map.group_prompts(text_prompt,
-                                             spec.groups.values())
     client = _client()
     frame_slots = [slot for group in spec.groups_read_in("survey")
                    for slot in fields.frame_slots(spec, group.coordinates)]
@@ -2069,35 +2155,65 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
                 return [{"type": "text", "text": text}, part]
         return text
 
-    def ask_values(source, parameter, context, read, corrections=None):
-        text = json.dumps(reading_map.values_payload(
-            source, parameter, context, read, corrections),
-            ensure_ascii=False, indent=2)
+    def ask_values(source, parameter, context, read, thread, follow=None):
+        # The first message shows the passage; what follows an answer is the
+        # ask for the next value or a correction (owner decisions
+        # 2026-11-07).
         head = reading_map.with_head_asked(parameter, source)
+        example = reading_map.values_example(parameter, head)
+        if thread.begun:
+            prompt = values_parts.prompt
+            conversation = thread.then(values_parts.follow_up(follow,
+                                                              example))
+        else:
+            payload = reading_map.values_payload(source, parameter, context,
+                                                 read)
+            prompt = values_parts.system(payload)
+            conversation = [{"role": "user", "content": content_of(
+                source, json.dumps(payload, ensure_ascii=False, indent=2))}]
         return ask_in_grammar(
-            client, values_prompt,
-            [{"role": "user", "content": content_of(source, text)}],
+            client, prompt, conversation,
             reading_map.values_response_format(parameter, head),
-            document_of(source), "read_values", "value",
-            example=reading_map.values_example(parameter, head),
-            parameter=parameter.uri, kind=source.owner_kind,
-            owner=source.owner_id, round=len(read) + 1,
-            corrections=len(corrections or ()))
+            document_of(source), "read_values", "value", example=example,
+            thread=thread, parameter=parameter.uri, kind=source.owner_kind,
+            owner=source.owner_id, round=answers_in(thread) + 1,
+            corrections=told(follow))
 
-    def ask_text(source, parameter, group, slots, row, context,
-                 corrections=None):
-        text = json.dumps(reading_map.text_payload(
-            source, parameter, slots, row, group.where, context,
-            corrections, full=group.full_definition),
-            ensure_ascii=False, indent=2)
+    def ask_text(source, parameter, group, slots, row, context, thread,
+                 follow=None):
+        # The first message of a value's conversation shows the passage and
+        # the value with the words of its first group; each next group is a
+        # message with its own words; a correction and the second reading
+        # follow the answer they are about (owner decisions 2026-11-07).
+        example = reading_map.text_example(slots)
+        if follow is not None:
+            prompt = text_parts.prompt
+            conversation = thread.then(text_parts.follow_up(follow, example))
+        elif thread.begun:
+            payload = reading_map.group_payload(
+                parameter, slots, group.where, context,
+                full=group.full_definition and not shows_in_full(
+                    thread.first, parameter))
+            prompt = text_parts.prompt
+            conversation = thread.then(worded(
+                text_parts.group(group.name, example), payload))
+        else:
+            payload = reading_map.text_payload(
+                source, parameter, slots, row, group.where, context,
+                full=group.full_definition)
+            thread.first = payload
+            prompt = text_parts.system(payload)
+            conversation = [{"role": "user", "content": content_of(
+                source, worded(text_parts.group(group.name, example),
+                               payload))}]
         return ask_in_grammar(
-            client, text_prompts[group.name],
-            [{"role": "user", "content": content_of(source, text)}],
+            client, prompt, conversation,
             reading_map.text_response_format(slots), document_of(source),
-            "read_text", slots[0].name,
-            example=reading_map.text_example(slots), parameter=parameter.uri,
-            kind=source.owner_kind, owner=source.owner_id, group=group.name,
-            value=row.label, corrections=len(corrections or ()))
+            "read_text", slots[0].name, example=example, thread=thread,
+            parameter=parameter.uri, kind=source.owner_kind,
+            owner=source.owner_id,
+            group=group.name if group is not None else None,
+            value=row.label, corrections=told(follow))
 
     return reading_map.Reader(
         spec, ask_values, ask_text, frame_slots,
@@ -2117,32 +2233,38 @@ def make_namer(spec: Spec, passages_of: Callable) -> Optional[Callable]:
     if not naming_map.merges(spec):
         return None
     try:
-        groups_prompt, prompt = (prompts.load(prompt_id) for prompt_id
-                                 in naming_map.NAMING_PROMPT_IDS)
+        groups_parts, parts = (parts_of(prompt_id) for prompt_id
+                               in naming_map.NAMING_PROMPT_IDS)
     except (FileNotFoundError, LookupError):
         return None
     client = _client()
 
-    def ask_groups(payload, shape, document_id, kind, example=None):
+    def ask_groups(payload, shape, document_id, kind, example=None,
+                   thread=None, follow=None):
         # The candidates (owner decision 2026-11-06): every name with its
-        # quote, the groups that may name one thing.
-        text = json.dumps(payload, ensure_ascii=False, indent=2)
+        # quote, the groups that may name one thing; what was wrong follows
+        # the answer (owner decisions 2026-11-07).
+        thread = thread if thread is not None else thread_map.Thread()
+        prompt, conversation = threaded(groups_parts, thread, payload,
+                                        follow, example=example)
         return ask_in_grammar(
-            client, groups_prompt, [{"role": "user", "content": text}],
-            shape, document_id, "naming_groups", naming_map.GROUPS,
-            example=example, kind=kind, names=len(payload["names"]),
-            corrections=len(payload.get("corrections") or ()))
+            client, prompt, conversation, shape, document_id,
+            "naming_groups", naming_map.GROUPS, example=example,
+            thread=thread, kind=kind, names=len(payload["names"]),
+            corrections=told(follow))
 
-    def ask(payload, shape, document_id, kind, example=None):
+    def ask(payload, shape, document_id, kind, example=None, thread=None,
+            follow=None):
         # One request per name (owner decision 2026-11-06): the name asked
         # with its places, its candidates with their quotes.
-        text = json.dumps(payload, ensure_ascii=False, indent=2)
+        thread = thread if thread is not None else thread_map.Thread()
+        prompt, conversation = threaded(parts, thread, payload, follow,
+                                        example=example)
         return ask_in_grammar(
-            client, prompt, [{"role": "user", "content": text}], shape,
-            document_id, "naming", naming_map.MEANT, example=example,
-            kind=kind, names=len(payload["names"]),
-            places=len(payload["name"]["places"]),
-            corrections=len(payload.get("corrections") or ()))
+            client, prompt, conversation, shape, document_id, "naming",
+            naming_map.MEANT, example=example, thread=thread, kind=kind,
+            names=len(payload["names"]),
+            places=len(payload["name"]["places"]), corrections=told(follow))
 
     def embed(texts: list) -> list:
         return COALESCED.embed([{"text": text} for text in texts])
@@ -2165,9 +2287,9 @@ def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
     if not spec.groups:
         return None
     try:
-        prompt, check_prompt = (prompts.load(prompt_id) for prompt_id in
-                                (combing_map.COMB_PROMPT_ID,
-                                 combing_map.CHECK_PROMPT_ID))
+        comb_parts, check_parts = (parts_of(prompt_id) for prompt_id in
+                                   (combing_map.COMB_PROMPT_ID,
+                                    combing_map.CHECK_PROMPT_ID))
     except (FileNotFoundError, LookupError):
         return None
     client = _client()
@@ -2176,25 +2298,34 @@ def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None):
     from docpipe.profile import active_profile
     states = year_states_of(active_profile())
 
-    def ask(payload, shape, document_id, source, group=None, example=None):
-        text = json.dumps(payload, ensure_ascii=False, indent=2)
+    def ask(payload, shape, document_id, source, group=None, example=None,
+            thread=None, follow=None):
+        # The rounds of one value's search are one conversation, each later
+        # message what is new since the answer before (owner decisions
+        # 2026-11-07).
+        thread = thread if thread is not None else thread_map.Thread()
+        prompt, conversation = threaded(comb_parts, thread, payload, follow,
+                                        example=example)
         return ask_in_grammar(
-            client, prompt, [{"role": "user", "content": text}], shape,
-            document_id, "comb", "rows", example=example,
-            parameter=payload["parameter"]["key"], kind=source.owner_kind,
-            owner=source.owner_id, group=group,
-            corrections=len(payload.get("corrections") or ()))
+            client, prompt, conversation, shape, document_id, "comb", "rows",
+            example=example, thread=thread,
+            parameter=thread.first["parameter"]["key"],
+            kind=source.owner_kind, owner=source.owner_id, group=group,
+            round=answers_in(thread) + 1, corrections=told(follow))
 
-    def check(payload, shape, document_id, source, group=None, example=None):
+    def check(payload, shape, document_id, source, group=None, example=None,
+              thread=None, follow=None):
         # A find quoted from a passage other than the value's own: does that
         # place speak about the value (owner decision 2026-11-07)?
-        text = json.dumps(payload, ensure_ascii=False, indent=2)
+        thread = thread if thread is not None else thread_map.Thread()
+        prompt, conversation = threaded(check_parts, thread, payload, follow,
+                                        example=example)
         return ask_in_grammar(
-            client, check_prompt, [{"role": "user", "content": text}], shape,
-            document_id, "comb_check", "about", example=example,
-            parameter=payload["parameter"]["key"], kind=source.owner_kind,
-            owner=source.owner_id, group=group,
-            corrections=len(payload.get("corrections") or ()))
+            client, prompt, conversation, shape, document_id, "comb_check",
+            "about", example=example, thread=thread,
+            parameter=thread.first["parameter"]["key"],
+            kind=source.owner_kind, owner=source.owner_id, group=group,
+            corrections=told(follow))
 
     comber = combing_map.Comber(
         spec, ask, rank, row_context,
@@ -2226,20 +2357,25 @@ def make_years(spec: Spec, rank: Optional[Callable] = None):
     if not dates_by_plan(spec):
         return None
     try:
-        prompt = prompts.load(years_map.YEARS_PROMPT_ID)
+        parts = parts_of(years_map.YEARS_PROMPT_ID)
     except (FileNotFoundError, LookupError):
         return None
     client = _client()
     from docpipe.profile import active_profile
     states = year_states_of(active_profile())
 
-    def ask(payload, document_id, corrections=0):
-        text = json.dumps(payload, ensure_ascii=False, indent=2)
+    def ask(payload, document_id, thread=None, follow=None):
+        # The rounds are one conversation, each later message what is new
+        # since the answer before (owner decisions 2026-11-07).
+        thread = thread if thread is not None else thread_map.Thread()
+        example = years_map.example()
+        prompt, conversation = threaded(parts, thread, payload, follow,
+                                        example=example)
         return ask_in_grammar(
-            client, prompt, [{"role": "user", "content": text}],
-            years_map.response_format(), document_id, "years",
-            "base_years", example=years_map.example(),
-            corrections=corrections)
+            client, prompt, conversation, years_map.response_format(),
+            document_id, "years", "base_years", example=example,
+            thread=thread, round=answers_in(thread) + 1,
+            corrections=told(follow))
     return years_map.PlanYears(ask, frame_slots_of(spec), states, rank=rank,
                                trace=trace.event)
 
@@ -2292,7 +2428,7 @@ def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
     if not spec.groups:
         return None
     try:
-        prompt = prompts.load(survey_map.SURVEY_PROMPT_ID)
+        parts = parts_of(survey_map.SURVEY_PROMPT_ID)
     except (FileNotFoundError, LookupError):
         return None
     client = _client()
@@ -2301,32 +2437,38 @@ def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
     slots = survey_map.tuple_slots(spec)
     every = every or make_rest_of_document(db_path, content=content)
 
-    def conversation_of(context: list,
-                        corrections: Optional[list] = None) -> list:
-        text = json.dumps(survey_map.payload(context, parameters, groups,
-                                             corrections),
-                          ensure_ascii=False, indent=2)
+    def content_of(context: list, body: dict):
+        text = json.dumps(body, ensure_ascii=False, indent=2)
         source = survey_map.one_passage(context)
         if source.owner_kind == "figure" and source.image_path \
                 and ATTACH_IMAGES:
             part = _image_part(str(image_root / source.image_path)
                                if image_root else source.image_path)
             if part is not None:
-                return [{"role": "user",
-                         "content": [{"type": "text", "text": text}, part]}]
-        return [{"role": "user", "content": text}]
+                return [{"type": "text", "text": text}, part]
+        return text
 
-    def ask(context: list, document_id: int,
-            corrections: Optional[list] = None):
+    def ask(context: list, document_id: int, thread=None, follow=None):
+        # What was wrong follows the answer (owner decisions 2026-11-07); a
+        # figure goes with its crop in the first message.
+        thread = thread if thread is not None else thread_map.Thread()
+        body = (survey_map.payload(context, parameters, groups)
+                if follow is None else None)
+        example = survey_map.example(slots)
+        prompt, conversation = threaded(
+            parts, thread, body, follow,
+            content=content_of(context, body) if body is not None else None,
+            example=example)
         return ask_in_grammar(
-            client, prompt, conversation_of(context, corrections),
+            client, prompt, conversation,
             survey_map.response_format(parameters, slots),
-            document_id, "survey", "parameters",
-            example=survey_map.example(slots), passages=len(context),
-            corrections=len(corrections or ()),
+            document_id, "survey", "parameters", example=example,
+            thread=thread,
+            passages=len(context), corrections=told(follow),
             figure=any(s.owner_kind == "figure" for s in context))
 
-    key = survey_map.key_of(prompt.text, parameters, groups, LLM_MODEL)
+    key = survey_map.key_of(parts.prompt.text, parameters, groups,
+                            LLM_MODEL)
     log.info("survey%s: one per plan over %d parameter(s) and the group(s) "
              "%s, kept in %s", f" ({scope})" if scope else "",
              len(parameters), ", ".join(groups) or "-", Path(out) / "survey")
@@ -6279,6 +6421,9 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
         prompt = prompts.load(computing.COMPUTE_PROMPT_ID)
     except (FileNotFoundError, LookupError):
         return None
+    # A prompt that lacks the words of a follow-up stops the run here, not
+    # the step quietly.
+    parts = thread_map.cut(prompt, follows=computing.FOLLOWS)
     client = _client()
     temperature = float(prompt.meta.get("temperature", 0))
     max_tokens = int(prompt.meta.get("max_tokens", 2048))
@@ -6309,14 +6454,16 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
                  "reason": None}
         faults = 0
 
-        def request() -> dict:
-            # What it asked of the plan stands in the first message, so a
-            # request asked again with more is the same request grown.
-            return {"role": "user", "content": json.dumps(
-                {**computing.payload(question, shown, gathered.sources),
-                 **gathered.context()}, ensure_ascii=False, indent=2)}
-
-        conversation = [request()]
+        # The question is one conversation (owner decisions 2026-11-07):
+        # its first message shows what is wanted, the numbers and their
+        # passages; what it fetched, a number it took and its code's output
+        # follow the answer that asked for them, each with what is new.
+        first = {**computing.payload(question, shown, gathered.sources),
+                 **gathered.context()}
+        system = parts.system(first).text
+        conversation = [{"role": "user", "content": json.dumps(
+            first, ensure_ascii=False, indent=2)}]
+        fetched = {"mark": gathered.mark()}
 
         def told(said: Optional[str], text: str) -> None:
             conversation.extend(({"role": "assistant", "content": said or ""},
@@ -6343,7 +6490,7 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
             attempt += 1
             if stop is not None and stop.is_set():
                 return ended("stopped")
-            limit = answer_room(prompt.text, conversation, max_tokens)
+            limit = answer_room(system, conversation, max_tokens)
             if limit < MIN_ANSWER_TOKENS:
                 return ended("too_long")
             shape = replies.compute(
@@ -6358,7 +6505,7 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
                         model=LLM_MODEL,
                         temperature=retry_temperature(temperature, faults),
                         max_tokens=limit,
-                        messages=[{"role": "system", "content": prompt.text},
+                        messages=[{"role": "system", "content": system},
                                   *conversation],
                         extra_body=request_extras(),
                         response_format=providers.grammar("compute_reply",
@@ -6396,11 +6543,12 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
             answer = _loads_object(said)
             if isinstance(answer, dict) and order and gathered.fetch(
                     answer.get("more"), order, passages, budget):
-                # Asked again with what it fetched, as the reading is: a
-                # round that brings something new is no attempt, and the
-                # window bounds how many there are.
+                # What it fetched follows the answer that asked for it, as in
+                # the combing: a round that brings something new is no
+                # attempt, and the window bounds how many there are.
                 attempt -= 1
-                conversation[0] = request()
+                told(said, parts.follow_up(gathered.since(fetched["mark"])))
+                fetched["mark"] = gathered.mark()
                 continue
             taken = answer.get("take") if isinstance(answer, dict) else None
             if isinstance(taken, dict) and question.take is not None:
@@ -6418,9 +6566,12 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
                 if isinstance(made, computing.Number):
                     question.numbers.append(made)
                     noted["taken"] += 1
-                    conversation[0] = request()
-                    told(said, say("compute_taken", label=computing.label(
-                        len(question.numbers) - 1)))
+                    # The number it took, as the first message shows the
+                    # others, after the answer that took it.
+                    entry = computing.payload(question, shown,
+                                              gathered.sources)["numbers"][-1]
+                    told(said, worded(say("compute_taken", label=entry["id"]),
+                                      {"numbers": [entry]}))
                 else:
                     faults += 1
                     noted["untaken"] += 1
@@ -7005,8 +7156,9 @@ def surveyed_flow(spec: Spec, profile=None) -> bool:
     names the prompt, as `spec.load` stops at a broken group (owner decision
     2026-11-04). Switching silently harvested 100 plans one coordinate at a
     time and said so only in a log line. So does a group prompt whose
-    sections are not the spec's groups (`reading.group_prompts`), before a
-    request is sent rather than at the first plan's reading."""
+    parts are not the spec's groups, or one whose file lacks the words of a
+    field its follow-ups carry (`parts_of`), before a request is sent rather
+    than at the first plan's reading."""
     if not spec.groups:
         return False
     # The naming only where the spec merges names (`naming.py`), the plan's
@@ -7017,9 +7169,7 @@ def surveyed_flow(spec: Spec, profile=None) -> bool:
               *((years_map.YEARS_PROMPT_ID,) if dates_by_plan(spec) else ()))
     for prompt_id in needed:
         try:
-            prompt = prompts.load(prompt_id, profile)
-            if prompt_id == reading_map.READ_TEXT_PROMPT_ID:
-                reading_map.group_prompts(prompt, spec.groups.values())
+            parts_of(prompt_id, spec, profile)
         except (FileNotFoundError, LookupError) as exc:
             raise LookupError(
                 f"the spec names groups, so the profile "

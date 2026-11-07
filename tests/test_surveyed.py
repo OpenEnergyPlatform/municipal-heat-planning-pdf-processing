@@ -65,6 +65,17 @@ from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.trust import parameter_states
 from profiles.scenarios import extraction as scenarios_extraction
 
+
+def answered(thread, reply):
+    """What the run keeps of an answer (`runner.ask_in_grammar`): a reply
+    the conversation goes on after (owner decisions 2026-11-07)."""
+    if thread is not None and isinstance(reply, dict):
+        thread.messages = [*thread.messages, {"role": "user", "content": ""},
+                           {"role": "assistant",
+                            "content": json.dumps(reply)}]
+    return reply
+
+
 SPEC = load_spec(json.loads((Path(__file__).resolve().parent.parent
                              / "profiles" / "kwp" / "extraction_spec.json")
                             .read_text(encoding="utf-8")))
@@ -251,7 +262,8 @@ def test_start_at_surveys_the_found_passages_and_a_gained_parameter_the_rest():
 def test_a_survey_of_part_of_a_plan_is_kept_under_its_scope(tmp_path):
     asked = []
 
-    def leaves_out_the_table(context, document_id, corrections=None):
+    def leaves_out_the_table(context, document_id, thread=None,
+                             follow=None):
         asked.append(len(context))
         return {} if context[0].owner_kind == "table"             else {"parameters": ["out:none"]}
 
@@ -312,9 +324,12 @@ def test_a_pass_combs_a_coordinate_in_its_own_passage_first():
 def comber(*replies, ranked=()):
     asked = []
 
-    def ask(payload, shape, document_id, source, group=None, example=None):
-        asked.append(payload)
-        return replies[min(len(asked), len(replies)) - 1]
+    def ask(payload, shape, document_id, source, group=None, example=None,
+            thread=None, follow=None):
+        # A follow-up as its message shows it (owner decisions 2026-11-07).
+        asked.append(payload if follow is None
+                     else {**follow, "follows": True})
+        return answered(thread, replies[min(len(asked), len(replies)) - 1])
 
     made = combing.Comber(SPEC, ask,
                           lambda d, probes, exclude: [

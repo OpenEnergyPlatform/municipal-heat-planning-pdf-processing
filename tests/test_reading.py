@@ -64,7 +64,7 @@ from pathlib import Path
 
 import jsonschema
 
-from docpipe.extraction import fields, lookup, reading
+from docpipe.extraction import fields, lookup, reading, thread
 from docpipe.extraction.pipeline import Row, Source, merge_field, route_claims
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.verify import verify_tuple
@@ -118,28 +118,64 @@ def nth(given, calls, task):
     return given[min(n, len(given)) - 1]
 
 
+def answered(thread, reply):
+    """What the run keeps of an answer (`runner.ask_in_grammar`): a reply
+    the conversation goes on after."""
+    if isinstance(reply, dict):
+        thread.messages = [*thread.messages,
+                           {"role": "user", "content": ""},
+                           {"role": "assistant",
+                            "content": json.dumps(reply)}]
+    return reply
+
+
+def sent(thread, follow, first):
+    """What a request sends as the run builds it (`runner.make_reader`): a
+    first message shows *first()*, a follow-up only its fields, marked
+    "follows", after the answer of its conversation; the conversation is
+    kept under "thread"."""
+    if follow is not None:
+        assert thread.begun, "a follow-up without an answer to follow"
+        return {**follow, "follows": True, "thread": thread}
+    payload = first()
+    if not thread.begun:
+        thread.first = payload
+    return {**payload, "thread": thread}
+
+
 def asking(values=({"value": None},), groups=None, spec=SPEC, frame=FRAME,
            **kw):
     """A Reader whose values requests are answered by *values* in turn and
     the requests of each group by *groups[name]* in turn, any other group
-    with every coordinate not printed; and each request as (task, payload),
-    the payload built as the run builds it."""
+    with every coordinate not printed, the second reading of a value in its
+    conversation by *groups["near"]*; and each request as (task, payload),
+    the payload built as the run builds it (`sent`)."""
     calls = []
 
-    def ask_values(source, parameter, context, read, corrections=None):
-        calls.append(("values", reading.values_payload(
-            source, parameter, context, read, corrections)))
-        return nth(values, calls, "values")
+    def ask_values(source, parameter, context, read, thread, follow=None):
+        calls.append(("values", sent(thread, follow, lambda:
+                                     reading.values_payload(
+                                         source, parameter, context, read))))
+        return answered(thread, nth(values, calls, "values"))
 
-    def ask_text(source, parameter, group, slots, row, context,
-                 corrections=None):
-        calls.append((group.name, reading.text_payload(
-            source, parameter, slots, row, group.where, context,
-            corrections, full=group.full_definition)))
-        given = (groups or {}).get(group.name)
+    def ask_text(source, parameter, group, slots, row, context, thread,
+                 follow=None):
+        name = group.name if group is not None else "near"
+        if thread.begun and follow is None:
+            first = lambda: reading.group_payload(
+                parameter, slots, group.where, context,
+                full=group.full_definition)
+        else:
+            first = lambda: reading.text_payload(
+                source, parameter, slots, row, group.where, context,
+                full=group.full_definition)
+        calls.append((name, sent(thread, follow, first)))
+        given = (groups or {}).get(name)
         if given is None:
-            return {slot.name: {"value": UNSTATED} for slot in slots}
-        return nth(given, calls, group.name)
+            reply = {slot.name: {"value": UNSTATED} for slot in slots}
+        else:
+            reply = nth(given, calls, name)
+        return answered(thread, reply)
 
     return reading.Reader(spec, ask_values, ask_text, frame, **kw), calls
 
@@ -162,6 +198,19 @@ def corrections_of(calls) -> list:
             if payload.get("corrections")]
 
 
+def firsts(calls) -> list:
+    """(task, payload) of each first message: the ones that show the
+    passage."""
+    return [(task, payload) for task, payload in calls if "source" in payload]
+
+
+def unstated_but(**given) -> dict:
+    """A reply to the second reading of EMISSION: every coordinate not
+    printed but those *given*."""
+    return {**{slot.name: {"value": UNSTATED}
+               for slot in reading.slots_of(SPEC, EMISSION)}, **given}
+
+
 def test_a_table_gives_its_rows_cell_by_cell_and_text_gives_none():
     grid = reading.grid_of(TABLE)
     assert grid.columns == 4 and len(grid.body) == 2
@@ -172,9 +221,17 @@ def test_a_table_gives_its_rows_cell_by_cell_and_text_gives_none():
 # -- the values of a passage, one per round ---------------------------------------
 
 def test_each_round_names_the_next_value_and_the_rounds_end_on_none():
+    # The rounds are one conversation (owner decisions 2026-11-07): the
+    # first message shows the passage, each later one asks for the next
+    # value after the answer it follows, and nothing lists what was named.
     read, calls = read_of(TEXT, values=(V300, V27,
                                         {"value": None}))
-    assert [p["read"] for p in rounds(calls)] == [[], [V300], [V300, V27]]
+    asked = rounds(calls)
+    assert [p.get("follows", False) for p in asked] == [False, True, True]
+    assert all(set(p) == {reading.NEXT, "follows", "thread"}
+               for p in asked[1:])
+    assert "read" not in asked[0]
+    assert len({id(p["thread"]) for p in asked}) == 1
     assert [c["value"] for c in read.claims] == [300, 27]
     none, calls = read_of(TEXT)
     assert none.claims == [] and not none.unread and len(rounds(calls)) == 1
@@ -388,24 +445,35 @@ def test_a_coordinate_may_quote_what_its_value_has_read():
 # The order of a group's request (ticket 26): the parameter's, the plan's,
 # the passage's, the value's.
 TEXT_KEYS = ("parameter", "coordinates", "where", "base_years",
-             "target_years", "source", "around", "known", "value",
-             "corrections")
+             "target_years", "source", "around", "known", "value")
 
 
-def test_each_group_is_asked_alone_and_only_a_frame_group_sees_the_pairs():
+def test_each_value_is_one_conversation_and_each_group_a_message_of_it():
+    # Owner decisions 2026-11-07: the first message shows the passage and
+    # the value with the first group's coordinates; each further group is a
+    # message of the same conversation with its own coordinates only; only a
+    # frame group is shown the pairs.
     read, calls = read_of(TEXT, values=(V300, V27,
                                         {"value": None}),
                           tuples=[PAIRS[0]], pairs=PAIRS)
     asked = [(task, payload) for task, payload in calls if task != "values"]
+    n = len(GROUPS)
     assert [task for task, _ in asked] == [g.name for g, _ in GROUPS] * 2
-    assert [p["value"]["value"] for _, p in asked] \
-        == [300] * len(GROUPS) + [27] * len(GROUPS)
-    for task, payload in asked:
+    assert [p["value"]["value"] for _, p in firsts(asked)] == [300, 27]
+    for value in (asked[:n], asked[n:]):
+        assert len({id(p["thread"]) for _, p in value}) == 1
+    assert asked[0][1]["thread"] is not asked[n][1]["thread"]
+    for index, (task, payload) in enumerate(asked):
         assert ("known" in payload) == (task in FRAMED), task
-        # What every request of the parameter shares first, the value last.
-        assert list(payload) == [key for key in TEXT_KEYS if key in payload]
-        assert list(payload)[0] == "parameter"
-        assert list(payload)[-1] == "value"
+        keys = [key for key in payload if key != "thread"]
+        assert keys == [key for key in TEXT_KEYS if key in payload]
+        if index % n:
+            # A further group: neither the passage nor the value again.
+            assert "source" not in payload and "value" not in payload
+        else:
+            # What every request of the parameter shares first, the value
+            # last.
+            assert keys[0] == "parameter" and keys[-1] == "value"
     assert read.asked == 3 + 2 * len(GROUPS)
 
 
@@ -602,14 +670,18 @@ def test_a_table_splits_into_halves_of_its_rows_under_its_title_and_head():
 def model(cut=lambda rows: False, silent=lambda rows: False):
     """A model reading LONG: CUT where *cut* says the rows shown do not fit,
     no reply where *silent* says so, else the next value of column 2."""
-    def answer(source, parameter, context, read, corrections=None):
+    def answer(source, parameter, context, read, thread, follow=None):
         body = [cells for _line, cells in reading.grid_of(source.text).body]
         labels = [cells[0] for cells in body]
         if cut(labels):
             return reading.CUT
         if silent(labels):
             return None
-        done = {r["value"] for r in read}
+        # What the conversation has named, and what a conversation begun
+        # anew shows under "read".
+        done = {r["value"] for r in read} | {
+            json.loads(m["content"]).get("value")
+            for m in thread.messages if m["role"] == "assistant"}
         for line, cells in reading.grid_of(source.text).body:
             value = int(cells[1].replace(".", ""))
             if value not in done:
@@ -622,10 +694,11 @@ def model(cut=lambda rows: False, silent=lambda rows: False):
 def read_long(answer):
     shown = []
 
-    def ask_values(source, parameter, context, read, corrections=None):
+    def ask_values(source, parameter, context, read, thread, follow=None):
         assert len(shown) < ENDLESS, "the reading asks without end"
         shown.append([c[0] for _l, c in reading.grid_of(source.text).body])
-        return answer(source, parameter, context, read, corrections)
+        return answered(thread, answer(source, parameter, context, read,
+                                       thread, follow))
 
     reader = reading.Reader(SPEC, ask_values, lambda *a, **k: {}, FRAME)
     long = table(LONG)
@@ -742,7 +815,7 @@ def test_a_year_printed_in_the_text_around_a_table_is_read_from_there():
     read, calls = read_of(placed(), values=(GAS, {"value": None}),
                           groups=FROM_AROUND, passages=passages)
     assert all("Die folgende Tabelle" in payload["around"]
-               for _task, payload in calls)
+               for _task, payload in firsts(calls))
     claim = read.claims[0]
     assert claim["year"] == 2022 and claim["year_state"] == "read"
     assert claim["year_source"] == ["section", 9]
@@ -808,10 +881,15 @@ def test_a_quote_from_a_section_not_shown_is_read_only_once_it_is_shown():
     # section under "after" (owner decision 2026-11-06), and the year is read
     # from it there.
     read, calls = read_of(BARE, values=(BARE_300, {"value": None}),
-                          groups={"frame": [frame(year=YEAR_AFTER)]},
+                          groups={"frame": [frame(year=YEAR_AFTER)],
+                                  "near": [unstated_but(year=YEAR_AFTER)]},
                           passages=PLAN)
     asked = [payload for task, payload in calls if task == "frame"]
-    assert "after" not in asked[0] and asked[-1]["after"] == AFTER.text
+    near = [payload for task, payload in calls if task == "near"]
+    assert "after" not in asked[0] and near[-1]["after"] == AFTER.text
+    # in the value's conversation, after its answers (owner decisions
+    # 2026-11-07)
+    assert near[-1]["follows"] and near[-1]["thread"] is asked[0]["thread"]
     claim = read.claims[0]
     assert claim["year_state"] == "read"
     assert claim["year_source"] == ["section", 8]
@@ -850,7 +928,10 @@ def shown_definitions(parameter):
     reader.read(7, parameter, source, [], [], {("section", 6): source})
     shown = {}
     for task, payload in calls:
-        shown.setdefault(task, payload["parameter"]["definition"])
+        # A further group's message shows the parameter only where it
+        # needs the full definition the conversation has not shown.
+        if "parameter" in payload:
+            shown.setdefault(task, payload["parameter"]["definition"])
     return shown
 
 
@@ -885,13 +966,15 @@ def prompt_of(text):
 
 
 def test_each_group_is_sent_the_shared_part_and_its_own_section():
-    per = reading.group_prompts(prompt_of(GROUPED), ["frame", "number"])
-    assert per["frame"].text == "Gemeinsam.\n\nRahmen.\n"
-    assert per["number"].text == "Gemeinsam.\n\nZahl.\n"
+    # The shared part is the system prompt, each group's words go with the
+    # message that asks it (owner decisions 2026-11-07).
+    per = thread.cut(prompt_of(GROUPED), ["frame", "number"])
+    assert per.system().text == "Gemeinsam.\n"
+    assert (per.group("frame"), per.group("number")) == ("Rahmen.", "Zahl.")
     # A prompt without sections is every group's as it stands.
-    plain = reading.group_prompts(prompt_of("Alles."), ["frame", "number"])
-    assert {name: one.text for name, one in plain.items()} \
-        == {"frame": "Alles.", "number": "Alles."}
+    plain = thread.cut(prompt_of("Alles."), ["frame", "number"])
+    assert plain.system().text == "Alles.\n"
+    assert plain.group("frame") == plain.group("number") == ""
     # the failures by construction: a group without its section, a section
     # without its group, a section twice
     for text, groups in ((GROUPED, ["frame", "number", "context"]),
@@ -899,7 +982,7 @@ def test_each_group_is_sent_the_shared_part_and_its_own_section():
                          (GROUPED + "<!-- group: frame -->\nNoch einmal.\n",
                           ["frame", "number"])):
         try:
-            reading.group_prompts(prompt_of(text), groups)
+            thread.cut(prompt_of(text), groups)
         except LookupError:
             continue
         raise AssertionError(f"no error for {groups}")
@@ -1088,11 +1171,17 @@ def test_the_second_reading_asks_what_is_open_with_the_sections_around():
     read, calls = read_of(BARE, values=(BARE_300, {"value": None}),
                           groups=number, passages=NEAR_PLAN)
     second = [(task, p) for task, p in calls if "before" in p]
-    assert {task for task, _ in second} == {"frame", "number", "context"}
-    asked = next(p for task, p in second if task == "number")
+    # One message after the value's answers, every group's open coordinates
+    # in it (owner decisions 2026-11-07).
+    assert [task for task, _ in second] == ["near"]
+    asked = second[0][1]
+    assert asked["follows"]
     # The unit was read, and a word printed with the number is not asked
     # again: neither comes back.
-    assert set(asked["coordinates"]) == {"subject"}
+    open_ = {name for group, slots in GROUPS for name in (
+        s.name for s in group.asked_near(slots))} - {"unit"}
+    assert set(asked["coordinates"]) == open_
+    assert "qualifier" not in asked["coordinates"]
     assert (asked["before"], asked["after"]) == (BEFORE.text, AFTER.text)
     assert read.near == len(second)
     # No section around the place: nothing more is asked.
@@ -1167,7 +1256,7 @@ def test_a_table_shows_the_head_of_the_table_right_before_it():
     kita = {"value": 61400, "quote": "| Kita | 61.400 |", "head": "Verbrauch"}
     read, calls = read_of(marked[1], values=(kita, {"value": None}))
     assert all(p["table_before"] == marked[1].provenance["table_before"][
-        "text"] for _task, p in calls)
+        "text"] for _task, p in firsts(calls))
     assert corrections_of(calls) == []
 
 

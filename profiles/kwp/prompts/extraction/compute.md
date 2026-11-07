@@ -12,8 +12,8 @@ Summe ("kind":"sum"): Gesucht ist die Summe der Zahlen über die Achse "over", f
 * Dieselbe Angabe zählt einmal, auch wenn sie in zwei Passagen oder in anderen Worten steht. Eine Zahl, die eine andere der Liste schon enthält, zählt nicht neben ihr, etwa "Biomasse" neben "Holz".
 * Schließen sich Zahlen aus, etwa Varianten oder Alternativen derselben Anlage, gibt es keine Summe. Fehlt ein Teil in "numbers", etwa weil eine Passage nur die größten Teile nennt, gibt es nichts zu rechnen, auch wenn er in einer Tabelle steht.
 
-Antworte immer mit genau einem JSON-Objekt, ohne Text oder Codeblock davor oder danach, je nach Schritt: nachsehen, übernehmen, rechnen oder das Ergebnis. No Backticks!
-* Nachsehen: {"more":[...]}. Du bekommst dieselbe Frage noch einmal, das Nachgeforderte unter "more" (je mit "id" M1, M2, …), Trefferlisten unter "hits" (je Treffer "id", Art, Titel und erste Zeile) und unter "not_found", was sich nicht holen ließ: "end" (in diese Richtung kein Abschnitt mehr), "unknown" (kein oder mehr als ein Platzhalter oder Treffer dieses Namens), "invalid_pattern" oder "timeout".
+Antworte immer mit genau einem JSON-Objekt, ohne Text oder Codeblock davor oder danach, je nach Schritt: nachsehen, übernehmen, rechnen oder nichts zu rechnen. No Backticks!
+* Nachsehen: {"more":[...]}, mit dem, was du lesen willst:
   - {"get":"next"} oder {"get":"previous"}: der Abschnitt nach oder vor der Passage des Anteils oder der ersten Zahl, beim nächsten Mal der danach oder davor;
   - {"get":"item","id":"..."}: die Tabelle oder Abbildung, deren Platzhalter in eckigen Klammern im Text steht;
   - {"get":"search","pattern":"..."}: Treffer für einen regulären Ausdruck, ohne Unterschied von Groß- und Kleinschreibung;
@@ -21,5 +21,7 @@ Antworte immer mit genau einem JSON-Objekt, ohne Text oder Codeblock davor oder 
   - {"get":"hit","id":"..."}: die Passage eines Treffers.
 * Übernehmen: {"take":{"parameter":"...","value":123.4,"unit":"...","quantity":"...","quantity_raw":"...","quote":"..."}} mit Einträgen aus "wanted.take": dem Parameter, einer seiner Einheiten und einem Schlüssel seiner Liste "quantity". "value" ist die Zahl, wie das Zitat sie druckt, "quantity_raw" das Wort des Plans für die Größe und "quote" die Stelle aus der gezeigten Passage mit der Zahl darin, Zeichen für Zeichen.
 * Rechnen: {"action":"python","code":"..."}. Bereit stehen "numbers" ("N1", "N2", … auf {"value", "unit"}), "sources" ("Q1", "M1", … auf den Text), "tables" (Liste aus {"caption", "markdown"}, die Tabellen unter den Passagen), numpy und pandas. Rechne mit "numbers", schreib keine Zahlen ab und gib genau das Ergebnis aus, mit "print(round(ergebnis, 3))".
-* Ergebnis, nach der Ausgabe: {"value":123.456,"used":["N1","N3"],"quote":"..."}. "value" ist die ausgegebene Zahl, Zeichen für Zeichen. "used" nennt die Zahlen, mit denen du gerechnet hast: Aus ihnen wird das Ergebnis als Anteil mal Ganzes durch 100 oder als ihre Summe nachgerechnet, und eine Zahl, die nicht aus ihnen folgt, wird verworfen. "quote" steht nur bei einem Anteil: die Stelle aus der Passage des Ganzen, Zeichen für Zeichen, die sagt, was dieses Ganze ist. Die Einheit ist die des Ganzen oder der Zahlen in "numbers".
 * Nichts zu rechnen: {"value":null,"used":[]}.
+
+<!-- follow-up: more hits not_found -->
+Hier ist, was neu dazukommt: unter "more" die Passagen, die du angefordert hast, je mit "id" M1, M2, …, unter "hits" Trefferlisten, je Treffer "id", Art, Titel und erste Zeile, und unter "not_found", was sich nicht holen ließ: "end" (in diese Richtung kein Abschnitt mehr), "unknown" (kein oder mehr als ein Platzhalter oder Treffer dieses Namens), "invalid_pattern" oder "timeout". Antworte wieder mit einem der Schritte.

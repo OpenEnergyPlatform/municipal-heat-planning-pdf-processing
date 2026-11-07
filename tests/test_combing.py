@@ -25,7 +25,11 @@ ends the listing; one whose request no longer fits before that ends
 exhausted. One given in another form than asked (a bare word where an
 object with "value" is asked) is asked for again as given in the wrong
 form and ends unanswered; a coordinate read before is never touched; and a
-first request that does not fit leaves every open coordinate exhausted.
+first request that does not fit leaves every open coordinate exhausted. The
+rounds of one value's search are one conversation (owner decisions
+2026-11-07): only its first message shows the row and the coordinates, AND
+each message after an answer brings only what is new since, AND together
+the messages list every passage once.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -38,6 +42,17 @@ from docpipe.extraction import combing, fields, reading
 from docpipe.extraction.pipeline import Batch, Row, Source, WorkItem, merge_field
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.wording import say
+
+
+def answered(thread, reply):
+    """What the run keeps of an answer (`runner.ask_in_grammar`): a reply
+    the conversation goes on after (owner decisions 2026-11-07)."""
+    if thread is not None and isinstance(reply, dict):
+        thread.messages = [*thread.messages, {"role": "user", "content": ""},
+                           {"role": "assistant",
+                            "content": json.dumps(reply)}]
+    return reply
+
 
 SPEC = load_spec(json.loads((Path(__file__).resolve().parent.parent
                              / "profiles" / "kwp" / "extraction_spec.json")
@@ -77,9 +92,12 @@ def reads(*claims, probes=()):
 def comber(*replies, ranked=(HIT,), ranking=True, known=None):
     asked, searched = [], []
 
-    def ask(payload, shape, document_id, source, group=None, example=None):
-        asked.append(payload)
-        return replies[min(len(asked), len(replies)) - 1]
+    def ask(payload, shape, document_id, source, group=None, example=None,
+            thread=None, follow=None):
+        # A follow-up as its message shows it (owner decisions 2026-11-07).
+        asked.append(payload if follow is None
+                     else {**follow, "follows": True})
+        return answered(thread, replies[min(len(asked), len(replies)) - 1])
 
     def rank(document_id, probes, exclude):
         searched.append((probes, set(exclude)))
@@ -97,6 +115,24 @@ def everything(**given):
     return out
 
 
+def conversations(asked) -> list:
+    """The messages of *asked* by conversation, each list beginning with the
+    message that shows the value (the comber asks in order without a pool):
+    the rounds of a search are one conversation (owner decisions
+    2026-11-07)."""
+    out = []
+    for payload in asked:
+        if not payload.get("follows"):
+            out.append([])
+        out[-1].append(payload)
+    return out
+
+
+def lists_of(asked) -> list:
+    """Every list of hits the messages of *asked* brought, in order."""
+    return [one for payload in asked for one in payload.get("hits") or ()]
+
+
 YEAR = {"value": 2030, "quote": "gelten für das Jahr 2030"}
 # What a reading that found the year unstated wrote to it.
 SAID = {"year": "Die Emissionen gelten für das Jahr 2022."}
@@ -111,12 +147,20 @@ def test_only_values_with_an_open_coordinate_are_combed_once_per_group():
     # the number itself (owner decision 2026-11-06).
     assert [d.group for d in done] == ["frame", "context"]
     assert all(d.rows == 1 for d in done)
+    firsts = [one[0] for one in conversations(asked)]
+    assert len(firsts) == 2
     assert not any({"subject", "qualifier", "aggregation"}
-                   & set(payload["coordinates"]) for payload in asked)
+                   & set(payload["coordinates"]) for payload in firsts)
     # One row per request, shown without a label (owner decision
-    # 2026-11-06).
+    # 2026-11-06), by the first message of its conversation; a message that
+    # follows an answer shows neither the row nor the coordinates again
+    # (owner decisions 2026-11-07).
     assert all("rows" not in payload and "row" not in payload["row"]
-               for payload in asked)
+               for payload in firsts)
+    follows = [payload for payload in asked if payload.get("follows")]
+    assert follows and not any(
+        {"row", "coordinates", "parameter", "passage"} & set(payload)
+        for payload in follows)
     # A value open in one group only is combed in that group alone.
     made, asked, _ = comber({})
     done = made(7, reads(claim(**{name: fields.READ for name in SLOTS
@@ -188,8 +232,8 @@ def test_the_combing_offers_no_not_stated():
     assert year == {"type": "integer"}
     made, asked, _ = comber({})
     made(7, reads(claim()), PASSAGES, [])
-    shown = [entry for payload in asked
-             for entry in payload["coordinates"].values()]
+    shown = [entry for one in conversations(asked)
+             for entry in one[0]["coordinates"].values()]
     assert any("options" in entry for entry in shown)
     assert all(UNSTATED not in entry.get("options", {}) for entry in shown)
     # The failure by construction: the reading still offers it.
@@ -208,9 +252,10 @@ def test_a_quote_from_nothing_the_request_showed_is_not_read():
     assert read[0].claims[0]["year_state"] == fields.UNBACKED
     # Told in the names of what a combing request shows (owner decision
     # 2026-11-06), not in those of another request.
-    (again,) = [p for p in asked if "year" in p["coordinates"]
-                and p.get("corrections")]
+    (again,) = [p for p in asked if p.get("corrections")]
     assert again["corrections"] == {"what": {"year": say("quote_not_shown")}}
+    # A message after the answer it corrects (owner decisions 2026-11-07).
+    assert again["follows"] and "coordinates" not in again
 
 
 def test_a_quote_from_a_hit_s_line_is_read_and_cites_the_hit():
@@ -296,12 +341,17 @@ def test_an_unfound_coordinate_lists_the_plan_to_its_end_then_is_unstated():
     read = reads(year_only(), probes=[SAID])
     (done,) = made(7, read, PLAN, [])
     assert read[0].claims[0]["year_state"] == fields.SAID_UNSTATED
-    listed = [hit["title"] for one in asked[-1]["hits"] for hit in one["hits"]]
+    lists = lists_of(asked)
+    listed = [hit["title"] for one in lists for hit in one["hits"]]
     assert sorted(listed) == sorted(s.text.split("\n")[0] for s in SECTIONS)
     assert len(listed) == len(set(listed))       # each passage listed once
-    assert [len(one["hits"]) for one in asked[-1]["hits"]] == [15, 5]
+    assert [len(one["hits"]) for one in lists] == [15, 5]
+    # Each message brings only the list that is new since the answer it
+    # follows (owner decisions 2026-11-07).
+    assert [p.get("follows", False) for p in asked] == [False, True]
+    assert [len(p["hits"]) for p in asked] == [1, 1]
     # The sentences ranked with are not shown (owner decision 2026-11-06).
-    assert all(set(one) == {"hits"} for one in asked[-1]["hits"])
+    assert all(set(one) == {"hits"} for one in lists)
     assert done.asked == 2 and done.listed == 1
     assert all("corrections" not in payload for payload in asked)
     # The failure by construction: a find on the second list ends it, read.
@@ -321,11 +371,11 @@ def test_without_a_ranking_the_plan_is_listed_in_its_order():
     (done,) = made(7, read, PLAN, [])
     assert "hits" not in asked[0]
     order = [s.text.split("\n")[0] for s in PLAN.values() if s is not OWN]
-    listed = [hit["title"] for one in asked[-1]["hits"] for hit in one["hits"]]
+    listed = [hit["title"] for one in lists_of(asked) for hit in one["hits"]]
     assert listed == ["Ausblick"] + [f"S{i}" for i in range(15)] \
         + [f"S{i}" for i in range(15, 20)]
     assert listed == order
-    assert all("query" not in one for one in asked[-1]["hits"])
+    assert all("query" not in one for one in lists_of(asked))
     assert read[0].claims[0]["year_state"] == fields.SAID_UNSTATED
 
 
@@ -417,20 +467,21 @@ def test_the_search_ranks_with_the_sentences_of_the_coordinates_asked():
          PASSAGES, [])
     # The year group alone has a sentence; the unit is read, not asked.
     assert [probes for probes, _ in searched] == [[SAID["year"]]]
-    framed = next(p for p in asked if "year" in p["coordinates"])
-    (listed,) = framed["hits"]
+    (framed,) = [one for one in conversations(asked)
+                 if "year" in one[0]["coordinates"]]
+    (listed,) = framed[0]["hits"]
     # Ranked with it, the list does not show it: the run wrote it, the plan
-    # does not print it (owner decision 2026-11-06).
+    # does not print it (owner decision 2026-11-06); no message does.
     assert set(listed) == {"hits"} and listed["hits"]
-    assert SAID["year"] not in json.dumps(framed, ensure_ascii=False)
+    assert SAID["year"] not in json.dumps(asked, ensure_ascii=False)
     # A group without a sentence starts without a list, and what it lists
     # later is the plan in its order.
-    others = [p for p in asked if "year" not in p["coordinates"]]
-    firsts = [p for p in others if "hits" not in p]
+    others = [one for one in conversations(asked)
+              if "year" not in one[0]["coordinates"]]
     # The context group; the number's has nothing to comb (its unit read).
-    assert len(firsts) == 1
-    assert all(set(one) == {"hits"} for p in others
-               for one in p.get("hits") or ())
+    assert len(others) == 1 and "hits" not in others[0][0]
+    assert lists_of(others[0])
+    assert all(set(one) == {"hits"} for one in lists_of(others[0]))
 
 
 def test_without_a_sentence_the_model_searches_itself_with_its_own():
@@ -477,8 +528,12 @@ def test_a_table_s_frame_open_on_every_value_is_combed_once_for_all():
     read = [reading.Read(batch, [gas, oil], probes=[SAID, SAID])]
     made, asked, _ = comber(everything(year=YEAR))
     done = made(7, read, {("table", 11): TABLE, ("section", 8): HIT}, [])
-    framed = [p for p in asked if "year" in p["coordinates"]]
-    assert len(framed) == 1 and framed[0]["row"]["whole_table"] is True
+    framed = [one[0] for one in conversations(asked)
+              if "year" in one[0]["coordinates"]]
+    # Said beside the row, where the prompt's part for it is sent with it
+    # (owner decisions 2026-11-07).
+    assert len(framed) == 1 and framed[0]["whole_table"] is True
+    assert "whole_table" not in framed[0]["row"]
     assert [d.table_rows for d in done if d.group == "frame"] == [1]
     assert [(c["year"], c["year_state"]) for c in (gas, oil)] == [
         (2030, fields.READ)] * 2
@@ -491,4 +546,4 @@ def test_a_table_s_frame_open_on_every_value_is_combed_once_for_all():
                          probes=[SAID, {}])]
     made, asked, _ = comber(everything(year=YEAR))
     made(7, read, {("table", 11): TABLE, ("section", 8): HIT}, [])
-    assert not any(p["row"].get("whole_table") for p in asked)
+    assert asked and not any("whole_table" in p for p in asked)

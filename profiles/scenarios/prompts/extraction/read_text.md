@@ -6,18 +6,14 @@ You read ONE passage of a scientific publication on climate and energy scenarios
 
 You get:
 - "source": the passage, the "text" of a section, of a whole table with its title, head and all its rows, or the description of a figure (a figure comes with its image), and the section it stands in.
-- "around", only for a table or a figure: the text of its section around it, with the sentence that announces it.
-- "table_before", only for a table that may continue the table right before it, on its page or the page before: the title and head of that table. If "source" continues that table, its title and head speak about the value too.
-- "before" and "after", only in a second request for what the first found unstated: the sections before and after the value's place. They count where they speak about THIS value.
 - "parameter": the field with its definition.
 - "coordinates": the coordinates asked, each with its question; "where": where a publication usually prints them.
 - "known": empty for publications.
 - "value": the value with "value", "quote" and, for a number in a table, the head of its column ("head"). "read", where something about it is read already: those coordinates in the publication's words.
-- "corrections", only in a second request: what was wrong with your first answer, per coordinate ("coordinate") under "what". You then answer once more in full and fix these points. A correction that names a "value" asks for that scenario alone.
 
-For EVERY coordinate from "coordinates" one entry with "value", the scenario's name as the publication prints it, copied character for character, and "quote": ONE contiguous place from "text", the heading under "section" or "around", copied character for character, that contains the name and speaks about THIS value; it may also stand in "table_before", "before" or "after". Where the question says so, "value" is an entry of the coordinate's "options" instead of a name, such as "status quo"; "value_raw" then holds the words of the quote that show it. Beside a name, "value_raw" repeats the name. From "around" only what speaks about THIS table or figure counts. If the publication states this value for several scenarios, give each of them as its own entry of a list, each with its own quote. If the publication does not name the coordinate, its entry is {"value": "out:unstated"}, without "quote". In that entry, write under "probe" one short sentence as the publication would print the coordinate for this value. What it says may be made up: it is only used to search the rest of the publication, never as an answer.
+For EVERY coordinate from "coordinates" one entry with "value", the scenario's name as the publication prints it, copied character for character, and "quote": ONE contiguous place from "text" or the heading under "section", copied character for character, that contains the name and speaks about THIS value. Where the question says so, "value" is an entry of the coordinate's "options" instead of a name, such as "status quo"; "value_raw" then holds the words of the quote that show it. Beside a name, "value_raw" repeats the name. If the publication states this value for several scenarios, give each of them as its own entry of a list, each with its own quote. If the publication does not name the coordinate, its entry is {"value": "out:unstated"}, without "quote". In that entry, write under "probe" one short sentence as the publication would print the coordinate for this value. What it says may be made up: it is only used to search the rest of the publication, never as an answer.
 
-A quote is copied from text you were shown: from the passage and the heading of its section, so also from the rows of a table or the description of a figure, or from the text around it. What only the image shows and the description does not is no quote.
+A quote is copied from text you were shown: from the passage and the heading of its section, so also from the rows of a table or the description of a figure. What only the image shows and the description does not is no quote.
 
 Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks! In this form:
 {{example}}
@@ -25,3 +21,19 @@ Where the publication states the value for several scenarios (the quotes in the 
 {"scenario": [{"value": "<<the first scenario's name>>", "quote": "<<the clause that names it>>"}, {"value": "<<the second scenario's name>>", "quote": "<<the clause that names it>>"}]}
 Where the publication does not name the scenario of this value:
 {"scenario": {"value": "out:unstated", "probe": "<<a sentence as the publication would print the scenario of this value>>"}}
+
+<!-- with: around -->
+"around" is the text of the section around the table or figure, with the sentence that announces it. A quote may stand in it; of it, only what speaks about THIS table or figure counts.
+
+<!-- with: table_before -->
+"table_before" is the title and head of the table right before it, on its page or the page before. If "source" continues that table, its title and head speak about the value too, and a quote may stand in them.
+
+<!-- with: before after -->
+"before" and "after" are the sections before and after the value's place. They count where they speak about THIS value, and a quote may stand in them.
+
+<!-- follow-up: before after coordinates -->
+Under "before" and "after" stand the sections before and after the value's place. Give the coordinates under "coordinates" once more: they count where these sections speak about THIS value, and a quote may stand in them. Answer in this form:
+{{example}}
+
+<!-- follow-up: corrections -->
+Your last answer has mistakes, per coordinate ("coordinate") under "what". Answer once more in full and fix these points. A correction that names a "value" asks for that scenario alone.

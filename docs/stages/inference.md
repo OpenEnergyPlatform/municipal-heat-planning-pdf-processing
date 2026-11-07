@@ -413,8 +413,14 @@ under `inference/`: `phrase`, `chunk_qa`, `image_phrase`, `answer_head`,
 `answer_tail`, `json_format`, `compare`, `repeats`, `pick_values`, `compute_hint`,
 `image_hint` and `readoff`. The answer prompt is `answer_head` and `answer_tail`, with
 `compute_hint` added where a sandbox is configured and `image_hint` where crop
-requests are on. The prompts themselves state the shape of the reply: no
-separate prompt splices an answer format into them, none corrects a reply, and
+requests are on. The chat loop stays single-turn (a gateway agent rejects a JSON
+assistant turn), so owner decisions 2026-11-07 changed only the texts:
+`compute_hint` and `image_hint` no longer describe the next turn, the formats
+of a computed statement and of an image read-off moved into the
+`compute_guide` and `image_guide` phrases (`_COMPUTED`, `_READ_OFF` in the
+profiles' `inference.py` and the built-in profile's), and `readoff` and
+`answer_tail` no longer refer to a later answer. The prompts themselves state
+the shape of the reply: no separate prompt splices an answer format into them, none corrects a reply, and
 none revises an answer. The sentences that tell a model what was wrong with a
 reply that was not the one object are not in `inference.PHRASES` either. They are
 the profile's `reading.PHRASES`, the table of

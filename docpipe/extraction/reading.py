@@ -33,15 +33,22 @@ document's pairs is its year, read off the head line and not asked
 (`pipeline.with_head`, owner decision 2026-11-03); where exactly one pair has
 that year, the pair's scenario is the value's too (`pipeline.head_pair`).
 Then every group of the spec (`Spec.groups`, `groups_of`) is asked for this
-one value, its coordinates still open only. A request begins with what is the
-same for every request of its parameter and group (the parameter, in full
-only where the group classifies, its questions with their lists), then what
-is the same in a plan (its base and target years), then the passage, and the
-value comes last, marked, with what is already read of it, so a server reads
-each shared beginning once (owner decision 2026-11-05, ticket 26). Each group
-has its own system prompt, its section of the prompt (`group_prompts`), and
-its own correction round, and only a group that asks a frame coordinate is
-shown the pairs and the plan's base and target years.
+one value, its coordinates still open only, in the order of the spec, all in
+one conversation (owner decisions 2026-11-07, `thread.py`): the first message
+shows the passage and the value, each group's message brings the words of
+that group and its coordinates only, and the model sees what it answered for
+the groups before. A first message begins with what is the same for every
+request of its parameter and group (the parameter, in full only where the
+group classifies, its questions with their lists), then what is the same in
+a plan (its base and target years), then the passage, and the value comes
+last, marked, with what is already read of it, so a server reads each shared
+beginning once (owner decision 2026-11-05, ticket 26). The system prompt is
+what every group is told and the part of each field the first message
+carries; only a group that asks a frame coordinate is shown the pairs and the
+plan's base and target years. The rounds of a passage's values are a
+conversation as well: each later round asks for the next value after the
+answer it follows. A correction and the second reading go after the answer
+they are about, in its conversation.
 
 Every coordinate asked is answered: the grammar of a group request requires
 each of them, and "the passage does not say" is one of the answers
@@ -77,6 +84,7 @@ from dataclasses import dataclass, field, replace
 from typing import Callable, Optional
 
 from . import fields, lookup
+from .thread import CORRECTIONS, Thread
 from .pipeline import (CELL, READ, YEAR_STATES, Batch, Row, Source, WorkItem,
                        cell_index, column_head, head_cells, head_pair,
                        in_several_rows, mark_unanswered, merge_field,
@@ -107,10 +115,13 @@ SHOWN = {"section": 15, "table": 20, "figure": 20}
 # "around" (owner decision 2026-11-06).
 NOT_SHOWN = "quote_not_in_passage"
 
-# A group's section of a prompt the groups share opens with this line; what
-# stands before the first section is every group's (`group_prompts`).
-GROUP_SECTION = re.compile(r"^<!-- group: ([A-Za-z_]+) -->[ \t]*$",
-                           re.MULTILINE)
+# What a message that follows an answer in the same conversation carries
+# (owner decisions 2026-11-07, `thread.py`): the ask for the next value of a
+# passage, what the check refused of the answer, and, in the second reading,
+# the coordinates asked again beside the sections before and after the
+# value's place (`NEAR`).
+NEXT = "next"
+COORDINATES = "coordinates"
 
 # Why the check refused a round's value, as `Read.failed` counts it: the value
 # itself, its head, or a value already read.
@@ -404,6 +415,10 @@ def around_of(source: Source, passages: dict,
 # own place, and the title and head of the table right before a table, which
 # it may continue.
 NEAR = ("before", "after")
+# The fields of the follow-ups each kind of reading request sends, whose
+# words its prompt holds (`runner.FOLLOWS`).
+VALUE_FOLLOWS = (NEXT, CORRECTIONS)
+TEXT_FOLLOWS = (CORRECTIONS, *NEAR, COORDINATES)
 BESIDE = ("title_page", "table_before")
 
 
@@ -521,18 +536,32 @@ class Gathered:
     unfit: bool = False
 
     def context(self) -> dict:
-        """What the request shows of the gathering so far, as it stands
-        now: a later round adds to the gathering, not to a request sent.
-        Each hit list without what it was searched with (`SEARCHED_WITH`)."""
+        """What a first message shows of the gathering so far: the passages
+        fetched under "more", the hit lists under "hits", each without what
+        it was searched with (`SEARCHED_WITH`), and what could not be
+        fetched under "not_found"."""
+        return self.since((0, 0, 0))
+
+    def mark(self) -> tuple:
+        """Where the gathering stands: how many passages it showed, hit
+        lists it made and misses it noted, for what a later message brings
+        anew (`since`)."""
+        return (len(self.shown), len(self.hits), len(self.missed))
+
+    def since(self, mark: tuple) -> dict:
+        """What the gathering added after *mark*, as `context` shows it: a
+        later round of a search brings only what is new, after the answer
+        it follows (owner decisions 2026-11-07)."""
+        shown, hits, missed = mark
         out = {}
-        if self.shown:
-            out["more"] = list(self.shown)
-        if self.hits:
+        if self.shown[shown:]:
+            out["more"] = list(self.shown[shown:])
+        if self.hits[hits:]:
             out["hits"] = [{key: value for key, value in listed.items()
                             if key not in SEARCHED_WITH}
-                           for listed in self.hits]
-        if self.missed:
-            out["not_found"] = list(self.missed)
+                           for listed in self.hits[hits:]]
+        if self.missed[missed:]:
+            out["not_found"] = list(self.missed[missed:])
         return out
 
     def listed(self) -> set:
@@ -680,13 +709,15 @@ def gather(ask: Callable, reply: dict, gathered: Gathered, order: list,
            passages: dict, budget: Optional[int],
            then: Optional[Callable] = None) -> tuple:
     """(the reply that stands, the requests made): what each reply asks of
-    the rest of the plan is fetched and the request sent again, until a round
-    asks for nothing the request has not shown or the request no longer fits
-    the model's window (`Gathered.unfit`). The reply before such a round
-    stands. *then(reply)*, where given, is asked when a round asks for
-    nothing new: True when it showed the request something new, which sends
-    it again (the combing lists the next passages of its ranking, owner
-    decision 2026-11-06)."""
+    the rest of the plan is fetched and *ask()* sends the next round, a
+    message after that reply bringing what is new (owner decisions
+    2026-11-07: the rounds are one conversation), until a round asks for
+    nothing the conversation has not shown or it no longer fits the model's
+    window (`Gathered.unfit`). The reply before such a round stands.
+    *then(reply)*, where given, is asked when a round asks for nothing new:
+    True when it showed the request something new, which sends it again
+    (the combing lists the next passages of its ranking, owner decision
+    2026-11-06)."""
     asked = 0
     while (gathered.fetch(reply.get("more"), order, passages, budget)
            or (then is not None and then(reply))):
@@ -744,31 +775,30 @@ def shown_value(claim: dict) -> dict:
             if claim.get(key) not in (None, "") or key == "value"}
 
 
-def values_payload(source: Source, parameter, context: dict, read: list,
-                   corrections: Optional[list] = None) -> dict:
-    """One round of the values of a passage: the parameter in short, a
-    category parameter with its entries (`value_classes`), first, the same
-    in every round of the parameter; then the passage and the text around a
-    table or figure, the same in every round of the passage; the values
-    already read (*read*) last; with *corrections* the value of the round
-    the check refused, asked once more (ticket 26: what requests share
+def values_payload(source: Source, parameter, context: dict,
+                   read: list = ()) -> dict:
+    """The first message of the values of a passage: the parameter in
+    short, a category parameter with its entries (`value_classes`), first,
+    the same in every conversation of the parameter; then the passage and
+    the text around a table or figure (ticket 26: what requests share
     stands first). Nothing of the value's coordinates. The line of the
     title page that names the plan's own place stands before the passage,
     the same in a plan; the title and head of the table the passage may
-    continue after it (`beside_of`)."""
+    continue after it (`beside_of`). The next value, and a value the check
+    refused, are asked after the answer in the same conversation (owner
+    decisions 2026-11-07); *read*, the values named so far, stands only in
+    a conversation begun anew because the old one no longer fit the
+    model's window (`Reader._rounds`)."""
     classes = value_classes(parameter)
-    payload = {"parameter": {**parameter_shown(parameter, full=False),
-                             **({"value_classes": classes} if classes
-                                else {})},
-               **({"title_page": context["title_page"]}
-                  if context.get("title_page") else {}),
-               "source": source_shown(source),
-               **{key: context[key] for key in ("around", "table_before")
-                  if context.get(key)},
-               "read": list(read)}
-    if corrections:
-        payload["corrections"] = corrections
-    return payload
+    return {"parameter": {**parameter_shown(parameter, full=False),
+                          **({"value_classes": classes} if classes
+                             else {})},
+            **({"title_page": context["title_page"]}
+               if context.get("title_page") else {}),
+            "source": source_shown(source),
+            **{key: context[key] for key in ("around", "table_before")
+               if context.get(key)},
+            **({"read": list(read)} if read else {})}
 
 
 def values_response_format(parameter, head: bool = False) -> dict:
@@ -981,9 +1011,7 @@ def head_in_before(source: Source, head: str) -> bool:
 # -- one group's coordinates of one value ---------------------------------------
 
 def text_payload(source: Source, parameter, slots: list, row: Row,
-                 where: str, context: dict,
-                 corrections: Optional[list] = None,
-                 full: bool = False) -> dict:
+                 where: str, context: dict, full: bool = False) -> dict:
     """One group's request for one value, what its requests share first
     (ticket 26): the parameter, with its full definition only where *full*
     (the group that classifies, `Group.full_definition`), and the group's
@@ -993,11 +1021,14 @@ def text_payload(source: Source, parameter, slots: list, row: Row,
     passage, the text around a table or figure and, for a frame group, the
     survey's pairs of the passage (`group_context`); the value last, with
     its quote and, under "read", what is already read of it in the plan's
-    words; with *corrections* the same request asked once more. The line of
-    the title page stands with the plan's years, the table the passage may
-    continue after it (`beside_of`), and in a second reading the sections
-    before and after the value's place (`near_of`). A request for every
-    value of a table at once says so ("whole_table", `Reader._near_table`)."""
+    words. The line of the title page stands with the plan's years, the
+    table the passage may continue after it (`beside_of`), and, in the second
+    reading of a value no conversation stands for, the sections before and
+    after its place (`near_of`). A request for every value of a table at once
+    says so ("whole_table", `Reader._near_table`). It is the first message
+    of the value's conversation: its next group, a correction and its
+    second reading follow the answer (`group_payload`, owner decisions
+    2026-11-07)."""
     value = shown_value(row.claim)
     if context.get("read"):
         value["read"] = context["read"]
@@ -1018,9 +1049,29 @@ def text_payload(source: Source, parameter, slots: list, row: Row,
                **({"whole_table": True} if context.get("whole_table")
                   else {}),
                "value": value}
-    if corrections:
-        payload["corrections"] = corrections
     return payload
+
+
+def group_payload(parameter, slots: list, where: str, context: dict,
+                  full: bool = False) -> dict:
+    """The message that asks the next group of a value in its conversation
+    (owner decision 2026-11-07: one conversation per value, each group a
+    message of its own): the group's coordinates and the spec's words for
+    where a plan prints them, the parameter's full definition where the
+    group classifies (*full*) and the conversation has not shown it, and for
+    a frame group the plan's base and target years and the survey's pairs of
+    the passage (`group_context`). The passage and the value stand in the
+    first message; a row the conversation goes on for that its answers do
+    not show, a further name a reply gave (`_Job.clone`), is shown again
+    with what it has read ("value")."""
+    return {**({"parameter": parameter_shown(parameter, full=True)}
+               if full else {}),
+            "coordinates": {slot.name: coordinate_shown(slot)
+                            for slot in slots},
+            "where": where,
+            **{key: context[key] for key in ("base_years", "target_years",
+                                             "known", "value")
+               if key in context}}
 
 
 def text_response_format(slots: list) -> dict:
@@ -1042,41 +1093,6 @@ def text_example(slots: list) -> dict:
     example per prompt, 183 of 184 heat load requests left out the
     "aggregation" it did not show (owner decision 2026-11-06)."""
     return {slot.name: entry_example(slot) for slot in slots}
-
-
-def group_prompts(prompt, groups) -> dict:
-    """{group name: the prompt its requests send}: what stands before the
-    first section (`GROUP_SECTION`) is every group's, then the group's own
-    section (owner decision 2026-11-05, ticket 26: one system prompt per kind
-    of request, with only its rules). A prompt without sections is every
-    group's as it is, the one prompt of a profile with one group. A prompt
-    with sections has one for each of *groups* and none for any other group:
-    a group without its rules, or rules no group reads, raises LookupError,
-    which the run raises at its start (`runner.surveyed_flow`)."""
-    marks = list(GROUP_SECTION.finditer(prompt.text))
-    names = [group.name if hasattr(group, "name") else group
-             for group in groups]
-    if not marks:
-        return {name: prompt for name in names}
-    common = prompt.text[:marks[0].start()]
-    sections: dict = {}
-    for index, mark in enumerate(marks):
-        end = marks[index + 1].start() if index + 1 < len(marks) \
-            else len(prompt.text)
-        if mark.group(1) in sections:
-            raise LookupError(f"{prompt.id}: two sections for group "
-                              f"{mark.group(1)!r}")
-        sections[mark.group(1)] = prompt.text[mark.end():end]
-    missing = [name for name in names if name not in sections]
-    extra = sorted(set(sections) - set(names))
-    if missing or extra:
-        raise LookupError(
-            f"{prompt.id}: the spec's groups and the prompt's sections "
-            f"differ: no section for {missing}, a section for no group "
-            f"{extra}")
-    return {name: replace(prompt, text=(common.rstrip() + "\n\n"
-                                        + sections[name].strip() + "\n"))
-            for name in names}
 
 
 def answer_of(entry: dict) -> dict:
@@ -1293,16 +1309,25 @@ class _Job:
     # the plan's passages in its order, and two pages of it in characters
     order: list = field(default_factory=list)
     budget: Optional[int] = None
+    # each value's conversation, by its label (owner decision 2026-11-07:
+    # one conversation per value), and the rows that went on in a branch of
+    # another's, whose messages show them again
+    threads: dict = field(default_factory=dict)
+    branched: set = field(default_factory=set)
 
     def clone(self, row: Row) -> Row:
         """A copy of *row* under a label of its own, for one more name of
         a value the reply names several of (`answers_each`): the piece it
-        was read in and its sentences go with it."""
+        was read in, its sentences and its conversation so far go with it,
+        the conversation as a branch of its own."""
         label = row_label(self.made)
         self.made += 1
         self.views[label] = self.views.get(row.label, self.shown)
         if row.label in self.probes:
             self.probes[label] = dict(self.probes[row.label])
+        if row.label in self.threads:
+            self.threads[label] = self.threads[row.label].branch()
+            self.branched.add(label)
         return Row(label=label, item_index=row.item_index,
                    claim=copy.deepcopy(row.claim))
 
@@ -1330,13 +1355,17 @@ class Reader:
     """(document_id, survey, passages) -> [Read], one per parameter and
     passage the survey named for it.
 
-    Two requests, each with one task and one value (owner decisions
-    2026-11-04 and 2026-11-05), each the reply as a dict, CUT, or None:
-    *ask_values(source, parameter, context, read, corrections)* the next
-    value of a passage not among *read*; *ask_text(source, parameter, group,
-    slots, row, context, corrections)* one group's coordinates of that
-    value. *context* is what the request shows beside its passage,
-    *corrections* None the first time and what was wrong the second.
+    Two kinds of request, each with one task and one value (owner
+    decisions 2026-11-04 and 2026-11-05), each the reply as a dict, CUT, or
+    None, and each a message of a conversation (`thread.Thread`, owner
+    decisions 2026-11-07): *ask_values(source, parameter, context, read,
+    thread, follow)* the first value of a passage not among *read*, or,
+    with *follow*, what follows the answer of *thread*: the next value, a
+    correction; *ask_text(source, parameter, group, slots, row, context,
+    thread, follow)* one group's coordinates of that value: the first
+    message of the value's conversation, the message of its next group, or,
+    with *follow*, a correction or its second reading. *context* is what
+    the first message shows beside its passage.
     *shown_with(source)* is what a coordinate's quote may stand in besides
     the passage: the heading it stands under (`heading_of`); so may what
     the value has read, as its request shows it (`known_shown`).
@@ -1521,34 +1550,82 @@ class Reader:
         """The second reading (owner decision 2026-11-06): a coordinate the
         first reading left open (`is_open`), which the passage, its section
         and its heading did not state, is asked once more with the sections
-        before and after the value's place (`near_of`), every group with its
-        open coordinates only, but for those printed with the number itself
-        (`Group.asked_near`). A table's frame left open on every one of its
-        values, a table that prints no frame in its head and rows, is asked
-        once for all of them, and each takes the answer with its quote
-        (`_near_table`). Nothing is asked where the plan has no section
-        around the place. [The rows made for further names of a value]."""
+        before and after the value's place (`near_of`), but for those
+        printed with the number itself (`Group.asked_near`): in the value's
+        conversation, every open coordinate of every group in one message
+        after its answers (`_near_value`, owner decisions 2026-11-07); where
+        no conversation stands for the value, as a first message per group.
+        A table's frame left open on every one of its values, a table that
+        prints no frame in its head and rows, is asked once for all of them,
+        and each takes the answer with its quote (`_near_table`). Nothing is
+        asked where the plan has no section around the place. [The rows
+        made for further names of a value]."""
         near = near_of(job.source, job.order, job.budget)
         if not near or not rows:
             return []
-        made: list = []
-        for group, group_slots in groups_of(self.spec, job.slots):
+        groups = groups_of(self.spec, job.slots)
+        done: set = set()
+        for group, group_slots in groups:
             slots = group.asked_near(group_slots)
-            done: set = set()
             if (job.source.owner_kind == "table" and group.read_in == "survey"
                     and len(rows) > 1 and not any(several(s) for s in slots)):
                 common = [s for s in slots
                           if all(is_open(row.claim, s) for row in rows)]
                 if common and self._near_table(job, rows, group, common,
                                                near):
-                    done = {slot.name for slot in common}
-            for row in rows + made:
-                asked = [s for s in slots
+                    done |= {slot.name for slot in common}
+        made: list = []
+        for row in list(rows):
+            thread = job.threads.get(row.label)
+            if thread is not None and thread.begun:
+                asked = [s for group, group_slots in groups
+                         for s in group.asked_near(group_slots)
+                         if s.name not in done and is_open(row.claim, s)]
+                if asked:
+                    made += self._near_value(job, row, asked, near)
+                continue
+            for group, group_slots in groups:
+                asked = [s for s in group.asked_near(group_slots)
                          if s.name not in done and is_open(row.claim, s)]
                 if asked:
                     made += self._value_group(job, row, group, asked,
                                               near=near)
         return made
+
+    def _near_value(self, job: _Job, row: Row, asked: list,
+                    near: dict) -> list:
+        """The second reading of one value in its conversation (owner
+        decisions 2026-11-06 and 2026-11-07): the sections before and after
+        its place and the coordinates still open (*asked*), of every group,
+        in one message after its answers; what the check refuses asked once
+        more after that answer. [The rows made for further names]."""
+        result = job.result
+        view = job.views.get(row.label, job.shown)
+        read = self.known(row.claim, [slot.name for slot in asked])
+        follow = {**{key: piece.text for key, piece in near.items()},
+                  COORDINATES: {slot.name: coordinate_shown(slot)
+                                for slot in asked}}
+
+        def ask(one: Row, told: dict):
+            return self.ask_text(view, job.parameter, None, asked, one, {},
+                                 job.threads[one.label], told)
+        reply = ask(row, follow)
+        result.asked += 1
+        result.near += 1
+        if not isinstance(reply, dict):
+            return []
+        evidence = ([view] + job.fixed + job.extra + job.frames
+                    + list(near.values())
+                    + known_shown(row.claim, read, job.passages))
+        replies = answers_each(reply, asked)
+        rows = [row] + [job.clone(row) for _ in replies[1:]]
+        for one, answer in zip(rows, replies):
+            self._answered(job, one, answer, asked, ask, evidence, view,
+                           named=len(rows) > 1, window=("near", 1))
+        result.near_read += sum(
+            1 for one in rows for slot in asked
+            if one.claim.get(f"{slot.name}_state") == READ)
+        return rows[1:]
 
     def _near_table(self, job: _Job, rows: list, group, slots: list,
                     near: dict) -> bool:
@@ -1565,12 +1642,13 @@ class Reader:
         context = {**base, **{key: piece.text for key, piece in near.items()},
                    "whole_table": True}
         result = job.result
+        thread = Thread()
 
-        def ask(corrections: Optional[list] = None):
+        def ask(follow: Optional[dict] = None):
             result.asked += 1
             result.near += 1
             return self.ask_text(view, job.parameter, group, slots, first,
-                                 context, corrections)
+                                 context, thread, follow)
         reply = ask()
         if not isinstance(reply, dict):
             return False
@@ -1601,7 +1679,7 @@ class Reader:
                              + refused_of(failed))
         if corrections:
             result.corrected += len(corrections)
-            again = ask(corrections)
+            again = ask({CORRECTIONS: corrections})
             if isinstance(again, dict):
                 for row in rows:
                     self._probed(job, row, again, slots)
@@ -1652,10 +1730,14 @@ class Reader:
 
     def _rounds(self, job: _Job, view: Source, start: int = 0):
         """The values of one piece, one per round, until the model names no
-        further value; CUT or None where its first round came to nothing. A
-        value the check refuses is asked once more with the reason; one
-        named again is asked once more, and named again it ends the rounds
-        (owner decision 2026-11-05)."""
+        further value; CUT or None where its first round came to nothing.
+        The rounds are one conversation (owner decisions 2026-11-07): the
+        first message shows the piece, each later one asks for the next
+        value after the answer it follows. A value the check refuses is
+        asked once more with the reason, after that answer; one named again
+        is asked once more, and named again it ends the rounds (owner
+        decision 2026-11-05). A conversation that no longer fits the model's
+        window begins anew, showing the values named so far."""
         result = job.result
         head = with_head_asked(job.parameter, view)
         shows = {key: job.context[key] for key in ("around",) + BESIDE
@@ -1663,14 +1745,21 @@ class Reader:
         shown = job.passages_shown()
         rows: list = []
         read: list = []
+        threads = [Thread()]
 
-        def ask(corrections: Optional[list] = None):
+        def ask(follow: Optional[dict] = None):
             return self.ask_values(view, job.parameter, dict(shows),
-                                   list(read), corrections)
+                                   list(read), threads[-1], follow)
         first = True
         while True:
-            reply = ask()
+            reply = ask({NEXT: None} if threads[-1].begun else None)
             result.asked += 1
+            if reply == CUT and threads[-1].begun:
+                # The conversation outgrew the window: anew, showing the
+                # values named so far.
+                threads.append(Thread())
+                reply = ask()
+                result.asked += 1
             if not isinstance(reply, dict):
                 if first:
                     return CUT if reply == CUT else None
@@ -1686,7 +1775,8 @@ class Reader:
                 result.failed = dict(collections.Counter(result.failed)
                                      + collections.Counter({kind: 1}))
                 result.corrected += 1
-                again = ask([{**shown_value(claim), "what": reason}])
+                again = ask({CORRECTIONS: [{**shown_value(claim),
+                                            "what": reason}]})
                 result.asked += 1
                 claim = claim_of(again, head)
                 if claim is None:
@@ -1747,13 +1837,15 @@ class Reader:
     def _value_group(self, job: _Job, row: Row, group,
                      group_slots: list, near: Optional[dict] = None) -> list:
         """One group's coordinates of one value, those still open only, in a
-        request of the group's own; what the check refuses asked once more,
+        message of the value's conversation (owner decisions 2026-11-07):
+        its first message, or the next after the answers of the groups
+        before; what the check refuses asked once more after that answer,
         by its coordinate. A reply that names several things for a
         coordinate that may name several makes one row per name
         (`answers_each`), each checked and asked once more on its own: [the
         rows made beside *row*]. With *near* ({"before", "after"}: Source,
-        `near_of`) it is the second reading, which shows those sections
-        too and may quote them."""
+        `near_of`) it is the second reading of a value no conversation
+        stands for, which shows those sections too and may quote them."""
         asked = [slot for slot in group_slots
                  if row.claim.get(f"{slot.name}_state") != READ]
         if not asked:
@@ -1765,12 +1857,18 @@ class Reader:
             base.update({key: piece.text for key, piece in near.items()})
         read = self.known(row.claim, [slot.name for slot in asked])
         window = ("near", 1) if near else ("own", 1)
+        context = {**base, **({"read": read} if read else {})}
+        if row.label in job.branched:
+            # A further name of a value its conversation's answers do not
+            # show alone: shown again with what it has read.
+            context["value"] = {**shown_value(row.claim),
+                                **({"read": read} if read else {})}
+        job.threads.setdefault(row.label, Thread())
 
-        def ask(corrections: Optional[list] = None):
-            return self.ask_text(view, job.parameter, group, asked, row,
-                                 {**base, **({"read": read} if read else {})},
-                                 corrections)
-        reply = ask()
+        def ask(one: Row, follow: Optional[dict] = None):
+            return self.ask_text(view, job.parameter, group, asked, one,
+                                 context, job.threads[one.label], follow)
+        reply = ask(row)
         result.asked += 1
         if near:
             result.near += 1
@@ -1800,7 +1898,8 @@ class Reader:
         made of one value: its correction names the name it was given and
         its quote (`named_corrections`), and a reply that names several again
         counts with its first. *window* is where the answer was read: the
-        value's own request, or ("near", 1) for the second reading."""
+        value's own request, or ("near", 1) for the second reading.
+        *ask(row, follow)* sends a message in *row*'s conversation."""
         result = job.result
         answers = reply
         self._probed(job, row, answers, asked)
@@ -1817,7 +1916,7 @@ class Reader:
             corrections = named_corrections(corrections, reply, asked)
         result.corrected += len(corrections)
         result.asked += 1
-        again = ask(corrections)
+        again = ask(row, {CORRECTIONS: corrections})
         if isinstance(again, dict):
             again = answers_each(again, asked)[0]
             self._probed(job, row, again, asked)

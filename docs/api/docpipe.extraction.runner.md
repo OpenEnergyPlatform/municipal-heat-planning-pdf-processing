@@ -1684,13 +1684,20 @@ is (`prompts.Prompt.render`).
 ```python
 def ask_in_grammar(client, prompt, conversation: list, shape: dict,
                    document_id: int, where: str, key: str,
-                   example: Optional[dict] = None, **noted)
+                   example: Optional[dict] = None,
+                   thread: Optional[thread_map.Thread] = None, **noted)
 ```
 
 One request of the rebuilt harvest: the reply as a dict, "cut_off"
 when it did not fit its room, or None when it could not be read. The
 prompt shows *example*, the reply this request asks for
 (`system_text`).
+
+With *thread* the request is one message of a conversation (owner
+decisions 2026-11-07): a follow-up is sent under the system prompt the
+conversation began with, and the answer that stands is kept in it with
+every message sent, so the next follow-up goes after it
+(`thread.Thread`).
 
 Asked again with the cause when the reply is no JSON object, or one
 without a key its schema requires (`_lacking`), as every request of the
@@ -1703,6 +1710,66 @@ unstamped, as for every request of the run. One that timed out is asked
 again with the time a repeat gets (`_repeating`), whatever client it was
 handed, as every request of the harvest is.
 
+### parts_of
+
+```python
+def parts_of(prompt_id: str, spec: Optional[Spec] = None, profile=None)
+```
+
+The prompt *prompt_id* cut at its parts (`thread.cut`): with *spec*,
+the reading's groups must each have theirs, and every field its
+follow-ups carry (`FOLLOWS`) its words. LookupError where it does not
+fit.
+
+### threaded
+
+```python
+def threaded(parts, thread, payload: Optional[dict] = None,
+             follow: Optional[dict] = None, content=None,
+             example: Optional[dict] = None) -> tuple
+```
+
+(prompt, conversation) of one message of *thread* (owner decisions
+2026-11-07): a follow-up (*follow*) goes after the answer that stands,
+in the words of the parts its fields need, with the reply the request
+asks for (*example*) where they show one; a first message shows
+*payload* (as *content* where given, such as a figure with its crop)
+under the system prompt of what every request of its kind is told and
+the part of each field it carries.
+
+### told
+
+```python
+def told(follow: Optional[dict]) -> int
+```
+
+How many corrections a follow-up carries, for the trace.
+
+### worded
+
+```python
+def worded(words: str, payload: dict) -> str
+```
+
+A message: its words, then what it shows as JSON.
+
+### answers_in
+
+```python
+def answers_in(thread) -> int
+```
+
+How many answers a conversation holds.
+
+### shows_in_full
+
+```python
+def shows_in_full(first: dict, parameter) -> bool
+```
+
+Has the first message of a conversation shown *parameter* with its
+full definition?
+
 ### make_reader
 
 ```python
@@ -1711,11 +1778,15 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None)
 
 The reading of one parameter's passages (`reading.Reader`), or None
 when the profile writes no prompts for it or its spec names no groups.
-Two requests, each with one task and one value (owner decisions
-2026-11-04 and 2026-11-05): the next value of a passage, and one
-group's coordinates of one value, each group with its own system prompt
-(`reading.group_prompts`). A figure goes with its crop. Neither request
-has tools (owner decision 2026-11-05, ticket 26).
+Two kinds of request, each with one task and one value (owner decisions
+2026-11-04 and 2026-11-05), each a message of a conversation (owner
+decisions 2026-11-07, `thread.py`): the values of a passage, the next
+one after each answer, and one value's coordinates, each group of the
+spec a message with its own words (`thread.Parts.group`). A system
+prompt holds what its kind of request is told and the part of each
+field its first message carries. A figure goes with its crop, in the
+first message. Neither request has tools (owner decision 2026-11-05,
+ticket 26).
 
 ### make_namer
 
@@ -2459,8 +2530,9 @@ profile, not a profile to harvest the old way with: the run stops and
 names the prompt, as `spec.load` stops at a broken group (owner decision
 2026-11-04). Switching silently harvested 100 plans one coordinate at a
 time and said so only in a log line. So does a group prompt whose
-sections are not the spec's groups (`reading.group_prompts`), before a
-request is sent rather than at the first plan's reading.
+parts are not the spec's groups, or one whose file lacks the words of a
+field its follow-ups carry (`parts_of`), before a request is sent rather
+than at the first plan's reading.
 
 ### producer
 

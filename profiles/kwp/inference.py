@@ -45,6 +45,22 @@ READOFF_MARKER = "abgelesen"
 READOFF_NOTE = ("(Hinweis: Werte teilweise aus Abbildungen abgelesen "
                 "– Schätzwerte, Ablesefehler möglich.)")
 
+# How a statement about a number the code printed, or one read off a
+# requested image, is given: told in the message that brings the output or
+# the image, not before (owner decision 2026-11-07: each request is told what
+# it is to do).
+_COMPUTED = (' Eine Aussage über eine berechnete Zahl lautet {"statement": '
+             '"...", "basis": "computed", "index": <int des Auszugs, der die '
+             'Eingangswerte enthält>, "quote": "<wörtlicher Satz oder '
+             'wörtliche Tabellenzeile aus diesem Auszug mit den '
+             'Eingangswerten>", "run": <Nummer des Laufs unter "Bereits '
+             'ausgeführt", dessen Ausgabe die Zahl gedruckt hat>}. Gib eine '
+             'berechnete Zahl nie mit basis "text" an.')
+_READ_OFF = (' Das Abgelesene gibst du als {"statement": "...", "basis": '
+             '"image", "block": "p17_img1", "reading": "..."} an, mit der '
+             'Kennung des Bildes statt eines Index.')
+
+
 PHRASES = {
     "task_heading": "Auftrag des Nutzers",
     "history_heading": ("Bisheriger Gesprächsverlauf (nutze ihn NUR, um Bezüge im "
@@ -74,17 +90,18 @@ PHRASES = {
     "compute_heading": "Bereits ausgeführt",
     "compute_guide": ("Gib die finale Antwort im vorgegebenen JSON-Format — oder, nur "
                       "falls unbedingt nötig, eine weitere "
-                      '{"action":"python","code":...}.'),
+                      '{"action":"python","code":...}.' + _COMPUTED),
     "compute_guide_final": ("Gib JETZT die finale Antwort im vorgegebenen JSON-Format "
-                            "(KEIN action-Objekt mehr)."),
+                            "(KEIN action-Objekt mehr)." + _COMPUTED),
 
     "image_heading": "Angeforderte Abbildungen (siehe Bilder)",
     "image_uncaptioned": "ohne Bildunterschrift",
     "image_unavailable": "Bild nicht verfügbar",
     "image_guide": ("Lies den Wert aus dem Bild ab und gib die finale Antwort — oder, "
-                    'nur falls wirklich nötig, eine weitere {"action":"image","id":"..."}.'),
+                    'nur falls wirklich nötig, eine weitere {"action":"image","id":"..."}.'
+                    + _READ_OFF),
     "image_guide_final": ("Gib JETZT die finale Antwort im vorgegebenen JSON-Format "
-                          "(KEIN action-Objekt mehr)."),
+                          "(KEIN action-Objekt mehr)." + _READ_OFF),
     "image_part": "Bild zum Auszug index={index}",
 
     "readoff_heading": "Abzulesen (laut Vorprüfung)",

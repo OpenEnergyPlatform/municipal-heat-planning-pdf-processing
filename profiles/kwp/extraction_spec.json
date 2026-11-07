@@ -18,17 +18,17 @@
   "unit_question": "Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: \"Gigawattstunden\" ist GWh, \"t CO₂-Äq.\" ist t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" sind kWh und GWh, \"1.700 kg CO2\" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann \"value\" weg und gib die Einheit wörtlich in \"value_raw\". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden (\"Anzahl Gebäude\", \"Wohngebäude\") hat die Einheit Gebäude.",
   "parameter_question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil. Eine Zahl von Gebäuden ist eine Gebäudeanzahl.",
   "groups": {
-    "frame": {
-      "coordinates": ["scenario", "year"],
-      "read_in": "survey",
-      "where": "Szenario und Jahr gelten meist für eine ganze Tabelle, eine ganze Abbildung oder einen ganzen Abschnitt und stehen nahe beieinander: im Titel, in der Überschrift, in einem Spaltenkopf oder in dem Satz, der eine Tabelle ankündigt."
-    },
     "number": {
       "coordinates": ["unit", "subject", "qualifier"],
       "read_in": "reading",
       "own_passage": ["subject"],
       "own_value": ["qualifier"],
       "where": "Die Zahl, ihre Einheit, ihr Bezug und ein Wort wie „ca.“ oder „bis zu“ stehen zusammen: in derselben Zelle, derselben Tabellenzeile oder demselben Satz. Die Einheit kann auch im Spaltenkopf, in einer Einheitenzeile oder im Titel der Tabelle stehen."
+    },
+    "frame": {
+      "coordinates": ["scenario", "year"],
+      "read_in": "survey",
+      "where": "Szenario und Jahr gelten meist für eine ganze Tabelle, eine ganze Abbildung oder einen ganzen Abschnitt und stehen nahe beieinander: im Titel, in der Überschrift, in einem Spaltenkopf oder in dem Satz, der eine Tabelle ankündigt."
     },
     "context": {
       "coordinates": ["quantity", "aggregation", "carrier", "sector", "technology", "whole", "spatial_scope"],
@@ -43,7 +43,7 @@
       "uri": "energy_consumption",
       "label": "Energieverbrauch",
       "description": "Eine im Wärmeplan bilanzierte Energiemenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: final energy consumption value ist \"the energy delivered to and consumed by end users\". Darunter fällt BEIDES, was ein deutscher Wärmeplan Verbrauch nennt und was er Bedarf nennt: für ein Zielszenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Ein Wärmebedarf, ein Endenergiebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. primary energy consumption value ist \"the total consumption of energy in a spatial region excluding the non-energetic use of fuels\", also die Bilanz vor der Umwandlung. Ein Potenzial ist \"a maximum value that describes some upper limit in a spatial region of reference\", also ein erschließbares Maximum und keine verbrauchte Menge. Die Ontologie unterscheidet theoretisches, technisches (technological), wirtschaftliches (economic), erschließbares (developable) und nachhaltiges (sustainable) Potenzial, jeweils als flow potential (eine Menge je Zeit) oder als stock potential (ein Bestand, etwa eine Speichermenge). Wähle die Art, die die Quelle druckt; nennt sie keine Art, wähle flow potential für eine Menge je Zeit (etwa MWh/a), stock potential für einen Bestand und potential nur, wenn auch das offen ist. Die übrigen Einträge der Liste sind Größen, für die die Ontologie keine Klasse hat (Nutzenergie, Erzeugung, Einsparung), und Zahlen, die keine Energiemenge sind (ein Anteil, ein spezifischer Wert). Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
-      "brief": "Eine Energiemenge, die der Wärmeplan bilanziert, je Energieträger, Sektor und Jahr: Verbrauch oder Bedarf, End- oder Primärenergie, ein Potenzial, Nutzenergie, Erzeugung oder Einsparung. Welche Größe es ist, fragt eine spätere Anfrage.",
+      "brief": "Eine Energiemenge, die der Wärmeplan bilanziert, je Energieträger, Sektor und Jahr: Verbrauch oder Bedarf, End- oder Primärenergie, ein Potenzial, Nutzenergie, Erzeugung oder Einsparung.",
       "value_type": "float",
       "unit_target": "OEO_00050008",
       "units_accepted": {
@@ -1061,7 +1061,7 @@
       "uri": "emission",
       "label": "Emissionen",
       "description": "Eine im Wärmeplan bilanzierte Emissionsmenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: CO2 emission value ist \"a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit\", also reines Kohlendioxid. carbon dioxide equivalent quantity value ist \"the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2\", also alle Treibhausgase in CO2-Äquivalenten. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Die übrigen Einträge der Liste sind Größen, die der Graph NICHT aufnimmt, etwa eine kumulierte Summe über mehrere Jahre, eine vermiedene Emission oder eine abgeschiedene Menge aus einer CCS-Anlage. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
-      "brief": "Eine Emissionsmenge, die der Wärmeplan bilanziert, je Energieträger, Sektor und Jahr: Kohlendioxid oder alle Treibhausgase in CO2-Äquivalenten, auch eine kumulierte, vermiedene oder abgeschiedene Menge. Welche Größe es ist, fragt eine spätere Anfrage.",
+      "brief": "Eine Emissionsmenge, die der Wärmeplan bilanziert, je Energieträger, Sektor und Jahr: Kohlendioxid oder alle Treibhausgase in CO2-Äquivalenten, auch eine kumulierte, vermiedene oder abgeschiedene Menge.",
       "value_type": "float",
       "unit_target": "OEO_00010137",
       "units_accepted": {
@@ -2110,7 +2110,7 @@
       "uri": "heat_load",
       "label": "Leistung",
       "description": "Eine im Wärmeplan angegebene Leistung, also Energie je Zeit: eine Heizlast, eine Anschlussleistung, eine Netz- oder Erzeugerleistung, die Nennwärmeleistung eines Kessels oder BHKW. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die Klasse über ihre Einheit: power value ist \"a quantity value that has a power unit as unit\", also jede Angabe in kW, MW oder GW. Die Einheit trennt diesen Parameter von den anderen: kW gegen kWh. Eine Angabe in kWh, MWh oder GWh ist KEINE Leistung, sondern eine Energiemenge, auch wenn die Zeile das Wort Leistung enthält. Eine ANZAHL (Gebäude, Anlagen, Anschlüsse) ist keine Leistung und hat keine Einheit dieser Liste, auch wenn sie in derselben Zeile steht; eine Zahl von Gebäuden ist eine Gebäudeanzahl. Ein Leistungspotenzial ist ein Potenzial, \"a maximum value that describes some upper limit in a spatial region of reference\", also eine erschließbare und keine bereitgestellte Leistung. Die Ontologie unterscheidet theoretisches, technisches (technological), wirtschaftliches (economic), erschließbares (developable) und nachhaltiges (sustainable) Potenzial, jeweils als flow potential (eine Menge je Zeit) oder als stock potential (ein Bestand, etwa eine Speichermenge). Eine Leistung ist Energie je Zeit: wähle die Art, die die Quelle druckt, und nennt sie keine Art, flow potential. Die übrigen Einträge der Liste sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
-      "brief": "Eine Leistung, also Energie je Zeit in kW, MW oder GW: Heizlast, Anschluss-, Netz- oder Erzeugerleistung, Nennwärmeleistung eines Kessels oder BHKW, auch ein Leistungspotenzial. Eine Angabe in kWh, MWh oder GWh ist keine Leistung, eine Zahl von Gebäuden oder Anlagen auch nicht. Welche Größe es ist, fragt eine spätere Anfrage.",
+      "brief": "Eine Leistung, also Energie je Zeit in kW, MW oder GW: Heizlast, Anschluss-, Netz- oder Erzeugerleistung, Nennwärmeleistung eines Kessels oder BHKW, auch ein Leistungspotenzial. Eine Angabe in kWh, MWh oder GWh ist keine Leistung, eine Zahl von Gebäuden oder Anlagen auch nicht.",
       "value_type": "float",
       "unit_target": "OEO_00390001",
       "integrated": false,

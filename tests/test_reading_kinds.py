@@ -22,6 +22,17 @@ from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.wording import say
 
 
+def answered(thread, reply):
+    """What the run keeps of an answer (`runner.ask_in_grammar`): a reply
+    the conversation goes on after (owner decisions 2026-11-07)."""
+    if thread is not None and isinstance(reply, dict):
+        thread.messages = [*thread.messages, {"role": "user", "content": ""},
+                           {"role": "assistant",
+                            "content": json.dumps(reply)}]
+    return reply
+
+
+
 def spec_of(profile):
     return load_spec(json.loads(
         (Path(__file__).resolve().parent.parent / "profiles" / profile
@@ -59,10 +70,10 @@ def asked_for(parameter, *replies):
     one again after that."""
     asked = []
 
-    def ask_values(source, parameter, context, read, corrections=None):
+    def ask_values(source, parameter, context, read, thread, follow=None):
         asked.append((reading.with_head_asked(parameter, source),
-                      corrections))
-        return replies[min(len(asked), len(replies)) - 1]
+                      (follow or {}).get("corrections")))
+        return answered(thread, replies[min(len(asked), len(replies)) - 1])
 
     read = reading.Reader(KWP, ask_values, lambda *a, **k: {}, FRAME).read(
         7, parameter, TABLE, [], [], {("table", 5): TABLE})

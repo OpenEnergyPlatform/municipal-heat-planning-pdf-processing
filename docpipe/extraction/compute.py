@@ -25,6 +25,9 @@ from typing import Callable, Optional
 from .verify import quote_in
 
 COMPUTE_PROMPT_ID = "extraction/compute"
+# The fields of the message that brings what a question fetched of the plan,
+# after the answer that asked for it (owner decisions 2026-11-07).
+FOLLOWS = ("more", "hits", "not_found")
 # What a row has as a reading and a row worked out from it does not.
 ITS_OWN = ("tier", "flags", "provenance", "value_target", "value_raw", "head",
            "compute", "computed")

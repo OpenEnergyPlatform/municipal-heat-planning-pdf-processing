@@ -34,13 +34,15 @@ class PlanYears
 years as `pipeline.named_years` gives them ({"state", "axis", "year",
 "quote", "source", "index"}), [] where none holds.
 
-*ask(payload, document_id, corrections)* is one request: the reply as a
-dict, CUT, or None. *frame_slots* are the coordinates the survey reads
-per passage, one of them the year; *states* what the profile says makes
-a pair of the survey that state (`runner.year_states_of`), which only
-says where the request starts to look. *rank(document_id, probes,
-exclude)* is the plan best first for a sentence ("similar"), None where
-the run ranks nothing.
+*ask(payload, document_id, thread, follow)* is one message of a
+conversation (`thread.Thread`): the first shows *payload*, a later one
+carries *follow*, what is new since the answer it follows (`FOLLOWS`,
+owner decisions 2026-11-07); the reply as a dict, CUT, or None.
+*frame_slots* are the coordinates the survey reads per passage, one of
+them the year; *states* what the profile says makes a pair of the survey
+that state (`runner.year_states_of`), which only says where the request
+starts to look. *rank(document_id, probes, exclude)* is the plan best
+first for a sentence ("similar"), None where the run ranks nothing.
 
 #### PlanYears.\_\_init\_\_
 

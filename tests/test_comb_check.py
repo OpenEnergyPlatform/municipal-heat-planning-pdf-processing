@@ -2,11 +2,12 @@
 
 Promise: a find quoted from a passage other than the value's own and its
 section gets one more request that asks whether that place speaks about the
-value, AND a "no" takes the find out, so the search goes on, AND every request
-after it says why, AND a "yes" keeps it; a find from the value's own passage
-gets no such request, AND neither does one the check of its quote and answer
-refuses anyway; a find given again is not asked about twice; and a reply that
-answers neither "yes" nor "no" is asked once more, told why.
+value, AND a "no" takes the find out, so the search goes on, AND the message
+after it says why, once, in the same conversation, AND a "yes" keeps it; a
+find from the value's own passage gets no such request, AND neither does one
+the check of its quote and answer refuses anyway; a find given again is not
+asked about twice; and a reply that answers neither "yes" nor "no" is asked
+once more, told why.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it.
@@ -18,6 +19,17 @@ from docpipe.extraction import combing, fields, reading
 from docpipe.extraction.pipeline import Batch, Source, WorkItem
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.wording import say
+
+
+def answered(thread, reply):
+    """What the run keeps of an answer (`runner.ask_in_grammar`): a reply
+    the conversation goes on after (owner decisions 2026-11-07)."""
+    if thread is not None and isinstance(reply, dict):
+        thread.messages = [*thread.messages, {"role": "user", "content": ""},
+                           {"role": "assistant",
+                            "content": json.dumps(reply)}]
+    return reply
+
 
 SPEC = load_spec(json.loads((Path(__file__).resolve().parent.parent
                              / "profiles" / "kwp" / "extraction_spec.json")
@@ -54,29 +66,37 @@ def from_section(i: int) -> dict:
     return year(2000 + i, f"Die Werte gelten für das Jahr {2000 + i}.")
 
 
-def comber(replies: list, verdicts: list, checked_too: bool = True):
+def comber(replies: list, verdicts: list, checked_too: bool = True,
+           sections: list = SECTIONS):
     asked, checked = [], []
 
-    def ask(payload, shape, document_id, source, group=None, example=None):
-        asked.append(payload)
-        return replies[min(len(asked), len(replies)) - 1]
+    def ask(payload, shape, document_id, source, group=None, example=None,
+            thread=None, follow=None):
+        # A follow-up as its message shows it (owner decisions 2026-11-07).
+        asked.append(payload if follow is None
+                     else {**follow, "follows": True})
+        return answered(thread, replies[min(len(asked), len(replies)) - 1])
 
-    def check(payload, shape, document_id, source, group=None, example=None):
-        checked.append(payload)
-        return verdicts[min(len(checked), len(verdicts)) - 1]
+    def check(payload, shape, document_id, source, group=None, example=None,
+              thread=None, follow=None):
+        checked.append(payload if follow is None
+                       else {**follow, "follows": True})
+        return answered(thread,
+                        verdicts[min(len(checked), len(verdicts)) - 1])
 
     def rank(document_id, probes, exclude):
-        return [s for s in SECTIONS if (s.owner_kind, s.owner_id) not in exclude]
+        return [s for s in sections
+                if (s.owner_kind, s.owner_id) not in exclude]
 
     made = combing.Comber(SPEC, ask, rank, lambda claim, names: {},
                           check=check if checked_too else None)
     return made, asked, checked
 
 
-def combed(made):
+def combed(made, plan: dict = PLAN):
     batch = Batch(7, EMISSION, [WorkItem(7, EMISSION, OWN)])
     read = [reading.Read(batch, [year_open()], probes=[SAID])]
-    (done,) = made(7, read, PLAN, [])
+    (done,) = made(7, read, plan, [])
     return read[0].claims[0], done
 
 
@@ -117,6 +137,28 @@ def test_a_find_turned_and_given_again_is_not_asked_about_twice():
     assert all(payload["corrections"]["what"]["year"]
                == say("not_about_value", answer=2003)
                for payload in asked[1:])
+
+
+def test_a_turned_find_is_told_once_in_its_conversation():
+    # Owner decisions 2026-11-07: the model sees what it was told; each
+    # message after brings only what is new. Three lists of the plan, the
+    # same find given in every reply.
+    sections = [Source("section", 100 + i,
+                       f"S{i}\nDie Werte gelten für das Jahr {2000 + i}.", {})
+                for i in range(40)]
+    plan = {("section", 6): OWN,
+            **{(s.owner_kind, s.owner_id): s for s in sections}}
+    made, asked, checked = comber([from_section(3)], [{"about": "no"}],
+                                  sections=sections)
+    value, done = combed(made, plan)
+    assert value["year_state"] == fields.SAID_UNSTATED
+    assert len(checked) == 1 and done.turned == 1
+    assert [p.get("follows", False) for p in asked] == [False, True, True]
+    assert [p for p in asked if p.get("corrections")] == [asked[1]]
+    assert asked[1]["corrections"]["what"]["year"] == say(
+        "not_about_value", answer=2003)
+    assert [len(one["hits"]) for p in asked for one in p["hits"]] == [
+        15, 15, 10]
 
 
 def test_a_find_from_the_value_s_own_passage_is_not_checked():

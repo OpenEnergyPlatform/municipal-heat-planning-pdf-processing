@@ -714,6 +714,12 @@ def take(quote="Der Wärmeverbrauch der Stadt beträgt 185.200 MWh",
         "quote": quote, **more}})
 
 
+def data_of(content: str) -> dict:
+    """What a message that follows an answer shows after its words: the JSON
+    that ends it (`thread.Parts.follow_up`, `runner.worded`)."""
+    return json.loads(content.rsplit("\n\n", 1)[-1])
+
+
 def test_a_share_takes_its_whole_from_a_passage_it_fetched(monkeypatch):
     found = json.dumps({"more": [{"get": "search",
                                   "pattern": "Wärmeverbrauch"}]})
@@ -724,11 +730,22 @@ def test_a_share_takes_its_whole_from_a_passage_it_fetched(monkeypatch):
         plan=plan_of(BALANCE))
     report, done = run_step(step, share(21), amount(185200, year=2030))
     assert done
-    shown_now = json.loads(asked[2]["messages"][1]["content"])
-    assert shown_now["more"][0]["id"] == "M1"
-    numbers = json.loads(asked[3]["messages"][1]["content"])["numbers"]
-    assert [n["id"] for n in numbers] == ["N1", "N2"]
-    assert numbers[1]["source"] == "M1"
+    # One conversation (owner decisions 2026-11-07): each request is the
+    # one before, its answer, and a message with what is new since.
+    for before, now in zip(asked, asked[1:]):
+        assert now["messages"][:len(before["messages"])] == before["messages"]
+        assert now["messages"][len(before["messages"])]["role"] == "assistant"
+    first = json.loads(asked[0]["messages"][1]["content"])
+    assert "more" not in first and [n["id"] for n in first["numbers"]] == [
+        "N1"]
+    # What it fetched follows the answer that asked for it, alone.
+    fetched = data_of(asked[2]["messages"][-1]["content"])
+    assert set(fetched) == {"more"}
+    assert [one["id"] for one in fetched["more"]] == ["M1"]
+    # The number it took follows the answer that took it, alone.
+    numbers = data_of(asked[3]["messages"][-1]["content"])["numbers"]
+    assert [n["id"] for n in numbers] == ["N2"]
+    assert numbers[0]["source"] == "M1"
     assert runs[0][1]["numbers"]["N2"] == {"value": 185200,
                                            "unit": "MWh/a"}
     row = report.tuples[-1]
@@ -854,8 +871,11 @@ def test_a_sentence_lists_the_passages_of_the_plan_nearest_it(monkeypatch):
         plan=plan, rank=rank)
     report, _done = run_step(step, share(21))
     assert ranked == [(7, [SENTENCE], {("table", 9)})]
-    shown = asked[1]["messages"][1]["content"]
-    listed = json.loads(shown)["hits"]
+    # The list follows the answer that searched (owner decisions
+    # 2026-11-07).
+    shown = asked[1]["messages"][-1]["content"]
+    assert asked[1]["messages"][-2]["content"] == near
+    listed = data_of(shown)["hits"]
     # Its hits, not its sentence (owner decision 2026-11-06).
     assert set(listed[0]) == {"hits"} and SENTENCE not in shown
     assert [hit["line"] for hit in listed[0]["hits"]] == [

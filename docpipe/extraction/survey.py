@@ -42,10 +42,14 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from . import archive, fields
+from .thread import CORRECTIONS, Thread
 
 log = logging.getLogger(__name__)
 
 SURVEY_PROMPT_ID = "extraction/survey"
+# The field of the message that follows a wrong answer (owner decisions
+# 2026-11-07).
+FOLLOWS = (CORRECTIONS,)
 
 # The answer for a passage that holds no number of any parameter.
 NONE = "out:none"
@@ -170,13 +174,13 @@ def key_of(prompt_text: str, parameters: dict, groups: dict,
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
-def payload(context: list, parameters: dict, groups: dict,
-            corrections: Optional[list] = None) -> dict:
+def payload(context: list, parameters: dict, groups: dict) -> dict:
     """One request: its one passage under "source", without an id, the
     title and head of the table right before it, which a table may continue
     ("table_before", `lookup.continued`, owner decision 2026-11-06), the
-    parameters and the groups; with *corrections* the same request asked
-    once more."""
+    parameters and the groups. What was wrong with its answer follows that
+    answer in the same conversation (`FOLLOWS`, owner decisions
+    2026-11-07)."""
     source = one_passage(context)
     provenance = source.provenance or {}
     shown = {"kind": source.owner_kind,
@@ -185,11 +189,8 @@ def payload(context: list, parameters: dict, groups: dict,
     if provenance.get("page"):
         shown["page"] = provenance["page"]
     before = (provenance.get("table_before") or {}).get("text")
-    body = {"source": shown, **({"table_before": before} if before else {}),
+    return {"source": shown, **({"table_before": before} if before else {}),
             "parameters": parameters, "groups": groups}
-    if corrections:
-        body["corrections"] = list(corrections)
-    return body
 
 
 def corrections_of(answers: list, unanswered: list) -> list:
@@ -343,10 +344,11 @@ def merge(found: Found, answers: list) -> None:
 class Survey:
     """document_id -> Found.
 
-    *ask(context, document_id, corrections)* is one request: the reply as a
-    dict, CUT, or None when it could not be read. A reply with something not
-    taken is asked once more with what was wrong (`corrections_of`), and
-    what either reply backs is taken. *passages_of(document_id)* is every
+    *ask(context, document_id, thread, follow)* is one message of a
+    conversation (`thread.Thread`): the reply as a dict, CUT, or None when
+    it could not be read. A reply with something not taken is followed by
+    what was wrong (`corrections_of`, owner decisions 2026-11-07), and what
+    either reply backs is taken. *passages_of(document_id)* is every
     passage of the document in its order, *pages_of(document_id)* its page
     count. *pool* runs a document's requests side by side (None: one after
     another). *store* is where surveys are kept, *scope* the name of a
@@ -423,7 +425,8 @@ class Survey:
         fit its room leaves the passage unanswered: there is nothing left to
         split."""
         source = one_passage(context)
-        reply = self.ask(context, document_id, None)
+        thread = Thread()
+        reply = self.ask(context, document_id, thread, None)
         if not isinstance(reply, dict):
             return [], [(source.owner_kind, source.owner_id)], False
         answers, unanswered = read_reply(reply, context, self.parameters,
@@ -431,7 +434,8 @@ class Survey:
         corrections = corrections_of(answers, unanswered)
         if not corrections:
             return answers, unanswered, True
-        again = self.ask(context, document_id, corrections)
+        again = self.ask(context, document_id, thread,
+                         {CORRECTIONS: corrections})
         if not isinstance(again, dict):
             return answers, unanswered, True
         more, still = read_reply(again, context, self.parameters,

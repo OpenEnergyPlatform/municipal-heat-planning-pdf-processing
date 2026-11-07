@@ -60,10 +60,13 @@ class Namer
 (document_id, rows, passages) -> {kind: {name: [names it means]}},
 each row marked on the way (`mark`).
 
-*ask(payload, shape, document_id, kind, example)* is the request about
-one name, *ask_groups* with the same arguments the request over all
-names (`groups_payload`): the reply as a dict, CUT, or None, *example*
-the reply its prompt shows. *embed(texts)* is a vector per text
+*ask(payload, shape, document_id, kind, example, thread, follow)* is the
+request about one name, *ask_groups* with the same arguments the
+request over all names (`groups_payload`), each a message of a
+conversation (`thread.Thread`): the first shows *payload*, a later one
+what was wrong with the answer it follows (*follow*, owner decisions
+2026-11-07); the reply as a dict, CUT, or None, *example* the reply its
+prompt shows. *embed(texts)* is a vector per text
 (`context_of`). Without *ask_groups*, or without *embed*, that source
 gives no candidates. *passages* is {(owner kind, owner id): Source} of
 the document in the order of the plan. The requests about the names of
@@ -195,13 +198,13 @@ name that has it among its nearest.
 ### groups_payload
 
 ```python
-def groups_payload(kind: str, numbers: dict, quotes: dict,
-                   corrections: Optional[dict] = None) -> dict
+def groups_payload(kind: str, numbers: dict, quotes: dict) -> dict
 ```
 
 The request over all names: what they name, and every name under
 its number (*numbers*, `numbered`) with the quote it was read with
-(*quotes*); with *corrections* the same request asked once more.
+(*quotes*). What was wrong with its answer follows that answer
+(`FOLLOWS`, owner decisions 2026-11-07).
 
 ### groups_format
 
@@ -238,14 +241,15 @@ groups name only numbers it showed, each group of two names or more;
 ### payload
 
 ```python
-def payload(kind: str, name: str, places: list, numbers: dict, quotes: dict,
-            corrections: Optional[dict] = None) -> dict
+def payload(kind: str, name: str, places: list, numbers: dict,
+            quotes: dict) -> dict
 ```
 
 One request: what the names name, the name asked under its number
 (*numbers*, `numbered`) with the texts of the places it was read at
 (*places*), and every name under its number with the quote it was read
-with (*quotes*); with *corrections* the same request asked once more.
+with (*quotes*). What was wrong with its answer follows that answer
+(`FOLLOWS`, owner decisions 2026-11-07).
 
 ### response_format
 

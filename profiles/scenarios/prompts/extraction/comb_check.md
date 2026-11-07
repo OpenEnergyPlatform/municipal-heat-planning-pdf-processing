@@ -11,9 +11,11 @@ You get:
 - "coordinate": the coordinate the search was for, with its question.
 - "answer": what the search found for it, with its quote.
 - "place": the passage that quote stands in, with kind, title, section and text.
-- "corrections": only in a second request. What was wrong with your first answer.
 
 "about" is "yes" where the place says what the value's own statement refers to: it speaks about the same statement, about the table or figure the value stands in, or about the section or the group of scenarios the value's quote speaks of. It is "no" where the place speaks about something else, such as another figure, another year, another statement or the publication in general, even where it names a scenario.
 
 Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks! In this form:
 {{example}}
+
+<!-- follow-up: corrections -->
+Your last answer has a mistake, under "what". Answer once more in the same form.

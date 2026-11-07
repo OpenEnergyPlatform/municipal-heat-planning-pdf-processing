@@ -57,6 +57,17 @@ from docpipe.extraction.wording import say
 from profiles.scenarios import kg
 from test_graph_from_shapes import OEO, oekg
 
+
+def answered(thread, reply):
+    """What the run keeps of an answer (`runner.ask_in_grammar`): a reply
+    the conversation goes on after (owner decisions 2026-11-07)."""
+    if thread is not None and isinstance(reply, dict):
+        thread.messages = [*thread.messages, {"role": "user", "content": ""},
+                           {"role": "assistant",
+                            "content": json.dumps(reply)}]
+    return reply
+
+
 SPEC_FILE = (Path(__file__).resolve().parent.parent / "profiles"
              / "scenarios" / "extraction_spec.json")
 SPEC = load_spec(json.loads(SPEC_FILE.read_text(encoding="utf-8")))
@@ -83,22 +94,34 @@ def read_of(parameter, values, groups=None, spec=None):
     given = {name: (list(reply) if isinstance(reply, list) else [reply])
              for name, reply in (groups or {}).items()}
 
-    def ask_values(source, parameter, context, read, corrections=None):
-        calls.append(("values", reading.values_payload(
-            source, parameter, context, read, corrections),
-            reading.values_response_format(parameter)))
-        return values[min(sum(1 for c in calls if c[0] == "values"),
-                          len(values)) - 1]
+    def ask_values(source, parameter, context, read, thread, follow=None):
+        payload = ({**follow, "follows": True} if follow is not None
+                   else reading.values_payload(source, parameter, context,
+                                               read))
+        calls.append(("values", payload,
+                      reading.values_response_format(parameter)))
+        return answered(thread, values[min(sum(1 for c in calls
+                                               if c[0] == "values"),
+                                           len(values)) - 1])
 
-    def ask_text(source, parameter, group, slots, row, context,
-                 corrections=None):
-        calls.append((group.name, reading.text_payload(
-            source, parameter, slots, row, group.where, context,
-            corrections), reading.text_response_format(slots)))
-        replies = given.get(group.name)
+    def ask_text(source, parameter, group, slots, row, context, thread,
+                 follow=None):
+        name = group.name if group is not None else "near"
+        if follow is not None:
+            payload = {**follow, "follows": True}
+        elif thread.begun:
+            payload = reading.group_payload(parameter, slots, group.where,
+                                            context)
+        else:
+            payload = reading.text_payload(source, parameter, slots, row,
+                                           group.where, context)
+        calls.append((name, payload, reading.text_response_format(slots)))
+        replies = given.get(name)
         if not replies:
-            return {slot.name: {"value": fields.UNSTATED} for slot in slots}
-        return replies.pop(0) if len(replies) > 1 else replies[0]
+            reply = {slot.name: {"value": fields.UNSTATED} for slot in slots}
+        else:
+            reply = replies.pop(0) if len(replies) > 1 else replies[0]
+        return answered(thread, reply)
 
     reader = reading.Reader(spec or SPEC, ask_values, ask_text, [])
     read = reader.read(7, parameter, TEXT, [], [],
@@ -404,13 +427,19 @@ def namer(answer, fits=None, grouped=None, vectors=None, groups_fit=None):
     the trace."""
     asked, group_asks, embedded, traced = [], [], [], []
 
-    def ask(payload, shape, document_id, kind, example=None):
+    def ask(payload, shape, document_id, kind, example=None, thread=None,
+            follow=None):
+        # A follow-up carries what was wrong after the answer it follows
+        # (owner decisions 2026-11-07); the request it follows is kept.
+        payload = {**payload, **(follow or {})}
         asked.append((payload, example))
         if fits is not None and len(payload["names"]) > fits:
             return naming.CUT
         return answer(payload["name"]["name"], payload)
 
-    def ask_groups(payload, shape, document_id, kind, example=None):
+    def ask_groups(payload, shape, document_id, kind, example=None,
+                   thread=None, follow=None):
+        payload = {**payload, **(follow or {})}
         group_asks.append((payload, example))
         if groups_fit is not None and len(payload["names"]) > groups_fit:
             return naming.CUT

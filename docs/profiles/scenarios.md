@@ -61,10 +61,12 @@ see [extraction](../stages/extraction.md)): the spec names one group,
 publication states about itself, its study or its own scenarios, as the
 passage's entry alone (`{"parameters": ["publication_title",
 "publication_author"]}`, owner decision 2026-11-06). `extraction/read_values`
-names the values one per request, with `value`, `value_raw` (only for an entry
-of a list) and quote, and
-`extraction/read_text` answers for each value the scenario
-it refers to by the name the publication prints, with its quote. The value
+names the values one per message of one conversation per passage, each after
+the answer before, with `value`, `value_raw` (only for an entry of a list) and
+quote, and `extraction/read_text` answers for each value, in a conversation of
+its own, the scenario it refers to by the name the publication prints, with
+its quote; a correction follows the answer it is about (owner decisions
+2026-11-07, see [extraction](../stages/extraction.md)). The value
 of `scenario_label` and the `scenario` axis are `merged: "scenario"` in the
 spec (owner decisions 2026-11-06, see [extraction](../stages/extraction.md)):
 a scenario is read as free text, the name as the publication prints it, and a
@@ -80,11 +82,12 @@ one author's name: a person, or the institution where the publication names
 no person. `extraction/comb` looks for a scenario still open in the rest of
 the publication; it offers no "not stated" (owner decision 2026-11-06): the
 model gives what it found and leaves out the rest, `{}` is a valid reply, and a
-coordinate left out is not asked for again. A find quoted from a passage other
-than the value's own and its section is checked first by `extraction/comb_check`,
-which asks whether the passage is about this value; on "no" the find is dropped
-and the search goes on (owner decision 2026-11-07, see
-[extraction](../stages/extraction.md)). It ends `unstated` only after every
+coordinate left out is not asked for again; its rounds are one conversation,
+each later message bringing only what is new. A find quoted from a passage
+other than the value's own and its section is checked first by
+`extraction/comb_check`, which asks whether the passage is about this value;
+on "no" the find is dropped, the search goes on and its next message says why
+once (owner decisions 2026-11-07, see [extraction](../stages/extraction.md)). It ends `unstated` only after every
 passage of the publication was listed; a coordinate the reply gave in another
 form is told `wrong_shape`. No field of this profile holds numbers, so a table is read
 by `read_values` and `read_text` too, as a table is in every profile, and a

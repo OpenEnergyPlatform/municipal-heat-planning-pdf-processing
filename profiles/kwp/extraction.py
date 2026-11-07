@@ -302,8 +302,15 @@ PHRASES = {
         'unter dem Zitat der Zeile, die sie druckt, und lass eine Zahl weg, '
         'die keine Zeile druckt.'),
     "compute_output": (
-        'Ausgabe des Codes:\n{output}\n\nAntworte jetzt mit "value" und '
-        '"used".'),
+        'Ausgabe des Codes:\n{output}\n\nAntworte jetzt mit dem Ergebnis: '
+        '{{"value":123.456,"used":["N1","N3"],"quote":"..."}}. "value" ist die '
+        'ausgegebene Zahl, Zeichen für Zeichen. "used" nennt die Zahlen, mit '
+        'denen du gerechnet hast: Aus ihnen wird das Ergebnis als Anteil mal '
+        'Ganzes durch 100 oder als ihre Summe nachgerechnet, und eine Zahl, '
+        'die nicht aus ihnen folgt, wird verworfen. "quote" steht nur bei '
+        'einem Anteil: die Stelle aus der Passage des Ganzen, Zeichen für '
+        'Zeichen, die sagt, was dieses Ganze ist. Die Einheit ist die des '
+        'Ganzen oder der Zahlen in "numbers".'),
     "compute_needs_code": (
         'Eine Zahl ohne Code ist nicht belegt. Rechne sie mit dem '
         'Aktions-Objekt aus, oder antworte mit "value": null.'),
@@ -329,7 +336,7 @@ PHRASES = {
     # eine Runde der Werte einer Passage, je ein Wert
     "value_already_read": (
         'Diesen Wert hast du schon genannt: {value} mit dem Zitat {quote!r}. '
-        'Nenne den nächsten Wert, der noch nicht unter "read" steht, oder '
+        'Nenne den nächsten Wert, den du noch nicht genannt hast, oder '
         'antworte {{"value":null}}.'),
     "value_rejected": (
         'Dieser Wert ist nicht übernommen: {reason}. Nenne ihn noch einmal, '
@@ -337,8 +344,8 @@ PHRASES = {
         'abgeschrieben ist, die ihn druckt. Bei einem Parameter mit Liste ist '
         '"value" einer ihrer Einträge, oder "", wo keiner passt, und das Wort '
         'der Passage dafür steht in "value_raw". Steht kein solcher Wert in '
-        'der Passage, nenne stattdessen den nächsten Wert, der noch nicht '
-        'unter "read" steht, oder antworte {{"value":null}}, wenn keiner mehr '
+        'der Passage, nenne stattdessen den nächsten Wert, den du noch nicht '
+        'genannt hast, oder antworte {{"value":null}}, wenn keiner mehr '
         'kommt.'),
     "head_not_in_table": (
         'Der Kopf {head!r} steht in keiner Kopfzeile der Tabelle. Schreib '

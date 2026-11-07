@@ -133,7 +133,9 @@ def test_every_passage_is_asked_alone_however_short(tmp_path):
     pages = [passage("section", n, "x" * 100) for n in range(1, 5)]
     asked = []
 
-    def ask(context, document_id, corrections=None):
+    def ask(context, document_id, thread=None,
+               follow=None):
+        corrections = (follow or {}).get("corrections")
         asked.append([s.owner_id for s in context])
         return {"parameters": ["out:none"]}
     survey.Survey(ask, lambda document_id: pages, lambda document_id: 1,
@@ -236,7 +238,9 @@ def make(store, ask, key="k"):
                          runner.frame_pairs, key, store=store)
 
 
-def emission_where_printed(context, document_id, corrections=None):
+def emission_where_printed(context, document_id, thread=None,
+                              follow=None):
+    corrections = (follow or {}).get("corrections")
     return ({"parameters": ["emission"]}
             if "Treibhausgas" in context[0].text
             else {"parameters": ["out:none"]})
@@ -248,7 +252,9 @@ def test_a_survey_names_a_parameters_passages_and_is_read_again(tmp_path):
     assert found.passages_of("emission") == [("table", 2)]
     asked = []
 
-    def counting(context, document_id, corrections=None):
+    def counting(context, document_id, thread=None,
+                    follow=None):
+        corrections = (follow or {}).get("corrections")
         asked.append(context)
         return emission_where_printed(context, document_id)
 
@@ -260,7 +266,9 @@ def test_a_survey_names_a_parameters_passages_and_is_read_again(tmp_path):
 
 def test_a_reply_cut_off_leaves_its_passage_unanswered_and_is_not_rescued(
         tmp_path):
-    def cut_at_the_table(context, document_id, corrections=None):
+    def cut_at_the_table(context, document_id, thread=None,
+                            follow=None):
+        corrections = (follow or {}).get("corrections")
         if "Treibhausgas" in context[0].text:
             return survey.CUT
         return emission_where_printed(context, document_id)
@@ -275,7 +283,9 @@ def test_a_reply_without_its_parameters_is_asked_again_and_answered(
         tmp_path):
     calls = []
 
-    def table_wrapped_first(context, document_id, corrections=None):
+    def table_wrapped_first(context, document_id, thread=None,
+                               follow=None):
+        corrections = (follow or {}).get("corrections")
         reply = emission_where_printed(context, document_id)
         if "Treibhausgas" in context[0].text:
             calls.append(corrections)
@@ -292,7 +302,9 @@ def test_a_reply_without_its_parameters_is_asked_again_and_answered(
 def test_a_reply_without_fault_is_asked_once_per_passage(tmp_path):
     calls = []
 
-    def right(context, document_id, corrections=None):
+    def right(context, document_id, thread=None,
+                 follow=None):
+        corrections = (follow or {}).get("corrections")
         calls.append(corrections)
         return emission_where_printed(context, document_id)
 
@@ -303,7 +315,9 @@ def test_a_reply_without_fault_is_asked_once_per_passage(tmp_path):
 def test_a_reply_wrong_twice_is_not_asked_a_third_time(tmp_path):
     calls = []
 
-    def always_without_the_table(context, document_id, corrections=None):
+    def always_without_the_table(context, document_id, thread=None,
+                                    follow=None):
+        corrections = (follow or {}).get("corrections")
         if "Treibhausgas" in context[0].text:
             calls.append(corrections)
             return {}

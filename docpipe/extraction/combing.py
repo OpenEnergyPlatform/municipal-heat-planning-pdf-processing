@@ -35,6 +35,11 @@ A round that asks for nothing new while a coordinate is still unfound gets
 the next passages of the ranking, as many of each kind as the first list,
 or of the plan in its order where there is no ranking, until every passage
 of the plan was listed (owner decision 2026-11-06: the search runs empty).
+The rounds are one conversation (owner decisions 2026-11-07, `thread.py`):
+the first message shows the value, the coordinates asked and the first
+hits; each later one follows the answer before it and brings only what is
+new, what the model fetched, the next hits, what could not be fetched, and
+what was wrong, a find the check turned told once.
 Only then is a coordinate no reply found `unstated`, a finding about the
 plan; one whose request no longer fits the model's window before that ends
 `exhausted`, a finding about the run.
@@ -75,11 +80,13 @@ from . import lookup
 from .fields import (EXHAUSTED, READ, SAID_UNSTATED, UNANSWERED, UNBACKED,
                      UNSTATED)
 from .pipeline import Row, answer_in_quote, merge_field, row_label
-from .reading import (SHOWN, Gathered, answer_of, answer_schema,
+from .reading import (CORRECTIONS, SHOWN, Gathered, answer_of,
+                      answer_schema,
                       answers_each, around_of, coordinate_shown, entry_example,
                       first_line, gather, groups_of, heading_of, known_shown,
                       more_schema, several, shown_as, shown_hits, slots_of,
                       source_of, unanswered_what, years_of)
+from .thread import Thread
 from .verify import MIN_QUOTE_CHARS, quote_in
 from .wording import say
 
@@ -94,6 +101,15 @@ CHECK_PROMPT_ID = "extraction/comb_check"
 # requests that follow tell the model so, and the search goes on.
 ABOUT = ("yes", "no")
 NOT_ABOUT = "not_about_value"
+
+# The fields of the messages that follow an answer, whose words the prompts
+# hold (`runner.FOLLOWS`, owner decisions 2026-11-07): the rounds of a search
+# are one conversation, each later message bringing what the search fetched
+# ("more"), the next hits ("hits"), what could not be fetched ("not_found")
+# and what was wrong with the answer before ("corrections"); the check is
+# told what was wrong with its answer.
+FOLLOWS = ("more", "hits", "not_found", CORRECTIONS)
+CHECK_FOLLOWS = (CORRECTIONS,)
 
 # What a combing request tells of a quote that stands in nothing it showed,
 # in the names of what it shows: "more", "hits", "passage", "row" (owner
@@ -333,18 +349,21 @@ class Comber:
     """(document_id, reads, passages, pairs, budget) -> [Combed], one per
     read value and group of the spec with an open coordinate.
 
-    *ask(payload, shape, document_id, source, group, example)* is one
-    request: the reply as a dict, CUT, or None, *group* the name of the group
-    of the spec it asks, for its trace, *example* the reply its prompt shows
-    (`comb_example`). *rank(document_id, probes, exclude)* is the plan's
-    passages best first for the search sentences *probes*
-    (`runner.make_more_sources`): the reading's sentences, and the model's
-    own under "similar". *known(claim, asked)* is what a row has read in the
+    *ask(payload, shape, document_id, source, group, example, thread,
+    follow)* is one message of a conversation (`thread.Thread`): the first
+    shows *payload*, a later one carries *follow*, what is new since the
+    answer it follows (`FOLLOWS`); the reply as a dict, CUT, or None,
+    *group* the name of the group of the spec it asks, for its trace,
+    *example* the reply its prompt shows (`comb_example`).
+    *rank(document_id, probes, exclude)* is the plan's passages best first
+    for the search sentences *probes* (`runner.make_more_sources`): the
+    reading's sentences, and the model's own under "similar". *known(claim, asked)* is what a row has read in the
     plan's words (`runner.row_context`). *check(payload, shape, document_id,
-    source, group, example)*, where given, is the request that asks of a
-    find quoted from a passage other than the value's own and its section
-    whether that place speaks about the value (`CHECK_PROMPT_ID`, owner
-    decision 2026-11-07).
+    source, group, example, thread, follow)*, where given, is the request
+    that asks of a find quoted from a passage other than the value's own
+    and its section whether that place speaks about the value
+    (`CHECK_PROMPT_ID`, owner decision 2026-11-07), a reply that names
+    neither answer told so after it.
     """
 
     def __init__(self, spec, ask: Callable, rank: Optional[Callable],
@@ -557,8 +576,7 @@ class Comber:
                     "unit": row.claim.get("unit"),
                     "quote": row.claim.get("quote"),
                     "known": knowns[row.label],
-                    "open": opened[row.label],
-                    **({"whole_table": True} if whole_table else {})}
+                    "open": opened[row.label]}
         base = {
             "passage": {"kind": source.owner_kind,
                         "title": lookup.title_of(source),
@@ -631,21 +649,53 @@ class Comber:
                 else:
                     entry.pop(slot.name)
 
+        thread = Thread()
+        # What the conversation has shown of the gathering, and the turned
+        # finds it has told.
+        shown = {"mark": gathered.mark()}
+        told_turned: set = set()
+
         def ask(corrections: Optional[list] = None,
-                row: Optional[Row] = None):
-            # One row per request: the value's own, or one asked again. A
-            # find the check turned is told with every request after it.
+                row: Optional[Row] = None,
+                conversation: Optional[Thread] = None):
+            # One row per conversation: the value's own, or a branch of it
+            # for one asked again. Its first message shows the value; each
+            # later one follows the answer before it with what is new since:
+            # what the search fetched and listed, and what was wrong, a find
+            # the check turned told once (owner decisions 2026-11-07).
             row = row or rows[0]
-            payload = {**base, "row": row_shown(row), **gathered.context()}
+            conversation = conversation or thread
             told = shown_corrections(corrections, row.label) or {}
-            if turned.get(row.label):
-                told = {**told, "what": {**turned[row.label],
+            fresh = {name: why for name, why in turned[row.label].items()
+                     if (row.label, name, why) not in told_turned}
+            if fresh:
+                told = {**told, "what": {**fresh,
                                          **(told.get("what") or {})}}
-            if told:
-                payload["corrections"] = told
-            return as_rows(self.ask(payload, shape, document_id, source,
-                                    group=group.name if group is not None
-                                    else None, example=example), row.label)
+            if not conversation.begun:
+                # A table combed once for all its values says so beside the
+                # row, where the prompt's part for it is sent with it.
+                payload, follow = {**base, "row": row_shown(row),
+                                   **({"whole_table": True} if whole_table
+                                      else {}),
+                                   **gathered.context()}, None
+            else:
+                payload = None
+                follow = {**(gathered.since(shown["mark"])
+                             if conversation is thread else {}),
+                          **({CORRECTIONS: told} if told else {})}
+                if not follow:
+                    # Nothing new to follow the answer with.
+                    return None
+            reply = self.ask(payload, shape, document_id, source,
+                             group=group.name if group is not None else None,
+                             example=example, thread=conversation,
+                             follow=follow)
+            if isinstance(reply, dict):
+                told_turned.update((row.label, name, why)
+                                   for name, why in fresh.items())
+                if conversation is thread:
+                    shown["mark"] = gathered.mark()
+            return as_rows(reply, row.label)
 
         reply = ask()
         result.asked = 1
@@ -719,7 +769,8 @@ class Comber:
             by_label = {row.label: row for row in rows}
             result.corrected = len(corrections)
             for correction in named_rows(corrections, given, asked):
-                again = ask([correction], by_label[correction["row"]])
+                again = ask([correction], by_label[correction["row"]],
+                            thread.branch())
                 result.asked += 1
                 if isinstance(again, dict):
                     judge(again, by_label[correction["row"]])
@@ -784,20 +835,20 @@ class Comber:
                              "section": (place.provenance or {}).get(
                                  "section_title"),
                              "text": place_text(place.text, quote, budget)}}
-        verdict, corrections = None, None
+        verdict, follow = None, None
+        thread = Thread()
         for _ in range(2):
-            asked = {**payload,
-                     **({"corrections": corrections} if corrections else {})}
-            reply = self.check(asked, check_response_format(), document_id,
+            reply = self.check(payload, check_response_format(), document_id,
                                source, group=group.name if group is not None
-                               else None, example=check_example())
+                               else None, example=check_example(),
+                               thread=thread, follow=follow)
             result.judged += 1
             about = reply.get("about") if isinstance(reply, dict) else None
             if about in ABOUT or not isinstance(reply, dict):
                 verdict = about if about in ABOUT else None
                 break
-            corrections = {"what": {"about": say("verdict_not_an_option",
-                                                 given=about)}}
+            follow = {CORRECTIONS: {"what": {"about": say(
+                "verdict_not_an_option", given=about)}}}
         judged[key] = verdict
         if verdict == ABOUT[1]:
             result.turned += 1

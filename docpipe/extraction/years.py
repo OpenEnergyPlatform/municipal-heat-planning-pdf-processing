@@ -27,10 +27,15 @@ from typing import Callable, Optional
 from . import fields, lookup
 from .pipeline import YEAR_STATES, answer_in_quote, named_years, year_in_range
 from .reading import Gathered, first_line, gather, more_schema, shown_hits
+from .thread import CORRECTIONS, Thread
 from .verify import MIN_QUOTE_CHARS, quote_in
 from .wording import say
 
 YEARS_PROMPT_ID = "extraction/years"
+# The fields of the messages that follow an answer (owner decisions
+# 2026-11-07): the rounds are one conversation, each later one bringing what
+# is new since (`reading.Gathered.since`) and what was wrong.
+FOLLOWS = ("more", "hits", "not_found", CORRECTIONS)
 
 # What the example of the request asks of the rest of the plan, as the
 # combing's example does.
@@ -75,13 +80,15 @@ class PlanYears:
     years as `pipeline.named_years` gives them ({"state", "axis", "year",
     "quote", "source", "index"}), [] where none holds.
 
-    *ask(payload, document_id, corrections)* is one request: the reply as a
-    dict, CUT, or None. *frame_slots* are the coordinates the survey reads
-    per passage, one of them the year; *states* what the profile says makes
-    a pair of the survey that state (`runner.year_states_of`), which only
-    says where the request starts to look. *rank(document_id, probes,
-    exclude)* is the plan best first for a sentence ("similar"), None where
-    the run ranks nothing.
+    *ask(payload, document_id, thread, follow)* is one message of a
+    conversation (`thread.Thread`): the first shows *payload*, a later one
+    carries *follow*, what is new since the answer it follows (`FOLLOWS`,
+    owner decisions 2026-11-07); the reply as a dict, CUT, or None.
+    *frame_slots* are the coordinates the survey reads per passage, one of
+    them the year; *states* what the profile says makes a pair of the survey
+    that state (`runner.year_states_of`), which only says where the request
+    starts to look. *rank(document_id, probes, exclude)* is the plan best
+    first for a sentence ("similar"), None where the run ranks nothing.
     """
 
     def __init__(self, ask: Callable, frame_slots: list,
@@ -157,14 +164,29 @@ class PlanYears:
                                     lookup.title_of(s), first_line(s))
                                    for s in listed])
         asked = 0
+        thread = Thread()
+        # What the conversation has shown of the gathering.
+        shown = {"mark": gathered.mark()}
 
         def ask(corrections: Optional[list] = None):
+            # The first message shows the first hits; each later one follows
+            # the answer before it with what is new since and what was
+            # wrong (owner decisions 2026-11-07).
             nonlocal asked
+            if not thread.begun:
+                payload, follow = gathered.context(), None
+            else:
+                payload = None
+                follow = {**gathered.since(shown["mark"]),
+                          **({CORRECTIONS: corrections}
+                             if corrections else {})}
+                if not follow:
+                    return None
             asked += 1
-            payload = gathered.context()
-            if corrections:
-                payload["corrections"] = corrections
-            return self.ask(payload, document_id, len(corrections or ()))
+            reply = self.ask(payload, document_id, thread, follow)
+            if isinstance(reply, dict):
+                shown["mark"] = gathered.mark()
+            return reply
 
         def next_passages(reply) -> bool:
             nonlocal hits

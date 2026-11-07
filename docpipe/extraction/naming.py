@@ -54,6 +54,7 @@ from typing import Callable, Optional
 
 from . import fields
 from .graphkit import NOT_IN_GRAPH
+from .thread import CORRECTIONS, Thread
 from .verify import flat
 from .wording import say
 
@@ -62,6 +63,9 @@ GROUPS_PROMPT_ID = "extraction/naming_groups"
 # The naming's prompts: the request over all names for the candidates, and
 # the request about one name.
 NAMING_PROMPT_IDS = (GROUPS_PROMPT_ID, NAMING_PROMPT_ID)
+# The field of the message that follows a wrong answer (owner decisions
+# 2026-11-07).
+FOLLOWS = (CORRECTIONS,)
 # Characters of a passage shown before and after a quote (owner decision
 # 2026-11-06).
 CONTEXT_CHARS = 500
@@ -267,17 +271,14 @@ def candidates(order: list, groups: list, near: dict) -> dict:
 GROUPS = "groups"
 
 
-def groups_payload(kind: str, numbers: dict, quotes: dict,
-                   corrections: Optional[dict] = None) -> dict:
+def groups_payload(kind: str, numbers: dict, quotes: dict) -> dict:
     """The request over all names: what they name, and every name under
     its number (*numbers*, `numbered`) with the quote it was read with
-    (*quotes*); with *corrections* the same request asked once more."""
-    out = {"kind": kind,
-           "names": {number: {"name": one, "quote": quotes.get(one, "")}
-                     for one, number in numbers.items()}}
-    if corrections:
-        out["corrections"] = corrections
-    return out
+    (*quotes*). What was wrong with its answer follows that answer
+    (`FOLLOWS`, owner decisions 2026-11-07)."""
+    return {"kind": kind,
+            "names": {number: {"name": one, "quote": quotes.get(one, "")}
+                      for one, number in numbers.items()}}
 
 
 def groups_format(numbers: list) -> dict:
@@ -327,20 +328,18 @@ def groups_of(reply, numbers: dict) -> tuple:
 MEANT = "means"
 
 
-def payload(kind: str, name: str, places: list, numbers: dict, quotes: dict,
-            corrections: Optional[dict] = None) -> dict:
+def payload(kind: str, name: str, places: list, numbers: dict,
+            quotes: dict) -> dict:
     """One request: what the names name, the name asked under its number
     (*numbers*, `numbered`) with the texts of the places it was read at
     (*places*), and every name under its number with the quote it was read
-    with (*quotes*); with *corrections* the same request asked once more."""
-    out = {"kind": kind,
-           "name": {"number": numbers[name], "name": name,
-                    "places": list(places)},
-           "names": {number: {"name": one, "quote": quotes.get(one, "")}
-                     for one, number in numbers.items()}}
-    if corrections:
-        out["corrections"] = corrections
-    return out
+    with (*quotes*). What was wrong with its answer follows that answer
+    (`FOLLOWS`, owner decisions 2026-11-07)."""
+    return {"kind": kind,
+            "name": {"number": numbers[name], "name": name,
+                     "places": list(places)},
+            "names": {number: {"name": one, "quote": quotes.get(one, "")}
+                      for one, number in numbers.items()}}
 
 
 def response_format(numbers: list) -> dict:
@@ -449,10 +448,13 @@ class Namer:
     """(document_id, rows, passages) -> {kind: {name: [names it means]}},
     each row marked on the way (`mark`).
 
-    *ask(payload, shape, document_id, kind, example)* is the request about
-    one name, *ask_groups* with the same arguments the request over all
-    names (`groups_payload`): the reply as a dict, CUT, or None, *example*
-    the reply its prompt shows. *embed(texts)* is a vector per text
+    *ask(payload, shape, document_id, kind, example, thread, follow)* is the
+    request about one name, *ask_groups* with the same arguments the
+    request over all names (`groups_payload`), each a message of a
+    conversation (`thread.Thread`): the first shows *payload*, a later one
+    what was wrong with the answer it follows (*follow*, owner decisions
+    2026-11-07); the reply as a dict, CUT, or None, *example* the reply its
+    prompt shows. *embed(texts)* is a vector per text
     (`context_of`). Without *ask_groups*, or without *embed*, that source
     gives no candidates. *passages* is {(owner kind, owner id): Source} of
     the document in the order of the plan. The requests about the names of
@@ -532,11 +534,11 @@ class Namer:
         numbers = numbered(among)
         shape = groups_format(list(numbers.values()))
         example = groups_example(numbers)
-        corrections = None
+        thread, follow = Thread(), None
         for _ in range(2):
-            reply = self.ask_groups(groups_payload(kind, numbers, quotes,
-                                                   corrections),
-                                    shape, document_id, kind, example)
+            reply = self.ask_groups(groups_payload(kind, numbers, quotes),
+                                    shape, document_id, kind, example,
+                                    thread, follow)
             if reply == CUT:
                 half = len(among) // 2
                 if half < 2:
@@ -552,7 +554,7 @@ class Namer:
             groups, wrong = groups_of(reply, numbers)
             if groups is not None:
                 return groups
-            corrections = wrong
+            follow = {CORRECTIONS: wrong}
         return []
 
     def _near(self, order: list, names: dict, passages: dict) -> dict:
@@ -575,11 +577,11 @@ class Namer:
         numbers = numbered(among)
         shape = response_format(list(numbers.values()))
         example = example_of(numbers, name)
-        corrections = None
+        thread, follow = Thread(), None
         for _ in range(2):
-            reply = self.ask(payload(kind, name, places, numbers, quotes,
-                                     corrections),
-                             shape, document_id, kind, example)
+            reply = self.ask(payload(kind, name, places, numbers, quotes),
+                             shape, document_id, kind, example, thread,
+                             follow)
             if reply == CUT:
                 return self._halves(document_id, kind, name, among, places,
                                     quotes)
@@ -588,7 +590,7 @@ class Namer:
             means, wrong = means_of(reply, numbers)
             if means is not None:
                 return means
-            corrections = wrong
+            follow = {CORRECTIONS: wrong}
         return None
 
     def _halves(self, document_id: int, kind: str, name: str, among: list,

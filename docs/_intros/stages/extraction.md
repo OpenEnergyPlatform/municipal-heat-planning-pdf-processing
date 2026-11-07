@@ -135,14 +135,17 @@ paper 86 the shortened prompt that still asked one quote per passage had sent
 fewer passages than the longer one before it: sectors 41 instead of 49,
 technologies 24 instead of 31, scenario descriptions 8 instead of 19. A tuple
 is held to `frame_pairs`. A reply with a tuple not taken or without a list
-`parameters` is asked once more, with what was wrong
-(`survey.corrections_of`; the second names `parameters`, `key_missing`), and
+`parameters` is asked once more, with what was wrong, as a follow-up after its
+answer (`survey.corrections_of`; the second names `parameters`, `key_missing`;
+owner decisions 2026-11-07), and
 what either reply backs is taken; a passage still without a list stays
 unanswered. Each number
 of a table cell counts for its own parameter. A reply that is cut off leaves
 its passage unanswered: one passage cannot be split further, and nothing is rescued. The survey is kept in `<harvest>/survey/<document
 id>.json` under a key over prompt, parameters, groups and model, and only a
-complete one is read again. `scripts/probe_rows.py --documents ... --survey`
+complete one is read again; the key is built from the prompt file text, so
+the survey prompts of 2026-11-07 made the stored surveys stale and they are
+surveyed again. `scripts/probe_rows.py --documents ... --survey`
 asks it over whole plans. On Rendsburg it replaces the anchors, the frame, the
 map of places and most of the search for open coordinates of corpus_m8_100: 60,
 31, 112 and 833 requests.
@@ -157,12 +160,40 @@ place (owner decisions 2026-11-04 and 2026-11-05). One request has one task:
 `read_values` names one value, and `read_text` answers the coordinates of one
 value for one group of the spec.
 
-`extraction/read_values` runs in rounds, one value per request. A round shows
-the parameter, the whole passage (a table with its title, head and all rows; a
-section as the survey's piece), the text around a table or figure (`around`)
-and the values already read (`read`), in that order, so that the rounds of a
-passage share a prefix for the server's cache (owner decision 2026-11-05).
-It asks for the next value not under `read`, the reply being the value itself
+Each request gets exactly the words of its own task, and whatever asks again
+about an answer goes after that answer in the same conversation (owner
+decisions 2026-11-07, `thread.py`). A prompt file of the survey flow holds
+what every request of its kind is told, then marked parts, each running to the
+next marker: `<!-- group: NAME -->`, the words for one group of the spec's
+coordinates, sent in the message that asks that group; `<!-- with: KEY ... -->`,
+what a field means that only some requests carry (`table_before`, `around`,
+`title_page`, `whole_table`, `before after`), part of the system prompt only
+where the conversation's first message carries one of those keys; and
+`<!-- follow-up: KEY ... -->`, the words of a message that follows an answer
+and carries one of those keys (`corrections`, `next`, `more hits not_found`,
+`numbers`), never part of a system prompt. A run checks at its start that each
+prompt has words for every field its follow-ups carry (`runner.FOLLOWS`,
+`runner.parts_of`, `runner.surveyed_flow`; for the compute step
+`runner.make_computer`) and stops with a `LookupError` otherwise. A follow-up
+shows the reply of its request (the `{{example}}`) only where its words have the
+place for it. A conversation (`thread.Thread`, sent by
+`runner.ask_in_grammar(thread=...)`) keeps every message, a retry and what it
+was told included, with the answer that stood, and is sent under the system
+prompt it began with. The API still receives the whole conversation with each
+call; a server that caches prefixes reads its beginning once, and what is saved
+otherwise is the with-parts a request does not carry and the context a message
+no longer resends.
+
+`extraction/read_values` runs in rounds, one value per request, the rounds of
+a passage being one conversation. The first round shows the parameter, the
+whole passage (a table with its title, head and all rows; a section as the
+survey's piece) and the text around a table or figure (`around`), in that
+order, so that the conversations of a passage share a prefix for the server's
+cache (owner decision 2026-11-05); each later round is the follow-up
+`{"next": null}`, asking for the next value after the answer it follows. The
+payload no longer lists the values already read: `read` appears only where a
+conversation had to begin anew after a cut-off (`Reader._rounds`).
+It asks for the next value, the reply being the value itself
 with no wrapper (owner decision 2026-11-06): `{"value": 12.5, "value_raw":
 "...", "quote": "...", "head": "..."}`, or `{"value": null}`, which ends the
 rounds. `value_raw` is asked only for a number or an entry of a list; a
@@ -195,8 +226,9 @@ reading shows, `"source"`, the heading of its section and `"around"`
 (`quote_not_in_passage`, `reading.NOT_SHOWN`, owner decision 2026-11-06); the
 reason stays `quote_not_in_source`, whose phrase names the field request's
 `"sources"`.
-A value named again (same value, wording, quote and head) is asked once more,
-and named again after that it ends the rounds. The reasons are
+Each refusal is a follow-up after the answer it is about
+(`corrections`). A value named again (same value, wording, quote and head) is
+asked once more, and named again after that it ends the rounds. The reasons are
 `value_already_read`, `head_not_in_table` and `value_rejected`, the last with
 the fold's own reason in it. Before, the round checked only the quote and the
 number, and the fold dropped without a word what the model could have
@@ -234,9 +266,13 @@ take the same tables (see [visuals](visuals.md)). Every reading request also sho
 that names the plan's municipality, `title_page` (`runner.title_line`; the
 profile constant `TITLE_PAGE_LINE` turns it on).
 
-A coordinate still open after a value's reading is asked once more, in the
-same group, with the sections before and after the value's place
-(`reading.near_of`, window `near`; owner decision 2026-11-06). A table read
+A coordinate still open after a value's reading is asked once more with the
+sections before and after the value's place (`reading.near_of`, window `near`;
+owner decision 2026-11-06). In the value's conversation that is one message
+after its answers, `before`, `after` and `coordinates`, with every open
+coordinate of every group of the value (`Reader._near_value`, owner decisions
+2026-11-07); where no conversation stands for the value it is a first message
+per group. A table read
 whole by the survey asks its open frame once for all its rows
 (`Reader._near_table`). The trace's `read` event counts the requests (`near`)
 and the coordinates they filled (`near_read`).
@@ -255,14 +291,21 @@ two ends of a range are linked by code, not by the model
 (`reading.link_ranges`, tuple key `range`), and the compute step gives a number
 it works out the qualifier of the rows it used (`profiles/kwp/compute.qualified`).
 
-`extraction/read_text` asks one request per value and group of the spec, and
-only the group's coordinates still open; a group with none open is not asked.
-What requests share stands first, so a server reads it once: the parameter, the
-group's coordinates with their questions, `where` (the spec's sentence on where
-a plan prints them), the plan's `base_years` and `target_years`, then the
-passage, the text around it and `known`, and last the value with its quote,
-head and `read` (what is read of it, in the plan's words, `runner.row_context`);
-a second request adds `corrections` at the end (owner decision 2026-11-05).
+`extraction/read_text` asks one conversation per value, and in it one message
+per group of the spec with only the group's coordinates still open; a group
+with none open is not asked (owner decisions 2026-11-05 and 2026-11-07). The
+first message shows what requests share first, so a server reads it once: the
+parameter, the first group's coordinates with their questions and its words,
+`where` (the spec's sentence on where a plan prints them), the plan's
+`base_years` and `target_years`, then the passage, the text around it and
+`known`, and last the value with its quote, head and `read` (what is read of
+it, in the plan's words, `runner.row_context`). Each further group is a message
+with its own words and only its coordinates (`reading.group_payload`): the
+parameter in full where the group classifies, the plan's years and the survey's
+pairs for a frame group. A correction, and the second reading beside the
+neighbouring passages, follow in the same conversation. A row made for a
+further name branches the conversation (`Thread.branch`) and shows its value
+again. The groups of the kwp spec stand in the order number, frame, context.
 A coordinate's `value_raw` is asked only where the coordinate is a closed list
 or a number (`fields.wording_asked`, `reading.answer_schema`); a free-text
 answer is its own wording, and the row keeps it beside the answer as
@@ -338,11 +381,11 @@ read. Once the document is folded, the naming step (`naming.py`, prompts
 together.
 
 The prompt of `read_text` may be split by lines `<!-- group: NAME -->`: the text
-before the first is every group's, and each group is sent that plus its own
-section (`reading.group_prompts`, owner decision 2026-11-05). A prompt without
-sections serves every group as it is (scenarios). A prompt with sections needs
-exactly one for each group of the spec, which the run checks at its start. In
-a list a request shows, an entry's `means` is its `gloss` where the spec has one,
+before the first is the system prompt's common part, and each group's section
+is sent in the message that asks that group (owner decisions 2026-11-05 and
+2026-11-07). A prompt without sections serves every group as it is
+(scenarios). A prompt with sections needs exactly one for each group of the
+spec, which the run checks at its start. In a list a request shows, an entry's `means` is its `gloss` where the spec has one,
 one line in the profile's language, else its English definition
 (`fields._options`); a gloss needs a definition beside it. The axis fingerprint
 holds the gloss and the parameter's the brief, so changing either moves the
@@ -352,9 +395,9 @@ Every coordinate is answered: the grammar requires each coordinate of the
 group, and `out:unstated` is an answer of every kind, a year's too
 (`fields.value_schema`, shared with the field request). Every coordinate goes
 through `merge_field`. What the check refuses and a coordinate the reply left
-out are asked once more in the same request with the reason (`corrections`,
-each `{coordinate, what}`), in the harvest's own phrases, a quote in nothing
-shown in those of the reading (`quote_not_in_passage`); the second reply
+out are asked once more, as a follow-up after the answer, with the reason
+(`corrections`, each `{coordinate, what}`), in the harvest's own phrases, a
+quote in nothing shown in those of the reading (`quote_not_in_passage`); the second reply
 fills what is still open and never a coordinate read the first time, and
 there is no third. A coordinate left out is asked for by name with `key_missing`; one the
 reply gave in another form than asked, such as the bare word "out:unstated"
@@ -437,8 +480,14 @@ what it did not find (owner decision 2026-11-06). The combing does not offer
 `out:unstated`, and the options of a closed list it shows leave that entry
 out (`reading.coordinate_shown(slot, unstated=False)`,
 `fields.value_schema(slot, unstated=False)`). `{}` is a valid reply: nothing
-found, nothing asked for. A coordinate left out is not asked for again, and an
-`out:unstated` the model writes all the same counts as no answer
+found, nothing asked for. The rounds of one value's search are one
+conversation (owner decisions 2026-11-07): the first message shows the value's
+passage, the row and the coordinates asked, with the first hit list where the
+reading wrote a sentence for them, and each later one brings only what is new
+since the answer before (`reading.Gathered.mark`, `Gathered.since`): the
+passages fetched under `more`, new hit lists under `hits`, `not_found`. A
+coordinate left out is not asked for again, and an `out:unstated` the model
+writes all the same counts as no answer
 (`combing.found`, `combing.finds`). A probe on paper 86 showed why: with a
 not-stated example line in the prompt the model ended its search at once, and
 the combing filled 47 of 266 open coordinates, where the probe before
@@ -447,8 +496,9 @@ filled 153 of 272. A request shows that one row under
 coordinates at its top with `more` beside them, no `rows` wrapper and no label
 (`combing.comb_response_format`, read back as the row by `combing.as_rows`,
 owner decision 2026-11-06); a correction is told as one object for that row,
-`{"what": {...}}` (`combing.shown_corrections`), and a row made for a further
-name of a coordinate that may name several is asked again on its own. The answers go through
+`{"what": {...}}` (`combing.shown_corrections`), after the answer it is about,
+and a row made for a further name of a coordinate that may name several is
+asked on in a branch of the conversation. The answers go through
 `merge_field` in window `retrieval`, a coordinate read before is never
 touched, and what the check refuses or the reply leaves out is asked once
 more (a coordinate the reply gave in another form than asked, such as a bare
@@ -490,14 +540,15 @@ the quote (`combing.place_text`), and asks `{"about": "yes"|"no"}`
 (`combing.ABOUT`, `combing.check_response_format`, `combing.check_example`).
 On "no" the find is taken out of the reply (reason `combing.NOT_ABOUT`,
 `not_about_value`), the search goes on as for a coordinate left out, listing
-the next passages until every passage was shown, and every later request
-carries the reason under `corrections`. On "yes" the find stands. A find quoted
+the next passages until every passage was shown, and the next message of the
+search tells the reason once under `corrections`, after the answer it
+follows, not in every later request. On "yes" the find stands. A find quoted
 from the value's own passage or its section is not checked, nor one that
 `merge_field` would refuse anyway (quote too short, quote shown nowhere, answer
 not in the quote); the same coordinate, answer and quote is asked about once.
-A reply naming neither word is asked once more, told why
-(`verdict_not_an_option`); without a verdict the find stands. A probe showed
-why: the model attached the scenario of a neighbouring sentence to years of
+A reply naming neither word is asked once more, told why, after its answer
+(`verdict_not_an_option`, a `corrections` follow-up); without a verdict the
+find stands. A probe showed why: the model attached the scenario of a neighbouring sentence to years of
 other figures, and picked single scenarios out of lists. The trace stage is
 `comb_check` (`schema.ASK_STAGES`); the `comb` event carries `judged`, the check
 requests, and `turned`, the finds the check said "no" to, which `stats.py`
@@ -509,7 +560,8 @@ One whose request no longer fit the model's window before that ends
 `make_more_sources` in a harvest.
 
 A table that prints no frame is combed once for all its rows, not once per row
-(`Combed.table_rows`, row `whole_table`; owner decision 2026-11-06).
+(`Combed.table_rows`, owner decision 2026-11-06); the first payload says so with
+`whole_table` at its top level, beside the row (owner decisions 2026-11-07).
 The combing asks only what another passage can state: coordinates the spec
 marks `own_passage` or `own_value` are left out of it.
 
@@ -788,6 +840,10 @@ The base and target years of a plan come from one request per plan
 (`years.PlanYears`, prompt `extraction/years`, trace event `years`; owner
 decision 2026-11-06). Each year is asked with a quote that prints it, checked
 as any coordinate is, with the combing's tools to read what it asks for. The
+rounds are one conversation (owner decisions 2026-11-07): the first message
+shows the first hits, each later one is a follow-up with only the passages
+listed since (`more`, `hits`, `not_found`, from `reading.Gathered.since`) and
+what the check refused (`corrections`). The
 pairs of single pages the survey found no longer count: one sheet's pair had
 put years of the target among the base years. The prompt is required where the
 spec dates a value by the plan's years (`runner.dates_by_plan`).
@@ -1550,8 +1606,9 @@ placeholder, a list of the passages matching a pattern, a list of those nearest
 a sentence it writes as the plan would print it (`similar`, ranked as the
 combing ranks the plan; the list shows its passages, not the sentence), or a
 passage of such a list, each cut to two pages of
-the plan, and the request is asked again with
-what came of it. A round that fetched something new is no attempt; the window
+the plan, and what came of it follows the answer that asked for it as a
+message of the same conversation (`more`, `hits`, `not_found`, owner decisions
+2026-11-07). A round that fetched something new is no attempt; the window
 bounds how many there are. For a share the model may take its whole from a
 passage it was shown, `{"take": {...}}` with the parameter, the number, one of
 its units, a quantity from its list with the plan's word for it, and a quote.
@@ -1559,16 +1616,19 @@ It names no passage: the number is read from the passage its quote stands in, of
 all the request showed (`reading.passage_of`), as a value round's is (owner
 decision 2026-11-05): a passage, its title, a hit's line or title, each under
 the passage it was shown with (`reading.Gathered.evidence`), so a whole may
-come from the line of a hit the model never fetched. It is read like any other (`verify_tuple`: the quote
-in the passage, the number in the quote, the unit one the parameter accepts),
-its quantity like any coordinate (`answer_in_quote`), and year, scenario and area
-are the share's (`take_whole`). A number taken is told back as the next `N` and
+come from the line of a hit the model never fetched. It is read like any other
+(`verify_tuple`: the quote in the passage, the number in the quote, the unit
+one the parameter accepts), its quantity like any coordinate
+(`answer_in_quote`), and year, scenario and area are the share's
+(`take_whole`). A number taken follows the answer that took it as
+`{"numbers": [entry]}` after the words `compute_taken`, the next `N`, and
 stands in `numbers`; one not taken is told why. It is an input of the computed
 row and no row of its own. The model answers with `{"action": "python", "code":
 ...}`, the sandbox runs the code with `numbers`, `sources` (the passages shown
-and fetched) and `tables` as in the chat, and the output goes back. Then the
-model answers `{"value": ..., "used": [...]}`, or `{"value": null}` where there
-is nothing to compute. For a share the answer also quotes, from the passage of
+and fetched) and `tables` as in the chat, and its output follows the answer
+that ran it, in the words of the `compute_output` phrase, which say what the
+result looks like. Then the model answers `{"value": ..., "used": [...]}`, or
+`{"value": null}` where there is nothing to compute. For a share the answer also quotes, from the passage of
 the whole it chose, what that whole is (`quote`). The quote is checked like any
 other, that it stands in that passage, and one that does not is told and asked
 again (`unquoted`); no wording of the share is compared with it, since a whole
@@ -1687,7 +1747,8 @@ answers of the probe, this reading gives 12 groups of names with no visible
 error. The answer quotes nothing, since each name keeps the quote it was read
 with.
 
-Nothing is checked beyond the list. A reply without its key is asked again with
+Nothing is checked beyond the list. A reply without its key is asked again, as
+a `corrections` follow-up after its answer (owner decisions 2026-11-07), with
 the reason `key_missing`; one with an empty list or a number not shown, with
 `name_not_listed` ("Under {name!r} you gave {given}. Answer with a list of
 numbers from "names"."; German in kwp), in one correction round

@@ -155,8 +155,15 @@ PHRASES = {
         '{values}. Give only these entries again, each under the quote of '
         'the row that prints it, and leave out a number no row prints.'),
     "compute_output": (
-        'Output of the code:\n{output}\n\nAnswer now with "value" and '
-        '"used".'),
+        'Output of the code:\n{output}\n\nAnswer now with the result: '
+        '{{"value":123.456,"used":["N1","N3"],"quote":"..."}}. "value" is the '
+        'number the code printed, character for character. "used" names the '
+        'numbers you computed with: the result is computed again from them as '
+        'share times whole divided by 100 or as their sum, and a number that '
+        'does not follow from them is dropped. "quote" stands only with a '
+        'share: the place in the passage of the whole, character for '
+        'character, that says what this whole is. The unit is that of the '
+        'whole or of the numbers in "numbers".'),
     "compute_needs_code": (
         'A number without code has no evidence. Work it out with the action '
         'object, or answer with "value": null.'),
@@ -182,7 +189,7 @@ PHRASES = {
     # a round of the values of a passage, one value each
     "value_already_read": (
         'You named this value already: {value} with the quote {quote!r}. '
-        'Name the next value that is not yet under "read", or answer '
+        'Name the next value you have not named yet, or answer '
         '{{"value":null}}.'),
     "value_rejected": (
         'This value was not taken: {reason}. Name it again with a "quote" '
@@ -190,8 +197,8 @@ PHRASES = {
         'For a parameter with a list, "value" is one of its entries, or "" '
         'where none fits, and the passage\'s own words for it go under '
         '"value_raw". If the passage holds no such value, name the next value '
-        'that is not yet under "read" instead, or answer {{"value":null}} '
-        'if none is left.'),
+        'you have not named yet instead, or answer {{"value":null}} if none '
+        'is left.'),
     "head_not_in_table": (
         'The head {head!r} stands on no head line of the table. Write the '
         'head of the value\'s column character for character as it stands '
