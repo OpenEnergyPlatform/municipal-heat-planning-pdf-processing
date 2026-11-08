@@ -210,7 +210,8 @@ prompt, and the image as a base64 `data:` URL. The reply schema of the item
 request, on every provider (`providers.grammar`), and the request carries the
 reasoning settings (`request_extras`; thinking is off unless
 `LLM_ENABLE_THINKING` is set) so a `<think>` block cannot spend the answer's
-budget. The reply is read as
+budget, and `tool_choice` none so an agent endpoint does not hand the image to
+a tool of its own. The reply is read as
 exactly one JSON object whose one required key (`markdown`, `description`) is
 text (`reading.read`; see [core](core.md)). Nothing is stripped, cut out,
 closed or salvaged, and no second request without a schema fills in for a

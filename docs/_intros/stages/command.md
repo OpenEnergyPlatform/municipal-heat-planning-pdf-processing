@@ -246,7 +246,8 @@ where the stages themselves say what they ask:
   request fields (the reasoning settings, or the reply schema of a hosted
   API). A refusal fails. A server that could not be asked, or that answered
   429 or a 5xx, gives a warning, "no verdict", and the exit stays 0. The chat
-  sends these fields as well (`LLM_ENABLE_THINKING`, `LLM_REASONING_EFFORT`), so
+  sends these fields as well (`LLM_ENABLE_THINKING`, `LLM_REASONING_EFFORT`,
+  `LLM_TOOL_CHOICE`), so
   a chat-only check sends the request too, and a server that refuses
   `chat_template_kwargs` or `reasoning_effort` fails it. With `--stage`, the
   request is sent for `refine`, `extract`, `visuals` and `chat`

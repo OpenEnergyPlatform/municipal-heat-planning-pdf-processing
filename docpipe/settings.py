@@ -470,6 +470,10 @@ SETTINGS = (
     S("LLM_TOKENIZER_ID", "llm.tokenizer_id", "str", None,
       "Tokenizer that counts chat prompt tokens; default: the model name.",
       stages=("chat",)),
+    S("LLM_TOOL_CHOICE", "llm.tool_choice", "str", "none",
+      "Tool choice sent with every request; none keeps an agent endpoint "
+      "from calling its own tools, empty or off sends none.",
+      stages=("preprocess", "refine", "visuals", "extract", "chat")),
     S("OEP_API_TOKEN", "oekg.api_token", "str", None,
       "Token for the OEKG SPARQL endpoint; the scenarios vocabulary refresh "
       "stops without it.",

@@ -753,7 +753,9 @@ room as the window leaves (`further_room`), and the stage that asks has the
 number from here and not from a second request to the server.
 
 And one thing every stage agrees with the server about before it asks
-anything: `request_extras`, the reasoning settings. They live here because
+anything: `request_extras`, the reasoning settings and the tool choice
+(none: an agent endpoint must not hand a request to its own tools). They
+live here because
 they are the same for every stage and because getting them wrong fails the
 same way a window set too small does: hours in, as replies whose JSON was
 truncated by the think block in front of it.

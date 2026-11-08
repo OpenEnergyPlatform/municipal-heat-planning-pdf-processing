@@ -290,8 +290,8 @@ the profile's own.
 `docpipe.inference.config` and does not redefine one: two copies of a value
 like `LLM_BASE_URL` are how a deployment ends up talking to the wrong endpoint.
 
-The model requests of a turn carry the reasoning fields the other stages send,
-`LLM_ENABLE_THINKING` and `LLM_REASONING_EFFORT`, and always send their reply
+The model requests of a turn carry the fields the other stages send,
+`LLM_ENABLE_THINKING`, `LLM_REASONING_EFFORT` and `LLM_TOOL_CHOICE`, and always send their reply
 schema as the grammar of the request. `LLM_MAX_RETRIES` is the number of
 attempts one request gets after a reply that could not be read or a failed call,
 and `LLM_SCHEMA` decides only whether a JSON answer in the user's own shape is

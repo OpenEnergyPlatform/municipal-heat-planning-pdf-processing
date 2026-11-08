@@ -328,8 +328,10 @@ grammar of the request, its
 that. The one request with no schema, the JSON answer above, asks for a JSON
 object and nothing more. Every request also carries `request_extras()`, the
 reasoning fields every stage sends: `chat_template_kwargs` with `enable_thinking`
-(`LLM_ENABLE_THINKING`, off by default) and `reasoning_effort`
-(`LLM_REASONING_EFFORT`, `low` by default).
+(`LLM_ENABLE_THINKING`, off by default), `reasoning_effort`
+(`LLM_REASONING_EFFORT`, `low` by default) and `tool_choice` (`LLM_TOOL_CHOICE`,
+`none` by default: no request gives the model a tool, and an agent endpoint must
+not hand a request to tools of its own; `off` sends none).
 
 The reply is read by `docpipe.reading` (`reading.read`), and read strictly: it
 is exactly one JSON object and nothing else. No code fence and no `<think>`
@@ -663,7 +665,7 @@ chat` lists them all.
 | `LLM_TEMPERATURE`, `LLM_MAX_TOKENS` | env vars | `0.1`, `2048` | sampling temperature and `max_tokens` per completion; a request that cannot be split and was cut off at the limit is asked once more with twice the tokens | `config.py:29-30` |
 | `LLM_TOKENIZER_ID` | env var | equal to `LLM_MODEL` | tokenizer for token-budget accounting | `config.py:33` |
 | `LLM_MAX_RETRIES`, `LLM_STUB_MODE` | env vars | `4`, off | attempts per request after an unreadable reply (asked again with its cause) or a transport error; canned replies with no endpoint call | `config.py:37, 39` |
-| `LLM_ENABLE_THINKING`, `LLM_REASONING_EFFORT` | env vars | off, `low` | the reasoning fields every request carries as `extra_body`, as in every stage; read at the call | `llm_preflight.py:105-123` |
+| `LLM_ENABLE_THINKING`, `LLM_REASONING_EFFORT`, `LLM_TOOL_CHOICE` | env vars | off, `low`, `none` | the fields every request carries as `extra_body`, as in every stage; read at the call | `llm_preflight.py:105-139` |
 | `LLM_SCHEMA` | env var | `auto` | no say over the grammar of the chat's requests, which is always sent; with `all`, as with a hosted provider, the user's own JSON shape is not asked for | `providers/__init__.py:68-72` |
 | `SPLIT_DEPTH` | module constant | `3` | how often a batch of excerpts whose reply was cut off is halved | `llm_client.py:56` |
 | `SCOPE_*` (6), `SCOPE_TO_EMBEDDING_TYPES`, `ALL_SCOPES`, `VISUAL_SCOPES` | module constants | 6 fixed strings, e.g. `"Body text"` | the `scopes` vocabulary, its embedding-type map, and the visual-only subset `scopes_are_visual` (`answer.py:69-71`) checks | `config.py:80-106` |

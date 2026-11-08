@@ -27,7 +27,9 @@ room as the window leaves (`further_room`), and the stage that asks has the
 number from here and not from a second request to the server.
 
 And one thing every stage agrees with the server about before it asks
-anything: `request_extras`, the reasoning settings. They live here because
+anything: `request_extras`, the reasoning settings and the tool choice
+(none: an agent endpoint must not hand a request to its own tools). They
+live here because
 they are the same for every stage and because getting them wrong fails the
 same way a window set too small does: hours in, as replies whose JSON was
 truncated by the think block in front of it.
@@ -113,6 +115,17 @@ def reasoning_effort() -> str:
     return "" if effort.lower() in ("", "off", "none") else effort
 
 
+# No request of this pipeline gives the model a tool, but an agent endpoint
+# carries tools of its own: one with a "subagent" tool handed figures to it,
+# streamed more than 64 KB of tool-call arguments, and the request ended on
+# the endpoint's guard or the run's timeout (owner decision 2026-11-08: every
+# request says tool_choice none). Read at call time like the two above.
+def tool_choice() -> str:
+    """"" when the server is not to be told one at all."""
+    choice = os.environ.get("LLM_TOOL_CHOICE", "none").strip()
+    return "" if choice.lower() in ("", "off") else choice
+
+
 def request_extras() -> dict:
     """The `extra_body` of every chat request this pipeline sends."""
     extras: dict = {"chat_template_kwargs":
@@ -120,6 +133,9 @@ def request_extras() -> dict:
     effort = reasoning_effort()
     if effort:
         extras["reasoning_effort"] = effort
+    choice = tool_choice()
+    if choice:
+        extras["tool_choice"] = choice
     return extras
 
 
@@ -396,7 +412,8 @@ def assert_request_extras(base_url: str, api_key: str, model: str, *,
         raise PreflightError(
             f"{base_url} refuses the reasoning settings {what} sends "
             f"({extras}).\n  {exc}\n"
-            f"  set LLM_REASONING_EFFORT=off to stop sending the effort, or "
+            f"  set LLM_REASONING_EFFORT=off to stop sending the effort, "
+            f"LLM_TOOL_CHOICE=off to stop sending the tool choice, or "
             f"LLM_ENABLE_THINKING=1 if this model has no thinking switch") \
             from exc
     log.info("Preflight ok: %s accepts %s", model, extras)

@@ -29,7 +29,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.dotenv](docpipe.dotenv.md): Populate os.environ from a `.env` file before anything reads it. (2 functions)
 - [docpipe.estimate](docpipe.estimate.md): What a run will cost, before it runs. (3 classes, 8 functions)
 - [docpipe.jsonl](docpipe.jsonl.md): The lines of a JSON Lines file. (2 functions)
-- [docpipe.llm_preflight](docpipe.llm_preflight.md): Asks the server what it can do, before the first document. (1 class, 11 functions)
+- [docpipe.llm_preflight](docpipe.llm_preflight.md): Asks the server what it can do, before the first document. (1 class, 12 functions)
 - [docpipe.migrate_artifact_names](docpipe.migrate_artifact_names.md): Rename the per-document artefacts of an already processed tree to the names in ``docpipe.artifacts``. (3 functions)
 - [docpipe.ontology](docpipe.ontology.md): Reads the ontology a spec is written against once and pins it in a snapshot. (22 functions)
 - [docpipe.profile](docpipe.profile.md): A profile is everything a project contributes to the generic pipeline: where its documents come from, what extra tables it needs, which prompts it overrides and which filters its app offers. (2 classes, 14 functions)
