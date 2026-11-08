@@ -84,7 +84,9 @@ def ranking(args):
     index, id_to_pos = faiss_store.load_global_index(args.index)
     cache_path = args.out / "query_cache.db"
     query_cache.connect(cache_path).close()
-    more = runner.make_more_sources(args.db, index, id_to_pos, cache_path)
+    more = runner.make_more_sources(
+        args.db, index, id_to_pos, cache_path,
+        reranker=runner.make_search_reranker(args.image_root))
 
     def rank(document_id: int, probes: list, exclude: set) -> list:
         return more(document_id, probes, set(exclude), limit=0)

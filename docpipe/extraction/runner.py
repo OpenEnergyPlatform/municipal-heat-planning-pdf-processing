@@ -844,6 +844,29 @@ def make_rest_of_document(db_path: Path,
     return rest_of_document
 
 
+def make_search_reranker(image_root: Optional[Path] = None
+                         ) -> Optional[Callable]:
+    """() -> one thread's reranker of every search (`rerank.Reranker`), or
+    None where the run is given no RERANK_BASE_URL (owner decisions
+    2026-11-06 and 2026-11-08). A figure is scored with its picture, as the
+    reading shows it."""
+    from docpipe.inference import rerank as rerank_map
+    if not rerank_map.RERANK_BASE_URL:
+        return None
+
+    def figure_image(source) -> Optional[dict]:
+        if (source.owner_kind == "figure" and source.image_path
+                and ATTACH_IMAGES):
+            return _image_part(str(image_root / source.image_path)
+                               if image_root else source.image_path)
+        return None
+
+    log.info("extraction: searches reranked by %s at %s, %d per kind",
+             rerank_map.RERANK_MODEL, rerank_map.RERANK_BASE_URL,
+             rerank_map.RERANK_POOL)
+    return lambda: rerank_map.make_reranker(image_of=figure_image)
+
+
 def make_more_sources(db_path: Path, index, id_to_pos: dict,
                       cache_path: Path,
                       content: Optional[Callable] = None,
@@ -4650,28 +4673,9 @@ def main(argv: Optional[list] = None) -> int:
     query_cache.connect(cache_path).close()
     # One store of passage content for every helper and thread of this run.
     content = make_shared_content()
-    # The reranker of every search, where the run is given one (owner
-    # decisions 2026-11-06 and 2026-11-08): a figure is scored with its
-    # picture, as the reading shows it.
-    from docpipe.inference import rerank as rerank_map
-    image_root = args.image_root
-
-    def figure_image(source) -> Optional[dict]:
-        if (source.owner_kind == "figure" and source.image_path
-                and ATTACH_IMAGES):
-            return _image_part(str(image_root / source.image_path)
-                               if image_root else source.image_path)
-        return None
-
-    reranker = ((lambda: rerank_map.make_reranker(image_of=figure_image))
-                if rerank_map.RERANK_BASE_URL else None)
-    if reranker is not None:
-        log.info("extraction: searches reranked by %s at %s, %d per kind",
-                 rerank_map.RERANK_MODEL, rerank_map.RERANK_BASE_URL,
-                 rerank_map.RERANK_POOL)
-    more_sources = make_more_sources(args.db, faiss_index, id_to_pos,
-                                     cache_path, content=content,
-                                     reranker=reranker)
+    more_sources = make_more_sources(
+        args.db, faiss_index, id_to_pos, cache_path, content=content,
+        reranker=make_search_reranker(args.image_root))
     # The combing of a harvest from the survey, which the passes over a
     # stored harvest re-read a coordinate with as well, and what it reads the
     # plan with.

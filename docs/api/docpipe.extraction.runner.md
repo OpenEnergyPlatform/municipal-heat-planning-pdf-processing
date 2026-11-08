@@ -427,6 +427,18 @@ sections only, and 71 percent of corpus_m5's tuples came out of images:
 Each call reads a whole document, so what it read goes into *content*, the
 run's shared store, and not into a store per thread.
 
+### make_search_reranker
+
+```python
+def make_search_reranker(image_root: Optional[Path] = None
+                         ) -> Optional[Callable]
+```
+
+() -> one thread's reranker of every search (`rerank.Reranker`), or
+None where the run is given no RERANK_BASE_URL (owner decisions
+2026-11-06 and 2026-11-08). A figure is scored with its picture, as the
+reading shows it.
+
 ### make_more_sources
 
 ```python
