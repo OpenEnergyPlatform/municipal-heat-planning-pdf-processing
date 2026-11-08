@@ -6,7 +6,7 @@ Generated from `docpipe/extraction/trust.py` and the published schema by `script
 
 Every accepted tuple already passed a minimum check: `verify.py`'s
 `verify_tuple` checks the number against its quote and the quote against a
-shown source (`verify.py:365-552`). The field sweep in
+shown source (`verify.py:365-552`). `merge_field` in
 `docpipe/extraction/pipeline.py` holds each coordinate to the same two
 clauses, its quote stands in a shown source and carries the answer, and
 writes the passage's owner onto the row (`merge_field`,

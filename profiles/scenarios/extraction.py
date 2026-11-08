@@ -293,12 +293,7 @@ CONTRACT_LANGUAGE = "en"
 # beyond the keys the stage reads by name: a wording the run depends on. The
 # prompts are in the profile's language, so the passage is too.
 # (what is checked, prompt, passage, True: has to be there, False: must not)
-PROMPT_CHECKS = (
-    ("field prompt asks one field", "extraction/field",
-     "EXACTLY ONE field", True),
-    ("rows prompt no longer fixes one parameter", "extraction/rows",
-     '"parameter": the field', False),
-)
+PROMPT_CHECKS = ()
 
 
 def shapes_files() -> list:

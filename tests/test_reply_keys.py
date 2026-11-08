@@ -1,7 +1,7 @@
 """A reply that parses but lacks a key its schema requires at the top is not
 the object that was asked for: it is asked again as missing_key, the retry
 naming the key, in every request of the stage that goes out with a schema
-(the survey, the two reading requests, the places and the field requests). A
+(the survey and the two reading requests). A
 reply that has every key the top requires is taken as it is, whatever it
 leaves out below. The combing requires no key: a coordinate it did not find
 is left out, so `{}` is its reply that found nothing and asks for nothing
@@ -14,7 +14,6 @@ from types import SimpleNamespace
 import pytest
 
 from docpipe.extraction import combing, reading, runner, survey
-from docpipe.extraction.pipeline import Row, Source
 from docpipe.extraction.spec import load as load_spec
 
 SPEC = load_spec(json.loads(
@@ -23,8 +22,6 @@ SPEC = load_spec(json.loads(
 EMISSION = SPEC.by_uri["emission"]
 SLOTS = reading.slots_of(SPEC, EMISSION)
 PROMPT = SimpleNamespace(meta={}, text="x")
-SOURCE = Source(owner_kind="section", owner_id=5, provenance={},
-                text="Die Emissionen betragen 300 t CO2.")
 
 
 def replying(*said):
@@ -109,26 +106,3 @@ def test_a_reply_with_every_key_the_top_requires_is_taken_as_it_is(faults):
         assert len(sent) == 1 and faults == []
 
 
-def test_a_places_reply_without_its_hits_is_asked_again(monkeypatch, faults,
-                                                       tmp_path):
-    client, sent = replying("{}", '{"hits": []}')
-    monkeypatch.setattr(runner, "_client", lambda *a, **k: client)
-    monkeypatch.setattr(runner.prompts, "load", lambda *a, **k: PROMPT)
-    places = runner.make_places(None, SPEC, tmp_path,
-                                every=lambda *a, **k: [SOURCE])
-    assert places.ask([SOURCE], 7) == {"hits": []}
-    assert faults == ["missing_key"] and '"hits"' in told(sent[1])
-
-
-def test_a_field_reply_without_its_fields_is_asked_again(monkeypatch, faults):
-    slot = next(s for s in SLOTS if s.name == "unit")
-    answered = {"fields": {"unit": {"answers": {"R1": {
-        "value": "t CO2", "quote": "300 t CO2"}}}}}
-    client, sent = replying("{}", json.dumps(answered))
-    monkeypatch.setattr(runner, "_client", lambda *a, **k: client)
-    monkeypatch.setattr(runner.prompts, "load", lambda *a, **k: PROMPT)
-    ask = runner.make_field_asker()
-    rows = [Row(label="R1", item_index=0, claim={"value": 300})]
-    got = ask([SOURCE], rows, [slot], document_id=7)
-    assert got["fields"]["unit"]["answers"]["R1"]["value"] == "t CO2"
-    assert faults == ["missing_key"] and '"fields"' in told(sent[1])

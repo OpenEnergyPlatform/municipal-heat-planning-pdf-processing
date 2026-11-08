@@ -4,48 +4,29 @@
 
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
-A run harvests from the survey of each plan wherever its spec names groups
-(`surveyed_flow`, which stops the run where the profile lacks a prompt of
-the survey): survey, reading and combing per document (`surveyed.py`), then
-the fold, the compute step and the file with its stamp as below. A spec
-without groups is harvested field by field, the flow the rest of this note
-describes; the passes over a stored harvest run on the
-steps of whichever flow the run has.
+A run harvests from the survey of each plan (`surveyed_flow`, which stops the
+run where the spec names no groups or the profile lacks a prompt of the
+survey): survey, reading and combing per document (`surveyed.py`), then the
+fold, the compute step and the file with its stamp as below. The passes over a
+stored harvest run on the same steps.
 
 This module supplies the loop's expensive dependencies from the real world:
-FAISS retrieval with owner exclusion, the harvesting LLM call, and locating a
-quote on its page in the source PDF, plus resume stamps and the CLI. Heavy
-imports (faiss, torch-backed embedders, fitz) happen inside functions, so
-importing this module stays cheap and a test that only touches the package pays
-for no GPU stack it does not use.
+FAISS retrieval with owner exclusion, the model calls, and locating a quote on
+its page in the source PDF, plus resume stamps and the CLI. Heavy imports
+(faiss, torch-backed embedders, fitz) happen inside functions, so importing
+this module stays cheap and a test that only touches the package pays for no
+GPU stack it does not use.
 
 `make_retrieve` fuses every probe handed to it into one FAISS search per
 document and ranks each owner by the best score any probe gave it; measured
 over 65 documents and 15,082 values, the fused ranking put the source a value
 was really read from at median rank 26, against 77 for the old per-probe
-concatenation. A probe is either one
-of the spec's query templates (`queries.expand`), stable across the whole
-corpus so `prime_probe_cache`'s embeddings hit for every document, or a
-HyDE-style anchor sentence a model writes: `make_anchors` writes one set per
-question the field sweep asks, cached under `anchors.json` and reusable across
-documents, and `document_anchor` writes the one short sentence per parameter
-the document being planned is searched with, which is a cache miss by
-construction.
+concatenation. A probe is a HyDE-style sentence a model writes:
+`document_anchor` writes the one short sentence per parameter the document is
+searched with, which is a cache miss by construction.
 
-`make_harvester` and `make_fieldwise_harvester` build the request to the model
-and parse its reply strictly: one JSON object and nothing else. A reply that is
-not that is asked again with the cause named (`_reply_fault`), and one cut off
-at the token ceiling is asked again over half the passages (`_split_harvest`)
-rather than half-read. `make_sweeper` drives the field-wise
-sweep: a coordinate the value's own passage does not answer is asked for again
-over short overlapping windows of the rest of the document (`window_sources`),
-bounded per axis. A document's batches ask their own passages in their turn
-(`Turn`), and what is still open after them is searched once per document and
-coordinate with the open rows of all the batches together (`DocumentSearch`).
-`find_frame` and `make_frame_asker` read a document's frame,
-its scenario and year pairs, once before any value, so a value request states
-the pair rather than deciding it. `harvest_batches` runs every batch of a whole
-run in flight at once, not as ordered per-document chains.
+The requests parse the reply strictly: one JSON object and nothing else. A
+reply that is not that is asked again with the cause named (`_reply_fault`).
 
 `make_locate` finds where a quote sits on its page in the source PDF, through
 the same alignment the app highlights with. Resume stamps (`_stamp_current`,
@@ -208,792 +189,6 @@ the server's multimodal cache (vLLM before 0.28, CVE-2026-105753).
 def __init__(self, tokenizer)
 ```
 
-### SweepStopped
-
-```python
-class SweepStopped(Exception)
-```
-
-The run was stopped (a signal, a dead server) while a document's search
-was still asking. The document is left unwritten, like a batch that was
-never harvested.
-
-### Scope
-
-```python
-class Scope
-```
-
-The rows one sweep asks for, and the batches they came from.
-
-A batch's rows keep the labels the rows request gave them. Rows of several
-batches would meet on "R1" and an answer for one would land on the other,
-so then every row stands in the scope as a view with a label of its own.
-The view shares the claim of the row it stands for: what a window reads is
-written into the batch's row, and `Row.label` and `Row.item_index`, which
-the fold reads, do not move.
-
-*groups* is [(batch, its views)]. A row is checked against the passages of
-its own batch (`merge_field`) and never against the union of the
-document's: the union is a pool the row's answer was not shown.
-
-#### Scope.\_\_init\_\_
-
-```python
-def __init__(self, entries: list)
-```
-
-### TableFrames
-
-```python
-class TableFrames
-```
-
-The scenario and the year of each table that has one frame, read once.
-
-Such a table (`prints_no_frame`) says them in its title or around it, and
-its rows were asked in portions of FIELD_ROWS, each portion reading its
-own answer: 65 of 678 such tables of corpus_m7_100 took several years. The
-frame belongs to the table, so it is searched once for the table and not
-for a value, and every row of the table takes the answer with its evidence
-(owner decision 2026-11-02). One store for a run, since a table's rows can
-stand in several batches, and the first reading stands.
-
-#### TableFrames.\_\_init\_\_
-
-```python
-def __init__(self, slots: list)
-```
-
-#### TableFrames.key_of
-
-```python
-def key_of(self, document_id: int, source) -> Optional[tuple]
-```
-
-The key of this passage if it is a table with one frame.
-
-#### TableFrames.keep
-
-```python
-def keep(self, key: tuple, axis: str, claim: dict) -> None
-```
-
-A reading of this table, unless it has one. What the other rows
-take says that it was the table's: `table`, not the window it was
-read in, whose question they were not asked.
-
-#### TableFrames.reading
-
-```python
-def reading(self, key: tuple, axis: str) -> Optional[dict]
-```
-
-#### TableFrames.take
-
-```python
-@staticmethod
-def take(claim: dict, axis: str, reading: dict) -> None
-```
-
-This row reads the table's reading and nothing it held before: a
-link quote of its own must not stay beside another year.
-
-### Sweeping
-
-```python
-class Sweeping
-```
-
-One coordinate asked over a scope of rows, window after window.
-
-The stages are the sweep's own: the passages the values came from (own),
-then the passages the question ranks (retrieval), then the rest of the
-document in its order. Whether they run one after another for the rows of
-one batch (`Sweeper.__call__`) or the last two once for the rows of all the
-batches of a document (`Sweeper.search`) is the sweeper's business. The
-attempt loop, the check and the trace are these methods, once.
-
-One coordinate per sweep and per request: the harvester runs the sweeps of
-a row's coordinates side by side, so a coordinate that is read in the
-value's own passage stops there and does not wait on one that has to look
-further out.
-
-The value's own passages first, because a carrier usually is in the table
-row it labels. What is still open after that is looked for further out, one
-short window at a time with an overlap, because the year of a table is in
-its caption and the scenario is in the section heading, neither of which
-the value's passage contains.
-
-Short windows and many requests, not one wide one. A window that holds the
-answer holds it whether or not ninety other passages ride along, and the
-ninety cost the attention that would have found it.
-
-One window saying "not in here" ends nothing. It is a statement about two
-passages, and the next window shows two others: a row stays open through
-out:unstated and closes only on a reading. What ends the sweep is running
-out of document, retrieval first and then the sections in their own order,
-or running out of budget, and those two are written down differently,
-because "the plan does not say" and "we stopped looking" are the pair this
-whole stage exists to keep apart.
-
-#### Sweeping.\_\_init\_\_
-
-```python
-def __init__(self, sweeper, scope: Scope, slots, anchor_id: str, *,
-             seen: set, held: dict, kind: str, stop=None)
-```
-
-#### Sweeping.requests_of
-
-```python
-def requests_of(self, rows: list) -> int
-```
-
-The requests one window costs for these rows: the asker cuts the
-rows of a window into requests of FIELD_ROWS, per coordinate.
-
-#### Sweeping.still_open
-
-```python
-def still_open(self, pool: list) -> list
-```
-
-Rows with at least one of these fields still unread.
-
-#### Sweeping.fitting
-
-```python
-def fitting(self, todo: list, window: list) -> list
-```
-
-The open rows a window of the map's places is for, all of them on
-any other stage.
-
-#### Sweeping.table_of
-
-```python
-def table_of(self, row) -> Optional[tuple]
-```
-
-#### Sweeping.for_the_tables
-
-```python
-def for_the_tables(self, todo: list) -> list
-```
-
-One row for each table with one frame, sent as the table and
-without its number; the other rows of the table are not asked.
-
-#### Sweeping.share_tables
-
-```python
-def share_tables(self) -> None
-```
-
-What a row of a table with one frame has read goes to the rows of
-that table still open, and what one has said to those not asked: a
-row that stands for its table and comes back `unstated` speaks for
-them too, and the end of the sweep must not take them for unanswered.
-A row the document's frame was written on is left alone, so a table
-read under two pairs of the document keeps both; a row that answered
-beside another of its table takes the reading that came first.
-
-#### Sweeping.portions
-
-```python
-def portions(self, windows)
-```
-
-(window, the open rows to ask it for), one after another.
-
-On the map's places, a window is asked once per batch with an open
-row. Of 35,217 quotes of corpus_m7_100 that stood in the plan and not
-in what the check was given, 32,613 came from requests with rows of
-four batches or more: half of them the quote of a number row, which
-the row answered with it cannot be checked against. Everywhere else a
-window is one question for all the open rows. A found place comes
-with the rows of its batch already (`search_found`).
-
-#### Sweeping.re_entry
-
-```python
-def re_entry(self, todo: list, already: set) -> list
-```
-
-The passages these rows were last read in, to ride along.
-
-The sweep asks five coordinates of the same row and moves on after
-each window. Where the sector was read, the aggregation is a
-column further right, so the search starts again where it last
-found something instead of striking that passage off for good.
-
-Three places, in this order, and only the ones the window does not
-already show:
-
-- the passage a coordinate of this row was READ in, by this sweep
-  or by the sweep of another coordinate running beside it. It is
-  the one of the three that `seen` makes unreachable forever, and
-  it is the one that has already proved it carries this row's
-  answers.
-- the section the row's own passage stands in. It is also the only
-  one of the three that is in no checked pool from the second
-  window on, so an answer quoting the caption of its own table
-  came back unbacked: its quote stood in no passage the check was
-  given.
-- the row's own passage last, because `merge_field` checks against
-  the row's batch's passages in every window anyway and the row
-  carries its own quote in the request, so it is the one that is
-  not lost when the budget cuts the list off.
-
-#### Sweeping.run
-
-```python
-def run(self, windows) -> bool
-```
-
-Ask over these windows. False when the budget ran out.
-
-A window is asked again when its answers came back unbackable, and
-the retry carries what was wrong with each row. A model told "R7:
-your quote is in none of the sources" can fix R7; a model told
-nothing gives the same answer again, which is why three attempts
-without the reason are one attempt three times. Every attempt
-counts against the window budget, so a stubborn coordinate cannot
-eat the document.
-
-#### Sweeping.fold
-
-```python
-def fold(self, shown: list, todo: list, stage: str, attempt: int,
-         started: float, usage: dict, index: int) -> list
-```
-
-One reply (`state["answer"]`) folded into the rows, counted and
-traced. *index* is the window it answers. Returns what failed, the
-corrections of a retry.
-
-#### Sweeping.width
-
-```python
-def width(self) -> int
-```
-
-How many windows this sweep may have out at once: the places the
-run's limit has that no request holds or waits for, at least one.
-A full run leaves none, and the sweep asks as it always did; the last
-document of a run finds the server idle and asks many.
-
-#### Sweeping.run_ahead
-
-```python
-def run_ahead(self, windows) -> bool
-```
-
-The windows of a search stage, several out at once, folded in the
-order of the windows: a row a window has read is not read again by
-one behind it (`merge_field` leaves a read coordinate alone). When
-nothing is open any more, what still waits is withdrawn and never
-sent. False when the budget ran out, as `run`.
-
-#### Sweeping.own
-
-```python
-def own(self) -> bool
-```
-
-The value's own passages AND the sections they stand in. A table
-carries its numbers and its row labels; the year, the scenario and
-the caption live one level up, and the own window never showed it.
-One batch's stage: its rows are the scope.
-
-#### Sweeping.search
-
-```python
-def search(self, combed: bool = True, heard=()) -> bool
-```
-
-Retrieval, then the rest of the document, over every open row of
-the scope. *combed* is what the stage before it ended on. *heard* is
-what the model said it still needed in answers this sweep did not see
-itself, the own stages of the batches the rows come from.
-
-True when the document was read to its end: with no budget cut the
-coordinate that is still open is a statement about the plan.
-
-#### Sweeping.sections_of
-
-```python
-def sections_of(self, rows: list) -> list
-```
-
-The sections these rows' own passages stand in.
-
-#### Sweeping.search_found
-
-```python
-def search_found(self) -> None
-```
-
-The passages this coordinate was read in last time for a row of
-the same passage (`found.py`), before any search, one batch at a time
-as on the map's places. A passage the batch has asked already is not
-asked again. Nothing here marks a passage as seen: it was shown to
-the rows of one batch, and the search after it stays what it is for
-every row still open.
-
-#### Sweeping.search_places
-
-```python
-def search_places(self, pool: list) -> bool
-```
-
-The search over the places the document's map names for this
-coordinate, nearest to the open rows first, under the allowance of
-both search stages. True when every place was shown: the map read
-the whole plan, so a row still open is one the plan does not answer
-(owner decision 2026-10-22).
-
-#### Sweeping.close
-
-```python
-def close(self, combed: bool = True) -> dict
-```
-
-What the sweep came to, in the trace and as a dict. A sweep that
-ended on its budget marks every row still open `exhausted`; an own
-stage ends nothing, the search after it does.
-
-### Sweeper
-
-```python
-class Sweeper
-```
-
-sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to,
-and the two halves it is made of.
-
-Called, it walks the three stages for one batch's rows, which is what a
-pass over a stored harvest wants. `own` is the first stage alone, a
-batch's turn; `search` is the other two, once for the rows of several
-batches (a document's), under an allowance that grows with the batches
-that still have an open row. Built by `make_sweeper`.
-
-#### Sweeper.\_\_init\_\_
-
-```python
-def __init__(self, ask: Callable, *, more_sources: Optional[Callable],
-             rest_of_document: Optional[Callable],
-             parents: Optional[Callable], anchors: dict,
-             budget_of: Callable, places: Optional[Callable] = None,
-             found=None, frame_axes: Optional[list] = None)
-```
-
-#### Sweeper.own
-
-```python
-def own(self, batch, rows: list, slots, anchor_id: str = "",
-        heard: Optional[list] = None, stop=None) -> dict
-```
-
-The value's own passages and nothing further. What the model said
-it still needed goes into *heard*, for the search that follows.
-
-#### Sweeper.search
-
-```python
-def search(self, entries: list, slots, anchor_id: str = "",
-           heard=(), stop=None) -> dict
-```
-
-Retrieval, then the rest of the document, once for these rows of
-several batches: [(batch, its rows)].
-
-With several batches nothing is left out of the retrieval pool. A
-batch's own passages were asked for ITS rows only, so none of them is
-already seen for all the rows of the search, and a pool that left them
-out would leave out the place another batch's row was read in. With one
-batch the search is that batch's own sweep and looks where it looked:
-its passages and their sections were asked in its own stage.
-
-### Turn
-
-```python
-class Turn
-```
-
-One batch's rows on their way through the coordinates that decide them:
-the unit, which settles the parameter, the parameter, which decides the
-axes a row has, the gate axes, one after another, and then the other
-axes, side by side.
-
-Two ways to walk it. Whole (`deferred` False) every coordinate is swept
-through all three stages before the next one is asked, which is what a
-pass over a stored harvest wants. Deferred, the turn asks each coordinate's
-own stage only, and a row whose deciding coordinate is still open WAITS
-there: nothing behind it is asked. The document step (`DocumentSearch`)
-then searches what is open once for all the batches of the document and
-lets the rows that waited go on. Both walk this one body.
-
-#### Turn.\_\_init\_\_
-
-```python
-def __init__(self, batch, rows: list, *, doc_spec, sweeper: Sweeper,
-             frame_axes: Optional[list] = None,
-             slice_gate: Optional[dict] = None, pool=None,
-             deferred: bool = False)
-```
-
-#### Turn.stage
-
-```python
-def stage(self, rows: list, slots: list, anchor: str) -> tuple
-```
-
-(what the sweep came to, the rows still open on these slots).
-
-Whole, nothing is left open for anyone: the sweep ended. Deferred,
-only the own stage ran and what it left open is for the search.
-
-#### Turn.record
-
-```python
-def record(self, slots: list, totals: dict) -> None
-```
-
-#### Turn.hold
-
-```python
-def hold(self, key: tuple, slots: list, anchor: str, still: list,
-         deciding: bool) -> list
-```
-
-What an own stage left open is registered for the search. The rows
-come back for the caller to keep from going on, if *deciding*.
-
-#### Turn.ask
-
-```python
-def ask(self, rows: list, slots, anchor: str, key: tuple,
-        deciding: bool = False) -> list
-```
-
-One coordinate over these rows, as far as this turn takes it.
-Returns the rows that now wait on the search (deferred, deciding).
-
-#### Turn.run_jobs
-
-```python
-def run_jobs(self, parallel: bool) -> None
-```
-
-The axes that decide nothing, side by side. Beside each other where
-the turn has the field pool to itself; one after the other inside the
-document step, whose own tasks are already what runs side by side.
-
-#### Turn.project
-
-```python
-def project(self, group: list, axes: list) -> None
-```
-
-The pair onto these rows, as far as their parameter has its axes.
-
-Before anything is asked. The sweep only offers a coordinate that
-is still open, so projecting here is what makes the year sweeper
-fall away rather than run and find nothing: measured on M3, the
-year axis produced 1,849 refusals against 0 readings, because
-every later window excluded the row's own source and only that one
-could carry the year.
-
-Only the frame coordinates the row's parameter has. The pair spans
-the document, but the planning organisation has no scenario and no
-year, and 11 of its rows on corpus_m5 carried both, which the
-schema refuses.
-
-#### Turn.normalise
-
-```python
-def normalise(self, rows: list) -> None
-```
-
-The unit as the list spells it. The answer names an option by any
-spelling the list folds alike, and the lookups below are exact.
-
-#### Turn.begin
-
-```python
-def begin(self) -> None
-```
-
-The turn: the unit first, and as a coordinate: one entry of a
-closed list, read with its own passage, never looked up from a
-spelling. The value request writes the unit as the passage prints it,
-and which entry that means is a reading: "450 kWh über das Jahr" is
-kWh/a, a storage capacity of 200 kWh is kWh, "kWh/m²a" and "kWp" are
-in no list. A spelling table made that reading until now, and on 641
-plans of corpus_m5 it let 3,324 tuples carry an entry their wording
-contradicts. Before the parameter, because the entry chosen is what
-settles the parameter. The value request's own entry is dropped
-first: it was a choice made beside the number, not a reading of its
-own, and left in place it would stand where the question's answer
-belongs.
-
-The unit decides only where the parameter is open; with the batch's
-parameter fixed a row whose unit is open goes on to its axes, and the
-unit is searched on its own.
-
-#### Turn.go_on
-
-```python
-def go_on(self, rows: list) -> None
-```
-
-Rows whose unit is settled: to the parameter, or to the axes of the
-parameter the batch was planned for.
-
-#### Turn.settle_parameter
-
-```python
-def settle_parameter(self, rows: list) -> None
-```
-
-Which quantity each value is comes first, because it decides which
-coordinates the row even has. One request, one quote, and a row it
-cannot answer for gets no axes rather than the axes of a guess.
-
-Asked only where the unit leaves it open. The spec says it itself,
-"the unit separates the two parameters", and over the kwp spec the
-nine energy units and the forty-two emission units share not one
-spelling. Asking anyway cost 322 of 1,043 field windows on Kassel,
-30.9 percent, for a coordinate not one of 559 accepted tuples
-contradicted.
-
-#### Turn.enter
-
-```python
-def enter(self, rows: list) -> None
-```
-
-Rows whose parameter is settled: their axes, the gate first.
-
-#### Turn.ask_value
-
-```python
-def ask_value(self, uri: str, choice, rows: list) -> None
-```
-
-The value asked again as one of its parameter's entries, before
-the axes, in the row's own passage (`value_choice`). The value stays
-what the passage printed until an entry is read, so a row that reads
-none is refused for it by `verify`. The wording the row printed is
-put aside meanwhile, since an answer writes its own over it
-(`after_value`).
-
-#### Turn.after_value
-
-```python
-def after_value(self, uri: str, rows: list) -> None
-```
-
-A row whose value has an entry takes the entry and goes on to its
-axes. What the row printed stays its wording and its quote, and the
-answer's quote stands beside them in value_quote as the entry's
-evidence. The others keep their wording too, are refused for their
-value, and their axes are never asked.
-
-#### Turn.keep
-
-```python
-def keep(self, rows: list, axis, axes: list) -> list
-```
-
-The rows this gate answer keeps; the others are closed. A closed
-row is never asked, and said so: an empty cell here would be
-indistinguishable from a coordinate the model dropped.
-
-#### Turn.walk
-
-```python
-def walk(self, uri: str, rows: list, position: int) -> None
-```
-
-The gate axes from *position* on, one after another and first.
-Each of them can close a row, and a closed row must not pay for the
-axes behind it: measured on 20 plans, 4,064 of 6,763 harvested tuples
-were dropped by the serializer for exactly these two coordinates,
-after the run had paid for all seven axes of every one of them. A row
-whose gate coordinate is still open waits there; the others go on.
-
-#### Turn.release
-
-```python
-def release(self, keys: list) -> None
-```
-
-The search of these coordinates is over: the rows that waited at
-them go on, from the coordinate behind. What a search left open it
-read to its end or ran out on, and either way it is settled.
-
-#### Turn.tally
-
-```python
-def tally(self) -> dict
-```
-
-#### Turn.finish
-
-```python
-def finish(self) -> None
-```
-
-Every coordinate no field reply mentioned, named as such.
-
-#### Turn.reply
-
-```python
-def reply(self, rows_reply: dict, orphans: list) -> dict
-```
-
-What goes back to the run. The label goes on so the fold routes
-each claim to the source the value request already settled on, instead
-of deciding a second time from the quote alone.
-
-A deferred turn is not finished, and the document step needs its rows
-and where each waits. They travel with the reply under a private key
-because `harvest_batches` hands back (batch, reply) and nothing else;
-`search_document` takes it out before the reply is folded or written.
-
-### DocumentSearch
-
-```python
-class DocumentSearch
-```
-
-What the batches of one document left open, searched once per
-coordinate with the open rows of all of them together.
-
-In the order the batches' own turns could not keep: the unit, then the
-parameter, then each gate axis, then the other axes. After each search the
-rows that waited on it go on, and a batch's own stage asks the coordinates
-they reach only now. Rows that wait nowhere are not held up by it.
-
-Every task here is a leaf: a search is one coordinate's windows in order, a
-continuation is one batch's own stages in order, and the pool they run on
-is the field pool the batches' turns use. Nothing here waits on the pool
-from inside it.
-
-#### DocumentSearch.\_\_init\_\_
-
-```python
-def __init__(self, sweeper: Sweeper, pool, slice_gate: Optional[dict],
-             stop=None)
-```
-
-#### DocumentSearch.phase
-
-```python
-def phase(self, key: tuple) -> int
-```
-
-Where a coordinate stands in the order: the unit, the parameter,
-a value asked again, the gate axes in the gate's order, and the
-rest.
-
-#### DocumentSearch.fan_out
-
-```python
-def fan_out(self, tasks: dict) -> None
-```
-
-These tasks, {label: (callable, whether rows wait on it)}, side by
-side on the field pool. All of them are waited for before what one of
-them raised is raised, a stop first: none is left writing into rows
-the document step has given up.
-
-#### DocumentSearch.run
-
-```python
-def run(self, turns: list) -> None
-```
-
-#### DocumentSearch.cut
-
-```python
-def cut(self) -> None
-```
-
-A stop is seen between two requests. One that came with the last
-request of a search, or of the own stages after it, has none behind it
-to be seen by, and that request may be the one the server did not
-answer: the step is cut all the same.
-
-#### DocumentSearch.search
-
-```python
-def search(self, turns: list, keys: list) -> None
-```
-
-One search per coordinate, over the rows of every batch that has
-some open on it.
-
-#### DocumentSearch.carry_on
-
-```python
-def carry_on(self, turns: list, keys: list) -> None
-```
-
-The rows that waited on these coordinates go on, batch by batch.
-What a batch asks here are the own stages of coordinates its rows
-wait on, as in its turn.
-
-### DeadStreak
-
-```python
-class DeadStreak
-```
-
-Consecutive requests the server did not serve (not reached, or a 429
-or a 5xx), across every document in flight: a dead server fails them all
-alike, and one with twenty batches never sees sixty-four of its own.
-
-#### DeadStreak.\_\_init\_\_
-
-```python
-def __init__(self, limit: int)
-```
-
-#### DeadStreak.hit
-
-```python
-def hit(self) -> bool
-```
-
-#### DeadStreak.clear
-
-```python
-def clear(self) -> None
-```
-
-### PlannedDocument
-
-```python
-@dataclass
-class PlannedDocument
-```
-
-One document planned, as `plan_batches` hands it to the harvest.
-
-Fields:
-
-- `name: str`: the file stem
-- `report: object`: the plan's DocumentReport, still empty
-- `batches: list`: every batch of the document, framed or not
-- `doc_spec: Spec`: this document's spec, its lists closed
-- `pairs: list`: the frame's pairs, in the order of `indices`
-- `indices: list`: the index each pair stands under in the file
-- `failed: int = 0`: frame and pair plans that raised
-
 ## Functions
 
 ### retry_temperature
@@ -1076,25 +271,6 @@ def read_to_end() -> None
 Every sweep from here on reads the rest of its document to the end, so
 a coordinate ends read or `unstated` and never `exhausted`.
 
-### window_budget
-
-```python
-def window_budget(share: float = 1.0) -> dict
-```
-
-{stage: windows} for one coordinate's sweep, own then retrieval then
-rest. Read at call time so a test that moves one constant moves this.
-
-The sum is FIELD_MAX_WINDOWS + REST_MAX_WINDOWS. `own` can never bind --
-one window, and the attempt loop already stops at FIELD_ATTEMPTS -- and
-is written here so the three numbers add up in one place instead of two.
-
-*share* scales the two search stages for a coordinate the profile says
-to look for less far (`SEARCH_SHARE`): under one budget, corpus_m5's
-sector search filled 4 percent of its 392,541 requests where the scope's
-filled 25 percent. At least one window stays, so no stage is skipped;
-a share of 0 is the exception and reads the own passage alone.
-
 ### embedder
 
 ```python
@@ -1111,19 +287,6 @@ the sixth died of CUDA OOM, and with it all sixteen documents.
 
 The double check is not decoration — eight threads reach this together on
 the first probe, and without the lock they would each build one.
-
-### make_content_fetcher
-
-```python
-def make_content_fetcher() -> Callable
-```
-
-fetch_owner_content, but each owner is read from SQLite once.
-
-A sweep meets the same section again in the next round, and again for the
-next parameter: four parameters times four rounds is the same row read up
-to sixteen times over NFS. One planning thread owns one of these, so it
-needs no lock.
 
 ### make_shared_content
 
@@ -1162,27 +325,6 @@ It used to return a list per probe, which the plan then concatenated. That
 is not a ranking, it is a concatenation of rankings, and it put probe 17's
 best match behind everything probes 1 to 16 had surfaced. Measured over 65
 documents and 15,082 values: median rank 77 that way, 26 this way.
-
-### make_structure
-
-```python
-def make_structure(conn: sqlite3.Connection,
-                   content_fetcher: Optional[Callable] = None) -> Callable
-```
-
-(document_id) -> every table and every figure of the document.
-
-The floor of the plan, and it is structural rather than lexical on
-purpose. The old floor searched the stored text with LIKE for the
-vocabulary's own words, which is a worse version of the retrieval above
-it — measured over the corpus it never had anything left to add, because
-the sweep above had already walked the whole document.
-
-This one adds what retrieval is bad at and structure is certain about:
-12,094 of 15,082 values came from a table or a figure, and whether
-something is a table is not a question a similarity search should be
-asked. There are about 110 per document, which is affordable exactly
-because the plan is no longer built once per parameter.
 
 ### make_parents
 
@@ -1251,19 +393,6 @@ Its own connection per thread, like `make_parents`: read-only, and SQLite
 handles are not shared. The content is, with the parents too: *content*,
 the run's shared store or one of its own.
 
-### own_section_number
-
-```python
-def own_section_number(sources) -> Optional[int]
-```
-
-The earliest section any of these passages stands in, or None.
-
-The rest stage reads in the document's own order, and that order starts at
-section 1 -- the title page of a 249-section plan, for a row that stands on
-page 180. Earliest and not nearest, because one sweep asks for several rows
-at once and only a start before all of them is close to every one.
-
 ### make_rest_of_document
 
 ```python
@@ -1297,25 +426,6 @@ sections only, and 71 percent of corpus_m5's tuples came out of images:
 
 Each call reads a whole document, so what it read goes into *content*, the
 run's shared store, and not into a store per thread.
-
-### make_front_page
-
-```python
-def make_front_page(db_path: Path,
-                    content: Optional[Callable] = None) -> Callable
-```
-
-(document_id, max_sources, max_chars) -> the document's sections from
-its start, in reading order, as many as one request of those limits holds.
-
-The passages a publication says what it is in: title, authors, date,
-DOI and abstract. Where they stood among forty other rows of one request,
-the model left them out, a title in 17 documents of the scenarios run and
-an abstract in 132. So the parameters the profile names in
-FRONT_PAGE_PARAMETERS are asked once more on their own over the opening
-of the document, and `plan_batches` reads as much of it as one request
-holds: a cover, a repository's title sheet or a bibliography entry in
-front of the paper takes a place, and the abstract still follows.
 
 ### make_more_sources
 
@@ -1428,19 +538,6 @@ def document_specs(db_path, spec: Spec, document_axes: Optional[Callable])
 `spec_for` for a pass over a harvest on disk, the corpus open for as
 long as the pass runs. None when the profile closes no list per document:
 such a pass needs no database.
-
-### anchor_question_key
-
-```python
-def anchor_question_key(target) -> str
-```
-
-The one question a stored anchor set was written for.
-
-An anchor is a sentence written from a label, a description and a
-wording. Those three and the anchor's own id are the target tuple, so the
-tuple IS the question, and a set is reusable exactly while its tuple has
-not moved.
 
 ### anchors_key
 
@@ -1584,24 +681,6 @@ keeps for every document (`make_seek_probes`), is sent for none, as
 everything every document waits on is; *document_id* still notes its
 failures and traces it (owner decision 2026-11-07).
 
-### years_in_sources
-
-```python
-def years_in_sources(sources, low: int = 0, high: int = 0) -> set
-```
-
-Every year-shaped number in these passages. A count, not a reading.
-
-The frame carries the whole harvest: every value is asked for one of its
-pairs, so a year the frame missed loses all of that year's values at once
-and loses them silently -- which is the one failure this design has that
-the old one did not. So the same passages the model was shown are scanned
-without a model, and what it did not name is reported.
-
-Reported, never added. "2045 MWh/a" is a year-shaped number and is not a
-year, and a cross-check that decided would put it in the frame and ask
-every table for a year the plan does not have.
-
 ### set_model_len
 
 ```python
@@ -1666,19 +745,6 @@ def answer_room(system: str, conversation: list, wanted: int) -> int
 ```
 
 max_tokens for this request: *wanted*, or what the window leaves.
-
-### make_places
-
-```python
-def make_places(db_path: Optional[Path], spec: Spec, out: Path,
-                content: Optional[Callable] = None,
-                every: Optional[Callable] = None)
-```
-
-The run's map of where each axis is answered (`places.Places`), or
-None when the profile writes no prompt for it or EXTRACT_PLACES=0.
-*every* is (document, exclude) -> passages, read from *db_path* when
-not given.
 
 ### make_page_count
 
@@ -1858,8 +924,18 @@ the sought search's sentences (`make_seek_probes`).
 def frame_slots_of(spec: Spec) -> list
 ```
 
-The coordinates the survey reads per passage, its frame: the pair of
-each group it reads (`spec.Group.paired`).
+The coordinates of the plan's frame, which its base and target years
+date a value by: the pair of each group the survey reads, and of a group
+the reading reads that names one (`spec.Group.paired`).
+
+### survey_slots_of
+
+```python
+def survey_slots_of(spec: Spec) -> list
+```
+
+The coordinates the survey reads per passage: the pair of each group
+it reads; none where the reading asks every coordinate per value.
 
 ### dates_by_plan
 
@@ -1942,20 +1018,6 @@ Each request shows one passage, a figure with its crop beside the text
 as the reading shows it. *scope* names a survey of part of a plan, kept
 beside the whole one's.
 
-### make_frame_asker
-
-```python
-def make_frame_asker(image_root: Optional[Path] = None) -> Callable
-```
-
-ask(sources, slots, document_id, known, usage_out) -> reply or None.
-
-One request, and the answer is a list of pairs with two quotes each. Two,
-because a column header carries the years and a section heading carries
-the scenario: one passage can back both halves only when it prints both,
-and every coordinate is checked against its OWN quote exactly as a field
-answer is.
-
 ### frame_pairs
 
 ```python
@@ -1973,123 +1035,11 @@ read once, from a caption or a heading, and every row of the document
 inherits it -- so "is this passage near this row" is not a question about
 it, and no reading anywhere in the harvest is asked it.
 
-*rejected* collects one sentence per pair that did not get through, for
-`find_frame` to put back in front of the model. Silently dropping them is
+*rejected* collects one sentence per pair that did not get through, to be
+put back in front of the model. Silently dropping them is
 how a plan ended up with a scenario the ontology has no class for: the
 pair was refused, nobody said so, and the next window was asked the same
 question in the same way.
-
-### frame_windows
-
-```python
-def frame_windows(sources: list, max_sources: int = 0,
-                  max_chars: int = 0) -> list
-```
-
-The plan's passages in windows one frame request can hold.
-
-All of them, not a prefix. A pair may only be quoted from a passage that
-was shown (`frame_pairs`), so a year printed past the cut cannot enter the
-frame at all, and a pair the frame does not have loses every value of that
-pair. Measured on Kassel: a frame over the first 12 of 50 passages found
-2 pairs, 2040 and 2024, and 174 of the 234 table tuples the hand reading
-covers were then stamped with a year printed on another table.
-
-### find_frame
-
-```python
-def find_frame(sources: list, slots: list, document_id: int, ask: Callable,
-               more_sources: Optional[Callable] = None,
-               probes: Optional[list] = None,
-               start: Optional[list] = None) -> tuple
-```
-
-(pairs, status, missed) - which scenarios and years this document has.
-
-Asked once per document and over every window of the plan, before any
-value. Every value question is then one of these pairs, which is what
-takes the coordinate out of the model's hands: it is not asked which year
-a number belongs to, it is asked what the number for THIS year is.
-
-`missed` is the deterministic cross-check: the year-shaped numbers in the
-passages that no pair names. It is a finding for the second pass, never an
-addition to the frame, and the second pass shows the window that CARRIES
-the missed year instead of the first window again.
-
-`start` is the pairs a harvest already read for this document. They stand
-first and in their order, the model is shown them as known, and a pair it
-names again is not added a second time (`take`), so what comes back is
-the stored pairs and then the ones these passages print in addition.
-
-### load_anchors
-
-```python
-def load_anchors(path: Path, key: str, targets: list) -> dict
-```
-
-The anchor sets a previous run wrote that are still the answer to the
-same question.
-
-Per question, not per file. One changed question used to miss the whole
-cache and have the model rewrite all nineteen sets, and those sets decide
-which passages a document is read from -- so an edit to the year question
-changed the retrieval of the carrier coordinate, which nothing had asked
-for and no line anywhere reported.
-
-A file written before the per-question map existed carries none of it and
-is therefore reused for nothing: it cannot say which of its sets still
-answer, and guessing is how a run comes to search with a set nobody
-checked.
-
-### save_anchors
-
-```python
-def save_anchors(path: Path, key: str, anchors: dict,
-                 targets: Optional[list] = None) -> None
-```
-
-Write the sets and, beside each, the question it answers.
-
-### make_anchors
-
-```python
-def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
-                 key: str = "") -> dict
-```
-
-anchor id -> search anchors the model wrote for one question.
-
-The QA app turns a question into a HyDE anchor before it searches: a
-sentence written as it would READ in the document, because that is what a
-similarity search matches against. This stage searched with the spec's
-templates alone, which name the thing rather than say it.
-
-Once per run and per question, not per document: the anchor depends on
-the question, not on the plan, and a stable probe string is what makes the
-query-embedding cache hit across the whole corpus.
-
-### probe_texts
-
-```python
-def probe_texts(spec: Spec, templates: list, anchors: Optional[dict] = None) -> list
-```
-
-Every retrieval probe the run will ever send, once, order-stable.
-
-### prime_probe_cache
-
-```python
-def prime_probe_cache(cache_conn, spec: Spec, templates: list,
-                      anchors: Optional[dict] = None) -> int
-```
-
-Embed every probe of every parameter in one batch, before any planning.
-
-The probes come from the spec, not from a document, so the whole corpus
-asks the same few dozen questions. Embedded from inside the sweep they
-cost one GPU round trip per miss and put every planning thread behind the
-same lock; embedded here they cost one call, and retrieval afterwards
-reads nothing but the cache.
 
 ### probe_server
 
@@ -2114,66 +1064,6 @@ def watch_server(on_dead: Callable, *, probe: Callable = probe_server,
 A daemon thread that calls *on_dead(seconds)* once the server has not
 answered for *dead_after* seconds, then stops watching.
 
-### expand_defaults
-
-```python
-def expand_defaults(defaults: Optional[dict], tuples: list) -> list
-```
-
-Fold the reply's shared coordinates into every tuple that omits them.
-
-Measured on the one table that truncated in three consecutive pilots: of
-the sixteen keys a tuple carries, ten are identical across all 39 of its
-tuples, and rewriting them costs 52% of the whole answer. So the model
-writes them once. A tuple's own key always wins, and a key in
-NOT_DEFAULTABLE is dropped however the model labelled it.
-
-### expand_values
-
-```python
-def expand_values(tuples: list) -> list
-```
-
-One tuple per number of an entry that gives several under one quote.
-
-A row of a table carries several values, and writing that row out once
-per value was most of a long answer: 59 tokens a value at the median, so
-6,144 tokens end at about 100 values, and a table of 20 municipalities in
-8 columns does not fit. Each value leaves here as a tuple of its own, so
-the check that its number stands in the quote runs per value, and one that
-does not is refused alone.
-
-A number keeps its place in its row where the list is the row's numbers
-cell by cell (`cells_in_order`): one printed in two cells is told apart
-by it alone.
-
-### split_table
-
-```python
-def split_table(source) -> Optional[tuple]
-```
-
-A table's passage as two, or None when it has no rows to divide.
-
-Each half keeps everything above the first row with a number: the title,
-the header, the sub-headers. Without them a number has no column. The crop
-stays behind, because it shows the rows of the other half and a long
-answer is what this split is for. Both halves are the same passage, and a
-quote is checked against the whole of it.
-
-### request_timeout
-
-```python
-def request_timeout(wanted: int, usual: int) -> Optional[int]
-```
-
-What a harvest request may take, None for the client's own limit.
-
-The time follows the room: a reply given twice the tokens takes twice as
-long, and 12,288 tokens at the 3.7 tokens a second a long reply gets could
-never arrive in the 600 s of a repeat. A repeat after a timeout gets at
-least `RETRY_TIMEOUT` from the client (`_repeating`).
-
 ### log_usage
 
 ```python
@@ -2181,16 +1071,6 @@ def log_usage(budget: Optional[int] = None) -> None
 ```
 
 One line at the end of a run: what the window was really asked for.
-
-### make_harvester
-
-```python
-def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable
-```
-
-The rows request: the values of a batch of passages, with the crops of
-its tables and figures, a sandbox round for a number the model computes,
-and the split of a request whose answer did not fit.
 
 ### row_context
 
@@ -2213,47 +1093,6 @@ that column. Three numbers under three year columns share one quote, and
 the column is what tells them apart: a fact already in hand here, so it
 is handed over rather than left to be counted. A number printed in two
 cells has its *head* from its place in its row's list (`with_head`).
-
-### own_title
-
-```python
-def own_title(source) -> str
-```
-
-The title of the table or figure a row comes from, else its
-section's: the heading a plan prints over the number.
-
-### table_head
-
-```python
-def table_head(source) -> Optional[str]
-```
-
-The first line of a table, which says which table a request means
-once a window no longer shows it.
-
-### question_head
-
-```python
-def question_head(question: Optional[str]) -> str
-```
-
-The question's first sentence ("Welcher Energieträger?"): what a
-probe names as asked, without the rules that follow it.
-
-### context_probes
-
-```python
-def context_probes(rows: list, asked, owner_of: dict, label: str = "") -> list
-```
-
-One search sentence per own passage of these rows: its title, the
-wording of what its rows have read, and what is asked (*label*).
-
-Per passage and not per row, because the rows of one table share their
-context and differ only in the cell: forty rows of one table would be
-forty probes that find the same passages. Rows without any context give
-none, and the caller searches with the question's anchors instead.
 
 ### keeps_row
 
@@ -2278,49 +1117,6 @@ happened to miss.
 *allowed* None means every class the graph takes, which is every entry
 that does not ride the out: convention. A tuple names the answers.
 
-### field_response_format
-
-```python
-def field_response_format(slot) -> dict
-```
-
-The shape a reply to one field request can take, as a server grammar.
-
-The field contract of the prompt, handed to vLLM as a JSON schema so the
-reply is generated inside it: one object, the asked field under its own
-name, `groups` and `answers`, and a `value` that is one of the options
-(UNSTATED included) or, for a number, an integer. 70,395 field replies of
-corpus_m5 carried text beside the object and were asked again; under the
-grammar none can. Nothing here is a check: every key stays optional that
-the prompt leaves optional (`value` may be omitted with a wording, a
-`quote` is not asked of UNSTATED), and what the reply says is verified by
-`merge_field` as before.
-
-### make_field_asker
-
-```python
-def make_field_asker(image_root: Optional[Path] = None, *,
-                     dead=None, on_give_up: Optional[Callable] = None
-                     ) -> Callable
-```
-
-ask(shown, rows, slots, ...) -> {"fields": {name: answer}}, or None.
-
-*dead* is the run's DeadStreak: the rows pool has always had one, the
-field pool none, so a server that went away was found by every one of its
-192 threads separately, each spending its own retries. *on_give_up* is
-called once when the streak fires.
-
-One coordinate per request, over at most FIELD_ROWS rows. Five coordinates
-for every row of a batch in one request wanted up to 27,311 prompt tokens
-and more answer than the window left, and came back refused or cut off;
-one question about a handful of numbers fits by construction. Several
-slots are asked one after another, rows in chunks, and the replies merged
-under the field's name, which is what the sweep folds. A chunk whose
-prompt leaves too little room for its rows is halved before it is sent.
-
-No sandbox: a field answer is a choice and a quote, never arithmetic.
-
 ### make_review_asker
 
 ```python
@@ -2333,65 +1129,6 @@ One stored value, read again over the two passages it may quote from. The
 same model and a narrower window, so what it can find is a reading that
 contradicts itself -- not a reading that is wrong about the picture in the
 same way twice.
-
-### make_sweeper
-
-```python
-def make_sweeper(ask: Callable, *,
-                 more_sources: Optional[Callable] = None,
-                 rest_of_document: Optional[Callable] = None,
-                 parents: Optional[Callable] = None,
-                 anchors: Optional[dict] = None,
-                 search_share: Optional[dict] = None,
-                 places: Optional[Callable] = None,
-                 found=None, frame_axes: Optional[list] = None) -> Sweeper
-```
-
-sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to.
-
-Lifted out of the harvester so a pass that re-reads ONE coordinate of an
-already harvested document walks the same three stages, in the same
-order, under the same allowances. A second copy of this would be a second
-set of numbers, and every measurement the sweep has ever produced is
-about this one.
-
-Its five dependencies are exactly what it closed over inside the
-harvester: the asker, and the three ways of finding more passages plus
-the anchor sets that seed them. *search_share* is the profile's
-`SEARCH_SHARE`: {coordinate: fraction of the search budget}. *places* is
-the document's map of where each axis is answered (`places.Places`).
-*found* is what earlier harvests found (`found.Found`). *frame_axes* are
-the coordinates a table with one frame is asked once for (`TableFrames`).
-
-### make_fieldwise_harvester
-
-```python
-def make_fieldwise_harvester(image_root: Optional[Path] = None,
-                             more_sources: Optional[Callable] = None,
-                             rest_of_document: Optional[Callable] = None,
-                             spec=None, anchors: Optional[dict] = None,
-                             slice_gate: Optional[dict] = None,
-                             parents: Optional[Callable] = None,
-                             frame_axes: Optional[list] = None,
-                             search_share: Optional[dict] = None,
-                             dead=None,
-                             on_give_up: Optional[Callable] = None,
-                             places: Optional[Callable] = None,
-                             found=None) -> Callable
-```
-
-A harvest(batch, prior) that asks the rows once and then every
-coordinate of them, one field to a request.
-
-The batch is the unit in flight, and the sweep over the fields happens
-inside one batch's turn. That is `harvest` itself, which a pass over a
-stored harvest uses: every coordinate through all its stages, per batch.
-
-The harvest of a document does it in two halves, both on the callable:
-`harvest.turn(batch, prior)` is the turn with the passages of the batch's
-own values only, and `harvest.search_document(answered)` is what is still
-open after them, searched once per document and coordinate with the rows
-of all the batches together.
 
 ### make_completer
 
@@ -2436,20 +1173,6 @@ passage, its title, a hit's line or title (owner decision 2026-11-05).
 which "similar" lists (`make_more_sources` in a run); without it that
 search finds nothing.
 
-### split_long_sources
-
-```python
-def split_long_sources(items: list, max_chars: int = MAX_SOURCE_CHARS) -> list
-```
-
-Work items whose source text fits one request.
-
-A section longer than the window used to be sent whole, rejected by the
-server with a 400, retried twice and written off — the values in it were
-lost without ever being read. Windows overlap so a number is never cut in
-half at the seam; both windows carry the same owner, so the provenance and
-the dedup that hang off it do not notice the split.
-
 ### document_room
 
 ```python
@@ -2492,59 +1215,6 @@ forgotten (`scheduler.read_out`).
 
 Returns (done, written, failures).
 
-### harvest_batches
-
-```python
-def harvest_batches(batches: list, harvest: Callable, *,
-                    more_sources: Optional[Callable] = None,
-                    verify: Optional[Callable] = None,
-                    on_give_up: Optional[Callable] = None,
-                    workers: int = LLM_PARALLEL,
-                    stop=None,
-                    unfinished: Optional[set] = None,
-                    pool=None,
-                    dead: Optional[DeadStreak] = None,
-                    progress: bool = True) -> list
-```
-
-Every batch of the whole run in flight at once.
-
-The batch is the unit, not the chain. A chain — one document, one
-parameter — has to be read in order only if a later batch must be told
-what an earlier one found, and making that ordering real made it the unit
-of scheduling too: the pilot's canary stage is a single document, which
-is three chains, so three requests faced a server sized for two hundred.
-The same document had taken three minutes when every source was its own
-request; it was killed unfinished after nine.
-
-So `prior` became a hint that each batch reads at dispatch instead of a
-sequence it waits for. *verify* turns one reply into the rows that
-survived checking, and only those are recorded — the hint must not carry
-claims the verifier threw away, or a value refused once is suppressed
-everywhere else in the document.
-
-Returns [(batch, reply)] in submission order, follow-up batches appended
-as they are earned. Ordering is by index, not by completion: the server
-answers a 40-token table long before a 6000-token section, and the report
-must not depend on that.
-
-*on_give_up* is called once when the dead-server cut fires. Cancelling this
-group is not enough on its own: the cut fired sixteen times in one run and
-the loop went on to the next group each time, so a server that died at
-01:44 was still being asked at 05:14. What the caller does with it is the
-caller's business, but it has to be able to know.
-
-*stop* ends the harvest early when it is set (SIGTERM): nothing new is
-submitted, and the call returns at once without waiting for the requests
-still open. Whenever batches are left behind, by *stop* or by the
-dead-server cut, the documents they belong to are added to *unfinished*.
-Such a document has replies for some of its batches and none for the rest,
-and written it would be stamped as if it had been read whole.
-
-*pool* and *dead* are shared when several documents harvest at once: the
-pool bounds the requests of all of them together, and the streak counts
-unreachable replies across all of them. Without them the call has its own.
-
 ### make_locate
 
 ```python
@@ -2557,14 +1227,6 @@ Uses the same alignment the app highlights with, so a value's recorded
 provenance and the box a reader sees are produced by one implementation.
 A section can run over a page break, so the section's other pages are
 tried too - bounded, because this opens the PDF each time.
-
-### flow_prompts
-
-```python
-def flow_prompts(flow: Optional[str] = None) -> tuple
-```
-
-The prompts a harvest of *flow* (this run's when None) sends.
 
 ### survey_prompt_ids
 
@@ -2584,15 +1246,12 @@ a spec that merges names or dates a value by the plan's years sends
 def surveyed_flow(spec: Spec, profile=None) -> bool
 ```
 
-Whether a run harvests from the survey: its spec names groups. A spec
-without groups harvests field by field, which is where a profile not yet
-moved over stays.
+Whether a run can harvest from the survey: its spec names groups. A
+spec without groups cannot be harvested (`main` stops on it).
 
 A spec with groups whose profile lacks a prompt of the survey is a broken
-profile, not a profile to harvest the old way with: the run stops and
-names the prompt, as `spec.load` stops at a broken group (owner decision
-2026-11-04). Switching silently harvested 100 plans one coordinate at a
-time and said so only in a log line. So does a group prompt whose
+profile: the run stops and names the prompt, as `spec.load` stops at a
+broken group (owner decision 2026-11-04). So does a group prompt whose
 parts are not the spec's groups, or one whose file lacks the words of a
 field its follow-ups carry (`parts_of`), before a request is sent rather
 than at the first plan's reading.
@@ -2734,15 +1393,6 @@ top-up exists to re-read. Filtered, the flag is a no-op that logs
 appends a parameter (`--top-up-parameters`) asks for the same, for the
 same reason.
 
-### run_document
-
-```python
-def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
-                 spec_sha: str, templates: list, deps: dict, *,
-                 force: bool = False, force_stale: bool = False,
-                 anchors_sha: str = "") -> bool
-```
-
 ### read_in_part
 
 ```python
@@ -2859,9 +1509,9 @@ picture's transcription without the picture.
 def field_slots(spec) -> list
 ```
 
-Every slot a field request can ask, one per request: the parameter,
-the unit, each parameter's coordinates and the value of a category
-parameter asked again (`Turn.enter`).
+Every slot a request can ask, one per request: the parameter, the
+unit, each parameter's coordinates and the value of a category parameter
+asked again.
 
 ### context_budget
 
@@ -2897,69 +1547,20 @@ request rides alone, which is why the larger of the two is what counts.
 Every source in a batch may bring a crop, and the prior block rides along
 on top.
 
-### fit_batch_sources
-
-```python
-def fit_batch_sources(prompt, spec, wanted: int = BATCH_SOURCES) -> int
-```
-
-The largest batch this profile can be ANSWERED for, at most *wanted*.
-
-The two numbers that killed a pilot lived in different files and nobody
-ever compared them: how many sources one request reads is set here, and
-how much the model may write about them is set in the prompt's
-frontmatter. Six sources of kwp tuples fit in 8192 tokens; six sources of
-scenarios tuples, whose quotes are whole sentences, need 11000 and would
-be cut
-off — every time, deterministically, on five GPUs.
-
-So the batch follows the answer budget rather than a hand-picked
-constant, and what one tuple costs comes from the profile's own example,
-which is the very contract the prompt shows the model.
-
-### sent_prompt_ids
-
-```python
-def sent_prompt_ids(framed: bool, flow: Optional[str] = None) -> tuple
-```
-
-The prompts a harvest sends to the model as a system message.
-
-From the survey (`SURVEYED`): the survey, the two reading requests, the
-combing and, where the profile writes it, the match
-(`survey_prompt_ids`). Field by field: the rows request, the field
-request, the sentence a document is searched with and the anchor
-questions; the frame
-request only when the profile has frame axes, because `ask_frame` does
-not exist otherwise. Not the queries (a list of search templates, never
-sent) and not the review, which has a line of its own in the doctor.
-
 ### request_budget
 
 ```python
-def request_budget(spec, framed: bool, profile=None,
-                   flow: Optional[str] = None) -> int
+def request_budget(spec, profile=None) -> int
 ```
 
 Tokens the largest request this run sends needs, per request.
 
 The window a server is started with has to hold every request kind of the
-run, so it follows the largest of them, and the largest is the field
-request for one profile and the rows request for the other. Read off the
-prompts the run sends and never off one that no request carries.
-
-### batch_sources_for
-
-```python
-def batch_sources_for(spec, profile=None) -> int
-```
-
-How many passages one rows request reads for this profile.
-
-The rows request is the only one that reads BATCH_SOURCES passages, and its
-max_tokens is what bounds that reply. The field request reads
-FIELD_WINDOW passages and answers a row at a time, so its ceiling says
-nothing about how many tuples a batch yields.
+run, so it follows the largest of them. Read off the prompts the run
+sends (`survey_prompt_ids`): the survey, the two reading requests, the
+combing and, where the profile writes it, the match. Never off one that
+no request carries, and not the review, which has a line of its own in
+the doctor.
 
 ### select_documents
 
@@ -2974,38 +1575,15 @@ means superseded rather than absent: `_documents` lists current versions
 only. A pilot has to hear about that instead of quietly being smaller than
 it was meant to be.
 
-### pair_batches
+### span_marks_of
 
 ```python
-def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
-                 anchors: list, *,
-                 max_sources: int = BATCH_SOURCES,
-                 max_chars: int = BATCH_CHARS) -> tuple
+def span_marks_of() -> dict
 ```
 
-(batches, rest, added) for one document with a frame.
-
-A pair is read over every passage that prints it, and over no other. Its
-own search and the document's search keep `PLAN_TOP` passages each, cut
-from two rankings. A table the document's search found that prints 2045,
-below the cut of the 2045 search, was in no batch at all: not under the
-pair, whose search had not kept it, and not in the rest, which is what
-prints none of the pairs. So every passage any search of the document
-planned goes to every pair it prints. `added` counts the ones a pair's own
-search had not kept; a pair whose own search failed (`None`) is read over
-those alone.
-
-A passage a pair's own search kept that does not print the pair is not
-read under it: every value from it is refused as another pair's, and on
-corpus_m5 that was 26,990 refusals, 95 percent of all. It goes where the
-passages of no pair go.
-
-`rest` is what any search of the document found that prints none of the
-pairs. It is read without one, and its year is asked per row against the
-section the passage stands in, which is where a plan writes it. A pair
-chosen for it from outside would be a coordinate with a quote from
-somewhere else, and the owner's rule is that every value says in the plan
-what it refers to.
+{coordinate: entry} a value stated for a span of years takes on each
+of its rows, as the active profile says it (`SPAN_MARKS`,
+`reading.span_rows`); {} where it says nothing.
 
 ### year_states_of
 
@@ -3017,88 +1595,6 @@ def year_states_of(profile) -> dict
 says it: their years date a row that names the state by word
 ("Basisjahr", "Zieljahr") and prints no year. None for a state the
 profile does not name, which then has no years.
-
-### plan_batches
-
-```python
-def plan_batches(document_id: int, filename: str, *, plan: Callable,
-                 plan_pool, ask_frame: Optional[Callable], frame_axes: list,
-                 more_sources: Optional[Callable], year_states,
-                 anchor_texts: dict, only=(),
-                 stored_pairs: Optional[dict] = None,
-                 rest_of_document: Optional[Callable] = None,
-                 already_read: frozenset = frozenset(),
-                 front_page: Optional[Callable] = None,
-                 front_parameters=(),
-                 plan_known: Optional[Callable] = None,
-                 gained: Optional[Callable] = None
-                 ) -> PlannedDocument
-```
-
-One document from its first search to its batches: the plan, the frame,
-one plan per pair, the rest of the document and the batches that read them.
-
-The planning half of the harvest of a document, shared by the run and by
-the pass that appends a parameter to a stored harvest. *only* names the
-parameters (by uri) the document is searched for and the batches ask for;
-empty is every parameter, which is the harvest. *stored_pairs* is
-{index: pair} of a harvest already on disk: the frame is asked over this
-plan's passages with those pairs seeded, they keep their index and the
-pairs the passages print in addition are numbered after them. Without it
-the pairs stand under 0, 1, 2 as the frame found them.
-
-*rest_of_document* (`make_rest_of_document`) adds every passage no search
-kept, read once after the planned ones: under the pair it prints, or
-without one. A search keeps `PLAN_TOP` passages, and on a long plan most
-values stand below that cut -- Mainz gave 1,409 tuples when a follow-up
-happened to walk the rest and 194 when none did.
-
-*already_read* is {(owner_kind, owner_id)} a stored harvest already asked
-for values (`topup_rest`): the frame is still found over every planned
-passage, so the pairs are the stored ones, and none of these is read.
-
-*front_page* (`make_front_page`) gives the document's sections from its
-start, and of the parameters asked, those in *front_parameters* are asked
-once more over as many of them as one request holds, in a request of its
-own that offers nothing else. Every other place
-may still give them; the checks are the same. A pass over a stored
-harvest's unread passages asks none.
-
-*plan_known* is (document_id, filename) -> what `plan` gives, over the
-passages earlier harvests found something in, or None when there are
-none (`found.py`). Then nothing is searched: no plan, no plan per pair and
-no rest of the document, and the frame is read over those passages.
-
-*gained* is (document_id, doc_spec) -> the parameters no earlier harvest
-of the document was asked (`found.Found.gained`). A found place stands
-for the questions asked when it was found, so with *plan_known* these
-are also searched over the whole plan, as in any run, with the frame
-seeded by the pairs of the found places and none of those passages read
-twice (owner decision 2026-11-03).
-
-### joined
-
-```python
-def joined(found: PlannedDocument, whole: PlannedDocument) -> PlannedDocument
-```
-
-One document planned at its found places and, for the parameters no
-earlier harvest asked, over the whole plan. The second frame was seeded
-with the first's pairs, which keep their indices, so its pairs are the
-document's.
-
-### accepted_rows
-
-```python
-def accepted_rows(batch, reply, spec) -> list
-```
-
-What of one reply survives checking: the next batch's `prior`.
-
-The same verify_tuple the fold runs, against the same source text, so
-the two cannot drift apart. It skips only `locate`, which turns a
-quote into highlight rectangles and has never decided whether a
-claim is accepted.
 
 ### fold_answers
 

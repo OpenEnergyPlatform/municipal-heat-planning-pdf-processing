@@ -31,11 +31,11 @@ Where it names them in different places:
 <!-- with: before after -->
 "before" and "after" are the sections before and after the value's place. They count where they speak about THIS value, and a quote may stand in them.
 
-<!-- with: whole_table -->
-"source" is the value's table with its title, head and all its rows. "whole_table" means: the table prints the coordinate neither in its head nor in its rows, and your answer holds for every one of its values. Give what its title, the sentence that announces it or its section says for the whole table.
-
 <!-- with: table_before -->
 "table_before" is the title and head of the table right before the value's table. If the value's table continues it, its title and head speak about the value too, and a quote may stand in them.
+
+<!-- with: sections -->
+"sections" are the titles of the publication's last sections up to the value's place, its own last. A quote may stand in them.
 
 <!-- with: settings -->
 "settings" are what the publication settles for all its values, each with its quote. They hold for this value too where they speak about it, and a quote may stand in them.
@@ -55,6 +55,9 @@ Asked now is the coordinate under "coordinates" of the same value, in this form:
 
 <!-- follow-up: more hits not_found -->
 Here is what is new: under "more" the passages you asked for, each with "id"; under "hits" new hit lists, each hit with "id", kind, title and one line, for a "search" the line that matches. Where you asked for nothing new while the coordinate is still missing, they are the next passages of the ranking or, where there was none, the next passages in the order of the publication. Under "not_found" stands what could not be found, with its reason ("end": there is no section in that direction any more, "unknown": no or more than one placeholder or hit of that name, "invalid_pattern" or "timeout": the pattern did not work). Give your whole answer again, with everything you already know.
+
+<!-- follow-up: plan_years -->
+No year was found for this value. Under "plan_years" stand the years the publication takes its own state in ("base_years") and its target years ("target_years"). Where the value's place prints, instead of a year, only the publication's word for its own state or for its target, take the year of the list that word refers to: "value" is the year, "value_raw" the word, character for character, and "quote" the place with the word. Otherwise the year is "out:unstated".
 
 <!-- follow-up: corrections -->
 Your last answer has mistakes, per coordinate ("coordinate") under "what". Answer once more in full and fix these points. Corrections that name a "value" are each about the scenario of that name: for that coordinate, give those scenarios alone.

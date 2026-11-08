@@ -138,22 +138,12 @@ YEAR_RANGE = (1900, 2100)
 # target and not the number, "Zieljahr" 12,369 of them.
 TARGET_YEAR = {"scenario": "target"}
 
+# What a value stated for a span of years takes on each of its rows, one per
+# year of the span (`reading.span_rows`, owner decision 2026-11-07: "als ca.
+# für jedes distinkte Jahr erfassen"): "im Mittel der Jahre 2019 bis 2021"
+# is the value for 2019, 2020 and 2021, each approximate.
+SPAN_MARKS = {"qualifier": "out:approximate"}
 
-# How far past its own passage a coordinate is looked for, as a share of the
-# search budget (FIELD_MAX_WINDOWS, REST_MAX_WINDOWS). Under one budget on
-# corpus_m5, the sector's search filled 4 percent of its 392,541 requests and
-# the aggregation's 3 percent of 65,285; the scope's and the scenario's filled
-# 23 to 25 percent. A coordinate not named here searches with the whole
-# budget. One whose search is cut short ends `exhausted`, never `unstated`
-# (owner decision 2026-09-23).
-#
-# 0 reads the value's own passage alone (owner decision 2026-10-22): the
-# MHPKG schema leaves an emission's carrier and sector optional, because the
-# law asks for the total, and every technology optional. A key may name the
-# parameter, `<parameter>.<axis>`, and is read before the bare axis.
-SEARCH_SHARE = {"sector": 0.5, "aggregation": 0.5, "subject": 0, "whole": 0,
-                "emission.carrier": 0, "emission.sector": 0,
-                "technology": 0}
 
 # How the documents write the decimal. It decides what the digits leave
 # open: "3,251 GWh" is 3.251 here, and "1.234" is 1234.
@@ -174,12 +164,7 @@ CONTRACT_LANGUAGE = "de"
 # beyond the keys the stage reads by name: a wording the run depends on. The
 # prompts are in the profile's language, so the passage is too.
 # (what is checked, prompt, passage, True: has to be there, False: must not)
-PROMPT_CHECKS = (
-    ("field prompt asks one field", "extraction/field",
-     "GENAU EIN Feld", True),
-    ("rows prompt no longer fixes one parameter", "extraction/rows",
-     '"parameter": die gesucht', False),
-)
+PROMPT_CHECKS = ()
 
 
 # What the stage says to the model outside its prompts: why an answer was not

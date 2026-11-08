@@ -9,35 +9,17 @@ works. This asks the real request over named passages against whatever
 LLM_BASE_URL and LLM_MODEL say, with the prompt, the split and the reading of
 the run, and needs neither a GPU job nor retrieval:
 
-    python scripts/probe_rows.py data/KWP.db --out probe --owner table/89205
-    python scripts/probe_rows.py data/KWP.db --out probe --document 1021 --largest 5
-    python scripts/probe_rows.py --hits passages.json --out probe
-    python scripts/probe_rows.py --hits passages.json --out probe --whole
+    python scripts/probe_rows.py data/scenarios/scenarios.db --out probe --survey --read --documents 4,23
     python scripts/probe_rows.py --hits passages.json --out new --compute probe
-    python scripts/probe_rows.py data/scenarios/scenarios.db --out probe --whole --documents 4,23
 
 `--hits` takes the passages from a file, as `fetch_owner_content` returns them,
 so a machine without the database can run the probe.
-
-For each passage it reports the tokens and seconds of its requests, the values
-read, how many share a quote, and how many stand the two checks of the harvest:
-the quote stands in the passage and the number in the quote.
-
-`--whole` asks what a run asks of these passages: the frame, the rows of each
-pair and every coordinate of them, with the prompts and the checks of the run.
-There is no search: a coordinate is looked for in the other passages given,
-in their order, and a list a document closes from the database stays empty.
-With `--places` the coordinates are searched over the map of the run instead,
-and `--every-row` asks each of its windows for every open row. It writes each
-document's report when it is done, and reports the pairs and each coordinate's
-states. Several agents share the work through LLM_MODELS and
-LLM_SLOTS_PER_MODEL, as in the chat.
 
 `--documents` takes every passage of these documents from the database, in
 the order the run reads the rest of a document, and closes each document's
 own lists from it as the run does (the profile's `document_axes`).
 
-`--compute` takes the verified rows of such a stored probe and asks only what
+`--compute` takes the verified rows of a stored probe and asks only what
 the compute step leaves open, so its prompt can be tried without reading the
 plans again. The plans' passages come from `--hits` or, with the database,
 from `--documents`. With the database and `--index` its search by a sentence ranks
@@ -59,20 +41,6 @@ A sandbox round needs CODE_EXEC_URL; `report.json` counts the rounds either way.
 
 ## Functions
 
-### owners_of
-
-```python
-def owners_of(args, conn) -> list
-```
-
-### tally
-
-```python
-def tally(tuples: list, text: str) -> dict
-```
-
-What came back for one passage, by the harvest's two checks.
-
 ### states_of
 
 ```python
@@ -92,17 +60,6 @@ def trace_events(out: Path) -> list
 ```python
 def source_of(hit: dict, args)
 ```
-
-### whole
-
-```python
-def whole(hits: list, spec, args, passages=None, document_spec=None) -> list
-```
-
-The frame, the rows and the coordinates of each document's passages.
-
-*passages* are {document: sources} in place of *hits*, and
-*document_spec* gives each document the spec its own lists close.
 
 ### ranking
 

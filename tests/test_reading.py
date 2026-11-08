@@ -63,7 +63,7 @@ from pathlib import Path
 
 import jsonschema
 
-from docpipe.extraction import fields, lookup, reading, thread
+from docpipe.extraction import fields, lookup, reading, surveyed, thread
 from docpipe.extraction.pipeline import Row, Source, merge_field, route_claims
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.verify import verify_tuple
@@ -142,8 +142,7 @@ def sent(thread, follow, first):
     return {**payload, "thread": thread}
 
 
-def asking(values=({"value": None},), groups=None, spec=SPEC, frame=FRAME,
-           **kw):
+def asking(values=({"value": None},), groups=None, spec=SPEC, **kw):
     """A Reader whose values requests are answered by *values* in turn and
     the request of each coordinate by *groups[coordinate]* in turn (each a
     whole reply, `{coordinate: answer}`), any other coordinate with "not
@@ -180,15 +179,14 @@ def asking(values=({"value": None},), groups=None, spec=SPEC, frame=FRAME,
             reply = nth(given, calls, name)
         return answered(thread, reply)
 
-    return reading.Reader(spec, ask_values, ask_text, frame, **kw), calls
+    return reading.Reader(spec, ask_values, ask_text, **kw), calls
 
 
 def read_of(source, *, values=({"value": None},), groups=None, pairs=(),
             tuples=(), passages=None, **kw):
     reader, calls = asking(values, groups, **kw)
     passages = passages or {(source.owner_kind, source.owner_id): source}
-    read = reader.read(7, EMISSION, source, list(tuples), list(pairs),
-                       passages)
+    read = reader.read(7, EMISSION, source, list(pairs), passages)
     return read, calls
 
 
@@ -269,8 +267,8 @@ NAMED = "covers the building, transport and industry"
 
 
 def sector_read(*values):
-    reader, calls = asking(values, spec=SCENARIOS, frame=[])
-    read = reader.read(7, SECTOR, COVERS, [], [],
+    reader, calls = asking(values, spec=SCENARIOS)
+    read = reader.read(7, SECTOR, COVERS, [],
                        {(COVERS.owner_kind, COVERS.owner_id): COVERS})
     return read, calls
 
@@ -403,8 +401,8 @@ def test_a_coordinate_may_quote_what_its_value_has_read():
 
 # The order of a coordinate's first request (ticket 26): the parameter's, the
 # plan's, the passage's, the value's.
-TEXT_KEYS = ("parameter", "coordinates", "where", "base_years",
-             "target_years", "source", "around", "known", "value")
+TEXT_KEYS = ("parameter", "coordinates", "where", "title_page", "settings",
+             "sections", "source", "around", "table_before", "value")
 # The coordinates a value is asked in the order of the spec's groups and of
 # each group's coordinates (owner decision 2026-11-07), written out of the
 # spec itself.
@@ -415,10 +413,9 @@ ASKED = [name for group in SPEC.groups.values() for name in group.coordinates
 def test_each_value_is_one_conversation_and_each_coordinate_a_message_of_it():
     # Owner decisions 2026-11-07: the first message shows the passage and
     # the value with the first coordinate; each further coordinate is a
-    # message of the same conversation with its own question only; only a
-    # frame coordinate is shown the survey's pairs.
-    read, calls = read_of(TEXT, values=(V300, V27, {"value": None}),
-                          tuples=[{"scenario": "Bestand", "year": 2022}])
+    # message of the same conversation with its own question only; no
+    # coordinate is shown pairs of its passage.
+    read, calls = read_of(TEXT, values=(V300, V27, {"value": None}))
     asked = [(task, payload) for task, payload in calls if task != "values"]
     n = len(ASKED)
     assert n > len(GROUPS)
@@ -428,7 +425,7 @@ def test_each_value_is_one_conversation_and_each_coordinate_a_message_of_it():
         assert len({id(p["thread"]) for _, p in value}) == 1
     assert asked[0][1]["thread"] is not asked[n][1]["thread"]
     for index, (task, payload) in enumerate(asked):
-        assert ("known" in payload) == (task in ("scenario", "year")), task
+        assert "known" not in payload, task
         assert [list(payload["coordinates"])] == [[task]]
         keys = [key for key in payload if key != "thread"]
         if index % n:
@@ -442,24 +439,30 @@ def test_each_value_is_one_conversation_and_each_coordinate_a_message_of_it():
     assert read.asked == 3 + 2 * n
 
 
-def test_what_the_unit_decides_is_not_asked_and_what_it_leaves_open_is():
-    # The unit question read an entry of the parameter's list: the
-    # coordinate the spec derives from it ("aggregation") is decided, not
-    # asked (owner decision 2026-11-07).
+def test_what_the_unit_could_decide_is_asked_and_derived_only_where_open():
+    # Owner decision 2026-11-07: the coordinate the spec derives from the
+    # unit ("aggregation") is asked like any other, and taken from the unit
+    # only where no request read it, once reading and combing are done.
     read, calls = read_of(TEXT, values=ONE, groups={"unit": [{"unit": UNIT}]})
     claim = read.claims[0]
     assert claim["unit_state"] == "read"
+    assert "aggregation" in {task for task, _ in calls}
+    assert claim["aggregation_state"] == "unstated"
+    assert surveyed.derive_left([read]) == 1
     assert claim["aggregation_state"] == "derived"
-    assert "aggregation" not in {task for task, _ in calls}
-    # the failure by construction: a unit the plan printed that is no entry
-    # of the list decides nothing, so the model is asked
+    assert claim["aggregation_raw"] == "t CO2"
+    # the failure by construction: an aggregation the model read stays
+    # what it read
+    kept, _ = read_of(TEXT, values=ONE, groups={"unit": [{"unit": UNIT}]})
+    kept.claims[0].update(aggregation="out:other", aggregation_state="read")
+    assert surveyed.derive_left([kept]) == 0
+    assert kept.claims[0]["aggregation"] == "out:other"
+    # and a unit the plan printed that is no entry of the list decides
+    # nothing
     odd = {"value": "Tonnen Kohlenstoff", "quote": "rund 300 t CO2"}
-    other, calls = read_of(TEXT, values=ONE, groups={"unit": [{"unit": odd}]})
+    other, _ = read_of(TEXT, values=ONE, groups={"unit": [{"unit": odd}]})
+    assert surveyed.derive_left([other]) == 0
     assert other.claims[0].get("aggregation_state") != "derived"
-    assert "aggregation" in {task for task, _ in calls}
-    # Not read at all: asked as well.
-    _none, calls = read_of(TEXT, values=ONE)
-    assert "aggregation" in {task for task, _ in calls}
 
 
 WRONG_CARRIER = {"value": "Erdgas", "quote": "Erdgas steht hier nicht"}
@@ -525,37 +528,53 @@ def test_a_coordinate_in_another_form_is_asked_again_as_such():
     assert read.claims[0]["year_state"] == "unanswered"
 
 
-# -- the survey's tuple of the passage ------------------------------------------
+# -- several entries, a span of years --------------------------------------------
 
-TUPLE = {"scenario": "Bestand", "scenario_raw": "im Jahr 2022",
-         "scenario_quote": "im Jahr 2022", "scenario_source": ["table", 5],
-         "year": 2022, "year_quote": "im Jahr 2022",
-         "year_source": ["table", 5]}
-TITLED = table("Tabelle 3: Emissionen im Jahr 2022\n" + TABLE.split("\n", 1)[1])
-
-
-def erdgas():
-    return [Row(label="R1", item_index=0, claim={
-        "source": "Q1", "value": 1200,
-        "quote": "| Erdgas | 1.200 | 800 | 2.000 |"})]
-
-
-def test_an_open_frame_takes_the_surveys_one_tuple_with_its_quote():
-    rows = erdgas()
-    assert reading.inherit(rows, FRAME, [TUPLE], [TUPLE], [TITLED]) == 2
-    assert rows[0].claim["year"] == 2022
-    assert rows[0].claim["year_quote"] == "im Jahr 2022"
-    assert list(rows[0].claim["year_window"])[0] == "frame"
+def test_a_value_stated_for_two_entries_is_one_row_per_entry():
+    # Owner decision 2026-11-07: "Fernwärme + Gas-NT" is the value once
+    # with each.
+    carrier = SLOTS["carrier"]
+    if not reading.several(carrier):
+        carrier = replace(carrier, several=True)
+    both = {"carrier": [{"value": "Erdgas", "quote": "300 t CO2 bei Erdgas"},
+                        {"value": "Fernwärme", "quote": "300 t CO2 bei Erdgas"}]}
+    assert len(reading.answers_each(both, [carrier])) == 2
+    # the failure by construction: a list that may name one entry only is
+    # one reply
+    single = replace(carrier, several=False)
+    assert len(reading.answers_each(both, [single])) == 1
 
 
-def test_two_tuples_or_a_year_of_its_own_take_nothing_from_the_survey():
-    rows = erdgas()
-    assert reading.inherit(rows, FRAME, [TUPLE, dict(TUPLE, year=2040)],
-                           [], [TITLED]) == 0
-    rows[0].claim.update(year=2040, year_state="read")
-    assert reading.inherit(rows, FRAME, [TUPLE], [TUPLE], [TITLED]) == 0
-    assert rows[0].claim["year"] == 2040
-    assert rows[0].claim.get("scenario_state") != "read"
+def test_a_span_of_years_is_one_row_per_year_marked_as_the_profile_says():
+    year = SLOTS["year"]
+    quote = "im Mittel der Jahre 2019 bis 2021"
+    row = Row(label="R1", item_index=0, claim={
+        "value": 300, "year": 2019, "year_state": "read",
+        "year_quote": quote, "year_raw": "2019 bis 2021"})
+    made = []
+
+    def clone(one):
+        copied = Row(label=f"R{len(made) + 2}", item_index=0,
+                     claim=dict(one.claim))
+        made.append(copied)
+        return copied
+    marks = {"qualifier": "out:approximate"}
+    got = reading.span_rows(row, year, reading.until_of(
+        year, {"year": {"value": 2019, "until": 2021, "quote": quote}}),
+        marks, clone)
+    assert [r.claim["year"] for r in [row] + got] == [2019, 2020, 2021]
+    assert [r.claim["year_state"] for r in [row] + got] \
+        == ["read", "derived", "read"]
+    assert all(r.claim["qualifier"] == "out:approximate"
+               and r.claim["qualifier_state"] == "derived"
+               for r in [row] + got)
+    # the failure by construction: a last year its quote does not print
+    # makes no rows
+    alone = Row(label="R9", item_index=0, claim={
+        "value": 300, "year": 2019, "year_state": "read",
+        "year_quote": "im Jahr 2019 und danach"})
+    assert reading.span_rows(alone, year, 2021, marks, clone) == []
+    assert "qualifier" not in alone.claim
 
 
 # -- the grammars ---------------------------------------------------------------
@@ -689,9 +708,9 @@ def read_long(answer):
         return answered(thread, answer(source, parameter, context, read,
                                        thread, follow, drawn))
 
-    reader = reading.Reader(SPEC, ask_values, lambda *a, **k: {}, FRAME)
+    reader = reading.Reader(SPEC, ask_values, lambda *a, **k: {})
     long = table(LONG)
-    return reader.read(7, EMISSION, long, [], [], {("table", 5): long}), shown
+    return reader.read(7, EMISSION, long, [], {("table", 5): long}), shown
 
 
 ALL = [n * 1000 + 100 for n in range(1, 9)]
@@ -728,15 +747,16 @@ BASES = [{"state": "base", "axis": "year", "year": 2022,
           "quote": "bis zum Jahr 2045", "source": ["table", 5], "index": 1}]
 
 
-def test_only_a_group_asking_the_year_is_shown_the_base_and_target_years():
+def test_no_coordinate_of_the_reading_is_shown_the_base_and_target_years():
+    # Owner decision 2026-11-07: the model looks for a year first; only
+    # where nothing found one is it shown the plan's years (`combing`).
     assert reading.years_of(BASES, list(SLOTS.values())) \
         == {"base_years": [2022], "target_years": [2045]}
     assert reading.years_of(BASES, [SLOTS["carrier"]]) == {}
     _read, calls = read_of(TEXT, values=ONE, bases=lambda pairs: BASES)
     shown = {task: (p.get("base_years"), p.get("target_years"))
              for task, p in calls if task != "values"}
-    assert shown == {name: (([2022], [2045]) if name == "year"
-                            else (None, None)) for name in ASKED}
+    assert shown == {name: (None, None) for name in ASKED}
 
 
 STATE = Source("section", 6, "Im Bestand fielen rund 300 t CO2 an.",
@@ -754,14 +774,11 @@ def read_by_word(year):
     return read.claims[0]
 
 
-def test_a_value_named_by_the_plans_word_for_its_state_takes_that_year():
-    claim = read_by_word(2022)
-    assert claim["year"] == 2022 and claim["year_state"] == "read"
-    assert claim["year_quote"] == "im Jahr 2022"
-    assert claim["year_link_quote"] == "Im Bestand fielen rund 300 t CO2"
-
-
-def test_a_year_named_by_the_word_but_not_of_the_plan_is_not_read():
+def test_the_reading_takes_no_year_its_quote_does_not_print():
+    # Owner decision 2026-11-07: a year named by the plan's word for its
+    # state is read only in the request that shows the plan's years, once
+    # nothing found a year (`combing.PLAN_YEARS`); the reading takes none.
+    assert read_by_word(2022)["year_state"] == "unbacked"
     assert read_by_word(2019)["year_state"] == "unbacked"
 
 
@@ -838,9 +855,16 @@ def test_a_year_printed_only_in_a_section_s_own_heading_is_read_from_it():
     assert claim["year"] == 2045 and claim["year_state"] == "read"
     assert claim["year_quote"] == "Zielszenario 2045"
     assert claim["year_source"] == ["section", 12]
+    # The section's own title stands among the titles every request about
+    # a value shows (`reading.sections_of`, owner decision 2026-11-07), so
+    # it is read from there without the heading as well.
     alone, _ = read_of(HEADED, values=(V80, {"value": None}),
                        groups=FROM_HEADING)
-    assert alone.claims[0]["year_state"] == "unbacked"
+    assert alone.claims[0]["year_state"] == "read"
+    # the failure by construction: a year no shown text prints is not read
+    nowhere, _ = read_of(HEADED, values=(V80, {"value": None}), groups={
+        "year": [{"year": {"value": 2045, "quote": "Zieljahr ist 2045"}}]})
+    assert nowhere.claims[0]["year_state"] == "unbacked"
 
 
 # -- a quote from a passage never shown --------------------------------------------
@@ -904,7 +928,7 @@ def shown_definitions(parameter):
                             {"value": None}))
     source = Source("section", 6, "Es fielen 300 t an.",
                     {"document_id": 7, "section_title": "Bilanz"})
-    reader.read(7, parameter, source, [], [], {("section", 6): source})
+    reader.read(7, parameter, source, [], {("section", 6): source})
     shown = {}
     for task, payload in calls:
         # A further group's message shows the parameter only where it

@@ -40,15 +40,15 @@ one conversation (owner decision 2026-11-07: "Die Fragen A, B und C sind ja
 eigentlich mehrere Fragen und sollten dann auch nacheinander gestellt
 werden"): the first message shows the passage and the value, each later one
 brings the words of the coordinate's group and that coordinate only, and the
-model sees what it answered before. A coordinate the spec derives from the
-unit is not asked where the unit question chose an entry of the parameter's
-list, and is asked where it chose none (owner decision 2026-11-07: where it
-does not follow by itself, the model tries). The system prompt is what every
-message is told and the part of each field the first message carries; only a
-frame coordinate is shown the survey's pairs, only the year the plan's base
-and target years. The rounds of a passage's values are a conversation as
-well: each later round asks for the next value after the answer it follows.
-A correction goes after the answer it is about, in its conversation.
+model sees what it answered before. Every coordinate is asked, scenario and
+year too, each for this value alone (owner decision 2026-11-07: nothing is
+taken from its passage or its table). Every request about a value's
+coordinates shows the titles of the last sections of the plan up to the
+value's place, its own last (`SECTION_TITLES`). The system prompt is what
+every message is told and the part of each field the first message carries.
+The rounds of a passage's values are a conversation as well: each later
+round asks for the next value after the answer it follows. A correction goes
+after the answer it is about, in its conversation.
 
 With a pool, the conversations of a passage's values run side by side once
 its rounds have named them, as the passages do, and none waits for another
@@ -64,7 +64,9 @@ passage does not say" is one of the answers (`fields.UNSTATED`).
 A coordinate whose answer is the name the document gives a thing, such as
 a scenario, is read as the document prints it (`fields.Slot.merged`). A
 value the passage states for several of them is one row per name, each
-checked on its own (`answers_each`, owner decision 2026-11-06); names that
+checked on its own (`answers_each`, owner decision 2026-11-06), and so is a
+value stated for several entries of a list that may name several
+(`fields.Slot.several`, owner decision 2026-11-07); names that
 stand in one place may share one quote, which must hold each of them
 (`spread`, owner decision 2026-11-07). What the check refuses on any of the
 rows one answer made is asked once more in ONE message after that answer,
@@ -77,9 +79,10 @@ Nothing is checked here beyond what the harvest checks everywhere. Every
 coordinate goes through `pipeline.merge_field` and every value through
 `fold_batch`. What that check refuses is asked once more with its reason,
 named by its coordinate; a coordinate the reply left out is asked for by
-name. A frame coordinate still open takes the survey's tuple of the passage,
-with its quote, where the survey named one (window `frame`). What is still
-open then is asked in a conversation of its own, with the answers so far,
+name. A year the plan states for a span of years ("im Mittel der Jahre 2019
+bis 2021") is one row per year of the span, each marked as the profile
+marks a span (`span_rows`, owner decision 2026-11-07). What is still open
+then is asked in a conversation of its own, with the answers so far,
 the sections around the value's place and the rest of the plan
 (`combing.py`). A request too long for the model's window is split: a table
 into halves of its rows, until a single row is a hole of its own
@@ -103,7 +106,7 @@ from . import fields, lookup
 from .thread import CORRECTIONS, Thread
 from .pipeline import (READ, YEAR_STATES, Batch, Row, Source, WorkItem,
                        answer_in_quote, mark_unanswered, merge_field,
-                       option_named, printed_lines, row_label, window_around)
+                       printed_lines, row_label, window_around)
 from .verify import (MIN_QUOTE_CHARS, canonical_number, flat,
                      number_outside_quote, quote_in, read_off, times_quoted,
                      times_stated, value_refused)
@@ -124,6 +127,12 @@ NO_ANSWER = "no_answer"
 # The hits of one ranked list a request shows, per kind (owner decision
 # 2026-11-04: the best 15 sections, 20 tables and 20 figures).
 SHOWN = {"section": 15, "table": 20, "figure": 20}
+
+# The titles of the sections of the plan up to a value's place, its own last,
+# that every request about the value's coordinates shows (owner decision
+# 2026-11-07: "die vorigen 10 Section Titles mitgeben inklusive des
+# aktuellen").
+SECTION_TITLES = 10
 
 # What a reading request tells of a quote that stands in nothing it showed,
 # in the names of what it shows: "source", the heading of its section,
@@ -261,19 +270,30 @@ def groups_of(spec, slots: list) -> list:
             if any(slot.name in group.coordinates for slot in slots)]
 
 
-def group_context(context: dict, group_slots: list, frame_slots: list,
-                  bases: list) -> dict:
+def group_context(context: dict) -> dict:
     """What a group's request shows beside the passage: the text around it,
-    the title page's line and the table it may continue (`beside_of`), and
-    the survey's pairs and the plan's years only where the group asks a
-    frame coordinate."""
-    names = {slot.name for slot in group_slots}
-    shown = {key: context[key] for key in ("around", "settings") + BESIDE
-             if context.get(key)}
-    if names & {slot.name for slot in frame_slots}:
-        shown["known"] = context.get("known") or []
-    shown.update(years_of(bases, group_slots))
-    return shown
+    the plan's settings, the titles of the sections up to the value's place
+    (`sections_of`), the title page's line and the table it may continue
+    (`beside_of`)."""
+    return {key: context[key]
+            for key in ("around", "settings", "sections") + BESIDE
+            if context.get(key)}
+
+
+def sections_of(source: Source, passages: dict) -> tuple:
+    """([title], [passage a quote may stand in]) of the last
+    `SECTION_TITLES` sections of the plan up to *source*, its own last: a
+    table's or figure's own section is the one it stands in. Each title is
+    shown, and may be quoted, under its section (`shown_as`)."""
+    titles, pieces = [], []
+    for section in lookup.sections_up_to(
+            list(passages.values()), (source.owner_kind, source.owner_id),
+            SECTION_TITLES):
+        title = lookup.title_of(section)
+        if title:
+            titles.append(title)
+            pieces += shown_as(section, title)
+    return titles, pieces
 
 
 def coordinate_shown(slot, unstated: bool = True) -> dict:
@@ -300,8 +320,10 @@ def several(slot) -> bool:
     """May one value name several things for *slot*, one row each: a
     coordinate whose answer is the name the document gives a thing, merged
     with the document's other names for it after the reading (`naming.py`,
-    owner decisions 2026-11-06)?"""
-    return bool(getattr(slot, "merged", None))
+    owner decisions 2026-11-06), or one whose list may name several entries
+    for one value (`fields.Slot.several`, owner decision 2026-11-07)?"""
+    return bool(getattr(slot, "merged", None)) \
+        or bool(getattr(slot, "several", False))
 
 
 def answer_schema(slot, probe: bool = False, unstated: bool = True) -> dict:
@@ -318,6 +340,9 @@ def answer_schema(slot, probe: bool = False, unstated: bool = True) -> dict:
     if fields.wording_asked(slot):
         properties["value_raw"] = {"type": "string"}
     properties["quote"] = {"type": "string"}
+    if slot.kind == fields.NUMBER:
+        # The last year of a span the value is stated for (`span_rows`).
+        properties["until"] = {"type": "integer"}
     if probe:
         properties["probe"] = {"type": "string"}
     one = {"type": "object", "properties": properties,
@@ -407,11 +432,6 @@ def answers_each(reply, slots: list) -> list:
                 if isinstance(one, dict)] or [None]
         out = [{**one, slot.name: answer} for one in out for answer in each]
     return out
-
-
-def known_of(tuples: list, frame_slots: list) -> list:
-    return [{slot.name: one.get(slot.name) for slot in frame_slots}
-            for one in tuples]
 
 
 def years_of(bases: list, slots: list) -> dict:
@@ -1090,13 +1110,12 @@ def text_payload(source: Source, parameter, slots: list, row: Row,
     (ticket 26): the parameter, with its full definition only where *full*
     (the group that classifies, `Group.full_definition`), and the group's
     coordinates with the spec's words for where a plan prints them
-    (*where*), the same for every value of the parameter; then, for a frame
-    group, the plan's base and target years, the same in a plan; then the
-    passage, the text around a table or figure and, for a frame group, the
-    survey's pairs of the passage (`group_context`); the value last, with
-    its quote and, under "read", what is already read of it in the plan's
-    words. The line of the title page stands with the plan's years, the
-    table the passage may continue after it (`beside_of`). It is the first
+    (*where*), the same for every value of the parameter; then the line of
+    the title page and the plan's settings, the same in a plan; then the
+    titles of the sections up to the passage (`sections_of`), the passage,
+    the text around a table or figure and the table the passage may continue
+    (`group_context`); the value last, with its quote and, under "read",
+    what is already read of it in the plan's words. It is the first
     message of the value's conversation: its next coordinate and a
     correction follow the answer (`group_payload`, owner decisions
     2026-11-07)."""
@@ -1107,17 +1126,15 @@ def text_payload(source: Source, parameter, slots: list, row: Row,
                "coordinates": {slot.name: coordinate_shown(slot)
                                for slot in slots},
                "where": where,
-               **{key: context[key] for key in ("base_years", "target_years")
-                  if key in context},
                **({"title_page": context["title_page"]}
                   if context.get("title_page") else {}),
                **({"settings": context["settings"]}
                   if context.get("settings") else {}),
+               **({"sections": context["sections"]}
+                  if context.get("sections") else {}),
                "source": source_shown(source),
                **{key: context[key] for key in ("around", "table_before")
                   if context.get(key)},
-               **({"known": context["known"]} if "known" in context
-                  else {}),
                "value": value}
     return payload
 
@@ -1128,9 +1145,8 @@ def group_payload(parameter, slots: list, where: str, context: dict,
     (owner decision 2026-11-07: one conversation per value, each group a
     message of its own): the group's coordinates and the spec's words for
     where a plan prints them, the parameter's full definition where the
-    group classifies (*full*) and the conversation has not shown it, and for
-    a frame group the plan's base and target years and the survey's pairs of
-    the passage (`group_context`). The passage and the value stand in the
+    group classifies (*full*) and the conversation has not shown it. The
+    passage, the titles of the sections up to it and the value stand in the
     first message; a row the conversation goes on for that its answers do
     not show, a further name a reply gave (`_Job.clone`), is shown again
     with what it has read ("value")."""
@@ -1139,9 +1155,7 @@ def group_payload(parameter, slots: list, where: str, context: dict,
             "coordinates": {slot.name: coordinate_shown(slot)
                             for slot in slots},
             "where": where,
-            **{key: context[key] for key in ("base_years", "target_years",
-                                             "known", "value")
-               if key in context}}
+            **({"value": context["value"]} if "value" in context else {})}
 
 
 def text_response_format(slots: list) -> dict:
@@ -1488,44 +1502,54 @@ def turned_out(reply, slots: list, judge: Optional[Judge], evidence: list,
 
 # -- one parameter in one passage ----------------------------------------------
 
-def same(slot, a, b) -> bool:
-    if slot.is_closed:
-        first, second = option_named(slot, a), option_named(slot, b)
-        return first is not None and second is not None \
-            and first.uri == second.uri
-    return str(a) == str(b)
+def until_of(slot, answer) -> Optional[int]:
+    """The last year of the span a number answer states its value for
+    ("until", `answer_schema`), None for any other answer."""
+    entry = answer.get(slot.name) if isinstance(answer, dict) else None
+    until = entry.get("until") if isinstance(entry, dict) else None
+    if slot.kind != fields.NUMBER or not isinstance(until, int) \
+            or isinstance(until, bool):
+        return None
+    return until
 
 
-def inherit(rows: list, slots: list, tuples: list, pairs: list,
-            shown: list) -> int:
-    """A frame coordinate still open on a row takes the survey's tuple of
-    the passage, when the survey named exactly one, through the field check
-    with the tuple's own quote. Not on a row that read a frame coordinate of
-    its own the tuple contradicts: a year under its column head is not the
-    year of the table's title. Returns the coordinates taken."""
-    if len(tuples) != 1:
-        return 0
-    one = tuples[0]
-    index = next((i for i, pair in enumerate(pairs, start=1)
-                  if all(pair.get(s.name) == one.get(s.name) for s in slots)),
-                 1)
-    agree = [row.label for row in rows
-             if all(row.claim.get(f"{s.name}_state") != READ
-                    or same(s, row.claim.get(s.name), one.get(s.name))
-                    for s in slots)]
-    taken = 0
-    for slot in slots:
-        if not agree:
-            break
-        answer = {"value": one.get(slot.name),
-                  "quote": one.get(f"{slot.name}_quote")}
-        if one.get(f"{slot.name}_raw"):
-            answer["value_raw"] = one[f"{slot.name}_raw"]
-        got = merge_field(rows, shown, slot,
-                          {"groups": [dict(answer, rows=agree)]},
-                          window=("frame", index))
-        taken += got["filled"]
-    return taken
+def span_rows(row: Row, slot, until: Optional[int], marks: dict,
+              clone: Callable) -> list:
+    """A value the plan states for a span of years as one row per year of
+    it (owner decision 2026-11-07: "als ca. für jedes distinkte Jahr
+    erfassen"): *row*, read with the span's first year, and a copy of it
+    (*clone(row)*) for each year after, the last read as the first is, those
+    between derived from the span, which the quote prints and names neither
+    of. Each takes *marks* ({coordinate: entry}, the profile's `SPAN_MARKS`)
+    where it read nothing, derived from the span. Only where the year read
+    holds and the last year stands in its quote as well, as any year must;
+    [the copies]."""
+    first = row.claim.get(slot.name)
+    quote = row.claim.get(f"{slot.name}_quote")
+    if (until is None or row.claim.get(f"{slot.name}_state") != READ
+            or not isinstance(first, int) or until <= first
+            or not isinstance(quote, str)
+            or not answer_in_quote(slot, until, None, quote)):
+        return []
+    wording = row.claim.get(f"{slot.name}_raw") or quote
+    made = []
+    for year in range(first + 1, until + 1):
+        copied = clone(row)
+        copied.claim[slot.name] = year
+        if year != until:
+            copied.claim[f"{slot.name}_state"] = fields.DERIVED
+        made.append(copied)
+    for one in [row] + made:
+        for name, entry in (marks or {}).items():
+            if one.claim.get(f"{name}_state") == READ:
+                continue
+            for suffix in fields.COORDINATE_KEYS:
+                one.claim.pop(f"{name}{suffix}", None)
+            one.claim[name] = entry
+            one.claim[f"{name}_state"] = fields.DERIVED
+            one.claim[f"{name}_raw"] = wording
+            one.claim[f"{name}_quote"] = quote
+    return made
 
 
 def link_ranges(rows: list, slots: list) -> int:
@@ -1598,11 +1622,9 @@ class _Job:
     context: dict
     bases: list
     fixed: list
-    frames: list
     merged: Callable
     passages: dict
     result: Read
-    pairs: list = field(default_factory=list)
     # the piece of the passage each value was read in, by its label
     views: dict = field(default_factory=dict)
     # the sentences of each value's unstated coordinates, by its label
@@ -1626,9 +1648,7 @@ class _Job:
     rounds: dict = field(default_factory=dict)
     # the spec's groups of the parameter's coordinates (`groups_of`)
     groups: list = field(default_factory=list)
-    # the survey's frame tuples of the passage, and each piece of it that a
-    # round answered (`_values`)
-    tuples: list = field(default_factory=list)
+    # each piece of the passage that a round answered (`_values`)
     read_in: list = field(default_factory=list)
     # What the conversations of the passage's values share while they run
     # side by side (`Reader.__call__`): the counts of the reading and the
@@ -1718,21 +1738,24 @@ class Reader:
     (`runner.row_context`). *drawn(source)* says whether a request about
     *source* sends a figure's image, which a value only the image shows is
     read off (owner decisions 2026-11-05 and 2026-11-07); None sends none.
-    *pool* reads passages side by side, and the values of a passage side by
-    side once its rounds have named them (owner decision 2026-11-07). No
-    request of the reading has tools (owner decision 2026-11-05, ticket 26).
+    *span_marks* are what a value stated for a span of years takes on each of
+    its rows (`span_rows`). *pool* reads passages side by side, and the
+    values of a passage side by side once its rounds have named them (owner
+    decision 2026-11-07). No request of the reading has tools (owner decision
+    2026-11-05, ticket 26).
     """
 
-    def __init__(self, spec, ask_values: Callable, ask_text: Callable,
-                 frame_slots: list, *, shown_with: Optional[Callable] = None,
+    def __init__(self, spec, ask_values: Callable, ask_text: Callable, *,
+                 shown_with: Optional[Callable] = None,
                  bases: Optional[Callable] = None,
                  known: Optional[Callable] = None,
                  drawn: Optional[Callable] = None,
+                 span_marks: Optional[dict] = None,
                  pool=None, trace=None):
         self.spec = spec
         self.ask_values = ask_values
         self.ask_text = ask_text
-        self.frame_slots = frame_slots
+        self.span_marks = dict(span_marks or {})
         self.shown_with = shown_with or (lambda source: [])
         self.bases = bases or (lambda pairs: [])
         self.known = known or (lambda claim, asked: {})
@@ -1782,9 +1805,7 @@ class Reader:
 
         def start(job):
             parameter, source, shown = job
-            owner = (source.owner_kind, source.owner_id)
-            return self._start(document_id, parameter, source,
-                               found.tuples_at(owner, "frame"), pairs,
+            return self._start(document_id, parameter, source, pairs,
                                passages, shown=shown, budget=budget,
                                bases=bases, title_page=title_page,
                                settings=settings)
@@ -1857,24 +1878,25 @@ class Reader:
             raise
         return reads
 
-    def context_of(self, source: Source, tuples: list, passages: dict,
+    def context_of(self, source: Source, passages: dict,
                    budget: Optional[int] = None,
                    title_page: Optional[Source] = None) -> tuple:
         """(what the requests of a passage show beside it, the section it
         was cut from, the passages a coordinate may quote for what stands
         beside it): the text around a table or figure (`around_of`), the
-        title page's line and the table the passage may continue
-        (`beside_of`), and the survey's pairs of the passage, which only a
-        group that asks a frame coordinate shows (`group_context`)."""
+        titles of the sections up to it (`sections_of`), the title page's
+        line and the table the passage may continue (`beside_of`)."""
         around = around_of(source, passages, budget)
         context = {"around": around.text} if around is not None else {}
+        titles, titled = sections_of(source, passages)
+        if titles:
+            context["sections"] = titles
         beside, pieces = beside_of(source, title_page)
         context.update(beside)
-        context["known"] = known_of(tuples, self.frame_slots)
-        return context, around, pieces
+        return context, around, list(pieces) + titled
 
     def read(self, document_id: int, parameter, source: Source,
-             tuples: list, pairs: list, passages: dict,
+             pairs: list, passages: dict,
              shown: Optional[Source] = None,
              budget: Optional[int] = None, *,
              bases: Optional[list] = None,
@@ -1890,7 +1912,7 @@ class Reader:
         *pairs*), *title_page* its title page's line (`Reader.__call__`).
         The values one after another: the steps `Reader.__call__` runs side
         by side with a pool."""
-        job, rows = self._start(document_id, parameter, source, tuples,
+        job, rows = self._start(document_id, parameter, source,
                                 pairs, passages, shown, budget, bases=bases,
                                 title_page=title_page, settings=settings)
         if rows is None:
@@ -1899,7 +1921,7 @@ class Reader:
                             [self._coordinates(job, row) for row in rows])
 
     def _start(self, document_id: int, parameter, source: Source,
-               tuples: list, pairs: list, passages: dict,
+               pairs: list, passages: dict,
                shown: Optional[Source] = None,
                budget: Optional[int] = None, *,
                bases: Optional[list] = None,
@@ -1916,8 +1938,8 @@ class Reader:
                       [WorkItem(document_id, parameter, source)],
                       spec=self.spec)
         bases = list(bases) if bases is not None else self.bases(pairs)
-        context, around, beside = self.context_of(source, tuples, passages,
-                                                  budget, title_page)
+        context, around, beside = self.context_of(source, passages, budget,
+                                                  title_page)
         if settings:
             # What the plan settles for all its values, shown with each
             # value's coordinates, and quotable there.
@@ -1925,31 +1947,29 @@ class Reader:
             beside = list(beside) + settings_evidence(settings, passages)
         result = Read(batch, [])
         # What a coordinate's quote may stand in besides what a request
-        # shows of the passage: its heading, the text around it, the frame.
+        # shows of the passage: its heading and the text around it.
         fixed = list(self.shown_with(source)) + (
             [around] if around is not None else [])
-        frames = [passages[tuple(one[f"{s.name}_source"])] for one in tuples
-                  for s in self.frame_slots
-                  if tuple(one.get(f"{s.name}_source") or ()) in passages]
 
         def merged(rows: list, replies: dict, evidence: list) -> list:
             """Every coordinate's answers onto *rows*; [(coordinate, level,
-            failure)] of what the check refused."""
+            failure)] of what the check refused. A year is read where its
+            number stands in its quote: the plan's base and target years
+            are asked of a value only once nothing found its year
+            (`combing`, owner decision 2026-11-07)."""
             failed = []
             for slot in slots:
                 for level, window, field_reply in replies.get(slot.name, ()):
                     got = merge_field(rows, evidence, slot, field_reply,
-                                      window=window, bases=bases,
-                                      not_shown=NOT_SHOWN)
+                                      window=window, not_shown=NOT_SHOWN)
                     failed.extend((slot.name, level, failure)
                                   for failure in got["failed"])
             return failed
 
         job = _Job(document_id, parameter, source, shown, slots, context,
-                   bases, fixed, frames, merged, passages, result,
-                   pairs=list(pairs), extra=list(beside),
-                   order=list(passages.values()), budget=budget,
-                   groups=groups_of(self.spec, slots), tuples=list(tuples))
+                   bases, fixed, merged, passages, result,
+                   extra=list(beside), order=list(passages.values()),
+                   budget=budget, groups=groups_of(self.spec, slots))
         rows, views = self._values(job)
         if not views:
             result.unread = True
@@ -1970,8 +1990,10 @@ class Reader:
         been asked its coordinates (*eaches*, per row the rows its
         conversation came to): a value read as no value of its parameter is
         asked for once more, in the order of the values (`_again`, owner
-        decision 2026-11-07), then what the spec derives, what the frame
-        gives, the ranges, and what no reply answered."""
+        decision 2026-11-07), then the ranges, and what no reply answered.
+        What the spec derives from the unit waits for the combing: it is
+        taken only where no request read the coordinate (owner decision
+        2026-11-07, `fields.apply_derived`)."""
         slots = job.slots
         before = [slot for group, group_slots in job.groups
                   for slot in in_group_order(group, group_slots)]
@@ -1983,17 +2005,6 @@ class Reader:
                         each = each + self._coordinates(job, named)
             grouped.extend(each)
         rows = grouped
-        evidence = list(job.read_in) + job.fixed + job.extra + job.frames
-        # What the spec derives from the unit, where the unit question chose
-        # an entry; where it chose none, the coordinate was asked.
-        for axis in fields.axis_slots(job.parameter):
-            fields.apply_derived([row for row in rows
-                                  if fields.derives(axis, row.claim,
-                                                    job.parameter)],
-                                 axis)
-        inherit(rows, [s for s in self.frame_slots
-                       if s.name in {x.name for x in slots}],
-                job.tuples, job.pairs, evidence)
         link_ranges(rows, slots)
         result = job.result
         result.unanswered = mark_unanswered(rows, slots)
@@ -2054,9 +2065,12 @@ class Reader:
     def _coordinates(self, job: _Job, row: Row) -> list:
         """[*row* and the rows made beside it], each coordinate asked in
         one message, in the order of the groups and of each group's
-        coordinates (owner decision 2026-11-07). A value stated for several
-        names of a coordinate that may name several is one row per name, and
-        each asks the coordinates after it alone. A coordinate with an entry
+        coordinates (owner decision 2026-11-07), a coordinate the spec could
+        derive from the unit too (owner decision 2026-11-07: asked, derived
+        only where no answer is read). A value stated for several names of a
+        coordinate that may name several is one row per name, and each asks
+        the coordinates after it alone; so is each year of a span. A
+        coordinate with an entry
         a value must have (`fields.kept`) that reads a row as no value of
         its parameter closes the coordinates after it, which are never
         asked (`out_of_slice`); the value is asked for once more when every
@@ -2069,8 +2083,6 @@ class Reader:
                     if fields.closed(before, one.claim):
                         one.claim.setdefault(f"{slot.name}_state",
                                              fields.OUT_OF_SLICE)
-                        continue
-                    if fields.derives(slot, one.claim, job.parameter):
                         continue
                     each += self._value_group(job, one, group, [slot])
                 before.append(slot)
@@ -2198,7 +2210,7 @@ class Reader:
         if not asked:
             return []
         view = job.views.get(row.label, job.shown)
-        base = group_context(job.context, asked, self.frame_slots, job.bases)
+        base = group_context(job.context)
         read = self.known(row.claim, [slot.name for slot in asked])
         window = ("own", 1)
         context = {**base, **({"read": read} if read else {})}
@@ -2220,7 +2232,7 @@ class Reader:
             return []
         # What the value has read is shown too, and may be quoted (owner
         # decision 2026-11-05), and so is what stands beside the passage.
-        evidence = ([view] + job.fixed + job.extra + job.frames
+        evidence = ([view] + job.fixed + job.extra
                     + known_shown(row.claim, read, job.passages))
         return self._settled(job, row, reply, asked, ask, evidence,
                              window=window)
@@ -2246,11 +2258,15 @@ class Reader:
         replies = answers_each(reply, asked)
         rows = [row] + [job.clone(row) for _ in replies[1:]]
         corrections: dict = {}
+        spans: list = []
         for one, answer in zip(rows, replies):
             self._probed(job, one, answer, asked)
             failed = job.merged([one], {slot.name: value_replies(
                 answer, slot, one.label, window) for slot in asked}, evidence)
             job.count(failed=refused_of(failed))
+            for slot in asked:
+                spans += span_rows(one, slot, until_of(slot, answer),
+                                   self.span_marks, job.clone)
             told = [entry for entry in value_corrections(one, failed, asked,
                                                          answer)
                     if entry["coordinate"] not in turned
@@ -2258,13 +2274,13 @@ class Reader:
             if told:
                 corrections[one.label] = told
         if not corrections:
-            return rows[1:]
+            return rows[1:] + spans
         given = {one.label: answer for one, answer in zip(rows, replies)}
         told = told_once(corrections, given, asked, named=len(rows) > 1)
         job.count(asked=1, corrected=len(told))
         again = ask(row, {CORRECTIONS: told})
         if not isinstance(again, dict):
-            return rows[1:]
+            return rows[1:] + spans
         if judge is not None:
             again, _ = judge(again)
         made = []
@@ -2280,4 +2296,8 @@ class Reader:
             job.merged([target], {slot.name: value_replies(
                 answer, slot, target.label, window) for slot in asked
                 if slot.name in coordinates}, evidence)
-        return rows[1:] + made
+            for slot in asked:
+                if slot.name in coordinates:
+                    made += span_rows(target, slot, until_of(slot, answer),
+                                      self.span_marks, job.clone)
+        return rows[1:] + spans + made

@@ -10,8 +10,8 @@ parameter, that is a full corpus run spent answering a question nothing else
 asked.
 
 This module instead takes the coordinate off the rows that carry it, walks the
-same sweep the harvest walks (`runner.make_sweeper`, so there is one sweep and
-one set of numbers), and writes the answer back. It then carries that one stamp
+same combing the harvest walks (`surveyed.comb_sweep`, so there is one search
+and one set of numbers), and writes the answer back. It then carries that one stamp
 key forward and leaves every other key exactly as it was, so a later run still
 sees what it has to redo. Who read is recorded apart from that: the pass enters
 the stamp's `producers` list whether or not it earned a key, and each
@@ -416,14 +416,6 @@ def read_harvest(path) -> Stored:
     return stored
 
 
-def split_derived(rows: list, slot, parameter) -> tuple:
-    """(rows the spec sets *slot* for, rows that are asked it): the unit
-    decides the coordinate unless the plan read what `unless_read` names
-    (`fields.derives`), as in the harvest."""
-    decided = [r for r in rows if fields.derives(slot, r, parameter)]
-    return decided, [r for r in rows if not any(r is d for d in decided)]
-
-
 def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
                 only=None) -> Counter:
     """Re-sweep one harvest file's moved coordinates, then carry its stamp."""
@@ -483,30 +475,23 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
             mine = [r for r in tuples if r.get("parameter") == parameter.uri]
             if not mine:
                 continue
-            if slot.derive:
-                # No request where the spec decides this coordinate
-                # (`fields.derives`); a row it does not decide for is asked
-                # below. Reopening is what makes apply_derived write, because
-                # it skips a row that already carries a state.
-                decided, asked = split_derived(mine, slot, parameter)
-                rows = [Row(row_label(i), 0, r)
-                        for i, r in enumerate(decided)]
-                for entry in rows:
-                    reopen(entry.claim, slot)
-                stats["derived"] += fields.apply_derived(rows, slot)
-                # Written by this pass, so it says so: a missing key reads as
-                # the harvest.
-                for entry in rows:
-                    if f"{slot.name}_state" in entry.claim:
-                        point(entry.claim, slot, position)
-                if not asked:
-                    continue
-                mine = asked
             got, refused = _sweep_one(mine, parameter, slot, doc_spec, deps,
                                       stats, bases=bases, position=position)
             demoted.extend(refused)
             if not got:
                 settled.discard(key)
+            if slot.derive:
+                # Asked as in the harvest, and taken from the unit only where
+                # no answer was read (`fields.derives`, owner decision
+                # 2026-11-07).
+                rows = [Row(row_label(i), 0, r) for i, r in enumerate(mine)
+                        if not any(r is d for d in refused)
+                        and fields.derives(slot, r, parameter)]
+                stats["derived"] += fields.apply_derived(rows, slot)
+                # Written by this pass, so it says so: a missing key reads as
+                # the harvest.
+                for entry in rows:
+                    point(entry.claim, slot, position)
 
     # A row the gate had closed may now stay, and its other coordinates were
     # never asked. They carry `out_of_slice`, which is not a reading and not a

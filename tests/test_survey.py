@@ -21,13 +21,20 @@ RAW = json.loads((Path(__file__).resolve().parent.parent / "profiles" / "kwp"
                   / "extraction_spec.json").read_text(encoding="utf-8"))
 SPEC = load_spec(RAW)
 PARAMETERS = survey.parameters_of(SPEC)
-SLOTS = survey.tuple_slots(SPEC)
 
 
 def with_groups(change) -> dict:
     raw = copy.deepcopy(RAW)
     change(raw["groups"])
     return raw
+
+
+# The KWP spec asks every coordinate per value (owner decision 2026-11-07);
+# a spec whose survey reads the frame per passage is this one with the frame
+# group read in the survey.
+SURVEYING = load_spec(with_groups(lambda g: g["frame"].update(
+    read_in="survey")))
+SLOTS = survey.tuple_slots(SURVEYING)
 
 
 def passage(kind, number, text, page=1):
@@ -40,7 +47,11 @@ def passage(kind, number, text, page=1):
 def test_every_coordinate_of_the_spec_is_in_exactly_one_group():
     grouped = [c for group in SPEC.groups.values() for c in group.coordinates]
     assert len(grouped) == len(set(grouped))
-    assert [g.name for g in SPEC.groups_read_in("survey")] == ["frame"]
+    # KWP's survey reads no coordinate per passage (owner decision
+    # 2026-11-07: each value is asked its own scenario and year).
+    assert SPEC.groups_read_in("survey") == []
+    assert survey.tuple_slots(SPEC) == {}
+    assert [g.name for g in SURVEYING.groups_read_in("survey")] == ["frame"]
 
 
 def test_a_coordinate_in_no_group_is_refused():
@@ -91,7 +102,7 @@ def test_what_only_a_value_s_own_passage_or_number_says_is_of_its_group():
     # Which body made the plan, the municipality itself or another, only the
     # passage that names it says (owner decision 2026-11-07).
     assert context.own_passage == ("aggregation", "role")
-    assert SPEC.groups["frame"].own_passage == ("period_start",)
+    assert SPEC.groups["frame"].own_passage == ()
     raw = with_groups(lambda g: g["number"].update(own_passage=["year"]))
     with pytest.raises(SpecError, match="group's coordinates"):
         load_spec(raw)

@@ -25,7 +25,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from docpipe.extraction import fields, spec as spec_module, topup
+from docpipe.extraction import fields, spec as spec_module
 from docpipe.extraction.fields import READ
 from profiles.kwp import compute, kg, vocabulary
 
@@ -115,13 +115,17 @@ def test_an_annual_amount_takes_its_aggregation_from_the_unit():
                            parameter("energy_consumption"))
 
 
-def test_a_mean_over_a_span_of_years_is_asked():
-    over_years = claim(period_start=2019, period_start_state=READ)
+def test_an_aggregation_the_model_read_is_never_taken_from_the_unit():
+    # Owner decision 2026-11-07: asked first, derived only where no answer
+    # is read; a mean over a span of years is what the model read.
     for uri in ("energy_consumption", "emission"):
         unit = "MWh/a" if uri == "energy_consumption" else "t CO2/a"
+        assert fields.derives(aggregation_slot(uri),
+                              claim(unit=unit, aggregation_state="unstated"),
+                              parameter(uri))
         assert not fields.derives(aggregation_slot(uri),
-                                   {**over_years, "unit": unit},
-                                   parameter(uri))
+                                  claim(unit=unit, aggregation_state=READ),
+                                  parameter(uri))
 
 
 def test_a_unit_the_list_does_not_hold_sets_nothing():
@@ -130,15 +134,9 @@ def test_a_unit_the_list_does_not_hold_sets_nothing():
                                parameter("energy_consumption"))
 
 
-def test_a_top_up_derives_the_annual_amount_and_asks_the_mean():
-    annual, mean = claim(), claim(period_start=2019, period_start_state=READ)
-    decided, asked = topup.split_derived(
-        [annual, mean], aggregation_slot("energy_consumption"),
-        parameter("energy_consumption"))
-    assert decided == [annual] and asked == [mean]
-
-
-def test_unless_read_must_name_an_axis_of_the_parameter():
+def test_a_derive_takes_no_exception_of_its_own():
+    # The exception for a span of years went with its coordinate (owner
+    # decision 2026-11-07): a derive is "from" and "value" only.
     broken = copy.deepcopy(RAW)
     broken["parameters"][0]["axes"]["aggregation"]["derive"][
         "unless_read"] = "no_such_axis"

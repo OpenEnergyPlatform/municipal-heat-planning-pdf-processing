@@ -61,6 +61,7 @@ Fields:
 - `merged: Optional[str] = None`: The kind of thing whose name the document gives here, such as "scenario" (`spec.Axis.merged`): a value stated for several of them is one row per name, and which of the document's names mean the same thing is asked once the document is read (`naming.py`).
 - `keeps_print: bool = False`: Whether an answer may be the print itself where the list has no entry for it: the unit, which is never refused (owner decision 2026-11-07, `pipeline.printed_only`).
 - `keep: Optional[str] = None`: The entry a value must have here to be a value of its parameter (`spec.Axis.keep`, owner decisions 2026-11-07, `kept`).
+- `several: bool = False`: Whether a value stated for several entries of the list is one row per entry (`spec.Axis.several`).
 
 #### Slot.is_closed
 
@@ -142,11 +143,11 @@ state it once every passage was listed (owner decision 2026-11-06).
 def value_example(slot: Slot)
 ```
 
-A coordinate's answer as the example of a request shows it, read and
-of the kind `value_schema` takes: an entry of its list or a wording as a
-placeholder, a number as a year. Never UNSTATED: an example shows every
-coordinate read (owner decision 2026-11-06), and the prompt's rule line
-shows how an unstated one looks.
+A coordinate's answer as the example of a request shows it, read: an
+entry of its list or a wording as a placeholder, a number as the
+placeholder of a year. Never UNSTATED: an example shows every coordinate
+read (owner decision 2026-11-06), and the prompt's rule line shows how
+an unstated one looks.
 
 ### parameter_slot
 
@@ -339,12 +340,11 @@ no annual amount.
 def derives(slot, claim: dict, parameter) -> bool
 ```
 
-Does the spec set *slot* for this value instead of asking it: the
-unit decides it (`derived_by_unit`), and the coordinate the spec names in
-`unless_read` was not read. "im Mittel der Jahre 2019 bis 2021" in MWh/a
-is a mean and no annual sum, so where the plan names the start of a span
-the aggregation is asked (owner decision 2026-11-07: "Wenn es nach OEO
-ein Mittelwert ist, dann ist es ein Mittelwert").
+May the spec set *slot* for this value from its unit: the unit
+decides it (`derived_by_unit`), and no request read the coordinate. It
+is asked first, and taken from the unit only where nothing read it
+(owner decision 2026-11-07: "Fragen wir trotzdem und nur im Fallback
+machen wir die Zuordnung").
 
 ### apply_derived
 
@@ -352,7 +352,10 @@ ein Mittelwert ist, dann ist es ein Mittelwert").
 def apply_derived(rows: list, slot: Slot) -> int
 ```
 
-Write a derived coordinate onto every row that has none. Returns how many.
+Write a derived coordinate onto every row no request read it on: one
+never asked, and one asked and left open, whose answer, quote and state
+go (owner decision 2026-11-07: asked first, derived only where no answer
+is read). Returns how many.
 
 The wording it was derived from is kept, and so is the row's own passage:
 a derived coordinate is not evidence-free, it is evidenced by the unit the

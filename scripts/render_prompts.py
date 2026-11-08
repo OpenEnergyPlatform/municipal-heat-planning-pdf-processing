@@ -65,6 +65,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import difflib
+import inspect
 import io
 import json
 import os
@@ -308,11 +309,12 @@ def _numbers(profile, prompts, spec_path) -> dict:
     naming_map = getattr(runner, "naming_map", None)
     naming_ids = getattr(naming_map, "NAMING_PROMPT_IDS", None) or tuple(
         one for one in (getattr(naming_map, "NAMING_PROMPT_ID", None),) if one)
-    for pid in (*runner.PROMPT_IDS,
+    for pid in (*getattr(runner, "PROMPT_IDS", ()),
                 *getattr(runner, "SURVEY_PROMPT_IDS", ()),
                 *naming_ids,
                 runner.REVIEW_PROMPT_ID):
-        if pid == runner.QUERIES_PROMPT_ID:     # search templates, no request
+        if pid == getattr(runner, "QUERIES_PROMPT_ID", None):
+            # search templates, no request
             continue
         try:
             budgets[pid] = runner.context_budget(
@@ -320,12 +322,19 @@ def _numbers(profile, prompts, spec_path) -> dict:
         except FileNotFoundError:
             budgets[pid] = None
     if hasattr(runner, "surveyed_flow"):
-        # The flow the run harvests with decides which prompts it sends.
+        # The prompts the run sends are the tree's own to say. A tree that
+        # still harvests field by field takes the flow and the frame, and
+        # sizes its batches from the rows prompt; one that harvests from the
+        # survey alone takes neither.
         rule = "sent"
-        flow = (runner.SURVEYED if runner.surveyed_flow(spec, profile)
-                else runner.FIELDWISE)
-        window = runner.request_budget(spec, framed, profile, flow)
-        sources = runner.batch_sources_for(spec)
+        if "framed" in inspect.signature(runner.request_budget).parameters:
+            flow = (runner.SURVEYED if runner.surveyed_flow(spec, profile)
+                    else runner.FIELDWISE)
+            window = runner.request_budget(spec, framed, profile, flow)
+        else:
+            window = runner.request_budget(spec, profile)
+        batch = getattr(runner, "batch_sources_for", None)
+        sources = batch(spec) if batch is not None else None
     elif hasattr(runner, "request_budget") and hasattr(runner,
                                                        "batch_sources_for"):
         rule = "sent"

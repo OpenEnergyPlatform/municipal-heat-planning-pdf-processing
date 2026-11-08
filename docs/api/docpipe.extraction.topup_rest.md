@@ -7,7 +7,7 @@ for values, and appends what they hold.
 
 A harvest asked the passages its searches kept, and on a long plan most
 values stand below that cut: the rest was read only when a follow-up happened
-to walk it (`runner.plan_batches`). This pass reads the rest of a document
+to walk it. This pass reads the rest of a document
 that was harvested before the rest was read, without harvesting it again.
 
 Which passages were asked is in the harvest's trace: every `rows` event names
@@ -24,29 +24,6 @@ again; its own trace goes beside the harvest's (`TRACE_DIR`), since a trace is
 truncated by the next pass that writes it.
 
 Author: Felix Vossel
-
-## Classes
-
-### RestPass
-
-```python
-class RestPass
-```
-
-`harvest_document(document_id, filename) -> (written, failures)` for
-the run's own loop, with what it counted.
-
-#### RestPass.\_\_init\_\_
-
-```python
-def __init__(self, out_dir: Path, deps: dict)
-```
-
-#### RestPass.report
-
-```python
-def report(self) -> None
-```
 
 ## Functions
 
@@ -75,20 +52,5 @@ def read_to_end(stamp_path: Path) -> bool
 ```
 
 Whether this pass has already read the document to its end.
-
-### append_rest
-
-```python
-def append_rest(document_id: int, filename: str, out_dir: Path,
-                deps: dict) -> tuple
-```
-
-(written, failures, stats) for one stored document.
-
-`deps` holds what the run supplies: "plan" (`plan_batches` with the rest
-reader bound), "harvest" (`harvest_batches` over the run's pools),
-"locate", "frame_axes", "halted" and "fold" (`runner.fold_answers`),
-"not_happened", "unserved" (`runner.UNSERVED.of`), "producer"
-(`runner.producer`) and "model".
 
 [Back to the index](../README.md)

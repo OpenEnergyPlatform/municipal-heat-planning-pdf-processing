@@ -1,13 +1,8 @@
 """The graph takes its terms from the MHPKG schema the last refresh pulled;
-the strict graph holds only what the schema's shapes take; an optional
-coordinate is read from the value's own passage alone."""
-import json
-from pathlib import Path
-from types import SimpleNamespace
+the strict graph holds only what the schema's shapes take."""
 
 import pytest
 
-from docpipe.extraction import runner
 from profiles.kwp import kg, mhpkg
 
 SCHEMA = {
@@ -145,16 +140,4 @@ def test_an_emission_needs_no_carrier_in_the_strict_graph():
 
 # -- an optional coordinate is read where the value stands ---------------------------
 
-def test_a_share_of_zero_reads_the_own_passage_alone():
-    budget = runner.window_budget(0)
-    assert budget["retrieval"] == budget["rest"] == 0
-    assert budget["own"] == runner.FIELD_ATTEMPTS
-    assert runner.window_budget(1.0)["retrieval"] > 0
 
-
-def test_a_share_named_for_the_parameter_wins_over_the_axis():
-    sweeper = runner.make_sweeper(lambda *a, **k: None, search_share={
-        "emission.carrier": 0, "carrier": 0.5})
-    carrier = [SimpleNamespace(name="carrier")]
-    assert sweeper.budget_of(carrier, "emission")["rest"] == 0
-    assert sweeper.budget_of(carrier, "energy_consumption")["rest"] > 0

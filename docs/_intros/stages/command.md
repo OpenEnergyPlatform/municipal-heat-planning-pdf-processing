@@ -257,8 +257,9 @@ where the stages themselves say what they ask:
   with its template) are told apart. For a parts file the line carries the
   `PromptPartsError`, which names the prompt, the part or block, the profile and
   both files, and a hint on what a parts file holds (see [the extraction
-  prompts](../profiles.md)). The `extract` line covers the rows, field, frame and
-  review prompts, and the `compile` line the example prompt.
+  prompts](../profiles.md)). The `extract` line covers the prompts of the survey flow (survey, reading,
+  combing, settings and seek), the search-sentence prompt and the review prompt,
+  and the `compile` line the example prompt.
 - `wording`: the profile's phrase and UI tables for extraction and the chat,
   and the hooks of the graph route, each checked by the code that raises for
   what is missing.

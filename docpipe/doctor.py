@@ -330,17 +330,16 @@ def _extraction_spec(profile):
 
 def _extract_budget(profile) -> int:
     """What `extract --print-context-budget` prints: the largest request of
-    the prompts the run sends: those of a harvest from the survey where the
-    profile has one (`runner.surveyed_flow`), as the run decides. A frame
-    request counts when the profile names frame axes, as it does in the
-    run."""
-    from .extraction import fields, runner
+    the prompts the run sends, those of a harvest from the survey. A spec
+    without groups is a failure here, as the run stops on it
+    (`runner.surveyed_flow`)."""
+    from .extraction import runner
     spec = _extraction_spec(profile)
-    framed = bool(fields.frame_slots(
-        spec, profile.component("extraction", "FRAME") or ()))
-    flow = (runner.SURVEYED if runner.surveyed_flow(spec, profile)
-            else runner.FIELDWISE)
-    return runner.request_budget(spec, framed, profile, flow)
+    if not runner.surveyed_flow(spec, profile):
+        raise LookupError("the spec names no groups: a spec needs groups, "
+                          "since every run harvests from the survey of each "
+                          "plan")
+    return runner.request_budget(spec, profile)
 
 
 def _review_budget(profile) -> int:
@@ -488,7 +487,8 @@ def _prompt_ids(stage: str) -> tuple:
         return tuple(config.PROMPT_IDS)
     if stage == "extract":
         from .extraction import runner
-        return (*runner.PROMPT_IDS, runner.REVIEW_PROMPT_ID)
+        return (*runner.SURVEY_PROMPT_IDS, runner.PHRASE_PROMPT_ID,
+                runner.REVIEW_PROMPT_ID)
     if stage == "chat":
         from .inference import llm_client
         return tuple(llm_client.PROMPT_IDS)

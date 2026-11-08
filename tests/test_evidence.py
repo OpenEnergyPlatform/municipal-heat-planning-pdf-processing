@@ -16,7 +16,6 @@ import pytest
 
 from docpipe.extraction import fields
 from docpipe.extraction.pipeline import Row, Source, answer_in_quote, merge_field
-from docpipe.extraction.runner import _field_payload
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.verify import (QUOTE_NOT_FOUND, Refusal, Verified,
                                        canonical_number, not_in_quote,
@@ -271,18 +270,6 @@ def test_one_group_answers_many_rows_and_a_read_coordinate_stays_read():
         "quote": "Endenergie im Bilanzjahr 2022"}]})
     assert got[0].claim["year"] == 2022
     assert got[1].claim["year"] == 2021, "the first backed reading stands"
-
-
-def test_a_request_names_the_frames_years_without_their_quotes():
-    """The number is offered, and one the model could copy as its own quote
-    is not; a year the frame found twice stands once."""
-    frame = "Bilanziert wurde das Jahr 2021."
-    base = [{"axis": "year", "year": year, "state": state, "quote": frame}
-            for year, state in ((2021, "base"), (2021, "base"), (2045, "target"))]
-    asked = _field_payload(SHOWN, rows("R1"), YEAR, bases=base)
-    assert asked["base_years"] == [2021]
-    assert asked["target_years"] == [2045]
-    assert frame not in json.dumps(asked, ensure_ascii=False)
 
 
 @pytest.mark.parametrize("wording, read", [

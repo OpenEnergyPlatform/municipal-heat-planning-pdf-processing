@@ -271,7 +271,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `carrier`
 
@@ -505,7 +505,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `catalogue`
 
@@ -579,55 +579,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
-
-### `period_start`
-
-Axis 'period_start' of Gebäudeanzahl. null unless period_start_state is 'read' or 'derived'.
-
-The prompt's own wording:
-
-> Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht.
-
-### `period_start_link_quote`
-
-Only with window `base_year` or `target_year`: the passage where the row names that state ('period_start_raw'). 'period_start_quote' is then the frame's passage that prints the number.
-
-### `period_start_link_source`
-
-Which source 'period_start_link_quote' was found in.
-
-### `period_start_producer`
-
-Who re-read 'period_start': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
-
-### `period_start_quote`
-
-The verbatim passage carrying 'period_start'. Present exactly when period_start_state is 'read'.
-
-### `period_start_raw`
-
-The document's own wording 'period_start' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
-
-### `period_start_raw_foreign`
-
-The wording does not name the option chosen for 'period_start': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
-
-### `period_start_seen`
-
-A wording the model noticed for 'period_start' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
-
-### `period_start_source`
-
-Which source the passage for 'period_start' was found in. How far that may be from the row is the axis' own rule (own | local | any).
-
-### `period_start_state`
-
-How the coordinate 'period_start' ended. Always present: a missing key and a refused reading must not look alike.
-
-### `period_start_window`
-
-[stage, index] of the window 'period_start' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `provenance`
 
@@ -692,7 +644,7 @@ How the coordinate 'qualifier' ended. Always present: a missing key and a refuse
 
 ### `qualifier_window`
 
-[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `quantity`
 
@@ -751,7 +703,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `quote`
 
@@ -836,7 +788,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `sector`
 
@@ -928,7 +880,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `spatial_scope`
 
@@ -936,12 +888,8 @@ Axis 'spatial_scope' of Gebäudeanzahl. A closed list; an entry beginning 'out:'
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich der Wert?
-ZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.
-Steckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.
-Erst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.
+> Auf welches Gebiet bezieht sich die Zahl?
 Teilgebiet: sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.
-Ganzes Gemeindegebiet: die Klasse reicht.
 
 <details><summary>What it may answer (2)</summary>
 
@@ -999,7 +947,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `subject`
 
@@ -1047,7 +995,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `technology`
 
@@ -1137,7 +1085,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `tier`
 
@@ -1195,7 +1143,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `value`
 
@@ -1251,7 +1199,7 @@ How the coordinate 'what' ended. Always present: a missing key and a refused rea
 
 ### `what_window`
 
-[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `year`
 
@@ -1259,7 +1207,7 @@ Axis 'year' of Gebäudeanzahl. null unless year_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt ("Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres ("Durchschnittswert der Jahre 2022-2024"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.
+> Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Gilt sie für einen Zeitraum mehrerer Jahre („im Mittel der Jahre 2019 bis 2021“), ist "value" sein erstes Jahr und "until" sein letztes.
 
 - `datatype`: `xsd:integer`
 - `label`: `has scenario year value`
@@ -1310,7 +1258,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -1352,7 +1300,7 @@ The prompt's own wording:
 
 <details><summary>Why</summary>
 
-Object is a named individual of OEO_00140068 aggregation type. Derived from a unit that converts onto the parameter's own unit, unless period_start was read; asked otherwise.
+Object is a named individual of OEO_00140068 aggregation type. Asked; where no answer is read, derived from a unit that converts onto the parameter's own unit.
 
 </details>
 
@@ -1394,7 +1342,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `carrier`
 
@@ -1628,7 +1576,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `catalogue`
 
@@ -1702,55 +1650,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
-
-### `period_start`
-
-Axis 'period_start' of Emissionen. null unless period_start_state is 'read' or 'derived'.
-
-The prompt's own wording:
-
-> Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht.
-
-### `period_start_link_quote`
-
-Only with window `base_year` or `target_year`: the passage where the row names that state ('period_start_raw'). 'period_start_quote' is then the frame's passage that prints the number.
-
-### `period_start_link_source`
-
-Which source 'period_start_link_quote' was found in.
-
-### `period_start_producer`
-
-Who re-read 'period_start': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
-
-### `period_start_quote`
-
-The verbatim passage carrying 'period_start'. Present exactly when period_start_state is 'read'.
-
-### `period_start_raw`
-
-The document's own wording 'period_start' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
-
-### `period_start_raw_foreign`
-
-The wording does not name the option chosen for 'period_start': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
-
-### `period_start_seen`
-
-A wording the model noticed for 'period_start' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
-
-### `period_start_source`
-
-Which source the passage for 'period_start' was found in. How far that may be from the row is the axis' own rule (own | local | any).
-
-### `period_start_state`
-
-How the coordinate 'period_start' ended. Always present: a missing key and a refused reading must not look alike.
-
-### `period_start_window`
-
-[stage, index] of the window 'period_start' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `provenance`
 
@@ -1815,7 +1715,7 @@ How the coordinate 'qualifier' ended. Always present: a missing key and a refuse
 
 ### `qualifier_window`
 
-[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `quantity`
 
@@ -1898,7 +1798,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `quote`
 
@@ -1983,7 +1883,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `sector`
 
@@ -2075,7 +1975,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `spatial_scope`
 
@@ -2083,12 +1983,8 @@ Axis 'spatial_scope' of Emissionen. A closed list; an entry beginning 'out:' is 
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich der Wert?
-ZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.
-Steckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.
-Erst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.
+> Auf welches Gebiet bezieht sich die Zahl?
 Teilgebiet: sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.
-Ganzes Gemeindegebiet: die Klasse reicht.
 
 <details><summary>What it may answer (2)</summary>
 
@@ -2146,7 +2042,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `subject`
 
@@ -2194,7 +2090,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `technology`
 
@@ -2284,7 +2180,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `tier`
 
@@ -2409,7 +2305,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `value`
 
@@ -2465,7 +2361,7 @@ How the coordinate 'what' ended. Always present: a missing key and a refused rea
 
 ### `what_window`
 
-[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `year`
 
@@ -2473,7 +2369,7 @@ Axis 'year' of Emissionen. null unless year_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt ("Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres ("Durchschnittswert der Jahre 2022-2024"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.
+> Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Gilt sie für einen Zeitraum mehrerer Jahre („im Mittel der Jahre 2019 bis 2021“), ist "value" sein erstes Jahr und "until" sein letztes.
 
 - `datatype`: `xsd:integer`
 - `label`: `has scenario year value`
@@ -2524,7 +2420,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -2566,7 +2462,7 @@ The prompt's own wording:
 
 <details><summary>Why</summary>
 
-Object is a named individual of OEO_00140068 aggregation type. Derived from a unit that converts onto the parameter's own unit, unless period_start was read; asked otherwise.
+Object is a named individual of OEO_00140068 aggregation type. Asked; where no answer is read, derived from a unit that converts onto the parameter's own unit.
 
 </details>
 
@@ -2608,7 +2504,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `carrier`
 
@@ -2842,7 +2738,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `catalogue`
 
@@ -2916,55 +2812,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
-
-### `period_start`
-
-Axis 'period_start' of Energieverbrauch. null unless period_start_state is 'read' or 'derived'.
-
-The prompt's own wording:
-
-> Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht.
-
-### `period_start_link_quote`
-
-Only with window `base_year` or `target_year`: the passage where the row names that state ('period_start_raw'). 'period_start_quote' is then the frame's passage that prints the number.
-
-### `period_start_link_source`
-
-Which source 'period_start_link_quote' was found in.
-
-### `period_start_producer`
-
-Who re-read 'period_start': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
-
-### `period_start_quote`
-
-The verbatim passage carrying 'period_start'. Present exactly when period_start_state is 'read'.
-
-### `period_start_raw`
-
-The document's own wording 'period_start' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
-
-### `period_start_raw_foreign`
-
-The wording does not name the option chosen for 'period_start': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
-
-### `period_start_seen`
-
-A wording the model noticed for 'period_start' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
-
-### `period_start_source`
-
-Which source the passage for 'period_start' was found in. How far that may be from the row is the axis' own rule (own | local | any).
-
-### `period_start_state`
-
-How the coordinate 'period_start' ended. Always present: a missing key and a refused reading must not look alike.
-
-### `period_start_window`
-
-[stage, index] of the window 'period_start' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `provenance`
 
@@ -3029,7 +2877,7 @@ How the coordinate 'qualifier' ended. Always present: a missing key and a refuse
 
 ### `qualifier_window`
 
-[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `quantity`
 
@@ -3132,7 +2980,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `quote`
 
@@ -3217,7 +3065,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `sector`
 
@@ -3309,7 +3157,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `spatial_scope`
 
@@ -3317,12 +3165,8 @@ Axis 'spatial_scope' of Energieverbrauch. A closed list; an entry beginning 'out
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich der Wert?
-ZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.
-Steckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.
-Erst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.
+> Auf welches Gebiet bezieht sich die Zahl?
 Teilgebiet: sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.
-Ganzes Gemeindegebiet: die Klasse reicht.
 
 <details><summary>What it may answer (2)</summary>
 
@@ -3380,7 +3224,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `subject`
 
@@ -3428,7 +3272,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `technology`
 
@@ -3518,7 +3362,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `tier`
 
@@ -3597,7 +3441,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `value`
 
@@ -3653,7 +3497,7 @@ How the coordinate 'what' ended. Always present: a missing key and a refused rea
 
 ### `what_window`
 
-[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `year`
 
@@ -3661,7 +3505,7 @@ Axis 'year' of Energieverbrauch. null unless year_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt ("Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres ("Durchschnittswert der Jahre 2022-2024"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.
+> Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Gilt sie für einen Zeitraum mehrerer Jahre („im Mittel der Jahre 2019 bis 2021“), ist "value" sein erstes Jahr und "until" sein letztes.
 
 - `datatype`: `xsd:integer`
 - `label`: `has scenario year value`
@@ -3712,7 +3556,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -3796,7 +3640,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `carrier`
 
@@ -4030,7 +3874,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `catalogue`
 
@@ -4104,55 +3948,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
-
-### `period_start`
-
-Axis 'period_start' of Leistung. null unless period_start_state is 'read' or 'derived'.
-
-The prompt's own wording:
-
-> Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht.
-
-### `period_start_link_quote`
-
-Only with window `base_year` or `target_year`: the passage where the row names that state ('period_start_raw'). 'period_start_quote' is then the frame's passage that prints the number.
-
-### `period_start_link_source`
-
-Which source 'period_start_link_quote' was found in.
-
-### `period_start_producer`
-
-Who re-read 'period_start': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
-
-### `period_start_quote`
-
-The verbatim passage carrying 'period_start'. Present exactly when period_start_state is 'read'.
-
-### `period_start_raw`
-
-The document's own wording 'period_start' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
-
-### `period_start_raw_foreign`
-
-The wording does not name the option chosen for 'period_start': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
-
-### `period_start_seen`
-
-A wording the model noticed for 'period_start' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
-
-### `period_start_source`
-
-Which source the passage for 'period_start' was found in. How far that may be from the row is the axis' own rule (own | local | any).
-
-### `period_start_state`
-
-How the coordinate 'period_start' ended. Always present: a missing key and a refused reading must not look alike.
-
-### `period_start_window`
-
-[stage, index] of the window 'period_start' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `provenance`
 
@@ -4217,7 +4013,7 @@ How the coordinate 'qualifier' ended. Always present: a missing key and a refuse
 
 ### `qualifier_window`
 
-[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `quantity`
 
@@ -4311,7 +4107,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `quote`
 
@@ -4396,7 +4192,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `sector`
 
@@ -4488,7 +4284,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `spatial_scope`
 
@@ -4496,12 +4292,8 @@ Axis 'spatial_scope' of Leistung. A closed list; an entry beginning 'out:' is a 
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich der Wert?
-ZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.
-Steckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.
-Erst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.
+> Auf welches Gebiet bezieht sich die Zahl?
 Teilgebiet: sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.
-Ganzes Gemeindegebiet: die Klasse reicht.
 
 <details><summary>What it may answer (2)</summary>
 
@@ -4559,7 +4351,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `subject`
 
@@ -4607,7 +4399,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `technology`
 
@@ -4697,7 +4489,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `tier`
 
@@ -4763,7 +4555,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `value`
 
@@ -4819,7 +4611,7 @@ How the coordinate 'what' ended. Always present: a missing key and a refused rea
 
 ### `what_window`
 
-[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `year`
 
@@ -4827,7 +4619,7 @@ Axis 'year' of Leistung. null unless year_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Für welches Kalenderjahr gilt diese Leistung? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt ("Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Eine Bestandsanlage trägt das Jahr der Bestandsaufnahme, nicht ihr Baujahr.
+> Für welches Kalenderjahr gilt diese Leistung? Vierstellig. Gilt sie für einen Zeitraum mehrerer Jahre („im Mittel der Jahre 2019 bis 2021“), ist "value" sein erstes Jahr und "until" sein letztes. Eine Bestandsanlage trägt das Jahr der Bestandsaufnahme, nicht ihr Baujahr.
 
 - `datatype`: `xsd:integer`
 - `label`: `has scenario year value`
@@ -4878,7 +4670,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -4963,7 +4755,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `provenance`
 
@@ -5044,7 +4836,7 @@ How the coordinate 'role' ended. Always present: a missing key and a refused rea
 
 ### `role_window`
 
-[stage, index] of the window 'role' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'role' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `tier`
 
@@ -5313,7 +5105,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `catalogue`
 
@@ -5387,55 +5179,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
-
-### `period_start`
-
-Axis 'period_start' of Anteil. null unless period_start_state is 'read' or 'derived'.
-
-The prompt's own wording:
-
-> Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht.
-
-### `period_start_link_quote`
-
-Only with window `base_year` or `target_year`: the passage where the row names that state ('period_start_raw'). 'period_start_quote' is then the frame's passage that prints the number.
-
-### `period_start_link_source`
-
-Which source 'period_start_link_quote' was found in.
-
-### `period_start_producer`
-
-Who re-read 'period_start': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
-
-### `period_start_quote`
-
-The verbatim passage carrying 'period_start'. Present exactly when period_start_state is 'read'.
-
-### `period_start_raw`
-
-The document's own wording 'period_start' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
-
-### `period_start_raw_foreign`
-
-The wording does not name the option chosen for 'period_start': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
-
-### `period_start_seen`
-
-A wording the model noticed for 'period_start' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
-
-### `period_start_source`
-
-Which source the passage for 'period_start' was found in. How far that may be from the row is the axis' own rule (own | local | any).
-
-### `period_start_state`
-
-How the coordinate 'period_start' ended. Always present: a missing key and a refused reading must not look alike.
-
-### `period_start_window`
-
-[stage, index] of the window 'period_start' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `provenance`
 
@@ -5500,7 +5244,7 @@ How the coordinate 'qualifier' ended. Always present: a missing key and a refuse
 
 ### `qualifier_window`
 
-[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `quantity`
 
@@ -5579,7 +5323,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `quote`
 
@@ -5664,7 +5408,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `sector`
 
@@ -5756,7 +5500,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `spatial_scope`
 
@@ -5764,12 +5508,8 @@ Axis 'spatial_scope' of Anteil. A closed list; an entry beginning 'out:' is a de
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich der Wert?
-ZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.
-Steckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.
-Erst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.
+> Auf welches Gebiet bezieht sich die Zahl?
 Teilgebiet: sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.
-Ganzes Gemeindegebiet: die Klasse reicht.
 
 <details><summary>What it may answer (2)</summary>
 
@@ -5827,7 +5567,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `subject`
 
@@ -5875,7 +5615,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `technology`
 
@@ -5965,7 +5705,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `tier`
 
@@ -6024,7 +5764,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `value`
 
@@ -6080,7 +5820,7 @@ How the coordinate 'what' ended. Always present: a missing key and a refused rea
 
 ### `what_window`
 
-[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `whole`
 
@@ -6130,7 +5870,7 @@ How the coordinate 'whole' ended. Always present: a missing key and a refused re
 
 ### `whole_window`
 
-[stage, index] of the window 'whole' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'whole' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 ### `year`
 
@@ -6138,7 +5878,7 @@ Axis 'year' of Anteil. null unless year_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Für welches Kalenderjahr gilt dieser Anteil? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt ("Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres ("Durchschnittswert der Jahre 2022-2024"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.
+> Für welches Kalenderjahr gilt dieser Anteil? Vierstellig. Gilt sie für einen Zeitraum mehrerer Jahre („im Mittel der Jahre 2019 bis 2021“), ist "value" sein erstes Jahr und "until" sein letztes.
 
 - `datatype`: `xsd:integer`
 - `label`: `has scenario year value`
@@ -6189,7 +5929,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column.
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -6255,7 +5995,7 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `naming_several`: `doc`, `kind`, `resolved`, `wordings`
 - `naming`: `asked`, `doc`, `groups`, `kind`, `names`, `several`, `things`, `why`
 - `read`: `asked`, `corrected`, `doc`, `failed`, `kind`, `owner`, `parameter`, `unanswered`, `unread`, `values`, `why`
-- `comb`: `anew`, `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `judged`, `kind`, `listed`, `missed`, `near`, `near_read`, `open`, `owner`, `parameter`, `rows`, `searched`, `table_rows`, `turned`
+- `comb`: `anew`, `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `judged`, `kind`, `listed`, `missed`, `near`, `near_read`, `open`, `owner`, `parameter`, `plan_years`, `rows`, `searched`, `table_rows`, `turned`
 - `years`: `asked`, `base`, `doc`, `fetched`, `hits`, `refused`, `target`
 - `seek`: `doc`, `kind`, `owner`, `parameter`, `rank`
 - `settings`: `asked`, `doc`, `fetched`, `hits`, `refused`, `settings`

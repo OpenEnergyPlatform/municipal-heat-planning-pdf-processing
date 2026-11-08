@@ -64,6 +64,7 @@ Fields:
 - `derive: Optional[dict] = None`: A coordinate the SPEC already decides, so no request asks for it: {"from": "unit", "value": "\<a key of this axis' vocabulary>"}.  Principle one, applied one step further. The structure of a tuple is deterministic, and so is a coordinate every accepted unit of the parameter fixes: measured over Kassel, all 452 aggregations the model answered were `integral`, every one of them evidenced by the unit string it had just been handed. Asking cost a fifth of the reply of every five-field request for a coordinate the spec knew. What the unit does NOT fix stays a question — the profile decides which is which.
 - `kg: Optional[dict] = None`: What this coordinate becomes in the graph: {"role": "type"|"edge"| "parent"|"comment", ...}. The serializer reads the predicate from here and the JSON schema publishes it, so the two cannot drift: a predicate changed in one place used to leave the other describing a graph nobody was writing.
 - `keep: Optional[str] = None`: The entry of this coordinate's list a value must have to be a value of its parameter at all (owner decisions 2026-11-07): "scenario year" for a year, "this publication" for an author. Asked before the coordinates after it; a value read with another entry is asked for its parameter once more, told it was read wrongly, is asked nothing further, and stays out of the graph, as does one whose entry stays open (`fields.kept`).
+- `several: bool = False`: Whether a value the plan states for several entries of this list is one row per entry (owner decision 2026-11-07: "Fernwärme + Gas-NT" is the value once with Fernwärme and once with Gas), as a value stated for several names is (`merged`).
 
 #### Axis.label_to_uri
 
@@ -174,7 +175,7 @@ Fields:
 - `full_definition: bool = False`: Whether its requests show a parameter's full definition rather than its `brief` (spec: "definition": "full"): the group that classifies a value needs every distinction the definition draws, the others only what a value of the parameter is (owner decision 2026-11-05, ticket 26).
 - `own_passage: tuple = ()`: Coordinates only the value's own passage states, such as what the number counts: asked again with the passages around it, never searched for in the rest of the plan (spec: "own_passage", owner decision 2026-11-06).
 - `own_value: tuple = ()`: Coordinates printed with the number itself, such as "ca." or "bis zu": read once with the value, its "not stated" an answer that nothing qualifies the number, never asked again (spec: "own_value", owner decision 2026-11-06).
-- `pair: tuple = ()`: Of a group the survey reads, the coordinates it reads per passage as one pair (spec: "pair", all of them where it names none): the frame's scenario and year, while the beginning of a period the value is a mean over stands in the same group and is read per value only (owner decision 2026-11-07), so the frame keeps its one year.
+- `pair: tuple = ()`: The plan's frame (spec: "pair"): the scenario and the year, which the plan's base and target years date a value by (`years.PlanYears`). A group the survey reads reads these per passage, all of its coordinates where it names none. A group the reading reads asks them per value (owner decision 2026-11-07: each value is asked its own scenario and year, none takes its passage's).
 
 #### Group.paired
 
@@ -183,7 +184,8 @@ Fields:
 def paired(self) -> tuple
 ```
 
-The coordinates the survey reads per passage.
+The coordinates of the frame: those the survey reads per passage
+in a group it reads.
 
 #### Group.asked_near
 

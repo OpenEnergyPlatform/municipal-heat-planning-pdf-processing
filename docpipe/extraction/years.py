@@ -62,9 +62,11 @@ def response_format() -> dict:
 
 def example() -> dict:
     """The reply as the prompt's example shows it: a year of each state with
-    its quote, and an ask for more, in the order of `response_format`."""
-    return {**{key: [{"value": year, "quote": "..."}]
-               for key, year in zip(YEAR_STATES.values(), (2022, 2045))},
+    its quote, and an ask for more, in the order of `response_format`. A
+    year is its placeholder, never a year the model could copy (owner
+    decision 2026-11-07: "mach das Beispiel mit YYYY")."""
+    return {**{key: [{"value": fields.YEAR, "quote": "..."}]
+               for key in YEAR_STATES.values()},
             "more": [dict(ask) for ask in MORE_EXAMPLE]}
 
 

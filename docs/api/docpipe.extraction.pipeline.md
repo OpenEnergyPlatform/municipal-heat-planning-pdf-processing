@@ -2,34 +2,21 @@
 
 `docpipe/extraction/pipeline.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-pipeline.py: The harvest loop that turns a document's retrieved passages into
-verified value tuples.
+pipeline.py: What turns the claims of a harvest into verified value tuples.
 
-`plan_document` builds one retrieval plan per document rather than per
-parameter: every table and every figure, taken whole because being a table or a
-figure predicts a value better than any similarity ranking does, plus the best
-ranked prose sections. `group_items` folds the plan into batches read in one
-request each. A batch stays inside one document and one parameter, or the whole
-document when the plan is not split by parameter, so it never mixes what a
-different parameter's choice list would need. Every claimed tuple, whichever
-request produced it, passes `verify_tuple`; refusals are kept alongside the
-accepted tuples, because a harvest that cannot say what it threw away reads as
-complete when it is not.
-
-`Sweep` and `build_sweeps` carry the tuples a document's batches have already
-verified forward as a hint to later batches, and grant a bounded follow-up
-budget when a reply says more passages are needed (`follow_up`).
-`fold_claims` and `fold_batch` verify a reply's claims into a
-`DocumentReport`; `write_report` writes that report's tuples, refusals,
-per-parameter states and one summary line to one JSONL file, atomically.
+`group_items` folds passages into batches read in one request each. Every
+claimed tuple, whichever request produced it, passes `verify_tuple`; refusals
+are kept alongside the accepted tuples, because a harvest that cannot say what
+it threw away reads as complete when it is not. `fold_claims` and `fold_batch`
+verify a reply's claims into a `DocumentReport`; `write_report` writes that
+report's tuples, refusals, per-parameter states and one summary line to one
+JSONL file, atomically.
 
 A coordinate is checked for two things and no third: its quote stands in a
 passage that was shown, and the quote carries the answer (`merge_field`).
 
-The three expensive dependencies, retrieval, the harvesting LLM call, and
-locating a quote on its PDF page, are injected callables. The module's own
-correctness is a pure-code property and is tested without a GPU; the wiring to
-the live inference stack lives in `runner.py`.
+The module's own correctness is a pure-code property and is tested without a
+GPU; the wiring to the live inference stack lives in `runner.py`.
 
 Author: Felix Vossel
 
@@ -163,136 +150,8 @@ Fields:
 - `label: str`: "R1", the id a field answer names
 - `item_index: int`: which source of the batch it sits in
 - `claim: dict = field(default_factory=dict)`
-- `pair: Optional[dict] = None`: The pair this row belongs to, when that is NOT the pair its request asked for. The request's pair is written by `project`; a row that names another pair of the same document carries it here and keeps it.
-- `pair_index: int = 0`
-- `table: tuple = ()`: The frame axes, on a view of a row that is asked for its whole table and not for its number (`Sweeping.for_the_tables`).
-
-### Sweep
-
-```python
-class Sweep
-```
-
-The shared state of one (document, parameter), across its batches.
-
-Batches used to be run one after another so that a later one could be
-told what the earlier ones had found. That made a chain the unit of
-scheduling, and the unit of scheduling is the unit of parallelism: a
-single-document run — which is exactly what the pilot's canary stage is —
-collapsed to one request per parameter, three at a time against a server
-sized for two hundred, and the canary that used to take three minutes was
-killed unfinished after nine.
-
-So the ordering is gone and the bookkeeping stays. `prior` is a hint that
-stops the model handing back a value a neighbouring passage already gave;
-a hint does not need to be deterministic, and paying two orders of
-magnitude of throughput to make it so is the wrong trade. Every batch
-reads whatever has been verified by the time it is dispatched.
-
-Verified, not claimed: a tuple that verification threw away used to be
-handed to the next batch as "already extracted", and the prompt tells the
-model not to repeat those — so a value refused once for a bad quote was
-suppressed everywhere else in the document, leaving neither a tuple nor a
-refusal behind.
-
-#### Sweep.\_\_init\_\_
-
-```python
-def __init__(self, seen: set, budget: int)
-```
-
-#### Sweep.snapshot
-
-```python
-def snapshot(self) -> list
-```
-
-#### Sweep.record
-
-```python
-def record(self, verified: list) -> None
-```
-
-#### Sweep.take_followup
-
-```python
-def take_followup(self, sources: list) -> list
-```
-
-The passages of a follow-up this sweep has not already covered.
 
 ## Functions
-
-### with_visual_share
-
-```python
-def with_visual_share(ranked: list, top: int,
-                      share: float = VISUAL_SHARE) -> list
-```
-
-The top `top` of the ranking, with room held for figures and tables.
-
-The cap stays exactly what it was: this decides which `top` sources are
-taken, never how many. If the head of the ranking already holds its share
-of figures and tables, it is the head. Otherwise the best-ranked ones are
-pulled up into the reserved seats and prose gives way from the bottom,
-and the result is put back into ranking order so batching and every rank
-written into the report stay what they were.
-
-Held, not guaranteed: a document with four figures contributes four.
-
-### plan_document
-
-```python
-def plan_document(
-    document_id: int,
-    spec: Spec,
-    templates: list,
-    *,
-    extra_probes: Optional[dict] = None,
-    retrieve: Callable,                 # (probes, document_id, exclude) -> [Source]
-    structure: Optional[Callable] = None,   # (document_id) -> [Source]
-    prose_top: int = PROSE_TOP,
-    top: Optional[int] = None,
-) -> tuple
-```
-
-(work items, report skeleton) — the retrieval half, no model involved.
-
-One plan per DOCUMENT, not one per parameter. Which quantity a number is,
-is a coordinate the field sweep asks for like every other, so a table is
-read once instead of once per parameter.
-
-Two sets go in, and they are picked by different rules because the values
-sit in them for different reasons:
-
-* every table and every figure, from structure alone. Measured over 65
-  documents, 12,094 of 15,082 values came from one of those, and "is a
-  table" is a better predictor of holding a number than any similarity to
-  any question. There are about 110 per document, so reading all of them
-  is affordable exactly once the parameter stopped tripling the plan.
-* the best `prose_top` sections by retrieval. Prose carries the other
-  fifth of the values and there are 125 sections per document, so this is
-  the half where a ranking has to earn its keep.
-
-The probes are the HyDE anchors and nothing else. The query templates used
-to ride along and they were measured as harmful: with them the source a
-value was really read from sat at median rank 84, without them at 26. A
-template names the thing, an anchor says the sentence as a plan would
-write it, and a similarity search matches sentences.
-
-No rounds. The old loop asked retrieval again with everything it had
-already returned excluded, which walks down the ranking until the document
-is exhausted — 277 planned sources against 234 owners, three times over.
-That is a full scan wearing a vector store as a hat.
-
-`top` replaces both rules with one. The plan is then the fused top `top`
-in rank order, tables figures and prose together, and the structural floor
-is not a source of items any more. It is still CALLED, and what it knows
-and the ranking missed is reported as `leftover` — the number that says
-whether the floor has to come back, which can only be taken while the
-floor is still there to ask. Without `top` nothing about this function
-changes.
 
 ### group_items
 
@@ -370,29 +229,6 @@ def lines_of_number(quote, value) -> list
 
 The table rows of this quote that print this number.
 
-### narrow_quote
-
-```python
-def narrow_quote(claim)
-```
-
-The claim under the one table row that prints its number.
-
-A quote is one row, and 184 of 1,540 table rows of seven plans of
-corpus_m7_100 quoted several. The other lines are other numbers' words:
-Erdgas read `Summe` from the sum line its quote ran into. A number one
-line prints is cut to that line, by machine and at no cost: the quote
-still stands in the passage and the number in the quote. A number several
-lines print keeps its quote and is asked again (`in_several_rows`).
-
-### in_several_rows
-
-```python
-def in_several_rows(claim) -> bool
-```
-
-Does the quote of this claim print its number on more than one row?
-
 ### cell_index
 
 ```python
@@ -412,23 +248,6 @@ year the header's nth cell names.
 None whenever it is not certain: no table row, the value in no cell, the
 same number in two of them, or on two rows of the quote. A wrong column is
 worse than none.
-
-### cells_in_order
-
-```python
-def cells_in_order(quote, values) -> Optional[list]
-```
-
-(cell, cells) of each number of an entry that lists one table row, in
-its order, or None.
-
-The rows request writes a row's numbers in the order of its cells, so a
-number printed in two cells is told apart by its place in the list, where
-`cell_index` cannot tell it by its value (owner decision 2026-11-03): one
-plan's row "27 % | 28 % | 27 % | 23 %" gave both 27 % one year. Only where
-the list is the row's numbers cell by cell: one table row, each cell that
-prints a number printing one, the n-th of them the n-th of the list. A
-wrong column is worse than none.
 
 ### head_cells
 
@@ -451,170 +270,6 @@ The number of a column leaves the model to find the head of that column,
 and over a wide row it often read none: "no carrier" under a column headed
 "Wärmenetze". The head is in hand here, so it goes over as words. Only from
 head lines with as many cells as the row: a wrong head is worse than none.
-
-### year_axis
-
-```python
-def year_axis(frame_axes: Optional[list]) -> Optional[str]
-```
-
-The frame coordinate that dates a pair: its one number coordinate.
-
-### head_year
-
-```python
-def head_year(source, cell: tuple, pairs: tuple,
-              frame_axes: Optional[list]) -> Optional[dict]
-```
-
-The year the head of this column names, as the row's reading, or None.
-
-A column head that prints one year, and that year one of the document's
-pairs, is the year of the numbers under it: read off the table, not asked
-(owner decision 2026-11-03). Asked, the model gave 28 % under the head
-2035 the year 2045. A year of the pairs only: "bis 1918" heads an age
-class and no year of the plan's numbers. Cited on the head line that
-prints it, the window `head` with the column as its index.
-
-### with_head
-
-```python
-def with_head(claim: dict, source, pairs: tuple = (),
-              frame_axes: Optional[list] = None) -> dict
-```
-
-The claim with the head of its column, a fact of the table, and the
-year that head names (`head_year`).
-
-"0 %" in a row of seven classes says nothing without its column, and 28 of
-90 rows read from corpus tables did not know theirs: the head was shown to
-the model and left no trace. Kept beside the number, it tells two numbers
-of one row apart wherever a graph or a reader needs that. The cell is the
-number's place in its row's list where the reply listed the row cell by
-cell (`cells_in_order`), else the one cell that prints the number.
-
-### head_pair
-
-```python
-def head_pair(claim: dict, pairs: tuple, current: Optional[dict],
-              frame_axes: Optional[list]) -> Optional[tuple]
-```
-
-(pair, index) of the year a row took from its column head, where that
-is not the year of *current* and exactly one pair of the document has it:
-the row's scenario is then that pair's too, not the request's.
-
-### pair_in_text
-
-```python
-def pair_in_text(pair: Optional[dict], slots: list, text: str) -> bool
-```
-
-Does this text print every axis of this pair?
-
-The one question both callers ask, of two different texts: of the whole
-passage, to decide which pairs it may be read under, and of a single
-claim's own quote, to decide which pair that claim belongs to.
-
-### names_pair
-
-```python
-def names_pair(source, pair: Optional[dict], slots: list) -> bool
-```
-
-Does this passage print the scenario and the year of this pair?
-
-The whole passage, not a line of it. Where the year stands is the plan's
-business: a column header, a caption, a sentence above the table.
-
-### prints_no_frame
-
-```python
-def prints_no_frame(source, slots: list) -> bool
-```
-
-Does this table print nothing of its frame in its head or its rows?
-
-Then every row of it has the one scenario and the one year the table
-stands for, and they are read off the table, not off a number of it. A
-table with a column per year or a profile with rows "IST-Zustand" and
-"Zieljahr (2040)" prints its frame and is read number by number. Its
-title does not count: that is where the frame of such a table stands.
-
-In corpus_m7_100 this holds for 678 of 1,140 tables with a read year, and
-the rows of 65 of the 678 took several years. Of the 43 tables with several
-years on seven plans it names the 8 that print no year.
-
-### pair_of_claim
-
-```python
-def pair_of_claim(claim: dict, pairs: tuple, slots: list,
-                  taken: Optional[dict] = None) -> Optional[tuple]
-```
-
-(pair, index) the claim's OWN quote names, or None.
-
-Measured on corpus_m5: of the 120,442 claims refused as "passage is not of
-this pair", 35,407 were never read under any pair at all. They are not
-stray readings — their units are the corpus's own, GWh/a, MWh/a and
-t CO2eq/a — they are values the model found while answering for one pair
-in a table that prints several.
-
-Asked of the quote, not of the passage. The passage is a whole table and
-prints four years; the quote is the row the value sits in, and a row that
-prints one year is a row of that year. Nothing new is checked: this is the
-same `answer_in_quote` the pair's own coordinates are held to.
-
-Exactly one, or nothing. A quote that satisfies two pairs says which value
-belongs to which as little as the passage did, and guessing between them
-would put a year on a number that has not earned it.
-
-### pair_of_source
-
-```python
-def pair_of_source(source, pairs: tuple, slots: list,
-                   taken: Optional[dict] = None) -> Optional[tuple]
-```
-
-(pair, index) the whole passage names, or None.
-
-The second try, for the table of another year: its rows carry no year of
-their own, the year is in the title, and every value in it is a value of
-that year. The same judgement `pair_batches` makes when it decides which
-requests a passage goes into -- asked here of the pairs it was NOT asked
-under.
-
-Exactly one again. A table with four year columns names four pairs and
-says nothing about which row belongs to which, and that is the case the
-request per pair exists for.
-
-### rows_from_reply
-
-```python
-def rows_from_reply(batch: Batch, reply: Optional[dict],
-                    frame_axes: Optional[list] = None, spec=None) -> tuple
-```
-
-(rows, orphans) from the value request - the only request that counts.
-
-Routing: the quote decides which source a value belongs to, the label
-breaks a tie, and a claim that neither quotes nor names any source of the
-batch is an orphan.
-
-Under a frame, a passage that does not print the request's pair gives no
-row of THAT pair: `apply_frame` writes the pair onto every row, so the
-pair has to stand in the passage the row was read from. A passage that
-prints several pairs, a table with a column per year, is read under each
-of them, and each request takes the column of its own pair.
-
-What such a passage's claims do carry is their own quote, and a quote that
-prints exactly one other pair of the document is filed under that pair
-instead of refused (`pair_of_claim`). It used to be dropped: 35,407 values
-of corpus_m5, better than half the harvest, were refused as another pair's
-and then read under no pair at all.
-
-A sentinel for a request that never came back is not a claim. It passes
-through untouched, its `_why` included, because the resume reads it there.
 
 ### answer_in_quote
 
@@ -825,77 +480,6 @@ answer, *not_in_quote*: "not stated" where it offers that
 (`or_unstated`), else to leave the coordinate out (`or_leave_out`)
 (owner decisions 2026-11-06); the reason stays `answer_not_in_quote`.
 
-### line_naming
-
-```python
-def line_naming(slot, given, wording, text: str) -> Optional[str]
-```
-
-The line of this passage that carries the answer, or None.
-
-So that a projected coordinate cites the passage the row itself was read
-from rather than the passage the frame was read from. Both are true, and
-only one of them tells a reader whether the row's own table says it.
-
-### apply_frame
-
-```python
-def apply_frame(rows: list, pair: Optional[dict], index: int,
-                slots: list, sources: Optional[list] = None) -> int
-```
-
-Write the document's frame onto these rows. Returns coordinates written.
-
-The pair was read once, for the document, and every row this request
-produced is a row of that pair: the request asked for it by name and
-`rows_from_reply` refused the passages that do not print it. So the
-coordinate is not asked again per row, it is projected, and the window
-says `frame` so a reader can tell a coordinate that was read for the
-document from one that was read for the row.
-
-A table with a column per year is no exception. It prints several pairs
-and is read under each of them, the request for one pair takes the column
-of that pair, and every row it produced carries that pair's year.
-
-Cited on the row's own passage where that passage names the answer, and on
-the frame's passage otherwise. `read`, not `derived`: `derived` means the
-SPEC decides a coordinate without anybody reading anything, and this is a
-model reading with a passage behind it.
-
-A coordinate already read is left alone. The frame is what the request
-asked for, but if the row itself carried a better answer the row wins,
-the same rule `merge_field` has and for the same reason.
-
-### open_rows
-
-```python
-def open_rows(rows: list, slot) -> list
-```
-
-The rows this field still has no reading for.
-
-Both the never-answered and the answered-with-"not stated": the second is
-only a statement about the passages that were shown, and the next window
-shows different ones. It becomes a statement about the document when the
-windows run out, and not before.
-
-### window_sources
-
-```python
-def window_sources(pool: list, size: int, overlap: int)
-```
-
-Walk a source pool in short overlapping windows.
-
-Short, not wide. A coordinate that is not in the passage the value came
-from is somewhere else in the plan, and the way to it is more requests
-with little context each, not one request with all of it: the window that
-holds the answer holds it whether or not ninety other passages ride along,
-and the ninety cost the attention that finds it.
-
-The overlap is why a caption is never cut off from the table it belongs
-to, which is the seam the year lives on.
-
 ### mark_unanswered
 
 ```python
@@ -910,77 +494,6 @@ cell — 16% to 34% of every axis on the 1079-document run, and no way to
 tell which half was the corpus and which half was the harvest. A row that
 reaches this with no state was asked and did not answer, and that is a
 defect of the run, not a property of the plan.
-
-### sweep_key
-
-```python
-def sweep_key(batch: Batch) -> tuple
-```
-
-What one follow-up budget and one `prior` belong to.
-
-The document, its parameter and the frame pair the request asks for. The
-same passages are read once per pair, so telling the request for 2035 that
-the request for 2040 already has these numbers tells it to skip its own:
-`prior` says "do not repeat", and two pairs of the same table are not a
-repeat.
-
-### build_sweeps
-
-```python
-def build_sweeps(batches: list, rounds: int = 1) -> dict
-```
-
-One Sweep per (document, parameter, frame pair), keyed as the batches
-are.
-
-A document-level plan has no parameter, so the key is the document and the
-follow-up budget is the document's.
-
-### follow_up
-
-```python
-def follow_up(batch: Batch, reply: dict, sweep: Sweep, more_sources: Callable,
-              *, max_sources: int = BATCH_SOURCES,
-              max_chars: int = BATCH_CHARS) -> list
-```
-
-The extra batches a "there is more here, look for this" earns.
-
-The third of the four answers a batch may give. "Found it" and "not in
-these passages" end the batch; the sandbox is a turn inside the request
-and never reaches here. This one does work: the model writes what to
-search for, retrieval answers with passages this document has not shown
-yet, and they join the pool like any other batch. Bounded per sweep, and
-what arrives is excluded from every later round, so a model that keeps
-asking cannot loop.
-
-### harvest_document
-
-```python
-def harvest_document(
-    document_id: int,
-    spec: Spec,
-    templates: list,
-    *,
-    retrieve: Callable,                   # (probes, document_id, exclude) -> [Source]
-    harvest: Callable,                    # (Batch, prior) -> reply dict
-    locate: Optional[Callable] = None,    # (Source, quote) -> rects | None
-    structure: Optional[Callable] = None,   # (document_id) -> [Source]
-    more_sources: Optional[Callable] = None,  # (doc, queries, exclude) -> [Source]
-    extra_probes: Optional[dict] = None,
-    prose_top: int = PROSE_TOP,
-    max_sources: int = BATCH_SOURCES,
-    max_chars: int = BATCH_CHARS,
-) -> DocumentReport
-```
-
-Plan and harvest one document, one batch after another.
-
-The serial path: it keeps the loop's semantics in one readable piece and
-is what the tests own. Real runs do the same work with every batch of
-every document in flight at once, which is the whole reason a batch and
-not a chain is the unit here.
 
 ### fold_claims
 

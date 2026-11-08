@@ -160,6 +160,9 @@ class Slot:
     # The entry a value must have here to be a value of its parameter
     # (`spec.Axis.keep`, owner decisions 2026-11-07, `kept`).
     keep: Optional[str] = None
+    # Whether a value stated for several entries of the list is one row per
+    # entry (`spec.Axis.several`).
+    several: bool = False
 
     @property
     def is_closed(self) -> bool:
@@ -235,18 +238,19 @@ def value_schema(slot: Slot, unstated: bool = True) -> dict:
 
 
 # What an example reply writes for an answer (`value_example`): a placeholder
-# for an entry of a list or a wording, a year for a number, as the prompts'
-# examples always did.
+# for an entry of a list or a wording, and one for a year, never a year of
+# its own the model could copy (owner decision 2026-11-07: "mach das
+# Beispiel mit YYYY").
 SAID = "..."
-YEAR = 2022
+YEAR = "YYYY"
 
 
 def value_example(slot: Slot):
-    """A coordinate's answer as the example of a request shows it, read and
-    of the kind `value_schema` takes: an entry of its list or a wording as a
-    placeholder, a number as a year. Never UNSTATED: an example shows every
-    coordinate read (owner decision 2026-11-06), and the prompt's rule line
-    shows how an unstated one looks."""
+    """A coordinate's answer as the example of a request shows it, read: an
+    entry of its list or a wording as a placeholder, a number as the
+    placeholder of a year. Never UNSTATED: an example shows every coordinate
+    read (owner decision 2026-11-06), and the prompt's rule line shows how
+    an unstated one looks."""
     if not slot.is_closed and slot.kind == NUMBER:
         return YEAR
     return SAID
@@ -514,20 +518,22 @@ def derived_by_unit(claim: dict, parameter) -> bool:
 
 
 def derives(slot, claim: dict, parameter) -> bool:
-    """Does the spec set *slot* for this value instead of asking it: the
-    unit decides it (`derived_by_unit`), and the coordinate the spec names in
-    `unless_read` was not read. "im Mittel der Jahre 2019 bis 2021" in MWh/a
-    is a mean and no annual sum, so where the plan names the start of a span
-    the aggregation is asked (owner decision 2026-11-07: "Wenn es nach OEO
-    ein Mittelwert ist, dann ist es ein Mittelwert")."""
+    """May the spec set *slot* for this value from its unit: the unit
+    decides it (`derived_by_unit`), and no request read the coordinate. It
+    is asked first, and taken from the unit only where nothing read it
+    (owner decision 2026-11-07: "Fragen wir trotzdem und nur im Fallback
+    machen wir die Zuordnung")."""
     if not slot.derive or not derived_by_unit(claim, parameter):
         return False
-    unless = slot.derive.get("unless_read")
-    return not (unless and claim.get(f"{unless}_state") == READ)
+    return claim.get(f"{slot.name}_state") not in (READ, DERIVED,
+                                                   OUT_OF_SLICE)
 
 
 def apply_derived(rows: list, slot: Slot) -> int:
-    """Write a derived coordinate onto every row that has none. Returns how many.
+    """Write a derived coordinate onto every row no request read it on: one
+    never asked, and one asked and left open, whose answer, quote and state
+    go (owner decision 2026-11-07: asked first, derived only where no answer
+    is read). Returns how many.
 
     The wording it was derived from is kept, and so is the row's own passage:
     a derived coordinate is not evidence-free, it is evidenced by the unit the
@@ -537,8 +543,11 @@ def apply_derived(rows: list, slot: Slot) -> int:
         return 0
     done = 0
     for row in rows:
-        if row.claim.get(f"{slot.name}_state"):
+        if row.claim.get(f"{slot.name}_state") in (READ, DERIVED,
+                                                   OUT_OF_SLICE):
             continue
+        for suffix in COORDINATE_KEYS:
+            row.claim.pop(f"{slot.name}{suffix}", None)
         row.claim[slot.name] = slot.derive["value"]
         row.claim[f"{slot.name}_state"] = DERIVED
         wording = row.claim.get("unit_raw") or row.claim.get("unit")
@@ -598,7 +607,8 @@ def axis_slots(parameter: Parameter) -> list:
                         question=axis.question,
                         options=_options(axis.vocabulary, axis.definitions,
                                          axis.glosses),
-                        derive=axis.derive, keep=axis.keep)
+                        derive=axis.derive, keep=axis.keep,
+                        several=axis.several)
         elif axis.enum:
             slot = Slot(name=name, kind=CHOICE, required=axis.required,
                         question=axis.question,

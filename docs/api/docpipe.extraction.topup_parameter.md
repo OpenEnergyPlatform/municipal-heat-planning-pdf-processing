@@ -98,32 +98,6 @@ Fields:
 - `shared: set = field(default_factory=set)`
 - `stored: object = None`: the harvest file, read, when it was needed
 
-### DocumentPass
-
-```python
-class DocumentPass
-```
-
-`harvest_document(document_id, filename) -> (written, failures)` for the
-run's own loop (`runner.harvest_documents`), with what it counted.
-
-The loop calls it from several threads, one document each; the counts are
-added under a lock.
-
-#### DocumentPass.\_\_init\_\_
-
-```python
-def __init__(self, out_dir: Path, spec: Spec, current: dict, deps: dict)
-```
-
-#### DocumentPass.report
-
-```python
-def report(self) -> None
-```
-
-One line per count, each with what it counts.
-
 ## Functions
 
 ### owned_keys
@@ -269,27 +243,6 @@ def not_read(cause: str, found: int, of: int) -> str
 ```
 
 What `runner.not_happened` counted, said in the unit it counted.
-
-### append_document
-
-```python
-def append_document(document_id: int, filename: str, out_dir: Path,
-                    spec: Spec, current: dict, deps: dict) -> tuple
-```
-
-(written, failures, stats) for one stored document.
-
-`deps` is what the run supplies: "document_spec" (id -> this document's
-spec, None when a list it closes cannot be), "plan" (the run's
-`plan_batches`, everything but the document bound), "harvest" (the run's
-`harvest_batches` over its pools, everything but the batches and the
-unfinished set bound), "questions" (name -> the sentences this document
-was searched with, taken), "locate", "frame_axes", "frame_names",
-"dynamic_ok" and "halted".
-
-Nothing is written unless the new parameters were read: a document the
-server did not serve, a frame or a plan that raised, or one the run halted
-in leaves the file and the stamp as they were.
 
 ### with_harvest
 

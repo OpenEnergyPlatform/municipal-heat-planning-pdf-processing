@@ -29,8 +29,8 @@ a harvest already written can use without starting a document over.
 | | |
 |---|---|
 | **In** | The corpus [chunking](chunking.md) built: the SQLite database's `Sections`, `Tables`, `Images`, `Embeddings`, `Documents` and `DocumentMeta` rows, and the FAISS index. No file under `results/` is read directly. Also a profile's validated `extraction_spec.json` (`spec.load`). |
-| **Out** | One `<document>.jsonl` harvest and one `<document>.stamp.json` resume stamp per document, a per-document trace file under `trace/`, and, written once per run, `anchors.json` and `query_cache.db`, a `places/<document id>.json` per document whose map of places was asked (named by the numeric id of the `Documents` row) (see The field sweep), a `stats/<pass>-<run start>.json` and, for every file the run replaced, the copy it found under `archive/` (see Archive and stats). A `--serialize` call reads the harvest back and writes one Turtle file (a profile with a strict serializer, kwp, writes a second, `.strict.ttl`), feeding [the knowledge graph](graph.md) stage. |
-| **Resumes on** | `<document>.stamp.json`, compared against what today's spec would produce, one key per parameter, value list, axis and slot; the whole-file spec sha stands in only for a stamp that carries none of those. The sha256 of the PDF the harvest was read from is compared too, where the stamp and the database both carry one. The model, the anchor set and every prompt are written into the stamp for a reader and are never compared. A document with no stamp is read as fully stale, never as finished, and a document one of whose requests ended on a 429 or a 5xx, or timed out, is not stamped, which the run counts as a failure and answers with exit code 1. |
+| **Out** | One `<document>.jsonl` harvest and one `<document>.stamp.json` resume stamp per document, a per-document trace file under `trace/`, a `survey/<document id>.json` per document whose survey was kept, `query_cache.db` once per run, a `stats/<pass>-<run start>.json` and, for every file the run replaced, the copy it found under `archive/` (see Archive and stats). A `--serialize` call reads the harvest back and writes one Turtle file (a profile with a strict serializer, kwp, writes a second, `.strict.ttl`), feeding [the knowledge graph](graph.md) stage. |
+| **Resumes on** | `<document>.stamp.json`, compared against what today's spec would produce, one key per parameter, value list, axis and slot; the whole-file spec sha stands in only for a stamp that carries none of those. The sha256 of the PDF the harvest was read from is compared too, where the stamp and the database both carry one. The model, the anchors key and every prompt are written into the stamp for a reader and are never compared. A document with no stamp is read as fully stale, never as finished, and a document one of whose requests ended on a 429 or a 5xx, or timed out, is not stamped, which the run counts as a failure and answers with exit code 1. |
 | **Needs** | A served LLM reached over the network, the query embedder, the FAISS index, the corpus database, and, unless `EXTRACT_LOCATE=0`, the source PDF (`--pdf-root`) to place a quote's highlight rectangles. Unless `EXTRACT_ATTACH_IMAGES=0`, also the `images/` directory (`--image-root`) with the table and figure crops that ride along with every request. |
 
 Extraction is the seventh of the pipeline's eight stages. [Chunking,
@@ -40,21 +40,20 @@ in the database and its stamp. [The knowledge graph](graph.md) follows,
 reading only the tuples this stage accepted, never a refusal or the
 spec itself.
 
-One document, from its anchor to its summary row:
+One document, from its survey to its summary row:
 
 ```mermaid
 flowchart TD
-    anchor[Anchor: one HyDE sentence per parameter] --> retrieve[Retrieval: one fused ranked source list]
-    retrieve --> rows[Row request: which values exist, per pair]
-    rows --> turn[Turn of each batch: the passages its values came from, one coordinate at a time]
-    turn --> sweep[Document search: what is still open, once per coordinate for all batches]
-    sweep --> verify{Verification: quote in passage, answer in quote}
+    survey[Survey: every passage read once, naming the parameters whose values stand there] --> reading[Reading: each value of a passage, then each of its coordinates, one message at a time]
+    reading --> comb[Combing: what is open, a new conversation per value, the rest of the plan searched]
+    comb --> years[A year nothing found: one more message with the plan's base and target years]
+    years --> verify{Verification: quote in passage, answer in quote}
     verify -->|passes| tuple[Accepted tuple, graded A, B, C or D]
     verify -->|fails| refusal[Refusal, with a closed reason]
     tuple --> harvest[Harvest file: tuples, refusals, parameter states, summary row]
     refusal --> harvest
     harvest -. later, on demand .-> review[Review: reread the values of levels C and D]
-    harvest -. later, on demand .-> topup[Top up: resweep one stamp-changed coordinate]
+    harvest -. later, on demand .-> topup[Top up: comb again one stamp-changed coordinate]
     harvest -. later, on demand .-> append[Append: read a parameter the spec gained, its rows follow the stored lines]
 ```
 
@@ -104,28 +103,33 @@ an evidence rule is refused at load time (`spec.py`): a
 coordinate is checked for its quote and its answer, wherever the
 passage stands.
 
-A spec may name `groups`: the coordinates a plan prints together, each group
+A spec names `groups`: the coordinates a plan prints together, each group
 with the step that reads it (`read_in`, `survey` or `reading`) and a sentence
-on where a plan prints it (`where`). kwp has three: `frame` (scenario and
-year and `period_start`, the first year of a multi-year period; the pair
-scenario, year is what the survey reads), `number` (unit, `what`, the number's
-own name in the plan's words, `subject` and `qualifier`) and `context` (the
-other axes), the last two read with the number. A value's coordinates are
-asked in the order of the groups and of each group's coordinates (see Reading
-a parameter). scenarios has one, `scenario` (the
-scenario a value refers to, read with the value). `spec.load` refuses a coordinate in no
-group or in two, a name that is no coordinate, an unknown step, and a survey
-group that is not the axes of one parameter. A group may say
-`"definition": "full"` to have its requests show a parameter's whole
-description and not its `brief` (`Group.full_definition`). Groups are for the rebuilt
-harvest (owner decision 2026-11-04); the harvest below reads none of them. A group may also say which coordinates the
-combing does not ask (owner decision 2026-11-06): `own_passage` names those
-only the passage of the value can state, asked in the reading and never
-combed, and `own_value` those asked once with the value, whatever passage
-answers (`Group.asked_near`, `Group.combed`); a coordinate is in one of them
-or neither. kwp: `unit`, `what`, `subject`, `aggregation` and `period_start` are
-`own_passage`, `qualifier` is `own_value`; `what` and `period_start` are read
-in the first conversation and in the second reading, never searched.
+on where a plan prints it (`where`). kwp has three: `frame` (scenario and year,
+the pair that dates a value; read per value in the reading), `number` (unit,
+`what`, the number's own name in the plan's words, `subject` and `qualifier`)
+and `context` (the other axes). A value's coordinates are asked in the order of
+the groups and of each group's coordinates, each for this value alone: nothing
+is taken over for a whole table or section (owner decision 2026-11-07; see
+Reading a parameter). scenarios has one, `scenario` (the scenario a value
+refers to, read with the value). `spec.load` refuses a coordinate in no group
+or in two, a name that is no coordinate, an unknown step, and a survey group
+that is not the axes of one parameter. A spec without groups stops the run (see
+The run harvests from the survey). A group may say `"definition": "full"` to
+have its requests show a parameter's whole description and not its `brief`
+(`Group.full_definition`). A group the survey reads reads per passage only the
+coordinates of its `pair` (all of its coordinates where it names none); a group
+the reading reads may name a `pair` too, which only says that those coordinates
+are the plan's frame, the ones its base and target years date a value by
+(`Group.paired`; kwp's `frame` does). Neither profile reads a group in the
+survey since 2026-11-08. A group may also say which coordinates the combing
+does not ask (owner decision 2026-11-06): `own_passage` names those only the
+passage of the value can state, asked in the reading and never combed, and
+`own_value` those asked once with the value, whatever passage answers
+(`Group.asked_near`, `Group.combed`); a coordinate is in one of them or
+neither. kwp: `unit`, `what`, `subject`, `aggregation` and `role` are
+`own_passage`, `qualifier` is `own_value`; `what` is read in the first
+conversation and in the second reading, never searched.
 
 ### The survey of a whole plan
 
@@ -142,7 +146,7 @@ scenario descriptions in 18 passages instead of 12 and authors in 10 instead of
 The reply is that passage's entry, with no `passages` wrapper and no id, which
 the grammar requires: the parameters whose values stand there, or `out:none`,
 and the tuples of each group the survey reads, each coordinate with its own
-quote (kwp `{"parameters": ["emission"], "frame": [...]}`, scenarios
+quote (none now: kwp `{"parameters": ["emission"]}`, scenarios
 `{"parameters": ["publication_title", "publication_author"]}`). The model
 copies nothing to key its answer by, since the request shows one passage.
 The survey only names the parameters, without a quote, and a parameter of the
@@ -156,9 +160,11 @@ is held to `frame_pairs`. A reply with a tuple not taken or without a list
 answer (`survey.corrections_of`; the second names `parameters`, `key_missing`;
 owner decisions 2026-11-07), and
 what either reply backs is taken; a passage still without a list stays
-unanswered. Each number of a table cell counts for its own parameter. Of a group with a
-`pair`, the survey reads only the pair (kwp: scenario and year); `period_start`
-is read with the value. A reply that is cut off leaves
+unanswered. Each number of a table cell counts for its own parameter. A group the survey
+reads reads only its `pair` where it names one. Neither profile reads a group in
+the survey since 2026-11-08: scenario and year are read per value in the
+reading (owner decision 2026-11-07), so the survey only names parameters. A
+reply that is cut off leaves
 its passage unanswered: one passage cannot be split further, and nothing is rescued. The survey is kept in `<harvest>/survey/<document
 id>.json` under a key over prompt, parameters, groups and model, and only a
 complete one is read again; the key is built from the prompt file text, so
@@ -185,11 +191,11 @@ what every request of its kind is told, then marked parts, each running to the
 next marker: `<!-- group: NAME -->`, the words for one group of the spec's
 coordinates, sent in the message that asks that group; `<!-- with: KEY ... -->`,
 what a field means that only some requests carry (`table_before`, `around`,
-`title_page`, `whole_table`, `before after`), part of the system prompt only
+`title_page`, `sections`, `before after`), part of the system prompt only
 where the conversation's first message carries one of those keys; and
 `<!-- follow-up: KEY ... -->`, the words of a message that follows an answer
 and carries one of those keys (`corrections`, `next`, `more hits not_found`,
-`numbers`), never part of a system prompt. A run checks at its start that each
+`plan_years`, `numbers`), never part of a system prompt. A run checks at its start that each
 prompt has words for every field its follow-ups carry (`runner.FOLLOWS`,
 `runner.parts_of`, `runner.surveyed_flow`; for the compute step
 `runner.make_computer`) and stops with a `LookupError` otherwise. A follow-up
@@ -218,8 +224,7 @@ free-text value is its own wording (`verify.wording_of`) and is not asked twice.
 reading has no tools (see below). The parameter is shown by its `brief` where the spec
 writes one, a paragraph on what a value of it is, else by its description. A
 list field is shown with its
-entries under `value_classes`, each with its meaning and spellings, as the
-field request shows the value of such a parameter asked again
+entries under `value_classes`, each with its meaning and spellings
 (`reading.value_classes`, `fields.value_choice`), and the grammar takes for a
 value exactly one entry, or `""` where the model is unsure and writes the
 wording into `value_raw`; the fold keeps such a wording without an entry
@@ -252,8 +257,7 @@ one correction with its reason.
 A quote in no passage the round showed is told in the names of what the
 reading shows, `"source"`, the heading of its section and `"around"`
 (`quote_not_in_passage`, `reading.NOT_SHOWN`, owner decision 2026-11-06); the
-reason stays `quote_not_in_source`, whose phrase names the field request's
-`"sources"`.
+reason stays `quote_not_in_source`, whose phrase names `"sources"`.
 Each refusal is a follow-up after the answer it is about
 (`corrections`). A value named again (same value, wording and quote) is
 asked once more, and named again after that it ends the rounds. The reasons are `value_already_read`, `quote_not_unique`, `value_not_once` and `value_rejected`, the last with the fold's own reason in it. Before, the round checked only the quote and the
@@ -296,10 +300,9 @@ from the one its quote stands in (`reading.passage_of`), which joins the
 reading's batch, so the fold checks it there (`pipeline.route_claims`); a value
 read twice this way is one node in the kwp graph, which merges repeats.
 
-The survey flow keeps no column head (owner decision 2026-11-07): no round
-asks one, and `head_year` and `head_pair` (see The field sweep) are not applied
-to its values; the year of a number is a coordinate read like any other. The
-field sweep keeps its own column logic.
+No column head is kept (owner decision 2026-11-07): no round asks one, and the
+year of a number is a coordinate read like any other, never taken from the head
+over its column.
 
 A table is shown whole. A request that does not fit the model's window is
 split into halves of the table's rows, title and head lines kept, again and
@@ -339,33 +342,40 @@ it works out the qualifier of the rows it used (`profiles/kwp/compute.qualified`
 
 `extraction/read_text` is the first conversation of a value: one message per
 coordinate, never several at once, in the order of the spec's groups and of each
-group's coordinates (owner decisions 2026-11-05 and 2026-11-07). kwp asks unit,
-what, subject, qualifier, scenario, year, period_start, quantity, aggregation,
-carrier, sector, technology, whole, spatial_scope; a coordinate the parameter
-lacks is skipped (`reading.groups_of`, `reading.in_group_order`). The first
-message shows what requests share first, so a server reads it once: the
-parameter, the group's words and the first coordinate with its question,
-`where` (the spec's sentence on where a plan prints it), the plan's
-`base_years` and `target_years`, the plan's settings (`settings`, see The plan's
-settings), then the passage, the text around it and `known`, and last the value
-with its quote and `read` (what is read of it, in the plan's words,
-`runner.row_context`). Each further message carries its coordinate only,
-with the words of its group where the group changes (`reading.group_payload`):
-the parameter in full where the group classifies, the plan's years and the
-survey's pairs for a frame coordinate. The model sees what it answered before.
-A correction follows in the same conversation. The unit is asked first: the
-model copies the printed unit into `unit_raw` and picks the entry of the
-parameter's list it means, or `""` where none fits, and it is never refused. The
-coordinates the spec derives from a unit are derived only where an entry was
-chosen; where none was, they are asked like the others, and a derive block with
-`unless_read` names an axis of the same parameter that, once read, makes the
-coordinate asked instead (`fields.derives`, in the harvest and in a top-up: kwp reads `aggregation` that way
-where `period_start` was read). `what` is the number's
-own name in the plan's words, `period_start` the first year of a multi-year
-period; both are harvest-only for now, read here and in the second reading and
-never searched. The scenarios profile has no number coordinates (no unit,
-`what`, `qualifier`, `period_start` or conversion); it asks its one group the
-same way. What the check refuses on any of the rows one reply made (one row per name of a coordinate that may
+group's coordinates (owner decisions 2026-11-05 and 2026-11-07). Every coordinate
+is asked, scenario and year included, each for this value alone: nothing is
+taken over from its table or its section, no coordinate is read once for a
+whole table, and a request shows no `known` and no pair of the survey (owner
+decision 2026-11-07). kwp asks unit, what, subject, qualifier, scenario, year,
+quantity, aggregation, carrier, sector, technology, whole, spatial_scope and
+role; a coordinate the parameter lacks is skipped (`reading.groups_of`,
+`reading.in_group_order`). The first message shows what requests share first, so
+a server reads it once: the parameter, the group's words and the first
+coordinate with its question, `where` (the spec's sentence on where a plan
+prints it), the title-page line and the plan's settings (`settings`, see The
+plan's settings), then the titles of the last 10 sections of the plan up to the
+value's place, its own last (`sections`: `reading.SECTION_TITLES`,
+`reading.sections_of`, `lookup.sections_up_to`; a table or figure counts from its
+own position, so its own section is the last; every request about a value's
+coordinates shows them, owner decision 2026-11-07, and a quote may stand in
+them), then the passage, the text around it and last the value with its quote
+and `read` (what is read of it, in the plan's words, `runner.row_context`). The
+plan's base and target years are not shown here (see The plan's years). Each
+further message carries its coordinate only, with the words of its group where
+the group changes (`reading.group_payload`): the parameter in full where the
+group classifies. The model sees what it answered before. A correction follows
+in the same conversation. The unit is asked first: the model copies the printed
+unit into `unit_raw` and picks the entry of the parameter's list it means, or
+`""` where none fits, and it is never refused. A coordinate the spec derives from
+a unit (a `derive` block; kwp's `aggregation`) is asked like the others, and is
+derived from the unit only where no request read it (`fields.derives`,
+`fields.apply_derived`): the run does that once the reading and the combing are
+done (`surveyed.derive_left`), `--top-up` after its sweep (owner decision
+2026-11-07: asked first, derived only as the fallback). A coordinate asked and
+left open takes the unit's entry and loses its answer, quote and state. `what`
+is the number's own name in the plan's words, read here and in the second
+reading and never searched. The scenarios profile has no number coordinates (no
+unit, `what`, `qualifier` or conversion); it asks its one group the same way. What the check refuses on any of the rows one reply made (one row per name of a coordinate that may
 name several things) is asked once more in ONE message after that reply, naming
 each refused name with its quote where the reply made several rows
 (`reading.told_once`, `Reader._settled`; owner decision 2026-11-07); before,
@@ -380,8 +390,7 @@ or a number (`fields.wording_asked`, `reading.answer_schema`); a free-text
 answer is its own wording, and the row keeps it beside the answer as
 `<coordinate>_raw` (`pipeline.merge_field`, owner decision 2026-11-06), so
 every coordinate still keeps its wording.
-Only a group that asks a frame coordinate sees `known` (the survey's pairs),
-`base_years` and `target_years`. The parameter is shown by its `brief`, except
+The parameter is shown by its `brief`, except
 for a group whose spec entry says `"definition": "full"`, which shows the full
 description (kwp: `context`, the group that classifies; a parameter without a
 brief shows its description everywhere). A table or a figure is shown with the
@@ -439,6 +448,16 @@ stored harvest re-reads each stored row in place and takes the first name.
 Asked for one name, a value of several scenarios was left without one: on one
 paper the scenario of a year was read 48 times instead of 129.
 
+An axis with a list may say `"several": true` (`spec.Axis.several`,
+`fields.Slot.several`, owner decision 2026-11-07; the spec refuses it on an axis
+without a vocabulary): a place that names several entries of the list for one
+value ("Fernwärme + Gas-NT") gives one row per entry, each with its own quote and
+checked on its own, like a name of a `merged` coordinate (`reading.several`
+follows both). The answer is a list with `value`, `value_raw` and `quote` per
+entry, where it used to be the one entry all of them fall into, or "Summe". kwp
+marks `carrier`, `sector` and `technology` of the five parameters that have
+them; scenarios marks none.
+
 An axis of names may list entries beside them under the spec key `"beside"`
 (`spec.Axis.beside`, owner decision 2026-11-07), written uri to labels like a
 vocabulary, with a definition; only a `merged` axis may, and only with keys
@@ -493,7 +512,7 @@ key of that question only.
 
 Every coordinate is answered: the grammar requires each coordinate of the
 group, and `out:unstated` is an answer of every kind, a year's too
-(`fields.value_schema`, shared with the field request). Every coordinate goes
+(`fields.value_schema`). Every coordinate goes
 through `merge_field`. What the check refuses and a coordinate the reply left
 out are asked once more, as a follow-up after the answer, with the reason
 (`corrections`, each `{coordinate, what}`), in the harvest's own phrases, a
@@ -503,14 +522,20 @@ there is no third. A coordinate left out is asked for by name with `key_missing`
 reply gave in another form than asked, such as the bare word "out:unstated"
 where an object with "value" is asked, is told `wrong_shape`
 (`reading.unanswered_what`, used by `reading.value_corrections`). Either, if
-still open after the second reply, ends `unanswered`. A request that asks the year shows the plan's base
-and target years, numbers only, as the field request does
-(`reading.years_of`), so a value whose passage names its state by the plan's
-word ("Bestand", "Zieljahr") and prints no year is read with the year of that
-state (`pipeline.named_year`). A frame coordinate still open takes the
-survey's tuple of the passage when there is exactly one and the row read no
-frame coordinate of its own that contradicts it (`reading.inherit`, window
-`frame`). The values are folded by `fold_batch`.
+still open after the second reply, ends `unanswered`. The model looks for a year first, in the reading, in the second reading and in
+the search, none of which shows the plan's base and target years (owner decision
+2026-11-07); a year is read where its number stands in its quote. Only a year
+nothing found is asked once more, in the combing, with those years (see
+Combing what the reading left open). A year the plan states for a span ("im
+Mittel der Jahre 2019 bis 2021") is answered with `value`, its first year, and
+`until`, its last (`reading.answer_schema`, `reading.until_of`). The run makes
+one row per distinct year of the span (`reading.span_rows`, owner decision
+2026-11-07: "als ca. für jedes distinkte Jahr erfassen"): the first and the last
+year are READ, each with the quote that prints it (the last year must stand in
+the quote as any year must), the years between are DERIVED from the span, and
+every row takes the marks the profile names where it read nothing of its own
+(`SPAN_MARKS`, kwp `{"qualifier": "out:approximate"}`, "ca."). `period_start`
+is no coordinate any more. The values are folded by `fold_batch`.
 
 Every reply schema lists its keys in the order its prompt's example names them
 (owner decision 2026-11-04, "the schema follows the prompt"): a server that
@@ -531,8 +556,8 @@ its own schema asks, in that order, as one line:
 - An entry carries its printed wording (`value_raw`) wherever the grammar asks
   one (`fields.wording_asked`), so beside every entry of a list, the unit
   included.
-- A placeholder stands for a wording or an entry of a list, a year for a
-  number.
+- A placeholder stands for a wording or an entry of a list, and `YYYY` for a
+  year (owner decision 2026-11-07), never a year the model could copy.
 
 The model writes the keys its example shows. Where the server does not hold a
 reply to its schema, the example is all the model has to go by. With one fixed
@@ -562,15 +587,16 @@ still open after the first conversation, one the passage does not state, one
 whose answer did not hold or one no reply answered, is asked in a NEW
 conversation per value, not in the value's reading conversation (owner decision
 2026-11-07). Its first message shows the value with its quote, the answers so
-far with their quotes, the title and heading of its place, the title page's line,
-the table before (`table_before`) and the plan's settings, and not the value's
+far with their quotes, the title and heading of its place, the titles of the last
+sections up to it (`sections`), the title page's line, the table before
+(`table_before`) and the plan's settings, and not the value's
 own passage, which its quote and answers pin down. First comes the second
 reading, then the search.
 
 The second reading shows the sections before and after the value's place
 (`reading.near_of`, `before`, `after`) once and asks each open coordinate on its
 own, one message after another (`Group.asked_near`): `what`, `subject`,
-`aggregation` and `period_start` are only re-read here, `qualifier` only in the
+`aggregation` and `role` are only re-read here, `qualifier` only in the
 first conversation. Its answer may be "not stated", with the sentence of how the
 plan would print it (`probe`). A find quoted from those sections is checked yes
 or no as a find of the search is (below). The `comb` event counts its messages
@@ -700,28 +726,36 @@ One whose request no longer fit the model's window before that ends
 The combing begins while the plan is still read (owner decision 2026-11-07).
 `combing.Session` (made by `Comber.session`) takes a passage's combing up the
 moment its reading is done (`Session.add`, handed in as `on_read` by
-`surveyed.SurveyedHarvest`): per Read, the jobs of its tables first (a table
-whose frame is open on every one of its values, `Comber.plan`), the jobs of its
-values once those are done, since a value of a table shows the frame its table
-took (`taken_by`). A value whose open coordinate is shown every name of its
-kind read in the plan (`Comber.shows_names`, `combing.names_read`; a scenario in
-the scenarios profile, no coordinate of kwp) waits for `Session.finish(reads)`,
-which comes when the whole plan is read, the front walk, the sought walk and
-the model's own search included, so its list is the whole one. `finish` returns
-the `Combed` in the order `Comber.__call__` always gave (every table's, then
-every value's, Read by Read) and joins the rows each made to their Read.
-`Session.cancel()` takes back every job not begun; `SurveyedHarvest` cancels
-when a document stops early (halted or an error). `Comber.__call__` is a Session
-every Read was added to. Before, the combing began only after the whole plan was
-read, the tables of all Reads first as a barrier.
+`surveyed.SurveyedHarvest`): a job per value of the Read with a coordinate still
+open (`Comber.plan`), each value asked for itself. A value whose open coordinate
+is shown every name of its kind read in the plan (`Comber.shows_names`,
+`combing.names_read`; a scenario in the scenarios profile, no coordinate of kwp)
+waits for `Session.finish(reads)`, which comes when the whole plan is read, the
+front walk, the sought walk and the model's own search included, so its list is
+the whole one. `finish` returns the `Combed` in the order `Comber.__call__`
+gives (Read by Read) and joins the rows each made, one per further name or per
+further year of a span, to their Read. `Session.cancel()` takes back every job
+not begun; `SurveyedHarvest` cancels when a document stops early (halted or an
+error). `Comber.__call__` is a Session every Read was added to.
 
-A table whose frame coordinate (scenario, year, `period_start`) is open on all
-its values gets this conversation once for the whole table, not once per row
-(`Combed.table_rows`, owner decisions 2026-11-06 and 2026-11-07); the first
-payload shows the whole table, says so with `whole_table` at its top level,
-beside the row, and every value takes the answer with its quote. The search asks
-only what another passage can state: coordinates the spec marks `own_passage`
-or `own_value` are never searched.
+**A year nothing found** (`combing.PLAN_YEARS`, owner decision 2026-11-07: only
+where the model finds no year is there an extra request). Where a year
+coordinate is still not read after the second reading and the search, one
+further message of the same conversation follows, the follow-up `plan_years`,
+with the plan's `base_years` and `target_years`, numbers only (`reading.years_of`,
+from `years.PlanYears`). Where the value's place names only the plan's word for
+its own state or its target ("Basisjahr", "Ist-Zustand", "Zieljahr"), the answer
+may be the year of that list it refers to (`pipeline.named_year`, see Base and
+target years); which state the word means is the model's reading and is not
+checked. Until then no answer is taken from the list, and a year this message
+does not read stays as the search left it. The `comb` event counts the messages
+(`plan_years`), a year read under it has the window `plan_years`. Every value is
+asked for itself: a table's frame is no longer asked once for the whole table, no
+value takes the answers of another value of its table, and `Combed.table_rows`,
+`whole_table` and the table-wide conversation are gone (a harvest of before
+2026-11-08 may carry the window `table` and the trace key `table_rows`). The
+search asks only what another passage can state: coordinates the spec marks
+`own_passage` or `own_value` are never searched.
 
 A parameter the survey of the whole plan named no passage for is searched for
 before it can count as not stated (owner decision 2026-11-04): the same
@@ -788,20 +822,21 @@ the passages read so under `front`.
 
 ### The run harvests from the survey
 
-A run harvests from the survey of each plan wherever its spec names groups
-(`runner.surveyed_flow`), and then the profile must write the prompts `extraction/survey`, `read_values`, `read_text`, `comb`, `comb_check`, `settings` and `seek`
+A run harvests from the survey of each plan (`runner.surveyed_flow`: its spec
+must name groups), and then the profile must write the prompts `extraction/survey`, `read_values`, `read_text`, `comb`, `comb_check`, `settings` and `seek`
 (`runner.SURVEY_PROMPT_IDS`), and `extraction/naming_groups`,
 `extraction/naming` and `extraction/naming_several` where its spec merges names (`naming.NAMING_PROMPT_IDS`,
 below; `runner.survey_prompt_ids` lists them). kwp and scenarios do. A profile whose spec names
 groups and lacks one of them is broken, and the run stops at the start and names
 the prompt, for every run and every probe, as `spec.load` stops at a broken group
-(owner decision 2026-11-04). It used to harvest field by field instead, saying
-so only in a log line. A spec without groups is harvested field by field as
-before, so the two flows stand side by side until every profile has moved. Per document the run surveys, asks the plan's years and settings, reads and combs (`surveyed.SurveyedHarvest`; the combing of a passage begins as soon as its reading is done), then folds, runs
+(owner decision 2026-11-04). A spec without groups stops the run
+with an error, and `docpipe doctor`'s extract line fails on it as well (owner
+decision 2026-11-08: the field-by-field flow is gone). Per document the run surveys, asks the plan's years and settings, reads and combs (`surveyed.SurveyedHarvest`; the combing of a passage begins as soon as its reading is done), then folds, runs
 the compute step and writes the file with its stamp as for any harvest. This
 flow writes no anchors, sends no frame request, builds no map of places and has
-no slice gate (owner decision 2026-11-04): a number is asked for its
-coordinates in one request per group of the spec, and every row the reading leaves open is combed.
+no slice gate (owner decisions 2026-11-04 and 2026-11-08): a number is asked for
+its coordinates one message at a time, each for the value alone, and every row
+the reading leaves open is combed.
 Every request goes through the one queue, served oldest document first
 (`scheduler.py`). A profile with lists per document gets its own spec per
 document, and the reading's batch carries it, so the fold checks against those
@@ -825,7 +860,8 @@ stage is: the eight-plan probe asked three times within the same 180 s and
 lost the replies that take longer.
 
 The stamp records the prompts of the flow the run harvested with, and every
-producer entry carries `flow` ("survey" or "fieldwise"); it is recorded and
+producer entry carries `flow` ("survey"; the stamps of older harvests say
+"fieldwise"); it is recorded and
 never compared (owner rule of 2026-09-10), so a stamp of the other flow does
 not make a document stale. A survey of part of a plan is kept beside the whole
 one's as `survey/<document>.<scope>.json`, the scopes being `found`, `gained`,
@@ -844,7 +880,7 @@ one request per group of the spec, each with its share of the coordinates the
 pass names. The pass's restore rules are unchanged. The second half of `--top-up-open` (`surveyed.append_unread`)
 surveys what no stored survey answered plus the passages the file holds as
 holes (scope `rest`), and reads a reading's hole again for its own parameter
-with the frame tuples its survey gave; for a harvest of the old flow, what its
+with what its survey said of the passage; for a harvest of the old flow, what its
 rows requests were shown counts as read. `--top-up-parameters`
 (`surveyed.append_parameters`) surveys the whole plan for the gained parameters
 (scope `parameters`).
@@ -854,156 +890,22 @@ The server's window is measured over the prompts of this flow
 its kind, `read_values_ask`, `read_text_ask`, `comb_ask`, `comb_check_ask`, `settings_ask`, `seek_free_ask`, `naming_groups_ask` and `naming_ask`, each with its
 `group` where the request has one: `read_values_ask` carries `round`,
 `read_text_ask` carries `group` and `value`, and the `comb` event carries
-`group` and `listed`, the hit lists the run added; the `read` event carries no near, judged or turned count any more: the second reading and the find check are the `comb` event's. The requests for a search sentence, the frame, the review and
-the compute step write `phrase_ask`, `frame_ask`, `review_ask` and
-`compute_ask` (`runner._asked`, one per reply, with its tokens). `stats.py`
+`group`, `listed`, the hit lists the run added, and `plan_years`, the messages
+that asked a year nothing found; the `read` event carries no near, judged or turned count any more: the second reading and the find check are the `comb` event's. The requests for a search sentence, the review and the
+compute step write `phrase_ask`, `review_ask` and `compute_ask`
+(`runner._asked`, one per reply, with its tokens). The events of the
+field-by-field flow, `plan`, `anchor`, `frame`, `rows`, `field`, `sweep`, `drop`
+and `places`, are written no more and stay in the schema for older traces. `stats.py`
 writes per run the requests per stage, every `<stage>_ask` kind under its
 stage and the known stages (`schema.ASK_STAGES`) even when they asked
 nothing, and the survey, reading and combing counts, `lists_added` among them
 (`stats.from_traces`). The reading block counts no check; the combing block
 counts the second reading (`second_reading_messages`, `second_reading_read`,
 `begun_anew`) beside `check_requests` and `finds_turned`;
-the cost estimate counts the requests of both flows (`estimate.TRACED`),
-a frame request once, by its `frame` event (owner decision 2026-11-05).
-
-### The retrieval plan
-
-`pipeline.plan_document` builds one plan per document, not per parameter,
-since which quantity a number belongs to is asked as a coordinate later.
-Two rules used to feed it: every table and figure taken whole through the
-`structure` callable, since over 65 documents 12,094 of 15,082 values
-came from one of the two (`pipeline.py`); prose ranked and capped at
-`prose_top` sections, the half a ranking retains. A newer
-single cut (`top`, `EXTRACT_PLAN_TOP`) replaces both with one fused
-ranking, keeping the structural floor only as a counter of what it would
-have missed. There are no repeated rounds: retrieval is asked once per
-document, not asked again with everything already found excluded. The
-single call fuses every probe into one ranked
-list rather than concatenating a ranking per probe: over 65 documents and
-15,082 values, concatenation put a value's real source at median rank 77,
-fusion at rank 26 (`runner.py`).
-
-That single cut is not a plain slice of the ranking either.
-`with_visual_share` (`pipeline.py`) holds a share of `top`'s room,
-`VISUAL_SHARE` (env `EXTRACT_VISUAL_SHARE`, default `0.5`,
-`pipeline.py`), for figures and tables before prose can fill it,
-pulling the best-ranked ones up into that room when the head of the
-ranking does not already hold its share and putting the result back into
-rank order, so batching and every rank written into the report stay what
-they were. The cap itself does not move and the taken sources stay in
-ranking order; only which of them make the cut does. Measured on
-corpus_m5: figures and tables carried 71% of every tuple in the harvest,
-yet only 13 to 40% of a document's own figures and tables ever reached a
-question at all. Emskirchen showed the model none of its 12 tables,
-Bremen 13 of its 323 figures, Kassel none of its 23 figures, and on the
-30 thinnest documents only 42% of tuples came from an image, against 71%
-everywhere else.
-
-What no search kept is read as well. `plan_batches` (`runner.py`)
-takes the rest of the document from `make_rest_of_document`
-(`runner.py`), every section with its tables and figures that neither
-the document's search nor a pair's own search planned, and adds it behind
-the planned passages with origin `rest`: under the pair it prints, or
-without one, exactly as `pair_batches` places a planned passage. It is
-counted in `owners_harvested`, which `not_happened` measures against, and
-each passage gets a `plan` event in the trace. Before, the rest of a
-document was read only when the model answered a rows request with
-`partial` and a follow-up happened to walk it: Mainz gave 1,409 tuples in
-the run of 2026-09-29, 682 of its 892 rows requests follow-ups, and 194 in
-the run of 2026-10-14, which made none. A window `split_long_sources`
-(`runner.py`) cuts from a long passage keeps the passage's rank and
-origin. The stamp does not record the plan (owner decision 2026-09-10), so
-a harvest already on disk stays current and only a document harvested
-again is read to its end.
-
-The parameters a profile names in `FRONT_PAGE_PARAMETERS` are asked once
-more on their own. `plan_batches` takes the document's sections from its
-start from `make_front_page` (in reading order, page by page, as many as
-one request of `EXTRACT_BATCH_SOURCES` and `EXTRACT_BATCH_CHARS` holds,
-the first always) and adds ONE request over them that offers those
-parameters and nothing else, with origin `front`. Wherever else the
-harvest reads them still counts, and the checks are the same. The scenarios
-profile names what a publication says about itself, title, authors, date,
-DOI and abstract: asked among forty other rows of one request, the model
-left them out, the title in 17 of 164 publications and the abstract in 132,
-though nearly every one prints them at its start. Reading the opening
-rather than the first page leaves room for a cover, a repository's title
-sheet or a bibliography entry in front of the paper. A pass over a stored
-harvest's unread passages (`already_read`) asks none of these. A harvest from
-the survey sends no such request either: whether its survey names these
-parameters on the front page by itself is measured first (owner decision
-2026-11-04).
-
-### Anchors
-
-The plan searches not with the spec's query templates but a sentence
-written as a document would state the answer, a HyDE anchor; two
-mechanisms produce them. `document_anchor` (`runner.py`) writes the
-plan's own probe per document and parameter, from the parameter's
-label, description, the document's name and an early caption; recorded,
-never compared, in the stamp as `question_text/<key>`.
-Dropping query templates for it was measured directly: with templates
-included alongside the anchor, a value's real source sat at median rank
-84; without them, rank 26 (`pipeline.py`). `plan_document` falls back to
-`queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py`) is the second,
-corpus-wide mechanism: one set per question the field sweep asks, each
-axis question and the parameter choice, written once per run and cached
-per question. The value itself has no set: the plan searches with the
-one short sentence `document_anchor` writes (`anchor_targets`,
-`runner.py`). This set backs the retrieval stage of the field sweep only where
-no open row has any context (see What a field request shows of a row), and is
-fingerprinted as one `anchors` stamp key.
-
-### The frame
-
-Some coordinates belong to the document, not the row: a plan's scenario
-containers and reference years stand in headings, captions and column
-headers rather than varying cell by cell. `runner.find_frame` reads these
-once, before any value, over up to `FRAME_ROUNDS` rounds of up to
-`FRAME_SOURCES` passages, keeping only pairs with their own verbatim
-quote (`frame_pairs`). A
-deterministic cross-check, `years_in_sources`, scans the same passages
-for year-shaped numbers the model did not name and offers them back once,
-never adding a year on its own. Which coordinates form a frame is named
-by the profile: kwp sets `FRAME = ("scenario", "year")`
-(`profiles/kwp/extraction.py`); the scenarios profile sets none. A frame axis is built from the run's
-spec, so a list closed per document is not supported on one. The frame
-request puts the entries of a closed frame coordinate under a key of its body
-that the profile names: `_frame_payload` says the phrase `frame_options` with
-the coordinate's name as `slot`. `kwp` and `scenarios` say `"scenarios"`, one list
-for every closed coordinate; the built-in profile says `"{slot}_options"`, one
-list per coordinate. Its frame prompt names no key ("the list the request
-gives for `scenario`"), and its `frame_not_an_option` phrase is handed the key
-that was sent, as `{options}`, so a profile that extends it and words only
-`frame_options` differently has moved the request, the correction and the
-prompt together. The German frame template names the key through the fact
-`frame_options`, so the frame prompts of `kwp` and `scenarios` say `"scenarios"`
-as the profile's phrase does, and their `frame_not_an_option` phrase names
-`"scenarios"` in its own words.
-`pipeline.apply_frame` projects each pair onto its rows, state `read`,
-before any field job is queued; a row that already answered better keeps
-its own reading. A passage that prints several pairs, a table with a
-column per year, is read under each of them, and each request takes its
-own pair's column. A passage that prints none of a
-request's pair used to give no row at all: its claims were refused as
-`passage is not of this pair` (`rows_from_reply`, `pipeline.py`). Two
-helpers get a look at the claim first now: `pair_of_claim`
-(`pipeline.py`) asks the claim's own quote and `pair_of_source`
-(`pipeline.py`) asks the whole passage whether exactly one OTHER pair
-of the document is named there; if so the claim becomes a row carrying
-that pair in its own `pair` and `pair_index` fields (`Row`,
-`pipeline.py`), for `Turn.project` to stamp instead of
-the request's own, drawn from `Batch.pairs` (`pipeline.py`), set by
-`pair_batches` (`runner.py`). Exactly one, or the claim still stays
-refused. Measured on corpus_m5: of 120,442 claims refused this way, 52.8%
-came back later under the same quote, 17.8% as the same value under
-another quote, and 29.4%, 35,407 values, were never read under any pair
-at all; their units are the corpus's own, GWh/a (7,445), MWh/a (7,016),
-t CO2eq/a (3,836), from tables (14,227), figures (11,869) and prose
-(9,311). The gain from the frame itself was measured directly: before it
-existed, the year axis alone produced 1,849 refusals against 0 readings,
-since every window after the first excluded the row's own source
-(`Turn.project`).
+the cost estimate counts the requests of every `<stage>_ask` kind and, in a
+trace written before 2026-11-08, those of the `frame`, `rows` and `field` events
+(`estimate.TRACED`; a frame request once, by its `frame` event, owner decision
+2026-11-05).
 
 ### The plan's years
 
@@ -1017,7 +919,10 @@ listed since (`more`, `hits`, `not_found`, from `reading.Gathered.since`) and
 what the check refused (`corrections`). The
 pairs of single pages the survey found no longer count: one sheet's pair had
 put years of the target among the base years. The prompt is required where the
-spec dates a value by the plan's years (`runner.dates_by_plan`).
+spec dates a value by the plan's years (`runner.dates_by_plan`). The reading, the
+second reading and the search never show these years: only the combing's one
+further message for a year nothing found does (owner decision 2026-11-07, see
+Combing what the reading left open).
 
 ### The plan's settings
 
@@ -1035,46 +940,33 @@ as any answer is: its quote stands in what the request showed, is at least the
 minimum length and holds both what it is about and what it settles; what fails is
 told once. Every request about a value's coordinates (the first conversation, the
 second reading and the search) shows them under `settings`, and an answer may
-quote one. They stand beside the plan's years and the title-page line, which are
-also asked per plan before the values.
+quote one. They stand beside the title-page line and the titles of the sections up to the
+value's place.
 
-### Base years
+### Base and target years
 
-A row's own table sometimes names no year at all, only the plan's word
-for its own state: "Basisjahr", "Ist-Zustand", "Bilanzjahr". Which frame
-pair is that state is named by the profile, kwp's `BASE_YEAR =
-{"scenario": "status_quo"}` (`profiles/kwp/extraction.py`).
-`state_years` (`pipeline.py`) reads the document's base year off that
-pair, one entry per year with the frame's own quote and source, and every
-batch of the document carries them as `Batch.bases`, framed or not, since
-a passage naming only "Basisjahr" is exactly the one that needs them
-(`named_years`, `pipeline.py`, joins the base and the target years;
-`plan_batches`, `runner.py`).
-
-A year answer whose quote carries this wording but not the number now
-reads (`named_year`, `pipeline.py`) when the number given is one
-of those base years (owner decision 2026-09-22): the model chooses among
-the plan's own base years rather than the run guessing which one
-"Basisjahr" means. `merge_field` (`pipeline.py`) then cites the
-frame's passage for the number, window `["base_year", <pair index>]`, and
-keeps the row's own passage as `<axis>_link_quote`/`<axis>_link_source`.
-Before this reading existed, corpus_m5 dropped 127,233 year answers whose
-wording stood in their quote and whose number did not, "Basisjahr" among
-the most common (`profiles/kwp/extraction.py`). The year field's
-own request is shown the plan's base years alongside the question,
-`"base_years"` (`runner.py`), and the trace's `field` event
-counts how many of a window's answers came this way, `via_base`
-(`Sweeping.run`). The list holds the year numbers alone. It held each year's
-quote until corpus_m7_100, where 110,792 of 125,192 year answers refused as
-`quote_not_in_source` had copied that quote from a passage the request did
-not show; the quote stays on this side and `merge_field` writes it.
-
-A window of the map's places asks only the rows it is for (`rows_for`,
-`places.py`): a place that names parameters is for their rows, a window holding
-a place that names none is for every row, and so is a row whose parameter is
-not settled yet, which covers the search for the unit. A window no row fits is
-not sent. On corpus_m7_100 a window carried 59 open rows at the mean, and 60
-percent of the map's places name a parameter.
+A value's table sometimes names no year at all, only the plan's word for its own
+state ("Basisjahr", "Ist-Zustand", "Bilanzjahr") or for its target ("Zieljahr").
+The plan's years come from the one request per plan (see The plan's years). A
+profile names which pairs of the survey are the plan's own state and which its
+target, `BASE_YEAR` and `TARGET_YEAR` (kwp: `{"scenario": "status_quo"}` and
+`{"scenario": "target"}`), which only says where that request starts to look
+(`runner.year_states_of`, `pipeline.named_years`). A value is shown those years in
+one place only since 2026-11-08: the combing's message for a year nothing found
+(see Combing what the reading left open; owner decision 2026-11-07). A year
+answer there whose quote carries the plan's word but not the number reads when
+the number is one of the years shown (`pipeline.named_year`, owner decisions
+2026-09-22, 2026-10-06 and 2026-11-07): the model chooses among them, which state
+the word means and which of several target years is its reading and is not
+checked, and a year that both states hold is cited from the base state.
+`merge_field` cites the passage of the years request for the number, window
+`["base_year", <index>]` or `["target_year", <index>]`, and keeps the row's own
+passage as `<axis>_link_quote` and `<axis>_link_source`. The list holds the year
+numbers alone: the quote stays on this side and `merge_field` writes it. A
+profile that sets no `TARGET_YEAR` has no target years. Before 2026-11-08 the
+reading and the field request showed `base_years` and `target_years` with every
+year question, and the trace's `field` event counted such answers as `via_base`
+and `via_target`; harvests from before carry them.
 
 A number carries `subject` (kwp spec): what tells it from its neighbours beyond
 the other coordinates, in the plan's words, such as a building age class, a zone
@@ -1082,140 +974,17 @@ or a network. It is read from the value's own passage alone and names no node by
 itself: only where different numbers meet on one identity does it split them
 (`wording_key`, `profiles/kwp/kg.py`). What still disagrees after the wording,
 rounding and trust stays in the full graph as a node of its own, marked as
-contested, and stays out of the strict graph (owner decision 2026-11-02).
+contested, and stays out of the strict graph (owner decision 2026-11-02). A
+share carries `whole`, what it is a share of. Harvests from before 2026-11-08
+also carry `head` on a table number, the words over its column, which the graph
+still uses to tell two numbers of one row apart (`wording_key`); no request asks
+it any more.
 
-In the field sweep (the survey flow keeps no column head), a number from a table carries the words over its column, where a head line has as many cells as the row (`column_head`): the field request shows them, and
-the tuple keeps them as `head` (`with_head`), where the graph tells two numbers
-of one row apart by them (`wording_key`). Its column is the one cell that prints
-its number, or, for a number printed in two cells, its place in the row's
-`values` where that list is the row's numbers cell by cell (`cells_in_order`,
-owner decision 2026-11-03): one plan's row "27 % | 28 % | 27 % | 23 %" gave both
-27 % one year. The place travels as `_cell` from `expand_values` to the row and
-no further. A head that prints one year, and that year one of the document's
-pairs, is the year of the numbers under it (`head_year`, owner decision
-2026-11-03): `read`, cited on the head line, the window `head` with the column as
-index, and not asked. Asked, the model gave 28 % under the head 2035 the year
-2045. A year of the pairs only, since "bis 1918" heads an age class. A number of
-another column than its request's pair is filed under the pair of its head's
-year where one pair has it, so the scenario is that pair's too (`head_pair`).
-On the map's places a window is asked once per batch with an open row (`Sweeping.portions`):
-in one request with rows of other batches the model answered a row with a quote
-that row cannot be checked against. A share carries `whole`, what it is a share
-of, read from its own passage alone.
-
-A rows reply that gives a number under a quote not printing it gets one more
-turn (`reread`, `runner.py`): the model is told which numbers and answers those
-again under their own rows. The check does not change. A number not given
-again stays and is refused as before, and a second reply that fails leaves the
-first as it was. On corpus_m7_100 such numbers were 16 percent of all values
-read, and in a sample 97 percent of them stood in their own passage.
-
-A quote is one table row. A quote that runs over several rows is cut by machine
-to the row printing its number (`narrow_quote`, in `_parse_reply`, per value of
-`values`): the other rows are other numbers' words, and a carrier was read from
-the sum line a quote ran into. It costs nothing and the check is untouched. Only
-a number printed on several of the quoted rows goes to the same second turn
-(`in_several_rows`), since the machine cannot tell which one it is, and it stays
-as it is when the model does not say. Of 1,540 table rows of seven plans of
-corpus_m7_100, 184 quoted several.
-
-A table whose head and rows print no year and no spelling of the scenario list
-has one frame (`prints_no_frame`; its title does not count, that is where such
-a table says it). Its scenario and its year are searched once for the table and
-not for a value (owner decision 2026-11-02, `TableFrames`): a sweep of a frame
-axis sends one row per such table, marked `"table": true`, with the table's
-head line and without number, quote or cell (`Sweeping.for_the_tables`), and
-leaves the table's other rows out of the request. Every row of the table takes
-the reading with its evidence, window `["table", <window it was read in>]`,
-counted as `via_table` in the trace's `sweep` event and as
-`coordinates_taken_from_their_table` in the stats (`share_tables`); a later
-batch on the same table takes it without a request. The first reading stands,
-so a row that read something else takes it too, except a row under a frame pair,
-which keeps its pair. A row that stands for its table and comes back `unstated`
-or `unbacked` speaks for the rows that were not asked. A table that prints a
-year or a scenario word is read number by number as before. On corpus_m7_100,
-678 of 1,140 tables with a read year had one frame, and the rows of 65 of them
-had taken several years.
-
-The plan's target works the same way (owner decision 2026-10-06, the same
-rule as the base year). A profile names the frame pairs that are the target
-with `TARGET_YEAR`, kwp's `{"scenario": "target"}`
-(`profiles/kwp/extraction.py`), and `named_years` reads their years off
-the frame as it does the base years. A year answer whose quote carries the
-plan's word for its target ("Zieljahr") and not the number reads when the
-number is one of those target years: the coordinate cites the frame's
-passage, window `["target_year", <pair index>]`, keeps the row's passage as
-`<axis>_link_quote`/`<axis>_link_source`, and the trace's `field` event
-counts it as `via_target`. The year field's request is shown them under
-`"target_years"` beside `"base_years"`, each list only in the request for
-the field it dates (`runner.py`). Which state the word means, and
-which of several target years, is the model's reading and is not checked:
-the number only has to be one of the years shown, and a year the frame found
-for both states is cited from the base state. The current kwp harvest
-dropped about 14,500 year answers whose quote carried the plan's word for
-its target and not the number, "Zieljahr" 12,369 of them
-(`profiles/kwp/extraction.py`). A profile that sets no `TARGET_YEAR`
-has no target years, and the scenarios field prompt leaves the
-`target_years` block out.
-
-### The row request
-
-Which values exist at all is decided once, by the value request
-(`make_harvester`, which sends the rows prompt and no other, called as
-`find_rows` inside `make_fieldwise_harvester`). `pipeline.rows_from_reply` turns its claims
-into `Row` objects through `route_claims`: the quote decides which source
-a value belongs to, a label only breaks a tie, and a claim naming no real
-source and quoting nothing findable is an orphan rather than filed under
-the first source. Routing matches a quote to its source with the same
-whitespace-collapsed test verification uses, `quote_in`, not a literal
-substring test: a stricter test would refuse claims verification would
-have accepted, since a table row retyped without its padding is the
-normal case, not the exception, worth 276 of one pilot's refusals
-(`pipeline.py`). A
-wording not in its own quote is caught here too, before it becomes a
-row (`pipeline.py`). Where a spec has no numeric parameter, as the
-scenarios spec, every string is a wording and so is a bare year
-(`fields.is_wording`), which is dropped here when its own quote does not
-print it, with the reason `text value not in its quote`. A `Row` is
-created only here, never later. The
-request can turn to a code sandbox, bounded to `CODE_ROUNDS` rounds. A
-reply that will not parse is asked again with the cause named,
-`_reply_fault` (`runner.py`), rather than the same message twice, and
-with the retried attempt's sampling temperature raised a step: on
-corpus_m5, a field retry asked again at temperature 0
-repeated its first reply byte for byte and lost all three tries. Every
-retry loop of this stage (phrase, frame, anchors, rows, field, places and
-review) raises the step, `retry_temperature` (`runner.py`, env
-`EXTRACT_RETRY_TEMPERATURE_STEP`, default `0.1`), once per fault and
-capped at `1.0`. One cut off at the token ceiling is asked again as two
-halves instead of kept half-read, its labels renumbered onto the whole
-batch, `_split_harvest` (`runner.py`). A single table is halved by its
-rows, each half with the table's headers and without the crop, and both
-keep the table's label (`split_table`). What cannot be divided gets its
-own ceiling doubled, up to twice (so up to four times the rows prompt's
-`max_tokens`), with its time limit raised alike (`request_timeout`); one
-that times out in that room is divided or written as a `_why: cut_off`
-sentinel, and is not asked the same way again. The trace keeps both ends
-of a reply that was cut off (`head`, `tail`).
-
-A row of a table with several values under one unit is one entry of the
-reply: the row once as `quote`, its numbers in `values`
-(`expand_values`). Each leaves the reader as a tuple of its own, so
-everything behind it sees the usual tuples and checks each number alone.
-The kwp prompt asks for this form; the scenarios prompt does not
-(`values_row`), since its quotes are narrow passages and not table rows.
-
-`scripts/probe_rows.py` asks this request over named passages against any
-LLM_BASE_URL, without a job and without retrieval, and reports tokens, seconds
-and how many values stand the two checks.
-With `--whole` it asks what a run asks of those passages, the frame, the rows
-and every coordinate, without a search. Several model names in `LLM_MODELS` share
-their places through the chat's pool, in this stage too. Each sandbox round
-leaves a `code` event in the trace.
+### Numbers, years and per-document lists
 
 A year is a number in the profile's `YEAR_RANGE` (kwp: 1900 to 2100): the
-frame refuses another with `frame_not_a_year` and a field answer is a
-`wrong_type` drop. A profile without the constant takes every whole number.
+survey's pair refuses another with `frame_not_a_year` and a coordinate answer is
+a `wrong_type` drop. A profile without the constant takes every whole number.
 
 A printed sign is part of a number: `-1.155` backs -1155, and -1155 is not
 backed by a quote that prints `1.155`. A dash after a letter, a digit or a
@@ -1232,283 +1001,43 @@ a double holds: ten fixed places showed the binary noise of a large one, and
 52678423.38 was never in its quote.
 
 A profile may close a choice list per document (`document_axes`; the scenarios
-profile closes its regions). `runner.fill_dynamic_axes`
-copies the spec with those lists filled in, parameter and unit questions
-kept, and every batch of the document carries the copy (`Batch.spec`, read
-through `runner.spec_of`): the value request, the field slots, the rows
-handed to the next batch and `fold_batch` read it, not only the plan's
-search. Stamps, fingerprints and the context budget stay on the run's own
-spec.
+profile closes its regions). `runner.fill_dynamic_axes` copies the spec with
+those lists filled in, parameter and unit questions kept, and the document's
+requests and its fold read the copy (`runner.spec_of`,
+`runner.make_document_spec`). Stamps, fingerprints and the context budget stay on
+the run's own spec.
 
-### The field sweep: two halves, three window stages and a budget
+### Searching: one embedding call for all searches
 
-Every coordinate a row still needs is asked for on its own. Asking per field
-is why a request cannot quietly drop an unsure coordinate: on a 204-document
-run, one request for every coordinate at once left the year missing on 63.5%
-of values (`fields.py`). Every request asks one coordinate, not several at
-once: five coordinates for every row of a batch in one request wanted up to
-27,311 prompt tokens and came back refused or cut off (`make_field_asker`).
-Its rows are chunked to at most `FIELD_ROWS` (32, env `EXTRACT_FIELD_ROWS`),
-about 2,600 answer tokens at the measured p90, sized against the server's own
-window before the request is sent rather than shrunk after a refusal,
-`answer_room`, from a prompt counted with the served model's tokenizer
-(see Counting the prompt); a chunk still too large for its room is halved before it is
-sent.
-
-A `Sweeper` (what `make_sweeper` returns) holds what a sweep needs and starts
-one `Sweeping` for a coordinate over a `Scope`, the rows asked and the batches
-they came from. A coordinate's sweep walks three stages, each with its own
-allowance rather than a shared pool. **Own** reads the value's own sources
-and the section its table stands in, for up to `FIELD_ATTEMPTS` (3) attempts,
-each retry naming the reason. **Retrieval** follows, searching further out with
-the probes of the open rows' own context (see What a field request shows of a row) in short, non-overlapping windows (`FIELD_WINDOW` 2)
-for up to `FIELD_ROUNDS` (4) rounds, asking the search for at most as many
-passages as the windows still left can show rather than the whole ranked
-document, since handed over whole it marked every passage seen after one round
-and left the rest stage nothing to read. What the model said it still needed
-in the answers of the own stages goes to the retrieval as further probes.
-**Rest** is the floor, its own windows still overlapping by `FIELD_OVERLAP`
-(1): once retrieval has nothing new, `rest_of_document` reads the document's
-own remaining sections in order, each followed by its own tables and figures
-in page order, not sections alone, rotated to start near the open rows, until
-the coordinate closes or the document runs out.
-
-**The map of places** (`places.py`) replaces retrieval and rest for the axes it
-knows. At a document's first search the model reads every passage of the
-document, one section with its tables and figures per request (a section too
-long to leave the reply its `max_tokens` is split), and names for each passage
-the parameters whose numbers stand there and the axes it answers, the unit
-among them, with a verbatim quote; it reads no value. A
-place is taken only when its quote stands in its own passage and has the
-minimum length. A reply that does not fit its limit is split, not rescued. The
-map is complete only when every request was readable, and only a complete map
-is used. The search for a coordinate then shows just the places of its axis,
-nearest to the open rows' sections first, in windows of `FIELD_WINDOW` passages
-that do not overlap. Its allowance is the coordinate's retrieval allowance plus
-its rest allowance once for every batch that still has an open row of it, at
-least once (stage `places` in traces and `<axis>_window`). When every place has
-been shown the document counts as combed, so a row still open is `unstated`.
-Without a complete map, or for a coordinate it does not know (the parameter,
-or the unit of a spec without a unit question), the search runs as above. The
-map is kept in `<harvest>/places/<document id>.json` under a key over prompt,
-questions and model, and later passes read it again; a replaced file is
-archived. A profile gets it by writing the prompt `extraction/places` (kwp and
-scenarios do); `EXTRACT_PLACES=0` turns it off.
-
-In the search stages a coordinate's windows go out several at once
-(`Sweeping.run_ahead`): as many as the request limit has free places (limit,
-minus requests in flight, minus requests waiting), at least one, so a full run
-behaves as before and the last document of a run asks many at once. Replies are
-folded in window order, so an earlier window's reading stands, and once no row
-is open the windows still waiting are withdrawn and never sent (`withdrawn` on
-the `sweep` event). Only while the adaptive limit is on: without it these windows, like the
-requests of the map of places, go out one at a time. The own stage always asks
-one window at a time.
-
-A document is harvested in two halves, both on the callable
-`make_fieldwise_harvester` returns. The coordinates of a row have an order,
-because some decide the others: the unit, which settles the parameter where the
-batch was planned without one; the parameter, which decides which axes the row
-has; the gate axes of the profile's `SLICE`, one after another and first, since
-a row they close is never asked the rest; and then the other axes.
-
-The first half is a batch's turn (`harvest.turn`, class `Turn`). Each batch
-asks only the own stage of its coordinates, in that order. A row whose
-deciding coordinate is still open after it (the unit where the parameter is
-open, the parameter, a gate axis) waits there, and nothing behind it is asked.
-The axes that decide nothing are asked side by side. The unit decides only
-where the parameter is open, a batch planned without one; for a batch planned
-with its parameter fixed, its rows go on to their axes in the turn and the
-unit is searched on its own.
-
-The second half is the document's search (`harvest.search_document`, class
-`DocumentSearch`). What the turns left open is searched once per document and
-coordinate, with the open rows of all the batches together, in the order unit,
-parameter, each gate axis, other axes. Searches that stand at one place in that
-order run side by side: the gate searches of different parameters in one gate
-position, and all the other axes together. When a search is over, whatever it
-came to, the rows that waited at it go on from the coordinate behind it. Each
-batch asks the own stages of the coordinates its rows reach only now one after
-another, and the batches do so side by side. What those leave open is searched
-in its turn, a coordinate once.
-
-The allowance is counted per document and coordinate, not per batch. Retrieval
-is allowed once for the coordinate: `FIELD_MAX_WINDOWS` (24) less the
-`FIELD_ATTEMPTS` (3) of the own stage, so 21 windows by default, in at most
-`FIELD_ROUNDS` rounds. The rest stage is allowed `REST_MAX_WINDOWS` (12)
-windows for every batch that still has an open row of the coordinate when the
-stage begins, and it is bounded in requests as well as in windows. A window of
-the search is shown to every open row of all the batches, and the asker cuts
-those rows into requests of `FIELD_ROWS`, so counted in windows alone a
-document with many open rows would send more requests than its batches' own
-sweeps did. The request bound is, for each of those batches, its windows times
-the requests one of its windows takes. The stage ends on whichever bound is
-reached first, or where the document ends, so in total a search costs at most
-what its batches' own sweeps would have cost. For the rows of one batch the request
-bound is never reached before the window bound, so a pass over a stored
-harvest asks what it asked. A batch whose rows retrieval has read by then has
-no open row, so it adds nothing to the rest allowance, as its own sweep would
-have had no rest stage. A profile's `SEARCH_SHARE` scales a named coordinate's
-retrieval and rest allowance by a fraction, at least one window staying; a key
-may be `<parameter>.<axis>` and is read before the bare axis, and a share of 0
-reads the value's own passage alone, with no retrieval and no rest stage (kwp
-halves `sector` and `aggregation`, and sets 0 for `technology`,
-`emission.carrier` and `emission.sector`, which the data schema leaves
-optional; `profiles/kwp/extraction.py`).
-The run's first log line about the sweep states the allowance of one
-coordinate in windows (own, retrieval and rest, 36 by default) and how a
-document's search counts it.
-
-How a search ends decides the state of what it leaves open. A search that
-reads the document to its end leaves its open rows as they stand, `unstated`
-where the model answered that the passages do not state it: a finding about
-the plan. A search its allowance cut off writes every row still open
-`exhausted`, never `unstated`: a finding about the run. A batch's own stage
-ends nothing, it leaves rows open for the search. So `unstated` is reachable
-again after combing the document, and there is one verdict per document and
-coordinate where there used to be one per batch.
-
-The rows of a search keep the labels the rows request gave them. Where the
-labels of rows from several batches would meet (two rows both called `R3`),
-every row of the search is numbered `R1` to `Rn` over the search instead,
-because an answer for the `R3` of one batch would otherwise land on the `R3` of
-another; a search over the rows of one batch asks under the labels its rows
-already have. A row is checked against the passages shown to it and the
-passages of its own batch (`merge_field`), never against the union of the
-document's, which is a pool its answer was not shown. Turns are searched in the
-order of the plan (frame index, then the owner keys of the batch's items), not
-in the order the replies came back, so the labels of a search do not depend on
-which batch finished first. Rows under other base or target years or another spec are
-searched in groups of their own; a real run has one group, because both belong
-to the document. A search over one batch leaves out of its retrieval and rest
-the passages its own stage asked and the sections they stand in, as the
-batch's own sweep did. A search over several batches leaves nothing out: a
-batch's passages were asked for its rows only, so none of them is already seen
-for the rows of the others.
-
-A stop (a signal) or the dead-server cut is seen between two requests, and
-once more after the last request of a search or of the own stages behind it,
-which has no request after it to be seen by. It ends the step, and the
-document is left unwritten, like one with a batch never harvested, so a resume
-harvests it again; it adds no failure of its own (`SweepStopped` is what ends
-the step inside). What else a task of the step raises depends on whether rows
-wait on it. Where they do (the search of the unit, of the parameter or of a
-gate axis, and a batch going on behind one of them), the exception is raised: the document is not written and counts as a
-failed document in the exit code, so a resume harvests it again. For an axis
-nothing waits on it is a warning in the log, and the coordinate comes out
-`unanswered`, as for a field job of a batch's turn. The tasks that run side by
-side are all waited for before the first exception is raised, a stop first, so
-none is left writing into rows the step has given up.
-
-Passes over a stored harvest keep the three stages per batch. `--top-up` calls
-the sweeper (what `make_sweeper` returns; `Sweeper` also has the two halves,
-`own` and `search`) for each rebuilt batch, and the pass for a new parameter
-calls `harvest_all`, whose harvester is the whole `harvest`, so every batch
-walks all three stages of a coordinate in its own turn. `run_document`
-and `pipeline.harvest_document`, the serial path, do the same.
-Only the harvest of `runner.main` uses the two halves, and it uses them for
-the batches of one document at a time.
-
-The trace tells the halves apart. `field` and `drop` events carry the optional
-key `batches`, how many batches the rows of the request came from: one for a
-batch's own stage, the document's for its search, and a label in a `drop`
-event of a search over several batches names no batch. `sweep` events carry
-`batches` and `scope`: `own` for a batch's own stage alone, `document` for the
-search of a document's open rows, `batch` for every stage walked for one batch,
-which is what a pass over a stored harvest does. A trace written without the
-keys is still valid, and the report reads it as it always did. The index in `<axis>_window`,
-`[stage, index]`, of a coordinate read in retrieval or rest counts the windows
-of the document's search from 1, not the windows since the batch's own stage;
-nothing reads the index but the frame pair, and the schema's remark that a
-coordinate read in window 1 and one in window 22 cost different amounts means
-the search. `scripts/trace_report.py` keeps the distributions apart. In a trace
-that has `batches`, the windows in which a coordinate closed are keyed
-`<slot> (search)` for a read in retrieval or rest. The windows per sweep are
-keyed by `scope`, `<slot> (own)` or `<slot> (document)`, and a sweep of scope
-`batch` or without a scope prints under `<slot>` as before.
-
-The log says what a search came to: when it begins, its rows, the batches they
-come from and the retrieval windows allowed; when its rest stage begins, the
-windows and the requests allowed and the number of batches they are counted
-for; when it ends, the windows asked, how many of its rows were read, how many
-are left open, and whether the document was read to its end or the allowance
-was spent. A batch's turn closes with an `own stages:` line that counts only
-its own stages, where a whole harvest keeps its `fields:` line. That per-batch
-tally adds up per coordinate; it used to overwrite for a gate axis that two
-parameters of one batch shared.
-
-Counted on a stub, the document step sends fewer field requests than the
-batches' own sweeps did, and the same where there is one batch. The stub has a
-long document of 60 ranked and 60 further passages, reads the unit in the own
-stage, answers "not stated" for each axis (carrier and year), and runs under
-the default allowances. The numbers are field requests per stubbed
-document, before the change to after it:
-
-| Open rows per batch | 1 batch | 5 batches | 17 batches |
-|---|---|---|---|
-| 1 | 69 to 69 | 345 to 177 | 1,173 to 247 |
-| 10 | 69 to 69 | 345 to 219 | 1,173 to 711 |
-| 40 | 138 to 138 | 690 to 562 | 2,346 to 1,818 |
-
-With 17 batches of one open row each, the document is read to its end after the
-change, and 34 coordinates come out `unstated` where they had been
-`exhausted`. These are worst cases of a stub in which no row is ever read, not
-a forecast of a run, and nothing was run against a model.
-
-### What a field request shows of a row, and the probes of the retrieval stage
-
-Every row a field request lists carries, beside its id, source, value and
-passage, two keys when it has them. `known` is the plan's own wording of every
-coordinate the row has already been read for, the asked one and the unit left
-out (`runner.row_context`); a coordinate that is only `derived` says nothing
-about the number and is left out too. `title` is the title of the row's own
-table or figure, else of its section (`runner.own_title`). "Which carrier?" is
-then a question about "Mehrfamilienhaus, Endenergiebedarf" and not about the
-plan. kwp's field prompt explains both in its part `rows_more`; the built-in
-profile keeps the template's sentence. Neither key is checked: the owner's two
-clauses are all `merge_field` holds an answer to.
-
-**Probes of the retrieval stage.** A search over open rows used to ask with the
-question's corpus-wide anchors, one set for every plan. It now asks with one
-sentence per own passage of its open rows (`runner.context_probes`): the title
-of that passage, the wording of what its rows have read, and the first sentence
-of the question (`runner.question_head`). One per passage and not per row,
-since the rows of one table share their context and differ only in the cell.
-Only where no open row has any context do the anchors search, as before. The
-probe list is no longer cut to four (`make_more_sources`). The ranking keeps
-each passage's best match over the probes.
-
-**One embedding call for all searches.** The searches of every document in
-flight ask for probe vectors at the same time. `make_retrieve` embeds all
-probes of a search together (`embed_many`: the query cache first, the misses in
-one call), and `runner.Coalescer` (`COALESCED`) joins the calls of all threads:
-one worker embeds everything that has queued up while the call before it ran,
-and hands each caller its slice. A failure of the call reaches every caller in
-the batch.
+The searches of every document in flight ask for probe vectors at the same time.
+`make_retrieve` embeds all probes of a search together (`embed_many`: the query
+cache first, the misses in one call), and `runner.Coalescer` (`COALESCED`) joins
+the calls of all threads: one worker embeds everything that has queued up while
+the call before it ran, and hands each caller its slice. A failure of the call
+reaches every caller in the batch.
 
 ### The reply grammar
 
-A field request now goes out with `response_format`, a JSON schema built
-by `field_response_format` (`runner.py`) from the coordinate's own
-contract: the asked field under its own name, `groups` and `answers`, and
-a `value` that is one of the slot's options (`out:unstated` included) or,
-for a number, an integer, nothing beyond that: `additionalProperties:
-False` throughout. vLLM generates the reply inside that shape rather than
-around it, sent on every attempt (`make_field_asker`). Nothing in the grammar is a check: every key stays as optional
-as the field prompt leaves it, and what the reply says is still verified
-by `merge_field` exactly as before. 70,395 field replies of corpus_m5
-carried text beside the object and were asked again for it; under the
-grammar none can.
+A request goes out with `response_format`, a JSON schema built from the request's
+own contract (`reading.answer_schema`, `reading.text_response_format`,
+`combing.comb_response_format`, `years.response_format`, `replies.py`): a
+coordinate's `value` is one of the slot's options (`out:unstated` included where
+the request offers it) or, for a number, an integer, and a number answer may carry
+`until`, the last year of a span; nothing beyond that: `additionalProperties:
+False` throughout. vLLM generates the reply inside that shape rather than around
+it, sent on every attempt. Nothing in the grammar is a check: every key stays as
+optional as the prompt leaves it, and what the reply says is still verified by
+`merge_field` exactly as before.
 
 A reply that parses but lacks a key its schema requires at the top is not the
 object that was asked for, and is asked again as `missing_key`, the retry
 naming the key (`runner._lacking`, owner decision 2026-11-04). This holds for
 every request of the stage that goes out with a schema: the survey, the
-reading, the combing, the places and the field requests. A server that holds
-a reply to its grammar never sends such a reply. A server that holds it to no
-schema, tested with the schema sent five ways (`json_schema` with and without
-`strict`, `json_object`, `guided_json`, `structured_outputs`), answered `{}`
-for tables full of values, which then read as tables without any.
+reading, the combing and the compute step. A server that holds a reply to its
+grammar never sends such a reply. A server that holds it to no schema, tested
+with the schema sent five ways (`json_schema` with and without `strict`,
+`json_object`, `guided_json`, `structured_outputs`), answered `{}` for tables
+full of values, which then read as tables without any.
 
 ### Requests the server did not serve
 
@@ -1526,27 +1055,24 @@ asked again, and a passage ends as `no_answer`. The compute request waits by
 the failures alone: a round of code, of fetching or of taking is no failure.
 
 The rule stands once and not in each loop. Of nine loops three kept all of
-it: the search-sentence and anchor requests asked a refused request again,
+it: the search-sentence requests asked a refused request again,
 and the compute request asked again at once after a server error, asked a
 refused request again and left its document stamped as finished when no
 attempt of it was served. A source check holds every request of the stage to
 the rule (`tests/test_failures.py`).
 
-What an unserved end means depends on the request. A passage's rows request
-writes one sentinel per source with `_why: "unserved"` (the harvest
-schema's `_why` has four values: `unreachable`, `unserved`, `no_answer`,
-`cut_off`; `docpipe/extraction/schema.py`), and such a sentinel
-counts towards the dead-server streak like an `unreachable` one
-(`runner.py`); the sentinel carries the cause to the stamp (`not_happened`).
-The coordinate, frame, reading, search-sentence and compute requests return
+What an unserved end means depends on the request. A survey or reading
+request of a passage that ends unserved leaves a hole for the passage with
+`_why: "unserved"` (`surveyed.hole`; the harvest schema's `_why` has four values:
+`unreachable`, `unserved`, `no_answer`, `cut_off`; `docpipe/extraction/schema.py`),
+which carries the cause to the stamp (`not_happened`). The other requests, the
+combing, the check of a find, the search-sentence and compute requests, return
 nothing, as they do for any failure; what marks the document is
-`Failures.given_up`, which counts it in the registry `UNSERVED`
-(`runner.py`), so the document is not stamped and a resume reads it again.
-The coordinate request's own streak counts it too. The run's anchor requests
-belong to no document and are counted under `None`. Two requests are not
-counted there, as their end is told another way: the map of places, without
-which the search reads as before (`places.py`), and the review, a pass over a
-written harvest whose row without a flag the next review reads again
+`Failures.given_up`, which counts it in the registry `UNSERVED` (`runner.py`), so
+the document is not stamped and a resume reads it again. The search sentence the
+run writes once per parameter belongs to no document and is counted under
+`None`. The review is not counted there, as its end is told another way: it is a
+pass over a written harvest whose row without a flag the next review reads again
 (`review.py`).
 
 A timeout counts because a server whose engine stopped taking requests keeps
@@ -1583,19 +1109,20 @@ is closed), and steps back by the back-off factor each time the API asks to
 wait.
 
 While the limit is on, the requests open at once are bounded by it, up to
-`EXTRACT_LIMIT_MAX`, and not by the pools: `EXTRACT_FIELD_PARALLEL` bounds the
-sweeps running at once and `EXTRACT_LLM_PARALLEL` the batches, while the search
-windows a sweep asks ahead and the requests of the map of places run on a pool
-the size of the limit's maximum. A server of one's own with no `/metrics` gets
-no adaptive limit at all, the pools alone deciding as before.
-`EXTRACT_LIMIT_ADAPTIVE=0` turns it off (`runner.start_limit`, `runner.py`).
+`EXTRACT_LIMIT_MAX`, and not by the pools: the survey, the reading, the combing
+and the naming run their conversations on a pool the size of the limit's maximum
+(`runner.AHEAD`), `EXTRACT_FIELD_PARALLEL` bounds the questions of the compute
+step at once and is warned about where it is lower than the limit's maximum, and
+`EXTRACT_LLM_PARALLEL` is the size of the run's pool of documents' tasks. A
+server of one's own with no `/metrics` gets no adaptive limit at all, the pools
+alone deciding. `EXTRACT_LIMIT_ADAPTIVE=0` turns it off (`runner.start_limit`,
+`runner.py`).
 
 While the limit is on, every model request of the run goes through one
 dispatcher thread and one queue (`scheduler.py`), served oldest document first,
 a document's rank being the order in which it first asked; a request that
-belongs to no document, the run's anchors and the one search sentence a run
-writes for a parameter and keeps for every document, goes before every
-document. A search sentence written for one document waits in that
+belongs to no document, the one search sentence a run writes for a parameter and
+keeps for every document, goes before every document. A search sentence written for one document waits in that
 document's turn, although a thread of a pool sends it (`runner.document_anchor`,
 owner decision 2026-11-07). The limit still
 decides how many requests are open. A request's timeout starts when it is sent,
@@ -1616,7 +1143,7 @@ A request sent word for word a second time in the same document is not sent
 (owner decision 2026-11-07, `scheduler.Once` in `Repeats`): it gets the first
 one's answer, and one sent while its twin is still out waits for that answer.
 Word for word is everything the request sends but its timeout
-(`scheduler.request_key`). A request of no document, such as an anchor, is
+(`scheduler.request_key`). A request of no document, such as the run's search sentence, is
 sent every time, and so is one whose twin ended without an answer. A request
 names its document only while it is sent (`runner._for`), so a thread that
 sent for one document leaves it behind for no later request. The answer
@@ -1682,9 +1209,7 @@ entry listed beside the names (`Axis.beside`, `fields.beside_names`; below,
 Coordinates) is read from a wording: the answer naming it is read where its
 `value_raw`, or else one of its spellings, stands in its quote
 (`pipeline.answer_in_quote`), is stored as its `out:` key, and keeps the
-wording in `<axis>_raw`. The preflight reads a prompt's
-example of a list the profile closes per document with the list closed by
-the example's own answers, as the run reads it (`preflight.reads_back`). A year counts only where its own four digits stand in the quote
+wording in `<axis>_raw`. A year counts only where its own four digits stand in the quote
 in one run, so "2.022 MWh" no longer backs the year 2022 though a dated
 "31.12.2022" still does; and a spelling counts only where no longer
 entry of another option of the same list stands at that spot, so a bare
@@ -1695,17 +1220,11 @@ too: naming one of
 the list's own entries, by label, spelling or URI, or it is never marked
 read (`option_named`, `not_an_option`, `pipeline.py`, the owner's
 rule of 2026-09-11). The same rule holds for the value of a category
-parameter, which is read before the parameter as the wording the passage
-prints: where the parameter is read and its list does not hold that
-wording, the value is asked again as one of the list's entries, in the
-row's own passage alone (`fields.holds`, `fields.value_choice`,
-`Turn.ask_value` in `runner.py`, owner's decision 2026-11-03). A value read
-so takes the entry from that answer, and what the row printed stays its
-wording in `value_raw` and its `quote`, with the answer's quote beside them
-in `value_quote` (`Turn.after_value`): one field answer covers several
-rows, and six scenarios one sentence names came back with that sentence as
-each one's wording. A row that reads no entry keeps its wording too, is
-refused for its value (`value … not in vocabulary`), and its axes are never asked. Which table the
+parameter: the reading shows its list and takes one entry, or `""` with the
+wording in `value_raw` (see Reading a parameter in its passages), and an answer
+that names none of the list's entries is never marked read (`not_an_option`). A
+row that reads no entry keeps its wording, is refused for its value (`value …
+not in vocabulary`), and its coordinates are never asked. Which table the
 passage belongs to, how far from the row it stands and which column of a
 table it heads are the model's reading, not a rule. Failures are recorded
 separately, `unquoted` against `unbacked`, so a retry can name what to fix. A
@@ -1762,9 +1281,9 @@ names no period (`names_period: false`).
 
 ### The compute step
 
-The rows request copies what stands in a passage, so from where it stands
-nothing is ever missing: of six test cases its prompt took the sandbox in none,
-a request of its own naming the number wanted in four. A tool is used where a
+A value read from a passage is what stands there, so from where it stands
+nothing is ever missing: of six test cases the rows prompt of the time took the
+sandbox in none, a request of its own naming the number wanted in four. A tool is used where a
 question stands open, so this step asks that question itself (owner decision
 2026-11-02). It runs inside the run, after a document is folded and before its
 file is written (`runner.make_computer`, `compute.py`), and works from rows that
@@ -1861,9 +1380,8 @@ in `settle`, and it is refused like any other when its value is not in the code'
 output (`computed_in_output`). It is refused as well when it is not what its inputs
 make, to the rounding it is written with: 116.1 stands for 116.05 to 116.15
 (`computed_from_inputs`, owner decision 2026-11-03). Code that summed a column of
-its table printed 1,948 t/a beside inputs of 20,345 and 1,399 t/a. A number the rows
-request worked out in its own sandbox rounds names no inputs and is held to its
-output alone.
+its table printed 1,948 t/a beside inputs of 20,345 and 1,399 t/a. A number worked out in a sandbox without naming its
+inputs is held to its output alone.
 
 The request runs these checks before it takes an answer, while the model can
 still answer them (owner decision 2026-11-05). It folds the claim the same way
@@ -2183,13 +1701,12 @@ region group the document names would find no entry, since the entry exists
 only in that document's list.
 
 `--top-up` (`topup.py`) is the one pass that is not free: it costs a
-model call, but only for the coordinate a stamp says moved, over the
-harvest's own sweep, all three stages of it for each rebuilt batch, as the
-sweeper walks them (see The field sweep). `actionable` blocks the whole document the
+model call, but only for the coordinate a stamp says moved, with the
+combing of the survey flow, one conversation per value (`surveyed.comb_sweep`,
+see The run harvests from the survey). `actionable` blocks the whole document the
 moment a changed key names anything other than one sweepable
 coordinate: a key naming no coordinate the spec still asks blocks
-outright, and so does one naming a frame axis, since the frame decides
-how many passes a document gets, or, unless allowed, a dynamic axis
+outright, and so does one naming a frame axis, or, unless allowed, a dynamic axis
 with no per-document list, since sweeping it empty would demote a class
 to a wording (`topup.py`). A parameter the spec has gained is not
 a coordinate and does not block: the keys that only the addition moved
@@ -2206,47 +1723,42 @@ numeric parameter, swept parameter by parameter since a stored row
 already knows its own (`targets_of`, `topup.py`); nothing
 sweeps every asked coordinate of every row at once any more. `reopen` strips one coordinate's keys before
 the sweep runs; `restore` puts the old block back unless the fresh
-sweep genuinely improves on it. A top-up whose own requests ended on a
+sweep genuinely improves on it. A coordinate the spec derives from the unit is
+asked as in the harvest and derived only where no answer was read
+(`fields.derives`, owner decision 2026-11-07). A top-up whose own requests ended on a
 429 or a 5xx leaves the file's stamp as it was, so the next top-up asks
 again; the stat lines count it as `stamps left, a request ended on 429 or
 5xx` (`topup.py`). A row whose passage no longer carries
 its stored quote is left untouched, and top-up traces land under their
 own `trace-topup/` directory, `open_trace` first closing any file an
-earlier directory left open. A re-swept `year` carries base years and
-target years too: `named_years_of` (`topup.py`) rebuilds the document's
-base-year and target-year pairs
-from the frame's own readings already sitting in the harvest file and
-hands them to every batch, the same as the main harvest, so a re-swept
-year that names only "Basisjahr" or "Zieljahr" still reads.
+earlier directory left open. A re-swept `year` that nothing in the
+combing reads is asked once more with the plan's base and target years, as in the
+main harvest: `named_years_of` (`topup.py`) rebuilds the document's base-year and
+target-year pairs from the frame's own readings already sitting in the harvest
+file and hands them to the combing (the years of the stored rows,
+`Comber.comb_groups`), so a re-swept year that names only "Basisjahr" or
+"Zieljahr" still reads.
 
-`--top-up-parameters` (`topup_parameter.py`) is the pass for a parameter
-added to the spec after documents were harvested. Such a parameter leaves
-every stored stamp without its `parameter/<uri>` key, and the resume can
-answer that only by harvesting the whole document again, every parameter
-and every coordinate sweep of it. The pass asks for the new parameter
-alone: per stored document it plans the search for that parameter only,
-asks the frame over the passages the plan found, asks the rows requests,
-each of which offers the new parameter and nothing else, and then the
-coordinates of the rows those requests produced. It asks nothing again for a stored parameter, for a
-coordinate of a stored row or for a refusal of the first pass. Like
-`--top-up` it needs the model, the index, the embedder and the database.
-It runs in the harvest's own loop and not beside it: `main` binds
-`plan_batches` once as `plan_for` and `harvest_batches` once as
-`harvest_all`, the harvest's `harvest_document` and the pass's `DocumentPass`
-both call them, and so the pools, the stop, the dead-server cut and the exit
-code are the harvest's. What differs is the harvester each hands to
-`harvest_all`: the harvest hands the batch's turn (`harvest.turn`) and follows
-it with the document's search, the pass leaves the default, the whole `harvest`,
-so each of its batches walks all three stages of its coordinates in its own
-turn and no document step follows (see The field sweep). It is refused
-together with `--top-up` (the parser ends with exit 2 and nothing runs);
-`--top-up-key` belongs to `--top-up` and this pass does not read it.
-`--document` restricts it as it restricts the harvest, `--force` and
-`--force-stale` change nothing for it, and a document with no harvest file
-in `--out` is left to the harvest, the log saying how many
-(`topup_parameter.with_harvest`). Its traces go to `trace-topup/` and
-never into the harvest's `trace/`, which the run does not open
-(`TOPUP_TRACE_DIR`).
+`--top-up-parameters` (`surveyed.append_parameters`, with the rules of
+`topup_parameter.py`) is the pass for a parameter added to the spec after
+documents were harvested. Such a parameter leaves every stored stamp without its
+`parameter/<uri>` key, and the resume can answer that only by harvesting the
+whole document again, every parameter and every coordinate of it. The pass asks
+for the new parameter alone: per stored document it surveys the whole plan for
+the new parameters only (scope `parameters`), reads the passages the survey
+names and combs what the reading left open, as the harvest does. It asks nothing
+again for a stored parameter, for a coordinate of a stored row or for a refusal of
+the first pass. Like `--top-up` it needs the model, the index, the embedder and
+the database. It runs in the harvest's own loop and not beside it: `main` hands
+`surveyed.ParameterPass` to `harvest_documents` in place of the harvest's
+`harvest_document`, so the pools, the stop, the dead-server cut and the exit code
+are the harvest's. It is refused together with `--top-up` (the parser ends with
+exit 2 and nothing runs); `--top-up-key` belongs to `--top-up` and this pass does
+not read it. `--document` restricts it as it restricts the harvest, `--force` and
+`--force-stale` change nothing for it, and a document with no harvest file in
+`--out` is left to the harvest, the log saying how many
+(`topup_parameter.with_harvest`). Its traces go to `trace-topup/` and never into
+the harvest's `trace/`, which the run does not open (`TOPUP_TRACE_DIR`).
 
 Whether a document may be taken is decided by its stamp alone
 (`topup_parameter.addition`, `classify`). A parameter is new when its
@@ -2285,27 +1797,15 @@ provenance and its `<axis>_producer` pointers to a new row before it
 (`drop_repeats`) or to a stored tuple (`drop_stored_repeats`) is not
 written again, and no stored tuple is ever removed.
 
-The request is narrowed to the new parameter. Every request is built from
-the spec its batch carries (`runner.spec_of`), and the pass hands its
-batches `runner.narrow_spec(spec, uris)`, the spec with the new parameters
-only: the quantities the rows request offers, the units, the parameter
-question and the grammar of the reply then offer the new parameter and its
-units alone, so no row of a stored parameter can arise and no filter on
-rows is needed. `fields.is_wording` is asked of that narrowed spec too,
+The survey is narrowed to the new parameter: `runner.narrow_spec(spec, uris)` is
+the spec with the new parameters only, so the survey names, and the reading and
+the combing ask, nothing of a stored parameter, and no row of a stored parameter
+can arise and no filter on rows is needed. `fields.is_wording` is asked of that narrowed spec too,
 which is where it differs from a harvest: a digit string is a number only
 in a spec with a numeric parameter, so for a new text parameter in a spec
 that has numeric ones, the narrowed spec has none and a digit string the
 model answers for it is a wording there, held to the rule that a wording
-stands in its own quote. The frame is asked over the new passages with the
-pairs the stored rows carry as its start (`plan_batches` with
-`stored_pairs`, `find_frame` with `start`; `topup.pairs_of` takes them off
-the `["frame", i]` windows of the stored rows). They stand first, under
-the index they were stored with and never renumbered, the model is shown
-them as known, a pair it names again is not added a second time, and a new
-pair is numbered after the highest stored index, so `["frame", i]` means
-the same pair everywhere in the file; an index no stored row carries stays
-a gap and names no passage. The frame is asked for a parameter with none
-of the frame's axes too: the profile's `FRAME` decides, not the parameter.
+stands in its own quote. 
 
 What the stamp gets is what the pass answered for and nothing else
 (`stamp_forward`): `parameter/<uri>`, `value/<uri>` (where the parameter has
@@ -2316,16 +1816,17 @@ did not answer stays stale for the pass that can, and the whole-file `spec`
 sha moves only when nothing else is stale. The pass also enters itself into
 `producers` as `{pass: "top-up-parameter", parameters: [uris], frame}`
 beside the version, time, model, provider and prompts that `runner.producer`
-records; `frame` is `none` for a profile without a frame, else `stored rows,
-then asked over the new passages`. Every coordinate of an appended row carries
+records; `frame` says where the frame of the rows came from, `the survey of the new
+parameters` (entries of older harvests say `none` or `stored rows, then asked
+over the new passages`). Every coordinate of an appended row carries
 `<axis>_producer`, the position of that entry. The entry and the pointers
 are written before the keys, as the coordinate pass does.
 
 A document is written only when the new parameters were read completely.
 A request of any kind that ended on a 429 or a 5xx, or timed out, more than half the
 sources never reaching the server, not one batch answering
-(`runner.not_happened`, which `finish_document` asks too), or a frame or
-the plan of a pair that raised leave the file and the stamp as they were
+(`runner.not_happened`, which `finish_document` asks too), or a survey
+that raised leave the file and the stamp as they were
 and count the document as failed; the run then ends with exit 1. So does a
 document whose lists cannot be closed, one whose file holds the state line
 of only some of its new parameters, and one whose stamp could not be
@@ -2333,8 +1834,7 @@ written after its file was. A document left with batches never harvested,
 by a stop or a dead server, is written nowhere and adds no failure of its
 own. As in the harvest, the stop (143) or the dead server (1) decides the
 exit code, a replay that asked something its cassette does not hold ends
-with 1, and so do the run's own anchor requests when one ended on a 429 or
-a 5xx, before any document. The
+with 1. The
 `parameter_state` line is the marker of the one window the pass has,
 between the file and the stamp: a file that already holds the state line of
 every new parameter and a stamp that lacks the key is completed with no
@@ -2388,36 +1888,36 @@ under Modules; none writes back into one.
 ### Open coordinates and unread passages (`--top-up-open`)
 
 A harvest ends a coordinate `exhausted` where its budget ran out before the
-document did, and reads values only from the passages its searches kept.
+document did, and reads values only from the passages its survey named.
 `--top-up-open` revisits a harvest for both, without harvesting it again and
 without moving a stamp key, since no question changed.
 
 First every coordinate a stored row left `exhausted`, `unanswered` or
 `unbacked` (`topup.OPEN`, chosen by `topup.open_coordinates`) is asked again
-through the harvest's own sweep, `topup._sweep_one`, with the rest stage
-reading the document to its end (`runner.read_to_end`, `REST_TO_END`). An
-answer replaces the open block, `unstated` after the whole document
-included; a coordinate still open keeps its old block, so a cut-short run
-leaves the file as it was. Documents are swept side by side, as many as the
-server has room for and at most `EXTRACT_BATCH_DOCS` (`topup.run_open`, with
-`runner.document_room`), since one document's sweeps to its end are many
-requests one after the other. Its trace goes to `trace-open`. Every file it
-replaces is archived first, under the pass name `top-up-open`.
+with the combing, `topup._sweep_one` (`surveyed.comb_sweep`), the search running
+until every passage of the plan was listed. An answer replaces the open block,
+`unstated` after the whole document included; a coordinate still open keeps its
+old block, so a cut-short run leaves the file as it was. Documents are swept side
+by side, as many as the server has room for and at most `EXTRACT_BATCH_DOCS`
+(`topup.run_open`, with `runner.document_room`), since one document's sweeps to
+its end are many requests one after the other. Its trace goes to `trace-open`.
+Every file it replaces is archived first, under the pass name `top-up-open`.
 
-Then `topup_rest` reads the passages the harvest never asked for values.
-Which ones were asked is in the harvest's trace (`trace/<name>.trace.jsonl.gz`,
-or `.trace.jsonl` from an earlier run, every `rows` event's sources,
-`topup_rest.owners_in`); `plan_batches` is
-given them as `already_read`, finds the frame over every planned passage
-with the stored pairs as its start, so the pairs keep their indices, and
-reads only the rest, the document's unplanned passages included. The rows
-it finds are asked every coordinate to the end and appended behind the
-stored lines, a row equal to a stored tuple left out
-(`topup_parameter.drop_stored_repeats`). A document without a trace is
-skipped and counted. Each pass enters the stamp's list of producers
-(`top-up-open`, `rest`); a document whose list holds `rest` was read to its
-end and is not read again. This pass's trace goes to `trace-rest`, because
-a trace is truncated by the next pass that writes it.
+Then the passages the harvest never asked for values are read
+(`surveyed.append_unread`, `surveyed.UnreadPass`, scope `rest`): a survey of what
+no stored survey answered plus the passages the file holds as holes, and a
+reading's hole is read again for its own parameter alone with what its survey
+said of the passage. For a harvest of the field-by-field flow, which has no
+surveys, what its rows requests were shown counts as read: the harvest's trace
+says which (`trace/<name>.trace.jsonl.gz`, or `.trace.jsonl` from an earlier run,
+every `rows` event's sources, `topup_rest.owners_in`, `topup_rest.read_owners`).
+The rows found are read and combed to the end and appended behind the stored
+lines, a row equal to a stored tuple left out
+(`topup_parameter.drop_stored_repeats`). A document with neither a survey nor a
+trace is skipped and counted. Each pass enters the stamp's list of producers
+(`top-up-open`, `rest`); a document whose list holds `rest` was read to its end
+and is not read again (`topup_rest.read_to_end`). This pass's trace goes to
+`trace-rest`, because a trace is truncated by the next pass that writes it.
 
 ### Starting at what was found (`--start-at`)
 
@@ -2428,25 +1928,17 @@ add up) is a harvest that begins there (`found.py`). A found place is a passage
 a stored row stands in, a stored row was refused in, or a coordinate of a
 stored row was read in; on corpus_m7_100 that is 8,634 passages. Only the place
 is taken and never an answer, so it outlives a change of a prompt, the
-ontology or the graph: the model reads the passage again, the frame included,
-and every check runs as ever. Stored pairs are answers and are not taken.
-
-`plan_batches` takes these passages, with origin `found`, instead of the
-document's plan. No anchor is written, nothing is ranked, there is no plan per
-pair and no rest of the document. The field sweep gains a stage in front of
-its search (`Sweeping.search_found`, stage `found`): a coordinate open after
-the row's own passages is first asked in the passages it was read in last time
-for a row of the same passage, one batch at a time, leaving out what the batch
-has asked already. What is still open then goes through the search as in any
-run, the map of places included, so `unstated` keeps its meaning. The stage
-marks nothing as seen: a passage shown to one batch stays open to the search
-of every other row.
+ontology or the graph: the model reads the passage again and every check runs
+as ever. `surveyed.take_found` surveys these passages (scope `found`) instead of
+the whole plan, then reads and combs them as any run does; there is no rest of
+the document and no stage of its own in a search, so `unstated` keeps its
+meaning.
 
 A number in a passage no harvest found anything in stays unread. The stamp
 says so with the producer `harvest-found`: a run without `--start-at` harvests
 such a document again (`read_in_part`), and `--top-up-open` reads the passages
-the trace did not ask and enters `rest`, after which the document counts as
-whole. A document is planned as in any run when no stamped harvest holds it,
+the survey did not answer and enters `rest`, after which the document counts as
+whole. A document is surveyed as in any run when no stamped harvest holds it,
 when nothing was found in it, or when it no longer holds every place. HARVEST
 has to be another directory than OUT, and the flag does not combine with a
 top-up.
@@ -2454,12 +1946,10 @@ top-up.
 A found place stands only for the questions asked when it was found. A
 parameter no stamped harvest of the document was asked, because its stamp
 has no `parameter/<uri>` key for it (`Found.gained`, the same test as
-`--top-up-parameters`), is searched over the whole plan as in any run:
-`plan_batches` plans the document a second time with `only` set to those
-parameters, the frame seeded with the pairs of the found places, which keep
-their indices, and the found passages left out, since their batches already
-ask every parameter (`joined`; owner decision 2026-11-03). A stamp without
-per-parameter keys says nothing and gains no parameter.
+`--top-up-parameters`), is surveyed over the whole plan as in any run (scope
+`gained`), beside the found places (`surveyed.joined`; owner decision
+2026-11-03). A stamp without per-parameter keys says nothing and gains no
+parameter.
 
 ### Archive and stats
 
@@ -2491,12 +1981,12 @@ and never fails the run. Each count says what it counts:
 | `documents_by_open_share` | documents, with their open coordinates (`exhausted`, `unanswered`, `unbacked`) and asked coordinates, the hardest first; `derived` and `out_of_slice` are not asked |
 | `read_with_wording_off_the_list` | coordinates read as an entry although the wording is none of its spellings (`<axis>_raw_foreign`), per axis, entry and wording |
 | `read_as_total` | coordinates read as `out:total`, per axis and wording, including numbers a plan does not split by that axis at all |
-| `requests_and_fills_by_axis_stage` | requests of the trace's `field` events and the coordinates they filled, per axis and search stage |
-| `dropped_answers_by_axis_reason` | answers dropped, per axis and reason |
+| `requests_and_fills_by_axis_stage` | requests of the trace's `field` events and the coordinates they filled, per axis and search stage; empty for a trace written after 2026-11-08 |
+| `dropped_answers_by_axis_reason` | answers dropped, per axis and reason, from the `drop` events of older traces |
 | `answers_outside_the_list` | `not_an_option` drops, per entry given and wording |
-| `places_maps` | maps of places, one per document: `documents` mapped, `complete` of them, `passages` read, `windows` (requests) asked, `places` taken, `dropped` and `unread` requests, and `places_by_axis`, places per axis |
-| `windows_withdrawn_unsent` | search windows asked ahead and withdrawn before they were sent |
-| `coordinates_taken_from_their_table` | coordinates a row took from the reading of its table, without being asked |
+| `places_maps` | maps of places, one per document: `documents` mapped, `complete` of them, `passages` read, `windows` (requests) asked, `places` taken, `dropped` and `unread` requests, and `places_by_axis`, places per axis; only in traces written before 2026-11-08 |
+| `windows_withdrawn_unsent` | search windows asked ahead and withdrawn before they were sent; only in older traces |
+| `coordinates_taken_from_their_table` | coordinates a row took from the reading of its table, without being asked; only in older harvests |
 | `computed_questions_by_kind_outcome` | open questions of the compute step, per kind and how they ended |
 | `passages_planned_by_origin` | passages planned, per origin: a search or a found place |
 | `requests_by_stage` | per stage (`<stage>_ask`): `requests` that got a reply, their `prompt_tokens` and `completion_tokens`, `second_rounds` (corrections sent), and `answered_once`, requests answered with the answer of the same request sent before in the document, which were not sent |
@@ -2542,7 +2032,7 @@ The folder then holds `draft.json`, the review file, `spec.json`, `harvest/` and
 
 `extract --spec FILE` reads FILE instead of the profile's spec, for the harvest
 and for `--review`, `--top-up`, `--top-up-parameters`, `--recheck` and `--remap`. The harvest has its
-own folder, stamps, anchors and query cache: OUT has to lie strictly below the
+own folder, stamps and query cache: OUT has to lie strictly below the
 folder FILE lies in, or the run ends with exit 2 before anything is written, so
 it cannot land beside a profile's harvest, nor overwrite one under `--force`.
 That is a convention and not a guarantee: a spec file kept high up, in the
@@ -2557,12 +2047,10 @@ would not be read, since the graph is written from the profile's own spec (kwp's
 writer fails on a parameter it does not know), and `--serialize` with `--spec`
 says so in a warning and goes on. Other limits of a column:
 
-- Under kwp the profile's `FRAME` and `SLICE` do nothing to it: no parameter of
-  a one-parameter spec has both frame axes, so no frame pair is asked, and the
-  `quantity` gate drops rows whose parameter has a quantity axis, which a column
-  has not. The run still logs `slice gate on quantity`. The prompts are the
-  profile's, German for kwp. A column that is given axes named `scenario`,
-  `year` or `quantity` does get the frame and the gate.
+- A spec without `groups` stops the run (see The run harvests from the survey),
+  and the draft `docpipe column` writes names none, nor does `compile apply` add
+  any: until the spec names a group, a column of one's own cannot be harvested.
+  The prompts are the profile's, German for kwp.
 - Under scenarios the `document_axes` hook reads the corpus database's section,
   table and image texts of every document, so the run needs the database layout
   that profile expects.
@@ -2598,51 +2086,46 @@ list names a meaning) go back to the model in the next request, so they are
 in the language of the prompts and belong to the profile: its
 `extraction.PHRASES`, where a profile that extends another one writes only
 the ones it words differently (`wording.py`). One of them, `frame_options`,
-is not a sentence but the key of the frame request's list of a closed
-coordinate (see The frame). Two more are keys and no prose either:
+is not a sentence but the key under which the survey's refusal of a pair lists
+the entries of a closed coordinate (`runner.frame_pairs`). Two more are keys and no prose either:
 `option_means` and `option_spellings` are the keys under which an entry of a
 closed list goes to the model, `means` and `spellings` in every shipped profile
 (the built-in one, kwp and scenarios; kwp and scenarios used to say them in
 German). An entry with a definition goes out as `{"<label>": {"means":
 <definition>, "spellings": [...]}}`, one without as `{"spellings": [...]}`, the
 entry for "not stated" carries `means` alone, and a list none of whose entries
-has a definition is a plain label to spellings. The field request, the second
-reading, the frame request (under `frame_options`) and the chat's coordinate
-question all take the list from the same place (`Slot.answerable`), so all four
-carry the two keys. Nothing else in a request of kwp or scenarios changed, the
+has a definition is a plain label to spellings. The reading, the second
+reading and the chat's coordinate question all take the list from the same
+place (`Slot.answerable`), so all carry the two keys. Nothing else in a request of kwp or scenarios changed, the
 stamp does not carry the keys, and so a changed word is neither a `--remap` nor
-a re-harvest. The field prompt of kwp names the two keys in the rule that
-decides by meaning, which is rule 7 of its composed text, in German prose; the
-scenarios field prompt leaves that rule out and names none (see The prompts).
-Whether the model reads the options the same under the English keys shows in
+a re-harvest. Whether the model reads the options the same under the English keys shows in
 the next run's summary line.
 
 ### The prompts: the core's contract text and a profile's parts
 
-Five prompts of the stage, `rows`, `field`, `frame`, `review` and `example` (the
-last is read by `docpipe compile examples`), are written in two halves.
-`docpipe/extraction/contract.py` is the core's half. Its templates lie in
-`docpipe/extraction/contract/<language>/<name>.md`, one for each of the five
-prompts in German and in English, and each says what that request has to say of
-every corpus: the shape of the reply, that the quote stands in a shown passage,
-that the answer stands in the quote, what "not stated" is, what to do with a
-closed list. `languages()` and `template_names()` list what is there, `read()`
-reads one template and checks it as a template, and `language_of()` gives the
-language a profile's parts files are in, from `extraction.CONTRACT_LANGUAGE` of
-the profile that holds them (`Profile.own`, so it is not inherited). `facts()`
-gives the values a template names and does not type: the least length of a quote
-(`verify.MIN_QUOTE_CHARS`), the word for "not stated" (`fields.UNSTATED`) and,
-from the profile's `extraction.PHRASES`, the two keys of an option, the gloss and
-the spelling of the closed list's entry for "not stated" and the key the frame's
-list goes under. Only the facts a prompt names are read, so a profile whose
+Two prompts of the stage, `review` and `example` (the last is read by `docpipe
+compile examples`), are written in two halves. `docpipe/extraction/contract.py`
+is the core's half. Its templates lie in
+`docpipe/extraction/contract/<language>/<name>.md`, one for each of the two
+prompts in German and in English (the templates of `rows`, `field` and `frame`
+went with the field-by-field flow on 2026-11-08), and each says what that request
+has to say of every corpus: the shape of the reply, that the quote stands in a
+shown passage, that the answer stands in the quote. `languages()` and
+`template_names()` list what is there, `read()` reads one template and checks it
+as a template, and `language_of()` gives the language a profile's parts files are
+in, from `extraction.CONTRACT_LANGUAGE` of the profile that holds them
+(`Profile.own`, so it is not inherited). `facts()` gives the values a template
+names and does not type: the least length of a quote (`verify.MIN_QUOTE_CHARS`),
+the word for "not stated" (`fields.UNSTATED`) and, from the profile's
+`extraction.PHRASES`, the two keys of an option, the gloss and the spelling of
+the closed list's entry for "not stated" and the key under which a closed
+coordinate's list goes. Only the facts a prompt names are read, so a profile whose
 phrases are incomplete is told so by the prompt that needs them and by no other.
 A phrase that is worded differently changes the sha256 of the prompt that names
 it, which the stamp records and never compares.
 
 A profile's half is its parts file: the role of the model for this corpus, its
-examples (those of kwp's field prompt describe a passage between `<<` and `>>`
-and never print one, see [kwp](../profiles/kwp.md)), the sentences about its
-own tables, and, for a sentence of the
+examples, the sentences about its own tables, and, for a sentence of the
 template that fits it less well, a part of its own in place of that block. A
 profile leaves out the blocks of a template it never had with `without` in the
 front matter, and only blocks the template lists as omittable. What a parts file
@@ -2652,43 +2135,18 @@ extraction prompts) and the mechanism is on [the core's modules](core.md)
 request builder sends the composed text, and a prompt that cannot be composed
 stops the run before the first request.
 
-What each shipped profile words itself and what it leaves out is in its parts
-files and is listed by `scripts/render_prompts.py` (see [Running the
-pipeline](../running.md)). The built-in profile, in English, takes the
-template's sentences for every block of the five prompts except three it leaves
-out of the field prompt (`no_guessing`, `closed_out` and `found_next`). Scenarios
-words `invent_figures` and `source_kinds` of the rows prompt, `rows_carry` and
-`unstated_when` of the field prompt, and `row_note` and `field_unit` of the
-review prompt, and leaves out the blocks of rows, field and review that it never
-had. Kwp words `value_text` of the rows prompt and `rows_more` and `closed_out_text` of the
-field prompt, and leaves out the blocks of rows, field and review that it never
-had. The frame and the example prompt are the template and the profile's own
-parts in all three, with no block left out or worded. The two German profiles
-keep their own noun in what is about their corpus (the role, the examples), and
-the contract sentences of the German templates call a document "Dokument". See
-[kwp](../profiles/kwp.md) and [scenarios](../profiles/scenarios.md).
-
-The rules of a template are numbered when the prompt is loaded, without a gap,
-so a number is a position in the prompt of one profile. The rows template has the
-rules `value`, `unit_raw`, `source`, `quote`, `per_value`, `citations`,
-`choice`, `status`, `sandbox` and `invent`, and "source" and "quote" are two
-numbered rules in every profile. The field template has `value`,
-`value_raw`, `quote`, `domain_1`, `domain_2`, `every_row`, `closed_out`,
-`by_meaning`, `need_more` and `corrections`; in kwp and scenarios `value`,
-`value_raw` and `quote` are rules 1, 2 and 3, and the rule that decides by
-meaning is rule 7 in kwp and absent in scenarios. A comment in the code that
-names "rule 2" or "rule 3" of the field prompt means the number in the composed
-text of those two profiles. The German and the English template of a name list
-the same parts, blocks and rules, apart from the blocks only the English
-template has (`images` and `quantities_number` of the rows template,
-`options_explained` of the field template)
-lists those in `EN_ONLY` and holds the list in both directions.
-
-Two places of the field template say that what is found comes as the next
-request: the end of `by_similarity` and the block `found_next`. A profile keeps
-the place where it says the sentence and leaves the other out, so each profile
-says it once. The front matter of the German and the English field template says
-so in a comment.
+Every other prompt of the run is the profile's own file in full, with no
+template: the survey, `read_values` and `read_text`, the combing and its check,
+the settings, the plan's years, the seek, the naming and the compute prompts
+(`runner.SURVEY_PROMPT_IDS`, see The run harvests from the survey and Reading a
+parameter in its passages for their marked parts). What each shipped profile
+words itself and what it leaves out is in its parts files and is listed by
+`scripts/render_prompts.py` (see [Running the pipeline](../running.md)). The
+built-in profile, in English, takes the template's sentences for every block of
+the two prompts. The two German profiles keep their own noun in what is about
+their corpus (the role, the examples), and the contract sentences of the German
+templates call a document "Dokument". See [kwp](../profiles/kwp.md) and
+[scenarios](../profiles/scenarios.md).
 
 ### The check before a run
 
@@ -2702,11 +2160,12 @@ as for `--profile`. A name that is no profile is one failed line
 printed, and the command still ends 1. It reads what the run reads: the spec
 the profile names (`extraction.SPEC_PATH`, and no other: a profile that names
 none fails on `spec present`, as the built-in profile does, also when an
-`extraction_spec.json` lies beside it, and the line says so), the extraction
-prompts (one that cannot be loaded fails its own line and every line about
-what it has to hold; a parts file that cannot be composed with its template is
-such a prompt, and its line carries the error that names the part, the profile
-and both files), the writer of the graph (the profile's own
+`extraction_spec.json` lies beside it, and the line says so), the anchors
+prompt (one that cannot be loaded fails its own line and every line about
+what it has to hold; a parts file that cannot be composed with its template
+fails with the error that names the part, the profile and both files; the prompts
+of the survey flow are checked by the run at its start, see The run harvests
+from the survey), the writer of the graph (the profile's own
 `kg.make_serializer`, else the generic writer, built as the run builds it by
 `graph.make_serializer` from the `graph` block of the spec; a block it refuses,
 such as the placeholder base that `docpipe compile spec` drafts, fails
@@ -2720,13 +2179,13 @@ of its prompts, and is declared in `extraction.PROMPT_CHECKS` as entries
 extends another one inherits the checks until it declares its own. An entry of
 any other shape is named as a failure and not run (`preflight.prompt_checks`).
 `scripts/preflight_profiles.py` runs the same checks for the two profiles kept
-in this repository, `kwp` and `scenarios`: 48 lines each, 96 in all.
+in this repository, `kwp` and `scenarios`: one line per check for each.
 `scripts/render_prompts.py` is the other look at a profile's prompts before a
 run: it renders them before and after a change and sets the text, the window
 and the passages per request of the two sides next to each other (see
 [Running the pipeline](../running.md)).
 
-Three lines read more than the keys. `every shape property is asked or left out
+Two lines read more than the keys. `every shape property is asked or left out
 on purpose` holds the shapes of the profile's graph against its spec, the way
 `docpipe compile diff` does: the properties no parameter asks, and no `kg`
 block or link names, are warned about unless the profile has recorded them in
@@ -2742,19 +2201,7 @@ that is stale, for a property no shape has any more, is warned about nowhere.
 `definitions agree with the pin` names, as a warning, the classes whose
 definition in the spec is not the pin's (the same notes `vocabulary --check`
 prints, see [the knowledge graph](graph.md)); a spec's own words are never a
-difference, and the line is skipped for a pin that lists no terms. The third,
-`field prompt's own example reads back`, fails. Every line of the field prompt
-that opens `{"fields"` is an example reply, and it goes through the reader of
-the run: `_loads_object`, then `merge_field` against passages that are the
-example's own quotes, in the spec's coordinate of that name (free text where
-the spec has none, which the line says). Every row has to come out read, apart
-from one the example answers `out:unstated`; then a copy of the reply with each
-quote replaced by an invented sentence has to leave every row unbacked, or the
-first half would hold of any reply. So a prompt cannot teach the model an
-example the run would refuse. A prompt with no one-line example is a warning,
-a missing field prompt a failure, and an example the reader cannot walk (a
-`groups` that is no list) is a failed line that names the fault and not a
-traceback.
+difference, and the line is skipped for a pin that lists no terms.
 
 How precision and recall are counted and how a recorded run is made again
 without a model is on [measuring a harvest](evaluation.md); how the values
@@ -2788,11 +2235,11 @@ different kind of finding.
 |---|---|
 | `read` | Answered; the cited passage carries the answer |
 | `derived` | Not asked: the spec decided it from the row itself |
-| `unstated` | Answered: the shown passages do not state it, or, after the combing, no reply found it in any passage of the plan. Final once the document's search for the coordinate read the document to its end |
-| `unanswered` | The field reply never mentioned it |
-| `exhausted` | Still open when the allowance of the document's search for the coordinate ran out, in windows or in requests, document unread to the end |
+| `unstated` | Answered: the shown passages do not state it, or, after the combing, no reply found it in any passage of the plan. Final once the search for the coordinate listed every passage of the plan |
+| `unanswered` | No reply answered it |
+| `exhausted` | Still open when the run's budget ended: a request that no longer fit the model's window before every passage of the plan was listed, or a reading hole that left the parameter without a value |
 | `unbacked` | Answered, but no shown passage carried it, it was another row's, or (a closed list) it named none of the list's entries |
-| `out_of_slice` | Never asked: a gate coordinate put the row outside what this run serializes, or no parameter of the spec could hold it |
+| `out_of_slice` | Never asked: a coordinate with an entry a value must have (`keep`) read the row as no value of its parameter, or no parameter of the spec could hold it |
 
 The resume stamp, `<document>.stamp.json`, is a flat dict: `spec` (the
 whole file's sha; see Method for how it is compared), `slot/parameter`
@@ -2803,7 +2250,7 @@ per axis; these are the keys `stale` compares, with `document`, the sha256 and
 size of the PDF (absent for a database that records none), of which it compares
 the sha256 alone. `value/<uri>` counts the classes and their spellings and not
 their definitions. `model`, `anchors`, one entry per
-`PROMPT_IDS` prompt, `question_text/<key>`, `review/*`, `docpipe` (the version)
+prompt of the run, `question_text/<key>`, `review/*`, `docpipe` (the version)
 and `producers` (every pass that wrote into the harvest, in order) are written
 into the stamp too, so a reader can place a harvest, and are never
 compared. A stamp of an older release also carries `extraction/harvest`; it
@@ -2812,71 +2259,60 @@ coordinate of a row the pass for a new parameter appended, carries `<name>_produ
 that pass in `producers`; the harvest writes none. An entry of the second
 pass also carries `parameters` (their uris) and `frame`. A trace event is one JSON
 line, `{"t": kind, "doc": document_id, ...}`, of one of the kinds
-`schema.py`'s `trace_schema` lists: `plan`, `anchor`, `frame`, `rows`, `code`,
-`field`, `sweep`, `drop` and `error` from the harvest loop, `compute` once per
-open question of the compute step, `places` once for
-every document whose map of places was built (`passages`, `windows`, `places`,
-`dropped`, `unread`, `complete`, `by_axis` and `by_parameter`), `coord` and
-`refusal` per folded tuple or refusal, `invalid` from the schema
-self-check described under Method, the survey flow's `survey`, `read`,
-`comb`, `seek`, `seek_probe`, `completion` and `years`, one `<stage>_ask` per answered
+`schema.py`'s `trace_schema` lists: the survey flow's `survey`, `read`, `comb`,
+`seek`, `seek_probe`, `completion`, `years`, `settings` and `naming`; `compute`
+once per open question of the compute step, `code` once per sandbox round,
+`coord` and `refusal` per folded tuple or refusal, `invalid` from the schema
+self-check described under Method, `error`, one `<stage>_ask` per answered
 request of each stage (`ASK_STAGES`), and `piece`, a text the requests of the
-document repeat. An event that reports a model request (`frame`, `rows`,
-`field`, every `<stage>_ask`, and an `error` of kind `exception`) carries the
-request as sent (`input`) and what came back (`output`). `field`, `sweep` and `drop` carry the
-optional key `batches`, and `sweep` the optional key `scope`, which tell a
-batch's own stage from a document's search (see The field sweep).
+document repeat. The events of the field-by-field flow, `plan`, `anchor`,
+`frame`, `rows`, `field`, `sweep`, `drop` and `places`, are written no more and
+stay in the schema for traces of before 2026-11-08. An event that reports a model
+request (every `<stage>_ask`, and an `error` of kind `exception`) carries the
+request as sent (`input`) and what came back (`output`).
 `review.csv` carries one line per
 field a review asked about, named by `review.COLUMNS`.
 
 A harvest directory (`out`) holds, per document,
-`<name>.jsonl`, `<name>.stamp.json` and `trace/<name>.trace.jsonl.gz`, and, where
-the map of places was asked, `places/<document id>.json`; per run,
-`anchors.json` and `query_cache.db`; and, only after a pass over a stored
-harvest, a trace directory of its own beside `trace/`: `trace-topup/` after
-`--top-up` or `--top-up-parameters`, `trace-open/` and `trace-rest/` after
-`--top-up-open`, each holding `<name>.trace.jsonl.gz`. `--review` also writes
-`review.csv` at the top. Every run adds `stats/<pass>-<run start>.json`, and
-every run that replaces a harvest, stamp or trace file keeps the old one under
-`archive/<pass>-<run start>/` (see Archive and stats). Neither directory holds
-a `*.jsonl` or `*.stamp.json` that a reader of the harvest would list.
+`<name>.jsonl`, `<name>.stamp.json`, `trace/<name>.trace.jsonl.gz` and, where its
+survey was kept, `survey/<document id>.json`; per run, `query_cache.db`; and,
+only after a pass over a stored harvest, a trace directory of its own beside
+`trace/`: `trace-topup/` after `--top-up` or `--top-up-parameters`, `trace-open/`
+and `trace-rest/` after `--top-up-open`, each holding `<name>.trace.jsonl.gz`.
+`--review` also writes `review.csv` at the top. Every run adds
+`stats/<pass>-<run start>.json`, and every run that replaces a harvest, stamp or
+trace file keeps the old one under `archive/<pass>-<run start>/` (see Archive and
+stats). Neither directory holds a `*.jsonl` or `*.stamp.json` that a reader of
+the harvest would list. A harvest from before 2026-11-08 also holds `anchors.json`
+and `places/<document id>.json`.
 
 ## Configuration
 
 | Name | Kind | Default | Effect | Where read |
 |---|---|---|---|---|
-| `EXTRACT_FIELD_WINDOW` / `EXTRACT_FIELD_OVERLAP` | env var | `2` / `1` | `WINDOW`: sources per retrieval- or rest-stage window. `OVERLAP`: how many of a rest-stage window repeat in the next one; a retrieval-stage window never repeats one | `runner.main`, `runner.Sweeping` |
 | `EXTRACT_MAX_RETRIES` / `EXTRACT_RETRY_TIMEOUT` | env var | `3` / `600` | `MAX_RETRIES`: attempts every retry loop of this stage gets per request. `RETRY_TIMEOUT`: client timeout (seconds) the repeat of a request that timed out gets, every request of the stage alike; a request's own longer time stays, and one that ended on a server error keeps its time | `runner.py`, `runner._client`, `scheduler.Repeats` |
 | `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` / `LLM_TIMEOUT` | env var | `http://localhost:8000/v1` / `EMPTY` / `Qwen/Qwen3.5-122B-A10B-FP8` / `180` | The address, the key and the model name every request of the stage goes out with (the model name is written into the stamp), and the client timeout in seconds, which starts when a request is sent and not while it waits; a retry after a timeout gets `EXTRACT_RETRY_TIMEOUT` instead | `runner.py`, `runner._client` |
 | `EXTRACT_RETRY_WAIT` / `_MAX` / `EXTRACT_TRANSPORT_WAIT` / `_MAX` | env var | `2` / `6` / `15` / `120` | Seconds before the next attempt. The short curve, `RETRY_WAIT` times the attempt up to `RETRY_WAIT_MAX`, follows the model's own mistake. The long curve, `TRANSPORT_WAIT` doubling per attempt up to `TRANSPORT_WAIT_MAX`, follows a request that never arrived or ended on a 429, a 5xx or a timeout | `runner.retry_wait` |
-| `EXTRACT_SPLIT_DEPTH` | env var | `3` | Most times a request cut off at its token ceiling is halved again: a rows request over its passages, a frame request over its sources. Three halvings are eight parts | `runner._split_harvest`, `runner.make_frame_asker` |
-| `EXTRACT_FIELD_ROWS` | env var | `32` | Rows one field request answers at once; a coordinate's open rows are chunked to this many per request, halved again if the chunk still leaves too little room for its answer. It is also the unit the rest stage of a document's search counts its requests in | `runner.make_field_asker`, `runner.Sweeping.requests_of` |
-| `EXTRACT_FIELD_ROUNDS` / `EXTRACT_FIELD_ATTEMPTS` | env var | `4` / `3` | Retrieval rounds before falling to the rest stage; retries of the own-stage window when unbackable | `runner.Sweeping` |
-| `EXTRACT_FIELD_MAX_WINDOWS` / `EXTRACT_REST_MAX_WINDOWS` | env var | `24` / `12` | `MAX_WINDOWS`: the own and retrieval windows of a coordinate; a document's search has them once per document and coordinate. `REST_MAX_WINDOWS`: the rest stage's separate allowance, per coordinate for one batch's sweep and, for a document's search, for every batch that still has an open row of the coordinate when the stage begins, with the requests of those windows bounded as well. A coordinate whose allowance ends before the document does is `exhausted` | `runner.window_budget`, `runner.Sweeping` |
-| `EXTRACT_PLAN_TOP` / `EXTRACT_PROSE_TOP` | env var | `100` / `200` | `PLAN_TOP`: the fused top-N cut replacing the older structural-floor plan; raised from 50 once that cut was measured holding only 40% of a document's tables and 15% of its figures. `PROSE_TOP`: ceiling on prose sections drawn from, always overriding `plan_document`'s own default of `50` | `runner.main` |
-| `EXTRACT_VISUAL_SHARE` | env var | `0.5` | Share of the `PLAN_TOP` cut held for figures and tables before prose fills what is left, so the cap does not fall entirely to whichever ranks higher | `pipeline.with_visual_share` |
-| `EXTRACT_BATCH_SOURCES` / `EXTRACT_BATCH_CHARS` | env var | `6` / `14000` | Passages and characters of passage text one rows request carries at most, also for the batches that follow a pair; a profile whose tuples are long reads fewer passages (see below the table) | `runner.fit_batch_sources`, `runner.batch_sources_for`, `runner.pair_batches` |
-| `EXTRACT_PRIOR_MAX` / `EXTRACT_FOLLOWUP_ROUNDS` | env var | `24` / `1` | `PRIOR_MAX`: the newest this many rows already read that a rows request is told it has, so it does not hand them back from a neighbouring passage. `FOLLOWUP_ROUNDS`: how often a chain of rows requests, per document, parameter and frame pair, may answer that there is more and get fresh passages for it | `runner._prior_payload`, `runner.harvest_batches` |
-| `EXTRACT_MAX_SOURCE_CHARS` / `EXTRACT_PARENT_CHARS` | env var | `16000` / `4000` | `MAX_SOURCE_CHARS`: the longest stretch of passage text one request carries; a longer passage is cut into windows that overlap by 400 characters, each keeping the passage's rank and origin. `PARENT_CHARS`: how much of a table's parent section rides along with it; a longer one is cut around the table's placeholder | `runner.split_long_sources`, `runner.make_parents` |
-| `EXTRACT_FRAME_ROUNDS` / `_SOURCES` / `EXTRACT_FRAME_YEAR_MIN` / `_MAX` | env var | `3` / `12` / `1990` / `2100` | Rounds and passages per round the frame request may spend; bounds of a calendar year for `years_in_sources`, its deterministic cross-check | `runner.find_frame`, `runner.years_in_sources` |
-| `EXTRACT_FRAME_CHARS` | env var | `14000` (the value of `EXTRACT_BATCH_CHARS`) | Characters of passage text one frame request holds; the frame reads all of the plan's passages in as many windows as that takes | `runner.frame_windows` |
-| `EXTRACT_CODE_ROUNDS` / `EXTRACT_FIELD_RE_ENTRY` | env var | `2` / `3` | Sandbox rounds a row request or a compute question may spend on a self-checked value; already-shown passages carried into a coordinate's next field window | `runner.make_harvester`, `runner.make_computer`, `runner.Sweeping.re_entry` |
+| `EXTRACT_SPLIT_DEPTH` | env var | `3` | Listed in `docpipe/settings.py`; no request of the extraction halves by it any more (`runner._split_harvest` is gone, and the chat's `llm_client` has a constant of its own) | `docpipe/settings.py` |
+| `EXTRACT_REST_MAX_WINDOWS` | env var | `12` | Listed in `docpipe/settings.py` and read into `runner.REST_MAX_WINDOWS`, which `runner.read_to_end` sets for `--top-up-open`; no step uses it since the field sweep went | `runner.py` |
+| `EXTRACT_BATCH_SOURCES` / `EXTRACT_BATCH_CHARS` | env var | `6` / `14000` | Passages and characters of passage text a value request was sized for; since the field-by-field flow went they only enter the context budget (`runner.context_budget`) | `runner.py` |
+| `EXTRACT_PRIOR_MAX` | env var | `24` | Earlier values a request was told it has; it only enters the context budget (`runner.context_budget`) now | `runner.py` |
+| `EXTRACT_MAX_SOURCE_CHARS` / `EXTRACT_PARENT_CHARS` | env var | `16000` / `4000` | `MAX_SOURCE_CHARS`: the longest stretch of passage text a request was sized for; it only enters the context budget now. `PARENT_CHARS`: how much of a table's parent section rides along with it; a longer one is cut around the table's placeholder | `runner.context_budget`, `runner.make_parents` |
+| `EXTRACT_CODE_ROUNDS` | env var | `2` | Sandbox rounds a compute question may spend on a self-checked value | `runner.make_computer` |
 | `CODE_EXEC_PARALLEL` | env var | `1` | Code runs one run has out at the sandbox at a time; match the service's `KWP_SANDBOX_PARALLEL` | `runner.SANDBOX_SLOTS` |
-| `EXTRACT_LLM_PARALLEL` / `EXTRACT_PLAN_PARALLEL` / `EXTRACT_FIELD_PARALLEL` | env var | `128` / `8` / `192` | Pool sizes: rows-request batches in flight for the whole run, planning threads (retrieval, SQL and the document's phrase requests, which run in parallel per parameter), and field-sweep threads beneath row-request batches, which a document's search runs on as well. Without the adaptive limit they bound the requests. With it on, `FIELD_PARALLEL` bounds the sweeps running at once, the limit (`EXTRACT_LIMIT_MAX` at most) bounds the requests, and the search windows a sweep asks ahead and the requests of the map of places run on a pool sized to the limit's maximum (see The adaptive request limit) | `runner.harvest_batches`, `runner.main`, `runner.make_fieldwise_harvester` |
-| `EXTRACT_ATTACH_IMAGES` / `EXTRACT_LOCATE` | env var | `1` / `1` | Off, respectively: no crop attaches to a row, field, frame or review request (no `images/` dir needed), or `make_locate` returns `None`, no quote placed on the page | `runner.py` askers, `runner.make_locate` |
+| `EXTRACT_LLM_PARALLEL` / `EXTRACT_PLAN_PARALLEL` / `EXTRACT_FIELD_PARALLEL` | env var | `128` / `8` / `192` | Pool sizes: the run's pool of documents' tasks, planning threads (retrieval, SQL and the document's phrase requests), and the questions of the compute step at once. With the adaptive limit on, the limit (`EXTRACT_LIMIT_MAX` at most) bounds the requests, and the conversations of the survey, reading and combing run on a pool sized to the limit's maximum (see The adaptive request limit) | `runner.main`, `runner.make_computer`, `runner.start_limit` |
+| `EXTRACT_ATTACH_IMAGES` / `EXTRACT_LOCATE` | env var | `1` / `1` | Off, respectively: no crop attaches to a survey, reading or review request (no `images/` dir needed), or `make_locate` returns `None`, no quote placed on the page | `runner.py` askers, `runner.make_locate` |
 | `EXTRACT_IMAGE_MAX_SIDE` | env var | `1280` | Longest side, in pixels, of a crop that rides along with a request; a larger one is shrunk to it, and the tokens counted for a crop follow from it | `runner._image_data_url`, `runner.IMAGE_TOKENS` |
 | `EXTRACT_LOCATE_MAX_PAGES` | env var | `3` | Pages of the PDF tried, the section's first page first, to place a quote's highlight rectangles before the quote gets the flag `not_located` | `runner.make_locate` |
 | `EXTRACT_LOCATE_CACHE_PAGES` | env var | `512` | Pages of words `make_locate` keeps across documents; a cache hit is a dict lookup and takes no lock, only a miss enters MuPDF under one | `runner.make_locate` |
 | `EXTRACT_CONTENT_CACHE_OWNERS` | env var | `300000` | Passages whose text a run keeps in the one store every thread shares (the rest of the document, parents, owner sources, more passages); each is read once, past the bound the oldest goes, `0` keeps all | `runner.make_shared_content`, `runner.main` |
 | `EXTRACT_BATCH_DOCS` | env var | `256` | Most documents in flight at once under rolling admission, largest first by section count, filename breaking a tie; within that ceiling, which only guards the runner's memory, a document starts while the model requests in flight stay below the adaptive limit (`document_room`). A finished one is written at once and the next starts, so no document waits on a group | `runner.main`, `runner.harvest_documents`, `runner._documents` |
-| `EXTRACT_PLACES` | env var | `1` | `0` turns off the map of places even for a profile that writes the `extraction/places` prompt; the search then retrieves and reads the rest as before | `runner.make_places` |
 | `EXTRACT_MAX_MODEL_LEN` | env var | `32768` | Fallback context window a request's answer room is sized against; overwritten by `set_model_len` from the server's own preflight report where it gives one | `runner.set_model_len`, `runner.answer_room` |
-| `EXTRACT_RETRY_TEMPERATURE_STEP` | env var | `0.1` | Sampling temperature of a retried attempt raised by this step, once per unreadable reply, capped at `1.0`; every retry loop of this stage applies it (phrase, frame, anchors, rows, field, places, review) | `runner.retry_temperature` |
+| `EXTRACT_RETRY_TEMPERATURE_STEP` | env var | `0.1` | Sampling temperature of a retried attempt raised by this step, once per unreadable reply, capped at `1.0`; every retry loop of this stage applies it | `runner.retry_temperature` |
 | `EXTRACT_TRACE` | env var | `1` | Off, every trace call returns immediately and no trace file is written | `trace.py` (`ENABLED`) |
-| `EXTRACT_ANCHORS` | env var | `1` | `0` writes none of the corpus-wide anchor sets (`make_anchors`); the field sweep's searches then run without them. A harvest from the survey writes no anchors whatever it is set to | `runner.main` |
 | `EXTRACT_SERVER_DEAD_AFTER` | env var | `180` | Seconds the model server may stay silent to the health probe (`GET /models`, every 15 seconds; not run for a hosted API or a replay) before the run ends as for a dead server: what is harvested is written, the rest is not, exit 1 | `runner.watch_server` |
 | `EXTRACT_SHOW_UNPARSABLE` | env var | `20` | How many unreadable replies of a run the log shows with their start and finish reason; the cause is logged for every one | `runner._unparsable` |
-| `EXTRACT_LIMIT_ADAPTIVE` | env var | `1` | `0` turns off the adaptive request limit, the scheduler and the windows asked ahead; the pools alone then bound the requests | `runner.start_limit` |
+| `EXTRACT_LIMIT_ADAPTIVE` | env var | `1` | `0` turns off the adaptive request limit, the scheduler and the pool of the limit's size; the other pools alone then bound the requests | `runner.start_limit` |
 | `EXTRACT_LIMIT_START` / `_MIN` / `_MAX` / `_STEP` / `_BACKOFF` / `_POLL` | env var | `128` / `16` / `512` / `8` / `0.8` / `5` | The adaptive limit (see The adaptive request limit): where it starts, its floor and its ceiling in requests, the requests it grows by, the factor it is multiplied by on a step down, and the seconds between two looks at the server. A hosted API starts at the floor | `throttle.py` |
 | `EXTRACT_LIMIT_KV_GROW` / `_KV_HIGH` / `_TPOT_MAX` | env var | `0.80` / `0.92` / unset | KV cache fractions: the limit grows only below the first and steps down at the second. `TPOT_MAX`: seconds per output token above which a sample steps the limit down too; unset, the token time never does | `throttle.Controller.decide` |
 | `EXTRACT_PROVENANCE` | env var | `1` | `0`, `false`, `no` or `off` writes no provenance file (`<graph>.prov.ttl`) beside the graph | `provenance.enabled` |
@@ -2890,51 +2326,37 @@ a `*.jsonl` or `*.stamp.json` that a reader of the harvest would list.
 | `--profile NAME` | CLI flag | `$DOCPIPE_PROFILE` | names the profile whose spec, prompts and hooks the run reads; the stage refuses to run without one, in a line naming the available profiles, and `__main__.py` binds the flag before `runner` is imported | `runner.main`, `docpipe/profile.py` |
 | `--serialize TTL` / `--print-context-budget` | CLI flag | none / off | `--serialize`: no harvest, hands `--out` to `serialize.run`, which calls the profile's `kg.make_serializer`. `--print-context-budget`: prints the tokens, per request, that the largest request of a harvest needs, then exits | `serialize.run`, `runner.main` |
 | `--no-provenance` | CLI flag | off (the file is written) | With `--serialize`: no provenance file beside the graph, as `EXTRACT_PROVENANCE=0` | `runner.main`, `provenance.enabled` |
-| `SLICE` / `FRAME` | profile hook | none / none (every coordinate per row) | `SLICE`: gate coordinate(s) asked first, a row that fails them never asked its others. `FRAME`: document-level coordinates found once and projected onto every row | `runner.main`, `topup.actionable` |
-| `SEARCH_SHARE` | profile hook | none (every coordinate gets the whole budget) | Fraction of the retrieval and rest allowance a named coordinate (`<axis>` or `<parameter>.<axis>`, the latter first) gets, in a batch's sweep and in a document's search alike; kwp halves `sector` and `aggregation`. At least one window stays per stage, except at 0, which reads the own passage only | `runner.make_sweeper` |
+| `SLICE` / `FRAME` | profile hook | none / none | `SLICE`: a gate on coordinates; no step of `docpipe/` reads it since the survey flow has no slice gate, kwp still declares it. `FRAME`: the frame coordinates (kwp: scenario and year): the plan's years date them, and `--top-up` blocks a changed key that names one (`runner.main`, `topup.actionable`) | `runner.main`, `topup.actionable` |
 | `PROMPT_CHECKS` | profile hook | the extended profile's, else none | Entries `(what is checked, prompt id, passage, has to be there)`: passages the profile's prompts have to hold or must not. Read by `docpipe preflight` and by nothing in a run | `preflight.audit`, `preflight.prompt_checks` |
 | `NOT_EXTRACTED` | profile hook | none | A mapping `(shape, property)` to one sentence of reason: the properties of the profile's shapes it leaves out on purpose, so that `docpipe preflight` does not warn about them. Scenarios declares 21 | `preflight.not_extracted`, `preflight.shapes_verdict` |
 | `shapes_files` | profile hook | none (the check is skipped) | A callable that returns the SHACL files the profile's graph is held against, those of its last refresh. Scenarios finds its own there; kwp names none | `preflight.shapes_verdict` |
 | `ALT_LABEL_LANGUAGE` | profile hook | required by the profile's `vocabulary` module | The language tag of the alternative labels a vocabulary snapshot keeps: `de` for kwp, `en` for scenarios and the built-in profile. The core fixes none | `profiles/*/vocabulary.py`, `ontology.build` |
-| `BASE_YEAR` / `TARGET_YEAR` | profile hook | none (the state has no years) | Which frame pairs are the plan's own state and which are its target: a mapping from a frame coordinate to its entry, kwp's `{"scenario": "status_quo"}` and `{"scenario": "target"}`. Their years date a row that names the state by its word and prints no year (see Base years) | `runner.year_states_of`, `pipeline.state_years` |
-| `FRONT_PAGE_PARAMETERS` | profile hook | none | The uris of the parameters asked once more on their own in one request over the document's opening sections, with origin `front`, field by field only; scenarios names title, authors, date, DOI and abstract | `runner.make_front_page`, `runner.plan_batches` |
+| `BASE_YEAR` / `TARGET_YEAR` | profile hook | none (the state has no years) | Which pairs of the survey are the plan's own state and which are its target: a mapping from a frame coordinate to its entry, kwp's `{"scenario": "status_quo"}` and `{"scenario": "target"}`. It only says where the request for the plan's years starts to look (see Base and target years) | `runner.year_states_of`, `pipeline.state_years` |
+| `SPAN_MARKS` | profile hook | none | What each row of a value stated for a span of years takes where it read nothing of its own: a mapping from a coordinate to its entry, kwp's `{"qualifier": "out:approximate"}` (see Reading a parameter in its passages) | `runner.span_marks_of`, `reading.span_rows` |
+| `FRONT_PAGE_PARAMETERS` | profile hook | none | The uris of the parameters a publication says of itself: read from its first page on, whatever the survey named (`surveyed.front_walk`); scenarios names title, authors, date, DOI and abstract, kwp none | `runner.main`, `surveyed.front_walk` |
 | `DECIMAL_MARK` | profile hook | `,` | `,` or `.`: how the profile's documents write the decimal, which decides what the digits alone leave open ("3,251" is 3.251 or 3251); any other value is an error | `verify.decimal_mark` |
 | `document_axes` | profile hook | none | A callable `(connection, document_id)` that returns `{axis name: {uri: [labels]}}`, the closed lists of the spec's dynamic axes for that document (scenarios closes its regions); every batch of the document carries the spec with them | `runner.fill_dynamic_axes`, `runner.make_document_spec` |
-| `document_context` | profile hook | none | A callable `(connection, document_id)` that returns `{"name": ...}`, what the document itself contributes to its own search anchor (the municipality); the caption of the first passage found is added to it | `runner.document_anchor` |
+| `document_context` | profile hook | none | A callable `(connection, document_id)` that returns `{"name": ...}`, what the document itself contributes to the sentence it is searched with (the municipality); the caption of the first passage found is added to it | `runner.document_anchor` |
 
 The context budget (`runner.context_budget`) is the tokens one request of
 one prompt needs at worst. Its payload term is the largest of the widest
 single parameter, which a request planned for one parameter carries whole,
 all parameters' class lists together, which a request planned for no
-parameter carries at once, and the widest slot a field request offers, its
+parameter carries at once, and the widest slot a request offers, its
 options with their definitions as the model reads them (`runner.field_slots`).
 For scenarios that slot is the value of `study_sector` asked again, 154
 entries in 63,230 characters. A run needs the largest of these budgets over
-the prompts it sends (`runner.request_budget`): in a harvest from the survey
-the survey, the two reading and the combing prompts; field by field the rows,
-field, phrase and anchors prompts, and the frame prompt only where the profile
-names frame axes (`runner.sent_prompt_ids`). The queries prompt is a list of
-search templates no request carries, and the review prompt has a line of
-its own in the doctor, so neither counts. That number, in tokens per
-request, is what `--print-context-budget` prints, what the doctor's extract
-line shows and what the check of the served window before the first
-document holds the server to: it is what the model server's
-`--max-model-len` has to cover. In a harvest from the survey it is 29,677
-tokens per request for kwp and 52,101 for scenarios, both set by the
-reading prompt for text, which carries a category parameter's whole list;
-field by field it is 30,347 for kwp, set by the field prompt, and 51,343 for
-scenarios, set by the rows prompt. All four numbers are those of the composed
-prompts. A
-profile with several long lists, as scenarios has, can therefore need a
-window above the 32768 that `EXTRACT_MAX_MODEL_LEN` falls back to.
-
-How many passages one rows request reads comes from the rows prompt alone
-(`runner.batch_sources_for`): its `max_tokens` bounds the reply, and the
-profile's own example tuple says what a passage costs, so a profile whose
-tuples are long reads fewer than `EXTRACT_BATCH_SOURCES` (6) at a time. kwp
-reads 6 passages per rows request, scenarios 3. The field prompt reads
-`EXTRACT_FIELD_WINDOW` passages and answers a row at a time, so its
-ceiling does not enter.
+the prompts it sends (`runner.request_budget`, `runner.survey_prompt_ids`): the
+survey, the two reading, the combing and its check, the settings and the seek
+prompts, and the naming and years prompts where the spec needs them. The review
+prompt has a line of its own in the doctor and does not count. That number, in
+tokens per request, is what `--print-context-budget` prints, what the doctor's
+extract line shows and what the check of the served window before the first
+document holds the server to: it is what the model server's `--max-model-len` has
+to cover. It is 33,159 tokens per request for kwp and 49,678 for scenarios
+(prompts as of 2026-11-08), those of the composed prompts. A profile with several
+long lists, as scenarios has, can therefore need a window above the 32768 that
+`EXTRACT_MAX_MODEL_LEN` falls back to.
 
 ## Failure modes
 
@@ -2952,13 +2374,12 @@ unit is treated the same way and never refused (owner decision 2026-11-07): a
 number whose unit is no entry of `units_accepted` stays read with its printed
 unit, flagged `unmapped:unit:<print>`, without `value_target`.
 
-Inside the field sweep, an unbacked or unquoted answer does not end a
-row's chance of being read: it stays open (`unbacked`, never final)
-until a later window, stage or round closes it, or the allowance of the
-document's search runs out with the document unread, turning it `exhausted`.
-A reply that does not parse, is empty, or arrives as a non-dict is coerced to
-an empty one at every fold point, so a bad batch yields zero claims and the
-loop moves on.
+In the combing, an unbacked or unquoted answer does not end a coordinate's
+chance of being read: it is told once with its reason and the search goes on,
+until every passage of the plan was listed, or the conversation's request no
+longer fits the model's window and the coordinate ends `exhausted`. A reply that
+does not parse, is empty, or arrives as a non-dict is asked again with the cause
+named (`_reply_fault`), and no JSON is repaired.
 
 At the document level, `finish_document` writes the JSONL file every time
 and withholds the stamp entirely, forcing a full redo on the next run, in
@@ -2981,46 +2402,33 @@ that folds a document's answers and calls `finish_document`, hands the value
 on, `harvest_document` returns `(stamped, failures)` with one failure added
 when the document is not stamped, `harvest_documents` adds the failures up,
 and `main` returns 1 when there are any. The exit code is 1 for a document
-written and left unstamped as it is for a server that stopped answering. The
-run's own anchor requests are the other case: if any ended on a 429 or a 5xx, or timed out,
-`main` returns 1 before anything is harvested, and the anchors already written
-stay in `anchors.json`, so the next start asks only for the rest.
+written and left unstamped as it is for a server that stopped answering.
 
-`harvest_document` harvests a document in two steps, the turns of its batches
-(`harvest_all` with `harvest.turn`) and then the document's search
-(`harvest.search_document`). A document left with batches never harvested is
-not written at all and adds no failure of its own; the dead server or the
-SIGTERM that left it decides the exit code. A document whose search was ended
-by a stop or the dead-server cut is left the same way, a stop that comes with
-the last request of the search included. A document whose search raised where
-rows wait on the task is a failed document: the exception ends
-`harvest_document`, `harvest_documents` counts the failure and logs it, nothing
-is written, and a resume harvests the document again (see The field sweep).
-`run_document`, the one-document path for a caller outside the run's own loop,
-withholds the stamp the same way and returns what `finish_document` returned;
-it walks each batch with the whole `harvest` and has no document step. The
-pass that appends a parameter takes the place of `harvest_document` in this
-loop (`parameter_pass`) and returns `(written, failures)` the same way, so
-`harvest_documents` and `main` count it by these rules.
+`harvest_document` of `runner.main` harvests a document from its survey to its
+file (`surveyed.SurveyedHarvest`, see The run harvests from the survey). A
+document a stop or the dead-server cut left unfinished is not written at all and
+adds no failure of its own; the dead server or the SIGTERM that left it decides
+the exit code. A step that raised ends the document: `harvest_documents` counts
+the failure and logs it, nothing is written, and a resume harvests the document
+again. The pass that appends a parameter (`surveyed.ParameterPass`) and the pass
+that reads unread passages (`surveyed.UnreadPass`) take the place of
+`harvest_document` in this loop and return `(written, failures)` the same way, so
+`harvest_documents` and `main` count them by these rules.
 
 A time limit ends a run the same careful way. `install_stop_handler` puts a
 SIGTERM handler in place, so that a time-limit trap or a manual kill sets
 `STOP` instead of letting the interpreter die where it stood. Documents run
 under rolling admission, `harvest_documents`, as many in flight as the server has
-room for (`document_room`) and at most `EXTRACT_BATCH_DOCS`, their batches sharing one `batch_pool` and one `DeadStreak`
-across every document in flight and across the field sweep's own requests too,
-rather than a separate dead-server count per document or per pool: the run
-gives up once `max(64, EXTRACT_LLM_PARALLEL)` requests in a row were not
-served by the server (not reached, a 429, a 5xx or a timeout). The rows pool and the
-field pool log it as "requests in a row the server did not serve". Once `STOP`
-or a dead server sets `Halted`, no new document starts, a document already in
-flight leaves its own `harvest_batches` call at once instead of waiting out its
-open requests, and a document in its search is cut at its next request. Such a
+room for (`document_room`) and at most `EXTRACT_BATCH_DOCS`. A model server that
+stays silent to the health probe for `EXTRACT_SERVER_DEAD_AFTER` seconds ends the
+run at once (`watch_server`): what was harvested is written and stamped, the rest
+is not, exit 1. Once `STOP` or a dead server sets `Halted`, no new document
+starts and a document already in flight is cut at its next request. Such a
 document is not written, so a resume harvests it whole instead of the run
-stamping it as though every batch had come back. Once `STOP` is set the run
+stamping it as though every request had come back. Once `STOP` is set the run
 logs, closes the trace and exits hard with `STOPPED_EXIT` (`143`) rather than
-waiting on the field-sweep threads still open, which are not daemons and could
-hold the process for minutes.
+waiting on the threads still open, which are not daemons and could hold the
+process for minutes.
 
 Among the six maintenance passes, `--recheck` and `--remap` never call a
 model, so their only failure mode is a coordinate they cannot settle,
@@ -3041,25 +2449,15 @@ never sends leaves no trace, so the row is offered again later.
 
 ## Measured behaviour
 
-- Planning per parameter instead of per document once turned one
-  document's owner set into three documents' worth of requests: 804
-  planned sources against 234 real owners (`fields.py`).
 - The kwp spec's numeric units, nine for energy and forty-two for
   emissions, share not one spelling; on Kassel not one of 559 accepted
   tuples contradicted its own unit, yet asking the model to choose the
   parameter anyway cost 322 of 1,043 field windows, 30.9%, and 18.0 of
   187.5 field minutes per plan, before the unit was used to derive it
-  instead: the sweep now asks the unit first, as its own coordinate,
-  and `derive_parameter` settles the parameter from the entry chosen, or,
-  for a wording, from the spec's one text parameter
-  (`fields.py`).
-- Letting the passage a coordinate was last read in drop out of the
-  window after one use, rather than remaining in the window, cost one
-  batch 520 dropped readings against 31 kept (`Sweeping.run`).
-- On the 20-plan draft where the slice gate was measured, of 6,763
-  harvested tuples the serializer dropped 1,554 for a quantity the graph
-  does not hold and, while the scenario axis still gated a row, 2,510
-  more for not being the target scenario (`profiles/kwp/extraction.py`).
+  instead (windows of the field-by-field flow, removed on 2026-11-08): the
+  unit is asked first, as its own coordinate, and `derive_parameter` settles the
+  parameter from the entry chosen, or, for a wording, from the spec's one text
+  parameter (`fields.py`).
 
 ## Modules
 
@@ -3067,14 +2465,11 @@ never sends leaves no trace, so the row is offered again later.
 `Parameter` and `Axis`, and computes the per-question fingerprints the
 stamp is built from; every other module imports it. `fields.py`
 computes a tuple's deterministic skeleton, its slots, from the spec
-alone, and defines the seven coordinate states. `queries.py` expands a
-profile's query templates into retrieval probes, a fallback used only
-when no anchor could be written.
+alone, and defines the seven coordinate states.
 
-`pipeline.py` holds the harvest loop itself: the retrieval plan, batching,
-routing a claim to its real source, `merge_field`, and the `Sweep` object
-sharing verified answers across a document's batches regardless of
-order. `verify.py` is the last
+`pipeline.py` holds the helpers of the fold: routing a claim to its real
+source (`route_claims`), `merge_field`, `fold_claims` and `drop_repeats`, and the
+plan's years a year may be named by (`named_year`). `verify.py` is the last
 check a claimed tuple passes, value against the spec's closed lists and
 units, quote against the literal source text, returning a `Verified`
 tuple or a `Refusal`. `trust.py` grades an accepted tuple's evidence, A, B,
@@ -3082,9 +2477,11 @@ C or D, from what the harvest already recorded, and folds a whole
 document's tuples into the closing summary line; every maintenance pass
 calls it to recompute a rewritten file's summary.
 
-`places.py` reads a document's map of where each axis is answered, and
-`scheduler.py` is the one request queue of a run, oldest document first (both
-described under The field sweep and The adaptive request limit). `compute.py`
+`survey.py`, `reading.py`, `combing.py`, `settings.py`, `seeking.py`, `years.py`
+and `thread.py` are the steps of the survey flow and `surveyed.py` is the loop
+that joins them for a document (see The survey of a whole plan to The run
+harvests from the survey). `scheduler.py` is the one request queue of a run,
+oldest document first (described under The adaptive request limit). `compute.py`
 holds what every open question of the compute step has (see The compute step).
 `naming.py` asks which names of a document mean the same thing (see Naming). `found.py` reads where earlier harvests found something (see Starting at what
 was found). `archive.py` copies a harvest, stamp or trace file aside before any pass
@@ -3103,21 +2500,23 @@ unreadable directory cannot overwrite a valid graph from an earlier
 run. Called only by `runner.py`'s `--serialize` branch.
 
 `runner.py` is the harvest CLI and by far the largest module of the stage: the
-retrieval, anchor and frame machinery described above, the field sweep (`Sweeper`, `Sweeping` and
-`Scope`), a batch's turn (`Turn`) and the document's search
-(`DocumentSearch`), the resume-stamp
-comparison, and the argparse branches dispatching `--recheck`,
-`--remap`, `--top-up`, `--review` and `--serialize` to their own
-modules. `--top-up-parameters` is no branch of its own: it runs the
-harvest's loop with `topup_parameter.DocumentPass` as the step for one
-document, and `plan_batches`, `fold_answers` and `not_happened`, lifted out
-of the harvest's own code, are what the two share.
+makers of the survey flow's askers (`make_survey`, `make_reader`, `make_comber`,
+`make_years`, `make_settings`, `make_seeker`, `make_namer`, `make_computer`), the
+retrieval and the shared request client, the resume-stamp comparison, and the
+argparse branches dispatching `--recheck`, `--remap`, `--top-up`, `--review` and
+`--serialize` to their own modules. `--top-up-parameters` and `--top-up-open` are
+no branches of their own: they run the harvest's loop with
+`surveyed.ParameterPass` and `surveyed.UnreadPass` as the step for one document,
+and `fold_answers` and `not_happened`, lifted out of the harvest's own code, are
+what they share with it.
 
-`topup.py`, `topup_parameter.py` and `topup_rest.py` are the passes that ask the
-model about a harvest already on disk: the first re-reads one coordinate of the
-rows that have it (and, as `--top-up-open`, the coordinates a harvest left
-open), the second appends the rows of a parameter the spec gained, the third
-reads the passages nobody asked for values. `topup.read_harvest` reads a file down to its bytes for both.
+`topup.py`, `topup_parameter.py` and `topup_rest.py` hold the rules of the
+passes over a harvest already on disk: the first re-reads one coordinate of the
+rows that have it (and, as `--top-up-open`, the coordinates a harvest left open),
+the second holds what the stamp says of a parameter the spec gained and how its
+rows are appended, the third what a trace says was read. The two passes that
+read with the model are in `surveyed.py` (`append_parameters`, `append_unread`).
+`topup.read_harvest` reads a file down to its bytes for all of them.
 
 `throttle.py` reads the server's own queue and steers the adaptive
 request limit every client `runner.py` makes waits in; see The
@@ -3145,9 +2544,8 @@ layer](providers.md)). `gold.py`, `evaluate.py` and `benchmark.py` are
 `scripts/curation_list.py`, `scripts/harvest_compare.py` and
 `scripts/trace_report.py` are read-only reporting tools over a harvest
 directory: a sorted list of untrustworthy values, a profile's own
-acceptance numbers, and a trace's event distributions, with the windows of a
-batch's own stage and of a document's search counted apart (see The field
-sweep), called only by a person from the shell.
+acceptance numbers, and a trace's event distributions, called only by a person
+from the shell.
 
 See [the harvest contract for kwp](../contract/kwp.md) and [the harvest
 contract for scenarios](../contract/scenarios.md) for what a profile's
@@ -3169,9 +2567,8 @@ __init__.py: Marks the extraction package as the OBIE stage.
 OBIE (ontology-based information extraction) turns passages a document's index
 already found into typed value tuples for a knowledge graph, using a profile's
 ontology as the contract. This file carries no code besides the docstring;
-`pipeline.py` holds the harvest loop, `runner.py` wires it to a live corpus and
-model, `spec.py` loads the contract, and `queries.py` builds the retrieval
-probes the loop searches with.
+`pipeline.py` holds the helpers of the fold, `runner.py` wires the harvest to
+a live corpus and model, and `spec.py` loads the contract.
 
 Author: Felix Vossel
 
@@ -3180,34 +2577,21 @@ Author: Felix Vossel
 <details>
 <summary><code>docpipe/extraction/pipeline.py</code></summary>
 
-pipeline.py: The harvest loop that turns a document's retrieved passages into
-verified value tuples.
+pipeline.py: What turns the claims of a harvest into verified value tuples.
 
-`plan_document` builds one retrieval plan per document rather than per
-parameter: every table and every figure, taken whole because being a table or a
-figure predicts a value better than any similarity ranking does, plus the best
-ranked prose sections. `group_items` folds the plan into batches read in one
-request each. A batch stays inside one document and one parameter, or the whole
-document when the plan is not split by parameter, so it never mixes what a
-different parameter's choice list would need. Every claimed tuple, whichever
-request produced it, passes `verify_tuple`; refusals are kept alongside the
-accepted tuples, because a harvest that cannot say what it threw away reads as
-complete when it is not.
-
-`Sweep` and `build_sweeps` carry the tuples a document's batches have already
-verified forward as a hint to later batches, and grant a bounded follow-up
-budget when a reply says more passages are needed (`follow_up`).
-`fold_claims` and `fold_batch` verify a reply's claims into a
-`DocumentReport`; `write_report` writes that report's tuples, refusals,
-per-parameter states and one summary line to one JSONL file, atomically.
+`group_items` folds passages into batches read in one request each. Every
+claimed tuple, whichever request produced it, passes `verify_tuple`; refusals
+are kept alongside the accepted tuples, because a harvest that cannot say what
+it threw away reads as complete when it is not. `fold_claims` and `fold_batch`
+verify a reply's claims into a `DocumentReport`; `write_report` writes that
+report's tuples, refusals, per-parameter states and one summary line to one
+JSONL file, atomically.
 
 A coordinate is checked for two things and no third: its quote stands in a
 passage that was shown, and the quote carries the answer (`merge_field`).
 
-The three expensive dependencies, retrieval, the harvesting LLM call, and
-locating a quote on its PDF page, are injected callables. The module's own
-correctness is a pure-code property and is tested without a GPU; the wiring to
-the live inference stack lives in `runner.py`.
+The module's own correctness is a pure-code property and is tested without a
+GPU; the wiring to the live inference stack lives in `runner.py`.
 
 Author: Felix Vossel
 
@@ -3218,48 +2602,29 @@ Author: Felix Vossel
 
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
-A run harvests from the survey of each plan wherever its spec names groups
-(`surveyed_flow`, which stops the run where the profile lacks a prompt of
-the survey): survey, reading and combing per document (`surveyed.py`), then
-the fold, the compute step and the file with its stamp as below. A spec
-without groups is harvested field by field, the flow the rest of this note
-describes; the passes over a stored harvest run on the
-steps of whichever flow the run has.
+A run harvests from the survey of each plan (`surveyed_flow`, which stops the
+run where the spec names no groups or the profile lacks a prompt of the
+survey): survey, reading and combing per document (`surveyed.py`), then the
+fold, the compute step and the file with its stamp as below. The passes over a
+stored harvest run on the same steps.
 
 This module supplies the loop's expensive dependencies from the real world:
-FAISS retrieval with owner exclusion, the harvesting LLM call, and locating a
-quote on its page in the source PDF, plus resume stamps and the CLI. Heavy
-imports (faiss, torch-backed embedders, fitz) happen inside functions, so
-importing this module stays cheap and a test that only touches the package pays
-for no GPU stack it does not use.
+FAISS retrieval with owner exclusion, the model calls, and locating a quote on
+its page in the source PDF, plus resume stamps and the CLI. Heavy imports
+(faiss, torch-backed embedders, fitz) happen inside functions, so importing
+this module stays cheap and a test that only touches the package pays for no
+GPU stack it does not use.
 
 `make_retrieve` fuses every probe handed to it into one FAISS search per
 document and ranks each owner by the best score any probe gave it; measured
 over 65 documents and 15,082 values, the fused ranking put the source a value
 was really read from at median rank 26, against 77 for the old per-probe
-concatenation. A probe is either one
-of the spec's query templates (`queries.expand`), stable across the whole
-corpus so `prime_probe_cache`'s embeddings hit for every document, or a
-HyDE-style anchor sentence a model writes: `make_anchors` writes one set per
-question the field sweep asks, cached under `anchors.json` and reusable across
-documents, and `document_anchor` writes the one short sentence per parameter
-the document being planned is searched with, which is a cache miss by
-construction.
+concatenation. A probe is a HyDE-style sentence a model writes:
+`document_anchor` writes the one short sentence per parameter the document is
+searched with, which is a cache miss by construction.
 
-`make_harvester` and `make_fieldwise_harvester` build the request to the model
-and parse its reply strictly: one JSON object and nothing else. A reply that is
-not that is asked again with the cause named (`_reply_fault`), and one cut off
-at the token ceiling is asked again over half the passages (`_split_harvest`)
-rather than half-read. `make_sweeper` drives the field-wise
-sweep: a coordinate the value's own passage does not answer is asked for again
-over short overlapping windows of the rest of the document (`window_sources`),
-bounded per axis. A document's batches ask their own passages in their turn
-(`Turn`), and what is still open after them is searched once per document and
-coordinate with the open rows of all the batches together (`DocumentSearch`).
-`find_frame` and `make_frame_asker` read a document's frame,
-its scenario and year pairs, once before any value, so a value request states
-the pair rather than deciding it. `harvest_batches` runs every batch of a whole
-run in flight at once, not as ordered per-document chains.
+The requests parse the reply strictly: one JSON object and nothing else. A
+reply that is not that is asked again with the cause named (`_reply_fault`).
 
 `make_locate` finds where a quote sits on its page in the source PDF, through
 the same alignment the app highlights with. Resume stamps (`_stamp_current`,
@@ -3319,29 +2684,6 @@ the very quote the model had itself cited. A request that asks for
 one field and shows the choices has no such exit: it names the entry
 and the passage it was read in, or it states that the passage does
 not say.
-
-Author: Felix Vossel
-
-</details>
-
-<details>
-<summary><code>docpipe/extraction/queries.py</code></summary>
-
-queries.py: Expands a profile's query templates into retrieval probes drawn
-from the spec.
-
-One broad question per parameter under-harvests. Retrieval ranks, a rank has a
-cap, and the tenth-most-similar table wins over the eleventh for no reason a
-corpus cares about. So the profile supplies query templates and the spec
-supplies the material, a parameter's label and its axis vocabularies, and every
-combination becomes its own retrieval probe. The templates live with the
-profile because their wording is corpus language (German for kwp's plans); this
-module only expands placeholders.
-
-Placeholders:
-    {label}        the parameter's label
-    {axis:NAME}    one query per vocabulary entry of that axis, using the
-                   entry's first (primary) corpus label
 
 Author: Felix Vossel
 
@@ -3636,8 +2978,8 @@ parameter, that is a full corpus run spent answering a question nothing else
 asked.
 
 This module instead takes the coordinate off the rows that carry it, walks the
-same sweep the harvest walks (`runner.make_sweeper`, so there is one sweep and
-one set of numbers), and writes the answer back. It then carries that one stamp
+same combing the harvest walks (`surveyed.comb_sweep`, so there is one search
+and one set of numbers), and writes the answer back. It then carries that one stamp
 key forward and leaves every other key exactly as it was, so a later run still
 sees what it has to redo. Who read is recorded apart from that: the pass enters
 the stamp's `producers` list whether or not it earned a key, and each
@@ -3897,9 +3239,7 @@ properties it leaves out on purpose (`extraction.NOT_EXTRACTED`).
 
 Two lines only say what they find and never fail: the properties of the
 shapes that nobody asks and the definitions of the spec that are not the
-pin's. A third fails when it must: the example reply of the field prompt has
-to read back through the reader of the run, and the same reply with an
-invented quote has to be refused.
+pin's.
 
 Author: Felix Vossel
 
@@ -3912,9 +3252,7 @@ replies.py: The reply each extraction request asks for, as a JSON schema.
 
 The prompts state these shapes in words. Here they are once more as schemas,
 for an API that generates inside one: a hosted model is asked for JSON in no
-other way, and a server of one's own can be (LLM_SCHEMA=all). The field
-request has had its schema since the grammar was introduced for it
-(`runner.field_response_format`); these are the other five.
+other way, and a server of one's own can be (LLM_SCHEMA=all).
 
 Nothing here is a check. A schema says which keys a reply can have and what
 kind of thing stands under each, as the prompt does. Every key the prompt

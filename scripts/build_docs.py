@@ -325,7 +325,7 @@ SOURCES = (
     _stage("stages/extraction.md", "7. Reading the values out",
            "docpipe/extraction/__init__.py", "docpipe/extraction/pipeline.py",
            "docpipe/extraction/runner.py", "docpipe/extraction/spec.py",
-           "docpipe/extraction/fields.py", "docpipe/extraction/queries.py",
+           "docpipe/extraction/fields.py",
            "docpipe/extraction/verify.py", "docpipe/extraction/trust.py",
            "docpipe/extraction/schema.py", "docpipe/extraction/trace.py",
            "docpipe/extraction/recheck.py", "docpipe/extraction/remap.py",

@@ -141,6 +141,11 @@ class Axis:
     # stays out of the graph, as does one whose entry stays open
     # (`fields.kept`).
     keep: Optional[str] = None
+    # Whether a value the plan states for several entries of this list is
+    # one row per entry (owner decision 2026-11-07: "Fernwärme + Gas-NT" is
+    # the value once with Fernwärme and once with Gas), as a value stated for
+    # several names is (`merged`).
+    several: bool = False
 
     def label_to_uri(self) -> dict:
         """Corpus label (folded) -> URI. Built once, used per tuple."""
@@ -278,16 +283,18 @@ class Group:
     # qualifies the number, never asked again (spec: "own_value", owner
     # decision 2026-11-06).
     own_value: tuple = ()
-    # Of a group the survey reads, the coordinates it reads per passage as one
-    # pair (spec: "pair", all of them where it names none): the frame's
-    # scenario and year, while the beginning of a period the value is a mean
-    # over stands in the same group and is read per value only (owner
-    # decision 2026-11-07), so the frame keeps its one year.
+    # The plan's frame (spec: "pair"): the scenario and the year, which the
+    # plan's base and target years date a value by (`years.PlanYears`). A
+    # group the survey reads reads these per passage, all of its coordinates
+    # where it names none. A group the reading reads asks them per value
+    # (owner decision 2026-11-07: each value is asked its own scenario and
+    # year, none takes its passage's).
     pair: tuple = ()
 
     @property
     def paired(self) -> tuple:
-        """The coordinates the survey reads per passage."""
+        """The coordinates of the frame: those the survey reads per passage
+        in a group it reads."""
         return self.pair or self.coordinates
 
     def asked_near(self, slots: list) -> list:
@@ -408,15 +415,7 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
         if not isinstance(vocabulary, dict) or derive.get("value") not in vocabulary:
             _fail(path, f"derive.value {derive.get('value')!r} is not a key of "
                         f"this axis' vocabulary")
-        # A value whose own reading says what the unit would only assume --
-        # a mean over a span of years is no annual sum -- is asked instead
-        # (owner decision 2026-11-07: "Wenn es nach OEO ein Mittelwert ist,
-        # dann ist es ein Mittelwert").
-        unless = derive.get("unless_read")
-        if unless is not None and (not isinstance(unless, str)
-                                   or not unless.strip()):
-            _fail(path, "derive.unless_read names a coordinate")
-        extra = set(derive) - {"from", "value", "unless_read"}
+        extra = set(derive) - {"from", "value"}
         if extra:
             _fail(path, f"derive has no key {sorted(extra)}")
     kinds = sum(x is not None for x in (vocabulary, axis_type, enum)) + int(dynamic)
@@ -463,6 +462,12 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
                              or keep not in vocabulary):
         _fail(f"{path}.keep", f"{keep!r} is not a key of this axis' "
                               f"vocabulary")
+    several = raw.get("several", False)
+    if not isinstance(several, bool):
+        _fail(f"{path}.several", "true or false")
+    if several and not isinstance(vocabulary, dict):
+        _fail(f"{path}.several", "several entries are for an axis with a "
+                                 "vocabulary")
     beside, beside_definitions, beside_glosses = _vocabulary(
         f"{path}.beside", raw.get("beside"))
     if beside is not None:
@@ -485,7 +490,8 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
                 enum=enum, required=bool(raw.get("required", False)),
                 dynamic=dynamic, merged=merged, beside=beside,
                 question=question, derive=derive,
-                kg=kg, definitions=definitions, glosses=glosses, keep=keep)
+                kg=kg, definitions=definitions, glosses=glosses, keep=keep,
+                several=several)
 
 
 def _validate_example(path: str, raw, value_type: str,
@@ -787,8 +793,6 @@ def _validate_groups(raw, parameters: list, asks_unit: bool) -> dict:
         if not isinstance(pair, list) or any(c not in coordinates
                                              for c in pair):
             _fail(f"{path}.pair", "a list of the group's coordinates")
-        if pair and read_in != "survey":
-            _fail(f"{path}.pair", "only a group the survey reads has a pair")
         groups[name] = Group(name, tuple(coordinates), read_in, where.strip(),
                              full_definition=definition == "full",
                              pair=tuple(pair), **own)

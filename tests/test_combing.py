@@ -36,8 +36,11 @@ in the wrong form and ends unanswered; a coordinate read before is never
 touched; and a request that does not fit leaves the searched coordinates
 exhausted.
 
-A table whose frame is open on all its values is asked once, with the table
-shown, AND every value of it takes the answers with their quotes.
+Every value of a table is asked for itself, AND none takes an answer another
+value of its table read. A year nothing found is asked once more with the
+plan's base and target years, AND only that request reads a year by the
+plan's word for its state; no earlier request is shown those years. Every
+conversation shows the titles of the sections up to the value's place.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -241,15 +244,12 @@ def test_the_first_message_shows_the_value_and_its_answers_and_not_the_passage()
     # parameter again.
     assert later and not any({"value", "read", "parameter", "passage",
                               "source"} & set(payload) for payload in later)
-    # The failure by construction: the whole-table conversation shows the
-    # passage.
-    batch = Batch(7, EMISSION, [WorkItem(7, EMISSION, TABLE)])
-    gas, oil = frame_open(), dict(frame_open(), value=27,
-                                  quote="| Heizöl | 27 |")
+    # The titles of the sections up to the value's place, its own last
+    # (owner decision 2026-11-07); a value further on is shown more of them.
+    assert first["sections"] == ["Bilanz"]
     made, asked, _ = comber()
-    made(7, [reading.Read(batch, [gas, oil], probes=[{}, {}])],
-         {("table", 11): TABLE, **PASSAGES}, [])
-    assert "source" in conversations(asked)[0][0]
+    made(7, reads(only("year"), source=NEXT), PASSAGES, [])
+    assert conversations(asked)[0][0]["sections"] == ["Bilanz", "Weiter"]
 
 
 def test_the_second_reading_shows_the_sections_around_and_cites_them():
@@ -683,7 +683,7 @@ def test_without_a_sentence_the_model_searches_itself_with_its_own():
 TABLE = Source("table", 11, "Tabelle 3: Emissionen\n| Träger | t CO2 |\n"
                "| --- | --- |\n| Erdgas | 300 |\n| Heizöl | 27 |",
                {"document_id": 7, "page": 3})
-FRAME = ("scenario", "year", "period_start")
+FRAME = ("scenario", "year")
 
 
 def frame_open(**more):
@@ -691,53 +691,70 @@ def frame_open(**more):
     return only(*FRAME, **more)
 
 
-def test_a_table_s_frame_open_on_every_value_is_combed_once_for_all():
-    # Owner decisions 2026-11-02 and 2026-11-06: a table that prints no
-    # frame in its head and rows is combed once, and every value of it takes
-    # the answers with their quotes.
+def test_every_value_of_a_table_is_combed_for_itself():
+    # Owner decision 2026-11-07: each value is asked its own coordinates;
+    # none takes what another value of its table read.
     batch = Batch(7, EMISSION, [WorkItem(7, EMISSION, TABLE)])
     gas = frame_open()
     oil = dict(frame_open(), value=27, quote="| Heizöl | 27 |")
     read = [reading.Read(batch, [gas, oil], probes=[SAID, SAID])]
-    made, asked, _ = comber({("comb", "year"): [{"year": YEAR}]})
-    plan = {("table", 11): TABLE, **PASSAGES}
-    done = made(7, read, plan, [])
-    conversation = conversations(asked)
-    # One conversation for the whole table, showing it and saying so.
-    assert len(conversation) == 1
-    first = conversation[0][0]
-    assert first["whole_table"] is True
-    assert first["source"]["text"] == TABLE.text
-    assert "whole_table" not in first["value"]
-    assert [d.table_rows for d in done] == [1]
-    assert [(c["year"], c["year_state"]) for c in (gas, oil)] == [
-        (2030, fields.READ)] * 2
-    assert oil["year_source"] == gas["year_source"] == ["section", 8]
-    assert oil["year_quote"] == gas["year_quote"] == YEAR["quote"]
-    assert list(oil["year_window"]) == ["table", 2]
-    # The failure by construction: a value of the table that read its frame
-    # is combed on its own, and no table is asked for.
-    read = [reading.Read(batch, [frame_open(), dict(
-        only("sector"), value=27, quote="| Heizöl | 27 |")],
-        probes=[SAID, {}])]
-    made, asked, _ = comber({("comb", "year"): [{"year": YEAR}]})
-    made(7, read, plan, [])
-    assert asked and not any("whole_table" in p for p in asked)
-    assert "source" not in conversations(asked)[0][0]
-
-
-def test_a_value_the_table_conversation_leaves_open_is_combed_on_its_own():
-    # The table's answers are for the coordinates open on all its values; a
-    # coordinate open on one value only is asked of that value.
-    batch = Batch(7, EMISSION, [WorkItem(7, EMISSION, TABLE)])
-    gas = frame_open()
-    oil = dict(only(*FRAME, "sector"), value=27, quote="| Heizöl | 27 |")
-    read = [reading.Read(batch, [gas, oil], probes=[{}, {}])]
-    made, asked, _ = comber()
+    # The first value's search finds the year, the second's nothing.
+    made, asked, _ = comber({("comb", "year"): [{"year": YEAR}, {}]})
     done = made(7, read, {("table", 11): TABLE, **PASSAGES}, [])
-    assert len(done) == 2 and len(conversations(asked)) == 2
-    whole = [c for c in conversations(asked) if c[0].get("whole_table")]
-    assert len(whole) == 1
-    own = [c for c in conversations(asked) if not c[0].get("whole_table")]
-    assert {name for p in own[0] for name in p.get("coordinates", ())} \
-        == {"sector"}
+    conversation = conversations(asked)
+    assert len(done) == 2 and len(conversation) == 2
+    assert not any({"whole_table", "source"} & set(c[0]) for c in conversation)
+    assert (gas["year"], gas["year_state"]) == (2030, fields.READ)
+    # the failure by construction: the other value of the table did not
+    # read it, and is not given it
+    assert oil["year_state"] != fields.READ and "year_quote" not in oil
+
+
+# -- a year nothing found ----------------------------------------------------------
+
+STATED = Source("section", 7, "Bestand\nDie Werte zeigen den Bestand.",
+                {"document_id": 7, "section_title": "Bestand"})
+BASES = [{"state": "base", "axis": "year", "year": 2022,
+          "quote": "Das Basisjahr ist 2022.", "source": ["section", 8],
+          "index": 0}]
+BY_WORD = {"year": {"value": 2022, "value_raw": "Bestand",
+                    "quote": "Die Werte zeigen den Bestand."}}
+
+
+def year_by_word(bases):
+    value = only("year")
+    made, asked, _ = comber({("near", "year"): [
+        {"year": {"value": UNSTATED}}, BY_WORD]})
+    (done,) = made(7, reads(value), {("section", 6): OWN,
+                                     ("section", 7): STATED,
+                                     ("section", 8): HIT}, [], bases=bases)
+    return value, done, asked
+
+
+def test_a_year_nothing_found_is_asked_once_more_with_the_plans_years():
+    # Owner decision 2026-11-07: first the model looks for a year; only
+    # where nothing found one may it choose the plan's base or target year.
+    value, done, asked = year_by_word(BASES)
+    (shown,) = [p for p in asked if "plan_years" in p]
+    assert shown["plan_years"] == {"base_years": [2022]}
+    assert asked.index(shown) == len(asked) - 1
+    assert not any("base_years" in json.dumps(p) for p in asked[:-1])
+    assert done.plan_years == 1
+    assert (value["year"], value["year_state"]) == (2022, fields.READ)
+    assert list(value["year_window"]) == ["base_year", 0]
+    assert value["year_link_quote"] == "Die Werte zeigen den Bestand."
+    # the failure by construction: a plan without base years asks nothing
+    # more, and the word reads no year
+    value, done, asked = year_by_word(None)
+    assert not any("plan_years" in p for p in asked)
+    assert done.plan_years == 0 and value["year_state"] != fields.READ
+
+
+def test_a_year_found_is_never_asked_with_the_plans_years():
+    value = only("year")
+    made, asked, _ = comber({("near", "year"): [
+        {"year": {"value": 2030, "quote": "gelten für das Jahr 2030"}}]})
+    made(7, reads(value), {("section", 6): OWN, ("section", 7): HIT},
+         [], bases=BASES)
+    assert value["year_state"] == fields.READ
+    assert not any("plan_years" in p for p in asked)

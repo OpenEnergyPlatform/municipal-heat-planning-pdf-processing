@@ -26,11 +26,10 @@
       "where": "Die Zahl, ihre Einheit, ihre Bezeichnung, ihr Bezug und ein Wort wie „ca.“ oder „bis zu“ stehen zusammen: in derselben Zelle, derselben Tabellenzeile oder demselben Satz. Die Einheit und die Bezeichnung können auch im Spaltenkopf, in einer Einheitenzeile oder im Titel der Tabelle stehen."
     },
     "frame": {
-      "coordinates": ["scenario", "year", "period_start"],
+      "coordinates": ["scenario", "year"],
       "pair": ["scenario", "year"],
-      "read_in": "survey",
-      "own_passage": ["period_start"],
-      "where": "Szenario und Jahr gelten meist für eine ganze Tabelle, eine ganze Abbildung oder einen ganzen Abschnitt und stehen nahe beieinander: im Titel, in der Überschrift, in einem Spaltenkopf oder in dem Satz, der eine Tabelle ankündigt. Der Beginn eines Zeitraums steht beim Jahr: „im Mittel der Jahre 2019 bis 2021“."
+      "read_in": "reading",
+      "where": "Szenario und Jahr stehen oft im Titel, in der Überschrift, in einem Spaltenkopf oder in dem Satz, der eine Tabelle ankündigt."
     },
     "context": {
       "coordinates": ["quantity", "aggregation", "carrier", "sector", "technology", "whole", "spatial_scope", "role"],
@@ -459,14 +458,13 @@
           "question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Wähle den Eintrag nach seiner Bedeutung (\"means\"), nicht nach einem Wort der Stelle. Der Normalfall ist \"integral\", eine Jahressumme.",
           "derive": {
             "from": "unit",
-            "value": "OEO_00140070",
-            "unless_read": "period_start"
+            "value": "OEO_00140070"
           },
           "kg": {
             "role": "edge",
             "schema_slot": "has_aggregation_type",
             "label": "has aggregation type",
-            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from a unit that converts onto the parameter's own unit, unless period_start was read; asked otherwise."
+            "note": "Object is a named individual of OEO_00140068 aggregation type. Asked; where no answer is read, derived from a unit that converts onto the parameter's own unit."
           }
         },
         "carrier": {
@@ -1287,7 +1285,8 @@
               "OEO_00140105": "waste water heat",
               "OEO_00140104": "surface water heat"
             }
-          }
+          },
+          "several": true
         },
         "sector": {
           "vocabulary": {
@@ -1422,7 +1421,8 @@
             "label": "refers to sector",
             "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
             "total_class": "OEO_00000128"
-          }
+          },
+          "several": true
         },
         "technology": {
           "vocabulary": {
@@ -1539,11 +1539,12 @@
             "schema_slot": "refers_to_technology",
             "label": "refers to technology",
             "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional."
-          }
+          },
+          "several": true
         },
         "year": {
           "type": "int",
-          "question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.",
+          "question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Gilt sie für einen Zeitraum mehrerer Jahre („im Mittel der Jahre 2019 bis 2021“), ist \"value\" sein erstes Jahr und \"until\" sein letztes.",
           "kg": {
             "role": "edge",
             "schema_slot": "has_scenario_year_value",
@@ -1551,11 +1552,6 @@
             "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
             "datatype": "xsd:integer"
           }
-        },
-        "period_start": {
-          "type": "int",
-          "required": false,
-          "question": "Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht."
         },
         "scenario": {
           "vocabulary": {
@@ -1644,7 +1640,7 @@
             }
           },
           "required": false,
-          "question": "Auf welches Gebiet bezieht sich der Wert?\nZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.\nSteckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.\nErst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.\nTeilgebiet: sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.\nGanzes Gemeindegebiet: die Klasse reicht.",
+          "question": "Auf welches Gebiet bezieht sich die Zahl?\nTeilgebiet: sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.",
           "kg": {
             "role": "parent",
             "map": {
@@ -2283,14 +2279,13 @@
           "question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Wähle den Eintrag nach seiner Bedeutung (\"means\"), nicht nach einem Wort der Stelle. Der Normalfall ist \"integral\", eine Jahressumme.",
           "derive": {
             "from": "unit",
-            "value": "OEO_00140070",
-            "unless_read": "period_start"
+            "value": "OEO_00140070"
           },
           "kg": {
             "role": "edge",
             "schema_slot": "has_aggregation_type",
             "label": "has aggregation type",
-            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from a unit that converts onto the parameter's own unit, unless period_start was read; asked otherwise."
+            "note": "Object is a named individual of OEO_00140068 aggregation type. Asked; where no answer is read, derived from a unit that converts onto the parameter's own unit."
           }
         },
         "carrier": {
@@ -3111,7 +3106,8 @@
               "OEO_00140105": "waste water heat",
               "OEO_00140104": "surface water heat"
             }
-          }
+          },
+          "several": true
         },
         "sector": {
           "vocabulary": {
@@ -3246,7 +3242,8 @@
             "label": "refers to sector",
             "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
             "total_class": "OEO_00000128"
-          }
+          },
+          "several": true
         },
         "technology": {
           "vocabulary": {
@@ -3363,11 +3360,12 @@
             "schema_slot": "refers_to_technology",
             "label": "refers to technology",
             "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional."
-          }
+          },
+          "several": true
         },
         "year": {
           "type": "int",
-          "question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.",
+          "question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Gilt sie für einen Zeitraum mehrerer Jahre („im Mittel der Jahre 2019 bis 2021“), ist \"value\" sein erstes Jahr und \"until\" sein letztes.",
           "kg": {
             "role": "edge",
             "schema_slot": "has_scenario_year_value",
@@ -3375,11 +3373,6 @@
             "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
             "datatype": "xsd:integer"
           }
-        },
-        "period_start": {
-          "type": "int",
-          "required": false,
-          "question": "Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht."
         },
         "scenario": {
           "vocabulary": {
@@ -3468,7 +3461,7 @@
             }
           },
           "required": false,
-          "question": "Auf welches Gebiet bezieht sich der Wert?\nZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.\nSteckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.\nErst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.\nTeilgebiet: sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.\nGanzes Gemeindegebiet: die Klasse reicht.",
+          "question": "Auf welches Gebiet bezieht sich die Zahl?\nTeilgebiet: sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.",
           "kg": {
             "role": "parent",
             "map": {
@@ -4719,7 +4712,8 @@
               "OEO_00140105": "waste water heat",
               "OEO_00140104": "surface water heat"
             }
-          }
+          },
+          "several": true
         },
         "sector": {
           "vocabulary": {
@@ -4854,7 +4848,8 @@
             "label": "refers to sector",
             "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
             "total_class": "OEO_00000128"
-          }
+          },
+          "several": true
         },
         "technology": {
           "vocabulary": {
@@ -4971,11 +4966,12 @@
             "schema_slot": "refers_to_technology",
             "label": "refers to technology",
             "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional."
-          }
+          },
+          "several": true
         },
         "year": {
           "type": "int",
-          "question": "Für welches Kalenderjahr gilt diese Leistung? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Eine Bestandsanlage trägt das Jahr der Bestandsaufnahme, nicht ihr Baujahr.",
+          "question": "Für welches Kalenderjahr gilt diese Leistung? Vierstellig. Gilt sie für einen Zeitraum mehrerer Jahre („im Mittel der Jahre 2019 bis 2021“), ist \"value\" sein erstes Jahr und \"until\" sein letztes. Eine Bestandsanlage trägt das Jahr der Bestandsaufnahme, nicht ihr Baujahr.",
           "kg": {
             "role": "edge",
             "schema_slot": "has_scenario_year_value",
@@ -4983,11 +4979,6 @@
             "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
             "datatype": "xsd:integer"
           }
-        },
-        "period_start": {
-          "type": "int",
-          "required": false,
-          "question": "Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht."
         },
         "scenario": {
           "vocabulary": {
@@ -5076,7 +5067,7 @@
             }
           },
           "required": false,
-          "question": "Auf welches Gebiet bezieht sich der Wert?\nZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.\nSteckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.\nErst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.\nTeilgebiet: sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.\nGanzes Gemeindegebiet: die Klasse reicht.",
+          "question": "Auf welches Gebiet bezieht sich die Zahl?\nTeilgebiet: sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.",
           "kg": {
             "role": "parent",
             "map": {
@@ -6208,7 +6199,8 @@
               "OEO_00140105": "waste water heat",
               "OEO_00140104": "surface water heat"
             }
-          }
+          },
+          "several": true
         },
         "sector": {
           "vocabulary": {
@@ -6343,7 +6335,8 @@
             "label": "refers to sector",
             "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
             "total_class": "OEO_00000128"
-          }
+          },
+          "several": true
         },
         "technology": {
           "vocabulary": {
@@ -6460,11 +6453,12 @@
             "schema_slot": "refers_to_technology",
             "label": "refers to technology",
             "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional."
-          }
+          },
+          "several": true
         },
         "year": {
           "type": "int",
-          "question": "Für welches Kalenderjahr gilt dieser Anteil? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.",
+          "question": "Für welches Kalenderjahr gilt dieser Anteil? Vierstellig. Gilt sie für einen Zeitraum mehrerer Jahre („im Mittel der Jahre 2019 bis 2021“), ist \"value\" sein erstes Jahr und \"until\" sein letztes.",
           "kg": {
             "role": "edge",
             "schema_slot": "has_scenario_year_value",
@@ -6472,11 +6466,6 @@
             "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
             "datatype": "xsd:integer"
           }
-        },
-        "period_start": {
-          "type": "int",
-          "required": false,
-          "question": "Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht."
         },
         "scenario": {
           "vocabulary": {
@@ -6565,7 +6554,7 @@
             }
           },
           "required": false,
-          "question": "Auf welches Gebiet bezieht sich der Wert?\nZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.\nSteckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.\nErst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.\nTeilgebiet: sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.\nGanzes Gemeindegebiet: die Klasse reicht.",
+          "question": "Auf welches Gebiet bezieht sich die Zahl?\nTeilgebiet: sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.",
           "kg": {
             "role": "parent",
             "map": {
@@ -7618,7 +7607,8 @@
               "OEO_00140105": "waste water heat",
               "OEO_00140104": "surface water heat"
             }
-          }
+          },
+          "several": true
         },
         "sector": {
           "vocabulary": {
@@ -7753,7 +7743,8 @@
             "label": "refers to sector",
             "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
             "total_class": "OEO_00000128"
-          }
+          },
+          "several": true
         },
         "technology": {
           "vocabulary": {
@@ -7870,11 +7861,12 @@
             "schema_slot": "refers_to_technology",
             "label": "refers to technology",
             "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional."
-          }
+          },
+          "several": true
         },
         "year": {
           "type": "int",
-          "question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.",
+          "question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Gilt sie für einen Zeitraum mehrerer Jahre („im Mittel der Jahre 2019 bis 2021“), ist \"value\" sein erstes Jahr und \"until\" sein letztes.",
           "kg": {
             "role": "edge",
             "schema_slot": "has_scenario_year_value",
@@ -7882,11 +7874,6 @@
             "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
             "datatype": "xsd:integer"
           }
-        },
-        "period_start": {
-          "type": "int",
-          "required": false,
-          "question": "Gilt diese Zahl für einen Zeitraum mehrerer Jahre, etwa als Mittel oder Summe: in welchem Jahr beginnt er? Vierstellig, wie der Plan es druckt: „im Mittel der Jahre 2019 bis 2021“ beginnt 2019, und das letzte Jahr ist das Jahr der Zahl. Gilt sie für ein einzelnes Jahr, sagt der Plan es nicht."
         },
         "scenario": {
           "vocabulary": {
@@ -7975,7 +7962,7 @@
             }
           },
           "required": false,
-          "question": "Auf welches Gebiet bezieht sich der Wert?\nZUERST die Zeile: nennt die Zeilenbeschriftung ein Gebiet (Quartiersname, Eignungsgebiet, Straße), ist DAS das Gebiet, die Überschrift gilt nicht.\nSteckbrief- oder Quartierstabelle: je Zeile ein anderes Gebiet, in der Überschrift nur der Gemeindename; wer die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate.\nErst wenn die Zeile kein Gebiet nennt, gilt Überschrift oder Caption.\nTeilgebiet: sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.\nGanzes Gemeindegebiet: die Klasse reicht.",
+          "question": "Auf welches Gebiet bezieht sich die Zahl?\nTeilgebiet: sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.",
           "kg": {
             "role": "parent",
             "map": {

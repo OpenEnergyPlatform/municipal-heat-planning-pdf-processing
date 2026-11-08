@@ -14,8 +14,10 @@ in a NEW conversation per value, not in the value's reading conversation
 (owner decision 2026-11-07: „Es wird neues Gespräch, mit den bisherigen
 Antworten / Ergebnissen“, to spare the context). Its first message shows the
 value with its quote, its answers so far with their quotes, the title and
-heading of its place, the line of the title page, the table it may continue,
-the plan's settings and the coordinate asked; never the passage itself
+heading of its place, the titles of the last sections up to it
+(`reading.sections_of`), the line of the title page, the table it may
+continue, the plan's settings and the coordinate asked; never the passage
+itself
 (owner decision 2026-11-07: „Ohne die Tabelle“), which the value's quote and
 answers pin down. Every request carries its document, so the run orders and
 dedupes it with the document's other requests.
@@ -55,10 +57,15 @@ longer fits begins anew for the next coordinate. A find quoted from a passage
 other than the value's own, its section and its heading is checked as the
 second reading's are.
 
-A table that prints no frame in its head and rows, its frame open on every
-one of its values, gets one such conversation for the whole table, which
-shows the table: its answers hold for every value of it, which take them
-with their quotes (`taken_by`, owner decisions 2026-11-02 and 2026-11-06).
+A year nothing found is asked once more at the end, in the same
+conversation, with the plan's base and target years (`PLAN_YEARS`, owner
+decision 2026-11-07: first the model looks for a year, and only where it
+finds none may it choose one of them): where the value's place names only
+the plan's word for its own state or its target, the year is the one of
+that list it refers to (`pipeline.named_year`). Before that no answer is
+taken from the list. Every value is asked for itself; none takes the
+answers of another value of its table (owner decision 2026-11-07).
+
 A value whose open coordinate may name several things, such as a scenario,
 is shown every name of that kind read in the plan so far, each once, so the
 model can give all of them a value holds for at once (`names_read`, owner
@@ -67,9 +74,8 @@ a row of its own (`reading.answers_each`).
 
 A passage is combed the moment its reading is done, while the rest of the
 plan is still read (`Session`, owner decision 2026-11-07: every place stays
-taken to the end): its tables first, then its values. A value shown every
-name read in the plan waits until the whole plan is read, so its list is
-the whole one.
+taken to the end). A value shown every name read in the plan waits until
+the whole plan is read, so its list is the whole one.
 
 Nothing is checked here beyond what the harvest checks everywhere. Every
 answer goes through `merge_field`, and what it refuses is asked once more in
@@ -84,7 +90,8 @@ A pass over a stored harvest asks with the same conversation
 (`Comber.comb_groups`): the coordinates it names (*coordinates*) whatever
 their state, the value's own passage and its section shown first (*own*),
 since the reading that asked them there ran under an older question, the
-years of the stored rows (*bases*), and the passages a harvest before read
+years of the stored rows (*bases*) for the last question of a year, and the
+passages a harvest before read
 the coordinate in listed (*first*). A stored row carries no sentence, so the
 model searches the rest of the plan itself.
 
@@ -136,8 +143,8 @@ Fields:
 - `corrected: int = 0`
 - `exhausted: int = 0`
 - `listed: int = 0`: lists of the next passages the run added
-- `made: list = field(default_factory=list)`: rows made beside the value, one per further name it was stated for
-- `table_rows: int = 0`: the other values of its table that took the answers asked for this one, its frame open on all of them (owner decision 2026-11-06)
+- `made: list = field(default_factory=list)`: rows made beside the value, one per further name it was stated for and one per further year of a span
+- `plan_years: int = 0`: requests for a year nothing found, with the plan's years
 - `judged: int = 0`: finds quoted from a passage other than the value's own the check was asked about, and those it said do not speak about the value (owner decision 2026-11-07)
 - `turned: int = 0`
 - `anew: int = 0`: conversations begun anew because the one before outgrew the window
@@ -149,8 +156,7 @@ class Comber
 ```
 
 (document_id, reads, passages, pairs, budget) -> [Combed], one per
-read value with an open coordinate and one per table whose frame is
-open on every one of its values.
+read value with an open coordinate.
 
 *ask(payload, shape, document_id, source, group, example, thread,
 follow)* is one message of a conversation (`thread.Thread`): the first
@@ -166,14 +172,16 @@ document_id, source, group, example, thread, follow)*, where given, is
 the request that asks of a find quoted from a passage other than the
 value's own and its section whether that place speaks about the value
 (`CHECK_PROMPT_ID`, owner decision 2026-11-07), a reply that names
-neither answer told so after it.
+neither answer told so after it. *span_marks* are what a value stated
+for a span of years takes on each of its rows (`reading.span_rows`).
 
 #### Comber.\_\_init\_\_
 
 ```python
 def __init__(self, spec, ask: Callable, rank: Optional[Callable],
              known: Callable, *, bases: Optional[Callable] = None,
-             pool=None, trace=None, check: Optional[Callable] = None)
+             pool=None, trace=None, check: Optional[Callable] = None,
+             span_marks: Optional[dict] = None)
 ```
 
 #### Comber.session
@@ -191,13 +199,11 @@ The combing of one document, begun before its reading
 #### Comber.plan
 
 ```python
-def plan(self, read) -> tuple
+def plan(self, read) -> list
 ```
 
-([table jobs], [value jobs]) of one Read: a job per table whose
-frame is open on every one of its values, asked for its first value,
-and a job per value with a coordinate still open besides those its
-table's job asks.
+[value jobs] of one Read: a job per value with a coordinate still
+open, each value asked for itself (owner decision 2026-11-07).
 
 #### Comber.shows_names
 
@@ -207,8 +213,7 @@ def shows_names(job) -> bool
 ```
 
 Is *job* a value's whose open coordinate is shown every name of
-its kind read in the plan (`names_read`)? A table's never is: what
-it asks for all its values names one thing (`several`).
+its kind read in the plan (`names_read`)?
 
 #### Comber.comb_job
 
@@ -219,8 +224,7 @@ def comb_job(self, job, session: "Session",
 
 The Combed of one job of `plan` in *session*'s document: the
 conversation of its value, shown the names *read_so_far* where its
-open coordinate may name several things; a table's answers then go
-to its other values (`taken_by`).
+open coordinate is a coordinate of names.
 
 #### Comber.comb_groups
 
@@ -247,7 +251,6 @@ def comb(self, document_id: int, parameter, source, slots: list,
          bases: Optional[tuple] = None,
          first: Optional[list] = None,
          probes: Optional[dict] = None, split: bool = False,
-         whole_table: int = 0,
          names_so_far: Optional[list] = None,
          title_page=None, settings: Optional[list] = None) -> Combed
 ```
@@ -260,19 +263,20 @@ more with the sections around the value's place, then each that the
 rest of the plan can state, searched for one after another (module
 docstring). *own* shows *source* and its section in the first
 message, *bases* are the years a row may name by a word (instead of
-those of *pairs*), *first* passages listed before the hits of the
+those of *pairs*), asked only once nothing found the year
+(`PLAN_YEARS`), *first* passages listed before the hits of the
 first coordinate searched, *probes* the sentences the reading wrote
 to coordinates it found unstated ({coordinate: sentence}), which the
-search ranks with. *whole_table* is how many other values of the
-value's table take the answers (`taken_by`): the conversation shows
-the table and says so ("whole_table"). *names_so_far* are the names
+search ranks with. *names_so_far* are the names
 read in the plan so far for a coordinate asked that may name several
 things (`names_read`). With *split*, a value the reply states for
 several names of such a coordinate is one row per name
-(`reading.answers_each`, owner decision 2026-11-06), each a copy of
+(`reading.answers_each`, owner decision 2026-11-06), and a value of
+a span of years one per year (`reading.span_rows`), each a copy of
 the value's row in `Combed.made`; without it, as in a pass over a
 stored harvest that re-reads each stored row in place, the first
-name. *title_page* and *settings* are shown in the first message.
+name and the first year. *title_page* and *settings* are shown in
+the first message.
 
 ## Functions
 

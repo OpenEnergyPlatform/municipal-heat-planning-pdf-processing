@@ -11,8 +11,10 @@ in a NEW conversation per value, not in the value's reading conversation
 (owner decision 2026-11-07: „Es wird neues Gespräch, mit den bisherigen
 Antworten / Ergebnissen“, to spare the context). Its first message shows the
 value with its quote, its answers so far with their quotes, the title and
-heading of its place, the line of the title page, the table it may continue,
-the plan's settings and the coordinate asked; never the passage itself
+heading of its place, the titles of the last sections up to it
+(`reading.sections_of`), the line of the title page, the table it may
+continue, the plan's settings and the coordinate asked; never the passage
+itself
 (owner decision 2026-11-07: „Ohne die Tabelle“), which the value's quote and
 answers pin down. Every request carries its document, so the run orders and
 dedupes it with the document's other requests.
@@ -52,10 +54,15 @@ longer fits begins anew for the next coordinate. A find quoted from a passage
 other than the value's own, its section and its heading is checked as the
 second reading's are.
 
-A table that prints no frame in its head and rows, its frame open on every
-one of its values, gets one such conversation for the whole table, which
-shows the table: its answers hold for every value of it, which take them
-with their quotes (`taken_by`, owner decisions 2026-11-02 and 2026-11-06).
+A year nothing found is asked once more at the end, in the same
+conversation, with the plan's base and target years (`PLAN_YEARS`, owner
+decision 2026-11-07: first the model looks for a year, and only where it
+finds none may it choose one of them): where the value's place names only
+the plan's word for its own state or its target, the year is the one of
+that list it refers to (`pipeline.named_year`). Before that no answer is
+taken from the list. Every value is asked for itself; none takes the
+answers of another value of its table (owner decision 2026-11-07).
+
 A value whose open coordinate may name several things, such as a scenario,
 is shown every name of that kind read in the plan so far, each once, so the
 model can give all of them a value holds for at once (`names_read`, owner
@@ -64,9 +71,8 @@ a row of its own (`reading.answers_each`).
 
 A passage is combed the moment its reading is done, while the rest of the
 plan is still read (`Session`, owner decision 2026-11-07: every place stays
-taken to the end): its tables first, then its values. A value shown every
-name read in the plan waits until the whole plan is read, so its list is
-the whole one.
+taken to the end). A value shown every name read in the plan waits until
+the whole plan is read, so its list is the whole one.
 
 Nothing is checked here beyond what the harvest checks everywhere. Every
 answer goes through `merge_field`, and what it refuses is asked once more in
@@ -81,7 +87,8 @@ A pass over a stored harvest asks with the same conversation
 (`Comber.comb_groups`): the coordinates it names (*coordinates*) whatever
 their state, the value's own passage and its section shown first (*own*),
 since the reading that asked them there ran under an older question, the
-years of the stored rows (*bases*), and the passages a harvest before read
+years of the stored rows (*bases*) for the last question of a year, and the
+passages a harvest before read
 the coordinate in listed (*first*). A stored row carries no sentence, so the
 model searches the rest of the plan itself.
 
@@ -106,11 +113,11 @@ from .reading import (ABOUT, CHECK_FOLLOWS, CHECK_PROMPT_ID, COORDINATES,
                       check_example, check_response_format, check_shown,
                       coordinate_shown, entry_example, first_line, gather,
                       groups_of, heading_of, in_group_order, more_schema,
-                      near_of, passage_at, place_text, routed,
+                      near_of, passage_at, place_text, routed, sections_of,
                       settings_evidence, settings_shown, several, shown_as,
                       shown_hits, shown_value, slots_of, source_of,
-                      source_shown, spread, table_before_of, told_once,
-                      turned_out, unanswered_what, years_of)
+                      span_rows, spread, table_before_of, told_once,
+                      turned_out, unanswered_what, until_of, years_of)
 from .thread import Thread
 from .wording import say
 
@@ -121,13 +128,18 @@ COMB_PROMPT_ID = "extraction/comb"
 # says "no" to is not taken, the requests that follow tell the model so,
 # and the search goes on.
 
+# The message that asks a year nothing found once more, with the plan's base
+# and target years (owner decision 2026-11-07), and the window a year it
+# reads is written under where its quote prints it.
+PLAN_YEARS = "plan_years"
+
 # The fields of the messages that follow an answer, whose words the prompts
 # hold (`runner.FOLLOWS`, owner decisions 2026-11-07): the coordinate asked
 # next ("coordinates"), what the search fetched ("more"), the next hits
-# ("hits"), what could not be fetched ("not_found") and what was wrong with
-# the answer before ("corrections"); the check is told what was wrong with
-# its answer.
-FOLLOWS = (COORDINATES, "more", "hits", "not_found", CORRECTIONS)
+# ("hits"), what could not be fetched ("not_found"), the plan's years for a
+# year nothing found ("plan_years") and what was wrong with the answer before
+# ("corrections"); the check is told what was wrong with its answer.
+FOLLOWS = (COORDINATES, "more", "hits", "not_found", PLAN_YEARS, CORRECTIONS)
 
 # What a combing request tells of a quote that stands in nothing it showed,
 # in the names of what it shows: "more", "hits", "passage", "row" (owner
@@ -343,10 +355,10 @@ class Combed:
     exhausted: int = 0
     listed: int = 0               # lists of the next passages the run added
     # rows made beside the value, one per further name it was stated for
+    # and one per further year of a span
     made: list = field(default_factory=list)
-    # the other values of its table that took the answers asked for this
-    # one, its frame open on all of them (owner decision 2026-11-06)
-    table_rows: int = 0
+    # requests for a year nothing found, with the plan's years
+    plan_years: int = 0
     # finds quoted from a passage other than the value's own the check was
     # asked about, and those it said do not speak about the value (owner
     # decision 2026-11-07)
@@ -356,42 +368,16 @@ class Combed:
     anew: int = 0
 
 
-# The keys of one coordinate a value takes from the value of its table that
-# was asked for all of them (`taken_by`).
-TAKEN = COORDINATE_KEYS
-
-
-def taken_by(first: dict, others: list, names: list) -> None:
-    """The coordinates *names* as the conversation left them on *first*, the
-    value of a table it was asked for, taken by the table's other values,
-    with their quotes and states (owner decisions 2026-11-02 and 2026-11-06:
-    a table that prints no frame in its head and rows is asked once). A
-    coordinate the search read on the first counts for the others as read
-    for their table (`table`)."""
-    for claim in others:
-        for name in names:
-            for suffix in TAKEN:
-                claim.pop(f"{name}{suffix}", None)
-                if f"{name}{suffix}" in first:
-                    claim[f"{name}{suffix}"] = copy.deepcopy(
-                        first[f"{name}{suffix}"])
-            window = claim.get(f"{name}_window") or ()
-            if claim.get(f"{name}_state") == READ and window \
-                    and window[0] == "retrieval":
-                claim[f"{name}_window"] = ["table", 2]
-
-
 class Session:
     """The combing of one document while it is read (owner decision
     2026-11-07: every place stays taken to the end).
 
-    *add(read)* begins a Read's combing the moment its reading is done:
-    its tables' jobs at once, its values' once those are done, since a value
-    of a table shows the frame its table took. A value shown every name of
-    its kind read in the plan (`Comber.shows_names`) waits for *finish(reads)*,
-    which comes when the whole plan is read: it asks those, waits for every
-    job and gives [Combed] as `Comber.__call__` does, every table's and then
-    every value's, Read by Read, the rows each made joined to their Read.
+    *add(read)* begins a Read's combing the moment its reading is done, a
+    job per value. A value shown every name of its kind read in the plan
+    (`Comber.shows_names`) waits for *finish(reads)*, which comes when the
+    whole plan is read: it asks those, waits for every job and gives
+    [Combed] as `Comber.__call__` does, Read by Read, the rows each made
+    joined to their Read.
     With the comber's pool the jobs run side by side and only *finish*
     waits; without one each runs at once. *cancel()* takes back every job
     not begun, and none is begun after it.
@@ -410,10 +396,9 @@ class Session:
         self.title_page = title_page
         self.settings = settings
         self._lock = threading.Condition()
-        self._plans: dict = {}      # id(read): (tables, values)
+        self._plans: dict = {}      # id(read): (read, values)
         self._futures: dict = {}    # id(job): its Combed to come
         self._held: list = []
-        self._waiting = 0           # Reads whose values wait for tables
         self._cancelled = False
 
     def _start(self, job, read_so_far: Optional[dict] = None) -> None:
@@ -431,59 +416,33 @@ class Session:
         with self._lock:
             if id(read) in self._plans or self._cancelled:
                 return
-            tables, values = self.comber.plan(read)
-            self._plans[id(read)] = (read, tables, values)
+            values = self.comber.plan(read)
+            self._plans[id(read)] = (read, values)
             self._held += [job for job in values
                            if self.comber.shows_names(job)]
             now = [job for job in values
                    if not self.comber.shows_names(job)]
-            if tables and self.comber.pool is not None:
-                self._waiting += 1
-        if not tables or self.comber.pool is None:
-            for job in tables + now:
-                self._start(job)
-            return
-        left = [len(tables)]
-
-        def table_done(_future) -> None:
-            with self._lock:
-                left[0] -= 1
-                if left[0]:
-                    return
-                go = not self._cancelled
-            try:
-                for job in now if go else ():
-                    self._start(job)
-            finally:
-                with self._lock:
-                    self._waiting -= 1
-                    self._lock.notify_all()
-        for job in tables:
+        for job in now:
             self._start(job)
-            self._futures[id(job)].add_done_callback(table_done)
 
     def finish(self, reads: list) -> list:
         """[Combed] of every Read of *reads*, once the whole plan is read
         (a Read not added yet is added now)."""
         for read in reads:
             self.add(read)
-        # Every table done first: a value of one shows its table's frame.
-        with self._lock:
-            while self._waiting:
-                self._lock.wait()
         read_so_far = names_read(self.comber.spec, reads)
         for job in list(self._held):
             self._start(job, read_so_far)
         plans = [self._plans[id(read)] for read in reads]
-        jobs = ([job for _read, tables, _values in plans for job in tables]
-                + [job for _read, _tables, values in plans for job in values])
+        jobs = [job for _read, values in plans for job in values]
         try:
             combed = [self._futures[id(job)].result() for job in jobs]
         except BaseException:
             self.cancel()
             raise
         # A value asked for several names is one row per name (owner
-        # decision 2026-11-06): the rows made join their value's reading.
+        # decision 2026-11-06), a value of a span one per year: the rows
+        # made join their value's reading.
         for job, result in zip(jobs, combed):
             read, index = job[0], job[4]
             probes = read.probes[index] if index < len(read.probes) else {}
@@ -505,8 +464,7 @@ class Session:
 
 class Comber:
     """(document_id, reads, passages, pairs, budget) -> [Combed], one per
-    read value with an open coordinate and one per table whose frame is
-    open on every one of its values.
+    read value with an open coordinate.
 
     *ask(payload, shape, document_id, source, group, example, thread,
     follow)* is one message of a conversation (`thread.Thread`): the first
@@ -522,12 +480,14 @@ class Comber:
     the request that asks of a find quoted from a passage other than the
     value's own and its section whether that place speaks about the value
     (`CHECK_PROMPT_ID`, owner decision 2026-11-07), a reply that names
-    neither answer told so after it.
+    neither answer told so after it. *span_marks* are what a value stated
+    for a span of years takes on each of its rows (`reading.span_rows`).
     """
 
     def __init__(self, spec, ask: Callable, rank: Optional[Callable],
                  known: Callable, *, bases: Optional[Callable] = None,
-                 pool=None, trace=None, check: Optional[Callable] = None):
+                 pool=None, trace=None, check: Optional[Callable] = None,
+                 span_marks: Optional[dict] = None):
         self.spec = spec
         self.ask = ask
         self.rank = rank
@@ -536,6 +496,7 @@ class Comber:
         self.pool = pool
         self.trace = trace
         self.check = check
+        self.span_marks = dict(span_marks or {})
 
     def _asked(self, parameter) -> list:
         """[(slot, group)] of *parameter* this step may ask, in the order of
@@ -553,10 +514,8 @@ class Comber:
                  title_page=None, settings: Optional[list] = None) -> list:
         """One conversation per read value with a coordinate still open
         after its reading (owner decisions 2026-11-04 to 2026-11-07: one
-        value per request, a new conversation for what is open). A table's
-        frame open on every one of its values is asked once, for its first
-        value, and the others take the answers (`taken_by`); those
-        conversations run first. *bases* are the plan's years
+        value per request, a new conversation for what is open). *bases*
+        are the plan's years
         (`years.PlanYears`), else those of *pairs*; *title_page* the line of
         the plan's title page, *settings* what the plan settles for all its
         values (`settings.PlanSettings`), both shown to every conversation.
@@ -576,81 +535,50 @@ class Comber:
         return Session(self, document_id, passages, pairs, budget, bases,
                        title_page=title_page, settings=settings)
 
-    def plan(self, read) -> tuple:
-        """([table jobs], [value jobs]) of one Read: a job per table whose
-        frame is open on every one of its values, asked for its first value,
-        and a job per value with a coordinate still open besides those its
-        table's job asks."""
-        tables: list = []
+    def plan(self, read) -> list:
+        """[value jobs] of one Read: a job per value with a coordinate still
+        open, each value asked for itself (owner decision 2026-11-07)."""
         values: list = []
         parameter = read.batch.parameter
-        asked = self._asked(parameter)
-        slots = [slot for slot, _group in asked]
-        by_table: dict = {}
+        slots = [slot for slot, _group in self._asked(parameter)]
         for index, claim in enumerate(read.claims):
-            source = source_of(read.batch, claim)
-            if source.owner_kind == "table":
-                by_table.setdefault(source.owner_id, []).append(
-                    (index, claim, source))
-        taken: dict = {}
-        for owner, entries in by_table.items():
-            if len(entries) < 2:
-                continue
-            common = [slot for slot, group in asked
-                      if group.read_in == "survey" and not several(slot)
-                      and all(claim.get(f"{slot.name}_state") in OPEN
-                              for _i, claim, _s in entries)]
-            if not common:
-                continue
-            index, claim, source = entries[0]
-            tables.append((read, parameter, source, common, index,
-                           [one for _i, one, _s in entries[1:]]))
-            for i, _claim, _source in entries:
-                taken.setdefault(i, set()).update(s.name for s in common)
-        for index, claim in enumerate(read.claims):
-            names = set(open_of(claim, slots)) - taken.get(index, set())
+            names = set(open_of(claim, slots))
             if names:
                 values.append((read, parameter,
                                source_of(read.batch, claim),
                                [slot for slot in slots
-                                if slot.name in names], index, []))
-        return tables, values
+                                if slot.name in names], index))
+        return values
 
     @staticmethod
     def shows_names(job) -> bool:
         """Is *job* a value's whose open coordinate is shown every name of
-        its kind read in the plan (`names_read`)? A table's never is: what
-        it asks for all its values names one thing (`several`)."""
-        read, _parameter, _source, slots, index, others = job
+        its kind read in the plan (`names_read`)?"""
+        read, _parameter, _source, slots, index = job
         claim = read.claims[index]
-        return not others and any(several(slot)
-                                  and slot.name in open_of(claim, slots)
-                                  for slot in slots)
+        return any(several(slot) and getattr(slot, "merged", None)
+                   and slot.name in open_of(claim, slots)
+                   for slot in slots)
 
     def comb_job(self, job, session: "Session",
                  read_so_far: Optional[dict] = None):
         """The Combed of one job of `plan` in *session*'s document: the
         conversation of its value, shown the names *read_so_far* where its
-        open coordinate may name several things; a table's answers then go
-        to its other values (`taken_by`)."""
-        read, parameter, source, slots, index, others = job
+        open coordinate is a coordinate of names."""
+        read, parameter, source, slots, index = job
         claim = read.claims[index]
         probes = read.probes[index] if index < len(read.probes) else {}
         shown = list(dict.fromkeys(
-            name for slot in slots if several(slot)
+            name for slot in slots if getattr(slot, "merged", None)
             and slot.name in open_of(claim, slots)
             for name in (read_so_far or {}).get(slot.merged, ())))
-        result = self.comb(session.document_id, parameter, source, slots,
-                           [claim], session.passages, session.pairs,
-                           session.budget, probes=probes, split=not others,
-                           bases=tuple(session.bases)
-                           if session.bases is not None else None,
-                           whole_table=len(others), names_so_far=shown,
-                           title_page=session.title_page,
-                           settings=session.settings)
-        if others:
-            taken_by(claim, others, [slot.name for slot in slots])
-        return result
+        return self.comb(session.document_id, parameter, source, slots,
+                         [claim], session.passages, session.pairs,
+                         session.budget, probes=probes, split=True,
+                         bases=tuple(session.bases)
+                         if session.bases is not None else None,
+                         names_so_far=shown, title_page=session.title_page,
+                         settings=session.settings)
 
     def comb_groups(self, document_id: int, parameter, source, slots: list,
                     claims: list, passages: dict, pairs: list,
@@ -686,7 +614,6 @@ class Comber:
              bases: Optional[tuple] = None,
              first: Optional[list] = None,
              probes: Optional[dict] = None, split: bool = False,
-             whole_table: int = 0,
              names_so_far: Optional[list] = None,
              title_page=None, settings: Optional[list] = None) -> Combed:
         """The coordinates of the one value *claims* holds, read from
@@ -697,19 +624,20 @@ class Comber:
         rest of the plan can state, searched for one after another (module
         docstring). *own* shows *source* and its section in the first
         message, *bases* are the years a row may name by a word (instead of
-        those of *pairs*), *first* passages listed before the hits of the
+        those of *pairs*), asked only once nothing found the year
+        (`PLAN_YEARS`), *first* passages listed before the hits of the
         first coordinate searched, *probes* the sentences the reading wrote
         to coordinates it found unstated ({coordinate: sentence}), which the
-        search ranks with. *whole_table* is how many other values of the
-        value's table take the answers (`taken_by`): the conversation shows
-        the table and says so ("whole_table"). *names_so_far* are the names
+        search ranks with. *names_so_far* are the names
         read in the plan so far for a coordinate asked that may name several
         things (`names_read`). With *split*, a value the reply states for
         several names of such a coordinate is one row per name
-        (`reading.answers_each`, owner decision 2026-11-06), each a copy of
+        (`reading.answers_each`, owner decision 2026-11-06), and a value of
+        a span of years one per year (`reading.span_rows`), each a copy of
         the value's row in `Combed.made`; without it, as in a pass over a
         stored harvest that re-reads each stored row in place, the first
-        name. *title_page* and *settings* are shown in the first message."""
+        name and the first year. *title_page* and *settings* are shown in
+        the first message."""
         if len(claims) != 1:
             raise ValueError(f"a combing request shows one row, not "
                              f"{len(claims)}")
@@ -726,8 +654,7 @@ class Comber:
             opened = set(open_of(rows[0].claim, ordered))
             wanted = [slot for slot in ordered if slot.name in opened]
         origin = (source.owner_kind, source.owner_id)
-        result = Combed(parameter.uri, origin, len(rows), len(wanted),
-                        table_rows=whole_table)
+        result = Combed(parameter.uri, origin, len(rows), len(wanted))
         if not wanted:
             return result
         if coordinates is not None:
@@ -740,7 +667,6 @@ class Comber:
             if around is not None else origin
         bases = list(bases) if bases is not None else self.bases(pairs)
         probes = dict(probes or {})
-        table = whole_table > 0
         near_slots = [slot for slot in wanted
                       if group_of[slot.name].asked_near([slot])]
         search_slots = [slot for slot in wanted
@@ -767,6 +693,7 @@ class Comber:
                   if piece is not None and (piece.text or "").strip()]
         settled = [one for one in settings or () if isinstance(one, dict)]
         setting_pieces = settings_evidence(settled, passages)
+        titles, titled = sections_of(source, passages)
         # What the value's own place is: a find quoted from it needs no
         # check (owner decision 2026-11-07).
         own_places = {origin, parent} | {(s.owner_kind, s.owner_id)
@@ -779,22 +706,18 @@ class Comber:
             # Whatever the conversation showed of the plan may be quoted
             # (owner decision 2026-11-05), each piece under the passage it
             # was shown with.
-            return ([source] + ([around] if around is not None else [])
-                    if table else []) \
-                + heading_of(source) \
+            return heading_of(source) \
                 + shown_as(source, lookup.title_of(source)) \
                 + shown_as(source, row.claim.get("quote")) \
                 + answers_evidence(row.claim, passages) \
-                + beside + setting_pieces + list(near.values()) \
+                + beside + setting_pieces + titled + list(near.values()) \
                 + gathered.evidence(passages)
 
         def coordinate_of(slot, unstated: bool) -> dict:
             # The coordinate as the conversation asks it: its question and
-            # list, where a plan prints it, and for a year the plan's base
-            # and target years.
+            # list, and where a plan prints it.
             return {slot.name: {**coordinate_shown(slot, unstated=unstated),
-                                "where": group_of[slot.name].where,
-                                **years_of(bases, [slot])}}
+                                "where": group_of[slot.name].where}}
 
         def row_shown(row: Row) -> dict:
             return {**shown_value(row.claim),
@@ -815,8 +738,7 @@ class Comber:
             **({"table_before": table_before_of(source).text}
                if table_before_of(source) is not None else {}),
             **({"settings": settings_shown(settled)} if settled else {}),
-            **({"source": source_shown(source), "whole_table": True}
-               if table else {}),
+            **({"sections": titles} if titles else {}),
             **({"names": list(names_so_far)} if names_so_far else {}),
             "value": {**shown_value(value),
                       **({"unit": value.get(f"{UNIT}_raw")
@@ -849,6 +771,21 @@ class Comber:
                 talk["mark"] = gathered.mark()
             return reply
 
+        def clone(row: Row) -> Row:
+            # A row of its own for a further year of a span, appended to the
+            # value's rows (`reading.span_rows`).
+            copied = Row(label=row_label(len(rows)), item_index=row.item_index,
+                         claim=copy.deepcopy(row.claim))
+            rows.append(copied)
+            return copied
+
+        def spanned(row: Row, slot, entry) -> None:
+            # A year stated for a span: one row per year of it, where the
+            # conversation makes rows of its own (*split*).
+            if split:
+                span_rows(row, slot, until_of(slot, {slot.name: entry}),
+                          self.span_marks, clone)
+
         def anew() -> None:
             # The conversation outgrew the model's window: the next
             # coordinate begins a new one, with the answers so far.
@@ -878,11 +815,12 @@ class Comber:
             return told
 
         def settle(slot, reply: dict, window: tuple, not_in_quote: str,
-                   search: bool) -> tuple:
+                   search: bool, with_years: Optional[list] = None) -> tuple:
             """*reply*'s answer for *slot* onto the rows it makes, one per
             name where the coordinate may name several (with *split*):
             ({row label: [corrections]} of what the check refused, {row
-            label: the answer it got})."""
+            label: the answer it got}). *with_years* are the plan's years
+            a year may be named by (`PLAN_YEARS`), none before."""
             replies = answers_each(reply, [slot])
             targets = [rows[0]] + [self._another(rows, wanted)
                                    for _ in (replies[1:] if split else ())]
@@ -906,9 +844,10 @@ class Comber:
                     continue
                 got = merge_field([row], shown_now(row), slot,
                                   {"answers": {row.label: answer_of(entry)}},
-                                  window=window, bases=bases,
+                                  window=window, bases=with_years,
                                   not_shown=NOT_SHOWN,
                                   not_in_quote=not_in_quote)
+                spanned(row, slot, entry)
                 refused = [{"coordinate": slot.name,
                             "what": failure.get("reason")}
                            for failure in got["failed"]]
@@ -918,7 +857,7 @@ class Comber:
 
         def corrected(slot, corrections: dict, given: dict, window: tuple,
                       not_in_quote: str, shape: dict, example: dict,
-                      search: bool) -> None:
+                      search: bool, with_years: Optional[list] = None) -> None:
             # ONE message after the answer for every row it made, naming
             # each refused name with its quote; each answer goes to the row
             # of its name, a changed name to the next row still open, a
@@ -949,8 +888,9 @@ class Comber:
                 target.claim.pop(f"{slot.name}_state", None)
                 merge_field([target], shown_now(target), slot,
                             {"answers": {target.label: answer_of(entry)}},
-                            window=window, bases=bases, not_shown=NOT_SHOWN,
-                            not_in_quote=not_in_quote)
+                            window=window, bases=with_years,
+                            not_shown=NOT_SHOWN, not_in_quote=not_in_quote)
+                spanned(target, slot, entry)
 
         # -- the second reading --------------------------------------------
         def shut(slot) -> bool:
@@ -964,7 +904,7 @@ class Comber:
                     row.claim[f"{slot.name}_state"] = fields.OUT_OF_SLICE
             return len(gone) == len(rows)
 
-        near_window = ("table", 1) if table else ("near", 1)
+        near_window = ("near", 1)
         for slot in (near_slots if near else ()):
             if rows[0].claim.get(f"{slot.name}_state") == READ or shut(slot):
                 continue
@@ -1131,6 +1071,48 @@ class Comber:
                 anew()
                 gathered.unfit = False
 
+        # -- a year nothing found, with the plan's own years ----------------
+        # Only now may the model choose the plan's base or target year, where
+        # the value's place names the plan's word for its state or its
+        # target instead of a year (owner decision 2026-11-07: "Nur wenn das
+        # Modell kein Jahr findet, gibt es eine extra Anfrage").
+        for slot in wanted:
+            years = years_of(bases, [slot])
+            if not years or shut(slot) or all(
+                    row.claim.get(f"{slot.name}_state") == READ
+                    for row in rows):
+                continue
+            shape, example = near_response_format([slot]), near_example([slot])
+            asked_now = {COORDINATES: coordinate_of(slot, unstated=True),
+                         PLAN_YEARS: years}
+            reply = send(asked_now, asked_now, shape, example)
+            result.asked += 1
+            result.plan_years += 1
+            if not isinstance(reply, dict) and talk["thread"].begun:
+                anew()
+                reply = send(asked_now, None, shape, example)
+                result.asked += 1
+                result.plan_years += 1
+            if not isinstance(reply, dict):
+                continue
+            reply = judged(slot, spread(reply, [slot]))
+            held = {row.label: row.claim.get(f"{slot.name}_state")
+                    for row in rows}
+            for row in rows:
+                if held[row.label] != READ:
+                    row.claim.pop(f"{slot.name}_state", None)
+            window = (PLAN_YEARS, 1)
+            corrections, given = settle(slot, reply, window, "or_unstated",
+                                        search=False, with_years=bases)
+            corrected(slot, corrections, given, window, "or_unstated", shape,
+                      example, search=False, with_years=bases)
+            for row in rows:
+                # What this request did not read stays as it was: a year
+                # still not found is what the search left it.
+                if row.claim.get(f"{slot.name}_state") != READ \
+                        and held.get(row.label):
+                    row.claim[f"{slot.name}_state"] = held[row.label]
+
         # A coordinate the conversation never reached keeps what the reading
         # left; one it asked and nothing answered is unanswered.
         for row in rows:
@@ -1175,7 +1157,7 @@ class Comber:
                        corrected=result.corrected,
                        exhausted=result.exhausted, listed=result.listed,
                        **({"anew": result.anew} if result.anew else {}),
-                       **({"table_rows": result.table_rows}
-                          if result.table_rows else {}),
+                       **({"plan_years": result.plan_years}
+                          if result.plan_years else {}),
                        **({"judged": result.judged, "turned": result.turned}
                           if result.judged else {}))

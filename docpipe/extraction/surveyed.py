@@ -56,7 +56,9 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .lookup import continued
-from .pipeline import Batch, DocumentReport, WorkItem, drop_repeats
+from . import fields
+from .pipeline import (Batch, DocumentReport, Row, WorkItem, drop_repeats,
+                       row_label)
 from .reading import NO_ANSWER, shown_hits, source_of
 from .survey import Answer, Found, budget_of, merge
 from .verify import value_refused
@@ -89,6 +91,26 @@ def frame_pairs(found: Found) -> list:
             if one not in pairs:
                 pairs.append(one)
     return pairs
+
+
+def derive_left(reads: list) -> int:
+    """What the spec derives from the unit, on every value no request read
+    it for once the reading and the combing are done (owner decision
+    2026-11-07: asked first, and only where no answer is read taken from the
+    unit, `fields.derives`). Returns how many coordinates."""
+    done = 0
+    for read in reads:
+        parameter = read.batch.parameter
+        if parameter is None:
+            continue
+        for slot in fields.axis_slots(parameter):
+            if not slot.derive:
+                continue
+            done += fields.apply_derived(
+                [Row(row_label(i), 0, claim)
+                 for i, claim in enumerate(read.claims)
+                 if fields.derives(slot, claim, parameter)], slot)
+    return done
 
 
 def joined(found: Found, also: Found) -> Found:
@@ -570,6 +592,7 @@ class SurveyedHarvest:
                 combed = session.finish(reads)
                 if self.halted():
                     return None
+            derive_left(reads)
             finished = True
             return taken_of(document_id, spec, found, reads, combed, shown,
                             sought, front)

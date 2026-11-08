@@ -72,8 +72,8 @@ table gives kwp's own answer.
 | Visuals | `prompts/visuals/*.md` | six prompt ids of its own | table transcription, figure description and captions, in German; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object, in English like the prompts of the first three (`reading.REQUIRED`), laid over the built-in profile's |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | plan-centric labels and names (a name opens each line of the values index), convoy membership, three filters |
-| Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `BASE_YEAR`, `TARGET_YEAR`, `document_context`, `FRONT_PAGE_PARAMETERS` (empty), `PHRASES`, `PROMPT_CHECKS`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE` | the spec, the slice gate, the frame axes, the frame pairs that are the plan's own state and its target, the German sentences the stage writes to the model (the frame request's list of a closed coordinate stands under `"scenarios"`), the passages the preflight holds its prompts to, and the language (`"de"`) of the core's templates its parts files are put together with |
-| Extraction | `prompts/extraction/*.md` | 18 prompt ids | phrase, anchors and queries as plain files; frame, rows, field, review and example as parts files that name a template of the core; `compute`; `places` and `years`; and the seven prompts of the survey flow, `survey`, `read_values`, `read_text`, `comb`, `comb_check`, `settings` and `seek` (see The prompts) |
+| Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `BASE_YEAR`, `TARGET_YEAR`, `SPAN_MARKS`, `document_context`, `FRONT_PAGE_PARAMETERS` (empty), `PHRASES`, `PROMPT_CHECKS` (empty), `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE` | the spec, the slice constant (read by no step now), the frame axes, the pairs that are the plan's own state and its target, the marks a value stated for a span of years takes on each of its rows (`out:approximate`), the German sentences the stage writes to the model (the list of a closed coordinate in a refused pair stands under `"scenarios"`), and the language (`"de"`) of the core's templates its parts files are put together with |
+| Extraction | `prompts/extraction/*.md` | 13 prompt ids | phrase and anchors as plain files; review and example as parts files that name a template of the core; `compute` and `years`; and the seven prompts of the survey flow, `survey`, `read_values`, `read_text`, `comb`, `comb_check`, `settings` and `seek` (see The prompts) |
 | The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
 | The answer app | `inference.py` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |
 | The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 12 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
@@ -157,11 +157,11 @@ amounts in how its aggregation is decided:
 
 | parameter | `quantity` size (`out:`) | `aggregation` size (`out:`) | `aggregation` derived |
 |---|---|---|---|
-| `energy_consumption` | 29 (3) | 5 (0) | yes, from the unit unless `period_start` was read |
-| `emission` | 11 (6) | 5 (0) | yes, from a unit that converts onto the parameter's own unit unless `period_start` was read; asked otherwise |
+| `energy_consumption` | 29 (3) | 5 (0) | yes, from the unit where no answer is read |
+| `emission` | 11 (6) | 5 (0) | yes, from a unit that converts onto the parameter's own unit where no answer is read; asked only otherwise |
 | `heat_load` | 24 (2) | 5 (0) | no, asked |
 | `share` | 16 (1) | none | no axis |
-| `building_count` | 1 (0), derived from the unit | 5 (0) | yes, from the unit (instantaneous) |
+| `building_count` | 1 (0), derived from the unit where no answer is read | 5 (0) | yes, from the unit (instantaneous) where no answer is read |
 
 An axis or a parameter answer beginning `out:` is a deliberate non-class,
 not a gap. The convention is the core's: the sentinel a coordinate
@@ -199,24 +199,24 @@ of a table without a sector column, which is not `out:unstated`. The model answe
 table (the sentence itself, for a sentence), and `value_raw` is the word of that
 quote it is split by instead, "Gebäudetyp" for example. The owner's two checks
 are the only ones, as for every answer: the quote stands in a shown passage and
-the wording in the quote. The questions of both axes say so and point to
-`known` for what the number already is.
+the wording in the quote. The questions of both axes say so.
 
-Two of the numeric parameters decide their `aggregation` on their own
-rather than asking, carried as the `derived` state
-(`docpipe/extraction/fields.py:68` to `75`; [glossary](../glossary.md)):
-every unit `energy_consumption` or `emission` accepts that converts onto the
-parameter's own unit names a span, so their aggregation is the closed list's
-integral entry, never asked, unless `period_start` was read (`docpipe/extraction/spec.py:381` to `400`,
-`Axis.derive`, whose block carries `"unless_read": "period_start"`; the key
-must name an axis of the same parameter, and `fields.derives` applies it): a
-plan that names the start of a span states a mean over years, and a mean is a
-mean (owner decision 2026-11-07), so there the aggregation is asked. It is asked
-as well for the 20 emission-factor units ("g CO2/kWh", "kg CO2/MWh", "kg CO2/GJ",
-...): an entry of `units_accepted` may name its own `"target"`, the unit its
-factor converts onto where that is not `unit_target` (`Parameter.target_of`),
-and an emission factor is no annual amount, so `fields.derived_by_unit` leaves
-it to the model (owner decision 2026-11-07). Before this was
+Two of the numeric parameters take their `aggregation` from the unit where no
+request read it, carried as the `derived` state
+(`docpipe/extraction/fields.py:68` to `75`; [glossary](../glossary.md)): every
+unit `energy_consumption` or `emission` accepts that converts onto the
+parameter's own unit names a span, so the closed list's integral entry is the
+fallback. It is asked first, like every coordinate (owner decision 2026-11-07:
+asked, and derived only as the fallback), and the unit's entry is written only
+where nothing read it (`Axis.derive`, `fields.derives`, `fields.apply_derived`;
+the run does it after the reading and the combing): a plan that names a span
+states a mean over years, and a mean is a mean (owner decision 2026-11-07), which
+the model reads. For the 20 emission-factor units ("g CO2/kWh", "kg CO2/MWh",
+"kg CO2/GJ", ...) it is never derived: an entry of `units_accepted` may name its
+own `"target"`, the unit its factor converts onto where that is not
+`unit_target` (`Parameter.target_of`), and an emission factor is no annual
+amount, so `fields.derived_by_unit` leaves it to the model (owner decision
+2026-11-07). Before this was
 derived, all 452 aggregation answers the model gave for these two
 parameters over one plan were that same entry every time, evidenced
 only by the unit string the request had itself just handed over. `heat_load`'s aggregation is
@@ -224,21 +224,20 @@ not derived, since a watt is not integrated over a span the way a
 watt-hour is: this axis is asked instead, with evidence allowed one page
 away, and a peak load can come back distinct from an average one.
 
-The frame is the pair of coordinates found once per document rather than
-once per row: `FRAME = ("scenario", "year")`
-(`profiles/kwp/extraction.py:73`). A plan states its scenario containers
-and its reference years in headings and column headers, not inside every
-cell, so the run reads that pair first and projects every combination it
-found onto the rows that follow, rather than asking each row to name its
-own scenario and year again; not a cross product, since a plan with a
-target scenario for four years and one inventory year contributes five
-pairs, not twenty (`profiles/kwp/extraction.py:60` to `72`). Before the
-frame existed, the year axis alone produced 1,849 refusals against zero
-readings, because every retrieval window after the first excluded the one
-source that could carry the year.
+The frame is the pair of coordinates that dates a value, `FRAME = ("scenario",
+"year")` (`profiles/kwp/extraction.py`). A plan states its scenario containers
+and its reference years in headings and column headers, not inside every cell,
+and since 2026-11-08 no step reads that pair once for a document, a table or a
+section and projects it onto rows: each value is asked its scenario and its
+year for itself, in the messages of the `frame` group, with the titles of the
+sections up to its place beside the passage (owner decision 2026-11-07), and a
+year no step found is asked once more with the plan's base and target years (see
+[extraction](../stages/extraction.md)). Before the frame existed, the year axis
+alone produced 1,849 refusals against zero readings, because every retrieval
+window after the first excluded the one source that could carry the year.
 
-A passage that prints no pair at all is read without one, and its year is
-asked per row against the section it stands in. There used to be a
+A value whose passage prints no scenario or year is asked them like any other,
+its year against the section it stands in. There used to be a
 `FRAME_DEFAULT` for this case, the pair such a passage was read under, after
 Kassel's Tabelle 3 (CO2 by sector and carrier, no year anywhere) left 35
 values without a year. It is gone. It fired only when exactly one pair of the
@@ -247,31 +246,21 @@ corpus_m5 run, 0 of 638 planning calls: a plan states its inventory for one
 base year and mentions a handful of others, so several pairs matched and the
 branch stood down. More than the count, it wrote a year that does not stand in
 the passage, and every value of this corpus says in the plan what it refers
-to. Where it says so is the text around the table: the field sweep's first
-window is its section, and the reading shows the whole section, up to two
-pages of the plan around the table's placeholder.
+to. Where it says so is the text around the table: the reading shows the whole
+section, up to two pages of the plan around the table's placeholder, and the
+titles of the sections before it.
 
-The slice gate decides, before any other coordinate is asked, whether a
-row belongs in this run's graph at all: `SLICE = {"quantity":
-kept_quantities(), "year": None}` (`profiles/kwp/extraction.py`). The year
-closes no row and stands there for its order: every axis behind it reads with
-the year in `known`. The quantity keeps every real class of the spec's
-quantity lists, and the one entry the ontology has no class for yet
-(`READ_IN_FULL`: avoided emission), which is read on every axis into the
-harvest and reaches the graph once a class exists (owner decision 2026-11-03).
-Useful energy, generation and saving left that list on 2026-11-07: each has an
-energy unit, so each is an OEO energy value, which the list offers. Every other entry beginning `out:`
-closes its row. Asking this axis first and
-alone is cheaper when a row fails it, three requests spent rather than
-eight, and on a 20-plan draft it dropped 1,554 of 6,763 harvested tuples
-for a quantity the graph does not hold. Scenario used to gate too, the
-larger half of that loss: 2,510 of the 6,763 were dropped for being a
-status quo, a trend or a potential reading rather than the target
-scenario, a decision about what the graph could hold rather than what
-the plan said. The gate
-no longer includes scenario, because the ontology names all three plan
-parts and the graph now serializes all three
-(`profiles/kwp/extraction.py:7` to `24`; see
+`SLICE = {"quantity": kept_quantities(), "year": None}`
+(`profiles/kwp/extraction.py`) is still declared and no step reads it any more:
+the survey flow has no slice gate (owner decision 2026-11-04), so every value is
+asked all its coordinates and the graph keeps what it holds. The quantity list
+keeps every real class of the spec's quantity lists, and the one entry the
+ontology has no class for yet (`READ_IN_FULL`: avoided emission), which is read on
+every axis into the harvest and reaches the graph once a class exists (owner
+decision 2026-11-03). Useful energy, generation and saving left that list on
+2026-11-07: each has an energy unit, so each is an OEO energy value, which the
+list offers. Every other entry beginning `out:` stays out of the graph. The
+graph serializes all three plan parts the ontology names, scenario included (see
 [The knowledge graph](#the-knowledge-graph)).
 
 Five parameters carry a `brief`, one paragraph on what a value of them is
@@ -302,64 +291,41 @@ that same file.
 
 ## The prompts
 
-19 prompt ids belong to extraction and the graph route, kwp's own
+14 prompt ids belong to extraction and the graph route, kwp's own
 wording of each spec question:
 
 | id | loaded | asks for |
 |---|---|---|
 | `extraction/phrase` | once per document, before any row | the one sentence this document is searched with |
-| `extraction/places` | once per document, at its first search | which passages answer which parameters and axes, with a quote and no value; the map the search then reads from |
-| `extraction/frame` | once per document, before any row | which scenario and year pairs the plan actually carries |
 | `extraction/years` | once per plan, where the spec dates a value by the plan's years | the plan's `base_years` and `target_years`, each year with a quote that prints it and names it the plan's state or target, read with the combing's tools, its rounds one conversation, each later message only the passages listed since; an empty list is an answer |
-| `extraction/anchors` | once per run, per question the field sweep asks | six hypothetical sentences a passage stating this coordinate could read |
-| `extraction/queries` | once per run, as a plain template list | one retrieval query template per parameter or per vocabulary entry |
-| `extraction/rows` | per retrieved window | which values a passage states, without their coordinates |
-| `extraction/field` | once per row per coordinate | one axis's own answer, from its closed list or its type |
+| `extraction/anchors` | no request of the run; its text still enters the stamp's `anchors` key and the preflight reads it | six hypothetical sentences a passage stating this coordinate could read, written for the field-by-field flow |
 | `extraction/review` | only under `--review`; excluded from the extraction stamp | a second reading of one value, over a window narrowed to its own passage and the section it stands in |
 | `extraction/example` | only under `docpipe compile examples` | which values of one parameter a passage states, to propose the example a spec parameter still lacks |
 | `extraction/compute` | once per question the compute step asks | one number the plan does not print, written as Python over the numbers already read; it may read on in the plan with the reading's tools, and for a share take its whole from a passage and quote what the chosen whole is; one conversation per question, what it fetched, a number it took and its code's output each following the answer that asked for them |
-| `extraction/survey` | once per passage, a request of its own however short | which parameters are read in that passage, and the coordinates it states (the groups of the spec); no value; the reply is the passage's entry, `{"parameters": [...], "frame": [...]}`, with no wrapper and no id (owner decision 2026-11-06) |
+| `extraction/survey` | once per passage, a request of its own however short | which parameters are read in that passage; no value and no coordinate; the reply is the passage's entry, `{"parameters": [...]}`, with no wrapper and no id (owner decision 2026-11-06) |
 | `extraction/read_values` | once per round of a passage's reading, one value per message of one conversation per passage (a later round is the follow-up `next`), without tools | the next value after the answer before, as the reply itself: `value`, `value_raw` (only for a number or an entry of a list), `quote` (it stands once in what the round showed and holds the value once; no column head), and, where a figure's image goes with the request, `drawn` and a `reading` in place of the quote for a number only the image shows (trust level C), or `{"value": null}` to end the rounds; a value is what the field asks for and the year of a number is a coordinate, not a value; after its first line the prompt says "Prüfe vor der Antwort, was die Definition ausschließt." (prompt only, no check; owner decision 2026-11-07) |
-| `extraction/read_text` | once per value and coordinate, one conversation per value, without tools | one coordinate for the one value, in the order unit, what, subject, qualifier, scenario, year, period_start, quantity, aggregation, carrier, sector, technology, whole, spatial_scope (the unit is copied as printed and never refused); one file whose common text is the system prompt and whose three `group` parts, `number`, `frame` and `context` (the order they are asked in), each stand in the message that asks the first coordinate of that group, beside `with` and `follow-up` parts (see [extraction](../stages/extraction.md), Reading a parameter in its passages); it opens with the same exclusion sentence, and what the check refuses on the rows one reply made is asked once in a follow-up after that reply (owner decision 2026-11-07) |
-| `extraction/comb` | once per value and coordinate, in a new conversation per value: first a second reading with the sections before and after the value's place, then a search, whose first message lists hits only | the open coordinate of the one row the request shows, searched for in the rest of the plan with the tools (`reading.Gathered`); the coordinate it finds stands at the top of the reply with `more` beside it; no "not stated" is offered, what it leaves out is not asked again, and `{}` is valid; the rounds of a value's search are one conversation, each later message only what is new, and its corrections are asked in one message after the reply; it opens with the same exclusion sentence (owner decision 2026-11-07) |
+| `extraction/read_text` | once per value and coordinate, one conversation per value, without tools | one coordinate for the one value, in the order unit, what, subject, qualifier, scenario, year, quantity, aggregation, carrier, sector, technology, whole, spatial_scope, role (the unit is copied as printed and never refused; every coordinate is asked for this value alone, with the titles of the last sections up to its place under `sections`; a year may come with `until`, the last year of a span); one file whose common text is the system prompt and whose three `group` parts, `number`, `frame` and `context` (the order they are asked in), each stand in the message that asks the first coordinate of that group, beside `with` and `follow-up` parts (see [extraction](../stages/extraction.md), Reading a parameter in its passages); it opens with the same exclusion sentence, and what the check refuses on the rows one reply made is asked once in a follow-up after that reply (owner decision 2026-11-07) |
+| `extraction/comb` | once per value and coordinate, in a new conversation per value: first a second reading with the sections before and after the value's place, then a search, whose first message lists hits only | the open coordinate of the one row the request shows, searched for in the rest of the plan with the tools (`reading.Gathered`); the coordinate it finds stands at the top of the reply with `more` beside it; no "not stated" is offered, what it leaves out is not asked again, and `{}` is valid; the rounds of a value's search are one conversation, each later message only what is new, and its corrections are asked in one message after the reply; it opens with the same exclusion sentence; a year nothing found is asked once more in the follow-up `plan_years`, which shows the plan's base and target years (owner decision 2026-11-07) |
 | `extraction/comb_check` | once per coordinate and quote of a find of the combing quoted from a passage other than the value's own and its section, and of a find of the second reading quoted from the section before or after the value's place (`reading.Judge`) | whether that passage is about this value, as `{"about": "yes"\|"no"}`; on "no" the find is dropped: the search goes on and its next message says why once, and after the second reading the coordinate goes open to the combing; worded for a find of either (owner decision 2026-11-07) |
 | `extraction/settings` | once per plan, before the values | what the plan settles for all its values, free settings in its words, each `{about, value, quote}`, read with the combing's tools, its rounds one conversation; shown with every request about a value's coordinates (owner decision 2026-11-07) |
 | `extraction/seek` | once per parameter the survey named no passage for and whose walk read no value | the passages of the plan that state a value, named by id, searched with the combing's tools; each is then read like any passage (owner decision 2026-11-07) |
 | `kg/coordinate` | once per chat turn the graph route tries | one closed answer to one coordinate axis, for the SPARQL query |
 
-Five of these ids, `extraction/rows`, `field`, `frame`, `review` and `example`,
-are parts files (see [profiles](../profiles.md), The extraction prompts). Each
-names its template of the core in its front matter, and
-`CONTRACT_LANGUAGE = "de"` in `profiles/kwp/extraction.py` says that the
-templates are the German ones. What kwp writes itself is its role (German
-municipal heat plans), its examples and the sentences about its own tables. It
-words three blocks itself, where the template's sentence fits it less well:
-`value_text` of the rows prompt (for a text field, the designation as the plan
-writes it, without its legal form), `rows_more` of the field prompt (the rows
-carry `known`, the plan's wording of what the row has already been read for,
-and `title`, that of its own table or section; the question is about exactly
-this number) and `closed_out_text` of the field prompt
-(the entries of a closed list that are expressly the opposite of a class, with
-kwp's own examples: a sum row or a number the list does not split, a remainder, an expressly unknown value, a
-percentage share, a useful energy). It leaves out the blocks of the templates it
-never had a sentence for: 14 blocks of the rows prompt, `rows_source`,
-`same_forms`, `by_similarity` and `domain_slot_2` of the field prompt, and
-`corpus_language` of the review prompt. The frame and the example prompt leave
-out and word nothing. `python scripts/render_prompts.py --what-if` shows each
-block it leaves out put back (see [Running the pipeline](../running.md)).
+Two of these ids, `extraction/review` and `example`, are parts files (see
+[profiles](../profiles.md), The extraction prompts). Each names its template of
+the core in its front matter, and `CONTRACT_LANGUAGE = "de"` in
+`profiles/kwp/extraction.py` says that the templates are the German ones. What
+kwp writes itself is its role (German municipal heat plans), its examples and the
+sentences about its own tables. It leaves out the block `corpus_language` of the
+review prompt, which it never had a sentence for; the example prompt leaves out
+and words nothing. `python scripts/render_prompts.py --what-if` shows each block
+it leaves out put back (see [Running the pipeline](../running.md)).
 
-The passages inside the examples of the field prompt are not sentences a plan
-could print. Each is a description between `<<` and `>>`, for example
-`"quote": "<<Titel der eigenen Tabelle, wörtlich, mit „Ist-Zustand 2022“
-darin>>"`, and the prompt says once that such a string describes a place and
-is never copied (owner decision 2026-10-06). Measured on the current kwp
-harvest, 48,737 dropped answers cited an example sentence of the prompt word
-for word as their quote.
-
-`extraction/rows` and `extraction/field` are the pair every value is
-read with: one call finds which values a passage states, a second asks
-each coordinate as its own question. `extraction/review` is deliberately
-outside the set the extraction stamp hashes, because a review only ever
+`extraction/survey`, `read_values` and `read_text` are the three every value is
+read with: the survey names the parameters a passage holds values of, `read_values`
+finds the values, and `read_text` asks each coordinate of one as its own
+question. `extraction/review` is deliberately outside the set the extraction
+stamp hashes, because a review only ever
 adds a flag and never changes a value, so folding its prompt into the
 stamp would report an entire corpus stale the day it is edited.
 

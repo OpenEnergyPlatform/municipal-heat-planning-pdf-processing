@@ -100,8 +100,7 @@ def read_years(kinds, again=(), pool=None, meet=None,
         return answered(thread, {"scenario": {"value": "NEO",
                                               "quote": RUNS}})
 
-    reader = reading.Reader(SCENARIOS, ask_values, ask_text,
-                            runner.frame_slots_of(SCENARIOS), pool=pool)
+    reader = reading.Reader(SCENARIOS, ask_values, ask_text, pool=pool)
     found = survey.Found(True, {("section", 4): survey.Answer(
         ("section", 4), [YEAR.uri], {}, [])}, [])
     reads = reader(7, found, {("section", 4): YEARS})
@@ -158,8 +157,8 @@ def test_a_value_read_wrongly_is_asked_again_after_every_value_in_order():
 
 class Seen(combing.Comber):
     """A combing that records each conversation instead of asking: its
-    kind (a table's or a value's), when it began and ended, and the names it
-    was shown. A table's takes *pause* seconds."""
+    value, when it began and ended, and the names it was shown. Each takes
+    *pause* seconds."""
 
     def __init__(self, spec, pool=None, pause=0.0):
         super().__init__(spec, None, None, None, pool=pool)
@@ -172,11 +171,9 @@ class Seen(combing.Comber):
              pairs, budget=None, **given):
         self.began.set()
         start = time.monotonic()
-        if given.get("whole_table"):
-            time.sleep(self.pause)
+        time.sleep(self.pause)
         with self.lock:
-            self.calls.append({"table": bool(given.get("whole_table")),
-                               "start": start, "end": time.monotonic(),
+            self.calls.append({"start": start, "end": time.monotonic(),
                                "names": list(given.get("names_so_far")
                                              or ()),
                                "value": claims[0].get("value")})
@@ -209,8 +206,7 @@ def test_a_passage_is_combed_while_the_rest_of_the_plan_is_read():
         def ask_text(*args, **kwargs):
             return {}
 
-        reader = reading.Reader(KWP, ask_values, ask_text,
-                                runner.frame_slots_of(KWP), pool=pool)
+        reader = reading.Reader(KWP, ask_values, ask_text, pool=pool)
         found = survey.Found(True, {
             ("section", 1): survey.Answer(("section", 1), [ENERGY.uri], {},
                                           []),
@@ -236,25 +232,24 @@ def table_read(spec, parameter, values, open_also):
     for i, value in enumerate(values):
         claim = {"value": value, "quote": f"Zeile {i} | {value}",
                  "source": batch.label(0)}
-        for name in ("scenario", "year", "period_start", *open_also):
+        for name in ("scenario", "year", *open_also):
             claim[f"{name}_state"] = fields.UNANSWERED
         claims.append(claim)
     return reading.Read(batch, claims), table
 
 
-def test_a_table_is_combed_before_its_values():
+def test_every_value_of_a_table_is_combed_as_a_job_of_its_own():
+    # Owner decision 2026-11-07: no table is combed once for all its
+    # values; its values side by side, each for itself.
     read, table = table_read(KWP, ENERGY, [120, 80, 60], ["sector"])
     with ThreadPoolExecutor(4) as pool:
         comber = Seen(KWP, pool=pool, pause=0.2)
-        tables, values = comber.plan(read)
-        assert len(tables) == 1 and len(values) == 3
+        assert len(comber.plan(read)) == 3
         session = comber.session(7, {("table", 9): table}, [], None)
         session.add(read)
         combed = session.finish([read])
-    ended = max(call["end"] for call in comber.calls if call["table"])
-    begun = [call["start"] for call in comber.calls if not call["table"]]
-    assert len(begun) == 3 and min(begun) >= ended
-    assert len(combed) == 4
+    assert len(combed) == 3
+    assert sorted(call["value"] for call in comber.calls) == [60, 80, 120]
 
 
 def year_read(source, claim):
@@ -276,7 +271,7 @@ def test_a_value_shown_every_name_waits_for_the_whole_plan():
         "scenario": "Net Zero", "scenario_state": fields.READ,
         "scenario_quote": later.text, "scenario_source": ["section", 5]})
     comber = Seen(SCENARIOS)
-    jobs = comber.plan(open_scenario)[1]
+    jobs = comber.plan(open_scenario)
     assert [comber.shows_names(job) for job in jobs] == [True]
     session = comber.session(7, {("section", 4): YEARS,
                                  ("section", 5): later}, [], None)

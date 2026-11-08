@@ -84,8 +84,7 @@ def read_years(kinds, again):
         return answered(thread, {"scenario": {"value": "NEO",
                                               "quote": RUNS}})
 
-    reader = reading.Reader(SPEC, ask_values, ask_text,
-                            runner.frame_slots_of(SPEC))
+    reader = reading.Reader(SPEC, ask_values, ask_text)
     found = survey.Found(True, {("section", 4): survey.Answer(
         ("section", 4), [YEAR.uri], {}, [])}, [])
     reads = reader(7, found, {("section", 4): SOURCE})

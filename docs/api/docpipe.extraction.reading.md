@@ -43,15 +43,15 @@ one conversation (owner decision 2026-11-07: "Die Fragen A, B und C sind ja
 eigentlich mehrere Fragen und sollten dann auch nacheinander gestellt
 werden"): the first message shows the passage and the value, each later one
 brings the words of the coordinate's group and that coordinate only, and the
-model sees what it answered before. A coordinate the spec derives from the
-unit is not asked where the unit question chose an entry of the parameter's
-list, and is asked where it chose none (owner decision 2026-11-07: where it
-does not follow by itself, the model tries). The system prompt is what every
-message is told and the part of each field the first message carries; only a
-frame coordinate is shown the survey's pairs, only the year the plan's base
-and target years. The rounds of a passage's values are a conversation as
-well: each later round asks for the next value after the answer it follows.
-A correction goes after the answer it is about, in its conversation.
+model sees what it answered before. Every coordinate is asked, scenario and
+year too, each for this value alone (owner decision 2026-11-07: nothing is
+taken from its passage or its table). Every request about a value's
+coordinates shows the titles of the last sections of the plan up to the
+value's place, its own last (`SECTION_TITLES`). The system prompt is what
+every message is told and the part of each field the first message carries.
+The rounds of a passage's values are a conversation as well: each later
+round asks for the next value after the answer it follows. A correction goes
+after the answer it is about, in its conversation.
 
 With a pool, the conversations of a passage's values run side by side once
 its rounds have named them, as the passages do, and none waits for another
@@ -67,7 +67,9 @@ passage does not say" is one of the answers (`fields.UNSTATED`).
 A coordinate whose answer is the name the document gives a thing, such as
 a scenario, is read as the document prints it (`fields.Slot.merged`). A
 value the passage states for several of them is one row per name, each
-checked on its own (`answers_each`, owner decision 2026-11-06); names that
+checked on its own (`answers_each`, owner decision 2026-11-06), and so is a
+value stated for several entries of a list that may name several
+(`fields.Slot.several`, owner decision 2026-11-07); names that
 stand in one place may share one quote, which must hold each of them
 (`spread`, owner decision 2026-11-07). What the check refuses on any of the
 rows one answer made is asked once more in ONE message after that answer,
@@ -80,9 +82,10 @@ Nothing is checked here beyond what the harvest checks everywhere. Every
 coordinate goes through `pipeline.merge_field` and every value through
 `fold_batch`. What that check refuses is asked once more with its reason,
 named by its coordinate; a coordinate the reply left out is asked for by
-name. A frame coordinate still open takes the survey's tuple of the passage,
-with its quote, where the survey named one (window `frame`). What is still
-open then is asked in a conversation of its own, with the answers so far,
+name. A year the plan states for a span of years ("im Mittel der Jahre 2019
+bis 2021") is one row per year of the span, each marked as the profile
+marks a span (`span_rows`, owner decision 2026-11-07). What is still open
+then is asked in a conversation of its own, with the answers so far,
 the sections around the value's place and the rest of the plan
 (`combing.py`). A request too long for the model's window is split: a table
 into halves of its rows, until a single row is a hole of its own
@@ -292,25 +295,28 @@ the value has read, as its request shows it (`known_shown`).
 (`runner.row_context`). *drawn(source)* says whether a request about
 *source* sends a figure's image, which a value only the image shows is
 read off (owner decisions 2026-11-05 and 2026-11-07); None sends none.
-*pool* reads passages side by side, and the values of a passage side by
-side once its rounds have named them (owner decision 2026-11-07). No
-request of the reading has tools (owner decision 2026-11-05, ticket 26).
+*span_marks* are what a value stated for a span of years takes on each of
+its rows (`span_rows`). *pool* reads passages side by side, and the
+values of a passage side by side once its rounds have named them (owner
+decision 2026-11-07). No request of the reading has tools (owner decision
+2026-11-05, ticket 26).
 
 #### Reader.\_\_init\_\_
 
 ```python
-def __init__(self, spec, ask_values: Callable, ask_text: Callable,
-             frame_slots: list, *, shown_with: Optional[Callable] = None,
+def __init__(self, spec, ask_values: Callable, ask_text: Callable, *,
+             shown_with: Optional[Callable] = None,
              bases: Optional[Callable] = None,
              known: Optional[Callable] = None,
              drawn: Optional[Callable] = None,
+             span_marks: Optional[dict] = None,
              pool=None, trace=None)
 ```
 
 #### Reader.context_of
 
 ```python
-def context_of(self, source: Source, tuples: list, passages: dict,
+def context_of(self, source: Source, passages: dict,
                budget: Optional[int] = None,
                title_page: Optional[Source] = None) -> tuple
 ```
@@ -318,15 +324,14 @@ def context_of(self, source: Source, tuples: list, passages: dict,
 (what the requests of a passage show beside it, the section it
 was cut from, the passages a coordinate may quote for what stands
 beside it): the text around a table or figure (`around_of`), the
-title page's line and the table the passage may continue
-(`beside_of`), and the survey's pairs of the passage, which only a
-group that asks a frame coordinate shows (`group_context`).
+titles of the sections up to it (`sections_of`), the title page's
+line and the table the passage may continue (`beside_of`).
 
 #### Reader.read
 
 ```python
 def read(self, document_id: int, parameter, source: Source,
-         tuples: list, pairs: list, passages: dict,
+         pairs: list, passages: dict,
          shown: Optional[Source] = None,
          budget: Optional[int] = None, *,
          bases: Optional[list] = None,
@@ -421,14 +426,24 @@ coordinate in exactly one group (`spec._validate_groups`).
 ### group_context
 
 ```python
-def group_context(context: dict, group_slots: list, frame_slots: list,
-                  bases: list) -> dict
+def group_context(context: dict) -> dict
 ```
 
 What a group's request shows beside the passage: the text around it,
-the title page's line and the table it may continue (`beside_of`), and
-the survey's pairs and the plan's years only where the group asks a
-frame coordinate.
+the plan's settings, the titles of the sections up to the value's place
+(`sections_of`), the title page's line and the table it may continue
+(`beside_of`).
+
+### sections_of
+
+```python
+def sections_of(source: Source, passages: dict) -> tuple
+```
+
+([title], [passage a quote may stand in]) of the last
+`SECTION_TITLES` sections of the plan up to *source*, its own last: a
+table's or figure's own section is the one it stands in. Each title is
+shown, and may be quoted, under its section (`shown_as`).
 
 ### coordinate_shown
 
@@ -451,7 +466,8 @@ def several(slot) -> bool
 May one value name several things for *slot*, one row each: a
 coordinate whose answer is the name the document gives a thing, merged
 with the document's other names for it after the reading (`naming.py`,
-owner decisions 2026-11-06)?
+owner decisions 2026-11-06), or one whose list may name several entries
+for one value (`fields.Slot.several`, owner decision 2026-11-07)?
 
 ### answer_schema
 
@@ -526,12 +542,6 @@ names several of them, in a list or with one quote for several
 (`entries_of`), gives one reply per name, with every other coordinate's
 answer the same on each; an empty list is no answer. Any other reply is
 the one reply.
-
-### known_of
-
-```python
-def known_of(tuples: list, frame_slots: list) -> list
-```
 
 ### years_of
 
@@ -865,13 +875,12 @@ One group's request for one value, what its requests share first
 (ticket 26): the parameter, with its full definition only where *full*
 (the group that classifies, `Group.full_definition`), and the group's
 coordinates with the spec's words for where a plan prints them
-(*where*), the same for every value of the parameter; then, for a frame
-group, the plan's base and target years, the same in a plan; then the
-passage, the text around a table or figure and, for a frame group, the
-survey's pairs of the passage (`group_context`); the value last, with
-its quote and, under "read", what is already read of it in the plan's
-words. The line of the title page stands with the plan's years, the
-table the passage may continue after it (`beside_of`). It is the first
+(*where*), the same for every value of the parameter; then the line of
+the title page and the plan's settings, the same in a plan; then the
+titles of the sections up to the passage (`sections_of`), the passage,
+the text around a table or figure and the table the passage may continue
+(`group_context`); the value last, with its quote and, under "read",
+what is already read of it in the plan's words. It is the first
 message of the value's conversation: its next coordinate and a
 correction follow the answer (`group_payload`, owner decisions
 2026-11-07).
@@ -887,9 +896,8 @@ The message that asks the next group of a value in its conversation
 (owner decision 2026-11-07: one conversation per value, each group a
 message of its own): the group's coordinates and the spec's words for
 where a plan prints them, the parameter's full definition where the
-group classifies (*full*) and the conversation has not shown it, and for
-a frame group the plan's base and target years and the survey's pairs of
-the passage (`group_context`). The passage and the value stand in the
+group classifies (*full*) and the conversation has not shown it. The
+passage, the titles of the sections up to it and the value stand in the
 first message; a row the conversation goes on for that its answers do
 not show, a further name a reply gave (`_Job.clone`), is shown again
 with what it has read ("value").
@@ -1070,24 +1078,31 @@ def turned_out(reply, slots: list, judge: Optional[Judge], evidence: list,
 (*reply* without each find whose place the check says does not speak
 about the value (`Judge`), {coordinate: [the answers taken out]}).
 
-### same
+### until_of
 
 ```python
-def same(slot, a, b) -> bool
+def until_of(slot, answer) -> Optional[int]
 ```
 
-### inherit
+The last year of the span a number answer states its value for
+("until", `answer_schema`), None for any other answer.
+
+### span_rows
 
 ```python
-def inherit(rows: list, slots: list, tuples: list, pairs: list,
-            shown: list) -> int
+def span_rows(row: Row, slot, until: Optional[int], marks: dict,
+              clone: Callable) -> list
 ```
 
-A frame coordinate still open on a row takes the survey's tuple of
-the passage, when the survey named exactly one, through the field check
-with the tuple's own quote. Not on a row that read a frame coordinate of
-its own the tuple contradicts: a year under its column head is not the
-year of the table's title. Returns the coordinates taken.
+A value the plan states for a span of years as one row per year of
+it (owner decision 2026-11-07: "als ca. für jedes distinkte Jahr
+erfassen"): *row*, read with the span's first year, and a copy of it
+(*clone(row)*) for each year after, the last read as the first is, those
+between derived from the span, which the quote prints and names neither
+of. Each takes *marks* ({coordinate: entry}, the profile's `SPAN_MARKS`)
+where it read nothing, derived from the span. Only where the year read
+holds and the last year stands in its quote as well, as any year must;
+[the copies].
 
 ### link_ranges
 

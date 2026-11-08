@@ -14,15 +14,12 @@ import openai
 import pytest
 
 from docpipe.extraction import runner
-from docpipe.extraction.spec import load as load_spec
 
 ROOT = Path(__file__).resolve().parent.parent
 STAGE = ROOT / "docpipe" / "extraction"
 # The clients every other client of the stage is made of: they pass a request
 # on and send none of their own.
 WRAPPERS = {"scheduler.py", "throttle.py"}
-SPEC = load_spec(json.loads((ROOT / "profiles" / "kwp" / "extraction_spec.json")
-                            .read_text(encoding="utf-8")))
 
 
 class Status(Exception):
@@ -118,7 +115,6 @@ def flaky(first, reply):
 
 PHRASE = SimpleNamespace(meta={}, text="x")
 SENTENCE = json.dumps({"phrase": "Ein Satz."})
-ANCHORS = json.dumps({"anchors": ["Ein Satz."]})
 
 
 def parameters(*uris):
@@ -144,21 +140,6 @@ def test_a_search_sentence_the_server_failed_is_asked_again(waits):
     assert sorted(asked.values()) == [2, 2]
     assert out == {"a": ["Ein Satz."], "b": ["Ein Satz."]}
     assert waits == [(1, True), (1, True)]
-
-
-def test_a_refused_anchor_set_is_asked_once(waits):
-    client, asked = flaky(Status(400), ANCHORS)
-    out = runner.make_anchors(SPEC, client)
-    assert set(asked.values()) == {1}
-    assert not any(out.values())
-    assert runner.UNSERVED.of(None) == 0
-
-
-def test_an_anchor_set_the_server_failed_is_asked_again(waits):
-    client, asked = flaky(Status(503), ANCHORS)
-    out = runner.make_anchors(SPEC, client)
-    assert set(asked.values()) == {2}
-    assert out and all(out.values())
 
 
 # -- every request of the stage ----------------------------------------------

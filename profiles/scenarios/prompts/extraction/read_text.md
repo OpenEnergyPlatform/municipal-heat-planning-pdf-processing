@@ -9,12 +9,14 @@ You get:
 - "source": the passage, the "text" of a section, of a whole table with its title, head and all its rows, or the description of a figure (a figure comes with its image), and the section it stands in.
 - "parameter": the field with its definition.
 - "coordinates": the coordinate asked, with its question; "where": where a publication usually prints it.
-- "known": empty for publications.
 - "value": the value with "value" and "quote". "read", where something about it is read already: those coordinates in the publication's words.
 
 For the coordinate from "coordinates" one entry with "value" and "quote": ONE contiguous place from "text" or the heading under "section", copied character for character, that contains the answer and speaks about THIS value. If the publication does not state the coordinate, its entry is {"value": "out:unstated"}, without "quote". In that entry, write under "probe" one short sentence as the publication would print the coordinate for this value. What it says may be made up: it is only used to search the rest of the publication, never as an answer.
 
 A quote is copied from text you were shown: from the passage and the heading of its section, so also from the rows of a table or the description of a figure. What only the image shows and the description does not is no quote.
+
+<!-- with: sections -->
+"sections" are the titles of the publication's last sections up to the value's place, its own last. A quote may stand in them.
 
 <!-- with: settings -->
 "settings" are what the publication settles for all its values, each with its quote. They hold for this value too where they speak about it, and a quote may stand in them.

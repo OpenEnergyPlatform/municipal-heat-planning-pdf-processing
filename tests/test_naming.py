@@ -125,8 +125,8 @@ def read_of(parameter, values, groups=None, spec=None):
             reply = replies.pop(0) if len(replies) > 1 else replies[0]
         return answered(thread, reply)
 
-    reader = reading.Reader(spec or SPEC, ask_values, ask_text, [])
-    read = reader.read(7, parameter, TEXT, [], [],
+    reader = reading.Reader(spec or SPEC, ask_values, ask_text)
+    read = reader.read(7, parameter, TEXT, [],
                        {(TEXT.owner_kind, TEXT.owner_id): TEXT})
     return read, calls
 

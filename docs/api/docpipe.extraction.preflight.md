@@ -29,9 +29,7 @@ properties it leaves out on purpose (`extraction.NOT_EXTRACTED`).
 
 Two lines only say what they find and never fail: the properties of the
 shapes that nobody asks and the definitions of the spec that are not the
-pin's. A third fails when it must: the example reply of the field prompt has
-to read back through the reader of the run, and the same reply with an
-invented quote has to be refused.
+pin's.
 
 Author: Felix Vossel
 
@@ -104,52 +102,6 @@ files of its last refresh) and which of their properties it leaves out on
 purpose (`extraction.NOT_EXTRACTED`). Where it names no shapes, or the
 file is not there, or rdflib is not, the line says it is skipped: a
 check that was not run is not a gap found.
-
-### example_lines
-
-```python
-def example_lines(text: str) -> list
-```
-
-The lines of a field prompt that are an example reply.
-
-The prompt asks for the reply on ONE line, so its example is one: the
-lines that open the object the reply is. A wrapped example is not found
-here, which `audit` says and does not pass over.
-
-### reads_back
-
-```python
-def reads_back(line: str, spec) -> tuple
-```
-
-(ok, detail) for one example reply, read the way a run reads a reply.
-
-The line goes through `runner._loads_object` and the field it answers
-through `merge_field`, against passages that are the example's own
-quotes: every row of it has to come out read, apart from a row the
-example itself answers "not stated". Then the same reply with every
-quote replaced by one that stands in none of those passages has to come
-out unbacked on every row, or the first half would hold of any reply.
-
-The field is the spec's coordinate of that name. A list that the profile
-only fills per document is closed by the example's own answers, as a run
-closes it by the document's, and a name the spec has no coordinate for
-is read as free text, which the detail says.
-
-### example_verdict
-
-```python
-def example_verdict(line: str, spec) -> tuple
-```
-
-`reads_back` for the audit, which a broken example must not abort.
-
-An example whose "groups" is no list or whose "rows" is none cannot be
-walked at all, and the reader says so by raising. For the audit that is
-a failed line that names the example's fault, as it is for any other
-example the reader does not read, and not a traceback in place of the
-other checks of the profile.
 
 ### audit
 

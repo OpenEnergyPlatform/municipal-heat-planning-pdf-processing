@@ -270,7 +270,8 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
             "type": "array",
             "prefixItems": [{"enum": ["own", "near", "found", "retrieval",
                                       "rest", "places", "frame", "table",
-                                      "base_year", "target_year", "head"]},
+                                      "base_year", "target_year", "head",
+                                      "plan_years"]},
                             {"type": "integer"}],
             "minItems": 2, "maxItems": 2,
             "description": f"[stage, index] of the window '{name}' was read "
@@ -292,7 +293,13 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"combing. `head`: the "
                            f"year the head of the row's column prints, one "
                            f"of the document's pairs, taken off the table "
-                           f"and not asked; the index is the column."},
+                           f"and not asked; the index is the column. "
+                           f"`plan_years`: a year none of the windows before "
+                           f"found, read in the comb's one further message "
+                           f"that showed the plan's base and target years; "
+                           f"the index is 1. `frame`, `table`, `head`, "
+                           f"`places` and `rest` are windows of harvests "
+                           f"made before each value was asked for itself."},
         f"{name}_link_quote": {
             "type": "string", "minLength": MIN_QUOTE_CHARS,
             "description": f"Only with window `base_year` or `target_year`: "
@@ -1191,9 +1198,14 @@ def trace_schema() -> dict:
                  "near": {"type": "integer"},
                  "near_read": {"type": "integer"},
                  "anew": {"type": "integer"},
-                 # The other values of the table that took the answers
-                 # combed for this one, its frame open on all of them.
+                 # Harvests before each value was asked for itself: the
+                 # other values of the table that took the answers combed
+                 # for this one.
                  "table_rows": {"type": "integer"},
+                 # The messages that asked for a year nothing found with
+                 # the plan's base and target years (owner decision
+                 # 2026-11-07: only where no year was found).
+                 "plan_years": {"type": "integer"},
                  # Requests that checked a find quoted from a passage other
                  # than the value's own, and the finds they said do not
                  # speak about the value (owner decision 2026-11-07).
@@ -1295,7 +1307,7 @@ def trace_schema() -> dict:
                             "value"}
            for stage in ("phrase", "frame", "review", "compute")},
         "comb": {"group", "listed", "table_rows", "judged", "turned",
-                 "anew"},
+                 "anew", "plan_years"},
         "read": {"corrected", "failed", "unanswered", "unread", "why"},
         "completion": {"filled", "id", "key", "matched"},
     }

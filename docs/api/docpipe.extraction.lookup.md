@@ -46,6 +46,18 @@ negative step), tables and figures skipped. A table or figure counts from
 its own position. None past either end, for step 0, and when `owner` is
 not in `passages`.
 
+### sections_up_to
+
+```python
+def sections_up_to(passages: list[Source], owner: tuple[str, int],
+                   count: int) -> list[Source]
+```
+
+The last `count` sections in reading order up to `owner`, its own
+included where it is a section, the earliest first; a table or figure
+counts from its own position, so its own section is the last. [] when
+`owner` is not in `passages`.
+
 ### page_of
 
 ```python

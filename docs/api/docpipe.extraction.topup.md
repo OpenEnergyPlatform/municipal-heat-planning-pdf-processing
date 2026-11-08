@@ -13,8 +13,8 @@ parameter, that is a full corpus run spent answering a question nothing else
 asked.
 
 This module instead takes the coordinate off the rows that carry it, walks the
-same sweep the harvest walks (`runner.make_sweeper`, so there is one sweep and
-one set of numbers), and writes the answer back. It then carries that one stamp
+same combing the harvest walks (`surveyed.comb_sweep`, so there is one search
+and one set of numbers), and writes the answer back. It then carries that one stamp
 key forward and leaves every other key exactly as it was, so a later run still
 sees what it has to redo. Who read is recorded apart from that: the pass enters
 the stamp's `producers` list whether or not it earned a key, and each
@@ -217,16 +217,6 @@ The file is read as bytes and split at the line feed alone, so a line is
 what it was down to a carriage return (`jsonl.lines`). A line that is not
 JSON, or is JSON and no record, is kept as it stands and counted. An empty
 line is not a record and is not kept.
-
-### split_derived
-
-```python
-def split_derived(rows: list, slot, parameter) -> tuple
-```
-
-(rows the spec sets *slot* for, rows that are asked it): the unit
-decides the coordinate unless the plan read what `unless_read` names
-(`fields.derives`), as in the harvest.
 
 ### top_up_file
 

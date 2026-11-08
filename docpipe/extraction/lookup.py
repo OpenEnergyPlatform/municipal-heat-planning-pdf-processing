@@ -53,6 +53,20 @@ def following(passages: list[Source], owner: tuple[str, int],
     return None
 
 
+def sections_up_to(passages: list[Source], owner: tuple[str, int],
+                   count: int) -> list[Source]:
+    """The last `count` sections in reading order up to `owner`, its own
+    included where it is a section, the earliest first; a table or figure
+    counts from its own position, so its own section is the last. [] when
+    `owner` is not in `passages`."""
+    at = next((i for i, p in enumerate(passages)
+               if (p.owner_kind, p.owner_id) == tuple(owner)), None)
+    if at is None or count <= 0:
+        return []
+    out = [p for p in passages[:at + 1] if p.owner_kind == "section"]
+    return out[-count:]
+
+
 def page_of(passage: Source) -> Optional[int]:
     """The page a passage starts on, None where it names none."""
     try:

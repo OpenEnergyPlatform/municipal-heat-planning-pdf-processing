@@ -1,7 +1,7 @@
-"""A run harvests from the survey when its spec names groups and its profile
-writes every prompt of that flow, and field by field otherwise; its stamps and
-producers record the flow and the prompts it sends, and the server's window is
-measured over them.
+"""A run harvests from the survey, so its spec names groups and its profile
+writes every prompt of that flow, or the run stops; its stamps and producers
+record the flow and the prompts it sends, and the server's window is measured
+over them.
 
 What nothing could read is a hole with its reason: a passage the survey left
 unanswered goes to the fold under no parameter and counts among the passages
@@ -168,13 +168,13 @@ def test_a_reading_says_why_it_came_to_nothing():
     def reader(reply):
         def ask(*args, **kwargs):
             return reply
-        return reading.Reader(SPEC, ask, ask, [])
+        return reading.Reader(SPEC, ask, ask)
 
-    cut = reader(reading.CUT).read(7, EMISSION, ONE, [], [], SHOWN)
-    silent = reader(None).read(7, EMISSION, ONE, [], [], SHOWN)
+    cut = reader(reading.CUT).read(7, EMISSION, ONE, [], SHOWN)
+    silent = reader(None).read(7, EMISSION, ONE, [], SHOWN)
     assert cut.unread and cut.why == reading.CUT
     assert silent.unread and silent.why == reading.NO_ANSWER
-    answered = reader({"value": None}).read(7, EMISSION, ONE, [], [], SHOWN)
+    answered = reader({"value": None}).read(7, EMISSION, ONE, [], SHOWN)
     assert not answered.unread and answered.why is None
 
 
@@ -475,12 +475,24 @@ def test_a_spec_with_groups_and_every_prompt_harvests_from_the_survey(
     sent = (*runner.SURVEY_PROMPT_IDS, years.YEARS_PROMPT_ID)
     assert set(entry["prompts"]) == set(sent)
     assert set(sent) <= set(runner._stamp_current("sha", "", SPEC))
-    assert runner.sent_prompt_ids(False) == sent
-    monkeypatch.setattr(runner, "FLOW", runner.FIELDWISE)
-    entry = runner.producer("harvest", "m")
-    assert entry["flow"] == runner.FIELDWISE
-    assert runner.FIELD_PROMPT_ID in entry["prompts"]
-    assert runner.SURVEY_PROMPT_IDS[0] not in runner.sent_prompt_ids(False)
+    assert runner.survey_prompt_ids() == sent
+
+
+def test_a_spec_without_groups_stops_the_run(tmp_path, monkeypatch, capsys):
+    raw = json.loads((Path(__file__).resolve().parent.parent / "profiles"
+                      / "kwp" / "extraction_spec.json").read_text(
+        encoding="utf-8"))
+    del raw["groups"]
+    folder = tmp_path / "trial"
+    folder.mkdir()
+    (folder / "spec.json").write_text(json.dumps(raw), encoding="utf-8")
+    monkeypatch.setenv("DOCPIPE_USAGE_DB", str(tmp_path / "usage.db"))
+    with pytest.raises(SystemExit) as stopped:
+        runner.main([str(tmp_path / "corpus.db"), str(tmp_path / "x.index"),
+                     str(folder / "out"), "--spec", str(folder / "spec.json"),
+                     "--profile", "kwp"])
+    assert stopped.value.code == 2
+    assert "needs groups" in capsys.readouterr().err
 
 
 def test_a_spec_with_groups_and_a_missing_prompt_stops_and_names_it(
@@ -496,8 +508,8 @@ def test_a_spec_with_groups_and_a_missing_prompt_stops_and_names_it(
         with pytest.raises(LookupError) as stopped:
             runner.surveyed_flow(SPEC)
         assert missing in str(stopped.value)
-        # A spec without groups never asked for the survey, so the same
-        # profile harvests it the old way.
+        # A spec without groups never asked for the survey: no prompt is
+        # looked at, and the run stops on it elsewhere.
         assert not runner.surveyed_flow(replace(SPEC, groups={}))
 
 

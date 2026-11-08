@@ -16,6 +16,9 @@ Antworte mit genau einer Zeile JSON:
 <!-- with: settings -->
 "settings" sind Festlegungen, die der Plan für alle seine Werte trifft, je mit Zitat. Sie gelten auch für diesen Wert, wo sie über ihn sprechen, und du darfst aus ihnen zitieren.
 
+<!-- with: sections -->
+"sections" sind die Titel der letzten Abschnitte des Plans bis zur Stelle des Werts, der eigene zuletzt. Auch daraus darfst du zitieren.
+
 <!-- with: around -->
 "around" ist der Text des Abschnitts um die Tabelle oder Abbildung. Auch daraus darfst du zitieren.
 
@@ -28,12 +31,11 @@ Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock da
 {{example}}
 
 <!-- group: frame -->
-Gefragt ist eine Angabe zum Rahmen des Werts. "known" sind die Paare aus Szenario und Jahr, die der Plan für diese Passage nennt, "base_years" und "target_years" die Jahre seines eigenen Stands und seines Ziels.
+Gefragt ist eine Angabe zum Rahmen des Werts.
 Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
 {{example}}
 
-* Nenne Szenario und Jahr nur, wo eine gezeigte Stelle sie für diesen Wert nennt. Sonst sind sie "out:unstated", und es gilt das Paar aus "known".
-* Steht bei der Zahl statt einer Jahreszahl nur das Wort des Plans für seinen eigenen Stand ("Basisjahr", "Bilanzjahr", "Ist-Zustand", "Status quo", "IST", "Bestand", "aktuell") oder für sein Ziel ("Zieljahr", "Zielzustand", "Zielszenario", "Ziel"), nimm das Jahr aus "base_years" oder "target_years", auf das dieses Wort verweist: "value" ist die Jahreszahl, "value_raw" das Wort, Zeichen für Zeichen, und "quote" die Stelle mit dem Wort. Bei mehreren "target_years" ist es das Jahr, das der Plan selbst Zieljahr nennt oder in dem sein Ziel erreicht ist, kein Zwischenziel. Fehlt die Liste oder passt keins ihrer Jahre, ist das Jahr "out:unstated".
+* Nenne Szenario und Jahr, wie eine gezeigte Stelle sie für diesen Wert nennt. Sonst sind sie "out:unstated".
 * Leite das Jahr nie aus dem Erscheinungsjahr des Plans ab.
 
 <!-- group: context -->
@@ -41,7 +43,7 @@ Gefragt ist eine Einordnung dieser Zahl. Jeder Listeneintrag nennt, was er bedeu
 Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
 {{example}}
 
-* Nennt die Stelle für die Zahl mehrere Einträge einer Liste ("Gas-BHKW + Gas-Brennwert"), ist die Antwort der Eintrag, in den alle fallen; fallen sie in verschiedene, ist sie "Summe", und das Wort des Plans steht in "value_raw".
+* Nennt die Stelle für die Zahl mehrere Einträge einer Liste ("Fernwärme + Gas-NT"), nenne jeden: die Antwort ist eine Liste, je Eintrag mit "value", "value_raw" und "quote".
 
 <!-- follow-up: corrections -->
 Deine letzte Antwort hat Fehler, je Angabe unter "what". Antworte noch einmal vollständig in derselben Form und behebe jeden Punkt.

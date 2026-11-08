@@ -54,8 +54,10 @@ def one_of(entry):
 
 def keys_match(example: dict, properties: dict) -> bool:
     """The example names exactly the keys the schema does, in its order,
-    the probe of an unstated entry aside."""
-    return list(example) == [key for key in properties if key != "probe"]
+    the probe of an unstated entry and the last year of a span aside: an
+    example shows one year read (`reading.span_rows`)."""
+    return list(example) == [key for key in properties
+                             if key not in ("probe", "until")]
 
 
 ALL = requests(KWP) + requests(SCENARIOS)
@@ -112,12 +114,15 @@ def test_an_entry_shows_its_printed_wording_where_the_grammar_asks_it():
     assert ("subject", False) in seen      # a wording is its own print
 
 
-def test_a_number_is_shown_as_a_number_and_a_wording_as_text():
+def test_a_year_is_shown_as_its_placeholder_and_never_as_a_year():
+    # Owner decision 2026-11-07: "mach das Beispiel mit YYYY" -- the model
+    # answered the example's year for a number under another year's column.
     for parameter, group, slots in ALL:
         for slot in slots:
             value = reading.entry_example(slot)["value"]
             number = not slot.is_closed and slot.kind == fields.NUMBER
-            assert isinstance(value, int) == number, slot.name
+            assert (value == fields.YEAR) == number, slot.name
+            assert not isinstance(value, int), slot.name
 
 
 def test_a_comb_example_has_exactly_its_requests_keys_in_order():

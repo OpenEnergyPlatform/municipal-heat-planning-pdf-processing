@@ -200,6 +200,17 @@ def frame_pairs(found: Found) -> list
 
 The frame tuples of a survey, each once, in the order of the plan.
 
+### derive_left
+
+```python
+def derive_left(reads: list) -> int
+```
+
+What the spec derives from the unit, on every value no request read
+it for once the reading and the combing are done (owner decision
+2026-11-07: asked first, and only where no answer is read taken from the
+unit, `fields.derives`). Returns how many coordinates.
+
 ### joined
 
 ```python

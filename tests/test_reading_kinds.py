@@ -77,8 +77,8 @@ def asked_for(parameter, *replies):
         asked.append((set(keys), (follow or {}).get("corrections")))
         return answered(thread, replies[min(len(asked), len(replies)) - 1])
 
-    read = reading.Reader(KWP, ask_values, lambda *a, **k: {}, FRAME).read(
-        7, parameter, TABLE, [], [], {("table", 5): TABLE})
+    read = reading.Reader(KWP, ask_values, lambda *a, **k: {}).read(
+        7, parameter, TABLE, [], {("table", 5): TABLE})
     return asked, read
 
 

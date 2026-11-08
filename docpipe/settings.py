@@ -239,10 +239,6 @@ SETTINGS = (
       "The one .env-style file to load before anything else; default: .env "
       "in the working folder.",
       bootstrap=True, stages=ALL),
-    S("EXTRACT_ANCHORS", "extract.anchors", "flag", "1",
-      "Ask the model once per question for a search anchor; 0 searches "
-      "without anchors.",
-      stages=("extract",)),
     S("EXTRACT_ATTACH_IMAGES", "extract.attach_images", "flag", "1",
       "Send table and figure crops along with extraction requests; 0 sends "
       "text only.",
@@ -267,55 +263,9 @@ SETTINGS = (
       "Passages (sections, tables, figures) whose text one run keeps, shared "
       "by every thread; 0 keeps all.",
       stages=("extract",)),
-    S("EXTRACT_FIELD_ATTEMPTS", "extract.field_attempts", "int", "3",
-      "Times one window is asked again when its answers could not be backed "
-      "by a quote.",
-      stages=("extract",)),
-    S("EXTRACT_FIELD_MAX_WINDOWS", "extract.field_max_windows", "int", "24",
-      "Most windows one coordinate may cost (own plus retrieval) before it "
-      "counts as exhausted.",
-      stages=("extract",)),
-    S("EXTRACT_FIELD_OVERLAP", "extract.field_overlap", "int", "1",
-      "Passages of one rest-stage window repeated at the start of the next.",
-      stages=("extract",)),
     S("EXTRACT_FIELD_PARALLEL", "extract.field_parallel", "int", "192",
       "Field-sweep threads under the row requests; a ceiling for the "
       "adaptive request limit.",
-      stages=("extract",)),
-    S("EXTRACT_FIELD_RE_ENTRY", "extract.field_re_entry", "int", "3",
-      "Already-read passages carried to the front of a coordinate's next "
-      "window.",
-      stages=("extract",)),
-    S("EXTRACT_FIELD_ROUNDS", "extract.field_rounds", "int", "4",
-      "Retrieval rounds of a coordinate's sweep before it falls back to the "
-      "rest stage.",
-      stages=("extract",)),
-    S("EXTRACT_FIELD_ROWS", "extract.field_rows", "int", "32",
-      "Most rows one field request answers at once.",
-      stages=("extract",)),
-    S("EXTRACT_FIELD_WINDOW", "extract.field_window", "int", "2",
-      "Passages in one window of the field sweep.",
-      stages=("extract",)),
-    S("EXTRACT_FOLLOWUP_ROUNDS", "extract.followup_rounds", "int", "1",
-      "Times the model may ask for more passages on a topic and receive "
-      "them.",
-      stages=("extract",)),
-    S("EXTRACT_FRAME_CHARS", "extract.frame_chars", "int", None,
-      "Characters of passage text per frame request; default: the "
-      "batch_chars value.",
-      stages=("extract",)),
-    S("EXTRACT_FRAME_ROUNDS", "extract.frame_rounds", "int", "3",
-      "Rounds the frame search (which scenarios and years a document has) "
-      "may ask for more.",
-      stages=("extract",)),
-    S("EXTRACT_FRAME_SOURCES", "extract.frame_sources", "int", "12",
-      "Passages one frame request reads.",
-      stages=("extract",)),
-    S("EXTRACT_FRAME_YEAR_MAX", "extract.frame_year_max", "int", "2100",
-      "Latest number the frame cross-check counts as a calendar year.",
-      stages=("extract",)),
-    S("EXTRACT_FRAME_YEAR_MIN", "extract.frame_year_min", "int", "1990",
-      "Earliest number the frame cross-check counts as a calendar year.",
       stages=("extract",)),
     S("EXTRACT_IMAGE_MAX_SIDE", "extract.image_max_side", "int", "1280",
       "Longest side in pixels of a crop attached to an extraction request.",
@@ -382,16 +332,8 @@ SETTINGS = (
     S("EXTRACT_PLAN_PARALLEL", "extract.plan_parallel", "int", "8",
       "Threads for retrieval planning and quote verification.",
       stages=("extract",)),
-    S("EXTRACT_PLAN_TOP", "extract.plan_top", "int", "100",
-      "Passages (tables, figures and prose) a document's plan keeps, in "
-      "rank order.",
-      stages=("extract",)),
     S("EXTRACT_PRIOR_MAX", "extract.prior_max", "int", "24",
       "Earlier values listed to the model so that it does not repeat them.",
-      stages=("extract",)),
-    S("EXTRACT_PROSE_TOP", "extract.prose_top", "int", "200",
-      "Prose cap of an older plan rule; the normal run plans by plan_top "
-      "and ignores it.",
       stages=("extract",)),
     S("EXTRACT_PROVENANCE", "extract.provenance", "flag", "1",
       "Write the provenance of every value beside the graph "
@@ -434,10 +376,6 @@ SETTINGS = (
     S("EXTRACT_TRANSPORT_WAIT_MAX", "extract.transport_wait_max",
       "float", "120",
       "Longest wait in seconds between retries to an unreachable server.",
-      stages=("extract",)),
-    S("EXTRACT_VISUAL_SHARE", "extract.visual_share", "float", "0.5",
-      "Share of a document's plan held for tables and figures before prose "
-      "fills the rest.",
       stages=("extract",)),
     S("GEMINI_API_KEY", "gemini.api_key", "str", None,
       "Key of the Gemini API, for a role that has no key of its own.",

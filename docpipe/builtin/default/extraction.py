@@ -32,10 +32,7 @@ CONTRACT_LANGUAGE = "en"
 # prompts are in the profile's language, so the passage is too. A profile
 # that words a prompt of its own says its own passages.
 # (what is checked, prompt, passage, True: has to be there, False: must not)
-PROMPT_CHECKS = (
-    ("field prompt asks one field", "extraction/field",
-     "EXACTLY ONE field", True),
-)
+PROMPT_CHECKS = ()
 
 PHRASES = {
     # the closed list as a request shows it

@@ -131,8 +131,7 @@ def first_conversation(source, unit_reply):
             return answered(thread, unit_reply)
         return answered(thread, unstated(slots))
 
-    reader = reading.Reader(SPEC, ask_values, ask_text,
-                            runner.frame_slots_of(SPEC))
+    reader = reading.Reader(SPEC, ask_values, ask_text)
     reads = reader(7, found_of(source, ENERGY.uri),
                    {(source.owner_kind, source.owner_id): source})
     return asked, reads
@@ -161,8 +160,9 @@ PRINTED = {"unit": {"value": "", "value_raw": "MWh/EW",
 def test_each_message_asks_one_coordinate_in_the_order_of_the_spec():
     asked, _reads = first_conversation(BALANCE, MWH)
     assert all(len(names) == 1 for names, _t, _m in asked)
-    assert [names[0] for names, _t, _m in asked] == spec_order(
-        ENERGY, skip=derived_by_unit_names(ENERGY))
+    # Every coordinate, the one the unit could decide too (owner decision
+    # 2026-11-07: asked first, derived only where no answer is read).
+    assert [names[0] for names, _t, _m in asked] == spec_order(ENERGY)
 
 
 def test_each_message_carries_the_answers_before_it_in_one_conversation():
@@ -175,13 +175,17 @@ def test_each_message_carries_the_answers_before_it_in_one_conversation():
                    for message in before if message["role"] == "assistant")
 
 
-def test_a_unit_read_as_an_entry_derives_what_it_decides_and_asks_it_not():
+def test_a_unit_read_as_an_entry_is_asked_and_derives_only_what_stays_open():
     asked, reads = first_conversation(BALANCE, MWH)
     derived = derived_by_unit_names(ENERGY)
     assert derived
     names = [names[0] for names, _t, _m in asked]
-    assert not set(derived) & set(names)
+    assert set(derived) <= set(names)
     claim = reads[0].claims[0]
+    assert not any(claim.get(f"{name}_state") == fields.DERIVED
+                   for name in derived)
+    # Open after the reading (and the combing): taken from the unit then.
+    surveyed.derive_left(reads)
     assert all(claim.get(f"{name}_state") == fields.DERIVED
                for name in derived)
 
@@ -335,7 +339,7 @@ TABLE = passage("table", 9, "Verbrauch nach Trägern\n| Träger | MWh |\n"
                 "| Gas | 300 |\n| Öl | 120 |", "Ausblick")
 
 
-def test_a_table_with_its_frame_open_on_all_values_is_asked_once():
+def test_each_value_of_a_table_is_asked_its_year_in_its_own_conversation():
     passages = {(s.owner_kind, s.owner_id): s
                 for s in (TABLE, OUTLOOK)}
     batch = Batch(7, ENERGY, [WorkItem(7, ENERGY, TABLE)])
@@ -344,7 +348,7 @@ def test_a_table_with_its_frame_open_on_all_values_is_asked_once():
                "unit_raw": "MWh", "unit_quote": "| Träger | MWh |",
                "unit_source": ["table", 9],
                **{f"{name}_state": fields.SAID_UNSTATED
-                  for name in ("scenario", "year", "period_start")}}
+                  for name in ("scenario", "year")}}
               for value, quote in ((300, "| Gas | 300 |"),
                                    (120, "| Öl | 120 |"))]
     read = reading.Read(batch, claims)
@@ -368,22 +372,12 @@ def test_a_table_with_its_frame_open_on_all_values_is_asked_once():
             m for m in talk.messages if asks and m["payload"]
             and m["thread"] is asks[0]["thread"]]
 
+    # Owner decision 2026-11-07: no table is asked once for all its values;
+    # each value is asked in its own conversation, which shows no table.
     threads, opening = year_conversations([read])
-    assert len(threads) == 1
-    # The conversation that asked it shows the whole table.
-    assert opening and opening[0]["payload"].get("whole_table")
-    assert all(claim.get("year") == 2030 for claim in claims)
-    assert all(claim.get("year_quote") == "Die Werte gelten für 2030"
-               for claim in claims)
-    # Each value in a table of its own: asked once per value.
-    apart = [reading.Read(Batch(7, ENERGY, [WorkItem(7, ENERGY, table)]),
-                          [dict(claim, year_state=fields.SAID_UNSTATED,
-                                year=None)])
-             for table, claim in ((TABLE, claims[0]),
-                                  (passage("table", 10, TABLE.text,
-                                           "Ausblick"), claims[1]))]
-    threads, _asks = year_conversations(apart)
     assert len(threads) == 2
+    assert opening and not opening[0]["payload"].get("whole_table")
+    assert all(claim.get("year") == 2030 for claim in claims)
 
 
 # -- 9. the model's own search after the list ------------------------------------

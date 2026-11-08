@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 from docpipe.extraction import fields
-from docpipe.extraction.pipeline import _invented_wording, answer_in_quote
+from docpipe.extraction.pipeline import answer_in_quote
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.verify import value_in_quote
 
@@ -59,39 +59,7 @@ def test_a_text_coordinate_stands_in_its_quote_itself():
     assert answer_in_quote(carrier, entry, "Wärmebedarf", quote)
 
 
-def test_the_early_filter_holds_a_text_value_to_itself():
-    claim = {"parameter": "scenario_abstract", "quote": QUOTE,
-             "value": "a scenario of another study", "value_raw": "baseline"}
-    assert _invented_wording(claim, SCENARIOS)
-    assert not _invented_wording(dict(claim, value="2.6 W and 2.0 W"),
-                                 SCENARIOS)
-    # Before its parameter is known a value is taken for a choice.
-    assert not _invented_wording(dict(claim, parameter=None), SCENARIOS)
-
-
-def test_an_example_of_a_list_closed_per_document_is_read_as_a_choice():
-    from docpipe.extraction.preflight import reads_back
-    # A spec whose scenario is a list each document closes, as a profile
-    # with such a list would write it.
-    raw = json.loads((Path(__file__).resolve().parent.parent / "profiles"
-                      / "scenarios" / "extraction_spec.json").read_text(
-        encoding="utf-8"))
-    for parameter in raw["parameters"]:
-        axis = (parameter.get("axes") or {}).get("scenario")
-        if axis is not None:
-            axis.pop("type")
-            axis.pop("merged")
-            # A list closes it: entries beside names are for names only.
-            axis.pop("beside", None)
-            axis["dynamic"] = True
-    closed = load_spec(raw)
+def test_a_list_entry_read_as_free_text_does_not_stand_in_its_quote():
     quote = "In the NDC scenario, emissions peak before 2030."
-    line = json.dumps({"fields": {"scenario": {"groups": [
-        {"rows": ["R1"], "value": "NDC_2030",
-         "value_raw": "the NDC scenario", "quote": quote}]}}})
-    ok, detail = reads_back(line, closed)
-    assert ok, detail
-    # Read as free text, as the open list would have it, the entry does not
-    # stand in its quote.
     free = fields.Slot(name="scenario", kind=fields.TEXT)
     assert not answer_in_quote(free, "NDC_2030", "the NDC scenario", quote)

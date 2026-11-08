@@ -1,6 +1,7 @@
-"""A field question and its search carry the row's context; the vectors for
-the search come in shared batches; documents start while the server has room;
-nothing a run replaces is lost; and every run counts where it was hard.
+"""A row's context is the wording of what it has read; a number a table does
+not split reads as a total; the vectors for the search come in shared
+batches; documents start while the server has room; nothing a run replaces is
+lost; and every run counts where it was hard.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -54,43 +55,7 @@ def test_open_derived_unit_and_asked_coordinates_are_no_context():
     assert runner.row_context(row(**claim).claim, {"quantity"}) == {}
 
 
-def test_every_row_of_a_field_request_carries_its_context_and_title():
-    rows = [row(**READ_ROW), row("R2")]
-    body = runner._field_payload([TABLE], rows, CARRIER,
-                                 owner_of={"R1": TABLE, "R2": TABLE})
-    first, second = body["rows"]
-    assert first["known"] == {"quantity": "Endenergiebedarf",
-                              "sector": "Mehrfamilienhaus"}
-    assert first["title"] == second["title"] == "Endenergiebedarf nach Gebäudetyp"
-    assert "known" not in second
-
-
 # -- the search: one sentence per table of the open rows ------------------------
-
-def test_the_search_asks_once_per_own_passage_with_its_context():
-    other = Source("table", 2, "x", {"title": "Wärmebedarf 2045"})
-    rows = [row("R1", **READ_ROW),
-            row("R2", **dict(READ_ROW, sector_raw="Einfamilienhaus")),
-            row("R3", **dict(READ_ROW, quantity_raw="Wärmebedarf",
-                             sector_state=fields.EXHAUSTED))]
-    probes = runner.context_probes(rows, {"carrier"},
-                                   {"R1": TABLE, "R2": TABLE, "R3": other},
-                                   "Welcher Energieträger?")
-    assert probes == [
-        "Endenergiebedarf nach Gebäudetyp Endenergiebedarf Mehrfamilienhaus "
-        "Einfamilienhaus Welcher Energieträger?",
-        "Wärmebedarf 2045 Wärmebedarf Welcher Energieträger?"]
-
-
-def test_rows_without_any_context_leave_the_search_to_the_anchors():
-    assert runner.context_probes([row()], {"carrier"}, {}, "Welcher?") == []
-
-
-def test_the_head_of_a_question_is_its_first_sentence():
-    head = runner.question_head(CARRIER.question)
-    assert CARRIER.question.startswith(head) and head.endswith("?")
-    assert len(head) < len(CARRIER.question)
-    assert runner.question_head("Kein Fragezeichen. Rest") == "Kein Fragezeichen"
 
 
 # -- not split by the axis: a total, backed like any other answer --------------
