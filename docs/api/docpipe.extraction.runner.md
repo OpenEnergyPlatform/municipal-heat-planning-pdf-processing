@@ -190,14 +190,6 @@ the server's multimodal cache (vLLM before 0.28, CVE-2026-105753).
 def __init__(self, tokenizer)
 ```
 
-#### PromptCounter.text
-
-```python
-def text(self, text: str) -> int
-```
-
-The tokens of a text alone, as the model's tokenizer counts it.
-
 ## Functions
 
 ### retry_temperature
@@ -763,17 +755,6 @@ plus one), and reading that as the prompt shrank the answer by 33 tokens
 per attempt until the coordinates were written off. With the model's
 tokenizer (`start_counting`) the text is counted exactly; without one it
 is estimated high.
-
-### text_tokens
-
-```python
-def text_tokens(text: str) -> int
-```
-
-The tokens of a text: counted with the served model's tokenizer where
-the run has it (`start_counting`), else by the run's estimate, the one a
-request is sized with (`PROMPT_CHARS_PER_TOKEN`). A hosted model's
-tokenizer is its own, so its runs count by the estimate.
 
 ### answer_room
 

@@ -12,7 +12,7 @@ decision 2026-11-07: "streich diese ganze Code Logik").
 The first message shows the parameter in short (its `brief`), the whole
 passage (a table with its title, its head and all its rows, or a piece of
 at most two pages of a section, its heading counted in), the plan's text
-around a table or figure (300 tokens before and after it, `around_of`), the
+around a table or figure (1000 characters before and after it, `around_of`), the
 line of the title page and the table the passage may continue, and asks for
 every value of the parameter in it, in one answer (owner decisions
 2026-11-08: asked one after another, the model stopped after the three
@@ -513,50 +513,31 @@ def known_shown(claim: dict, known: dict, passages: dict) -> list:
 
 
 # The plan's text a request shows around a table or figure, before it and
-# after it, in tokens (owner decisions 2026-11-08: "250 Token oben und
-# unten", then "Mach 300 Tokens daraus").
-AROUND_TOKENS = 300
-# Characters per token where no tokenizer counts them, set low so a text is
-# never estimated short: the estimate the run sizes its requests with as well
-# (`runner.PROMPT_CHARS_PER_TOKEN`).
-CHARS_PER_TOKEN = 2.62
+# after it, in characters (owner decisions 2026-11-08: "250 Token oben und
+# unten", "Mach 300 Tokens daraus", then "Mach 1000 Zeichen daraus").
+AROUND_CHARS = 1000
 
 
-def estimated_tokens(text: str) -> int:
-    """The tokens of *text* by the run's estimate."""
-    return int(len(text or "") / CHARS_PER_TOKEN)
-
-
-def last_tokens(text: str, tokens: int, count: Callable) -> str:
-    """The end of *text* that *count* makes at most *tokens*, begun at a
-    word where the cut falls inside one."""
-    if count(text) <= tokens:
+def last_chars(text: str, chars: int) -> str:
+    """The last *chars* characters of *text*, begun at a word where the cut
+    falls inside one."""
+    if len(text) <= chars:
         return text
-    low, high = 0, len(text)          # the most characters that fit
-    while low < high:
-        mid = (low + high + 1) // 2
-        if count(text[-mid:]) <= tokens:
-            low = mid
-        else:
-            high = mid - 1
-    out = text[-low:] if low else ""
+    out = text[-chars:] if chars > 0 else ""
+    if not out or out[0].isspace() or text[-chars - 1].isspace():
+        return out
     space = out.find(" ")
     return out[space + 1:] if 0 <= space < len(out) // 4 else out
 
 
-def first_tokens(text: str, tokens: int, count: Callable) -> str:
-    """The start of *text* that *count* makes at most *tokens*, ended at a
-    word where the cut falls inside one."""
-    if count(text) <= tokens:
+def first_chars(text: str, chars: int) -> str:
+    """The first *chars* characters of *text*, ended at a word where the cut
+    falls inside one."""
+    if len(text) <= chars:
         return text
-    low, high = 0, len(text)
-    while low < high:
-        mid = (low + high + 1) // 2
-        if count(text[:mid]) <= tokens:
-            low = mid
-        else:
-            high = mid - 1
-    out = text[:low]
+    out = text[:max(chars, 0)]
+    if not out or out[-1].isspace() or text[len(out)].isspace():
+        return out
     space = out.rfind(" ")
     return out[:space] if space > len(out) * 3 // 4 else out
 
@@ -574,17 +555,14 @@ def marker_span(text: str, block: str) -> Optional[tuple]:
 
 
 def around_of(source: Source, passages: dict,
-              count: Optional[Callable] = None,
-              tokens: int = AROUND_TOKENS) -> list:
+              chars: int = AROUND_CHARS) -> list:
     """The plan's text around a table or figure as its requests show it
-    (owner decisions 2026-11-08): *tokens* of the text before its place and
-    as many after it, counted by *count* (the run's tokenizer, else
-    `estimated_tokens`), across the edge of its section into the sections
-    before and after. One passage per section the text comes from, in the
+    (owner decisions 2026-11-08): *chars* characters of the text before its
+    place and as many after it, across the edge of its section into the
+    sections before and after. One passage per section the text comes from, in the
     plan's order, each under its own section, so a quote from it cites the
     section it stands in. [] for a section, and for a table or figure whose
     section is not among *passages*."""
-    count = count or estimated_tokens
     provenance = source.provenance or {}
     parent = provenance.get("parent_section")
     if source.owner_kind == "section" or parent is None:
@@ -599,25 +577,25 @@ def around_of(source: Source, passages: dict,
     span = marker_span(text, provenance.get("block_id") or "")
     # Unmarked, it stands at the start of its section.
     start, end = span if span is not None else (0, 0)
-    before = last_tokens(text[:start], tokens, count)
-    after = first_tokens(text[end:], tokens, count)
+    before = last_chars(text[:start], chars)
+    after = first_chars(text[end:], chars)
     parts = [replace(own, text=before + text[start:end] + after, body=None)]
-    left = tokens - count(before)
+    left = chars - len(before)
     for section in reversed(order[:at]):
         if left <= 0:
             break
-        piece = last_tokens(section.text or "", left, count)
+        piece = last_chars(section.text or "", left)
         if piece.strip():
             parts.insert(0, replace(section, text=piece, body=None))
-        left -= count(piece)
-    left = tokens - count(after)
+        left -= len(piece)
+    left = chars - len(after)
     for section in order[at + 1:]:
         if left <= 0:
             break
-        piece = first_tokens(section.text or "", left, count)
+        piece = first_chars(section.text or "", left)
         if piece.strip():
             parts.append(replace(section, text=piece, body=None))
-        left -= count(piece)
+        left -= len(piece)
     return [part for part in parts if (part.text or "").strip()]
 
 
@@ -1871,8 +1849,7 @@ class Reader:
                  known: Optional[Callable] = None,
                  drawn: Optional[Callable] = None,
                  span_marks: Optional[dict] = None,
-                 pool=None, trace=None,
-                 count_tokens: Optional[Callable] = None):
+                 pool=None, trace=None):
         self.spec = spec
         self.ask_values = ask_values
         self.ask_text = ask_text
@@ -1883,7 +1860,6 @@ class Reader:
         self.drawn = drawn or (lambda source: False)
         self.pool = pool
         self.trace = trace
-        self.count_tokens = count_tokens
 
     def __call__(self, document_id: int, found, passages: dict,
                  budget: Optional[int] = None, *,
@@ -2014,7 +1990,7 @@ class Reader:
         line and the table the passage may continue (`beside_of`). The text
         around is one passage per section it comes from, each a passage a
         quote may stand in."""
-        around = around_of(source, passages, self.count_tokens)
+        around = around_of(source, passages)
         context = ({"around": "\n\n".join(part.text for part in around)}
                    if around else {})
         titles, titled = sections_of(source, passages)

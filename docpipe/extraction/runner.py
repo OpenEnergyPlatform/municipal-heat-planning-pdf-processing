@@ -1342,9 +1342,8 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
 # The server's context window. Read from the server at the start of a run
 # (`set_model_len`); the job serves at least `context_budget`.
 MAX_MODEL_LEN = int(os.environ.get("EXTRACT_MAX_MODEL_LEN", "32768"))
-# Prompt characters per token, set low so a prompt is never estimated short;
-# the text around a table counts with the same (`reading.CHARS_PER_TOKEN`).
-PROMPT_CHARS_PER_TOKEN = reading_map.CHARS_PER_TOKEN
+# Prompt characters per token, set low so a prompt is never estimated short.
+PROMPT_CHARS_PER_TOKEN = 2.62
 # One crop at IMAGE_MAX_SIDE on both sides, one visual token per 28 px square.
 IMAGE_TOKENS = (IMAGE_MAX_SIDE // 28 + 1) ** 2 + 2
 # Room kept free between the estimate and the window.
@@ -1449,12 +1448,6 @@ class PromptCounter:
             ids = self._tokenizer.encode(text, add_special_tokens=False)
         return len(ids) + images * IMAGE_TOKENS
 
-    def text(self, text: str) -> int:
-        """The tokens of a text alone, as the model's tokenizer counts it."""
-        with self._lock:
-            return len(self._tokenizer.encode(text or "",
-                                              add_special_tokens=False))
-
 
 # Set by `start_counting` for the run; None counts by estimate.
 PROMPT_COUNTER: Optional[PromptCounter] = None
@@ -1509,16 +1502,6 @@ def prompt_tokens(system: str, conversation: list) -> int:
                 chars += len(part.get("text") or "")
     return (int(chars / PROMPT_CHARS_PER_TOKEN) + images * IMAGE_TOKENS
             + 16 * (len(conversation) + 1))
-
-
-def text_tokens(text: str) -> int:
-    """The tokens of a text: counted with the served model's tokenizer where
-    the run has it (`start_counting`), else by the run's estimate, the one a
-    request is sized with (`PROMPT_CHARS_PER_TOKEN`). A hosted model's
-    tokenizer is its own, so its runs count by the estimate."""
-    if PROMPT_COUNTER is not None:
-        return PROMPT_COUNTER.text(text)
-    return int(len(text or "") / PROMPT_CHARS_PER_TOKEN)
 
 
 def answer_room(system: str, conversation: list, wanted: int) -> int:
@@ -1853,7 +1836,7 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None):
         shown_with=reading_map.heading_of,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
         known=row_context, drawn=drawn, span_marks=span_marks_of(),
-        pool=AHEAD, trace=trace.event, count_tokens=text_tokens)
+        pool=AHEAD, trace=trace.event)
 
 
 def check_asker(client, parts=None) -> Optional[Callable]:
@@ -1992,8 +1975,7 @@ def make_comber(spec: Spec, rank: Callable):
         spec, ask, rank, row_context,
         bases=lambda pairs: named_years(pairs, frame_slots, states),
         pool=AHEAD, trace=trace.event,
-        check=check_asker(client, check_parts), span_marks=span_marks_of(),
-        count_tokens=text_tokens)
+        check=check_asker(client, check_parts), span_marks=span_marks_of())
     return comber
 
 

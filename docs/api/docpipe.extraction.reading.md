@@ -15,7 +15,7 @@ decision 2026-11-07: "streich diese ganze Code Logik").
 The first message shows the parameter in short (its `brief`), the whole
 passage (a table with its title, its head and all its rows, or a piece of
 at most two pages of a section, its heading counted in), the plan's text
-around a table or figure (300 tokens before and after it, `around_of`), the
+around a table or figure (1000 characters before and after it, `around_of`), the
 line of the title page and the table the passage may continue, and asks for
 every value of the parameter in it, in one answer (owner decisions
 2026-11-08: asked one after another, the model stopped after the three
@@ -315,8 +315,7 @@ def __init__(self, spec, ask_values: Callable, ask_text: Callable, *,
              known: Optional[Callable] = None,
              drawn: Optional[Callable] = None,
              span_marks: Optional[dict] = None,
-             pool=None, trace=None,
-             count_tokens: Optional[Callable] = None)
+             pool=None, trace=None)
 ```
 
 #### Reader.context_of
@@ -606,31 +605,23 @@ the plan's wording}, `runner.row_context`), each wording a passage a
 quote may stand in under the passage its coordinate was read in
 (`shown_as`).
 
-### estimated_tokens
+### last_chars
 
 ```python
-def estimated_tokens(text: str) -> int
+def last_chars(text: str, chars: int) -> str
 ```
 
-The tokens of *text* by the run's estimate.
+The last *chars* characters of *text*, begun at a word where the cut
+falls inside one.
 
-### last_tokens
+### first_chars
 
 ```python
-def last_tokens(text: str, tokens: int, count: Callable) -> str
+def first_chars(text: str, chars: int) -> str
 ```
 
-The end of *text* that *count* makes at most *tokens*, begun at a
-word where the cut falls inside one.
-
-### first_tokens
-
-```python
-def first_tokens(text: str, tokens: int, count: Callable) -> str
-```
-
-The start of *text* that *count* makes at most *tokens*, ended at a
-word where the cut falls inside one.
+The first *chars* characters of *text*, ended at a word where the cut
+falls inside one.
 
 ### marker_span
 
@@ -645,15 +636,13 @@ text ("[p18_tbl0: Tabelle 6: ...]"), None where it is not marked.
 
 ```python
 def around_of(source: Source, passages: dict,
-              count: Optional[Callable] = None,
-              tokens: int = AROUND_TOKENS) -> list
+              chars: int = AROUND_CHARS) -> list
 ```
 
 The plan's text around a table or figure as its requests show it
-(owner decisions 2026-11-08): *tokens* of the text before its place and
-as many after it, counted by *count* (the run's tokenizer, else
-`estimated_tokens`), across the edge of its section into the sections
-before and after. One passage per section the text comes from, in the
+(owner decisions 2026-11-08): *chars* characters of the text before its
+place and as many after it, across the edge of its section into the
+sections before and after. One passage per section the text comes from, in the
 plan's order, each under its own section, so a quote from it cites the
 section it stands in. [] for a section, and for a table or figure whose
 section is not among *passages*.

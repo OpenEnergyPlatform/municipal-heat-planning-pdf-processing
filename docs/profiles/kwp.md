@@ -248,8 +248,8 @@ corpus_m5 run, 0 of 638 planning calls: a plan states its inventory for one
 base year and mentions a handful of others, so several pairs matched and the
 branch stood down. More than the count, it wrote a year that does not stand in
 the passage, and every value of this corpus says in the plan what it refers
-to. Where it says so is the text around the table: the reading shows 300 tokens of
-the plan's text before the table and 300 after it, and the titles of the
+to. Where it says so is the text around the table: the reading shows 1000 characters of
+the plan's text before the table and 1000 after it, and the titles of the
 sections before it.
 
 `SLICE = {"quantity": kept_quantities(), "year": None}`

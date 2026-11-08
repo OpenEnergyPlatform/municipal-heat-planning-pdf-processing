@@ -885,15 +885,10 @@ def test_the_reading_takes_no_year_its_quote_does_not_print():
 # -- the text around a table -----------------------------------------------------
 
 # Promise (owner decisions 2026-11-08): a table or figure is shown with
-# 300 tokens of the plan's text before its place and 300 after it, AND
+# 1000 characters of the plan's text before its place and 1000 after it, AND
 # across the edge of its section into the sections before and after, each
 # part under the section it comes from; a section, a table in no section and
 # one whose section is not among the passages are shown nothing around.
-
-def words(text):
-    """A count of tokens that is easy to check: one per word."""
-    return len(text.split())
-
 
 def test_a_table_is_shown_with_its_section_where_it_is_short():
     passages = {("section", 9): SECTION}
@@ -904,13 +899,13 @@ def test_a_table_is_shown_with_its_section_where_it_is_short():
     assert reading.around_of(placed(), {}) == []         # not shown
 
 
-def test_a_table_is_shown_with_300_tokens_before_and_after_its_place():
+def test_a_table_is_shown_with_1000_characters_before_and_after_its_place():
     long = replace(SECTION, text="x " * 5000 + "[p2_tbl5: Tabelle 3]"
                    + " y" * 5000)
-    [part] = reading.around_of(placed(), {("section", 9): long}, words)
+    [part] = reading.around_of(placed(), {("section", 9): long})
     assert "[p2_tbl5: Tabelle 3]" in part.text
-    assert part.text.count("x") == reading.AROUND_TOKENS
-    assert part.text.count("y") == reading.AROUND_TOKENS
+    assert part.text.count("x") == reading.AROUND_CHARS // 2
+    assert part.text.count("y") == reading.AROUND_CHARS // 2
 
 
 def test_the_text_around_goes_on_into_the_sections_before_and_after():
@@ -920,26 +915,25 @@ def test_the_text_around_goes_on_into_the_sections_before_and_after():
     after = Source("section", 10, "d " * 1000, {"document_id": 7})
     passages = {("section", 8): before, ("section", 9): own,
                 ("table", 5): placed(), ("section", 10): after}
-    parts = reading.around_of(placed(), passages, words)
+    parts = reading.around_of(placed(), passages)
     assert [p.owner_id for p in parts] == [8, 9, 10]
     assert parts[0].text.count("a") == 100
     assert parts[1].text == own.text
-    assert parts[2].text.count("d") == reading.AROUND_TOKENS - 50
-    # the failure by construction: fewer tokens, and the sections beside
+    assert len(parts[2].text) == reading.AROUND_CHARS - 100
+    # the failure by construction: fewer characters, and the sections beside
     # it are not reached
     assert [p.owner_id for p in reading.around_of(
-        placed(), passages, words, tokens=40)] == [9]
+        placed(), passages, chars=80)] == [9]
 
 
 def test_the_text_around_a_table_keeps_the_other_tables_of_its_section():
     text = ("Vorher [p2_tbl1: Tabelle 2] Danach kommt die Tabelle. "
             "[p2_tbl5: Tabelle 3] Sie zeigt 2022. [p4_img2] Weiter 999 t CO2.")
     whole = replace(SECTION, text=text)
-    [part] = reading.around_of(placed(), {("section", 9): whole}, words)
+    [part] = reading.around_of(placed(), {("section", 9): whole})
     assert part.text == text
-    # the failure by construction: with fewer tokens it is cut
-    [part] = reading.around_of(placed(), {("section", 9): whole}, words,
-                               tokens=2)
+    # the failure by construction: with fewer characters it is cut
+    [part] = reading.around_of(placed(), {("section", 9): whole}, chars=13)
     assert part.text == "die Tabelle. [p2_tbl5: Tabelle 3] Sie zeigt"
 
 
@@ -1390,17 +1384,3 @@ def test_a_long_section_is_read_in_pieces_of_two_pages_with_its_heading():
         heading) > 300
 
 
-# Promise: the text around a table is counted with the served model's
-# tokenizer where the run has it, AND by the run's estimate where it has
-# none (a hosted model's tokenizer is its own).
-def test_the_text_around_is_counted_with_the_run_s_tokenizer_where_it_has_one(
-        monkeypatch):
-    from docpipe.extraction import runner
-
-    class Words:
-        def text(self, text):
-            return len(text.split())
-    monkeypatch.setattr(runner, "PROMPT_COUNTER", None)
-    assert runner.text_tokens("x" * 262) == 100
-    monkeypatch.setattr(runner, "PROMPT_COUNTER", Words())
-    assert runner.text_tokens("a b c") == 3

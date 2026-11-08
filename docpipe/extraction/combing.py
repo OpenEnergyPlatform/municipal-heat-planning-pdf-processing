@@ -482,15 +482,12 @@ class Comber:
     (`CHECK_PROMPT_ID`, owner decision 2026-11-07), a reply that names
     neither answer told so after it. *span_marks* are what a value stated
     for a span of years takes on each of its rows (`reading.span_rows`).
-    *count_tokens(text)* counts the text around a table or figure
-    (`reading.around_of`), the run's estimate where not given.
     """
 
     def __init__(self, spec, ask: Callable, rank: Optional[Callable],
                  known: Callable, *, bases: Optional[Callable] = None,
                  pool=None, trace=None, check: Optional[Callable] = None,
-                 span_marks: Optional[dict] = None,
-                 count_tokens: Optional[Callable] = None):
+                 span_marks: Optional[dict] = None):
         self.spec = spec
         self.ask = ask
         self.rank = rank
@@ -500,7 +497,6 @@ class Comber:
         self.trace = trace
         self.check = check
         self.span_marks = dict(span_marks or {})
-        self.count_tokens = count_tokens
 
     def _asked(self, parameter) -> list:
         """[(slot, group)] of *parameter* this step may ask, in the order of
@@ -668,7 +664,7 @@ class Comber:
                 rows[0].claim.pop(f"{slot.name}_state", None)
         # The plan's text around a table or figure, as its reading showed
         # it (owner decisions 2026-11-08), and the section it stands in.
-        around = around_of(source, passages, self.count_tokens)
+        around = around_of(source, passages)
         stands_in = (source.provenance or {}).get("parent_section")
         parent = ("section", int(stands_in)) \
             if around and stands_in is not None else origin

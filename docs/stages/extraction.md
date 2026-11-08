@@ -393,14 +393,12 @@ for a group whose spec entry says `"definition": "full"`, which shows the full
 description (kwp: `context`, the group that classifies; a parameter without a
 brief shows its description everywhere). A table or a figure is shown with the text around it
 (`reading.around_of`, owner decisions 2026-11-04, 2026-11-05 and 2026-11-08):
-`AROUND_TOKENS` = 300 tokens of the plan's text before the table's or figure's
-place and 300 after it, where the sentence that announces it and the line under
+`AROUND_CHARS` = 1000 characters of the plan's text before the table's or
+figure's place and 1000 after it, where the sentence that announces it and the line under
 it print its year, its scenario and its area. The text goes across the edges of
 its section into the sections before and after it. It is one passage per section
 it comes from, each quotable under its own section, so a coordinate quoted from
-it cites the section it stands in. Tokens are counted with the run's tokenizer
-where it has one (`runner.text_tokens`), else by the estimate `CHARS_PER_TOKEN`
-= 2.62 characters per token. Before, the whole section up to two pages was
+it cites the section it stands in. Before, the whole section up to two pages was
 shown, other tables and figures of it included. The combing shows the same text
 around. Every request also
 shows the heading its passage stands under, a table's or figure's that of its
