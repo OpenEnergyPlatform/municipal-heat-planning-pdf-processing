@@ -123,7 +123,9 @@ vector is really in the index.
 def save_index(index: faiss.Index, index_path: Path) -> None
 ```
 
-Save the FAISS index to disk.
+Save the FAISS index to disk, written whole under a new name first: a
+job killed while the file is written leaves the last saved index, which
+the next run resumes from, and not a truncated one it cannot load.
 
 ### remove_ids_from_index
 

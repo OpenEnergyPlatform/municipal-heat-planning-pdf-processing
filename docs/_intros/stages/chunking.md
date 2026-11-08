@@ -205,7 +205,9 @@ id and filters `build_embedding_inputs`' output against
 named in one warning at the run's end (`pipeline.py:273`, `321`). At
 `EMBED_FLUSH_ITEMS` pending items, `create_embeddings` runs and the index saves
 past `EMBED_SAVE_VECTORS` growth; a final flush and save close the run
-(`pipeline.py:309-337`, `331`). One `Unembedded` tally runs through every
+(`pipeline.py:309-337`, `331`). `save_index` writes the whole file under
+`<name>.part` and renames it over the index, so a job killed mid-save leaves
+the last saved index for the resume to load, not a truncated file. One `Unembedded` tally runs through every
 flush, and `embedded` counts the vectors actually created, not the inputs
 handed over. Each prepare thread reuses one connection across calls:
 `_worker_connection` caches it per thread for `document_id()` and

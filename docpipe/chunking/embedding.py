@@ -114,10 +114,15 @@ def index_ids(index: faiss.Index) -> list:
 
 
 def save_index(index: faiss.Index, index_path: Path) -> None:
-    """Save the FAISS index to disk."""
+    """Save the FAISS index to disk, written whole under a new name first: a
+    job killed while the file is written leaves the last saved index, which
+    the next run resumes from, and not a truncated one it cannot load."""
     import faiss
+    index_path = Path(index_path)
     index_path.parent.mkdir(parents=True, exist_ok=True)
-    faiss.write_index(index, str(index_path))
+    part = index_path.with_name(index_path.name + ".part")
+    faiss.write_index(index, str(part))
+    os.replace(part, index_path)
     log.info("FAISS index saved: %s (%d vectors)", index_path, index.ntotal)
 
 
