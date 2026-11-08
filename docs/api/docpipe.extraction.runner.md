@@ -432,7 +432,8 @@ run's shared store, and not into a store per thread.
 ```python
 def make_more_sources(db_path: Path, index, id_to_pos: dict,
                       cache_path: Path,
-                      content: Optional[Callable] = None) -> Callable
+                      content: Optional[Callable] = None,
+                      reranker: Optional[Callable] = None) -> Callable
 ```
 
 (document_id, queries, exclude) -> the passages the model asked for.
@@ -456,6 +457,10 @@ coordinates in 263,997 sweeps that way. 0 means no bound.
 
 The passages' content comes from *content*, the run's shared store or one
 of its own, and not from a store per thread.
+
+*reranker()* makes one thread's reranker (`rerank.Reranker`), which puts
+the best passages of each kind in its own order before they are handed
+back; None leaves the vector search's order.
 
 ### fill_dynamic_axes
 

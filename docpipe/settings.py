@@ -511,6 +511,21 @@ SETTINGS = (
       "Sections per refinement request; default: the profile's setting, "
       "else 3.",
       stages=("refine",)),
+    S("RERANK_API_KEY", "rerank.api_key", "str", "EMPTY",
+      "API key of the reranker's server.",
+      secret=True, stages=("extract",)),
+    S("RERANK_BASE_URL", "rerank.base_url", "str", "",
+      "The vLLM server whose /rerank orders every passage search of a "
+      "harvest; empty leaves the vector search's order.",
+      stages=("extract",)),
+    S("RERANK_MODEL", "rerank.model", "str", "Qwen/Qwen3-VL-Reranker-8B",
+      "The model the reranker's server serves.",
+      stages=("extract",)),
+    S("RERANK_POOL", "rerank.pool", "int", "100",
+      "Passages of each kind (section, table, figure) a search hands the "
+      "reranker, the best of the vector search; the rest follow in its "
+      "order.",
+      stages=("extract",)),
     S("DOC_PARALLEL", "run.doc_parallel", "int", "8",
       "Documents processed at once in batch mode of refinement and visuals.",
       stages=("refine", "visuals")),

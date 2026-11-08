@@ -1014,6 +1014,36 @@ the calls of all threads: one worker embeds everything that has queued up while
 the call before it ran, and hands each caller its slice. A failure of the call
 reaches every caller in the batch.
 
+The query cache key (`query_cache.make_key`) carries the embedding model, the
+size of its vectors and how a vector is made: the backend, and for the api
+backend the form of its request. The same model in this process and behind a
+vLLM server (`EMBEDDING_BACKEND=api`, `EMBEDDING_API_FORMAT=messages`) gives
+different vectors, so a query embedded one way is never compared with an index
+embedded the other. The index a run searches is the one it is handed; the
+vLLM-embedded indexes are searched with queries embedded through vLLM.
+
+### Reranking a search
+
+Every search of a harvest goes through one function (`runner.make_more_sources`):
+the combing's search per value, the walk for a parameter the survey named no
+passage for, the model's own search and the searches of the plan's years and
+settings. Given `RERANK_BASE_URL`, it hands the best `RERANK_POOL` passages of
+each kind of the vector search's order (100 sections, tables and figures, owner
+decisions 2026-11-06 and 2026-11-08) to a reranker (`rerank.Reranker`,
+Qwen3-VL-Reranker served by vLLM's `/rerank`), which reads each passage with
+the search sentence and scores the pair. Those passages come back in its order,
+the rest after them in the vector search's, so a walk down the list still
+reaches every passage and the hits a request shows (15 sections, 20 tables, 20
+figures) are the reranker's best. A search asks with several sentences; each is
+one request over the pool, and a passage keeps its best score, as the vector
+search keeps a passage's best. A figure goes with its picture where the run
+attaches figures, any other passage as its text; the server cuts a pair that
+outgrows the model to the model's length. Scores are kept per thread for the
+document in hand, so a search asked again with fewer passages left scores
+nothing twice. A failed request fails the search as a failed embedding does:
+a warning, and no passages for it. Without `RERANK_BASE_URL` the vector
+search's order stands.
+
 ### The reply grammar
 
 A request goes out with `response_format`, a JSON schema built from the request's
@@ -2297,6 +2327,7 @@ and `places/<document id>.json`.
 | `EXTRACT_PRIOR_MAX` | env var | `24` | Earlier values a request was told it has; it only enters the context budget (`runner.context_budget`) now | `runner.py` |
 | `EXTRACT_MAX_SOURCE_CHARS` / `EXTRACT_PARENT_CHARS` | env var | `16000` / `4000` | `MAX_SOURCE_CHARS`: the longest stretch of passage text a request was sized for; it only enters the context budget now. `PARENT_CHARS`: how much of a table's parent section rides along with it; a longer one is cut around the table's placeholder | `runner.context_budget`, `runner.make_parents` |
 | `EXTRACT_CODE_ROUNDS` | env var | `2` | Sandbox rounds a compute question may spend on a self-checked value | `runner.make_computer` |
+| `RERANK_BASE_URL` / `RERANK_MODEL` / `RERANK_POOL` / `RERANK_API_KEY` | env var | empty / `Qwen/Qwen3-VL-Reranker-8B` / `100` / `EMPTY` | The vLLM server whose `/rerank` orders every passage search (empty: the vector search's order), the model it serves, and how many of the best passages of each kind a search hands it | `rerank.py`, `runner.make_more_sources` |
 | `CODE_EXEC_PARALLEL` | env var | `1` | Code runs one run has out at the sandbox at a time; match the service's `KWP_SANDBOX_PARALLEL` | `runner.SANDBOX_SLOTS` |
 | `EXTRACT_LLM_PARALLEL` / `EXTRACT_PLAN_PARALLEL` / `EXTRACT_FIELD_PARALLEL` | env var | `128` / `8` / `192` | Pool sizes: the run's pool of documents' tasks, planning threads (retrieval, SQL and the document's phrase requests), and the questions of the compute step at once. With the adaptive limit on, the limit (`EXTRACT_LIMIT_MAX` at most) bounds the requests, and the conversations of the survey, reading and combing run on a pool sized to the limit's maximum (see The adaptive request limit) | `runner.main`, `runner.make_computer`, `runner.start_limit` |
 | `EXTRACT_ATTACH_IMAGES` / `EXTRACT_LOCATE` | env var | `1` / `1` | Off, respectively: no crop attaches to a survey, reading or review request (no `images/` dir needed), or `make_locate` returns `None`, no quote placed on the page | `runner.py` askers, `runner.make_locate` |

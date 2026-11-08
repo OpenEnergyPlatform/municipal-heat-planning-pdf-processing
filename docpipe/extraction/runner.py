@@ -846,7 +846,8 @@ def make_rest_of_document(db_path: Path,
 
 def make_more_sources(db_path: Path, index, id_to_pos: dict,
                       cache_path: Path,
-                      content: Optional[Callable] = None) -> Callable:
+                      content: Optional[Callable] = None,
+                      reranker: Optional[Callable] = None) -> Callable:
     """(document_id, queries, exclude) -> the passages the model asked for.
 
     Retrieval a second time, but from a query the MODEL wrote rather than one
@@ -868,6 +869,10 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
 
     The passages' content comes from *content*, the run's shared store or one
     of its own, and not from a store per thread.
+
+    *reranker()* makes one thread's reranker (`rerank.Reranker`), which puts
+    the best passages of each kind in its own order before they are handed
+    back; None leaves the vector search's order.
     """
     from docpipe.inference import query_cache
 
@@ -884,6 +889,7 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
             # were rebuilt for every round of every coordinate.
             local.retrieve = make_retrieve(local.conn, index, id_to_pos,
                                            local.cache, shared)
+            local.rerank = reranker() if reranker is not None else None
         return local.retrieve
 
     def more_sources(document_id: int, queries: list, exclude: set,
@@ -902,6 +908,8 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
                     continue
                 taken.add(key)
                 found.append(source)
+            if local.rerank is not None:
+                found = local.rerank.order(document_id, list(queries), found)
         except Exception as exc:
             log.warning("   more-passages for document %s failed: %s",
                         document_id, exc)
@@ -4642,8 +4650,28 @@ def main(argv: Optional[list] = None) -> int:
     query_cache.connect(cache_path).close()
     # One store of passage content for every helper and thread of this run.
     content = make_shared_content()
+    # The reranker of every search, where the run is given one (owner
+    # decisions 2026-11-06 and 2026-11-08): a figure is scored with its
+    # picture, as the reading shows it.
+    from docpipe.inference import rerank as rerank_map
+    image_root = args.image_root
+
+    def figure_image(source) -> Optional[dict]:
+        if (source.owner_kind == "figure" and source.image_path
+                and ATTACH_IMAGES):
+            return _image_part(str(image_root / source.image_path)
+                               if image_root else source.image_path)
+        return None
+
+    reranker = ((lambda: rerank_map.make_reranker(image_of=figure_image))
+                if rerank_map.RERANK_BASE_URL else None)
+    if reranker is not None:
+        log.info("extraction: searches reranked by %s at %s, %d per kind",
+                 rerank_map.RERANK_MODEL, rerank_map.RERANK_BASE_URL,
+                 rerank_map.RERANK_POOL)
     more_sources = make_more_sources(args.db, faiss_index, id_to_pos,
-                                     cache_path, content=content)
+                                     cache_path, content=content,
+                                     reranker=reranker)
     # The combing of a harvest from the survey, which the passes over a
     # stored harvest re-read a coordinate with as well, and what it reads the
     # plan with.
