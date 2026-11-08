@@ -55,6 +55,18 @@ def answered(thread, reply):
     return reply
 
 
+def listed(reply):
+    """A values reply as the run asks it (owner decisions 2026-11-08: every
+    value of a passage in one answer): a fixture's one value as an answer
+    that lists it, {"value": null} as one that lists none; a whole answer,
+    or no answer, as given."""
+    if not isinstance(reply, dict) or "values" in reply:
+        return reply
+    if reply.get("value") is None:
+        return {"values": [], "incomplete": False}
+    return {"values": [reply], "incomplete": False}
+
+
 def read_years(kinds, again=(), pool=None, meet=None,
                named=("2018", "2019"), slow=()):
     """The reading of the scenario years of YEARS: the rounds name *named*,
@@ -75,9 +87,9 @@ def read_years(kinds, again=(), pool=None, meet=None,
         if follow and reading.WRONG in follow:
             with lock:
                 events.append(("wrong", follow[reading.WRONG]["value"]))
-            return answered(thread, again.pop(0) if again
-                            else {"value": None})
-        return answered(thread, next(rounds))
+            return answered(thread, listed(again.pop(0) if again
+                                           else {"value": None}))
+        return answered(thread, listed(next(rounds)))
 
     def ask_text(src, parameter, group, slots, row, context, thread,
                  follow=None):
@@ -201,7 +213,7 @@ def test_a_passage_is_combed_while_the_rest_of_the_plan_is_read():
             if src.owner_id == 2 and follow is None and not waited:
                 # The second passage is read only once the first is combed.
                 waited.append(comber.began.wait(timeout=5))
-            return answered(thread, next(rounds[src.owner_id]))
+            return answered(thread, listed(next(rounds[src.owner_id])))
 
         def ask_text(*args, **kwargs):
             return {}

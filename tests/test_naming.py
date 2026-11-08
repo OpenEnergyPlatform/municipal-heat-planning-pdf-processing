@@ -88,6 +88,18 @@ TWO = {"scenario": [{"value": "CurPol",
                     {"value": "NDC", "quote": "the NDC scenario"}]}
 
 
+def listed(reply):
+    """A values reply as the run asks it (owner decisions 2026-11-08: every
+    value of a passage in one answer): a fixture's one value as an answer
+    that lists it, {"value": null} as one that lists none; a whole answer,
+    or no answer, as given."""
+    if not isinstance(reply, dict) or "values" in reply:
+        return reply
+    if reply.get("value") is None:
+        return {"values": [], "incomplete": False}
+    return {"values": [reply], "incomplete": False}
+
+
 def read_of(parameter, values, groups=None, spec=None):
     """A Reader over TEXT: *values* the replies of the rounds in turn,
     *groups* {group: a reply, or [replies in turn]}."""
@@ -102,9 +114,8 @@ def read_of(parameter, values, groups=None, spec=None):
                                                read, drawn))
         calls.append(("values", payload,
                       reading.values_response_format(parameter)))
-        return answered(thread, values[min(sum(1 for c in calls
-                                               if c[0] == "values"),
-                                           len(values)) - 1])
+        return answered(thread, listed(values[min(
+            sum(1 for c in calls if c[0] == "values"), len(values)) - 1]))
 
     def ask_text(source, parameter, group, slots, row, context, thread,
                  follow=None):

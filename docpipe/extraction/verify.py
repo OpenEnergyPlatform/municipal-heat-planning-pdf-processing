@@ -697,10 +697,8 @@ def value_refused(raw: dict, parameter: Parameter, source_text: str,
     figure of *owner_kind* (`read_off`) only the value itself. Not the unit
     and not the axes, which a reading asks after the value and checks as it
     reads them (`pipeline.merge_field`). A reading asks it of each value
-    while the model can still answer (`reading.round_failure`), and the walk
-    down a search's list of what it read (`surveyed.sought_walk`), so both
-    hold a value to the check the fold applies (owner decisions
-    2026-11-05)."""
+    while the model can still answer (`reading.round_failure`), so it holds
+    a value to the check the fold applies (owner decisions 2026-11-05)."""
     if not isinstance(raw, dict):
         return "tuple is not an object"
     _resolved, refusal = _check_value(raw, parameter, [], with_unit=False)

@@ -1,46 +1,37 @@
 """
-surveyed.py: One document harvested from its survey.
+surveyed.py: One document harvested passage by passage.
 
-The survey of the whole plan (survey.py), the plan's years and settings
-(years.py, settings.py), the reading of every parameter in the passages it
-named (reading.py) and the conversation for what the reading left open
-(combing.py). The run folds what they read, works out what the profile
-computes and writes the file with its stamp, as it writes every harvest.
+Every passage of the plan for every parameter, best first (survey.py, owner
+decisions 2026-11-08), the plan's years and settings (years.py,
+settings.py), the reading of every parameter in every passage (reading.py)
+and the conversation for what the reading left open (combing.py). The run
+folds what they read, works out what the profile computes and writes the
+file with its stamp, as it writes every harvest.
 
-A parameter the survey of the whole plan named no passage for is searched
-for before it can count as not stated (owner decision 2026-11-04): the
-combing's search over the whole plan ranks the passages for it, and the run
-reads it down that list, one passage a round and every such parameter in the
-same round, until a reading of it comes back with a value the check takes or
-the list ends (owner decisions 2026-11-05, `sought_walk`). A reading sees
-only its passage (owner decision 2026-11-05: no tools in reading, the walk
-reads the list). A parameter the walk read no value of, its list ended or
-the search found no passage for it, is searched for by the model itself,
-with the combing's tools, and every passage it names is read the same way
-(owner decision 2026-11-07, `seeking.FreeSearch`). What a publication says of itself (the profile's FRONT_PAGE_PARAMETERS) is read from its first
-page on as well, page by page, until a title came, whatever the survey
-named (owner decisions 2026-11-05, `front_walk`): the first page with a
-title is its title page, and a chapter that presents other studies comes
-after it. Every passage a parameter was read in is one of its sources, so a
-request that came to nothing there leaves a hole and not a silent plan.
+Since every passage is read for every parameter, nothing is searched for a
+parameter before it can count as not stated: the walk down a search's list
+for a parameter the survey named no passage for, the model's own search for
+it and the read of a publication's first pages for what it says of itself
+went with the survey (owner decisions 2026-11-08). What a passage leaves
+open of a value is still searched for in the rest of the plan (combing.py).
+Every passage a parameter was read in is one of its sources, so a request
+that came to nothing there leaves a hole and not a silent plan.
 
-What none of them could read is a hole with its reason, never a plan that
-seems silent: a passage the survey left unanswered, and a passage a parameter
-was to be read in that came to no readable reply, each go to the fold as the
-harvest's sentinel (`_harvest_failed`, `_why` cut_off or no_answer). The fold
-keeps it as a refusal, and a parameter that has no row then ends `exhausted`
-and not `unstated`: `trust.parameter_states` looks for its holes among the
-passages the survey named for it, and a passage the survey could not answer
-counts for every parameter. The hole of a reading names its parameter
+What could not be read is a hole with its reason, never a plan that seems
+silent: a passage a parameter was to be read in that came to no readable
+reply goes to the fold as the harvest's sentinel (`_harvest_failed`, `_why`
+cut_off or no_answer). The fold keeps it as a refusal, and a parameter that
+has no row then ends `exhausted` and not `unstated`
+(`trust.parameter_states`). The hole of a reading names its parameter
 (`_parameter`), so a pass over the harvest knows what to read again.
 
 The passes over a stored harvest go through the same steps. `--start-at`
-surveys the passages earlier harvests found something in (`take_found`);
-`--top-up-parameters` surveys the whole plan for the parameters the spec
+reads the passages earlier harvests found something in (`take_found`);
+`--top-up-parameters` reads the whole plan for the parameters the spec
 gained (`append_parameters`); `--top-up-open` combs every coordinate left
 open (`comb_sweep` under `topup._sweep_one`) and then reads what nothing has
 read yet (`append_unread`); `--top-up` combs the coordinates whose question
-moved (`comb_sweep`). A survey of part of a plan is kept under its own scope
+moved (`comb_sweep`). An order of part of a plan is kept under its own scope
 beside the whole one's.
 
 Author: Felix Vossel
@@ -59,9 +50,8 @@ from .lookup import continued
 from . import fields
 from .pipeline import (Batch, DocumentReport, Row, WorkItem, drop_repeats,
                        row_label)
-from .reading import NO_ANSWER, shown_hits, source_of
+from .reading import NO_ANSWER
 from .survey import Answer, Found, budget_of, merge
-from .verify import value_refused
 
 log = logging.getLogger(__name__)
 
@@ -114,8 +104,9 @@ def derive_left(reads: list) -> int:
 
 
 def joined(found: Found, also: Found) -> Found:
-    """One survey of both: what *also* names is read beside what *found*
-    names, a passage both answer with the parameters of both."""
+    """One order of both: what *also* names is read beside what *found*
+    names, a passage both name with the parameters of both, each parameter
+    in the order its own ranking gave."""
     out = Found(found.complete and also.complete)
     merge(out, [Answer(a.owner, list(a.parameters),
                        {k: list(v) for k, v in a.tuples.items()},
@@ -126,240 +117,31 @@ def joined(found: Found, also: Found) -> Found:
     for owner in found.unanswered + also.unanswered:
         if owner not in out.answers and owner not in out.unanswered:
             out.unanswered.append(owner)
-    out.walked = {**found.walked, **also.walked}
+    out.order = {**found.order, **also.order}
     return out
 
 
 @dataclass
 class Taken:
-    """What the survey, the reading and the combing of one document came to,
-    in the shape the fold and the stamp read."""
+    """What the reading and the combing of one document came to, in the
+    shape the fold and the stamp read."""
     found: Found
     reads: list = field(default_factory=list)
     combed: list = field(default_factory=list)
     # (batch, reply) for the fold: every reading's values and every hole.
     answered: list = field(default_factory=list)
-    # Passages the survey answered: none of them means no reply at all.
+    # Readings that came back with a reply: none of them means no reply at
+    # all (`runner.not_happened`).
     replies: int = 0
     passages: int = 0
-    # parameter uri -> the passages the survey named for it, and every
-    # passage it could not answer (`trust.parameter_states`).
+    # parameter uri -> the passages it was read in (`trust.parameter_states`).
     sources_of: dict = field(default_factory=dict)
-    # The parameters the survey named no passage for, each with every
-    # passage the walk down its search's list read it in (`sought_walk`),
-    # in the order read (`walks_of`).
-    sought: Found = field(default_factory=lambda: Found(True))
-    # What a publication says of itself, each with the passages of the first
-    # pages it was read in besides those the survey named (`front_walk`).
-    front: Found = field(default_factory=lambda: Found(True))
-
-
-def sought_lists(rank: Callable, document_id: int, parameters: list,
-                 probes: Optional[Callable] = None) -> dict:
-    """{parameter uri: [Source]}: for each of *parameters*, which the survey
-    of the whole plan named no passage for, the passages the combing's
-    search over the whole plan (*rank*) ranks for its search sentences, as
-    many of each kind as a request shows (`reading.shown_hits`), best first.
-    The sentences are *probes(parameter, document_id)* (owner decision
-    2026-11-05: HyDE sentences, one written for the document for a field
-    about the document itself, one written per run for any other,
-    `runner.make_seek_probes`), its label where it has none. A parameter
-    the search finds no passage for is left out."""
-    lists: dict = {}
-    for parameter in parameters:
-        sentences = ((probes(parameter, document_id) if probes else None)
-                     or [parameter.label])
-        listed = shown_hits(rank(document_id, sentences, set()))
-        if listed:
-            lists[parameter.uri] = listed
-    return lists
-
-
-def carried(found: Found) -> Found:
-    """A survey of one round of reading that names no parameter yet: what
-    the survey of the whole plan (*found*) said of every passage, without
-    its parameters, so the reading sees the plan's pairs and years as it
-    does anywhere else."""
-    out = Found(True)
-    merge(out, [Answer(owner, [],
-                       {k: list(v) for k, v in answer.tuples.items()}, [])
-                for owner, answer in found.answers.items()])
-    return out
-
-
-def taken_values(read) -> list:
-    """The passages a reading's values are read from, one per value the
-    check of a value takes (`verify.value_refused`: its quote in that
-    passage, its answer in its quote). An answer the fold refuses is no
-    value (owner decision 2026-11-05)."""
-    parameter = read.batch.parameter
-    out: list = []
-    for claim in read.claims:
-        passage = source_of(read.batch, claim)
-        if value_refused(claim, parameter, passage.text or "",
-                         passage.owner_kind) is None:
-            out.append(passage)
-    return out
-
-
-def sought_survey(found: Found, lists: dict, step: int) -> Found:
-    """The survey of one round of the walk down *lists* ({parameter uri:
-    [Source]}): each parameter named for the passage at *step* of its list,
-    and no other passage of the list, since a reading has no tools to go on
-    with (owner decision 2026-11-05). What the survey of the whole plan
-    (*found*) said of every passage stands beside it (`carried`)."""
-    out = carried(found)
-    for uri, listed in lists.items():
-        if step < len(listed):
-            owner = (listed[step].owner_kind, listed[step].owner_id)
-            merge(out, [Answer(owner, [uri])])
-    return out
-
-
-def sought_walk(found: Found, lists: dict, read: Callable,
-                seen: Optional[Callable] = None,
-                halted: Optional[Callable] = None) -> Optional[tuple]:
-    """(the passages walked, as one survey; their Reads): each parameter of
-    *lists* ({uri: [Source]}, `sought_lists`) read down its list in rank
-    order, one passage a round and every parameter in the same round
-    (*read(survey)* -> [Read], the run's reading), until a reading of it
-    comes back with a value the check takes (`taken_values`) or its list
-    ends (owner decisions 2026-11-05: the run reads the list, since the
-    model fetched none of its hits itself, and an answer the fold refuses is
-    no value). A reading that came to no reply ends nothing. Every passage
-    walked names its parameter in the survey returned, so it is one of the
-    parameter's sources (`taken_of`), and stands under `walked` with its
-    place in the list, in the order the walk read it (`walks_of`).
-    *seen(uri, owner, rank)* hears of each passage before it is read,
-    *rank* its place in the list, from 1. None where *halted()* stopped the
-    walk."""
-    walked = Found(True)
-    reads: list = []
-    walking = dict(lists)
-    step = 0
-    while walking:
-        for uri, listed in walking.items():
-            owner = (listed[step].owner_kind, listed[step].owner_id)
-            merge(walked, [Answer(owner, [uri])])
-            walked.walked[(uri,) + owner] = step + 1
-            if seen is not None:
-                seen(uri, owner, step + 1)
-        got = read(sought_survey(found, walking, step))
-        reads.extend(got)
-        if halted is not None and halted():
-            return None
-        valued = {one.batch.parameter.uri for one in got
-                  if taken_values(one)}
-        step += 1
-        walking = {uri: listed for uri, listed in walking.items()
-                   if uri not in valued and step < len(listed)}
-    return walked, reads
-
-
-def unvalued(uris: list, reads: list) -> list:
-    """The parameters of *uris* that no Read of *reads* holds a value of
-    the check takes (`taken_values`), in the order of *uris*."""
-    valued = {read.batch.parameter.uri for read in reads
-              if taken_values(read)}
-    return [uri for uri in uris if uri not in valued]
-
-
-def walks_of(sought: Found) -> dict:
-    """{parameter uri: [owner]}: the passages the walk read each parameter
-    in, in the order it read them (`sought_walk`). Not the order of
-    `Found.passages_of`, which is the order passages joined the survey, and a
-    passage another parameter read first joined it earlier."""
-    out: dict = {}
-    for uri, kind, owner in sought.walked:
-        out.setdefault(uri, []).append((kind, owner))
-    return out
-
-
-def source_page(source) -> Optional[int]:
-    """The page a passage starts on, None where it names none."""
-    try:
-        return int((source.provenance or {}).get("page"))
-    except (TypeError, ValueError):
-        return None
-
-
-def by_page(sources: list) -> list:
-    """[(page, [Source])]: the passages of a document by the page they start
-    on, first page first, each page's in the document's order. A passage
-    that names no page stands on none."""
-    pages: dict = {}
-    for source in sources:
-        page = source_page(source)
-        if page is not None:
-            pages.setdefault(page, []).append(source)
-    return sorted(pages.items())
-
-
-def titled_page(reads: list, title: str) -> Optional[int]:
-    """The first page a reading of *title* in *reads* came back with a value
-    on that the check takes (`taken_values`), None where none did."""
-    pages = [source_page(passage) for one in reads
-             if one.batch.parameter.uri == title
-             for passage in taken_values(one)]
-    pages = [page for page in pages if page is not None]
-    return min(pages) if pages else None
-
-
-def front_walk(found: Found, reads: list, sources: list, uris: list,
-               title: str, read: Callable,
-               halted: Optional[Callable] = None) -> Optional[tuple]:
-    """(the passages read from the front, as one survey; their Reads): what
-    a publication says of itself (*uris*, the profile's
-    FRONT_PAGE_PARAMETERS) read from its first page on, page by page, every
-    passage of a page in one round (*sources*, every passage of the
-    document; *read(survey)* -> [Read]), until a title came: a reading of
-    *title* with a value the check takes, on the page just read or before
-    it, by the survey's reading (*reads*) or by this one. A passage the
-    survey named for a field is not read for it again. Owner decisions
-    2026-11-05: a publication prints its own title, authors, date, DOI and
-    abstract on its first pages, and a chapter that presents other studies
-    prints theirs, so these pages are read whatever the survey named, and
-    the first page with a title is the title page
-    (`profiles/scenarios/front.py`). None where *halted()* stopped it."""
-    walked = Found(True)
-    more: list = []
-    first = titled_page(reads, title)
-    for page, on_page in by_page(sources):
-        named: dict = {}
-        for uri in uris:
-            held = {tuple(owner) for owner in found.passages_of(uri)}
-            for source in on_page:
-                owner = (source.owner_kind, source.owner_id)
-                if owner not in held:
-                    named.setdefault(owner, []).append(uri)
-        if named:
-            survey = carried(found)
-            for owner, named_uris in named.items():
-                merge(survey, [Answer(owner, list(named_uris))])
-                merge(walked, [Answer(owner, list(named_uris))])
-            got = read(survey)
-            more.extend(got)
-            if halted is not None and halted():
-                return None
-            here = titled_page(got, title)
-            if here is not None:
-                first = here if first is None else min(first, here)
-        if first is not None and page >= first:
-            break
-    return walked, more
 
 
 def taken_of(document_id: int, spec, found: Found, reads: list,
-             combed: list, shown: dict,
-             sought: Optional[Found] = None,
-             front: Optional[Found] = None) -> Taken:
+             combed: list, shown: dict) -> Taken:
     """The fold's view of one document's reading, holes included. A
-    parameter's sources are the passages the survey named for it, every one
-    the walk down its search's list read it in (*sought*), every one the
-    read from the front read it in (*front*, `front_walk`) and every passage
-    the survey could not answer."""
-    sought = sought if sought is not None else Found(True)
-    front = front if front is not None else Found(True)
+    parameter's sources are the passages it was read in."""
     answered: list = []
     for read in reads:
         source = read.batch.items[0].source
@@ -372,54 +154,42 @@ def taken_of(document_id: int, spec, found: Found, reads: list,
             answered.extend(hole(document_id, source, why,
                                  read.batch.parameter.uri)
                             for why in read.lost)
-    for owner in found.unanswered:
-        source = shown.get(tuple(owner))
-        if source is not None:
-            answered.append(hole(document_id, source, NO_ANSWER))
-    unanswered = {tuple(owner) for owner in found.unanswered}
     sources_of = {parameter.uri: {tuple(owner) for owner
-                                  in found.passages_of(parameter.uri)
-                                  + sought.passages_of(parameter.uri)
-                                  + front.passages_of(parameter.uri)}
-                  | unanswered for parameter in spec.parameters}
-    return Taken(found, reads, combed, answered, len(found.answers),
-                 len(found.answers) + len(unanswered), sources_of, sought,
-                 front)
+                                  in found.passages_of(parameter.uri)}
+                  for parameter in spec.parameters}
+    replies = sum(1 for read in reads if not read.unread)
+    return Taken(found, reads, combed, answered, replies, len(found.answers),
+                 sources_of)
 
 
 class SurveyedHarvest:
     """document_id -> Taken, or None when the run was halted on the way.
 
-    *make_survey(spec, only, scope)* is the run's survey of the parameters
-    *only* (all when empty) under *scope*, *make_reader(spec)* and
+    *make_survey(spec, only, scope)* is the run's order of the passages
+    for the parameters *only* (all when empty) under *scope*
+    (`survey.Ranking`), *make_reader(spec)* and
     *make_comber(spec)* its reading and combing (the comber None where
     nothing is combed), each made once per spec. *spec_for(document_id)* is
     the document's spec, its lists closed (`runner.closed_spec`),
     *passages_of(document_id)* every passage of the document in its order,
     *pages_of(document_id)* its page count, *halted()* whether the run stops.
-    *front* are the parameters a publication states of itself, read from
-    its first page until a reading of *title* comes back (`front_walk`),
-    the profile's FRONT_PAGE_PARAMETERS and FRONT_PAGE_TITLE; none without a
-    title among them. *make_years(spec)* is the request for the plan's base
+    *make_years(spec)* is the request for the plan's base
     and target years (`years.PlanYears`), None where the spec dates nothing
     by them; *title_page_of(document_id, passages)* the line of the title
     page that names the plan's own place, None where the profile shows none
     (owner decisions 2026-11-06). *make_settings(spec)* is the request for
     what the plan settles for all its values (`settings.PlanSettings`),
-    *make_seeker(spec)* the model's own search for a parameter whose walk
-    found no value (`seeking.FreeSearch`), each None where the profile
-    writes no prompt for it (owner decisions 2026-11-07).
+    None where the profile writes no prompt for it (owner decision
+    2026-11-07).
     """
 
     def __init__(self, spec, make_survey: Callable, make_reader: Callable,
                  make_comber: Callable, passages_of: Callable,
                  pages_of: Callable, *, spec_for: Optional[Callable] = None,
-                 halted: Optional[Callable] = None, front=(),
-                 title: Optional[str] = None,
+                 halted: Optional[Callable] = None,
                  make_years: Optional[Callable] = None,
                  title_page_of: Optional[Callable] = None,
-                 make_settings: Optional[Callable] = None,
-                 make_seeker: Optional[Callable] = None):
+                 make_settings: Optional[Callable] = None):
         self.spec = spec
         self.make_survey = make_survey
         self.make_reader = make_reader
@@ -428,13 +198,10 @@ class SurveyedHarvest:
         self.pages_of = pages_of
         self.spec_for = spec_for or (lambda document_id: spec)
         self.halted = halted or (lambda: False)
-        self.front = tuple(front or ())
-        self.title = title
         self.make_years = make_years or (lambda spec: None)
         self.title_page_of = title_page_of or (lambda document_id, passages:
                                                None)
         self.make_settings = make_settings or (lambda spec: None)
-        self.make_seeker = make_seeker or (lambda spec: None)
         self._made: dict = {}
         self._lock = threading.Lock()
 
@@ -467,20 +234,15 @@ class SurveyedHarvest:
         return self._once(("settings", id(spec)), spec,
                           lambda: self.make_settings(spec))
 
-    def seeker_of(self, spec):
-        return self._once(("seeker", id(spec)), spec,
-                          lambda: self.make_seeker(spec))
-
     def __call__(self, document_id: int, *, only=(), scope: str = "",
                  passages: Optional[list] = None,
                  also: Optional[Found] = None) -> Optional[Taken]:
-        """The whole plan, or the survey of part of it: of the parameters
-        *only*, of the *passages* given, under *scope*. *also* is read with
-        it: what another survey named (`take_found`, `append_unread`)."""
+        """The whole plan, or part of it: for the parameters *only*, the
+        *passages* given, under *scope*. *also* is read with it: what another
+        order names (`take_found`, `append_unread`)."""
         spec = self.spec_for(document_id)
         # A table shows the title and head of the table right before it,
-        # which it may continue, in the survey and in the reading (owner
-        # decisions 2026-11-06 and 2026-11-07).
+        # which it may continue (owner decisions 2026-11-06 and 2026-11-07).
         sources = continued(self.passages_of(document_id))
         shown = {(s.owner_kind, s.owner_id): s for s in sources}
         budget = budget_of(sources, self.pages_of(document_id))
@@ -531,71 +293,14 @@ class SurveyedHarvest:
             reads = read(found)
             if self.halted():
                 return None
-            front = Found(True)
-            uris = [parameter.uri for parameter in spec.parameters
-                    if parameter.uri in self.front
-                    and (not only or parameter.uri in only)]
-            # Only after a survey of the whole plan, as the walk below.
-            if passages is None and also is None and self.title in uris:
-                walk = front_walk(found, reads, sources, uris, self.title,
-                                  read, self.halted)
-                if walk is None or self.halted():
-                    return None
-                front, more = walk
-                reads = reads + more
             combed: list = []
-            sought = Found(True)
-            # Only after a survey of the whole plan: a survey of some
-            # passages names none for a parameter the rest of the plan may
-            # hold.
-            if comber is not None and passages is None and also is None:
-                missing = [parameter for parameter in spec.parameters
-                           if (not only or parameter.uri in only)
-                           and not found.passages_of(parameter.uri)]
-                lists = sought_lists(comber.rank, document_id, missing,
-                                     getattr(comber, "seek", None))
-
-                def seen(uri, owner, rank):
-                    if comber.trace is not None:
-                        comber.trace("seek", document_id, parameter=uri,
-                                     kind=owner[0], owner=owner[1],
-                                     rank=rank)
-                walk = sought_walk(found, lists, read, seen, self.halted)
-                if walk is None or self.halted():
-                    return None
-                sought, more = walk
-                reads = reads + more
-                # A parameter the walk read no value of is searched for by
-                # the model itself; each passage it names is read and is one
-                # of the parameter's sources (owner decision 2026-11-07).
-                seeker = self.seeker_of(spec)
-                for uri in (unvalued([p.uri for p in missing], more)
-                            if seeker is not None else ()):
-                    parameter = spec.by_uri[uri]
-                    walked = [owner[1:] for owner in sought.walked
-                              if owner[0] == uri]
-                    places = seeker(document_id, parameter, shown, walked,
-                                    budget)
-                    if self.halted():
-                        return None
-                    if not places:
-                        continue
-                    survey = carried(found)
-                    merge(survey, [Answer((s.owner_kind, s.owner_id), [uri])
-                                   for s in places])
-                    merge(sought, [Answer((s.owner_kind, s.owner_id), [uri])
-                                   for s in places])
-                    reads = reads + read(survey)
-                    if self.halted():
-                        return None
             if session is not None:
                 combed = session.finish(reads)
                 if self.halted():
                     return None
             derive_left(reads)
             finished = True
-            return taken_of(document_id, spec, found, reads, combed, shown,
-                            sought, front)
+            return taken_of(document_id, spec, found, reads, combed, shown)
         finally:
             if session is not None and not finished:
                 session.cancel()

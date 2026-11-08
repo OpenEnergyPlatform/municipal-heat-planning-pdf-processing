@@ -4,10 +4,11 @@
 
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
-A run harvests from the survey of each plan (`surveyed_flow`, which stops the
+A run reads each plan passage by passage (`surveyed_flow`, which stops the
 run where the spec names no groups or the profile lacks a prompt of the
-survey): survey, reading and combing per document (`surveyed.py`), then the
-fold, the compute step and the file with its stamp as below. The passes over a
+harvest): the order of its passages, the reading of every passage for every
+parameter and the combing per document (`surveyed.py`), then the fold, the
+compute step and the file with its stamp as below. The passes over a
 stored harvest run on the same steps.
 
 This module supplies the loop's expensive dependencies from the real world:
@@ -188,6 +189,14 @@ the server's multimodal cache (vLLM before 0.28, CVE-2026-105753).
 ```python
 def __init__(self, tokenizer)
 ```
+
+#### PromptCounter.text
+
+```python
+def text(self, text: str) -> int
+```
+
+The tokens of a text alone, as the model's tokenizer counts it.
 
 ## Functions
 
@@ -637,9 +646,9 @@ def make_seek_probes(own=(), context_of: Optional[Callable] = None,
                      write: Optional[Callable] = None) -> Callable
 ```
 
-probes(parameter, document_id) -> the sentences the search for a
-parameter the survey named no passage for ranks with
-(`surveyed.sought_lists`, owner decision 2026-11-05).
+probes(parameter, document_id) -> the sentences a plan's passages
+are ranked with for a parameter, which sets the order it reads them in
+(`survey.Ranking`, owner decisions 2026-11-05 and 2026-11-08).
 
 A parameter about the document itself (*own*, the profile's
 `FRONT_PAGE_PARAMETERS`: its title, authors, date, DOI and abstract) gets
@@ -754,6 +763,17 @@ plus one), and reading that as the prompt shrank the answer by 33 tokens
 per attempt until the coordinates were written off. With the model's
 tokenizer (`start_counting`) the text is counted exactly; without one it
 is estimated high.
+
+### text_tokens
+
+```python
+def text_tokens(text: str) -> int
+```
+
+The tokens of a text: counted with the served model's tokenizer where
+the run has it (`start_counting`), else by the run's estimate, the one a
+request is sized with (`PROMPT_CHARS_PER_TOKEN`). A hosted model's
+tokenizer is its own, so its runs count by the estimate.
 
 ### answer_room
 
@@ -886,10 +906,11 @@ def make_reader(spec: Spec, image_root: Optional[Path] = None)
 
 The reading of one parameter's passages (`reading.Reader`), or None
 when the profile writes no prompts for it or its spec names no groups.
-Two kinds of request, each with one task and one value (owner decisions
-2026-11-04 and 2026-11-05), each a message of a conversation (owner
-decisions 2026-11-07, `thread.py`): the values of a passage, the next
-one after each answer, and one value's coordinates, one coordinate per
+Two kinds of request, each with one task (owner decisions 2026-11-04
+and 2026-11-05), each a message of a conversation (owner decisions
+2026-11-07, `thread.py`): all values of a passage in one answer, what
+follows it asking for those not named yet (owner decisions 2026-11-08),
+and one value's coordinates, one coordinate per
 message with the words of its group (`thread.Parts.group`). A system
 prompt holds what its kind of request is told and the part of each
 field its first message carries. A figure goes with its crop, in the
@@ -926,14 +947,13 @@ run's embedding model (`COALESCED`).
 ### make_comber
 
 ```python
-def make_comber(spec: Spec, rank: Callable, seek: Optional[Callable] = None)
+def make_comber(spec: Spec, rank: Callable)
 ```
 
 The search for what the reading left open (`combing.Comber`), or None
 when the profile writes no prompt for it or its spec names no groups.
 *rank(document_id, probes, exclude)* is the plan's passages best first
-for the search sentences, `make_more_sources` in a harvest. *seek* is
-the sought search's sentences (`make_seek_probes`).
+for the search sentences, `make_more_sources` in a harvest.
 
 ### frame_slots_of
 
@@ -942,17 +962,8 @@ def frame_slots_of(spec: Spec) -> list
 ```
 
 The coordinates of the plan's frame, which its base and target years
-date a value by: the pair of each group the survey reads, and of a group
-the reading reads that names one (`spec.Group.paired`).
-
-### survey_slots_of
-
-```python
-def survey_slots_of(spec: Spec) -> list
-```
-
-The coordinates the survey reads per passage: the pair of each group
-it reads; none where the reading asks every coordinate per value.
+date a value by: the pair of each group that names one
+(`spec.Group.paired`).
 
 ### dates_by_plan
 
@@ -985,17 +996,6 @@ The request for what a plan settles for all its values, once per plan
 profile writes no prompt for it. *rank* is the plan best first for a
 sentence the model writes ("similar").
 
-### make_seeker
-
-```python
-def make_seeker(spec: Spec, rank: Optional[Callable] = None)
-```
-
-The model's own search for a parameter whose walk down its list read
-no value (`seeking.FreeSearch`, owner decision 2026-11-07), or None
-where the profile writes no prompt for it. *rank* is the plan best first
-for a sentence the model writes ("similar").
-
 ### title_line
 
 ```python
@@ -1022,18 +1022,18 @@ names the plan's own place (`title_line`), its name from the profile's
 ### make_survey
 
 ```python
-def make_survey(db_path: Optional[Path], spec: Spec, out: Path,
-                content: Optional[Callable] = None,
-                every: Optional[Callable] = None,
-                image_root: Optional[Path] = None, scope: str = "")
+def make_survey(spec: Spec, out: Path, rank: Optional[Callable],
+                every: Callable, probes: Optional[Callable] = None,
+                scope: str = "")
 ```
 
-The survey of whole plans (`survey.Survey`), or None when the profile
-writes no prompt for it or its spec names no groups. *every* is
-(document, exclude) -> passages, read from *db_path* when not given.
-Each request shows one passage, a figure with its crop beside the text
-as the reading shows it. *scope* names a survey of part of a plan, kept
-beside the whole one's.
+The order every passage of a plan is read in for each parameter
+(`survey.Ranking`, owner decisions 2026-11-08): *rank(document_id,
+sentences, exclude)* is the whole plan best first, `make_more_sources`
+with the run's reranker in a harvest; *probes(parameter, document_id)*
+the parameter's search sentences (`make_seek_probes`); *every* is
+(document, exclude) -> passages. *scope* names an order of part of a
+plan, kept beside the whole one's.
 
 ### frame_pairs
 
@@ -1268,7 +1268,7 @@ tried too - bounded, because this opens the PDF each time.
 def survey_prompt_ids(profile=None) -> tuple
 ```
 
-The prompts of a harvest from the survey: `SURVEY_PROMPT_IDS`, and
+The prompts of a harvest passage by passage: `SURVEY_PROMPT_IDS`, and
 the naming's and the plan's years' where the profile writes them, which
 a spec that merges names or dates a value by the plan's years sends
 (`naming.NAMING_PROMPT_IDS`, `years.YEARS_PROMPT_ID`, required by
@@ -1280,11 +1280,11 @@ a spec that merges names or dates a value by the plan's years sends
 def surveyed_flow(spec: Spec, profile=None) -> bool
 ```
 
-Whether a run can harvest from the survey: its spec names groups. A
-spec without groups cannot be harvested (`main` stops on it).
+Whether a run can harvest passage by passage: its spec names groups.
+A spec without groups cannot be harvested (`main` stops on it).
 
-A spec with groups whose profile lacks a prompt of the survey is a broken
-profile: the run stops and names the prompt, as `spec.load` stops at a
+A spec with groups whose profile lacks a prompt of the harvest is a
+broken profile: the run stops and names the prompt, as `spec.load` stops at a
 broken group (owner decision 2026-11-04). So does a group prompt whose
 parts are not the spec's groups, or one whose file lacks the words of a
 field its follow-ups carry (`parts_of`), before a request is sent rather
@@ -1591,8 +1591,7 @@ Tokens the largest request this run sends needs, per request.
 
 The window a server is started with has to hold every request kind of the
 run, so it follows the largest of them. Read off the prompts the run
-sends (`survey_prompt_ids`): the survey, the two reading requests, the
-combing and, where the profile writes it, the match. Never off one that
+sends (`survey_prompt_ids`): the two reading requests, the combing and, where the profile writes it, the match. Never off one that
 no request carries, and not the review, which has a line of its own in
 the doctor.
 

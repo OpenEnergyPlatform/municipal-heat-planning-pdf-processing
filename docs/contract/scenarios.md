@@ -4307,7 +4307,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 | `producers` | Every pass that wrote into this harvest, in order: the harvest, then each top-up that rewrote the file, each pass that appended a new parameter, each remap that carried a key forward and each review that changed a row. Entries are only ever added, so a position is stable: a coordinate a top-up re-read points at its entry with `<axis>_producer`. `model` above names the first only. Recorded and never compared. |
 | `spec` | sha256 of extraction_spec.json. A record, not a verdict: it moves on a comment, an indent or a graph annotation, none of which any question is asked through. Compared, it would outvote every key below it. |
 | `^axis/[^/]+/[^/]+$` | What this coordinate asks and what it may answer: the question and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else. |
-| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame\|survey\|read_values\|read_text\|comb\|match\|settings\|seek)$` | sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_values`, `read_text`, `comb`, `match`, `settings` and `seek` are the prompts of the survey flow |
+| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame\|survey\|read_values\|read_text\|comb\|match\|settings\|seek)$` | sha256 of the prompt file; `harvest`, `survey` and `seek` are in stamps of an older release; `read_values`, `read_text`, `comb`, `match` and `settings` are the prompts of a harvest passage by passage |
 | `^parameter/[^/]+$` | What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale. Those have keys of their own. |
 | `^question_text/[^/]+$` | The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here: the generator prompt, the model, and the annotation inside parameter/. |
 | `^review/(prompt\|model)$` | What read this document a second time. Recorded and never compared: the review does not decide whether the harvest is current, and comparing it would report every reviewed document stale the day the review prompt changes. |
@@ -4318,7 +4318,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 
 One event per line; `t` names it and `doc` the document. An event that reports a model request carries it as sent (`input`) and what came back (`output`); a text the requests repeat is a `piece` they refer to. Read by scripts/trace_report.py.
 
-41 record kinds, told apart by `t`:
+37 record kinds, told apart by `t`:
 
 - `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
 - `anchor`: `doc`, `parameter`, `text`
@@ -4334,8 +4334,7 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `refusal`: `doc`, `owner`, `parameter`, `reason`
 - `places`: `by_axis`, `by_parameter`, `complete`, `doc`, `dropped`, `passages`, `places`, `unread`, `windows`
 - `invalid`: `detail`, `doc`, `kind`, `where`, `why`
-- `survey`: `budget`, `by_parameter`, `complete`, `contexts`, `doc`, `dropped`, `none`, `passages`, `scope`, `tuples`, `unanswered`
-- `survey_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
+- `order`: `doc`, `first`, `parameters`, `passages`, `scope`
 - `read_values_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `read_text_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `comb_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
@@ -4345,7 +4344,6 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `naming_several_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `places`, `prompt_tokens`, `sent_at`
 - `years_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `settings_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
-- `seek_free_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `phrase_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `frame_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
 - `review_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
@@ -4355,9 +4353,7 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `read`: `asked`, `corrected`, `doc`, `failed`, `kind`, `owner`, `parameter`, `unanswered`, `unread`, `values`, `why`
 - `comb`: `anew`, `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `judged`, `kind`, `listed`, `missed`, `near`, `near_read`, `open`, `owner`, `parameter`, `plan_years`, `rows`, `searched`, `table_rows`, `turned`
 - `years`: `asked`, `base`, `doc`, `fetched`, `hits`, `refused`, `target`
-- `seek`: `doc`, `kind`, `owner`, `parameter`, `rank`
 - `settings`: `asked`, `doc`, `fetched`, `hits`, `refused`, `settings`
-- `seek_free`: `asked`, `doc`, `fetched`, `found`, `parameter`, `unknown`, `walked`
 - `seek_probe`: `doc`, `parameter`, `per`, `text`
 - `completion`: `detail`, `doc`, `filled`, `id`, `key`, `matched`, `open`, `outcome`
 - `piece`: `doc`, `id`, `text`

@@ -17,7 +17,7 @@ A table may continue the table right before it in reading order when that
 table stands on its page or the page before and has a transcribed head.
 Whatever stands between them (a heading, a page footer, a caption, a
 paragraph, a figure) is shown to the model, which decides (owner decision
-2026-11-07: also after a heading). The survey and the reading pick the same
+2026-11-07: also after a heading). The reading picks the same
 tables by the same rule (`docpipe.extraction.lookup.continued`).
 
 Author: Felix Vossel

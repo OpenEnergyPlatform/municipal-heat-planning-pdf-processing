@@ -184,10 +184,6 @@ PHRASES = {
         'these entries again, each with the one row it stands in as its '
         '"quote".'),
     # a round of the values of a passage, one value each
-    "value_already_read": (
-        'You named this value already: {value} with the quote {quote!r}. '
-        'Name the next value you have not named yet, or answer '
-        '{{"value":null}}.'),
     "value_not_kept": (
         'By its reading this value is "{given}" and no value of '
         '"parameter": it was read wrongly.'),
@@ -196,9 +192,7 @@ PHRASES = {
         'copied character for character from the passage that prints it. '
         'For a parameter with a list, "value" is one of its entries, or "" '
         'where none fits, and the passage\'s own words for it go under '
-        '"value_raw". If the passage holds no such value, name the next value '
-        'you have not named yet instead, or answer {{"value":null}} if none '
-        'is left.'),
+        '"value_raw". If the passage holds no such value, leave it out.'),
     "quote_not_unique": (
         'Your "quote" {quote!r} stands more than once in what you were '
         'shown, so it does not say which number you mean. Name this value '
@@ -208,10 +202,6 @@ PHRASES = {
         'Your "quote" {quote!r} prints {value} more than once, so it does '
         'not say which of them you mean. Name this value again with a '
         '"quote" that prints it exactly once.'),
-    # the model's own search for a parameter, by the ids it was shown
-    "place_unknown": (
-        'No hit and no passage of this conversation has the id {id!r}. Name '
-        'each passage you found by the id it was shown under.'),
     "shorter_field": (
         'Put rows with the same answer together in "groups" and quote '
         'only the short place where the field stands.'),

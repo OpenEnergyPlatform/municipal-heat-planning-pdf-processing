@@ -157,7 +157,7 @@ continue the table right before it in reading order when that table stands on
 its page or the page before (`continuation.links`, `runs`) and has a
 transcribed head (`head_lines`); whatever stands between them, a heading
 included, is shown and the model decides (owner decision 2026-11-07). The
-survey and the reading take the same tables by the same rule (see
+reading takes the same tables by the same rule (see
 [extraction](extraction.md)). Such a table is asked after the table before
 it with prompt `visuals/table_continued`: that table's caption and head and
 the text between the two (`BETWEEN_CHARS`), and the reply says whether it

@@ -1,44 +1,17 @@
-"""A run harvests from the survey, so its spec names groups and its profile
-writes every prompt of that flow, or the run stops; its stamps and producers
-record the flow and the prompts it sends, and the server's window is measured
-over them.
+"""A run reads each plan passage by passage, so its spec names groups and its
+profile writes every prompt of that flow, or the run stops; its stamps and
+producers record the flow and the prompts it sends, and the server's window
+is measured over them.
 
-What nothing could read is a hole with its reason: a passage the survey left
-unanswered goes to the fold under no parameter and counts among the passages
-of every parameter; a reading that came to no readable reply goes under its
-reason and names its parameter. Folded, a parameter whose only passage was a
-hole ends exhausted, one whose passage was read and held nothing unstated. A
-survey that answered no passage is no reply at all. A harvest halted after its
-survey reads nothing.
+What nothing could read is a hole with its reason: a reading that came to no
+readable reply goes under its reason and names its parameter. Folded, a
+parameter whose only passage was a hole ends exhausted, one whose passage was
+read and held nothing unstated. A document none of whose readings came back
+is no reply at all. A harvest halted after its order reads nothing.
 
-With --start-at the survey covers the found passages under its own scope, and
-a parameter no earlier harvest was asked is surveyed over the rest of the plan
-too. A survey of part of a plan is kept under its scope beside the whole one's
-and taken again only for the same passages, its unanswered passages kept.
-
-A parameter the survey of the whole plan named no passage for is read down
-the list a search of the whole plan ranks for it, in its order, one passage a
-round and every such parameter in the same round, AND it stops at the first
-reading that comes back with a value, AND where none does it is read to the
-end of the list as a request shows it, a reading with no reply ending
-nothing (owner decision 2026-11-05); AND not after a survey of part of the
-plan; every passage it was read in is one of its sources, so a reading there
-that came to nothing leaves it exhausted, not unstated; AND each reading
-is shown its one passage and no list, since a reading has no tools (ticket
-26), AND each passage walked is kept and traced with its place in the list,
-AND each parameter's passages are kept in the order the walk read them; a
-reading whose answer the check refuses ends nothing; and two surveys joined
-keep the walks of both.
-
-What a publication says of itself is read from its first page on, page by
-page and first page first, every passage of a page in one round, whatever
-the survey named (owner decisions 2026-11-05), AND until a title came, on
-the page just read or before it, by the survey's reading or by this one,
-AND a title the check refuses ends nothing; a passage the survey named for
-a field is not read for it again; every passage it was read in is one of its
-sources; AND nothing is read from the front where the profile names no
-title among them, nor after a survey of part of the plan, nor once the run
-halted. The profile's title is one of its front parameters.
+With --start-at the order covers the found passages under its own scope, and
+a parameter no earlier harvest was asked is read over the rest of the plan
+too.
 
 A pass re-reads a coordinate by combing it, whatever its state, in its own
 passage first and with the years of the stored rows; the combing lists the
@@ -63,7 +36,6 @@ from docpipe.extraction.pipeline import (Batch, DocumentReport, Row, Source,
                                          WorkItem)
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.trust import parameter_states
-from profiles.scenarios import extraction as scenarios_extraction
 
 
 def answered(thread, reply):
@@ -118,22 +90,6 @@ def sentinels(taken):
 
 # -- holes ---------------------------------------------------------------------
 
-def test_a_passage_the_survey_left_unanswered_is_a_hole_of_every_parameter():
-    taken = surveyed.taken_of(7, SPEC, found_of(answer(ONE),
-                                                unanswered=[TWO]),
-                              [], [], SHOWN)
-    holes = sentinels(taken)
-    assert len(holes) == 1
-    batch, claim = holes[0]
-    assert batch.items[0].source is TWO and batch.parameter is None
-    assert claim["_why"] == reading.NO_ANSWER and "_parameter" not in claim
-    assert all(("table", 2) in owners
-               for owners in taken.sources_of.values())
-    # Answered without a number of any parameter: no hole.
-    assert all(("section", 1) not in owners
-               for owners in taken.sources_of.values())
-
-
 def test_a_reading_with_no_readable_reply_is_a_hole_that_names_its_parameter():
     claim = {"source": "Q1", "value": 300, "quote": "rund 300 t CO2"}
     taken = surveyed.taken_of(
@@ -174,7 +130,8 @@ def test_a_reading_says_why_it_came_to_nothing():
     silent = reader(None).read(7, EMISSION, ONE, [], SHOWN)
     assert cut.unread and cut.why == reading.CUT
     assert silent.unread and silent.why == reading.NO_ANSWER
-    answered = reader({"value": None}).read(7, EMISSION, ONE, [], SHOWN)
+    answered = reader({"values": [], "incomplete": False}).read(
+        7, EMISSION, ONE, [], SHOWN)
     assert not answered.unread and answered.why is None
 
 
@@ -196,17 +153,22 @@ def test_a_parameter_whose_passage_was_a_hole_is_exhausted_not_unstated():
     assert states["heat_load"] == fields.SAID_UNSTATED
 
 
-def test_a_survey_that_answered_no_passage_is_no_reply_at_all():
-    silent = surveyed.taken_of(7, SPEC, found_of(unanswered=[ONE, TWO]),
-                               [], [], SHOWN)
+def test_a_document_none_of_whose_readings_came_back_is_no_reply_at_all():
+    # Owner decisions 2026-11-08: every passage is read for every parameter,
+    # so a reply is a reading that came back, not a passage ordered.
+    found = found_of(answer(ONE, "emission"), answer(TWO, "emission"))
+    silent = surveyed.taken_of(
+        7, SPEC, found, [read_of(EMISSION, ONE, why=reading.NO_ANSWER),
+                         read_of(EMISSION, TWO, why=reading.CUT)], [], SHOWN)
     assert silent.replies == 0 and silent.passages == 2
     report = DocumentReport(document_id=7, owners_harvested=silent.passages)
     runner.fold_answers(silent.answered, report, locate=None, spec=SPEC)
     assert runner.not_happened(report, answered=silent.replies)[0] \
         == "no_reply"
-    # A plan whose passages hold no number answered: a reply, no hole.
-    numberless = surveyed.taken_of(7, SPEC, found_of(answer(ONE), answer(TWO)),
-                                   [], [], SHOWN)
+    # A plan whose passages hold no number came back: a reply, no hole.
+    numberless = surveyed.taken_of(
+        7, SPEC, found, [read_of(EMISSION, ONE), read_of(EMISSION, TWO)], [],
+        SHOWN)
     report = DocumentReport(document_id=7,
                             owners_harvested=numberless.passages)
     runner.fold_answers(numberless.answered, report, locate=None, spec=SPEC)
@@ -239,7 +201,7 @@ def harvest(found, *, halted=False, reads=()):
     return whole, made, read_calls
 
 
-def test_a_harvest_halted_after_its_survey_reads_nothing():
+def test_a_harvest_halted_after_its_order_reads_nothing():
     whole, made, read_calls = harvest(found_of(answer(ONE, "emission")),
                                       halted=True)
     assert whole(7) is None
@@ -248,7 +210,7 @@ def test_a_harvest_halted_after_its_survey_reads_nothing():
     assert whole(7) is not None and read_calls
 
 
-def test_start_at_surveys_the_found_passages_and_a_gained_parameter_the_rest():
+def test_start_at_orders_the_found_passages_and_a_gained_parameter_the_rest():
     whole, made, _reads = harvest(found_of(answer(ONE, "emission")))
     surveyed.take_found(whole, 7, [ONE], ["building_count"])
     assert ((), "found", [("section", 1)]) in made
@@ -257,34 +219,6 @@ def test_start_at_surveys_the_found_passages_and_a_gained_parameter_the_rest():
     whole, made, _reads = harvest(found_of(answer(ONE, "emission")))
     surveyed.take_found(whole, 7, [ONE], [])
     assert [scope for _only, scope, _passages in made] == ["found"]
-
-
-def test_a_survey_of_part_of_a_plan_is_kept_under_its_scope(tmp_path):
-    asked = []
-
-    def leaves_out_the_table(context, document_id, thread=None,
-                             follow=None):
-        asked.append(len(context))
-        return {} if context[0].owner_kind == "table"             else {"parameters": ["out:none"]}
-
-    def made(scope=""):
-        return survey.Survey(leaves_out_the_table,
-                             lambda document_id: [ONE, TWO, THREE],
-                             lambda document_id: 1,
-                             survey.parameters_of(SPEC),
-                             survey.tuple_slots(SPEC), runner.frame_pairs,
-                             "k", store=tmp_path, scope=scope)
-
-    found = made("found")(7, [ONE, TWO])
-    assert (tmp_path / "7.found.json").is_file()
-    assert not (tmp_path / "7.json").is_file()
-    assert found.unanswered == [("table", 2)]
-    asked.clear()
-    again = made("found")(7, [ONE, TWO])
-    assert not asked and again.unanswered == [("table", 2)]
-    # Other passages under the same scope: surveyed anew.
-    made("found")(7, [ONE, THREE])
-    assert asked
 
 
 # -- passes over a stored harvest ------------------------------------------------
@@ -463,7 +397,7 @@ def test_a_request_that_timed_out_is_asked_again_with_the_time_of_a_repeat(
 
 # -- the flow ------------------------------------------------------------------
 
-def test_a_spec_with_groups_and_every_prompt_harvests_from_the_survey(
+def test_a_spec_with_groups_and_every_prompt_harvests_passage_by_passage(
         monkeypatch):
     assert runner.surveyed_flow(SPEC)
     assert not runner.surveyed_flow(replace(SPEC, groups={}))
@@ -508,286 +442,9 @@ def test_a_spec_with_groups_and_a_missing_prompt_stops_and_names_it(
         with pytest.raises(LookupError) as stopped:
             runner.surveyed_flow(SPEC)
         assert missing in str(stopped.value)
-        # A spec without groups never asked for the survey: no prompt is
-        # looked at, and the run stops on it elsewhere.
+        # A spec without groups is never harvested: no prompt is looked
+        # at, and the run stops on it elsewhere.
         assert not runner.surveyed_flow(replace(SPEC, groups={}))
-
-
-# -- a parameter the survey named no passage for --------------------------------
-
-class SearchOnly:
-    """The combing's search, best first for a label (*ranked*); it combs
-    nothing."""
-
-    def __init__(self, ranked):
-        self.ranked = ranked
-        self.searched = []
-        self.trace = None
-
-    def rank(self, document_id, probes, exclude):
-        self.searched.append(list(probes))
-        return list(self.ranked.get(probes[0], ()))
-
-    def session(self, document_id, shown, pairs, budget, bases=None, **_):
-        return CombsNothing()
-
-
-class CombsNothing:
-    """A combing session that combs nothing (`combing.Session`)."""
-
-    def add(self, read):
-        pass
-
-    def finish(self, reads):
-        return []
-
-    def cancel(self):
-        pass
-
-
-def sought_harvest(found, ranked, reads=None, halt_after=None):
-    """A harvest whose reader records which passages it was asked to read
-    each parameter in and the walk each reading is shown, and gives back
-    *reads*: {(parameter uri, owner): Read}. *halt_after* readings halt
-    it."""
-    asked, hits = [], []
-
-    def make_reader(spec):
-        def run(document_id, found, shown, budget, **_):
-            named = {p.uri: found.passages_of(p.uri) for p in spec.parameters
-                     if found.passages_of(p.uri)}
-            asked.append(named)
-            hits.append(dict(found.walked))
-            return [(reads or {})[(uri, owner)]
-                    for uri, owners in named.items() for owner in owners
-                    if (uri, owner) in (reads or {})]
-        return run
-
-    search = SearchOnly(ranked)
-    whole = surveyed.SurveyedHarvest(
-        SPEC, lambda spec, only, scope: (lambda document_id, passages: found),
-        make_reader, lambda spec: search,
-        lambda document_id: [ONE, TWO, THREE], lambda document_id: 2,
-        halted=(lambda: len(asked) >= halt_after) if halt_after else None)
-    return whole, asked, hits, search
-
-
-# A value each passage prints, with the quote it stands in.
-BACKED = {("section", 1): {"value": 300, "quote": "Es fielen rund 300 t CO2"},
-          ("table", 2): {"value": 40, "quote": "2022 | 40 MW"},
-          ("section", 3): {"value": 2030,
-                           "quote": "Die Werte gelten für 2030"}}
-
-
-def valued(parameter, source):
-    """A reading of *parameter* in *source* that came back with a value the
-    check takes there."""
-    return read_of(parameter, source, claims=[
-        dict(BACKED[(source.owner_kind, source.owner_id)])])
-
-
-def test_a_parameter_without_a_passage_is_read_down_its_list_until_a_value():
-    whole, asked, _hits, search = sought_harvest(
-        found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO, THREE, ONE]},
-        reads={("heat_load", ("section", 3)): valued(HEAT_LOAD, THREE)})
-    taken = whole(7)
-    assert asked == [{"emission": [("section", 1)]},
-                     {"heat_load": [("table", 2)]},
-                     {"heat_load": [("section", 3)]}]
-    # Searched once for every parameter without a passage, not for one with.
-    assert [EMISSION.label] not in search.searched
-    assert search.searched.count([HEAT_LOAD.label]) == 1
-    # Every passage walked is a source, the one never read is not.
-    assert taken.sought.passages_of("heat_load") == [("table", 2),
-                                                     ("section", 3)]
-    assert {("table", 2), ("section", 3)} <= taken.sources_of["heat_load"]
-    assert ("section", 1) not in taken.sources_of["heat_load"]
-    # the failure by construction: a value in the first passage ends the walk
-    whole, asked, _hits, _search = sought_harvest(
-        found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO, THREE, ONE]},
-        reads={("heat_load", ("table", 2)): valued(HEAT_LOAD, TWO)})
-    whole(7)
-    assert asked[1:] == [{"heat_load": [("table", 2)]}]
-
-
-def test_an_answer_the_check_refuses_does_not_end_the_walk():
-    for refused in ({"value": 40, "quote": "2022 | 40 MW"},      # not in THREE
-                    {"value": 999, "quote": "Die Werte gelten für 2030"}):
-        whole, asked, _hits, _search = sought_harvest(
-            found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [THREE, ONE]},
-            reads={("heat_load", ("section", 3)):
-                   read_of(HEAT_LOAD, THREE, claims=[refused])})
-        whole(7)
-        assert asked[1:] == [{"heat_load": [("section", 3)]},
-                             {"heat_load": [("section", 1)]}]
-    # the failure by construction: an answer its passage backs ends the walk
-    whole, asked, _hits, _search = sought_harvest(
-        found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [THREE, ONE]},
-        reads={("heat_load", ("section", 3)): valued(HEAT_LOAD, THREE)})
-    whole(7)
-    assert asked[1:] == [{"heat_load": [("section", 3)]}]
-
-
-def test_every_parameter_without_a_passage_is_read_in_the_same_round():
-    other = next(p for p in SPEC.parameters
-                 if p.uri not in ("emission", "heat_load"))
-    whole, asked, _hits, _search = sought_harvest(
-        found_of(answer(ONE, "emission")),
-        {HEAT_LOAD.label: [TWO, THREE], other.label: [THREE, TWO]},
-        reads={("heat_load", ("table", 2)): valued(HEAT_LOAD, TWO)})
-    whole(7)
-    assert asked[1:] == [{"heat_load": [("table", 2)],
-                          other.uri: [("section", 3)]},
-                         {other.uri: [("table", 2)]}]
-
-
-def test_a_list_no_reading_gives_a_value_is_read_to_the_end_a_request_shows():
-    sections = [passage("section", 100 + n, f"Teil {n}\nText", f"Teil {n}")
-                for n in range(reading.SHOWN["section"] + 2)]
-    lists = surveyed.sought_lists(lambda d, probes, exclude: sections, 7,
-                                  [HEAT_LOAD])
-    read_in = []
-
-    def read(one):
-        read_in.extend(one.passages_of("heat_load"))
-        return []
-    walked, reads = surveyed.sought_walk(survey.Found(True), lists, read)
-    # The two the hit list cuts off are never read.
-    assert read_in == [("section", 100 + n)
-                       for n in range(reading.SHOWN["section"])]
-    assert walked.passages_of("heat_load") == read_in and reads == []
-
-
-def test_a_reading_that_came_to_no_reply_ends_nothing():
-    cut = read_of(HEAT_LOAD, TWO, why=reading.CUT)
-    read_in = []
-
-    def read(one):
-        owners = one.passages_of("heat_load")
-        read_in.extend(owners)
-        return [cut] if owners == [("table", 2)] else []
-    walked, reads = surveyed.sought_walk(
-        survey.Found(True), {"heat_load": [TWO, THREE]}, read)
-    assert read_in == [("table", 2), ("section", 3)] and reads == [cut]
-
-
-def test_each_reading_of_the_walk_is_shown_its_passage_and_no_list():
-    whole, asked, shown, _search = sought_harvest(
-        found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO, THREE, ONE]})
-    whole(7)
-    assert asked[1:] == [{"heat_load": [("table", 2)]},
-                         {"heat_load": [("section", 3)]},
-                         {"heat_load": [("section", 1)]}]
-    assert shown[1:] == [{}, {}, {}]
-
-
-def test_each_passage_walked_keeps_its_place_in_its_list():
-    walked, _reads = surveyed.sought_walk(
-        survey.Found(True), {"heat_load": [TWO, THREE, ONE]}, lambda one: [])
-    assert walked.walked == {("heat_load", "table", 2): 1,
-                             ("heat_load", "section", 3): 2,
-                             ("heat_load", "section", 1): 3}
-    # the failure by construction: a value in the first passage ends the walk
-    stopped, _reads = surveyed.sought_walk(
-        survey.Found(True), {"heat_load": [TWO, THREE, ONE]},
-        lambda one: [valued(HEAT_LOAD, TWO)])
-    assert stopped.walked == {("heat_load", "table", 2): 1}
-
-
-def test_each_parameter_s_passages_are_kept_in_the_order_the_walk_read_them():
-    other = next(p for p in SPEC.parameters
-                 if p.uri not in ("emission", "heat_load"))
-    walked, _reads = surveyed.sought_walk(
-        survey.Found(True), {other.uri: [THREE, ONE], "heat_load": [TWO, THREE]},
-        lambda one: [])
-    assert surveyed.walks_of(walked) == {
-        other.uri: [("section", 3), ("section", 1)],
-        "heat_load": [("table", 2), ("section", 3)]}
-    # the failure by construction: the survey's own order puts the passage
-    # the other parameter read first ahead of the one read before it
-    assert walked.passages_of("heat_load") == [("section", 3), ("table", 2)]
-
-
-def test_each_passage_walked_is_traced_with_its_place_in_the_list():
-    whole, _asked, _hits, search = sought_harvest(
-        found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO, THREE]})
-    events = []
-    search.trace = lambda event, document_id, **about: events.append(
-        (event, about))
-    whole(7)
-    assert events == [("seek", {"parameter": "heat_load", "kind": "table",
-                                "owner": 2, "rank": 1}),
-                      ("seek", {"parameter": "heat_load", "kind": "section",
-                                "owner": 3, "rank": 2})]
-
-
-def test_a_walk_halted_after_a_round_reads_no_further():
-    whole, asked, _hits, _search = sought_harvest(
-        found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO, THREE]},
-        halt_after=2)
-    assert whole(7) is None
-    assert asked[1:] == [{"heat_load": [("table", 2)]}]
-
-
-def test_a_survey_of_part_of_the_plan_searches_for_nothing():
-    whole, asked, _hits, search = sought_harvest(
-        found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO]})
-    whole(7, passages=[ONE])
-    assert search.searched == [] and len(asked) == 1
-
-
-def test_a_search_whose_reading_came_to_nothing_is_a_hole_not_a_silent_plan():
-    cut = read_of(HEAT_LOAD, TWO, why=reading.CUT)
-    whole, _asked, _hits, _search = sought_harvest(
-        found_of(answer(ONE, "emission")), {HEAT_LOAD.label: [TWO]},
-        reads={("heat_load", ("table", 2)): cut})
-    taken = whole(7)
-
-    def state(taken_view):
-        report = DocumentReport(document_id=7,
-                                owners_harvested=taken_view.passages,
-                                sources_of=taken_view.sources_of)
-        runner.fold_answers(taken_view.answered, report, locate=None,
-                            spec=SPEC)
-        return {s["parameter"]: s["state"] for s in parameter_states(
-            SPEC, report.tuples, report.refusals,
-            harvested=report.owners_harvested, answered=taken_view.replies,
-            sources_of=report.sources_of)}["heat_load"]
-    assert state(taken) == fields.EXHAUSTED
-    # Without the searched passage among its sources the hole is not its:
-    # the plan would read as silent.
-    blind = surveyed.taken_of(7, SPEC, taken.found, taken.reads, [], SHOWN)
-    assert state(blind) == fields.SAID_UNSTATED
-
-
-# -- the list of a search of the whole plan ----------------------------------
-
-FIRST = SimpleNamespace(owner_kind="section", owner_id=5)
-NEXT = SimpleNamespace(owner_kind="table", owner_id=9)
-
-
-def test_a_round_of_the_walk_names_its_passage_and_no_other_of_the_list():
-    lists = surveyed.sought_lists(
-        lambda document, probes, exclude: [FIRST, NEXT], 7, [EMISSION])
-    out = surveyed.sought_survey(survey.Found(True), lists, 0)
-    assert out.passages_of(EMISSION.uri) == [("section", 5)]
-    assert out.walked == {}
-    later = surveyed.sought_survey(survey.Found(True), lists, 1)
-    assert later.passages_of(EMISSION.uri) == [("table", 9)]
-    # By construction: a search that finds nothing names no list either.
-    none = surveyed.sought_lists(lambda *a: [], 7, [EMISSION])
-    assert none == {}
-    assert surveyed.sought_survey(survey.Found(True), none, 0) \
-        .passages_of(EMISSION.uri) == []
-
-
-def test_two_surveys_joined_keep_the_walks_of_both():
-    found, also = survey.Found(True), survey.Found(True)
-    found.walked = {(EMISSION.uri, "section", 5): 1}
-    also.walked = {("heat_load", "table", 9): 2}
-    assert surveyed.joined(found, also).walked == {**found.walked,
-                                                   **also.walked}
-    assert surveyed.joined(found, survey.Found(True)).walked == found.walked
 
 
 # Promise: a row read for the one field its request asked carries the state of
@@ -817,164 +474,6 @@ def test_a_row_read_for_one_field_has_its_parameter_derived():
     # the failure by construction: the same row without the state
     report.tuples[0].pop("parameter_state")
     assert runner.check_against_schema(report, "doc", SCENARIOS) == 1
-
-
-# -- what a publication says of itself, read from the front -------------------
-
-OWN = tuple(scenarios_extraction.FRONT_PAGE_PARAMETERS)
-TITLE = scenarios_extraction.FRONT_PAGE_TITLE
-
-
-def on_page(kind, number, text, page):
-    return Source(kind, number, text, {"document_id": 7, "page": page,
-                                       "section_title": text.split("\n")[0]})
-
-
-COVER = on_page("figure", 20, "A wind farm at dusk", 1)
-TITLE_PAGE = on_page("section", 21, "Net zero by 2050\nAda Lovelace, 2020", 2)
-IMPRINT = on_page("section", 22, "Imprint\ndoi:10.2760/081488", 2)
-BODY = on_page("section", 23, "Results\nThe scenarios reach net zero.", 3)
-OTHER = on_page("section", 24, "Gas for Climate, 2019\nNavigant", 11)
-PLAN = [COVER, TITLE_PAGE, IMPRINT, BODY, OTHER]
-
-
-def owner(source):
-    return (source.owner_kind, source.owner_id)
-
-
-def titled(source, quote="Net zero by 2050"):
-    """A reading of the title in *source* answered with *quote*."""
-    title = SCENARIOS.by_uri[TITLE]
-    return reading.Read(Batch(7, title, [WorkItem(7, title, source)]),
-                        [{"value": "Net zero by 2050", "quote": quote}])
-
-
-def front_harvest(found, reads=None, *, title=TITLE, halt_after=None):
-    """A harvest of PLAN whose reader records, round by round, the passages
-    it was asked to read each parameter in, and gives back *reads*:
-    {(parameter uri, owner): Read}. Nothing is combed or searched."""
-    asked = []
-
-    def make_reader(spec):
-        def run(document_id, named_by, shown, budget):
-            named = {p.uri: set(named_by.passages_of(p.uri))
-                     for p in spec.parameters if named_by.passages_of(p.uri)}
-            asked.append(named)
-            return [(reads or {})[(uri, one)]
-                    for uri, owners in named.items() for one in owners
-                    if (uri, one) in (reads or {})]
-        return run
-
-    whole = surveyed.SurveyedHarvest(
-        SCENARIOS, lambda spec, only, scope: (lambda document_id, passages: found),
-        make_reader, lambda spec: None, lambda document_id: list(PLAN),
-        lambda document_id: 11,
-        halted=(lambda: len(asked) >= halt_after) if halt_after else None,
-        front=OWN, title=title)
-    return whole, asked
-
-
-def every_field(*sources):
-    return {uri: {owner(s) for s in sources} for uri in OWN}
-
-
-def test_a_publication_s_own_fields_are_read_from_its_first_page_on():
-    # The review: the survey named only a chapter on another study.
-    named = found_of(answer(OTHER, TITLE, "publication_author",
-                            "publication_date"))
-    whole, asked = front_harvest(
-        named, {(TITLE, owner(TITLE_PAGE)): titled(TITLE_PAGE)})
-    taken = whole(7)
-    assert asked == [{TITLE: {owner(OTHER)},
-                      "publication_author": {owner(OTHER)},
-                      "publication_date": {owner(OTHER)}},
-                     every_field(COVER),
-                     every_field(TITLE_PAGE, IMPRINT)]
-    # What it read goes to the fold.
-    report = DocumentReport(document_id=7, owners_harvested=taken.passages,
-                            sources_of=taken.sources_of)
-    runner.fold_answers(taken.answered, report, locate=None, spec=SCENARIOS)
-    assert [(row["value"], row["provenance"]["owner_id"])
-            for row in report.tuples] == [("Net zero by 2050", 21)]
-    # Every passage read from the front is a source of its field, in page
-    # order.
-    assert taken.front.passages_of("publication_doi") == [
-        owner(COVER), owner(TITLE_PAGE), owner(IMPRINT)]
-    assert owner(IMPRINT) in taken.sources_of["publication_doi"]
-    blind = surveyed.taken_of(7, SCENARIOS, taken.found, taken.reads, [],
-                              {owner(s): s for s in PLAN})
-    assert owner(IMPRINT) not in blind.sources_of["publication_doi"]
-    # the failure by construction: a profile that names no title reads
-    # nothing from the front
-    whole, asked = front_harvest(
-        named, {(TITLE, owner(TITLE_PAGE)): titled(TITLE_PAGE)}, title=None)
-    whole(7)
-    assert asked == [{TITLE: {owner(OTHER)},
-                      "publication_author": {owner(OTHER)},
-                      "publication_date": {owner(OTHER)}}]
-
-
-def test_a_title_the_check_refuses_does_not_end_the_read_from_the_front():
-    whole, asked = front_harvest(
-        found_of(), {(TITLE, owner(TITLE_PAGE)):
-                     titled(TITLE_PAGE, quote="Net zero by 2060")})
-    whole(7)
-    assert asked[1:] == [every_field(COVER), every_field(TITLE_PAGE, IMPRINT),
-                         every_field(BODY), every_field(OTHER)]
-    # the failure by construction: the title its page prints ends it there
-    whole, asked = front_harvest(
-        found_of(), {(TITLE, owner(TITLE_PAGE)): titled(TITLE_PAGE)})
-    whole(7)
-    assert asked[1:] == [every_field(COVER), every_field(TITLE_PAGE, IMPRINT)]
-
-
-def test_a_title_the_survey_read_ends_the_read_at_its_page():
-    named = found_of(answer(TITLE_PAGE, TITLE))
-    whole, asked = front_harvest(
-        named, {(TITLE, owner(TITLE_PAGE)): titled(TITLE_PAGE)})
-    whole(7)
-    # A passage the survey named for a field is not read for it again.
-    assert asked == [{TITLE: {owner(TITLE_PAGE)}}, every_field(COVER),
-                     {**every_field(TITLE_PAGE, IMPRINT),
-                      TITLE: {owner(IMPRINT)}}]
-    # the failure by construction: the survey's title the check refuses
-    whole, asked = front_harvest(
-        named, {(TITLE, owner(TITLE_PAGE)):
-                titled(TITLE_PAGE, quote="Net zero by 2060")})
-    whole(7)
-    assert every_field(BODY) in asked
-
-
-def test_nothing_is_read_from_the_front_after_a_survey_of_part_of_the_plan():
-    whole, asked = front_harvest(found_of())
-    whole(7, passages=[TITLE_PAGE])
-    assert asked == [{}]
-    whole, asked = front_harvest(found_of())
-    whole(7)
-    assert asked[1] == every_field(COVER)
-
-
-def test_a_read_from_the_front_halted_after_a_round_reads_no_further():
-    whole, asked = front_harvest(found_of(), halt_after=2)
-    assert whole(7) is None
-    assert asked == [{}, every_field(COVER)]
-
-
-def test_the_front_is_read_first_page_first_each_page_in_document_order():
-    unpaged = Source("section", 25, "Annex", {"document_id": 7})
-    assert surveyed.by_page([OTHER, BODY, unpaged, IMPRINT, COVER,
-                             TITLE_PAGE]) == [(1, [COVER]),
-                                              (2, [IMPRINT, TITLE_PAGE]),
-                                              (3, [BODY]), (11, [OTHER])]
-
-
-def test_the_profile_s_title_is_one_of_its_front_parameters():
-    assert TITLE in OWN and all(uri in SCENARIOS.by_uri for uri in OWN)
-    # the failure by construction: a title the spec does not hold reads
-    # nothing from the front
-    whole, asked = front_harvest(found_of(), title="publication_titel")
-    whole(7)
-    assert asked == [{}]
 
 
 def test_the_title_page_line_is_the_one_naming_the_plan_s_place():

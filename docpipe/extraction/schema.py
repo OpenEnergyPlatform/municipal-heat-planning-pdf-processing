@@ -839,12 +839,12 @@ def stamp_schema() -> dict:
         "patternProperties": {
             "^extraction/(harvest|queries|anchors|rows|field|phrase|frame"
             "|survey|read_values|read_text|comb|match|settings|seek)$":
-                {**sha, "description": "sha256 of the prompt file; `harvest` "
-                                       "is in stamps of an older release; "
-                                       "`survey`, `read_values`, "
-                                       "`read_text`, `comb`, `match`, "
-                                       "`settings` and `seek` are the "
-                                       "prompts of the survey flow"},
+                {**sha, "description": "sha256 of the prompt file; `harvest`, "
+                                       "`survey` and `seek` are in stamps "
+                                       "of an older release; `read_values`, "
+                                       "`read_text`, `comb`, `match` and "
+                                       "`settings` are the prompts of a "
+                                       "harvest passage by passage"},
             "^question_text/[^/]+$": {
                 "type": "array", "items": {"type": "string"},
                 "description": "The sentence THIS document was searched "
@@ -903,13 +903,12 @@ def stamp_schema() -> dict:
 
 
 # The stages whose every request writes `<stage>_ask` to the trace: the
-# survey flow's own (`runner.ask_in_grammar`), the naming among them, and the
+# harvest's own (`runner.ask_in_grammar`), the naming among them, and the
 # search sentences, the frame, the review and the compute step
 # (`runner._asked`).
-ASK_STAGES = ("survey", "read_values", "read_text", "comb", "comb_check",
+ASK_STAGES = ("read_values", "read_text", "comb", "comb_check",
               "naming", "naming_groups", "naming_several", "years",
-              "settings", "seek_free",
-              "phrase", "frame", "review", "compute")
+              "settings", "phrase", "frame", "review", "compute")
 
 
 def trace_schema() -> dict:
@@ -1081,20 +1080,14 @@ def trace_schema() -> dict:
                     "where": {"type": "string"},
                     "why": {"type": "string"},
                     "detail": {"type": "string"}},
-        # The survey flow. `survey`: the survey of one document (survey.py),
-        # `scope` what it covered, `none` passages that carry no parameter,
-        # `dropped` answers not taken, `unanswered` passages without an
-        # answer, `by_parameter` passages per parameter.
-        "survey": {"scope": {"type": ["string", "null"]},
-                   "passages": {"type": "integer"},
-                   "contexts": {"type": "integer"},
-                   "budget": {"type": "integer"},
-                   "none": {"type": "integer"},
-                   "dropped": {"type": "integer"},
-                   "unanswered": {"type": "integer"},
-                   "complete": {"type": "boolean"},
-                   "by_parameter": by_field,
-                   "tuples": {"type": "integer"}},
+        # The order one document's passages are read in (survey.py): `scope`
+        # what it covered, `passages` how many, each read for every one of
+        # `parameters`, `first` the first five owners of each parameter.
+        "order": {"scope": {"type": ["string", "null"]},
+                  "passages": {"type": "integer"},
+                  "parameters": {"type": "integer"},
+                  "first": {"type": "object", "additionalProperties": {
+                      "type": "array", "items": {"type": "array"}}}},
         # One request that got a reply, per stage (`ASK_STAGES`); a
         # `corrections` above zero is a second round. Which of `parameter`,
         # `owner`, `kind`, `rows`, `passages`, `figure` it carries depends on
@@ -1219,14 +1212,6 @@ def trace_schema() -> dict:
                   "asked": {"type": "integer"}, "hits": {"type": "integer"},
                   "fetched": {"type": "integer"},
                   "refused": {"type": "integer"}},
-        # A passage the walk down a search's list reads a parameter in that
-        # the survey named no passage for (surveyed.py), `rank` its place in
-        # the list from 1, and a sentence that search ranks with, written
-        # for the document or once per run (`per`).
-        "seek": {"parameter": {"type": "string"},
-                 "kind": {"enum": ["section", "table", "figure"]},
-                 "owner": {"type": "integer"},
-                 "rank": {"type": "integer", "minimum": 1}},
         # What the plan settles for all its values, asked once per plan
         # (settings.py): the settings taken, the requests, the hits listed,
         # the passages fetched and the settings refused.
@@ -1235,16 +1220,8 @@ def trace_schema() -> dict:
                      "hits": {"type": "integer"},
                      "fetched": {"type": "integer"},
                      "refused": {"type": "integer"}},
-        # The model's own search for a parameter whose walk read no value
-        # (seeking.py): the passages walked before, the requests, the
-        # passages it named, those it fetched and the ids it named that no
-        # hit or passage of the conversation has.
-        "seek_free": {"parameter": {"type": "string"},
-                      "walked": {"type": "integer"},
-                      "asked": {"type": "integer"},
-                      "found": {"type": "integer"},
-                      "fetched": {"type": "integer"},
-                      "unknown": {"type": "integer"}},
+        # A sentence the passages are ranked with for a parameter, written
+        # for the document or once per run (`per`).
         "seek_probe": {"parameter": {"type": "string"},
                        "per": {"enum": ["document", "run"]},
                        "text": {"type": "string"}},
@@ -1279,10 +1256,8 @@ def trace_schema() -> dict:
     for kind, props in kinds.items():
         if "prompt_tokens" in props or kind == "error":
             props.update(exchange)
-    # Of the survey flow's events, the fields only some of them carry.
+    # Of the harvest's events, the fields only some of them carry.
     optional = {
-        "survey_ask": {"corrections", "parameter", "owner", "kind", "rows",
-                       "passages", "figure", "group", "round", "value"},
         "read_values_ask": {"corrections", "parameter", "owner", "kind",
                             "rows", "passages", "figure", "group", "value"},
         "read_text_ask": {"corrections", "parameter", "owner", "kind",
@@ -1296,9 +1271,6 @@ def trace_schema() -> dict:
                       "passages", "figure", "group", "round", "value"},
         "settings_ask": {"corrections", "parameter", "owner", "kind", "rows",
                          "passages", "figure", "group", "round", "value"},
-        "seek_free_ask": {"corrections", "parameter", "owner", "kind",
-                          "rows", "passages", "figure", "group", "round",
-                          "value"},
         "naming": {"things", "several", "groups", "asked"},
         # A search sentence, the frame, the review and the compute step say
         # their attempt and what it cost; a parameter where they have one.

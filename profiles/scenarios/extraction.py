@@ -264,20 +264,14 @@ DECIMAL_MARK = "."
 # opening of the document, besides wherever else it is read. Asked among
 # forty other rows it was left out: the title in 17 documents, the abstract
 # in 132 of 164, the date in 60, though nearly every one prints them there.
-# A harvest from the survey reads them from the first page on, page by page,
-# until a title came, whatever the survey named (`surveyed.front_walk`): in a
-# review the survey named only the chapters on other studies for them, and
-# their title, year and authors went into the graph (owner decisions
-# 2026-11-05). The search for one of them that the survey named no passage
-# for ranks with a sentence written for this publication from its title,
-# which finds the title page; any other parameter with a sentence written
-# once per run (`runner.make_seek_probes`, owner decision 2026-11-05).
+# Every passage is read for each of them (owner decisions 2026-11-08); the
+# passages of one of them are ranked with a sentence written for this
+# publication from its title, which puts the title page first, those of any
+# other parameter with a sentence written once per run
+# (`runner.make_seek_probes`, owner decisions 2026-11-05 and 2026-11-08).
 FRONT_PAGE_PARAMETERS = ("publication_title", "publication_author",
                          "publication_date", "publication_doi",
                          "publication_abstract")
-# The one of them whose reading ends the read from the front: the first page
-# it stands on is the title page (`front.front_pages`).
-FRONT_PAGE_TITLE = "publication_title"
 
 # The language tag of the ontology's alternative labels that the vocabulary
 # snapshot keeps for this profile, the words its spec is held against. The

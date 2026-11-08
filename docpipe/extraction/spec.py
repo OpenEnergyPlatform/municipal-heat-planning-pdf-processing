@@ -36,9 +36,10 @@ from typing import Optional, Union
 NUMERIC_TYPES = ("float", "int")
 VALUE_TYPES = NUMERIC_TYPES + ("text", "category")
 SCENARIOS = ("status_quo", "trend", "target", "unknown")
-# The steps that read a group of coordinates: the survey of the whole plan,
-# or the reading of one parameter's passages.
-READ_IN = ("survey", "reading")
+# The step that reads a group of coordinates: the reading of each value
+# (owner decision 2026-11-07); the survey that read a group per passage is
+# gone (owner decisions 2026-11-08).
+READ_IN = ("reading",)
 # Which definition of a parameter a group's requests show (`Group`).
 DEFINITIONS = ("brief", "full")
 # The coordinate that names a number's entry of units_accepted.
@@ -284,17 +285,15 @@ class Group:
     # decision 2026-11-06).
     own_value: tuple = ()
     # The plan's frame (spec: "pair"): the scenario and the year, which the
-    # plan's base and target years date a value by (`years.PlanYears`). A
-    # group the survey reads reads these per passage, all of its coordinates
-    # where it names none. A group the reading reads asks them per value
-    # (owner decision 2026-11-07: each value is asked its own scenario and
-    # year, none takes its passage's).
+    # plan's base and target years date a value by (`years.PlanYears`). The
+    # reading asks them per value (owner decision 2026-11-07: each value is
+    # asked its own scenario and year, none takes its passage's).
     pair: tuple = ()
 
     @property
     def paired(self) -> tuple:
-        """The coordinates of the frame: those the survey reads per passage
-        in a group it reads."""
+        """The coordinates of the frame: its pair, else all of the group's
+        coordinates."""
         return self.pair or self.coordinates
 
     def asked_near(self, slots: list) -> list:
@@ -727,9 +726,7 @@ def _validate_groups(raw, parameters: list, asks_unit: bool) -> dict:
     """name -> Group, each coordinate of the spec in exactly one of them.
 
     A coordinate in no group would be read by no step, and one in two would
-    be read twice with two answers to choose from. A group the survey reads
-    has to be one parameter's axes, the way a frame is: half of one is a set
-    of pairs that silently misses a coordinate.
+    be read twice with two answers to choose from.
     """
     if raw is None:
         return {}
@@ -763,19 +760,6 @@ def _validate_groups(raw, parameters: list, asks_unit: bool) -> dict:
         where = entry.get("where")
         if not isinstance(where, str) or not where.strip():
             _fail(f"{path}.where", "required, non-empty string")
-        if read_in == "survey" and not any(
-                all(c in parameter.axes for c in coordinates)
-                for parameter in parameters):
-            _fail(f"{path}.coordinates",
-                  "a group the survey reads must be axes of one parameter")
-        if read_in == "survey" and any(
-                parameter.axes[c].merged for parameter in parameters
-                for c in coordinates if c in parameter.axes):
-            # The survey reads a coordinate per passage, not per value, and
-            # names are merged over the rows of the reading.
-            _fail(f"{path}.coordinates",
-                  "a merged coordinate is read in the reading, not the "
-                  "survey")
         definition = entry.get("definition", "brief")
         if definition not in DEFINITIONS:
             _fail(f"{path}.definition", f"must be one of {DEFINITIONS}")

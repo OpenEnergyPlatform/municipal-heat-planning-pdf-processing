@@ -20,11 +20,8 @@ a case that breaks it by construction.
    its first message; its own searches come from the next message on.
 8. A table whose frame coordinate is open on all its values is asked once,
    AND every value of it takes the answer with its quote.
-9. A parameter whose walk down its list read no value is searched for by
-   the model itself, AND every passage that search names is read for it and
-   is one of its sources.
-10. No reply format of the survey flow and no row it reads carries a column
-    head.
+9. No reply format of the harvest and no row it reads carries a column
+   head.
 """
 import json
 from pathlib import Path
@@ -110,6 +107,18 @@ PER_HEAD = passage("section", 2,
                    "Bilanz\nEs wurden rund 300 MWh/EW verbraucht.", "Bilanz")
 
 
+def listed(reply):
+    """A values reply as the run asks it (owner decisions 2026-11-08: every
+    value of a passage in one answer): a fixture's one value as an answer
+    that lists it, {"value": null} as one that lists none; a whole answer,
+    or no answer, as given."""
+    if not isinstance(reply, dict) or "values" in reply:
+        return reply
+    if reply.get("value") is None:
+        return {"values": [], "incomplete": False}
+    return {"values": [reply], "incomplete": False}
+
+
 def first_conversation(source, unit_reply):
     """The reading of ENERGY in *source*, one value, every coordinate but
     the unit answered not stated: [(slots asked, thread, messages before)]
@@ -120,7 +129,7 @@ def first_conversation(source, unit_reply):
 
     def ask_values(src, parameter, context, read, thread, follow=None,
                    drawn=False):
-        return answered(thread, next(values))
+        return answered(thread, listed(next(values)))
 
     def ask_text(src, parameter, group, slots, row, context, thread,
                  follow=None):
@@ -380,63 +389,7 @@ def test_each_value_of_a_table_is_asked_its_year_in_its_own_conversation():
     assert all(claim.get("year") == 2030 for claim in claims)
 
 
-# -- 9. the model's own search after the list ------------------------------------
-
-class NoRanking:
-    trace = None
-
-    def rank(self, document_id, probes, exclude):
-        return []
-
-    def session(self, document_id, shown, pairs, budget, bases=None,
-                **plan):
-        return combing.Session(combing.Comber(SPEC, None, None, None),
-                               document_id, shown, pairs, budget, bases)
-
-
-def free_harvest(places):
-    """A harvest whose survey named no passage for ENERGY, whose search
-    ranks nothing, and whose own search names *places*: the readings asked
-    and the searches made."""
-    asked, searched = [], []
-
-    def make_reader(spec):
-        def run(document_id, found, shown, budget, **plan):
-            named = found.passages_of(ENERGY.uri)
-            asked.append(list(named))
-            return []
-        return run
-
-    def seeker(document_id, parameter, passages, walked, budget):
-        searched.append(parameter.uri)
-        return list(places)
-
-    whole = surveyed.SurveyedHarvest(
-        SPEC, lambda spec, only, scope: (lambda document_id, passages:
-                                         survey.Found(True)),
-        make_reader, lambda spec: NoRanking(),
-        lambda document_id: [BALANCE, OUTLOOK], lambda document_id: 2,
-        make_seeker=lambda spec: seeker)
-    return whole, asked, searched
-
-
-def test_a_parameter_the_walk_found_no_value_of_is_searched_and_read():
-    whole, asked, searched = free_harvest([OUTLOOK])
-    taken = whole(7)
-    assert ENERGY.uri in searched
-    assert any(("section", 3) in named for named in asked)
-    assert ("section", 3) in taken.sources_of[ENERGY.uri]
-
-
-def test_a_search_that_names_nothing_reads_nothing_more():
-    whole, asked, searched = free_harvest([])
-    taken = whole(7)
-    assert ENERGY.uri in searched
-    assert not any(("section", 3) in named for named in asked)
-    assert ("section", 3) not in taken.sources_of[ENERGY.uri]
-
-
-# -- 10. no column head ----------------------------------------------------------
+# -- 9. no column head ----------------------------------------------------------
 
 def keys_of(schema) -> set:
     out: set = set()
@@ -463,9 +416,9 @@ def test_no_reply_format_and_no_row_read_carries_a_head():
                                    for claim in reads[0].claims)
 
 
-# -- the plan's settings and the model's own search ------------------------------
+# -- the plan's settings ---------------------------------------------------------
 
-from docpipe.extraction import seeking, settings  # noqa: E402
+from docpipe.extraction import settings  # noqa: E402
 
 METHOD = passage("section", 11, "Methode\nDas Basisjahr ist das Jahr 2022.",
                  "Methode")
@@ -482,24 +435,6 @@ def test_a_setting_is_taken_only_where_its_quote_holds_what_it_settles():
     assert [(s["about"], s["value"], s["source"]) for s in taken] == [
         ("Basisjahr", "2022", ["section", 11])]
     assert [w["value"] for w in wrong] == ["2021", "2040"]
-
-
-def test_the_own_search_returns_the_passages_it_names_and_tells_an_unknown_id():
-    order = {(s.owner_kind, s.owner_id): s for s in (BALANCE, MIDDLE, METHOD)}
-    replies = iter([{"places": [], "more": [{"get": "next"}]},
-                    {"places": [{"id": "M1"}, {"id": "M9"}]},
-                    {"places": []}])
-    sent = []
-
-    def ask(payload, document_id, thread, follow):
-        sent.append(follow or {})
-        return answered(thread, next(replies))
-    search = seeking.FreeSearch(ask)
-    found = search(7, ENERGY, order, [], None)
-    assert [(s.owner_kind, s.owner_id) for s in found] == [("section", 2)]
-    # The id no hit and no fetched passage has is told once.
-    told = [entry for one in sent for entry in one.get("corrections", ())]
-    assert [entry["id"] for entry in told] == ["M9"]
 
 
 # A coordinate only the second reading re-reads ends exhausted where its

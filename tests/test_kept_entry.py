@@ -57,6 +57,18 @@ def kind_of(year, kinds):
                           "quote": quote}}
 
 
+def listed(reply):
+    """A values reply as the run asks it (owner decisions 2026-11-08: every
+    value of a passage in one answer): a fixture's one value as an answer
+    that lists it, {"value": null} as one that lists none; a whole answer,
+    or no answer, as given."""
+    if not isinstance(reply, dict) or "values" in reply:
+        return reply
+    if reply.get("value") is None:
+        return {"values": [], "incomplete": False}
+    return {"values": [reply], "incomplete": False}
+
+
 def read_years(kinds, again):
     """The reading of the scenario years of SOURCE: the rounds name 2018
     and then none, the question asked again names *again*; *kinds* answers
@@ -69,9 +81,9 @@ def read_years(kinds, again):
                    drawn=False):
         follows.append(follow)
         if follow and reading.WRONG in follow:
-            return answered(thread, again.pop(0) if again
-                            else {"value": None})
-        return answered(thread, next(rounds))
+            return answered(thread, listed(again.pop(0) if again
+                                           else {"value": None}))
+        return answered(thread, listed(next(rounds)))
 
     def ask_text(src, parameter, group, slots, row, context, thread,
                  follow=None):

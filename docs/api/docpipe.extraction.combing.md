@@ -174,6 +174,8 @@ value's own and its section whether that place speaks about the value
 (`CHECK_PROMPT_ID`, owner decision 2026-11-07), a reply that names
 neither answer told so after it. *span_marks* are what a value stated
 for a span of years takes on each of its rows (`reading.span_rows`).
+*count_tokens(text)* counts the text around a table or figure
+(`reading.around_of`), the run's estimate where not given.
 
 #### Comber.\_\_init\_\_
 
@@ -181,7 +183,8 @@ for a span of years takes on each of its rows (`reading.span_rows`).
 def __init__(self, spec, ask: Callable, rank: Optional[Callable],
              known: Callable, *, bases: Optional[Callable] = None,
              pool=None, trace=None, check: Optional[Callable] = None,
-             span_marks: Optional[dict] = None)
+             span_marks: Optional[dict] = None,
+             count_tokens: Optional[Callable] = None)
 ```
 
 #### Comber.session

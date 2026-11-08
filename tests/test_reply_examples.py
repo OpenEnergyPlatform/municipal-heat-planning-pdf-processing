@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from docpipe.extraction import combing, fields, reading, runner, survey
+from docpipe.extraction import combing, fields, reading, runner
 from docpipe.extraction.pipeline import Source
 from docpipe.extraction.spec import load as load_spec
 from docpipe.prompts import Prompt
@@ -144,45 +144,35 @@ def test_a_comb_example_has_exactly_its_requests_keys_in_order():
 @pytest.mark.parametrize("drawn", [False, True])
 def test_a_value_example_has_exactly_its_requests_keys_in_order(spec, drawn):
     for parameter in spec.parameters:
-        entry = schema(reading.values_response_format(
-            parameter, drawn))["anyOf"][0]
+        whole = schema(reading.values_response_format(parameter, drawn))
         example = reading.values_example(parameter, drawn)
+        # The answer lists the values and says whether it holds all of them
+        # (owner decisions 2026-11-08).
+        assert keys_match(example, whole["properties"]), parameter.uri
+        assert example["incomplete"] is False
+        entry = whole["properties"]["values"]["items"]
         # The example shows the printed form; the sentence read off an image
         # in place of a quote is the alternative of the "quote" it shows
         # (`values_example`).
         keys = {key: value for key, value in entry["properties"].items()
                 if key != "reading"}
-        assert keys_match(example, keys), parameter.uri
+        [one] = example["values"]
+        assert keys_match(one, keys), parameter.uri
         assert ("reading" in entry["properties"]) == drawn, parameter.uri
-        assert isinstance(example["value"], float) == bool(
+        assert isinstance(one["value"], float) == bool(
             parameter.is_numeric), parameter.uri
 
 
 def test_a_value_example_shows_drawn_only_for_a_request_that_sends_an_image():
     numeric = next(p for p in KWP.parameters if p.is_numeric)
-    assert reading.values_example(numeric, True)["drawn"] is False
-    assert "drawn" not in reading.values_example(numeric, False)
+    assert reading.values_example(numeric, True)["values"][0]["drawn"] \
+        is False
+    assert "drawn" not in reading.values_example(numeric, False)["values"][0]
     # the failure by construction: an example without the image's key is not
     # the reply of a request that sends one
-    entry = schema(reading.values_response_format(numeric, True))[
-        "anyOf"][0]["properties"]
-    assert not keys_match(reading.values_example(numeric, False),
+    entry = reading.value_entry_schema(numeric, True)["properties"]
+    assert not keys_match(reading.values_example(numeric, False)["values"][0],
                           {k: v for k, v in entry.items() if k != "reading"})
-
-
-@pytest.mark.parametrize("spec", [KWP, SCENARIOS], ids=["kwp", "scenarios"])
-def test_a_survey_example_has_exactly_its_requests_keys_in_order(spec):
-    parameters = survey.parameters_of(spec)
-    slots = survey.tuple_slots(spec)
-    properties = schema(survey.response_format(parameters, slots))[
-        "properties"]
-    example = survey.example(slots)
-    assert keys_match(example, properties)
-    for name in slots:
-        item = properties[name]["items"]["properties"]
-        assert keys_match(example[name][0], item), name
-    # A group the survey does not read is a key its request does not ask.
-    assert not keys_match({**example, "extra": []}, properties)
 
 
 def prompt(text):

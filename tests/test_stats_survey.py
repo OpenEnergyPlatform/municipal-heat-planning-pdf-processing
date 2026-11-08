@@ -1,7 +1,8 @@
-"""The stats count what the survey flow wrote to the trace: requests and
-tokens per stage with their second rounds, passages read and not read, the
-coordinates the combing found open and filled; and the stamp schema takes the
-flow's prompts and the producer's flow.
+"""The stats count what the harvest wrote to the trace: requests and tokens
+per stage with their second rounds, the passages ordered and the readings
+that order planned, passages read and not read, the coordinates the combing
+found open and filled; and the stamp schema takes the flow's prompts and the
+producer's flow.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it."""
@@ -29,12 +30,13 @@ def ask(t, **fields):
 
 
 def test_requests_and_tokens_are_counted_per_stage(tmp_path):
-    out = traced(tmp_path, ask("survey_ask"), ask("read_values_ask", round=1),
+    out = traced(tmp_path, ask("settings_ask"),
+                 ask("read_values_ask", round=1),
                  ask("read_values_ask", round=2, prompt_tokens=50))[
         "requests_by_stage"]
     assert out["read_values"]["requests"] == 2
     assert out["read_values"]["prompt_tokens"] == 150
-    assert out["survey"]["requests"] == 1
+    assert out["settings"]["requests"] == 1
     # By construction: a stage that asked nothing counts nothing.
     assert out["comb"] == {"requests": 0, "prompt_tokens": 0,
                            "completion_tokens": 0, "second_rounds": 0,
@@ -100,23 +102,18 @@ def test_comb_events_add_up_open_filled_and_exhausted_coordinates(tmp_path):
     assert empty["passages"] == 0 and empty["coordinates_open"] == 0
 
 
-def test_the_survey_events_add_up(tmp_path):
-    base = {"t": "survey", "scope": None, "contexts": 2, "budget": 1000,
-            "tuples": 3}
+def test_the_order_events_add_up(tmp_path):
+    # Owner decisions 2026-11-08: every passage for every parameter.
     out = traced(tmp_path,
-                 {**base, "passages": 10, "none": 4, "dropped": 1,
-                  "unanswered": 0, "complete": True,
-                  "by_parameter": {"a": 5, "b": 1}},
-                 {**base, "passages": 6, "none": 2, "dropped": 0,
-                  "unanswered": 2, "complete": False,
-                  "by_parameter": {"a": 2}})["survey"]
-    assert out["documents"] == 2
-    assert out["complete"] == 1
-    assert out["passages"] == 16
-    assert out["passages_without_parameter"] == 6
-    assert out["passages_unanswered"] == 2
-    assert out["answers_not_taken"] == 1
-    assert out["passages_by_parameter"] == {"a": 7, "b": 1}
+                 {"t": "order", "scope": None, "passages": 10,
+                  "parameters": 6, "first": {}},
+                 {"t": "order", "scope": "found", "passages": 3,
+                  "parameters": 2, "first": {}})["order"]
+    assert out == {"documents": 2, "passages": 13,
+                   "readings_planned": 10 * 6 + 3 * 2}
+    # By construction: a trace that ordered nothing counts nothing.
+    assert traced(tmp_path)["order"] == {"documents": 0, "passages": 0,
+                                         "readings_planned": 0}
 
 
 def stamp(**more):
@@ -215,54 +212,35 @@ def test_the_estimate_counts_every_request_kind_once(tmp_path):
     (tmp_path / estimate.TRACE_DIR / "plan.trace.jsonl").write_text("\n".join(
         json.dumps({"doc": 1, **ask(kind)}) for kind in (
             "phrase_ask", "review_ask", "compute_ask", "frame", "frame_ask",
-            "survey_ask", "naming_groups_ask", "years_ask",
+            "settings_ask", "naming_groups_ask", "years_ask",
             "comb_check_ask")), encoding="utf-8")
     documents, sections, counted = estimate._trace_of(
         tmp_path, [("plan", 1)], {1: 10})
     assert (documents, sections) == (1, 10)
     assert {k: n[0] for k, n in counted.items() if n[0]} == {
         "phrase_ask": 1, "review_ask": 1, "compute_ask": 1, "frame": 1,
-        "survey_ask": 1, "naming_groups_ask": 1, "years_ask": 1,
+        "settings_ask": 1, "naming_groups_ask": 1, "years_ask": 1,
         "comb_check_ask": 1}
 
 
-# Promise: a document's search for a parameter the survey named no passage for
-# counts once however far the walk down its list went, AND each passage the
-# walk read counts under its parameter; a trace from before the walk, which
-# names no rank, counts once (owner decision 2026-11-05).
-def seek(parameter, rank=None, owner=1):
-    event = {"t": "seek", "parameter": parameter, "kind": "section",
-             "owner": owner}
-    return event if rank is None else {**event, "rank": rank}
-
-
-def test_a_search_counts_once_a_document_and_each_passage_walked(tmp_path):
-    out = traced(tmp_path, seek("p", 1), seek("p", 2, 2), seek("p", 3, 3),
-                 seek("q"))
-    assert out["parameters_sought_by_parameter"] == {"p": 1, "q": 1}
-    assert out["passages_sought_by_parameter"] == {"p": 3, "q": 1}
-    # the failure by construction: a walk's later passage alone is no search
-    out = traced(tmp_path, seek("p", 2, 2))
-    assert out["parameters_sought_by_parameter"] == {}
-    assert out["passages_sought_by_parameter"] == {"p": 1}
-
-
-# Promise: the trace schema takes the events of that search, its sentences
-# and the completion, AND refuses one that breaks their shape.
-def test_the_trace_schema_takes_the_search_and_the_completion():
+# Promise: the trace schema takes the order of a document, the sentences it
+# is ranked with and the completion, AND refuses one that breaks their shape.
+def test_the_trace_schema_takes_the_order_and_the_completion():
     trace = schema.trace_schema()
-    walked = {"t": "seek", "doc": 1, **seek("p", 2, 3)}
+    ordered = {"t": "order", "doc": 1, "scope": None, "passages": 4,
+               "parameters": 6, "first": {"emission": [["table", 2]]}}
     probe = {"t": "seek_probe", "doc": 1, "parameter": "p", "per": "run",
              "text": "Emissions are reported by sector."}
     done = {"t": "completion", "doc": 1, "outcome": "taken",
             "filled": ["publication_doi"], "open": [], "id": "W1",
             "key": "index_doi", "matched": ["liu"]}
-    for event in (walked, probe, done,
+    for event in (ordered, probe, done,
                   {"t": "completion", "doc": 1, "outcome": "offline",
                    "open": ["publication_doi"], "detail": "timed out"}):
         jsonschema.validate(event, trace)
-    for broken in (dict(walked, rank=0),
-                   {k: v for k, v in walked.items() if k != "rank"},
+    for broken in (dict(ordered, passages="4"),
+                   {"t": "seek", "doc": 1, "parameter": "p",
+                    "kind": "section", "owner": 1, "rank": 2},
                    dict(probe, per="page"), dict(done, record={}),
                    {k: v for k, v in done.items() if k != "open"}):
         with pytest.raises(jsonschema.ValidationError):

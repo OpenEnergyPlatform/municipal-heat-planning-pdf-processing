@@ -330,15 +330,15 @@ def _extraction_spec(profile):
 
 def _extract_budget(profile) -> int:
     """What `extract --print-context-budget` prints: the largest request of
-    the prompts the run sends, those of a harvest from the survey. A spec
-    without groups is a failure here, as the run stops on it
+    the prompts the run sends, those of a harvest passage by passage. A
+    spec without groups is a failure here, as the run stops on it
     (`runner.surveyed_flow`)."""
     from .extraction import runner
     spec = _extraction_spec(profile)
     if not runner.surveyed_flow(spec, profile):
         raise LookupError("the spec names no groups: a spec needs groups, "
-                          "since every run harvests from the survey of each "
-                          "plan")
+                          "since every run reads each plan passage by "
+                          "passage")
     return runner.request_budget(spec, profile)
 
 

@@ -52,20 +52,19 @@ table gives this profile's own answer.
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 6 prompt ids of its own | page transcription, English artefact repair, table and figure captioning; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object (`reading.REQUIRED`), in English, the language of the prompts of the first three; the extraction prompts are German and `extraction.PHRASES` is another table, the harvest's own |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and names (a name opens each line of the values index) and two filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `FRONT_PAGE_PARAMETERS`, `FRONT_PAGE_TITLE`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 14 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document region list, the sentences the stage writes to the model, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
+| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `FRONT_PAGE_PARAMETERS`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 12 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document region list, the sentences the stage writes to the model, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
 | The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 11 prompt ids of its own | the English chat wording and the answer loop's own prompts; the twelfth, `json_format`, is the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copy gave |
 
-A run harvests a publication from its survey (owner decisions 2026-11-04,
-see [extraction](../stages/extraction.md)): the spec names one group,
-`scenario`, read with the value, and English prompts serve it.
-`extraction/survey` names per passage, one request each, the fields the
-publication states about itself, its study or its own scenarios, as the
-passage's entry alone (`{"parameters": ["publication_title",
-"publication_author"]}`, owner decision 2026-11-06). `extraction/read_values`
-names the values one per message of one conversation per passage, each after
-the answer before, with `value`, `value_raw` (only for an entry of a list) and
-quote, and `extraction/read_text` answers for each value, in a conversation of
+A run harvests a publication passage by passage (owner decisions 2026-11-04,
+2026-11-08, see [extraction](../stages/extraction.md)): the spec names one
+group, `scenario`, read with the value, and English prompts serve it. Every
+passage is read for every parameter, the publication's own fields (title,
+authors, date) and its study or its own scenarios included, in the order the
+search ranks the passages for each parameter. `extraction/read_values` asks for
+all values of a parameter in a passage, in one conversation per passage, with
+`value`, `value_raw` (only for an entry of a list) and quote for each, and
+`extraction/read_text` answers for each value, in a conversation of
 its own, the scenario it refers to by the name the publication prints, with
 its quote; a correction follows the answer it is about, and what the check
 refuses on the rows one reply made is asked in one message after that reply
@@ -123,25 +122,18 @@ in `value_raw`.
 
 The profile has no number coordinates (no unit, `what`, `qualifier`
 and no conversion), so a value's first conversation asks its one
-group, `scenario`, one message per coordinate. Its front-page walk and its
-naming step stay, and its `read_text` and `comb` prompts stay in their long
+group, `scenario`, one message per coordinate. Its naming step stays, and its `read_text` and `comb` prompts stay in their long
 form. As in kwp (see [extraction](../stages/extraction.md), owner decisions
 2026-11-07), `extraction/settings` reads once per publication what it settles
-for all its values and every request about a value shows it; a round's quote
-must stand exactly once in what the round showed and hold the value exactly
+for all its values and every request about a value shows it; a value's quote
+must stand exactly once in what the request showed and hold the value exactly
 once; a value only a figure's image shows is read off it, in place of a quote,
-trust level C; and a parameter the survey named no passage for, whose walk read
-no value, is searched by `extraction/seek`.
+trust level C.
 
 `FRONT_PAGE_PARAMETERS` in `extraction.py` names what a publication says
-about itself (title, authors, date, DOI, abstract). The run reads them from the
-first page on, page by page, until a title came, `FRONT_PAGE_TITLE` read with a
-value the check takes (owner decisions 2026-11-05, `surveyed.front_walk`): a
-probe showed that the survey of a review named only the chapters on other
-studies for them, and the graph took a cited report's title, year and
-authors. Where the
-survey named no passage for one of them, the search for it ranks with a
-sentence written for this publication from its title as the corpus index
+about itself (title, authors, date, DOI, abstract). Each is read in every
+passage like any parameter. The search that orders the passages for one of them
+ranks with a sentence written for this publication from its title as the corpus index
 holds it (`document_context`, `DocumentMeta.title`), which finds the title
 page; the sentence for any other parameter is written once per run, since a
 publication's title pulls it toward the title page (owner decision
@@ -210,7 +202,7 @@ where the publication does not say (owner decisions 2026-11-07,
 the name as the publication prints it, with its quote. `Axis.merged` and
 `Parameter.merged` are allowed on a free-text axis or a free-text value
 only (`spec.py`, `_validate_parameter` and the axis parser refuse them
-anywhere else), and a merged coordinate is never read in the survey. Which
+anywhere else), and which
 of a publication's names mean the same scenario is asked once the publication
 is read, by `docpipe/extraction/naming.py` (below).
 
@@ -582,9 +574,9 @@ on a front page. A chapter that presents other studies prints their titles,
 authors, publishers and years, a reference list the DOIs it cites, and the
 field descriptions say that only the document's own count. The authors are
 those of the first of these that names any, each name a node whose evidence
-is every reading of it, wherever it stands. The survey and the value reading say the same of a
+is every reading of it, wherever it stands. The value reading says the same of a
 passage that presents, reviews or compares another work, beside a reference
-list, a footnote and a citation (`survey.md`, `read_values.md`). Runner-up spellings are counted `contested` rather
+list, a footnote and a citation (`read_values.md`). Runner-up spellings are counted `contested` rather
 than dropped from the log. A read-only connection then cross-checks the chosen title, date and
 DOI against `DocumentMeta`, filled in by the crawl, not this profile's
 own extraction; a disagreement is logged and the crawled value is never

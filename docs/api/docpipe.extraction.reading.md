@@ -2,33 +2,37 @@
 
 `docpipe/extraction/reading.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-reading.py: The values of one parameter in the passages the survey named for
-it, one value per request: rounds name the values of a passage one by one,
-then each value is asked its coordinates one by one, each a message of the
-value's own conversation.
+reading.py: The values of one parameter in every passage of a plan: all
+values of a passage in one answer, then each value asked its coordinates
+one by one, each a message of the value's own conversation.
 
-Step 3 of the rebuilt harvest (owner decisions 2026-11-04, 2026-11-05 and
-2026-11-07). Every request has one task and reads exactly one value. A table
-is read like a section: the model repeats each value as the passage prints
-it, with a quote that pins it down, and code takes nothing from where it
-stands (owner decision 2026-11-07: "streich diese ganze Code Logik").
+Step 3 of the rebuilt harvest (owner decisions 2026-11-04, 2026-11-05,
+2026-11-07 and 2026-11-08). Every request has one task. A table is read like
+a section: the model repeats each value as the passage prints it, with a
+quote that pins it down, and code takes nothing from where it stands (owner
+decision 2026-11-07: "streich diese ganze Code Logik").
 
-A round shows the parameter in short (its `brief`), the whole passage (a table
-with its title, its head and all its rows, or the survey's piece of a
-section), the text around a table or figure, the line of the title page and
-the table the passage may continue, and asks for the next value not yet read,
-until the model says there is none. A value may stand in any passage the
-round showed; it is read from the one its quote stands in, which joins the
-reading's batch, so the fold checks it there (`pipeline.route_claims`). Its
-quote stands in what was shown exactly once and holds the value exactly
-once, each counted where it stands for itself and not as part of a longer
-name or number (`verify.times_quoted`, `verify.times_stated`):
-"410.662,44 | 1.109 | 6%" pins down the 1.109 of its row. A value the check
-refuses (its quote in no passage shown, its number not in its quote, whatever
-else the fold refuses of the value and its quote (`verify.value_refused`), a
-quote that does not pin it down) is asked once more with the reason; one
-named again is asked once more, and named again it ends the rounds. No
-request that reads has tools.
+The first message shows the parameter in short (its `brief`), the whole
+passage (a table with its title, its head and all its rows, or a piece of
+at most two pages of a section, its heading counted in), the plan's text
+around a table or figure (300 tokens before and after it, `around_of`), the
+line of the title page and the table the passage may continue, and asks for
+every value of the parameter in it, in one answer (owner decisions
+2026-11-08: asked one after another, the model stopped after the three
+values of the total row of a table of 21 values). An answer it marks as
+incomplete is asked to go on, one that brings nothing new then is told so
+once, and a passage with a value is asked twice whether more stand in it
+(`Reader._rounds`). A value may stand in any passage the request showed; it
+is read from the one its quote stands in, which joins the reading's batch,
+so the fold checks it there (`pipeline.route_claims`). Its quote stands in
+what was shown exactly once and holds the value exactly once, each counted
+where it stands for itself and not as part of a longer name or number
+(`verify.times_quoted`, `verify.times_stated`): "410.662,44 | 1.109 | 6%"
+pins down the 1.109 of its row. The values of an answer the check refuses
+(a quote in no passage shown, a number not in its quote, whatever else the
+fold refuses of a value and its quote (`verify.value_refused`), a quote that
+does not pin it down) are asked once more together, each with its reason; a
+value named before is no new one. No request that reads has tools.
 
 A number a figure only draws, as a bar, a segment, an area or a point of a
 curve, is a value of the plan and an estimate (owner decisions 2026-11-05 and
@@ -50,8 +54,8 @@ coordinates shows the titles of the last sections of the plan up to the
 value's place, its own last (`SECTION_TITLES`). The system prompt is what
 every message is told and the part of each field the first message carries.
 The rounds of a passage's values are a conversation as well: each later
-round asks for the next value after the answer it follows. A correction goes
-after the answer it is about, in its conversation.
+message asks for the values not named yet after the answer it follows. A
+correction goes after the answer it is about, in its conversation.
 
 With a pool, the conversations of a passage's values run side by side once
 its rounds have named them, as the passages do, and none waits for another
@@ -273,17 +277,18 @@ Fields:
 class Reader
 ```
 
-(document_id, survey, passages) -> [Read], one per parameter and
-passage the survey named for it.
+(document_id, found, passages) -> [Read], one per parameter and
+passage *found* names for it (`survey.Ranking`: every passage).
 
-Two kinds of request, each with one task and one value (owner
-decisions 2026-11-04 and 2026-11-05), each the reply as a dict, CUT, or
-None, and each a message of a conversation (`thread.Thread`, owner
-decisions 2026-11-07): *ask_values(source, parameter, context, read,
-thread, follow, drawn)* the first value of a passage not among *read*,
-or, with *follow*, what follows the answer of *thread*: the next value,
-a correction; with *drawn* the request sends the figure's image and
-takes a value read off it. *ask_text(source, parameter, group, slots,
+Two kinds of request, each with one task (owner decisions 2026-11-04
+and 2026-11-05), each the reply as a dict, CUT, or None, and each a
+message of a conversation (`thread.Thread`, owner decisions
+2026-11-07): *ask_values(source, parameter, context, read, thread,
+follow, drawn)* every value of a passage not among *read* (owner
+decisions 2026-11-08), or, with *follow*, what follows the answer of
+*thread*: the ask to go on, to say what is new, for more, a correction;
+with *drawn* the request sends the figure's image and takes a value
+read off it. *ask_text(source, parameter, group, slots,
 row, context, thread, follow)* one coordinate of that value (*slots*,
 one): the first message of the value's conversation, the message of
 its next coordinate, or, with *follow*, a correction. *context* is what
@@ -310,7 +315,8 @@ def __init__(self, spec, ask_values: Callable, ask_text: Callable, *,
              known: Optional[Callable] = None,
              drawn: Optional[Callable] = None,
              span_marks: Optional[dict] = None,
-             pool=None, trace=None)
+             pool=None, trace=None,
+             count_tokens: Optional[Callable] = None)
 ```
 
 #### Reader.context_of
@@ -321,11 +327,13 @@ def context_of(self, source: Source, passages: dict,
                title_page: Optional[Source] = None) -> tuple
 ```
 
-(what the requests of a passage show beside it, the section it
-was cut from, the passages a coordinate may quote for what stands
-beside it): the text around a table or figure (`around_of`), the
+(what the requests of a passage show beside it, the passages of
+the text around it, the passages a coordinate may quote for what
+stands beside it): the text around a table or figure (`around_of`), the
 titles of the sections up to it (`sections_of`), the title page's
-line and the table the passage may continue (`beside_of`).
+line and the table the passage may continue (`beside_of`). The text
+around is one passage per section it comes from, each a passage a
+quote may stand in.
 
 #### Reader.read
 
@@ -598,21 +606,57 @@ the plan's wording}, `runner.row_context`), each wording a passage a
 quote may stand in under the passage its coordinate was read in
 (`shown_as`).
 
+### estimated_tokens
+
+```python
+def estimated_tokens(text: str) -> int
+```
+
+The tokens of *text* by the run's estimate.
+
+### last_tokens
+
+```python
+def last_tokens(text: str, tokens: int, count: Callable) -> str
+```
+
+The end of *text* that *count* makes at most *tokens*, begun at a
+word where the cut falls inside one.
+
+### first_tokens
+
+```python
+def first_tokens(text: str, tokens: int, count: Callable) -> str
+```
+
+The start of *text* that *count* makes at most *tokens*, ended at a
+word where the cut falls inside one.
+
+### marker_span
+
+```python
+def marker_span(text: str, block: str) -> Optional[tuple]
+```
+
+(start, end) of the place a table or figure stands in its section's
+text ("[p18_tbl0: Tabelle 6: ...]"), None where it is not marked.
+
 ### around_of
 
 ```python
 def around_of(source: Source, passages: dict,
-              budget: Optional[int]) -> Optional[Source]
+              count: Optional[Callable] = None,
+              tokens: int = AROUND_TOKENS) -> list
 ```
 
-The text of the section a table or figure stands in, as its request
-shows it (owner decisions 2026-11-04 and 2026-11-05): the whole section,
-other tables and figures of it included, when it fits *budget*, two
-pages of the plan, else that many characters around the table's place
-in it. The model reads from it what it needs: a cut to 200 characters on
-each side would have hidden the text of 72 % of the quotes the m8 run
-took from a table's section. None for a section, and for a table or
-figure whose section is not among *passages*.
+The plan's text around a table or figure as its requests show it
+(owner decisions 2026-11-08): *tokens* of the text before its place and
+as many after it, counted by *count* (the run's tokenizer, else
+`estimated_tokens`), across the edge of its section into the sections
+before and after. One passage per section the text comes from, in the
+plan's order, each under its own section, so a quote from it cites the
+section it stands in. [] for a section, and for a table or figure whose
+section is not among *passages*.
 
 ### near_of
 
@@ -758,13 +802,28 @@ the text around a table or figure (ticket 26: what requests share
 stands first). Nothing of the value's coordinates. The line of the
 title page that names the plan's own place stands before the passage,
 the same in a plan; the title and head of the table the passage may
-continue after it (`beside_of`). The next value, and a value the check
-refused, are asked after the answer in the same conversation (owner
-decisions 2026-11-07); *read*, the values named so far, stands only in
-a conversation begun anew because the old one no longer fit the
-model's window (`Reader._rounds`). With *drawn*, a figure whose image
+continue after it (`beside_of`). The values not named yet, and the
+values the check refused, are asked after the answer in the same
+conversation (owner decisions 2026-11-07 and 2026-11-08); *read*, the
+values named so far, stands only in a conversation begun anew because
+the old one no longer fit the model's window (`Reader._rounds`). With *drawn*, a figure whose image
 goes with the request says so ("image"), and the system prompt tells how
 a number only the image shows is read off it.
+
+### value_entry_schema
+
+```python
+def value_entry_schema(parameter, drawn: bool = False) -> dict
+```
+
+One value of a passage as a reply lists it: its value and quote, its
+printed wording only where the value is an entry of a list or a number
+(a free text value is its own wording, `verify.wording_of`). A category
+value is one of its entries, or "" where the model is unsure of them.
+With *drawn*, a figure whose image goes with the request: always whether
+the image only draws the number (`drawn`), and in place of a quote the
+sentence of what was read off the image where no shown text states it
+(`reading`, owner decisions 2026-11-05 and 2026-11-07).
 
 ### values_response_format
 
@@ -772,16 +831,11 @@ a number only the image shows is read off it.
 def values_response_format(parameter, drawn: bool = False) -> dict
 ```
 
-The next value of the passage as the reply itself, with no wrapper
-(owner decision 2026-11-06): its value and quote, its printed wording
-only where the value is an entry of a list or a number (a free text value
-is its own wording, `verify.wording_of`); {"value": null} where no
-further value stands in it. A category value is one of its entries, or
-"" where the model is unsure of them. With *drawn*, a figure whose image
-goes with the request: always whether the image only draws the number
-(`drawn`), and in place of a quote the sentence of what was read off the
-image where no shown text states it (`reading`, owner decisions
-2026-11-05 and 2026-11-07).
+The values of the passage not named yet as the reply itself (owner
+decisions 2026-11-08: all of them in one answer): "values", each as
+`value_entry_schema`, an empty list where none stands in it, and
+"incomplete", true where the answer could not hold all of them, which
+is asked to go on (`Reader._rounds`).
 
 ### values_example
 
@@ -789,24 +843,41 @@ image where no shown text states it (`reading`, owner decisions
 def values_example(parameter, drawn: bool = False) -> dict
 ```
 
-The reply of a value request as its example shows it: a value read,
-with exactly the keys `values_response_format` asks for this parameter
-and this passage, in its order (owner decision 2026-11-06): a printed
-value, so with *drawn* one the image does not only draw. The reply that
-names no further value stays in the prompt's rule line, and one read off
-an image in the part about the image.
+The reply of a value request as its example shows it: one value
+read, with exactly the keys `value_entry_schema` asks for this parameter
+and this passage, in its order (owner decision 2026-11-06), and
+"incomplete" false: a printed value, so with *drawn* one the image does
+not only draw. The reply that names no value stays in the prompt's rule
+line, and one read off an image in the part about the image.
 
 ### claim_of
 
 ```python
-def claim_of(reply, drawn: bool = False) -> Optional[dict]
+def claim_of(entry, drawn: bool = False) -> Optional[dict]
 ```
 
-The value a round's reply names, as a row's claim, or None where it
-names none: {"value": null}, or no object. Where the request sent the
-image (*drawn*), whether the image only draws the number, and a reading
-in place of a missing quote, which the switch `read_off` makes the
-value's evidence (`verify.read_off`).
+One value a reply lists, as a row's claim, or None where it names
+none: a value null, or no object. Where the request sent the image
+(*drawn*), whether the image only draws the number, and a reading in
+place of a missing quote, which the switch `read_off` makes the value's
+evidence (`verify.read_off`).
+
+### claims_of
+
+```python
+def claims_of(reply, drawn: bool = False) -> list
+```
+
+The values a reply lists, as claims (`claim_of`), in its order; []
+where it lists none or is no object.
+
+### incomplete
+
+```python
+def incomplete(reply) -> bool
+```
+
+Did the model mark its answer as not holding every value?
 
 ### same_value
 
@@ -853,9 +924,10 @@ def round_failure(claim: dict, shown: list, read: list,
 ```
 
 (kind, reason) of what the check refuses of a round's value of
-*parameter*, or None: a value already read (`REPEATED`), the value
-itself (`VALUE`: its quote in no passage of *shown*, its number not in
-its quote, what the fold refuses of the value and its quote,
+*parameter*, or None: a value already read (`REPEATED`, no new value
+and nothing to tell: a list may name it again), the value itself
+(`VALUE`: its quote in no passage of *shown*, its number not in its
+quote, what the fold refuses of the value and its quote,
 `verify.value_refused`), or a quote that does not pin the value down
 (`UNIQUE`, owner decision 2026-11-07: it stands in what *shown* holds
 more than once, or holds the value more than once). Of a value read off

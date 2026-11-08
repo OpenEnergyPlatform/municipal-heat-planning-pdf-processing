@@ -1,11 +1,9 @@
-"""A passage is read one value per request (owner decisions 2026-11-04,
-2026-11-05 and 2026-11-07): rounds name its values one by one, each round
-shown the values read, until the model names none; a value the check refuses
-is asked once more with its reason, AND what the fold refuses of a value and
-its quote, an answer off its closed list or one its quote does not hold, is
-asked once more with the fold's own reason while a value the fold takes is
-not, AND one named again is asked once more and, named again, ends the
-rounds. A value may stand in any passage a round showed, the passage or the
+"""A passage is asked for all its values in one answer (owner decisions
+2026-11-08), then for what remains, an answer marked incomplete asked to go
+on; a value the check refuses is asked once more with its reason, AND what
+the fold refuses of a value and its quote, an answer off its closed list or
+one its quote does not hold, is asked once more with the fold's own reason
+while a value the fold takes is not, AND one named again is no new value. A value may stand in any passage a round showed, the passage or the
 text around it, AND it is read from the one its quote stands in, which joins
 the batch the fold checks it in; a quote in no passage shown is refused.
 
@@ -128,6 +126,18 @@ def answered(thread, reply):
     return reply
 
 
+def listed(reply):
+    """A values reply as the run asks it (owner decisions 2026-11-08: every
+    value of a passage in one answer): a fixture's one value as an answer
+    that lists it, {"value": null} as one that lists none; a whole answer,
+    or no answer, as given."""
+    if not isinstance(reply, dict) or "values" in reply:
+        return reply
+    if reply.get("value") is None:
+        return {"values": [], "incomplete": False}
+    return {"values": [reply], "incomplete": False}
+
+
 def sent(thread, follow, first):
     """What a request sends as the run builds it (`runner.make_reader`): a
     first message shows *first()*, a follow-up only its fields, marked
@@ -156,7 +166,7 @@ def asking(values=({"value": None},), groups=None, spec=SPEC, **kw):
                                      reading.values_payload(
                                          source, parameter, context, read,
                                          drawn))))
-        return answered(thread, nth(values, calls, "values"))
+        return answered(thread, listed(nth(values, calls, "values")))
 
     def ask_text(source, parameter, group, slots, row, context, thread,
                  follow=None):
@@ -219,23 +229,110 @@ def test_a_table_gives_its_rows_cell_by_cell_and_text_gives_none():
     assert reading.grid_of("Ein Satz ohne Tabelle.") is None
 
 
-# -- the values of a passage, one per round ---------------------------------------
+# -- the values of a passage, all in one answer -----------------------------------
+# Promise (owner decisions 2026-11-08): the first message asks for every
+# value of the passage AND an answer with a value is asked REMAINING_ASKS times
+# for what remains, the second time only where the first brought one, AND
+# an answer marked incomplete is asked to go on, AND one that then brings
+# nothing new is told so once and, nothing new again, the asks to go on
+# end, AND the values the check refuses of one answer go back together in
+# ONE message, AND a value named again is no new one; every message is one
+# of the same conversation.
 
-def test_each_round_names_the_next_value_and_the_rounds_end_on_none():
-    # The rounds are one conversation (owner decisions 2026-11-07): the
-    # first message shows the passage, each later one asks for the next
-    # value after the answer it follows, and nothing lists what was named.
-    read, calls = read_of(TEXT, values=(V300, V27,
-                                        {"value": None}))
+NONE = {"values": [], "incomplete": False}
+
+
+def listing(*values, incomplete=False):
+    return {"values": list(values), "incomplete": incomplete}
+
+
+def follows_of(calls) -> list:
+    """The field each values message after the first carried."""
+    return [next(key for key in payload if key not in ("follows", "thread"))
+            for payload in rounds(calls) if payload.get("follows")]
+
+
+G1200 = {"value": 1200, "quote": "| Erdgas | 1.200"}
+G800 = {"value": 800, "quote": "1.200 | 800"}
+G2000 = {"value": 2000, "quote": "800 | 2.000"}
+O28 = {"value": 28, "quote": "| Heizöl | 27 | 28"}
+
+
+def test_a_passage_names_its_values_in_one_answer_and_is_asked_what_remains():
+    read, calls = read_of(TEXT, values=(listing(V300, V27), NONE))
     asked = rounds(calls)
-    assert [p.get("follows", False) for p in asked] == [False, True, True]
-    assert all(set(p) == {reading.NEXT, "follows", "thread"}
-               for p in asked[1:])
+    assert [p.get("follows", False) for p in asked] == [False, True]
+    assert follows_of(calls) == [reading.REMAINING]
     assert "read" not in asked[0]
     assert len({id(p["thread"]) for p in asked}) == 1
     assert [c["value"] for c in read.claims] == [300, 27]
+    # the failure by construction: an answer without a value is asked
+    # nothing more
     none, calls = read_of(TEXT)
     assert none.claims == [] and not none.unread and len(rounds(calls)) == 1
+
+
+def test_what_remains_is_asked_twice_the_second_time_only_after_a_new_value():
+    read, calls = read_of(table(), values=(listing(G1200), listing(G800),
+                                           listing(G2000), listing(O28)))
+    assert follows_of(calls) == [reading.REMAINING] * reading.REMAINING_ASKS
+    assert [c["value"] for c in read.claims] == [1200, 800, 2000]
+    # the failure by construction: the first ask brings nothing new
+    read, calls = read_of(table(), values=(listing(G1200), listing(G1200)))
+    assert follows_of(calls) == [reading.REMAINING]
+    assert [c["value"] for c in read.claims] == [1200]
+
+
+def test_an_answer_marked_incomplete_is_asked_to_go_on():
+    read, calls = read_of(table(), values=(
+        listing(G1200, G800, incomplete=True), listing(G2000, O28), NONE))
+    assert follows_of(calls) == [reading.GO_ON, reading.REMAINING]
+    assert [c["value"] for c in read.claims] == [1200, 800, 2000, 28]
+    # the failure by construction: one not marked is not asked to go on
+    _read, calls = read_of(table(), values=(listing(G1200, G800), NONE))
+    assert reading.GO_ON not in follows_of(calls)
+
+
+def test_going_on_with_nothing_new_is_told_once_and_then_ends():
+    read, calls = read_of(table(), values=(
+        listing(G1200, incomplete=True), listing(G1200, incomplete=True),
+        NONE))
+    assert follows_of(calls) == [reading.GO_ON, reading.NOTHING_NEW,
+                                 reading.REMAINING]
+    assert [c["value"] for c in read.claims] == [1200]
+    # Told, it names what it left out, and goes on from there.
+    read, calls = read_of(table(), values=(
+        listing(G1200, incomplete=True), listing(G1200, incomplete=True),
+        listing(G800), NONE))
+    assert follows_of(calls) == [reading.GO_ON, reading.NOTHING_NEW,
+                                 reading.REMAINING]
+    assert [c["value"] for c in read.claims] == [1200, 800]
+
+
+def test_a_model_that_says_incomplete_forever_ends_all_the_same():
+    # the failure by construction: every answer marked incomplete, never a
+    # new value; `nth` would answer it for ever.
+    read, calls = read_of(table(), values=(listing(G1200, incomplete=True),))
+    assert [c["value"] for c in read.claims] == [1200]
+    assert follows_of(calls) == [reading.GO_ON, reading.NOTHING_NEW,
+                                 reading.REMAINING, reading.GO_ON,
+                                 reading.NOTHING_NEW]
+
+
+def test_the_values_the_check_refuses_go_back_together_in_one_message():
+    nowhere = dict(V300, quote="rund 300 t CO2 im Jahr")
+    outside = dict(V27, value=270)
+    read, calls = read_of(TEXT, values=(listing(nowhere, outside), listing(
+        V300, V27), NONE))
+    told = corrections_of(calls)
+    assert [(task, [c["value"] for c in given]) for task, given in told] \
+        == [("values", [300, 270])]
+    assert [c["value"] for c in read.claims] == [300, 27]
+    assert read.corrected == 2 and read.failed == {reading.VALUE: 2}
+    # the failure by construction: an answer the check takes whole is told
+    # nothing
+    _read, calls = read_of(TEXT, values=(listing(V300, V27), NONE))
+    assert corrections_of(calls) == []
 
 
 def test_a_value_the_check_refuses_is_asked_once_more_with_its_reason():
@@ -291,16 +388,16 @@ def test_what_the_fold_refuses_of_a_value_is_asked_with_the_fold_s_reason():
     assert corrections_of(calls) == [] and len(read.claims) == 1
 
 
-def test_a_value_named_again_is_asked_once_more_and_then_ends_the_rounds():
-    read, calls = read_of(TEXT, values=(V300, V300,
-                                        V27, {"value": None}))
-    assert corrections_of(calls) == [("values", [dict(V300, what=say(
-        "value_already_read", value="300", quote=V300["quote"]))])]
+def test_a_value_named_again_is_no_new_value_and_is_told_nothing():
+    read, calls = read_of(TEXT, values=(listing(V300), listing(V300, V27),
+                                        NONE))
+    assert corrections_of(calls) == []
     assert [c["value"] for c in read.claims] == [300, 27]
-    stuck, calls = read_of(TEXT, values=(V300,))
+    # the failure by construction: an answer that names only what was named
+    # brings nothing new, and the asks for what remains end
+    stuck, calls = read_of(TEXT, values=(listing(V300),))
     assert [c["value"] for c in stuck.claims] == [300]
-    assert len(rounds(calls)) == 3          # the value, again, again: done
-    assert stuck.failed == {reading.REPEATED: 1}
+    assert len(rounds(calls)) == 2 and stuck.failed == {}
 
 
 # -- a value in any passage shown ------------------------------------------------
@@ -605,22 +702,23 @@ def coordinate_grammar(name):
         "schema"]
 
 
-def test_a_round_names_one_value_or_none():
-    assert not rejected({"value": None}, values_grammar())
-    assert not rejected(V300, values_grammar())
-    assert rejected({"value": 300}, values_grammar())     # no quote
-    assert rejected([V300], values_grammar())
+def test_an_answer_lists_the_values_and_says_whether_it_holds_them_all():
+    assert not rejected(NONE, values_grammar())
+    assert not rejected(listing(V300, V27), values_grammar())
+    assert rejected(listing({"value": 300}), values_grammar())   # no quote
+    assert rejected({"values": [V300]}, values_grammar())        # incomplete?
+    assert rejected(V300, values_grammar())                      # one value
     # No column head is asked (owner decision 2026-11-07).
-    assert rejected(dict(V300, head="gesamt"), values_grammar())
-    # No wrapper (owner decision 2026-11-06): the reply as it was before is
-    # refused, and a free text value carries no wording beside it, which a
-    # number may.
-    assert rejected({"next": V300}, values_grammar())
-    assert not rejected(dict(V300, value_raw="300"), values_grammar())
+    assert rejected(listing(dict(V300, head="gesamt")), values_grammar())
+    # No wrapper (owner decision 2026-11-06), and a free text value carries
+    # no wording beside it, which a number may.
+    assert rejected({"next": listing(V300)}, values_grammar())
+    assert not rejected(listing(dict(V300, value_raw="300")),
+                        values_grammar())
     office = SPEC.by_uri["planning_organisation"]
     named = {"value": "Planungsbüro A", "quote": "Planungsbüro A GmbH"}
-    assert not rejected(named, values_grammar(parameter=office))
-    assert rejected(dict(named, value_raw="Planungsbüro A"),
+    assert not rejected(listing(named), values_grammar(parameter=office))
+    assert rejected(listing(dict(named, value_raw="Planungsbüro A")),
                     values_grammar(parameter=office))
 
 
@@ -628,14 +726,15 @@ def test_a_figure_with_its_image_may_answer_drawn_and_read_in_place_of_a_quote()
     # Owner decision 2026-11-07: where the image goes with the request, a
     # number only the image shows is answered "drawn" with what was read.
     off = {"value": 300, "drawn": True, "reading": "Balken bei 300 t CO2"}
-    assert not rejected(off, values_grammar(drawn=True))
-    assert not rejected(dict(V300, drawn=False), values_grammar(drawn=True))
-    assert rejected({"value": 300, "quote": V300["quote"]},
+    assert not rejected(listing(off), values_grammar(drawn=True))
+    assert not rejected(listing(dict(V300, drawn=False)),
+                        values_grammar(drawn=True))
+    assert rejected(listing({"value": 300, "quote": V300["quote"]}),
                     values_grammar(drawn=True))          # "drawn" is asked
     # the failures by construction: without the image there is no such
     # answer and a quote is required
-    assert rejected(off, values_grammar())
-    assert rejected({"value": 300, "drawn": True}, values_grammar())
+    assert rejected(listing(off), values_grammar())
+    assert rejected(listing({"value": 300, "drawn": True}), values_grammar())
 
 
 def test_a_coordinate_reply_answers_the_one_coordinate_asked_and_no_other():
@@ -676,7 +775,8 @@ def test_a_table_splits_into_halves_of_its_rows_under_its_title_and_head():
 
 def model(cut=lambda rows: False, silent=lambda rows: False):
     """A model reading LONG: CUT where *cut* says the rows shown do not fit,
-    no reply where *silent* says so, else the next value of column 2."""
+    no reply where *silent* says so, else every value of column 2 not named
+    yet, in one answer."""
     def answer(source, parameter, context, read, thread, follow=None,
                drawn=False):
         body = [cells for _line, cells in reading.grid_of(source.text).body]
@@ -688,13 +788,13 @@ def model(cut=lambda rows: False, silent=lambda rows: False):
         # What the conversation has named, and what a conversation begun
         # anew shows under "read".
         done = {r["value"] for r in read} | {
-            json.loads(m["content"]).get("value")
-            for m in thread.messages if m["role"] == "assistant"}
-        for line, cells in reading.grid_of(source.text).body:
-            value = int(cells[1].replace(".", ""))
-            if value not in done:
-                return {"value": value, "quote": line}
-        return {"value": None}
+            one["value"] for m in thread.messages if m["role"] == "assistant"
+            for one in json.loads(m["content"]).get("values") or ()}
+        return {"values": [
+            {"value": int(cells[1].replace(".", "")), "quote": line}
+            for line, cells in reading.grid_of(source.text).body
+            if int(cells[1].replace(".", "")) not in done],
+            "incomplete": False}
     return answer
 
 
@@ -784,27 +884,63 @@ def test_the_reading_takes_no_year_its_quote_does_not_print():
 
 # -- the text around a table -----------------------------------------------------
 
-def test_a_table_is_shown_with_its_section_or_the_part_around_its_place():
+# Promise (owner decisions 2026-11-08): a table or figure is shown with
+# 300 tokens of the plan's text before its place and 300 after it, AND
+# across the edge of its section into the sections before and after, each
+# part under the section it comes from; a section, a table in no section and
+# one whose section is not among the passages are shown nothing around.
+
+def words(text):
+    """A count of tokens that is easy to check: one per word."""
+    return len(text.split())
+
+
+def test_a_table_is_shown_with_its_section_where_it_is_short():
     passages = {("section", 9): SECTION}
-    assert reading.around_of(placed(), passages, 4000).text == SECTION.text
-    long = replace(SECTION, text="x" * 5000 + "[p2_tbl5: Tabelle 3]"
-                   + "y" * 5000)
-    cut = reading.around_of(placed(), {("section", 9): long}, 1000).text
-    assert len(cut) == 1000 and "[p2_tbl5" in cut
-    assert reading.around_of(table(), passages, 4000) is None    # no section
-    assert reading.around_of(SECTION, passages, 4000) is None    # a section
-    assert reading.around_of(placed(), {}, 4000) is None         # not shown
+    [whole] = reading.around_of(placed(), passages)
+    assert (whole.owner_id, whole.text) == (9, SECTION.text)
+    assert reading.around_of(table(), passages) == []    # no section
+    assert reading.around_of(SECTION, passages) == []    # a section
+    assert reading.around_of(placed(), {}) == []         # not shown
+
+
+def test_a_table_is_shown_with_300_tokens_before_and_after_its_place():
+    long = replace(SECTION, text="x " * 5000 + "[p2_tbl5: Tabelle 3]"
+                   + " y" * 5000)
+    [part] = reading.around_of(placed(), {("section", 9): long}, words)
+    assert "[p2_tbl5: Tabelle 3]" in part.text
+    assert part.text.count("x") == reading.AROUND_TOKENS
+    assert part.text.count("y") == reading.AROUND_TOKENS
+
+
+def test_the_text_around_goes_on_into_the_sections_before_and_after():
+    before = Source("section", 8, "a " * 100, {"document_id": 7})
+    own = replace(SECTION, text="b " * 50 + "[p2_tbl5: Tabelle 3]"
+                  + " c" * 50)
+    after = Source("section", 10, "d " * 1000, {"document_id": 7})
+    passages = {("section", 8): before, ("section", 9): own,
+                ("table", 5): placed(), ("section", 10): after}
+    parts = reading.around_of(placed(), passages, words)
+    assert [p.owner_id for p in parts] == [8, 9, 10]
+    assert parts[0].text.count("a") == 100
+    assert parts[1].text == own.text
+    assert parts[2].text.count("d") == reading.AROUND_TOKENS - 50
+    # the failure by construction: fewer tokens, and the sections beside
+    # it are not reached
+    assert [p.owner_id for p in reading.around_of(
+        placed(), passages, words, tokens=40)] == [9]
 
 
 def test_the_text_around_a_table_keeps_the_other_tables_of_its_section():
     text = ("Vorher [p2_tbl1: Tabelle 2] Danach kommt die Tabelle. "
             "[p2_tbl5: Tabelle 3] Sie zeigt 2022. [p4_img2] Weiter 999 t CO2.")
     whole = replace(SECTION, text=text)
-    assert reading.around_of(placed(), {("section", 9): whole},
-                             4000).text == text
-    # the failure by construction: past the survey's two pages it is cut
-    assert len(reading.around_of(placed(), {("section", 9): whole},
-                                 40).text) == 40
+    [part] = reading.around_of(placed(), {("section", 9): whole}, words)
+    assert part.text == text
+    # the failure by construction: with fewer tokens it is cut
+    [part] = reading.around_of(placed(), {("section", 9): whole}, words,
+                               tokens=2)
+    assert part.text == "die Tabelle. [p2_tbl5: Tabelle 3] Sie zeigt"
 
 
 GAS = {"value": 1200, "quote": "| Erdgas | 1.200 | 800 | 2.000 |"}
@@ -911,8 +1047,7 @@ def test_a_reading_offers_no_tools_in_its_grammars_or_its_requests():
     for schema in (values_grammar(), values_grammar(drawn=True),
                    *(coordinate_grammar(name) for name in ASKED)):
         assert "more" not in properties_of(schema)
-    assert rejected({"value": None, "more": [{"get": "next"}]},
-                    values_grammar())
+    assert rejected(dict(NONE, more=[{"get": "next"}]), values_grammar())
     _read, calls = read_of(TEXT, values=ONE)
     assert calls and not any(key in payload for _task, payload in calls
                              for key in ("more", "hits", "not_found",
@@ -1227,3 +1362,45 @@ def test_a_correction_names_the_ways_that_pass_in_its_request():
                       not_in_quote="or_leave_out")
     assert got["failed"][0]["reason"] == say(
         "answer_not_in_quote_text", answer="Schule") + say("or_leave_out")
+
+
+# Promise (owner decision 2026-11-08: "höchstens zwei Seiten inklusive
+# Titel"): a section longer than two pages is read in pieces that hold at
+# most two pages with its heading counted in, AND none of its text is lost.
+def test_a_long_section_is_read_in_pieces_of_two_pages_with_its_heading():
+    from docpipe.extraction import survey
+    heading = "Wärmebedarf der Gebäude in der Stadt"
+    long = Source("section", 6, "Zeile mit Text\n" * 60,
+                  {"document_id": 7, "section_title": heading})
+    shown = []
+
+    def ask_values(source, parameter, context, read, thread, follow=None,
+                   drawn=False):
+        shown.append(source.text)
+        return {"values": [], "incomplete": False}
+    found = survey.Found(True, {("section", 6): survey.Answer(
+        ("section", 6), [EMISSION.uri])})
+    reader = reading.Reader(SPEC, ask_values, lambda *a, **k: {})
+    reader(7, found, {("section", 6): long}, 300)
+    assert len(shown) > 1 and "".join(shown) == long.text
+    assert all(len(text) + len(heading) <= 300 for text in shown)
+    # the failure by construction: without its heading counted, a piece
+    # fills the two pages alone
+    assert max(len(p) for p in survey.pieces(long.text, 300)) + len(
+        heading) > 300
+
+
+# Promise: the text around a table is counted with the served model's
+# tokenizer where the run has it, AND by the run's estimate where it has
+# none (a hosted model's tokenizer is its own).
+def test_the_text_around_is_counted_with_the_run_s_tokenizer_where_it_has_one(
+        monkeypatch):
+    from docpipe.extraction import runner
+
+    class Words:
+        def text(self, text):
+            return len(text.split())
+    monkeypatch.setattr(runner, "PROMPT_COUNTER", None)
+    assert runner.text_tokens("x" * 262) == 100
+    monkeypatch.setattr(runner, "PROMPT_COUNTER", Words())
+    assert runner.text_tokens("a b c") == 3

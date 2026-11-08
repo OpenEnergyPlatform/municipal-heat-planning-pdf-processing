@@ -2,12 +2,13 @@
 temperature: 0
 max_tokens: 8192
 ---
-Nenne den ersten Wert der Kennzahl aus "parameter", der in der Reihenfolge des Plans in dieser Passage steht.
+Nenne alle Werte der Kennzahl aus "parameter", die in dieser Passage stehen, in der Reihenfolge des Plans.
 Prüfe vor der Antwort, was die Definition ausschließt.
 Nimm nur Text aus "source" und der Überschrift ihres Abschnitts; was nur das Bild einer Abbildung zeigt, ist kein Text.
-Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! Steht kein Wert der Kennzahl in der Passage, antworte {"value":null}, sonst in dieser Form:
+Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! Steht kein Wert der Kennzahl in der Passage, antworte {"values":[],"incomplete":false}, sonst in dieser Form:
 {{example}}
 
+* "values" nennt jeden Wert einmal. Passen nicht alle Werte in deine Antwort, setze "incomplete" auf true; dann fragen wir nach den übrigen.
 * "value" ist, was die Kennzahl nach ihrer Definition fragt, nie eine Angabe zu einem Wert: Das Jahr einer Zahl ist kein Wert. Beim Planungsbüro ist es sein Name.
 * Werte des Plans zählen: was er über seine Gemeinde oder etwas darin angibt. Ein Beispiel aus einem anderen Ort, eine Vorgabe aus Gesetz, Förderrichtlinie oder Leitfaden und eine allgemeine Angabe, die für keinen bestimmten Ort gilt, zählen nicht, außer der Plan macht die Vorgabe zu seinem eigenen Ziel.
 * Eine Zahl steht mit Punkt als Dezimalzeichen, ohne Tausendertrennzeichen und nicht umgerechnet: Aus "126.656.132" wird 126656132, aus "1.036.767,8" wird 1036767.8. Mengenwort und Prozentzeichen gehören zur Einheit: "153 Millionen kWh" ist 153, "2,46 TWh" ist 2.46, "51 %" ist 51.
@@ -23,19 +24,25 @@ Zu dieser Abbildung kommt ihr Bild. "drawn" ist true, wo das Bild die Zahl nur z
 Nennt die Beschreibung des Bildes die Zahl, zitiere sie wie jede andere.
 
 <!-- with: around -->
-"around" ist der Text des Abschnitts um die Tabelle oder Abbildung. Auch daraus darfst du einen Wert nehmen.
+"around" ist der Text des Plans direkt vor und nach der Tabelle oder Abbildung. Auch daraus darfst du einen Wert nehmen.
 
 <!-- with: table_before -->
 "table_before" sind Titel und Kopf der Tabelle direkt davor, auf derselben Seite oder der Seite davor: Setzt "source" diese Tabelle fort, ist ihr Kopf auch der Kopf von "source".
 
 <!-- with: read -->
-Unter "read" stehen die Werte, die du in dieser Passage schon genannt hast: Nenne den ersten, der nicht darunter steht.
+Unter "read" stehen die Werte, die du in dieser Passage schon genannt hast: Nenne alle übrigen.
 
-<!-- follow-up: next -->
-Nenne den nächsten Wert der Kennzahl in dieser Passage, den du noch nicht genannt hast, in derselben Form. Steht keiner mehr darin, antworte {"value":null}.
+<!-- follow-up: go_on -->
+Deine Antwort war unvollständig. Nenne die übrigen Werte der Kennzahl in dieser Passage, die du noch nicht genannt hast, in derselben Form.
+
+<!-- follow-up: nothing_new -->
+Deine letzte Antwort enthielt keinen Wert, den du nicht schon genannt hattest. Nenne die Werte der Kennzahl in dieser Passage, die noch fehlen, in derselben Form. Fehlt keiner, antworte {"values":[],"incomplete":false}.
+
+<!-- follow-up: remaining -->
+Stehen in dieser Passage noch Werte der Kennzahl, die du nicht genannt hast? Nenne sie in derselben Form. Steht keiner mehr darin, antworte {"values":[],"incomplete":false}.
 
 <!-- follow-up: wrong -->
-Der Wert unter "wrong" ist kein Wert der Kennzahl; warum, steht unter "what". Nenne den nächsten Wert in dieser Passage, der zur Definition passt und den du noch nicht genannt hast, in derselben Form. Steht keiner mehr darin, antworte {"value":null}.
+Der Wert unter "wrong" ist kein Wert der Kennzahl; warum, steht unter "what". Nenne die Werte in dieser Passage, die zur Definition passen und die du noch nicht genannt hast, in derselben Form. Steht keiner darin, antworte {"values":[],"incomplete":false}.
 
 <!-- follow-up: corrections -->
-Dein letzter Wert ist nicht übernommen. Warum und was du tun sollst, steht unter "what".
+Diese Werte deiner letzten Antwort sind nicht übernommen. Warum und was du tun sollst, steht je Wert unter "what". Nenne sie in derselben Form.

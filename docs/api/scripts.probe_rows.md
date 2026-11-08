@@ -25,17 +25,18 @@ plans again. The plans' passages come from `--hits` or, with the database,
 from `--documents`. With the database and `--index` its search by a sentence ranks
 the plan as a run does; without them that search finds nothing.
 
-`--survey --read` runs the rebuilt harvest's survey and its reading of each
-parameter; `--comb` adds the search for what the reading left open, ranked as
-a run ranks it: the global index named by `--index` and the embedding model,
-on the CPU when the machine has no GPU.
+`--survey --read` runs the harvest's order of the passages and its reading
+of every passage for each parameter; `--comb` adds the search for what the
+reading left open. With `--index` the passages are ranked as a run ranks
+them: the global index it names and the embedding model, on the CPU when the
+machine has no GPU; without it they are read in the plan's order.
 
-`--survey` with `--documents` asks only the survey of each whole plan, the
-first pass of the rebuilt harvest, and keeps it in `<out>/survey`. With
-`--read` each parameter is then read in the passages the survey named for it,
-and the values are folded as the run folds them; after the fold, as in the
-run, the model is asked which names of a merged coordinate mean the same
-thing (`runner.make_namer`).
+`--survey` with `--documents` makes only the order of each whole plan's
+passages, the first step of the harvest, and keeps it in `<out>/survey`.
+With `--read` each parameter is then read in every passage, and the values
+are folded as the run folds them; after the fold, as in the run, the model
+is asked which names of a merged coordinate mean the same thing
+(`runner.make_namer`).
 
 A sandbox round needs CODE_EXEC_URL; `report.json` counts the rounds either way.
 
@@ -76,9 +77,9 @@ run ranks it, over the global index named by `--index`.
 def survey_over(passages: dict, spec, args, document_spec=None) -> list
 ```
 
-The survey of each document's whole plan, as the run asks it, and
-with --read the reading of each parameter after it and with --comb the
-combing, through the run's own steps (`surveyed.SurveyedHarvest`). Each
+The order of each document's whole plan, as the run makes it, and
+with --read the reading of every passage for each parameter after it and
+with --comb the combing, through the run's own steps (`surveyed.SurveyedHarvest`). Each
 document is asked with the lists it closes (*document_spec*), made once
 per document, as the run makes them.
 

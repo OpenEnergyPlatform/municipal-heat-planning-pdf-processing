@@ -9559,7 +9559,7 @@
     "type": "string"
    },
    "^extraction/(harvest|queries|anchors|rows|field|phrase|frame|survey|read_values|read_text|comb|match|settings|seek)$": {
-    "description": "sha256 of the prompt file; `harvest` is in stamps of an older release; `survey`, `read_values`, `read_text`, `comb`, `match`, `settings` and `seek` are the prompts of the survey flow",
+    "description": "sha256 of the prompt file; `harvest`, `survey` and `seek` are in stamps of an older release; `read_values`, `read_text`, `comb`, `match` and `settings` are the prompts of a harvest passage by passage",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
@@ -10750,28 +10750,19 @@
    {
     "additionalProperties": false,
     "properties": {
-     "budget": {
-      "type": "integer"
-     },
-     "by_parameter": {
-      "additionalProperties": {
-       "type": "integer"
-      },
-      "type": "object"
-     },
-     "complete": {
-      "type": "boolean"
-     },
-     "contexts": {
-      "type": "integer"
-     },
      "doc": {
       "type": "integer"
      },
-     "dropped": {
-      "type": "integer"
+     "first": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
      },
-     "none": {
+     "parameters": {
       "type": "integer"
      },
      "passages": {
@@ -10784,106 +10775,15 @@
       ]
      },
      "t": {
-      "const": "survey"
-     },
-     "tuples": {
-      "type": "integer"
-     },
-     "unanswered": {
-      "type": "integer"
+      "const": "order"
      }
     },
     "required": [
      "t",
      "doc",
      "passages",
-     "contexts",
-     "budget",
-     "none",
-     "dropped",
-     "unanswered",
-     "complete",
-     "by_parameter",
-     "tuples"
-    ],
-    "type": "object"
-   },
-   {
-    "additionalProperties": false,
-    "properties": {
-     "answered_at": {
-      "type": "number"
-     },
-     "asked_at": {
-      "type": "number"
-     },
-     "attempt": {
-      "type": "integer"
-     },
-     "completion_tokens": {
-      "type": [
-       "integer",
-       "null"
-      ]
-     },
-     "corrections": {
-      "type": "integer"
-     },
-     "doc": {
-      "type": "integer"
-     },
-     "figure": {},
-     "group": {
-      "type": [
-       "string",
-       "null"
-      ]
-     },
-     "input": {
-      "type": "object"
-     },
-     "kind": {},
-     "ms": {
-      "type": "integer"
-     },
-     "once": {
-      "type": "boolean"
-     },
-     "output": {
-      "type": "object"
-     },
-     "owner": {},
-     "parameter": {
-      "type": [
-       "string",
-       "null"
-      ]
-     },
-     "passages": {},
-     "prompt_tokens": {
-      "type": [
-       "integer",
-       "null"
-      ]
-     },
-     "round": {
-      "type": "integer"
-     },
-     "rows": {},
-     "sent_at": {
-      "type": "number"
-     },
-     "t": {
-      "const": "survey_ask"
-     },
-     "value": {
-      "type": "string"
-     }
-    },
-    "required": [
-     "t",
-     "doc",
-     "attempt"
+     "parameters",
+     "first"
     ],
     "type": "object"
    },
@@ -11632,85 +11532,6 @@
       "type": "number"
      },
      "t": {
-      "const": "seek_free_ask"
-     },
-     "value": {
-      "type": "string"
-     }
-    },
-    "required": [
-     "t",
-     "doc",
-     "attempt"
-    ],
-    "type": "object"
-   },
-   {
-    "additionalProperties": false,
-    "properties": {
-     "answered_at": {
-      "type": "number"
-     },
-     "asked_at": {
-      "type": "number"
-     },
-     "attempt": {
-      "type": "integer"
-     },
-     "completion_tokens": {
-      "type": [
-       "integer",
-       "null"
-      ]
-     },
-     "corrections": {
-      "type": "integer"
-     },
-     "doc": {
-      "type": "integer"
-     },
-     "figure": {},
-     "group": {
-      "type": [
-       "string",
-       "null"
-      ]
-     },
-     "input": {
-      "type": "object"
-     },
-     "kind": {},
-     "ms": {
-      "type": "integer"
-     },
-     "once": {
-      "type": "boolean"
-     },
-     "output": {
-      "type": "object"
-     },
-     "owner": {},
-     "parameter": {
-      "type": [
-       "string",
-       "null"
-      ]
-     },
-     "passages": {},
-     "prompt_tokens": {
-      "type": [
-       "integer",
-       "null"
-      ]
-     },
-     "round": {
-      "type": "integer"
-     },
-     "rows": {},
-     "sent_at": {
-      "type": "number"
-     },
-     "t": {
       "const": "phrase_ask"
      },
      "value": {
@@ -12242,42 +12063,6 @@
    {
     "additionalProperties": false,
     "properties": {
-     "doc": {
-      "type": "integer"
-     },
-     "kind": {
-      "enum": [
-       "section",
-       "table",
-       "figure"
-      ]
-     },
-     "owner": {
-      "type": "integer"
-     },
-     "parameter": {
-      "type": "string"
-     },
-     "rank": {
-      "minimum": 1,
-      "type": "integer"
-     },
-     "t": {
-      "const": "seek"
-     }
-    },
-    "required": [
-     "t",
-     "doc",
-     "parameter",
-     "kind",
-     "rank"
-    ],
-    "type": "object"
-   },
-   {
-    "additionalProperties": false,
-    "properties": {
      "asked": {
       "type": "integer"
      },
@@ -12308,46 +12093,6 @@
      "hits",
      "fetched",
      "refused"
-    ],
-    "type": "object"
-   },
-   {
-    "additionalProperties": false,
-    "properties": {
-     "asked": {
-      "type": "integer"
-     },
-     "doc": {
-      "type": "integer"
-     },
-     "fetched": {
-      "type": "integer"
-     },
-     "found": {
-      "type": "integer"
-     },
-     "parameter": {
-      "type": "string"
-     },
-     "t": {
-      "const": "seek_free"
-     },
-     "unknown": {
-      "type": "integer"
-     },
-     "walked": {
-      "type": "integer"
-     }
-    },
-    "required": [
-     "t",
-     "doc",
-     "parameter",
-     "walked",
-     "asked",
-     "found",
-     "fetched",
-     "unknown"
     ],
     "type": "object"
    },

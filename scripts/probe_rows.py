@@ -23,17 +23,18 @@ plans again. The plans' passages come from `--hits` or, with the database,
 from `--documents`. With the database and `--index` its search by a sentence ranks
 the plan as a run does; without them that search finds nothing.
 
-`--survey --read` runs the rebuilt harvest's survey and its reading of each
-parameter; `--comb` adds the search for what the reading left open, ranked as
-a run ranks it: the global index named by `--index` and the embedding model,
-on the CPU when the machine has no GPU.
+`--survey --read` runs the harvest's order of the passages and its reading
+of every passage for each parameter; `--comb` adds the search for what the
+reading left open. With `--index` the passages are ranked as a run ranks
+them: the global index it names and the embedding model, on the CPU when the
+machine has no GPU; without it they are read in the plan's order.
 
-`--survey` with `--documents` asks only the survey of each whole plan, the
-first pass of the rebuilt harvest, and keeps it in `<out>/survey`. With
-`--read` each parameter is then read in the passages the survey named for it,
-and the values are folded as the run folds them; after the fold, as in the
-run, the model is asked which names of a merged coordinate mean the same
-thing (`runner.make_namer`).
+`--survey` with `--documents` makes only the order of each whole plan's
+passages, the first step of the harvest, and keeps it in `<out>/survey`.
+With `--read` each parameter is then read in every passage, and the values
+are folded as the run folds them; after the fold, as in the run, the model
+is asked which names of a merged coordinate mean the same thing
+(`runner.make_namer`).
 
 A sandbox round needs CODE_EXEC_URL; `report.json` counts the rounds either way.
 """
@@ -95,9 +96,9 @@ def ranking(args):
 
 
 def survey_over(passages: dict, spec, args, document_spec=None) -> list:
-    """The survey of each document's whole plan, as the run asks it, and
-    with --read the reading of each parameter after it and with --comb the
-    combing, through the run's own steps (`surveyed.SurveyedHarvest`). Each
+    """The order of each document's whole plan, as the run makes it, and
+    with --read the reading of every passage for each parameter after it and
+    with --comb the combing, through the run's own steps (`surveyed.SurveyedHarvest`). Each
     document is asked with the lists it closes (*document_spec*), made once
     per document, as the run makes them."""
     from docpipe.extraction import fields, runner, surveyed
@@ -125,23 +126,17 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
     rank = seek = None
     profile = active_profile()
     own = profile.component("extraction", "FRONT_PAGE_PARAMETERS") or ()
-    if args.comb:
-        if not args.read or args.index is None:
-            raise SystemExit("--comb needs --read and --index")
+    if args.comb and (not args.read or args.index is None):
+        raise SystemExit("--comb needs --read and --index")
+    if args.index is not None:
         rank = ranking(args)
         seek = runner.make_seek_probes(
             own, runner.document_context_of(
                 args.db, profile.component("extraction", "document_context")))
 
     def made_survey(doc_spec, only, scope):
-        made = runner.make_survey(args.db, runner.narrow_spec(doc_spec, only),
-                                  args.out, every=every,
-                                  image_root=args.image_root, scope=scope)
-        if made is None:
-            raise SystemExit("no survey: the profile writes no survey prompt "
-                             "or its spec names no groups")
-        made.pool = pool
-        return made
+        return runner.make_survey(runner.narrow_spec(doc_spec, only),
+                                  args.out, rank, every, seek, scope=scope)
 
     def made_reader(doc_spec):
         made = runner.make_reader(doc_spec, args.image_root)
@@ -151,37 +146,31 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
         return made
 
     def made_comber(doc_spec):
-        if rank is None:
+        if not args.comb:
             return None
-        made = runner.make_comber(doc_spec, rank, seek)
+        made = runner.make_comber(doc_spec, rank)
         if made is None:
             raise SystemExit("no combing: the profile writes no comb prompt")
         made.pool = pool
         return made
 
-    # The plan's years, the line of its title page, its settings and the
-    # model's own search for a parameter the walk read no value of, as the
+    # The plan's years, the line of its title page and its settings, as the
     # run asks them (`runner.harvest`).
     whole = surveyed.SurveyedHarvest(
         spec, made_survey, made_reader, made_comber,
         lambda document: every(document, set()),
         runner.make_page_count(args.db), spec_for=specs.__getitem__,
-        front=own,
-        title=profile.component("extraction", "FRONT_PAGE_TITLE"),
         make_years=lambda doc_spec: runner.make_years(doc_spec, rank),
         title_page_of=runner.make_title_page(args.db, profile),
-        make_settings=lambda doc_spec: runner.make_settings(doc_spec, rank),
-        make_seeker=lambda doc_spec: (runner.make_seeker(doc_spec, rank)
-                                      if rank is not None else None))
+        make_settings=lambda doc_spec: runner.make_settings(doc_spec, rank))
     names = sorted({slot.name for parameter in spec.parameters
                     for slot in fields.axis_slots(parameter)}
                    | {"unit", "parameter", "value"})
 
     def one(document: int) -> dict:
         started = time.time()
-        survey = whole.survey_of(specs[document])
-        found = survey(document, passages[document])
-        answers = list(found.answers.values())
+        found = whole.survey_of(specs[document])(document,
+                                                 passages[document])
         own = specs[document]
         row = {"document": document, "passages": len(passages[document]),
                "seconds": round(time.time() - started, 1),
@@ -193,32 +182,15 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
                             for p in own.parameters
                             for name, axis in p.axes.items()
                             if axis.dynamic}},
-               "complete": found.complete,
-               "by_parameter": {p: len(found.passages_of(p))
-                                for p in survey.parameters},
-               "none": sum(1 for a in answers if not a.parameters),
-               "dropped": sum(len(a.dropped) for a in answers),
-               "unanswered": len(found.unanswered),
-               "tuples": {name: sum(len(a.tuples.get(name, ()))
-                                    for a in answers)
-                          for name in survey.slots}}
+               # Each parameter's first passages, best first.
+               "first": {p.uri: [list(owner) for owner
+                                 in found.passages_of(p.uri)[:5]]
+                         for p in own.parameters}}
         if not args.read:
             return row
         read_started = time.time()
         taken = whole(document)
         reads, combed = taken.reads, taken.combed
-        # The parameters the survey named no passage for, each with every
-        # passage the walk down its search's list read it in, in rank order.
-        row["sought"] = {uri: [list(owner) for owner in owners]
-                         for uri, owners
-                         in surveyed.walks_of(taken.sought).items()}
-        # What a publication says of itself, each with the passages of its
-        # first pages read for it besides those the survey named, page by
-        # page.
-        row["front"] = {uri: [list(owner) for owner
-                              in taken.front.passages_of(uri)]
-                        for uri in whole.front
-                        if taken.front.passages_of(uri)}
         report = DocumentReport(document_id=document,
                                 owners_harvested=taken.passages,
                                 planned={surveyed.STAGE: taken.passages},
@@ -329,15 +301,17 @@ def main() -> int:
     parser.add_argument("--compute", type=Path,
                         help="the compute step over this stored probe")
     parser.add_argument("--survey", action="store_true",
-                        help="with --documents: only the survey of each plan")
+                        help="with --documents: only the order of each "
+                             "plan's passages")
     parser.add_argument("--read", action="store_true",
-                        help="with --survey: read each parameter after it")
+                        help="with --survey: read every passage for each "
+                             "parameter after it")
     parser.add_argument("--comb", action="store_true",
                         help="with --read: search for what the reading left "
                              "open (needs --index)")
     parser.add_argument("--index", type=Path, default=None,
-                        help="with --comb or --compute: the global FAISS "
-                             "index")
+                        help="the global FAISS index: ranks the passages, "
+                             "and is needed by --comb and --compute")
     args = parser.parse_args()
 
     from docpipe.extraction import runner, trace

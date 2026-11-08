@@ -19,9 +19,10 @@ numbers a report and the ontology side can act on:
   filled, which is what a coordinate costs;
 - the reasons answers were dropped, per axis;
 - the open questions of the compute step, per kind and how they ended;
-- the survey flow: requests, tokens and second rounds per stage, the
-  survey's passages, the readings per reason unread, and the combing's
-  coordinates open, filled and exhausted;
+- the harvest passage by passage: requests, tokens and second rounds per
+  stage, the passages each document was read in and for how many
+  parameters, the readings per reason unread, and the combing's coordinates
+  open, filled and exhausted;
 - how many requests were with the server at once, on average and at most,
   and the seconds they spent with it and waiting for a place, all and per
   stage; and per stage the requests answered with the answer of the same
@@ -201,11 +202,8 @@ def from_traces(trace_dirs: Iterable[Path],
     from_table = 0
     computed: dict = defaultdict(Counter)
     completed: Counter = Counter()
-    sought: Counter = Counter()
-    walked: Counter = Counter()
     stages: dict = defaultdict(Counter)
-    surveyed: Counter = Counter()
-    survey_by_parameter: Counter = Counter()
+    ordered: Counter = Counter()
     readings: Counter = Counter()
     unread_why: Counter = Counter()
     refused_first: Counter = Counter()
@@ -250,13 +248,6 @@ def from_traces(trace_dirs: Iterable[Path],
                         str(event.get("outcome"))] += 1
                 elif kind == "completion":
                     completed[str(event.get("outcome"))] += 1
-                elif kind == "seek":
-                    # One event per passage the walk down a search's list
-                    # read; the first of a document's is `rank` 1, and a
-                    # trace from before the walk names no rank.
-                    walked[str(event.get("parameter"))] += 1
-                    if _int(event, "rank") <= 1:
-                        sought[str(event.get("parameter"))] += 1
                 elif isinstance(kind, str) and kind.endswith(ASK) \
                         and len(kind) > len(ASK):
                     stage = kind[:-len(ASK)]
@@ -273,16 +264,11 @@ def from_traces(trace_dirs: Iterable[Path],
                         event, "completion_tokens")
                     stages[stage]["second_rounds"] += (
                         _int(event, "corrections") > 0)
-                elif kind == "survey":
-                    surveyed["documents"] += 1
-                    surveyed["complete"] += bool(event.get("complete"))
-                    for key in ("passages", "contexts", "none", "dropped",
-                                "unanswered"):
-                        surveyed[key] += _int(event, key)
-                    survey_by_parameter.update(
-                        {str(p): n for p, n in
-                         (event.get("by_parameter") or {}).items()
-                         if isinstance(n, int)})
+                elif kind == "order":
+                    ordered["documents"] += 1
+                    ordered["passages"] += _int(event, "passages")
+                    ordered["readings"] += (_int(event, "passages")
+                                            * _int(event, "parameters"))
                 elif kind == "read":
                     readings["readings"] += 1
                     if event.get("unread"):
@@ -315,11 +301,6 @@ def from_traces(trace_dirs: Iterable[Path],
         # Documents a profile completed from outside them, by what the
         # lookup came to.
         "completions_by_outcome": dict(completed),
-        # Parameters the survey named no passage for, searched for in the
-        # whole plan, per parameter (documents), and the passages the walk
-        # down the search's list read them in (passages).
-        "parameters_sought_by_parameter": dict(sought),
-        "passages_sought_by_parameter": dict(walked),
         # Where the plans' passages came from: a search or a found place.
         "passages_planned_by_origin": dict(planned),
         "requests_and_fills_by_axis_stage": {
@@ -345,18 +326,13 @@ def from_traces(trace_dirs: Iterable[Path],
         # Requests with the server at once, and the seconds with it and
         # waiting for a place (`at_once`).
         "requests_at_once": at_once(timed),
-        # Documents surveyed and completely, passages found, contexts sent,
-        # passages carrying no parameter, passages without an answer,
-        # answers not taken, and passages per parameter.
-        "survey": {
-            "documents": surveyed["documents"],
-            "complete": surveyed["complete"],
-            "passages": surveyed["passages"],
-            "contexts": surveyed["contexts"],
-            "passages_without_parameter": surveyed["none"],
-            "passages_unanswered": surveyed["unanswered"],
-            "answers_not_taken": surveyed["dropped"],
-            "passages_by_parameter": dict(survey_by_parameter)},
+        # Documents ordered (survey.py), their passages, and the readings
+        # that order planned: each passage for each parameter (passages x
+        # parameters).
+        "order": {
+            "documents": ordered["documents"],
+            "passages": ordered["passages"],
+            "readings_planned": ordered["readings"]},
         # Readings (one passage for one parameter), the readings that came to
         # no reply per reason, values read, coordinates left unanswered and
         # the check's refusals of the first answer per reason. A reading has

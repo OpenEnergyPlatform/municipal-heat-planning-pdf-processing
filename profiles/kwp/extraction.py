@@ -54,13 +54,10 @@ SLICE = {"quantity": kept_quantities(), "year": None}
 
 
 # What a plan says about itself: asked once more over the opening of the
-# document in a harvest field by field, read from the first page on until a
-# title came in a harvest from the survey (`surveyed.front_walk`, with
-# FRONT_PAGE_TITLE), and searched with a sentence written for this plan
-# where the survey named no passage for it (`runner.make_seek_probes`, owner
-# decisions 2026-11-05). The spec asks for no such field of a heat plan, so
-# nothing is read from the front and every parameter is searched with a
-# sentence written once per run.
+# document in a harvest field by field, and its passages ranked with a
+# sentence written for this plan (`runner.make_seek_probes`, owner decisions
+# 2026-11-05 and 2026-11-08). The spec asks for no such field of a heat
+# plan, so every parameter is ranked with a sentence written once per run.
 FRONT_PAGE_PARAMETERS: tuple = ()
 
 # Every reading request shows the line of the plan's title page that names
@@ -319,11 +316,7 @@ PHRASES = {
         'mehr als eine davon druckt die Zahl: {values}. Gib nur diese '
         'Einträge noch einmal an, jeden mit genau der einen Zeile, in der '
         'er steht, als "quote".'),
-    # eine Runde der Werte einer Passage, je ein Wert
-    "value_already_read": (
-        'Diesen Wert hast du schon genannt: {value} mit dem Zitat {quote!r}. '
-        'Nenne den nächsten Wert, den du noch nicht genannt hast, oder '
-        'antworte {{"value":null}}.'),
+    # die Werte einer Passage
     "value_not_kept": (
         'Gelesen ist dieser Wert "{given}" und kein Wert aus "parameter": '
         'Er ist falsch gelesen.'),
@@ -333,9 +326,7 @@ PHRASES = {
         'abgeschrieben ist, die ihn druckt. Bei einem Parameter mit Liste ist '
         '"value" einer ihrer Einträge, oder "", wo keiner passt, und das Wort '
         'der Passage dafür steht in "value_raw". Steht kein solcher Wert in '
-        'der Passage, nenne stattdessen den nächsten Wert, den du noch nicht '
-        'genannt hast, oder antworte {{"value":null}}, wenn keiner mehr '
-        'kommt.'),
+        'der Passage, lass ihn weg.'),
     "quote_not_unique": (
         'Dein "quote" {quote!r} steht mehr als einmal in dem, was du '
         'bekommen hast, und sagt so nicht, welche Zahl du meinst. Nenne '
@@ -346,11 +337,6 @@ PHRASES = {
         'Dein "quote" {quote!r} enthält {value} mehr als einmal und sagt so '
         'nicht, welche davon du meinst. Nenne diesen Wert noch einmal mit '
         'einem "quote", das ihn genau einmal enthält.'),
-    # die eigene Suche des Modells nach einer Kennzahl, nach den gezeigten ids
-    "place_unknown": (
-        'Kein Treffer und keine Passage dieses Gesprächs hat die id {id!r}. '
-        'Nenne jede Passage, die du gefunden hast, mit der id, unter der sie '
-        'gezeigt wurde.'),
     "shorter_field": (
         'Fasse Zeilen mit derselben Antwort in "groups" zusammen und '
         'zitiere nur die kurze Stelle, an der die Angabe steht.'),

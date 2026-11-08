@@ -239,16 +239,16 @@ shipped profile provides.
 | Reading the values out | `extraction.NOT_EXTRACTED` | optional (`component`), read by `docpipe preflight`: a mapping `(shape, property)` to one sentence, the properties of the profile's shapes it leaves out on purpose | not provided | 21 entries, each with its reason |
 | Reading the values out | `extraction.shapes_files` | optional (`component`), read by `docpipe preflight`: a callable returning the SHACL files the graph is held against | not provided; the shapes line says "skipped" | the shapes file of the last refresh of the OEKG sources |
 | Reading the values out | `extraction.SPEC_PATH` | required in practice; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:5433-5436`) | `extraction_spec.json` | `extraction_spec.json` |
-| Reading the values out | `extraction.SLICE` | optional (`component`); no step reads it since 2026-11-08, the survey flow has no slice gate | declared, `{"quantity": ..., "year": None}`, and not read | not provided |
+| Reading the values out | `extraction.SLICE` | optional (`component`); no step reads it since 2026-11-08, the harvest has no slice gate | declared, `{"quantity": ..., "year": None}`, and not read | not provided |
 | Reading the values out | `extraction.FRAME` | optional (`component`, `runner.main`): the frame coordinates, the ones the plan's base and target years date a value by | `("scenario", "year")`; each value is asked them for itself | not provided |
-| Reading the values out | `extraction.BASE_YEAR`, `extraction.TARGET_YEAR` | optional (`component`): which pairs of the survey are the plan's own state and its target; they only say where the request for the plan's years starts to look. A year answer naming only the plan's word for one of them ("Basisjahr", "Zieljahr") is read, in the combing's message for a year nothing found, when its number is one of the plan's years | `{"scenario": "status_quo"}` and `{"scenario": "target"}` | not provided; no state has years |
+| Reading the values out | `extraction.BASE_YEAR`, `extraction.TARGET_YEAR` | optional (`component`): which frame pairs are the plan's own state and its target; they only say where the request for the plan's years starts to look. A year answer naming only the plan's word for one of them ("Basisjahr", "Zieljahr") is read, in the combing's message for a year nothing found, when its number is one of the plan's years | `{"scenario": "status_quo"}` and `{"scenario": "target"}` | not provided; no state has years |
 | Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:5505`) | not provided | the study regions this publication names, out of 249 (`profiles/scenarios/regions.json`) |
 | Reading the values out | `extraction.document_context` | optional (`component`, `docpipe/extraction/runner.py:5510`) | the plan's own municipality name | not provided |
 | The knowledge graph | `kg.make_serializer` | optional for `--serialize` (`component`, `docpipe/extraction/runner.py:5371`); without one the generic writer built from the spec's `graph` block is used, and a profile with neither is refused with `SystemExit` (`docpipe/extraction/runner.py:5379-5383`) | tuples to MHPKG Turtle | tuples to OEKG Turtle |
 | The answer app | `kg.VALUE_QUERY` plus six more attributes, and `inference.ROUTE_NOTES` | optional; absent returns `None` (`component`, `docpipe/inference/kg_route.py:104-106`), present but missing any of the other seven raises `LookupError` instead (`111-114`), all eight present builds the route | provided; the app can answer a coordinate question straight from the graph | not provided; the app never queries a graph |
 
 Two entries of `extraction` say more than the table. `extraction.PHRASES` names
-the key of a list as well as its sentences. The survey's refusal of a pair
+the key of a list as well as its sentences. A frame pair's refusal
 (`frame_not_an_option`) names the list of a closed coordinate through
 `say("frame_options", slot=<coordinate name>)`, and `frame_options` is one of the
 phrases a profile has to have. `kwp` and `scenarios` say `"scenarios"`, one list
@@ -298,8 +298,8 @@ A file that names a template in its front matter, `template: review`, is a parts
 file, and `docpipe/prompts.py` puts it together with the template of the
 profile's language when the prompt is loaded. A request, a stamp and
 `scripts/render_prompts.py` see the composed prompt and never the two halves.
-The other extraction prompts (the survey, the readings, the combing and its
-check, the settings, the years, the seek, the naming, the compute, `phrase` and
+The other extraction prompts (the readings, the combing and its
+check, the settings, the years, the naming, the compute, `phrase` and
 `anchors`) and every prompt of the other stages are plain files, read as they are
 written.
 

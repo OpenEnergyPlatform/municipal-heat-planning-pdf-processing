@@ -1,7 +1,7 @@
 """A reply that parses but lacks a key its schema requires at the top is not
 the object that was asked for: it is asked again as missing_key, the retry
 naming the key, in every request of the stage that goes out with a schema
-(the survey and the two reading requests). A
+(the two reading requests). A
 reply that has every key the top requires is taken as it is, whatever it
 leaves out below. The combing requires no key: a coordinate it did not find
 is left out, so `{}` is its reply that found nothing and asks for nothing
@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from docpipe.extraction import combing, reading, runner, survey
+from docpipe.extraction import combing, reading, runner
 from docpipe.extraction.spec import load as load_spec
 
 SPEC = load_spec(json.loads(
@@ -54,10 +54,7 @@ def told(conversation) -> str:
 
 
 REQUESTS = ((reading.values_response_format(EMISSION, True), "read_values",
-             "value", {"value": None}),
-            (survey.response_format(survey.parameters_of(SPEC),
-                                    survey.tuple_slots(SPEC)), "survey",
-             "parameters", {"parameters": ["out:none"]}),
+             "values", {"values": [], "incomplete": False}),
             (reading.text_response_format(SLOTS), "read_text", SLOTS[0].name,
              {slot.name: {"value": "out:unstated"} for slot in SLOTS}))
 COMB = combing.comb_response_format(SLOTS)
@@ -74,14 +71,12 @@ def test_a_reply_without_its_keys_is_asked_again_naming_the_key(faults):
 
 
 def test_a_reply_in_a_wrapper_the_reply_lost_is_asked_again(faults):
-    # Owner decision 2026-11-06: no wrapper. The survey's reply as it was
-    # before and a value inside "next" lack the key their top requires.
+    # Owner decision 2026-11-06: no wrapper. The values of a passage inside
+    # "passages" lack the keys their top requires.
     for shape, where, key, wrapped, whole in (
-            (REQUESTS[1][0], "survey", "parameters",
-             {"passages": {"P1": {"parameters": ["out:none"]}}},
-             {"parameters": ["out:none"]}),
-            (REQUESTS[0][0], "read_values", "value", {"next": None},
-             {"value": None})):
+            (REQUESTS[0][0], "read_values", "values",
+             {"passages": {"P1": {"values": [], "incomplete": False}}},
+             {"values": [], "incomplete": False}),):
         faults.clear()
         client, sent = replying(json.dumps(wrapped), json.dumps(whole))
         assert runner.ask_in_grammar(client, PROMPT, [], shape, 7, where,

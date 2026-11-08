@@ -63,6 +63,18 @@ NAMED = {"value": "Klimaschutzagentur Nord",
 ELSEWHERE = dict(NAMED, quote="Die Klimaschutzagentur Nord hat erstellt")
 
 
+def listed(reply):
+    """A values reply as the run asks it (owner decisions 2026-11-08: every
+    value of a passage in one answer): a fixture's one value as an answer
+    that lists it, {"value": null} as one that lists none; a whole answer,
+    or no answer, as given."""
+    if not isinstance(reply, dict) or "values" in reply:
+        return reply
+    if reply.get("value") is None:
+        return {"values": [], "incomplete": False}
+    return {"values": [reply], "incomplete": False}
+
+
 def asked_for(parameter, *replies):
     """Each values request reading *parameter* in TABLE, as (the keys its
     grammar takes for a value, the corrections it carried), and what the
@@ -72,10 +84,10 @@ def asked_for(parameter, *replies):
 
     def ask_values(source, parameter, context, read, thread, follow=None,
                    drawn=False):
-        keys = reading.values_response_format(parameter)["json_schema"][
-            "schema"]["anyOf"][0]["properties"]
+        keys = reading.value_entry_schema(parameter)["properties"]
         asked.append((set(keys), (follow or {}).get("corrections")))
-        return answered(thread, replies[min(len(asked), len(replies)) - 1])
+        return answered(thread, listed(replies[min(len(asked),
+                                                   len(replies)) - 1]))
 
     read = reading.Reader(KWP, ask_values, lambda *a, **k: {}).read(
         7, parameter, TABLE, [], {("table", 5): TABLE})
@@ -120,8 +132,8 @@ def test_a_category_request_shows_its_entries_and_a_text_request_no_list():
 
 
 def grammar(parameter):
-    return reading.values_response_format(parameter)["json_schema"][
-        "schema"]
+    """One value as an answer lists it (`reading.value_entry_schema`)."""
+    return reading.value_entry_schema(parameter)
 
 
 def one(value, **given):

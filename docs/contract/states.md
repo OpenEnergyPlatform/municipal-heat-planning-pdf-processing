@@ -39,7 +39,7 @@ after the reading and the combing, owner decision 2026-11-07); a coordinate
 asked and left open loses its answer, quote and state to it. The years between
 the first and the last year of a span the plan states are `derived` too, from the
 span (`reading.span_rows`). Which parameter a row belongs to is a separate
-decision, `derive_parameter`; in the survey flow nobody asks it: a row is read
+decision, `derive_parameter`; in this flow nobody asks it: a row is read
 for the one field its request names, and the fold writes its `parameter_state` as
 `derived` (`pipeline.fold_claims`, owner decision 2026-11-05). `out_of_slice` is
 written when a coordinate with an entry a value must have (`keep`) reads the row

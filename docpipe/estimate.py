@@ -59,7 +59,7 @@ COMMANDS = ("ingest", "preprocess", "refine", "visuals", "chunk", "extract")
 # runner.py writes them; a frame event without tokens is the summary of a
 # frame search and no request.
 # The answered requests of either flow: field by field, and every stage that
-# writes `<stage>_ask` (`schema.ASK_STAGES`: the survey, the readings, the
+# writes `<stage>_ask` (`schema.ASK_STAGES`: the readings, the
 # combing and its check, the naming, the plan's years, the search sentences,
 # the review and the compute step), so a stage added there is counted here.
 # `frame_ask` is not here: the frame event counts the same requests, and a

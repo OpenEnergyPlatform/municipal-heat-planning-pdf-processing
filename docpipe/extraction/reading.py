@@ -1,31 +1,35 @@
 """
-reading.py: The values of one parameter in the passages the survey named for
-it, one value per request: rounds name the values of a passage one by one,
-then each value is asked its coordinates one by one, each a message of the
-value's own conversation.
+reading.py: The values of one parameter in every passage of a plan: all
+values of a passage in one answer, then each value asked its coordinates
+one by one, each a message of the value's own conversation.
 
-Step 3 of the rebuilt harvest (owner decisions 2026-11-04, 2026-11-05 and
-2026-11-07). Every request has one task and reads exactly one value. A table
-is read like a section: the model repeats each value as the passage prints
-it, with a quote that pins it down, and code takes nothing from where it
-stands (owner decision 2026-11-07: "streich diese ganze Code Logik").
+Step 3 of the rebuilt harvest (owner decisions 2026-11-04, 2026-11-05,
+2026-11-07 and 2026-11-08). Every request has one task. A table is read like
+a section: the model repeats each value as the passage prints it, with a
+quote that pins it down, and code takes nothing from where it stands (owner
+decision 2026-11-07: "streich diese ganze Code Logik").
 
-A round shows the parameter in short (its `brief`), the whole passage (a table
-with its title, its head and all its rows, or the survey's piece of a
-section), the text around a table or figure, the line of the title page and
-the table the passage may continue, and asks for the next value not yet read,
-until the model says there is none. A value may stand in any passage the
-round showed; it is read from the one its quote stands in, which joins the
-reading's batch, so the fold checks it there (`pipeline.route_claims`). Its
-quote stands in what was shown exactly once and holds the value exactly
-once, each counted where it stands for itself and not as part of a longer
-name or number (`verify.times_quoted`, `verify.times_stated`):
-"410.662,44 | 1.109 | 6%" pins down the 1.109 of its row. A value the check
-refuses (its quote in no passage shown, its number not in its quote, whatever
-else the fold refuses of the value and its quote (`verify.value_refused`), a
-quote that does not pin it down) is asked once more with the reason; one
-named again is asked once more, and named again it ends the rounds. No
-request that reads has tools.
+The first message shows the parameter in short (its `brief`), the whole
+passage (a table with its title, its head and all its rows, or a piece of
+at most two pages of a section, its heading counted in), the plan's text
+around a table or figure (300 tokens before and after it, `around_of`), the
+line of the title page and the table the passage may continue, and asks for
+every value of the parameter in it, in one answer (owner decisions
+2026-11-08: asked one after another, the model stopped after the three
+values of the total row of a table of 21 values). An answer it marks as
+incomplete is asked to go on, one that brings nothing new then is told so
+once, and a passage with a value is asked twice whether more stand in it
+(`Reader._rounds`). A value may stand in any passage the request showed; it
+is read from the one its quote stands in, which joins the reading's batch,
+so the fold checks it there (`pipeline.route_claims`). Its quote stands in
+what was shown exactly once and holds the value exactly once, each counted
+where it stands for itself and not as part of a longer name or number
+(`verify.times_quoted`, `verify.times_stated`): "410.662,44 | 1.109 | 6%"
+pins down the 1.109 of its row. The values of an answer the check refuses
+(a quote in no passage shown, a number not in its quote, whatever else the
+fold refuses of a value and its quote (`verify.value_refused`), a quote that
+does not pin it down) are asked once more together, each with its reason; a
+value named before is no new one. No request that reads has tools.
 
 A number a figure only draws, as a bar, a segment, an area or a point of a
 curve, is a value of the plan and an estimate (owner decisions 2026-11-05 and
@@ -47,8 +51,8 @@ coordinates shows the titles of the last sections of the plan up to the
 value's place, its own last (`SECTION_TITLES`). The system prompt is what
 every message is told and the part of each field the first message carries.
 The rounds of a passage's values are a conversation as well: each later
-round asks for the next value after the answer it follows. A correction goes
-after the answer it is about, in its conversation.
+message asks for the values not named yet after the answer it follows. A
+correction goes after the answer it is about, in its conversation.
 
 With a pool, the conversations of a passage's values run side by side once
 its rounds have named them, as the passages do, and none waits for another
@@ -140,11 +144,20 @@ SECTION_TITLES = 10
 NOT_SHOWN = "quote_not_in_passage"
 
 # What a message that follows an answer in the same conversation carries
-# (owner decisions 2026-11-07, `thread.py`): the ask for the next value of a
-# passage, what the check refused of the answer, and, in the conversation for
-# what the reading left open (`combing.py`), the coordinate asked next.
-NEXT = "next"
+# (owner decisions 2026-11-07 and 2026-11-08, `thread.py`): the ask for the
+# values of a passage not named yet, after an answer the model marked as
+# incomplete (GO_ON), after one that named nothing new (NOTHING_NEW) and
+# once its values are named (REMAINING); what the check refused of the answer;
+# and, in the conversation for what the reading left open (`combing.py`),
+# the coordinate asked next.
+GO_ON = "go_on"
+NOTHING_NEW = "nothing_new"
+REMAINING = "remaining"
 COORDINATES = "coordinates"
+# How often a passage whose values are named is asked whether more stand in
+# it; the second only where the first brought one (owner decision
+# 2026-11-08: "Zwei Nachfragen, ob es noch übrige Werte gibt").
+REMAINING_ASKS = 2
 # A value its coordinates read as no value of its parameter (`fields.kept`),
 # asked for once more in its passage's rounds, told that it was read wrongly
 # and why (owner decision 2026-11-07: "noch einmal nachfragen mit dem
@@ -499,28 +512,113 @@ def known_shown(claim: dict, known: dict, passages: dict) -> list:
                                 wording)]
 
 
+# The plan's text a request shows around a table or figure, before it and
+# after it, in tokens (owner decisions 2026-11-08: "250 Token oben und
+# unten", then "Mach 300 Tokens daraus").
+AROUND_TOKENS = 300
+# Characters per token where no tokenizer counts them, set low so a text is
+# never estimated short: the estimate the run sizes its requests with as well
+# (`runner.PROMPT_CHARS_PER_TOKEN`).
+CHARS_PER_TOKEN = 2.62
+
+
+def estimated_tokens(text: str) -> int:
+    """The tokens of *text* by the run's estimate."""
+    return int(len(text or "") / CHARS_PER_TOKEN)
+
+
+def last_tokens(text: str, tokens: int, count: Callable) -> str:
+    """The end of *text* that *count* makes at most *tokens*, begun at a
+    word where the cut falls inside one."""
+    if count(text) <= tokens:
+        return text
+    low, high = 0, len(text)          # the most characters that fit
+    while low < high:
+        mid = (low + high + 1) // 2
+        if count(text[-mid:]) <= tokens:
+            low = mid
+        else:
+            high = mid - 1
+    out = text[-low:] if low else ""
+    space = out.find(" ")
+    return out[space + 1:] if 0 <= space < len(out) // 4 else out
+
+
+def first_tokens(text: str, tokens: int, count: Callable) -> str:
+    """The start of *text* that *count* makes at most *tokens*, ended at a
+    word where the cut falls inside one."""
+    if count(text) <= tokens:
+        return text
+    low, high = 0, len(text)
+    while low < high:
+        mid = (low + high + 1) // 2
+        if count(text[:mid]) <= tokens:
+            low = mid
+        else:
+            high = mid - 1
+    out = text[:low]
+    space = out.rfind(" ")
+    return out[:space] if space > len(out) * 3 // 4 else out
+
+
+def marker_span(text: str, block: str) -> Optional[tuple]:
+    """(start, end) of the place a table or figure stands in its section's
+    text ("[p18_tbl0: Tabelle 6: ...]"), None where it is not marked."""
+    if not block:
+        return None
+    at = text.find(f"[{block}")
+    if at == -1:
+        return None
+    end = text.find("]", at)
+    return at, (len(text) if end == -1 else end + 1)
+
+
 def around_of(source: Source, passages: dict,
-              budget: Optional[int]) -> Optional[Source]:
-    """The text of the section a table or figure stands in, as its request
-    shows it (owner decisions 2026-11-04 and 2026-11-05): the whole section,
-    other tables and figures of it included, when it fits *budget*, two
-    pages of the plan, else that many characters around the table's place
-    in it. The model reads from it what it needs: a cut to 200 characters on
-    each side would have hidden the text of 72 % of the quotes the m8 run
-    took from a table's section. None for a section, and for a table or
-    figure whose section is not among *passages*."""
+              count: Optional[Callable] = None,
+              tokens: int = AROUND_TOKENS) -> list:
+    """The plan's text around a table or figure as its requests show it
+    (owner decisions 2026-11-08): *tokens* of the text before its place and
+    as many after it, counted by *count* (the run's tokenizer, else
+    `estimated_tokens`), across the edge of its section into the sections
+    before and after. One passage per section the text comes from, in the
+    plan's order, each under its own section, so a quote from it cites the
+    section it stands in. [] for a section, and for a table or figure whose
+    section is not among *passages*."""
+    count = count or estimated_tokens
     provenance = source.provenance or {}
     parent = provenance.get("parent_section")
     if source.owner_kind == "section" or parent is None:
-        return None
-    section = passages.get(("section", int(parent)))
-    if section is None or not section.text:
-        return None
-    text = section.text
-    if budget and len(text) > budget:
-        block = provenance.get("block_id") or ""
-        text = window_around(text, f"[{block}", budget)
-    return replace(section, text=text)
+        return []
+    order = [s for s in passages.values() if s.owner_kind == "section"]
+    at = next((i for i, s in enumerate(order)
+               if s.owner_id == int(parent)), None)
+    if at is None or not (order[at].text or "").strip():
+        return []
+    own = order[at]
+    text = own.text or ""
+    span = marker_span(text, provenance.get("block_id") or "")
+    # Unmarked, it stands at the start of its section.
+    start, end = span if span is not None else (0, 0)
+    before = last_tokens(text[:start], tokens, count)
+    after = first_tokens(text[end:], tokens, count)
+    parts = [replace(own, text=before + text[start:end] + after, body=None)]
+    left = tokens - count(before)
+    for section in reversed(order[:at]):
+        if left <= 0:
+            break
+        piece = last_tokens(section.text or "", left, count)
+        if piece.strip():
+            parts.insert(0, replace(section, text=piece, body=None))
+        left -= count(piece)
+    left = tokens - count(after)
+    for section in order[at + 1:]:
+        if left <= 0:
+            break
+        piece = first_tokens(section.text or "", left, count)
+        if piece.strip():
+            parts.append(replace(section, text=piece, body=None))
+        left -= count(piece)
+    return [part for part in parts if (part.text or "").strip()]
 
 
 # What the second reading of a value shows beside it, the sections before and
@@ -531,7 +629,7 @@ def around_of(source: Source, passages: dict,
 NEAR = ("before", "after")
 # The fields of the follow-ups each kind of reading request sends, whose
 # words its prompt holds (`runner.FOLLOWS`).
-VALUE_FOLLOWS = (NEXT, CORRECTIONS, WRONG)
+VALUE_FOLLOWS = (GO_ON, NOTHING_NEW, REMAINING, CORRECTIONS, WRONG)
 TEXT_FOLLOWS = (CORRECTIONS,)
 BESIDE = ("title_page", "table_before")
 
@@ -911,11 +1009,11 @@ def values_payload(source: Source, parameter, context: dict,
     stands first). Nothing of the value's coordinates. The line of the
     title page that names the plan's own place stands before the passage,
     the same in a plan; the title and head of the table the passage may
-    continue after it (`beside_of`). The next value, and a value the check
-    refused, are asked after the answer in the same conversation (owner
-    decisions 2026-11-07); *read*, the values named so far, stands only in
-    a conversation begun anew because the old one no longer fit the
-    model's window (`Reader._rounds`). With *drawn*, a figure whose image
+    continue after it (`beside_of`). The values not named yet, and the
+    values the check refused, are asked after the answer in the same
+    conversation (owner decisions 2026-11-07 and 2026-11-08); *read*, the
+    values named so far, stands only in a conversation begun anew because
+    the old one no longer fit the model's window (`Reader._rounds`). With *drawn*, a figure whose image
     goes with the request says so ("image"), and the system prompt tells how
     a number only the image shows is read off it."""
     classes = value_classes(parameter)
@@ -931,17 +1029,15 @@ def values_payload(source: Source, parameter, context: dict,
             **({"read": list(read)} if read else {})}
 
 
-def values_response_format(parameter, drawn: bool = False) -> dict:
-    """The next value of the passage as the reply itself, with no wrapper
-    (owner decision 2026-11-06): its value and quote, its printed wording
-    only where the value is an entry of a list or a number (a free text value
-    is its own wording, `verify.wording_of`); {"value": null} where no
-    further value stands in it. A category value is one of its entries, or
-    "" where the model is unsure of them. With *drawn*, a figure whose image
-    goes with the request: always whether the image only draws the number
-    (`drawn`), and in place of a quote the sentence of what was read off the
-    image where no shown text states it (`reading`, owner decisions
-    2026-11-05 and 2026-11-07)."""
+def value_entry_schema(parameter, drawn: bool = False) -> dict:
+    """One value of a passage as a reply lists it: its value and quote, its
+    printed wording only where the value is an entry of a list or a number
+    (a free text value is its own wording, `verify.wording_of`). A category
+    value is one of its entries, or "" where the model is unsure of them.
+    With *drawn*, a figure whose image goes with the request: always whether
+    the image only draws the number (`drawn`), and in place of a quote the
+    sentence of what was read off the image where no shown text states it
+    (`reading`, owner decisions 2026-11-05 and 2026-11-07)."""
     classes = value_classes(parameter)
     if parameter.is_numeric:
         value = {"type": "number"}
@@ -958,13 +1054,23 @@ def values_response_format(parameter, drawn: bool = False) -> dict:
         properties["drawn"] = {"type": "boolean"}
         properties["reading"] = {"type": "string"}
         required = ["value", "drawn"]
-    entry = {"type": "object", "properties": properties,
-             "required": required, "additionalProperties": False}
-    end = {"type": "object", "properties": {"value": {"type": "null"}},
-           "required": ["value"], "additionalProperties": False}
-    # "value" at the top as well: a reply without it is asked again
-    # (`runner._lacking`).
-    schema = {"type": "object", "anyOf": [entry, end], "required": ["value"]}
+    return {"type": "object", "properties": properties,
+            "required": required, "additionalProperties": False}
+
+
+def values_response_format(parameter, drawn: bool = False) -> dict:
+    """The values of the passage not named yet as the reply itself (owner
+    decisions 2026-11-08: all of them in one answer): "values", each as
+    `value_entry_schema`, an empty list where none stands in it, and
+    "incomplete", true where the answer could not hold all of them, which
+    is asked to go on (`Reader._rounds`)."""
+    schema = {"type": "object",
+              "properties": {
+                  "values": {"type": "array",
+                             "items": value_entry_schema(parameter, drawn)},
+                  "incomplete": {"type": "boolean"}},
+              "required": ["values", "incomplete"],
+              "additionalProperties": False}
     return {"type": "json_schema",
             "json_schema": {"name": "values_reply", "schema": schema}}
 
@@ -975,42 +1081,57 @@ NUMBER_SAID = 12.5
 
 
 def values_example(parameter, drawn: bool = False) -> dict:
-    """The reply of a value request as its example shows it: a value read,
-    with exactly the keys `values_response_format` asks for this parameter
-    and this passage, in its order (owner decision 2026-11-06): a printed
-    value, so with *drawn* one the image does not only draw. The reply that
-    names no further value stays in the prompt's rule line, and one read off
-    an image in the part about the image."""
+    """The reply of a value request as its example shows it: one value
+    read, with exactly the keys `value_entry_schema` asks for this parameter
+    and this passage, in its order (owner decision 2026-11-06), and
+    "incomplete" false: a printed value, so with *drawn* one the image does
+    not only draw. The reply that names no value stays in the prompt's rule
+    line, and one read off an image in the part about the image."""
     entry = {"value": NUMBER_SAID if parameter.is_numeric else fields.SAID}
     if parameter.is_numeric or value_classes(parameter):
         entry["value_raw"] = fields.SAID
     entry["quote"] = fields.SAID
     if drawn:
         entry["drawn"] = False
-    return entry
+    return {"values": [entry], "incomplete": False}
 
 
-def claim_of(reply, drawn: bool = False) -> Optional[dict]:
-    """The value a round's reply names, as a row's claim, or None where it
-    names none: {"value": null}, or no object. Where the request sent the
-    image (*drawn*), whether the image only draws the number, and a reading
-    in place of a missing quote, which the switch `read_off` makes the
-    value's evidence (`verify.read_off`)."""
-    if not isinstance(reply, dict) or reply.get("value") is None:
+def claim_of(entry, drawn: bool = False) -> Optional[dict]:
+    """One value a reply lists, as a row's claim, or None where it names
+    none: a value null, or no object. Where the request sent the image
+    (*drawn*), whether the image only draws the number, and a reading in
+    place of a missing quote, which the switch `read_off` makes the value's
+    evidence (`verify.read_off`)."""
+    if not isinstance(entry, dict) or entry.get("value") is None:
         return None
-    claim = {"source": "Q1", "value": reply.get("value"),
-             "quote": reply.get("quote")}
-    if reply.get("value_raw"):
-        claim["value_raw"] = reply["value_raw"]
+    claim = {"source": "Q1", "value": entry.get("value"),
+             "quote": entry.get("quote")}
+    if entry.get("value_raw"):
+        claim["value_raw"] = entry["value_raw"]
     if drawn:
-        if isinstance(reply.get("drawn"), bool):
-            claim["drawn"] = reply["drawn"]
-        reading, quote = reply.get("reading"), reply.get("quote")
-        if isinstance(reading, str) and reading.strip() \
-                and not (isinstance(quote, str) and quote.strip()):
+        if isinstance(entry.get("drawn"), bool):
+            claim["drawn"] = entry["drawn"]
+        reading, quote = entry.get("reading"), entry.get("quote")
+        if isinstance(reading, str) and reading.strip()                 and not (isinstance(quote, str) and quote.strip()):
             claim.pop("quote")
             claim.update(reading=reading.strip(), read_off=True)
     return claim
+
+
+def claims_of(reply, drawn: bool = False) -> list:
+    """The values a reply lists, as claims (`claim_of`), in its order; []
+    where it lists none or is no object."""
+    if not isinstance(reply, dict) or not isinstance(reply.get("values"),
+                                                     list):
+        return []
+    return [claim for claim in (claim_of(entry, drawn)
+                                for entry in reply["values"])
+            if claim is not None]
+
+
+def incomplete(reply) -> bool:
+    """Did the model mark its answer as not holding every value?"""
+    return isinstance(reply, dict) and reply.get("incomplete") is True
 
 
 def _same_text(a, b) -> bool:
@@ -1065,9 +1186,10 @@ def value_failure(claim: dict, source: Source) -> Optional[str]:
 def round_failure(claim: dict, shown: list, read: list,
                   parameter, kind: str = "section") -> Optional[tuple]:
     """(kind, reason) of what the check refuses of a round's value of
-    *parameter*, or None: a value already read (`REPEATED`), the value
-    itself (`VALUE`: its quote in no passage of *shown*, its number not in
-    its quote, what the fold refuses of the value and its quote,
+    *parameter*, or None: a value already read (`REPEATED`, no new value
+    and nothing to tell: a list may name it again), the value itself
+    (`VALUE`: its quote in no passage of *shown*, its number not in its
+    quote, what the fold refuses of the value and its quote,
     `verify.value_refused`), or a quote that does not pin the value down
     (`UNIQUE`, owner decision 2026-11-07: it stands in what *shown* holds
     more than once, or holds the value more than once). Of a value read off
@@ -1076,10 +1198,7 @@ def round_failure(claim: dict, shown: list, read: list,
     the fold refuses, the model hears while it can still answer (owner
     decision 2026-11-05)."""
     if any(same_value(claim, other) for other in read):
-        named = claim.get("value")
-        return REPEATED, say("value_already_read",
-                             value=json.dumps(named, ensure_ascii=False),
-                             quote=claim.get("quote") or claim.get("reading"))
+        return REPEATED, ""
     if read_off(claim, kind):
         refused = value_refused(claim, parameter, "", owner_kind=kind)
         return (VALUE, say("value_rejected", reason=refused)) if refused \
@@ -1716,17 +1835,18 @@ class _Rounds:
 
 
 class Reader:
-    """(document_id, survey, passages) -> [Read], one per parameter and
-    passage the survey named for it.
+    """(document_id, found, passages) -> [Read], one per parameter and
+    passage *found* names for it (`survey.Ranking`: every passage).
 
-    Two kinds of request, each with one task and one value (owner
-    decisions 2026-11-04 and 2026-11-05), each the reply as a dict, CUT, or
-    None, and each a message of a conversation (`thread.Thread`, owner
-    decisions 2026-11-07): *ask_values(source, parameter, context, read,
-    thread, follow, drawn)* the first value of a passage not among *read*,
-    or, with *follow*, what follows the answer of *thread*: the next value,
-    a correction; with *drawn* the request sends the figure's image and
-    takes a value read off it. *ask_text(source, parameter, group, slots,
+    Two kinds of request, each with one task (owner decisions 2026-11-04
+    and 2026-11-05), each the reply as a dict, CUT, or None, and each a
+    message of a conversation (`thread.Thread`, owner decisions
+    2026-11-07): *ask_values(source, parameter, context, read, thread,
+    follow, drawn)* every value of a passage not among *read* (owner
+    decisions 2026-11-08), or, with *follow*, what follows the answer of
+    *thread*: the ask to go on, to say what is new, for more, a correction;
+    with *drawn* the request sends the figure's image and takes a value
+    read off it. *ask_text(source, parameter, group, slots,
     row, context, thread, follow)* one coordinate of that value (*slots*,
     one): the first message of the value's conversation, the message of
     its next coordinate, or, with *follow*, a correction. *context* is what
@@ -1751,7 +1871,8 @@ class Reader:
                  known: Optional[Callable] = None,
                  drawn: Optional[Callable] = None,
                  span_marks: Optional[dict] = None,
-                 pool=None, trace=None):
+                 pool=None, trace=None,
+                 count_tokens: Optional[Callable] = None):
         self.spec = spec
         self.ask_values = ask_values
         self.ask_text = ask_text
@@ -1762,6 +1883,7 @@ class Reader:
         self.drawn = drawn or (lambda source: False)
         self.pool = pool
         self.trace = trace
+        self.count_tokens = count_tokens
 
     def __call__(self, document_id: int, found, passages: dict,
                  budget: Optional[int] = None, *,
@@ -1769,9 +1891,11 @@ class Reader:
                  title_page: Optional[Source] = None,
                  settings: Optional[list] = None,
                  on_read: Optional[Callable] = None) -> list:
-        """One Read per parameter and passage the survey named for it. A
-        section or figure longer than *budget* characters, two pages of the
-        plan, is read in pieces of that size (`survey.pieces`). *bases* are
+        """One Read per parameter and passage *found* names for it, in the
+        order it names them (`survey.Ranking`). A section or figure longer
+        than *budget* characters, two pages of the plan, its heading counted
+        in, is read in pieces of that size (`survey.pieces`, owner decision
+        2026-11-08: "höchstens zwei Seiten inklusive Titel"). *bases* are
         the plan's base and target years as one request per plan read them
         (`years.PlanYears`), else those of the survey's pairs; *title_page*
         the line of its title page that names its own place, which every
@@ -1795,11 +1919,13 @@ class Reader:
                 if source is None:
                     continue
                 text = source.text or ""
-                if budget and source.owner_kind != "table" \
-                        and len(text) > budget:
+                room = budget - len((source.provenance or {}).get(
+                    "section_title") or "") if budget else None
+                if room and source.owner_kind != "table" \
+                        and len(text) > room:
                     jobs.extend((parameter, source, replace(source,
                                                             text=piece))
-                                for piece in pieces(text, budget))
+                                for piece in pieces(text, room))
                 else:
                     jobs.append((parameter, source, source))
 
@@ -1881,13 +2007,16 @@ class Reader:
     def context_of(self, source: Source, passages: dict,
                    budget: Optional[int] = None,
                    title_page: Optional[Source] = None) -> tuple:
-        """(what the requests of a passage show beside it, the section it
-        was cut from, the passages a coordinate may quote for what stands
-        beside it): the text around a table or figure (`around_of`), the
+        """(what the requests of a passage show beside it, the passages of
+        the text around it, the passages a coordinate may quote for what
+        stands beside it): the text around a table or figure (`around_of`), the
         titles of the sections up to it (`sections_of`), the title page's
-        line and the table the passage may continue (`beside_of`)."""
-        around = around_of(source, passages, budget)
-        context = {"around": around.text} if around is not None else {}
+        line and the table the passage may continue (`beside_of`). The text
+        around is one passage per section it comes from, each a passage a
+        quote may stand in."""
+        around = around_of(source, passages, self.count_tokens)
+        context = ({"around": "\n\n".join(part.text for part in around)}
+                   if around else {})
         titles, titled = sections_of(source, passages)
         if titles:
             context["sections"] = titles
@@ -1948,8 +2077,7 @@ class Reader:
         result = Read(batch, [])
         # What a coordinate's quote may stand in besides what a request
         # shows of the passage: its heading and the text around it.
-        fixed = list(self.shown_with(source)) + (
-            [around] if around is not None else [])
+        fixed = list(self.shown_with(source)) + list(around)
 
         def merged(rows: list, replies: dict, evidence: list) -> list:
             """Every coordinate's answers onto *rows*; [(coordinate, level,
@@ -2092,10 +2220,11 @@ class Reader:
         """The value of *row*, read as no value of its parameter by a
         coordinate of *slots* (`fields.kept`), asked for once more in the
         conversation of the rounds it was read in: told that it was read
-        wrongly and why, the model names a value of the passage it has not
-        named yet that is one, or none (owner decision 2026-11-07). [The row
-        of the value named instead], checked as a round's value is; one the
-        check refuses is not asked again."""
+        wrongly and why, the model names the values of the passage it has
+        not named yet that are values of the parameter, or none (owner
+        decisions 2026-11-07 and 2026-11-08). [The rows of the values named
+        instead], each checked as a round's value is; one the check refuses
+        is not asked again."""
         rounds = job.rounds.get(row.label)
         if rounds is None:
             return []
@@ -2104,37 +2233,55 @@ class Reader:
         reply = rounds.ask({WRONG: {**shown_value(row.claim), "what": say(
             "value_not_kept", given=row.claim.get(slot.name))}})
         job.count(asked=1, corrected=1)
-        claim = claim_of(reply, rounds.drawn) if isinstance(reply, dict) \
-            else None
-        if claim is None:
-            return []
+        named: list = []
         shown = job.passages_shown()
-        if round_failure(claim, shown, [one.claim for one in rounds.rows],
-                         job.parameter, rounds.view.owner_kind) is not None:
-            return []
+        for claim in claims_of(reply, rounds.drawn):
+            if round_failure(claim, shown, [one.claim for one in rounds.rows],
+                             job.parameter, rounds.view.owner_kind) \
+                    is not None:
+                continue
+            named.append(self._taken(job, rounds, claim,
+                                     row_label(job.made)))
+            job.made += 1
+        return named
+
+    @staticmethod
+    def _taken(job: _Job, rounds: _Rounds, claim: dict, label: str) -> Row:
+        """The row of a value the check took in *rounds*: read from the
+        passage its quote stands in, or from the piece read where it was
+        read off a figure."""
+        shown = job.passages_shown()
         passage = passage_of(claim, shown) if claim.get("quote") \
             else (rounds.view if read_off(claim, rounds.view.owner_kind)
                   else None)
         if passage is not None:
             claim["source"] = job.label_of(passage)
-        named = Row(label=row_label(job.made), item_index=0, claim=claim)
-        job.made += 1
-        job.views[named.label] = rounds.view
-        job.rounds[named.label] = rounds
-        rounds.rows.append(named)
+        row = Row(label=label, item_index=0, claim=claim)
+        job.views[label] = rounds.view
+        job.rounds[label] = rounds
+        rounds.rows.append(row)
         rounds.read.append(shown_value(claim))
-        return [named]
+        return row
 
     def _rounds(self, job: _Job, view: Source, start: int = 0):
-        """The values of one piece, one per round, until the model names no
-        further value; CUT or None where its first round came to nothing.
-        The rounds are one conversation (owner decisions 2026-11-07): the
-        first message shows the piece, each later one asks for the next
-        value after the answer it follows. A value the check refuses is
-        asked once more with the reason, after that answer; one named again
-        is asked once more, and named again it ends the rounds (owner
-        decision 2026-11-05). A conversation that no longer fits the model's
-        window begins anew, showing the values named so far."""
+        """The values of one piece, all of them in one answer, in one
+        conversation (owner decisions 2026-11-07 and 2026-11-08); CUT or
+        None where its first message came to nothing.
+
+        The first message shows the piece and asks for every value of the
+        parameter in it. Every answer is checked value by value: a value
+        named before is no new one, and the values the check refuses go
+        back in ONE message after that answer, each with its reason; what
+        that answer names is taken as given, a value named before excepted,
+        and the fold decides (owner decision 2026-11-05: asked once more,
+        never a third time). An answer the model marks as incomplete is
+        followed by the ask to go on; one that then brings nothing new is
+        told so once, and bringing nothing new again, the asks to go on end.
+        Once its values are named, a piece that has one is asked
+        `REMAINING_ASKS` times whether more stand in it, the second time only
+        where the first brought one. Every message is one of the same conversation, so the
+        model sees what it named. A conversation that no longer fits the
+        model's window begins anew, showing the values named so far."""
         result = job.result
         drawn = bool(self.drawn(view))
         shows = {key: job.context[key] for key in ("around",) + BESIDE
@@ -2149,9 +2296,9 @@ class Reader:
                                    list(read), threads[-1], follow,
                                    drawn=drawn)
         rounds = _Rounds(ask, rows, read, view, drawn)
-        first = True
-        while True:
-            reply = ask({NEXT: None} if threads[-1].begun else None)
+
+        def send(follow: Optional[dict]):
+            reply = ask(follow)
             result.asked += 1
             if reply == CUT and threads[-1].begun:
                 # The conversation outgrew the window: anew, showing the
@@ -2159,40 +2306,77 @@ class Reader:
                 threads.append(Thread())
                 reply = ask()
                 result.asked += 1
-            if not isinstance(reply, dict):
-                if first:
-                    return CUT if reply == CUT else None
-                break
-            first = False
-            claim = claim_of(reply, drawn)
-            if claim is None:
-                break
-            failure = round_failure(claim, shown, [r.claim for r in rows],
-                                    job.parameter, view.owner_kind)
-            if failure is not None:
-                kind, reason = failure
-                result.failed = dict(collections.Counter(result.failed)
-                                     + collections.Counter({kind: 1}))
-                result.corrected += 1
-                again = ask({CORRECTIONS: [{**shown_value(claim),
-                                            "what": reason}]})
-                result.asked += 1
-                claim = claim_of(again, drawn)
-                if claim is None:
-                    break
+            return reply
+
+        def checked(claims: list, told: bool = False) -> tuple:
+            """(values taken, [(claim, (kind, reason))] refused) of *claims*:
+            a value named before is neither. Once *told* why, a value is
+            taken as given and the fold decides."""
+            taken, refused = 0, []
+            for claim in claims:
                 failure = round_failure(claim, shown,
                                         [r.claim for r in rows],
                                         job.parameter, view.owner_kind)
-                if failure is not None and failure[0] == REPEATED:
+                if failure is None or (told and failure[0] != REPEATED):
+                    self._taken(job, rounds, claim,
+                                row_label(start + len(rows)))
+                    taken += 1
+                elif failure[0] != REPEATED:
+                    refused.append((claim, failure))
+            return taken, refused
+
+        def take(reply) -> tuple:
+            """(values taken, marked incomplete) of one answer, the values
+            the check refused asked once more after it."""
+            taken, refused = checked(claims_of(reply, drawn))
+            if not refused:
+                return taken, incomplete(reply)
+            result.failed = dict(collections.Counter(result.failed)
+                                 + collections.Counter(
+                                     failure[0] for _, failure in refused))
+            result.corrected += len(refused)
+            again = send({CORRECTIONS: [{**shown_value(claim),
+                                         "what": failure[1]}
+                                        for claim, failure in refused]})
+            if not isinstance(again, dict):
+                return taken, incomplete(reply)
+            more, _ = checked(claims_of(again, drawn), told=True)
+            return taken + more, incomplete(again)
+
+        def go_on(more: bool) -> int:
+            """Values taken while the model marks its answer as incomplete:
+            told once when it brings nothing new, then no further."""
+            taken = 0
+            while more:
+                reply = send({GO_ON: None})
+                if not isinstance(reply, dict):
                     break
-            passage = passage_of(claim, shown) if claim.get("quote") \
-                else (view if read_off(claim, view.owner_kind) else None)
-            if passage is not None:
-                claim["source"] = job.label_of(passage)
-            rows.append(Row(label=row_label(start + len(rows)), item_index=0,
-                            claim=claim))
-            job.rounds[rows[-1].label] = rounds
-            read.append(shown_value(claim))
+                got, more = take(reply)
+                taken += got
+                if got:
+                    continue
+                reply = send({NOTHING_NEW: None})
+                if not isinstance(reply, dict):
+                    break
+                got, more = take(reply)
+                taken += got
+                if not got:
+                    break
+            return taken
+
+        reply = send(None)
+        if not isinstance(reply, dict):
+            return CUT if reply == CUT else None
+        _, more = take(reply)
+        go_on(more)
+        for _ in range(REMAINING_ASKS if rows else 0):
+            reply = send({REMAINING: None})
+            if not isinstance(reply, dict):
+                break
+            got, more = take(reply)
+            got += go_on(more)
+            if not got:
+                break
         return rows
 
     def _value_group(self, job: _Job, row: Row, group,

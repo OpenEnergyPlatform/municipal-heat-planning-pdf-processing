@@ -1,10 +1,10 @@
-"""A parameter the survey named no passage for is searched with HyDE
-sentences and not with its label: one written for this document from what it
-says of itself for a field about the document itself, AND one written once
-per run from label, description and list names for any other, AND its label
-only where no sentence could be written; the sentence of a list parameter is
-written with the names of its list, AND both profiles declare which fields
-are about the document itself (owner decision 2026-11-05)."""
+"""A parameter's passages are ranked with HyDE sentences and not with its
+label: one written for this document from what it says of itself for a field
+about the document itself, AND one written once per run from label,
+description and list names for any other, AND its label only where no
+sentence could be written; the sentence of a list parameter is written with
+the names of its list, AND both profiles declare which fields are about the
+document itself (owner decisions 2026-11-05 and 2026-11-08)."""
 import json
 import sqlite3
 from pathlib import Path
@@ -14,7 +14,7 @@ import pytest
 
 from docpipe.extraction import runner
 from docpipe.extraction.spec import load as load_spec
-from docpipe.extraction.surveyed import sought_lists
+from docpipe.extraction.survey import Ranking
 from profiles.kwp import extraction as kwp_extraction
 from profiles.scenarios import extraction as scenarios_extraction
 
@@ -25,6 +25,7 @@ BY_URI = {parameter.uri: parameter for parameter in SPEC.parameters}
 TITLE = BY_URI["publication_title"]
 DIVISION = BY_URI["study_sector_division"]
 PASSAGE = SimpleNamespace(owner_kind="section", owner_id=55052)
+OTHER = SimpleNamespace(owner_kind="table", owner_id=7)
 
 
 def ranking():
@@ -36,19 +37,25 @@ def ranking():
     return rank, asked
 
 
-def test_the_search_ranks_with_the_sentences_and_lists_what_it_found():
+def order_of(rank, probes=None) -> list:
+    found = Ranking(rank, lambda document: [OTHER, PASSAGE], [DIVISION],
+                    probes=probes)(151)
+    return found.passages_of(DIVISION.uri)
+
+
+def test_the_passages_are_ranked_with_the_sentences_and_all_kept():
     rank, asked = ranking()
     sentence = "Emissions are reported by sector following the CRF."
-    out = sought_lists(rank, 151, [DIVISION],
-                       lambda parameter, document: [sentence])
+    out = order_of(rank, lambda parameter, document: [sentence])
     assert asked == [[sentence]]
-    assert out == {DIVISION.uri: [PASSAGE]}
+    # The passage the search found first, the one it did not after it.
+    assert out == [("section", 55052), ("table", 7)]
 
 
-def test_without_a_sentence_the_search_falls_back_to_the_label():
+def test_without_a_sentence_the_ranking_falls_back_to_the_label():
     rank, asked = ranking()
-    sought_lists(rank, 151, [DIVISION], lambda parameter, document: [])
-    sought_lists(rank, 151, [DIVISION])
+    order_of(rank, lambda parameter, document: [])
+    order_of(rank)
     assert asked == [[DIVISION.label], [DIVISION.label]]
 
 
