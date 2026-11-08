@@ -390,7 +390,8 @@ permission error surfaces instead of silently dropping every VL input
 a warning naming its id, rather than resolving to the containing directory
 itself and embedding that (`chunking.py:179`, `209`). A section past
 `SECTION_EMBED_MAX_WORDS` is truncated and the cut logged, since refinement
-should already have split it (`chunking.py:64`).
+should already have split it, both before and after the model rewrote it
+(`chunking.py:64`).
 
 A model batch that raises inside `create_embeddings` is logged with its item
 range, and its inputs are collected in an `Unembedded` tally by embedding type

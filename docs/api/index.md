@@ -211,7 +211,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.refinement.pipeline](docpipe.refinement.pipeline.md): Orchestrates the textrefinement stage. (5 functions)
 - [docpipe.refinement.refine](docpipe.refinement.refine.md): Runs Stage 4, the LLM-based refinement of Stage 3 sections. (2 classes, 3 functions)
 - [docpipe.refinement.replies](docpipe.refinement.replies.md): The reply each refinement request asks for, as a JSON schema. (1 function)
-- [docpipe.refinement.split](docpipe.refinement.split.md): Cuts a section too long to be one retrieval chunk into several, each a self-contained citation unit. (1 class, 10 functions)
+- [docpipe.refinement.split](docpipe.refinement.split.md): Cuts a section too long to be one retrieval chunk into several, each a self-contained citation unit. (1 class, 11 functions)
 
 ## docpipe.serve
 

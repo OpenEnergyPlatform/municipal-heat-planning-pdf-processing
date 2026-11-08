@@ -350,6 +350,17 @@ of its text and followed by that section's own heading
 title broken over several headings reads in its order. Sections left with no content, tables, or figures are then
 dropped (`_is_empty_section`); a heading with no text after it, or one
 before a literature list, goes with them.
+The model can undo the cut that came before it: it merges the parts of a
+split section back together, and it rewrites a literature list as BibTeX,
+which names every field and makes the list about half as long again. So
+`_hold_to_limit` holds every refined section to `SECTION_MAX_WORDS` once more,
+with no model (`split.cut_to_limit`): a literature list after whole entries,
+other text where a line ends, else where a sentence ends, else after a run of
+words, so that no word is changed or lost, aiming at half the limit as
+`_enforce_max` does. Each part keeps the title and the tables and figures its
+text marks. Its segments follow its text in order and at its share of the way
+through (`split._spread_segments`), a text segment across a cut being cut
+there as well, since the refined text no longer rebuilds them word for word.
 `_finalize_pages` recomputes each section's `pages` from its segments and
 media; `_backfill_empty_pages` gives a still-empty one its nearest
 neighbour's page rather than leaving it uncitable. With

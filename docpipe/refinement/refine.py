@@ -58,13 +58,15 @@ from docpipe.reading import Hole
 
 from . import replies
 from .corrections import apply_corrections
-from .split import (NotServed, split_max_tokens, split_oversized,
+from .split import (NotServed, cut_to_limit, split_max_tokens, split_oversized,
                     split_temperature)
 from .config import (
     further_room,
     PROMPT_IDS,
     REFINEMENT_PARTIAL_JSON,
     REFINEMENT_REPORT_JSON,
+    SECTION_MAX_WORDS,
+    SECTION_SPLIT_ENABLE,
     SECTIONS_JSON,
     SECTIONS_REFINED_JSON,
     LLM_MODEL,
@@ -814,6 +816,27 @@ def _reattach_media_bbox(inputs: list[dict], outputs: list[dict]) -> None:
                     item["bbox"] = b
 
 
+def _hold_to_limit(sections: list[dict]) -> list[dict]:
+    """Every refined section at most SECTION_MAX_WORDS long (`cut_to_limit`).
+
+    The limit is held before the model reads, and the model's merges and its
+    BibTeX lists undo it: 22 sections in 20 scenario documents went into the
+    embedding over its budget and lost their tail there.
+    """
+    if not SECTION_SPLIT_ENABLE:
+        return sections
+    out: list[dict] = []
+    held = 0
+    for sec in sections:
+        parts = cut_to_limit(sec)
+        held += len(parts) > 1
+        out.extend(parts)
+    if held:
+        log.info("Stage 4: cut %d refined section(s) back to %d words "
+                 "→ %d sections", held, SECTION_MAX_WORDS, len(out))
+    return out
+
+
 def _finalize_pages(section: dict) -> None:
     """Recompute a section's `pages` (and page_number) in place from its
     segments and its tables'/figures' page numbers. Falls back to the section's
@@ -1289,6 +1312,8 @@ def refine_sections(sections: list[dict],
     removed = before - len(refined)
     if removed:
         log.info(f"Stage 4: removed {removed} empty section(s)")
+
+    refined = _hold_to_limit(refined)
 
     # Keep each section's page span self-consistent after merges/splits.
     for s in refined:

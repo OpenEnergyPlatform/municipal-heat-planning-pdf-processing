@@ -414,6 +414,161 @@ def _ask_all_cuts(sections: list, ask: Optional[Callable],
         return dict(zip(todo, pool.map(lambda i: _ask_cuts(sections[i], ask), todo)))
 
 
+_LINE_END = re.compile(r"\n\s*")
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+_WORD = re.compile(r"\S+")
+
+
+def _units(text: str, start: int, end: int, target: int) -> list:
+    """(start, end) character spans of *text*[start:end] that cut it only where
+    a line or, below that, a sentence ends; a span still longer than *target*
+    words is cut after every *target* words."""
+    spans = []
+    for finer in (_LINE_END, _SENTENCE_END):
+        if len(text[start:end].split()) <= target:
+            break
+        cuts = [m.end() for m in finer.finditer(text, start, end)
+                if start < m.start() and m.end() < end]
+        if cuts:
+            bounds = [start, *cuts, end]
+            for a, b in zip(bounds, bounds[1:]):
+                spans.extend(_units(text, a, b, target) if finer is _LINE_END
+                             else _words(text, a, b, target))
+            return spans
+    return _words(text, start, end, target)
+
+
+def _words(text: str, start: int, end: int, target: int) -> list:
+    """*text*[start:end] in runs of at most *target* words."""
+    words = list(_WORD.finditer(text, start, end))
+    if len(words) <= target:
+        return [(start, end)]
+    heads = [words[i].start() for i in range(target, len(words), target)]
+    bounds = [start, *heads, end]
+    return list(zip(bounds, bounds[1:]))
+
+
+def _group(sizes: list, target: int, max_words: int) -> list:
+    """Start indices of the parts *sizes* (words per unit) are grouped into:
+    a part closes once it reaches *target*, and a last part under ~100 words
+    joins the one before where both fit *max_words* (`_sanitize`'s rule)."""
+    starts, running = [0], 0
+    for i, size in enumerate(sizes):
+        if i and running >= target:
+            starts.append(i)
+            running = 0
+        running += size
+    if len(starts) > 1 and sum(sizes[starts[-1]:]) < 100 \
+            and sum(sizes[starts[-2]:]) <= max_words:
+        starts.pop()
+    return starts
+
+
+def cut_to_limit(section: dict, max_words: int = SECTION_MAX_WORDS) -> list:
+    """*section* as refinement left it, in parts of at most *max_words* each.
+
+    The cut before refinement (`split_oversized`) holds the limit only on what
+    goes into the model: a section the model merges back together, or a
+    literature list it rewrites as BibTeX, which names every field, comes out
+    longer, and the embedding then drops its tail. This cuts the refined text
+    itself, with no model: a literature list after whole entries, any other
+    text where a line ends, else where a sentence ends, else after a run of
+    words, so that no word is changed or lost. Each part keeps the title and
+    the tables and figures whose marker its text carries; one whose marker is
+    in no part stays with the first. The segments follow the text
+    (`_spread_segments`), so a part's pages are those of its own text.
+    """
+    content = section.get("content")
+    target = min(SECTION_TARGET_WORDS, max(1, max_words // 2))
+    if isinstance(content, list):
+        if sum(word_count(str(e)) for e in content) <= max_words:
+            return [section]
+        sizes = [word_count(str(e)) for e in content]
+        starts = _group(sizes, target, max_words)
+        pieces = [content[a:b] for a, b in zip(starts, starts[1:] + [len(content)])]
+        heads = [sum(sizes[:i]) for i in starts]
+    elif isinstance(content, str) and word_count(content) > max_words:
+        spans = _units(content, 0, len(content), target)
+        sizes = [word_count(content[a:b]) for a, b in spans]
+        starts = _group(sizes, target, max_words)
+        ends = [spans[i][0] for i in starts] + [len(content)]
+        pieces = [content[a:b].strip() for a, b in zip(ends, ends[1:])]
+        heads = [sum(sizes[:i]) for i in starts]
+    else:
+        return [section]
+    if len(pieces) < 2:
+        return [section]
+    parts = []
+    for piece in pieces:
+        part = dict(section)
+        part["content"] = piece
+        marked = set(_MARKER.findall(piece if isinstance(piece, str)
+                                     else "\n".join(map(str, piece))))
+        for key in ("tables", "figures"):
+            part[key] = [item for item in section.get(key) or []
+                         if isinstance(item, dict) and item.get("id") in marked]
+        parts.append(part)
+    for key in ("tables", "figures"):
+        placed = {item.get("id") for part in parts for item in part[key]}
+        parts[0][key] = parts[0][key] + [
+            item for item in section.get(key) or []
+            if not (isinstance(item, dict) and item.get("id") in placed)]
+    for part, segments in zip(parts, _spread_segments(
+            section.get("segments") or [], heads, sum(sizes), parts)):
+        part["segments"] = segments
+    return parts
+
+
+def _spread_segments(segments: list, heads: list, total: int,
+                     parts: list) -> list:
+    """The segments of each of *parts*, which start at the words *heads* of a
+    text *total* words long.
+
+    Refinement rewrote the text a little, so its segments no longer rebuild
+    it word for word (`_rebuild_matches`), but they still follow it in order
+    and at nearly its length. A part therefore holds the source words at its
+    own share of the way through: a text segment across a cut is cut there as
+    well, each piece keeping its page and kind, as `_subdivide_segments` does.
+    A table or figure goes with the part that marks it, else with the part
+    its place in the order falls in.
+    """
+    out = [[] for _ in parts]
+    source = sum(word_count(s.get("text")) for s in segments
+                 if isinstance(s, dict) and s.get("kind") == "text")
+    scale = source / total if total else 0.0
+    cuts = [round(h * scale) for h in heads] + [source]
+    marks = [set(_MARKER.findall(p["content"] if isinstance(p["content"], str)
+                                 else "\n".join(map(str, p["content"]))))
+             for p in parts]
+    position = 0
+
+    def part_at(word: int) -> int:
+        return max(j for j in range(len(parts)) if cuts[j] <= word or j == 0)
+
+    for seg in segments:
+        if not isinstance(seg, dict):
+            continue
+        if seg.get("kind") != "text":
+            owner = next((j for j, m in enumerate(marks) if seg.get("ref") in m),
+                         part_at(position))
+            out[owner].append(seg)
+            continue
+        seg_words = (seg.get("text") or "").split()
+        start, end = position, position + len(seg_words)
+        for j in range(len(parts)):
+            a, b = max(start, cuts[j]), min(end, cuts[j + 1])
+            if a < b or (not seg_words and j == part_at(start)):
+                piece = dict(seg)
+                if a < b and (a, b) != (start, end):
+                    piece["text"] = " ".join(seg_words[a - start:b - start])
+                out[j].append(piece)
+        position = end
+    return out
+
+
+_MARKER = re.compile(r"\[([A-Za-z0-9_]+)\]")
+
+
 def split_oversized(sections: list, ask: Optional[Callable] = None,
                     max_words: int = SECTION_MAX_WORDS,
                     holes: Optional[list] = None) -> list:

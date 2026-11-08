@@ -129,6 +129,25 @@ split_oversized); then *ask* is not called at all.
 An answer of no cuts at all is an answer: the prompt allows it, and it is
 no hole.
 
+### cut_to_limit
+
+```python
+def cut_to_limit(section: dict, max_words: int = SECTION_MAX_WORDS) -> list
+```
+
+*section* as refinement left it, in parts of at most *max_words* each.
+
+The cut before refinement (`split_oversized`) holds the limit only on what
+goes into the model: a section the model merges back together, or a
+literature list it rewrites as BibTeX, which names every field, comes out
+longer, and the embedding then drops its tail. This cuts the refined text
+itself, with no model: a literature list after whole entries, any other
+text where a line ends, else where a sentence ends, else after a run of
+words, so that no word is changed or lost. Each part keeps the title and
+the tables and figures whose marker its text carries; one whose marker is
+in no part stays with the first. The segments follow the text
+(`_spread_segments`), so a part's pages are those of its own text.
+
 ### split_oversized
 
 ```python
