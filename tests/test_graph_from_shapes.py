@@ -8,6 +8,8 @@ release label, without a language tag, AND one its source does not name
 carries no label of ours. A region is the LCC country of its own name, else
 the one whose short name is among its labels, AND one that finds none or two
 stays unnamed."""
+import sqlite3
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -34,9 +36,19 @@ def own(rows: list) -> list:
     return rows
 
 
-def make_serializer(*args, **kwargs):
-    """`kg.make_serializer` over rows of this publication (`own`)."""
-    inner = kg.make_serializer(*args, **kwargs)
+def empty_db() -> Path:
+    """A database with no table: no document in it had pages a model read."""
+    path = Path(tempfile.mkdtemp()) / "empty.db"
+    sqlite3.connect(path).close()
+    return path
+
+
+def make_serializer(db, *args, **kwargs):
+    """`kg.make_serializer` over rows of this publication (`own`); a database
+    that does not exist stands for one that has nothing to say (`empty_db`),
+    since the graph reads which documents had pages a model read from it."""
+    inner = kg.make_serializer(db if Path(db).exists() else empty_db(),
+                               *args, **kwargs)
 
     def serializer(name, rows):
         inner.decisions = serializer.decisions
