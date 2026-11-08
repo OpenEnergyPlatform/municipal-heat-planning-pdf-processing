@@ -1081,6 +1081,23 @@ def watch_server(on_dead: Callable, *, probe: Callable = probe_server,
 A daemon thread that calls *on_dead(seconds)* once the server has not
 answered for *dead_after* seconds, then stops watching.
 
+### shared_http
+
+```python
+def shared_http(limit=None)
+```
+
+The one connection pool every request of the run goes out through.
+
+Each kind of request has a client of its own (reading, combing, the
+check, the years, ...), and each client used to keep a pool of its own:
+connections it had opened stayed open while it sent nothing, so a probe
+with 18 requests in flight held 40 connections to the proxy, and a server
+that takes about 20 at once refused the rest outright (one probe,
+1,110 requests refused). One pool for all, as large as the requests the
+run may have open at once (*limit*, the run's `LIMIT`), holds no more
+connections than requests in flight. Made once, with the first client.
+
 ### log_usage
 
 ```python

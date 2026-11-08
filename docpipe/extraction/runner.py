@@ -2349,13 +2349,46 @@ def watch_server(on_dead: Callable, *, probe: Callable = probe_server,
     return thread
 
 
+_SHARED_HTTP = None
+_SHARED_HTTP_LOCK = threading.Lock()
+
+
+def shared_http(limit=None):
+    """The one connection pool every request of the run goes out through.
+
+    Each kind of request has a client of its own (reading, combing, the
+    check, the years, ...), and each client used to keep a pool of its own:
+    connections it had opened stayed open while it sent nothing, so a probe
+    with 18 requests in flight held 40 connections to the proxy, and a server
+    that takes about 20 at once refused the rest outright (one probe,
+    1,110 requests refused). One pool for all, as large as the requests the
+    run may have open at once (*limit*, the run's `LIMIT`), holds no more
+    connections than requests in flight. Made once, with the first client.
+    """
+    global _SHARED_HTTP
+    with _SHARED_HTTP_LOCK:
+        if _SHARED_HTTP is None:
+            import httpx
+            most = getattr(limit if limit is not None else LIMIT,
+                           "maximum", None)
+            _SHARED_HTTP = httpx.Client(
+                limits=httpx.Limits(max_connections=most,
+                                    max_keepalive_connections=most),
+                timeout=LLM_TIMEOUT)
+        return _SHARED_HTTP
+
+
 def _client():
     """The one client shape this stage uses, for the provider it is set to.
     A request that timed out is repeated with the time of a repeat
-    (`_repeating`)."""
+    (`_repeating`). Every client of the run sends through one connection
+    pool (`shared_http`)."""
+    shared = ({"http_client": shared_http()}
+              if providers.provider("llm") == providers.OPENAI_COMPATIBLE
+              else {})
     client = providers.client("llm", base_url=LLM_BASE_URL,
                               api_key=LLM_API_KEY, timeout=LLM_TIMEOUT,
-                              max_retries=0)
+                              max_retries=0, **shared)
     if SCHEDULER is None:
         # Several model names on one endpoint share their places as the chat's
         # do. One model and one place is the plain client.

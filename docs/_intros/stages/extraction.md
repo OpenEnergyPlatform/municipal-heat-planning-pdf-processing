@@ -1069,6 +1069,14 @@ full of values, which then read as tables without any.
 
 ### Requests the server did not serve
 
+Every client of the run (reading, combing, the check, the years, the settings,
+the search, the survey, naming) sends through one connection pool
+(`runner.shared_http`), as large as the requests the run may have open at once
+(`LIMIT.maximum`). With a pool per client, the connections a client had opened
+stayed open while it sent nothing: a probe with 18 requests in flight held 40
+connections to the proxy, and the model server behind it, which takes about 20
+at once, refused the rest outright (1,110 requests of one probe).
+
 Every request loop of this stage hands a failed request to one rule,
 `runner.Failures`, which reads the exception's HTTP status to tell three ends
 apart. A request that never arrived has no status and is the server's:
