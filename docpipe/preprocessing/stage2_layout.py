@@ -52,6 +52,7 @@ from .config import (
     LAYOUT_BATCH_SIZE,
     LAYOUT_DETECT_DPI,
     LAYOUT_PREFETCH_BATCHES,
+    LAYOUT_RENDER_PROCS,
     PAGE_RENDER_DPI,
     PP_CLASS_THRESHOLDS,
     PP_DOCLAYOUT_MODEL_ID,
@@ -79,6 +80,7 @@ from .config import (
     FONT_HEADING_MAX_CHARS,
     FONT_HEADING_ALLCAPS_MIN_CHARS,
 )
+from . import render_pool
 from .models import Block, PageData
 from .stage1_extract import _render_page_to_pil
 
@@ -292,6 +294,13 @@ def _prefetch(items, produce, depth: int):
                     break
             except queue.Empty:
                 pass
+
+
+def _as_image(rendered: tuple) -> Image.Image:
+    """A page `render_pool.render_page` rendered, as `_render_page_to_pil`
+    returns it."""
+    width, height, samples = rendered
+    return Image.frombytes("RGB", (width, height), samples)
 
 
 class LayoutDetectionFailed(RuntimeError):
@@ -1012,18 +1021,45 @@ def detect_layout_all_pages(
         chunk_pages = pages[start:end]
         chunk_fitz  = fitz_pages[start:end]
 
-        # Skip pages that fail to render.
-        rendered: list[tuple[PageData, fitz.Page, Image.Image]] = []
+        # Skip pages that fail to render. The crop image is rendered later,
+        # in the main loop.
+        rendered: list[tuple[PageData, fitz.Page, Image.Image, None]] = []
         for pg, fp in zip(chunk_pages, chunk_fitz):
             try:
                 with _FITZ_LOCK:
                     image = _render_page_to_pil(fp, LAYOUT_DETECT_DPI)
-                rendered.append((pg, fp, image))
+                rendered.append((pg, fp, image, None))
             except Exception as e:
                 log.error(f"Page {pg.page_number}: render failed, skipping detection: {e}")
         return b_idx, chunk_pages, rendered
 
-    batches = _prefetch(range(n_batches), render_batch, LAYOUT_PREFETCH_BATCHES)
+    def rendered_in_workers():
+        """The batches of render_batch, every page rendered at both
+        resolutions in a worker process (`render_pool.py`)."""
+        path = fitz_pages[0].parent.name
+        if not path:
+            raise ValueError("Stage 2: the document has no path to render from")
+        dpis = ((LAYOUT_DETECT_DPI,) if same_dpi
+                else (LAYOUT_DETECT_DPI, PAGE_RENDER_DPI))
+        spans = [(b * LAYOUT_BATCH_SIZE, min((b + 1) * LAYOUT_BATCH_SIZE, n))
+                 for b in range(n_batches)]
+        got = render_pool.batches(
+            path, [[fp.number for fp in fitz_pages[s:e]] for s, e in spans],
+            dpis, LAYOUT_RENDER_PROCS, LAYOUT_PREFETCH_BATCHES)
+        for b_idx, ((s, e), results) in enumerate(zip(spans, got)):
+            rendered = []
+            for pg, fp, res in zip(pages[s:e], fitz_pages[s:e], results):
+                if isinstance(res, str):
+                    log.error(f"Page {pg.page_number}: render failed, skipping detection: {res}")
+                    continue
+                crop = None if same_dpi else _as_image(res[PAGE_RENDER_DPI])
+                rendered.append((pg, fp, _as_image(res[LAYOUT_DETECT_DPI]), crop))
+            yield b_idx, pages[s:e], rendered
+
+    if LAYOUT_RENDER_PROCS > 0:
+        batches = rendered_in_workers()
+    else:
+        batches = _prefetch(range(n_batches), render_batch, LAYOUT_PREFETCH_BATCHES)
 
     for b_idx, chunk_pages, rendered in batches:
         log.info(
@@ -1042,10 +1078,12 @@ def detect_layout_all_pages(
             del det_images, rendered
             continue
 
-        for (pg, fp, det_img), dets in zip(rendered, dets_per_page):
+        for (pg, fp, det_img, rendered_crop), dets in zip(rendered, dets_per_page):
             try:
                 if same_dpi:
                     crop_img = det_img
+                elif rendered_crop is not None:
+                    crop_img = rendered_crop
                 else:
                     with _FITZ_LOCK:      # the prefetch thread is rendering too
                         crop_img = _render_page_to_pil(fp, PAGE_RENDER_DPI)

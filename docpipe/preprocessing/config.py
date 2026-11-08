@@ -57,6 +57,15 @@ LAYOUT_AUTOCAST = os.environ.get("DOCPIPE_LAYOUT_AUTOCAST", "off").lower()
 # work is all the GPU is ever waiting for.
 LAYOUT_PREFETCH_BATCHES = int(os.environ.get("DOCPIPE_LAYOUT_PREFETCH", "1"))
 
+# Worker processes that render the pages, both resolutions, in place of the
+# prefetch thread (`render_pool.py`). Measured on 3,254 KWP pages, rendering
+# is 0.119 of the 0.150 s a page takes through Stage 1-3, and in one process
+# MuPDF renders behind one lock, so the GPU waits on one core. 0 keeps the
+# thread. 8 workers took Stage 2 of six plans (1,006 pages, model stubbed)
+# from 0.215 to 0.049 s per page. Off until the KWP rebuild of 2026-11 is done, so its corpus is
+# rendered by one code path.
+LAYOUT_RENDER_PROCS = int(os.environ.get("DOCPIPE_LAYOUT_RENDER_PROCS", "0"))
+
 # Per-class confidence thresholds, keyed by the model's class id.
 PP_CLASS_THRESHOLDS: dict[int, float] = {
     0: 0.50, 1: 0.50, 2: 0.50, 3: 0.45,

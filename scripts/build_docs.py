@@ -305,6 +305,7 @@ SOURCES = (
            "docpipe/preprocessing/pipeline.py",
            "docpipe/preprocessing/stage1_extract.py",
            "docpipe/preprocessing/stage2_layout.py",
+           "docpipe/preprocessing/render_pool.py",
            "docpipe/preprocessing/stage3_structure.py",
            "docpipe/preprocessing/page_text_fallback.py",
            "docpipe/preprocessing/columns.py"),

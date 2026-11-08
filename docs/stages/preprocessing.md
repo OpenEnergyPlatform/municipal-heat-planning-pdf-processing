@@ -85,7 +85,12 @@ page whose extraction raises is skipped and counted in `n_failed`
 
 `detect_layout_all_pages()` renders the open `fitz` pages at
 `LAYOUT_DETECT_DPI` (150) in `LAYOUT_BATCH_SIZE` batches, prefetched one
-batch ahead on a worker thread, and runs `_infer_batch()`: a PP-DocLayoutV3
+batch ahead on a worker thread, and runs `_infer_batch()`. With
+`DOCPIPE_LAYOUT_RENDER_PROCS` above 0, worker processes (`render_pool.py`)
+render every page at both resolutions instead, each opening the PDF itself:
+in one process MuPDF renders behind one lock, and rendering was 0.119 of the
+0.150 s a KWP page took through Stage 1-3 (3,254 pages measured), so the GPU
+waited on one core. `_infer_batch()` is a PP-DocLayoutV3
 forward pass, a global confidence floor, per-class thresholds, per-class
 non-maximum suppression, and a cross-class pass suppressing a
 lower-confidence overlapping table/image detection of a different class.
@@ -287,6 +292,7 @@ list of rectangles, to every segment kind where the geometry is known
 | `--log-level` | CLI flag | `INFO` | logging verbosity: `DEBUG`/`INFO`/`WARNING`/`ERROR` (`pipeline.py:583-584`) |
 | `DOCPIPE_LAYOUT_AUTOCAST` | env var | `off` | `bf16`, `fp16`, or `off`: reduced-precision Stage 2 pass on CUDA |
 | `DOCPIPE_LAYOUT_PREFETCH` | env var | `1` | Stage 2 batches rendered ahead of the running forward pass, as `LAYOUT_PREFETCH_BATCHES` (`config.py:58`) |
+| `DOCPIPE_LAYOUT_RENDER_PROCS` | env var | `0` | Worker processes that render Stage 2's pages at both resolutions in place of the prefetch thread, as `LAYOUT_RENDER_PROCS` (`config.py:66`); 0 keeps the thread |
 | `PAGE_TRANSCRIBE_WORKERS` / `PAGE_RENDER_WORKERS` | env vars | `64` / `4` | concurrent transcription calls and page renders in the fallback, bounded separately |
 
 `Profile.column_layout` (`docpipe/profile.py:172`) is optional: it defaults
@@ -494,6 +500,24 @@ LayoutDetectionFailed rather than left with text and no layout, so
 the caller drops the document for the next run to retry.
 
 Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/preprocessing/render_pool.py</code></summary>
+
+render_pool.py: Renders the pages of Stage 2 in worker processes.
+
+MuPDF is not thread-safe within a process, so Stage 2 renders behind one lock
+(`stage2_layout._FITZ_LOCK`) and the GPU waits for it: on 3,254 pages of the
+KWP corpus, one core took 0.125 s per page for Stage 1's text and Stage 2's
+two renders, 0.087 s of it the 300 dpi render for the crops, while a whole
+page through Stage 1-3 took 0.150 s. A worker here opens the PDF itself and
+renders whole pages exactly as `stage1_extract._render_page_to_pil` does, at
+the same resolutions, so the pages of a batch render side by side on as many
+cores as the job has.
+
+Only fitz is imported, so a worker loads in a moment.
 
 </details>
 
