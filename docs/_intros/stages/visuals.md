@@ -3,7 +3,7 @@
 Stage 2 of preprocessing crops every table and figure it detects on a page
 into its own PNG under a document's `images/` directory, and Stage 3 leaves a
 placeholder token, such as `[p12_tbl0]`, in the section's prose wherever one
-of those crops was located (`docpipe/preprocessing/stage2_layout.py` assigns
+of those crops was located (`docpipe/preprocessing/layout_blocks.py` assigns
 the id and file name; see [preprocessing](preprocessing.md)). A placeholder
 token is not text a retrieval system can search or a model can answer from.
 This stage, implemented as `docpipe.visuals`, supplies that text: it sends

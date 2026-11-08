@@ -1,5 +1,6 @@
 """
-stage1_extract.py: Extracts text with PyMuPDF, as rawdict.
+page_text.py: Stage 1. Extracts the text of every page with PyMuPDF, as
+rawdict.
 
 Text blocks are extracted per page and returned as PageData. Paragraphs are
 deliberately not merged: Stage 2 suppression needs block boundaries precise
@@ -16,7 +17,6 @@ from pathlib import Path
 from typing import Optional
 
 import fitz
-from PIL import Image
 
 from ..profile import ENV_VAR, active_profile
 from .config import (
@@ -178,14 +178,6 @@ def _extract_page_text(page: fitz.Page, page_index: int) -> PageData:
 
     log.debug(f"Page {page_num}: {len(page_data.blocks)} text blocks extracted")
     return page_data
-
-
-def _render_page_to_pil(page: fitz.Page, dpi: int) -> Image.Image:
-    """Renders a fitz.Page to a PIL RGB image in memory without any disk I/O."""
-    zoom = dpi / 72.0
-    mat  = fitz.Matrix(zoom, zoom)
-    pix  = page.get_pixmap(matrix=mat, alpha=False)
-    return Image.frombytes("RGB", (pix.w, pix.h), pix.samples)
 
 
 def extract_all_pages(

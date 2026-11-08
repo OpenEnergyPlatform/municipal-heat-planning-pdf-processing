@@ -243,7 +243,7 @@ layout
 : The per-page object detection PP-DocLayoutV3 performs in preprocessing
   Stage 2, classifying each region (table, paragraph title, footer, and so
   on) into the `layout_label` a block carries. Run by
-  `docpipe/preprocessing/stage2_layout.py`; see
+  `docpipe/preprocessing/layout.py`; see
   [preprocessing](stages/preprocessing.md).
 
 merged

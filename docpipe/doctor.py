@@ -477,8 +477,8 @@ def check_request(stage: Optional[str], asked: list,
 def _prompt_ids(stage: str) -> tuple:
     """The prompts a stage's own module says it loads."""
     if stage == "preprocess":
-        from .preprocessing import page_text_fallback
-        return (page_text_fallback.PAGE_TRANSCRIBE_PROMPT_ID,)
+        from .preprocessing import page_text_without_layer
+        return (page_text_without_layer.PAGE_TRANSCRIBE_PROMPT_ID,)
     if stage == "refine":
         from .refinement import config
         return tuple(config.PROMPT_IDS)

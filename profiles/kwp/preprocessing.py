@@ -17,7 +17,7 @@ HYPHEN_EXCEPTIONS = (
 
 
 # Caption openers that must never be promoted to a section heading. Without
-# them "Abbildung 3: ..." becomes a title and opens a section (stage2_layout).
+# them "Abbildung 3: ..." becomes a title and opens a section (Stage 2, layout_blocks).
 TITLE_EXCLUDE_PREFIXES = (
     "abbildung",
     "abb.",

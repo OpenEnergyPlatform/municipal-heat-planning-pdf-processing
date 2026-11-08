@@ -1,8 +1,8 @@
-# docpipe.preprocessing.page_text_fallback
+# docpipe.preprocessing.page_text_without_layer
 
-`docpipe/preprocessing/page_text_fallback.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
+`docpipe/preprocessing/page_text_without_layer.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-page_text_fallback.py: Synthesizes text blocks for pages that carry
+page_text_without_layer.py: Synthesizes text blocks for pages that carry
 no usable PDF text layer.
 
 Stage 1 reads the PDF's own text layer. Some plans have none: the
@@ -10,8 +10,7 @@ pages are vector graphics or images end to end, get_text returns
 nothing, and every section Stage 3 assembles from them is a body of
 bare [pNN_tbl0] markers. Eleven plans in the heat-plan corpus are
 like that, together holding 1270 tables and figures that Stage 2
-transcribed and that then had no text to explain them
-(tests/test_page_text_fallback.py).
+transcribed and that then had no text to explain them.
 
 This module fills the gap at the level where it opens: a page's text
 blocks. The page is rendered, one model call transcribes it, and the

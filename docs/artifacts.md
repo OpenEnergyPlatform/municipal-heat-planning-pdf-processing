@@ -42,7 +42,7 @@ below a subfolder reaches stages 4 to 6 but shows and attaches no crops there.
 Layout detection, the second step of preprocessing, writes first: it
 crops every detected table and figure into `images/<block id>.png` and
 records that path on the block itself
-(`docpipe/preprocessing/stage2_layout.py:602, 718-727, 756-765`).
+(`docpipe/preprocessing/layout_blocks.py:310-329, 348-365`).
 Preprocessing's own JSON output follows in two files. `pages.json` is
 written only once Stage 1 (text extraction) and Stage 2 (layout
 detection) have both completed with no failed page; it caches their
@@ -61,7 +61,7 @@ see [preprocessing](stages/preprocessing.md)). A run that transcribed a page
 deletes the `sections.json` built before it, so that stage 3 is built again
 from the pages that now have text. Stage 3 reads only the
 in-memory pages object, whatever text it holds by then, and writes
-`sections.json` (`docpipe/preprocessing/stage3_structure.py:291`); it
+`sections.json` (`docpipe/preprocessing/sections.py:311`); it
 never opens `page_transcription_report.json` itself. That file is read
 later by chunking's `enrich_page_source`, backfilling a
 `page_text_transcribed` database column

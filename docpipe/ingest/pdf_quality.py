@@ -4,7 +4,7 @@ pdf_quality.py: Grades what a source PDF's text layer is worth.
 Stage 1 reads text with PyMuPDF, never OCR. A PDF with a broken ToUnicode map
 yields symbol garbage, useless at every later stage. A PDF with no text layer
 at all yields nothing, which preprocessing can now make good by rendering the
-page and having the model read it (page_text_fallback).
+page and having the model read it (page_text_without_layer).
 
 `check()` reports the fact and nothing more. What to do about it is policy, and
 lives in the ingest pipeline: garbled text is refused, a scan is registered and

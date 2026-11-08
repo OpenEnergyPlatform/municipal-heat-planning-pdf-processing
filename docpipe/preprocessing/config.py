@@ -58,7 +58,7 @@ LAYOUT_AUTOCAST = os.environ.get("DOCPIPE_LAYOUT_AUTOCAST", "off").lower()
 LAYOUT_PREFETCH_BATCHES = int(os.environ.get("DOCPIPE_LAYOUT_PREFETCH", "1"))
 
 # Worker processes that render the pages, both resolutions, in place of the
-# prefetch thread (`render_pool.py`). Measured on 3,254 KWP pages, rendering
+# prefetch thread (`rendering.py`). Measured on 3,254 KWP pages, rendering
 # is 0.119 of the 0.150 s a page takes through Stage 1-3, and in one process
 # MuPDF renders behind one lock, so the GPU waits on one core. 0 keeps the
 # thread. 8 workers took Stage 2 of six plans (1,006 pages, model stubbed)

@@ -1,5 +1,5 @@
 from docpipe.preprocessing.models import Block, PageData
-from docpipe.preprocessing.stage3_structure import (
+from docpipe.preprocessing.sections import (
     sections_to_dict, strip_running_headers, title_page_of)
 
 H = 1000.0

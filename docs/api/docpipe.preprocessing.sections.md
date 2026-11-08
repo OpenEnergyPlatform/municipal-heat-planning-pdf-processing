@@ -1,8 +1,8 @@
-# docpipe.preprocessing.stage3_structure
+# docpipe.preprocessing.sections
 
-`docpipe/preprocessing/stage3_structure.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
+`docpipe/preprocessing/sections.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-stage3_structure.py: Assembles document sections deterministically
+sections.py: Stage 3. Assembles document sections deterministically
 from pages that carry the layout labels Stage 2 attached.
 
 Walks every block in reading order. A block labelled as a section

@@ -41,7 +41,7 @@ narrow that resumption.
 | **In** | A PDF file, or a directory of PDF files (`run()`, `docpipe/preprocessing/pipeline.py:483-536`). An active profile supplies the caption, hyphenation and directory word lists plus `Profile.column_layout` (see Configuration). An optional page range (`--pages START END`) narrows a single-PDF run; the optional text fallback needs a reachable vision model server, which is asked before the first page that lacks its text and not before. |
 | **Out** | `results/pages.json` (Stage 1+2 cache), `results/sections.json` (Stage 3 output), `results/page_transcription_report.json` (only, but then always, with `--transcribe-missing-text`; it names the pages that failed and why), one PNG crop per table or image under `images/`, and, in folder mode, `_index.json`. |
 | **Resumes on** | `results/pages.json` and `results/sections.json`. A run whose Stage 1/2 leaves any page failed does not write the pages cache, and, within that same run, deletes a pre-existing `sections.json` before the Stage 3 cache-hit check runs, and so does a run that transcribed a page with `--transcribe-missing-text` (`pipeline.py:165-181`). An unreadable cache file is treated as absent. `--rebuild-stage3` resumes only from `pages.json`, skipping the PDF and the layout model. |
-| **Needs** | A GPU for PP-DocLayoutV3 when available, else CPU. `load_model()` fetches the weights via `from_pretrained()`, needing network unless they are already cached (`stage2_layout.py:98,107-108`). Stage 1 and Stage 3 need neither model nor network. With `--transcribe-missing-text`, a vision server that serves `VLM_MODEL`, has room for a page request and takes the page reply schema, asked before the first page that lacks its text (see Optional: filling in missing page text). |
+| **Needs** | A GPU for PP-DocLayoutV3 when available, else CPU. `load_model()` fetches the weights via `from_pretrained()`, needing network unless they are already cached (`layout_model.py:51-52`). Stage 1 and Stage 3 need neither model nor network. With `--transcribe-missing-text`, a vision server that serves `VLM_MODEL`, has room for a page request and takes the page reply schema, asked before the first page that lacks its text (see Optional: filling in missing page text). |
 
 File processing precedes this stage
 ([Getting the documents in](fileprocessing.md)); refinement follows,
@@ -79,28 +79,42 @@ starts uppercase), and measures the block's dominant font with
 `_dominant_font()`. `_is_valid_text_block()` drops a block under
 `TEXT_BLOCK_MIN_CHARS` characters or with no alphanumeric content, and a
 page whose extraction raises is skipped and counted in `n_failed`
-(`docpipe/preprocessing/stage1_extract.py:144-252`).
+(`docpipe/preprocessing/page_text.py:144-243`).
 
 ### Stage 2: detecting layout
 
-`detect_layout_all_pages()` renders the open `fitz` pages at
-`LAYOUT_DETECT_DPI` (150) in `LAYOUT_BATCH_SIZE` batches, prefetched one
-batch ahead on a worker thread, and runs `_infer_batch()`. With
-`DOCPIPE_LAYOUT_RENDER_PROCS` above 0, worker processes (`render_pool.py`)
-render every page at both resolutions instead, each opening the PDF itself:
-in one process MuPDF renders behind one lock, and rendering was 0.119 of the
-0.150 s a KWP page took through Stage 1-3 (3,254 pages measured), so the GPU
-waited on one core. `_infer_batch()` is a PP-DocLayoutV3
-forward pass, a global confidence floor, per-class thresholds, per-class
-non-maximum suppression, and a cross-class pass suppressing a
-lower-confidence overlapping table/image detection of a different class.
-`_process_page()` turns each surviving detection into a suppression, a title or caption
-`Block`, or a saved crop, whiting out any figure region overlapping a table
-crop; a crop is re-rendered at the higher `PAGE_RENDER_DPI` only when that
-differs from the detection resolution. Once every batch has run,
-`promote_headings_by_font()` upgrades heading-styled text to
-`paragraph_title`, and `resolve_captions()` attaches the nearest caption
-to each table or image (`docpipe/preprocessing/stage2_layout.py:1028-1073`).
+`detect_layout_all_pages()` (`layout.py`) renders the open `fitz` pages at
+`LAYOUT_DETECT_DPI` (150) in `LAYOUT_BATCH_SIZE` batches. A prefetch thread
+renders a batch ahead of the one running (`rendering.render_page_to_pil`,
+behind `FITZ_LOCK`) and builds the model's inputs for it
+(`layout_model.model_inputs`, resize and normalize, 0.018 s a page), while
+the previous batch runs through the model. With `DOCPIPE_LAYOUT_RENDER_PROCS`
+above 0, worker processes (`rendering.py`) render every page at both
+resolutions instead, each opening the PDF itself: in one process MuPDF renders
+behind one lock, and rendering was 0.119 of the 0.150 s a KWP page took
+through Stage 1-3 (3,254 pages measured), so the GPU waited on one core.
+
+`layout_model.infer_batch()` is a PP-DocLayoutV3 forward pass, a global
+confidence floor, per-class thresholds, per-class non-maximum suppression,
+and a cross-class pass suppressing a lower-confidence overlapping table/image
+detection of a different class. Scores, labels and boxes come from
+`kept_detections()`, which reads them from the model output itself. The
+processor's `post_process_object_detection` returned the same detections, in
+the same order, on all 144 pages compared, but also traced a polygon around
+every box from the masks (0.037 s a page), which Stage 2 never reads.
+
+`layout_blocks.process_page()` turns each surviving detection into a
+suppression, a title or caption `Block`, or a crop job (`crops.CropJob`),
+whiting out any figure region overlapping a table crop; a crop is
+re-rendered at the higher `PAGE_RENDER_DPI` only when that differs from the
+detection resolution. A batch's crops are PNG-encoded and written by one
+writer thread (`crops.write_crop`, 0.023 s a page) while the next batch runs;
+the main thread waits for one batch's writes before it hands over the next,
+so at most two batches of crops are held. Once every batch has run,
+`headings.promote_headings_by_font()` upgrades heading-styled text to
+`paragraph_title`, and `layout_captions.resolve_captions()` attaches the
+nearest caption to each table or image
+(`docpipe/preprocessing/layout.py:271-273`).
 
 A text block of the PDF's text layer that lies 90 percent or more inside a box
 of a suppressed class (header, footer, page number, footnote and their image
@@ -126,11 +140,11 @@ to `results/pages.json` atomically, via a temporary file and
 
 When `transcribe_missing_text` is set, `_fill_missing_page_text()` builds
 a page renderer and a profile-bound transcriber and calls
-`fill_missing_page_text()` (`docpipe/preprocessing/page_text_fallback.py:163`),
+`fill_missing_page_text()` (`docpipe/preprocessing/page_text_without_layer.py:162`),
 which selects pages where `needs_transcription()` finds under
 `MIN_PAGE_CHARS` (60) characters of Stage 1 text and, for each, replaces its
 text blocks with the list `synthesize_blocks()` returns
-(`page_text_fallback.py:112-160` builds the blocks; line 268 is the
+(`page_text_without_layer.py:111-160` builds the blocks; line 267 is the
 replacement). `results/page_transcription_report.json` is written
 unconditionally, and the pages cache is rewritten if any page changed. This
 runs after Stage 2, since the media blocks are already known, and before
@@ -219,7 +233,7 @@ block becomes a `TableRef` or `FigureRef` plus a `[block_id]` placeholder
 whose caption is settled by `docpipe.captions.resolve_title()`, and text
 accumulates into `Section.content` and `Section.segments`.
 `drop_directory_sections()` removes table-of-contents-like sections
-(`docpipe/preprocessing/stage3_structure.py:291-487`).
+(`docpipe/preprocessing/sections.py:311-507`).
 
 ### Folder-mode iteration
 
@@ -263,9 +277,9 @@ content units), and `pages` (sorted distinct page numbers, derived from
 `page_number`, and `bbox` (one rect, matching a segment's own `bbox`);
 `TableRef` additionally carries `source_text`. One segment is
 `{"page": int, "kind": "text"|"table"|"figure", "text": str, "ref":
-block_id}`; `stage3_structure.py` also attaches an optional `"bbox"` key, a
+block_id}`; `sections.py` also attaches an optional `"bbox"` key, a
 list of rectangles, to every segment kind where the geometry is known
-(`docpipe/preprocessing/stage3_structure.py:334,423,446`), which the comment on
+(`docpipe/preprocessing/sections.py:354,443,466`), which the comment on
 `Section.segments` in `models.py:159-163` names too.
 
 | File | Written by | Holds |
@@ -276,7 +290,7 @@ list of rectangles, to every segment kind where the geometry is known
 | `images/<block_id>.png` | Stage 2 | one PNG crop per table or image block |
 | `_index.json` | folder mode | `{relative_pdf_path: {status, output_dir, sections}}` |
 
-(`docpipe/artifacts.py:21-33`; `docpipe/preprocessing/page_text_fallback.py:163-287`.)
+(`docpipe/artifacts.py:21-33`; `docpipe/preprocessing/page_text_without_layer.py:162-286`.)
 
 ## Configuration
 
@@ -291,8 +305,8 @@ list of rectangles, to every segment kind where the geometry is known
 | `--profile` | CLI flag | `$DOCPIPE_PROFILE` | names the active profile |
 | `--log-level` | CLI flag | `INFO` | logging verbosity: `DEBUG`/`INFO`/`WARNING`/`ERROR` (`pipeline.py:583-584`) |
 | `DOCPIPE_LAYOUT_AUTOCAST` | env var | `off` | `bf16`, `fp16`, or `off`: reduced-precision Stage 2 pass on CUDA |
-| `DOCPIPE_LAYOUT_PREFETCH` | env var | `1` | Stage 2 batches rendered ahead of the running forward pass, as `LAYOUT_PREFETCH_BATCHES` (`config.py:58`) |
-| `DOCPIPE_LAYOUT_RENDER_PROCS` | env var | `0` | Worker processes that render Stage 2's pages at both resolutions in place of the prefetch thread, as `LAYOUT_RENDER_PROCS` (`config.py:66`); 0 keeps the thread |
+| `DOCPIPE_LAYOUT_PREFETCH` | env var | `1` | Stage 2 batches rendered, with the model's inputs built, ahead of the running forward pass, as `LAYOUT_PREFETCH_BATCHES` (`config.py:58`) |
+| `DOCPIPE_LAYOUT_RENDER_PROCS` | env var | `0` | Worker processes that render Stage 2's pages at both resolutions in place of the prefetch thread (`rendering.py`), as `LAYOUT_RENDER_PROCS` (`config.py:67`); 0 keeps the thread. The model's inputs are built in the prefetch thread either way |
 | `PAGE_TRANSCRIBE_WORKERS` / `PAGE_RENDER_WORKERS` | env vars | `64` / `4` | concurrent transcription calls and page renders in the fallback, bounded separately |
 
 `Profile.column_layout` (`docpipe/profile.py:172`) is optional: it defaults
@@ -325,7 +339,7 @@ A selection of the module constants that tune detection and assembly:
 
 | Name | Default | Effect |
 |---|---|---|
-| `LAYOUT_DETECT_DPI` / `PAGE_RENDER_DPI` | 150 / 300 | render resolution for the detection pass and for saved table/figure crops; a page is re-rendered only when the two differ (`stage2_layout.py:989-1051`) |
+| `LAYOUT_DETECT_DPI` / `PAGE_RENDER_DPI` | 150 / 300 | render resolution for the detection pass and for saved table/figure crops; a page is re-rendered only when the two differ (`layout.py:104-118,150`) |
 | `LAYOUT_BATCH_SIZE` | 12 | pages per Stage 2 forward pass |
 | `PP_GLOBAL_MIN_CONF` / `PP_CLASS_THRESHOLDS` | 0.4 / per class, 0.40 to 0.85 | confidence floors before and after per-class filtering |
 | `NMS_OVERLAP_THRESHOLD` | 0.5 | IoU above which two overlapping same-class (or cross-class table/image) boxes collapse to the higher-confidence one |
@@ -339,13 +353,13 @@ A selection of the module constants that tune detection and assembly:
 
 | Condition | Behaviour |
 |---|---|
-| A Stage 1 page raises during extraction, or `n_failed > 0` after Stage 1/2 | the page is skipped and counted; `pages.json` is not written, so the next run retries extraction from scratch (`stage1_extract.py:224-234`; `pipeline.py:128-136`) |
-| A Stage 2 batch's forward pass raises | recorded in `failed_batches`, its pages get no layout; once every batch has run, `detect_layout_all_pages` raises `LayoutDetectionFailed` naming the batch numbers and affected page count (`stage2_layout.py:1036-1043,1093-1100`) |
+| A Stage 1 page raises during extraction, or `n_failed > 0` after Stage 1/2 | the page is skipped and counted; `pages.json` is not written, so the next run retries extraction from scratch (`page_text.py:224-234`; `pipeline.py:128-136`) |
+| A Stage 2 batch's forward pass raises | recorded in `failed_batches`, its pages get no layout; once every batch has run, `detect_layout_all_pages` raises `LayoutDetectionFailed` naming the batch numbers and affected page count (`layout.py:250-255,293-300`) |
 | `LayoutDetectionFailed` reaches `run_folder`'s per-document handler | the document is marked `status="error"` in `_index.json` and the run continues; called directly, the exception propagates unhandled (`pipeline.py:267-292,632-656`) |
-| A page fails to render for Stage 2, its post-detection processing raises, or a crop fails to encode or write | logged and skipped; the page keeps its Stage-1-only data, and a written `Block` can still reference a failed crop (`stage2_layout.py:509-570,1023,1064`) |
+| A page fails to render for Stage 2, its post-detection processing raises, or a crop fails to encode or write | logged and skipped; the page keeps its Stage-1-only data, and a written `Block` can still reference a failed crop (`layout.py:119-120,184-185`, `crops.py:75-89`) |
 | `pages.json` or `sections.json` is unreadable, or a Stage 3 cache was built while `n_failed` was set, or the input path is neither a `.pdf` file nor a directory | treated as absent and rebuilt, deleted before the cache-hit check runs, or `run()` raises `ValueError` and `main()` exits with status 1 (`pipeline.py:60-62,170-189,536,654-656`) |
-| No profile is active but a profile-gated function is called, or a profile is named after the stage was imported under another one | a `LookupError` propagates uncaught, or `resolve_profile` raises `SystemExit` (`stage1_extract.py:41-43`; `profile.py:261-271,392-406,452-475`) |
-| A page's transcription ends in a hole (a reply that stayed unreadable, one cut off twice, a request refused or not answered, a page that could not be rendered, an error of the stage's own), returns an empty markdown string, or more candidates need transcription than `max_pages` | a hole is counted in `pages_failed` and listed in `failed_pages` with its cause, an empty string in `pages_empty`, and the exit code does not change; a run with candidates over `max_pages` is truncated with `pages_missing_text` still reporting the true total (`page_text_fallback.py:205-213`); unreachable through the CLI or `run()`, since `_fill_missing_page_text()` never passes `max_pages` (`pipeline.py:406-412`) |
+| No profile is active but a profile-gated function is called, or a profile is named after the stage was imported under another one | a `LookupError` propagates uncaught, or `resolve_profile` raises `SystemExit` (`page_text.py:41-43`; `profile.py:261-271,392-406,452-475`) |
+| A page's transcription ends in a hole (a reply that stayed unreadable, one cut off twice, a request refused or not answered, a page that could not be rendered, an error of the stage's own), returns an empty markdown string, or more candidates need transcription than `max_pages` | a hole is counted in `pages_failed` and listed in `failed_pages` with its cause, an empty string in `pages_empty`, and the exit code does not change; a run with candidates over `max_pages` is truncated with `pages_missing_text` still reporting the true total (`page_text_without_layer.py:204-212`); unreachable through the CLI or `run()`, since `_fill_missing_page_text()` never passes `max_pages` (`pipeline.py:406-412`) |
 | The vision server a page needs is not there, does not serve the model, has too small a window or refuses the page reply schema | the check `_assert_page_server` raises `PreflightError` before the first page that lacks its text; `run_folder` lets it through and `main` exits with status 1 (`pipeline.py:280-283,461-480,654-656`); a run in which no page lacks its text never asks |
 | The profile lacks a sentence of `reading.PHRASES`, with `--transcribe-missing-text` | `LookupError` from `reading.phrases()` before the first document, with a traceback and a non-zero exit (`pipeline.py:631-634`) |
 | `find_gutters()` cannot support a confident column split | returns `[]`; the page reads as a single column, or, under `column_layout="double"`, falls back to a hard centre split (`columns.py:158-267`) |
@@ -363,7 +377,7 @@ A selection of the module constants that tune detection and assembly:
   roughly 1700-pixel page, enough to shift a crop's edge into neighbouring
   text, so Stage 2 casts `logits`/`pred_boxes` back to fp32 after autocast
   while leaving `out_masks`, its largest tensor, in the reduced dtype
-  (`stage2_layout.py:311-330`).
+  (`layout_model.py:175-194`).
 - Real text columns measure an aligned-left-edge fraction of at least 0.90,
   labels scattered around a chart at most 0.43, the gap
   `COLUMN_ALIGN_TOL_PT`/`COLUMN_MIN_ALIGNED_FRAC` are set to separate
@@ -381,11 +395,11 @@ A selection of the module constants that tune detection and assembly:
   there (`profiles/scenarios/preprocessing.py:39-43`).
 - Eleven plans in the heat-plan corpus carry no PDF text layer, together
   holding 1,270 tables and figures Stage 2 transcribed with no surrounding
-  text (`docpipe/preprocessing/page_text_fallback.py:1-11`). Treating the
+  text (`docpipe/preprocessing/page_text_without_layer.py:1-8`). Treating the
   fallback's legitimate empty-page answer as a failure once reported 106
   broken calls for a run where none actually broke; `pages_empty` and
   `pages_failed` are counted apart to avoid that
-  (`docpipe/preprocessing/page_text_fallback.py:191-194`). Caption
+  (`docpipe/preprocessing/page_text_without_layer.py:190-193`). Caption
   resolution's own measured behaviour is documented on
   [The parts every stage uses](core.md).
 
@@ -399,17 +413,27 @@ folder-mode indexing, and the command line.
 Called directly through `python -m docpipe.preprocessing.pipeline`;
 otherwise only `run_folder()` (calling `run_single()`) calls into it.
 
-`docpipe/preprocessing/stage1_extract.py` performs PyMuPDF `rawdict` text
+`docpipe/preprocessing/page_text.py` performs PyMuPDF `rawdict` text
 extraction into `PageData`/`Block` objects, including hyphenation repair
-and dominant-font measurement. Called by `pipeline.run_single()`; its page
-renderer is reused by `stage2_layout.py` and `page_text_fallback.py`.
+and dominant-font measurement. Called by `pipeline.run_single()`.
 
-`docpipe/preprocessing/stage2_layout.py` runs PP-DocLayoutV3 object
-detection, classifies detections into suppression, title, caption, table
-and image blocks, writes crops, promotes font-styled headings, and
-resolves captions. Called by `pipeline.run_single()`.
+`docpipe/preprocessing/rendering.py` renders pages as images: `render_page_to_pil()`
+(called by `layout.py` and `page_text_without_layer.py`), `FITZ_LOCK` (which
+every fitz call that renders or reads a page shares across threads), and the
+worker-process pool behind `DOCPIPE_LAYOUT_RENDER_PROCS`.
 
-`docpipe/preprocessing/stage3_structure.py` deterministically assembles
+Stage 2 is six modules. `docpipe/preprocessing/layout.py` runs the flow:
+batches, prefetch, the crop writer thread, the heading and caption passes, and
+`LayoutDetectionFailed`; called by `pipeline.run_single()`.
+`layout_model.py` loads PP-DocLayoutV3, builds its inputs, reads the
+detections out of its output and filters them (thresholds, non-maximum
+suppression, cross-class suppression). `layout_blocks.py` classifies the
+detections of one page into suppression, title, caption, table and image
+blocks (`process_page()`, `FootnoteTally`). `crops.py` cuts a crop out of its
+page and writes it as PNG. `headings.py` promotes font-styled headings, and
+`layout_captions.py` resolves captions.
+
+`docpipe/preprocessing/sections.py` deterministically assembles
 `PageData` into `Section`/`TableRef`/`FigureRef` objects: reading order,
 header/footer stripping, title-driven section boundaries, placeholder and
 caption resolution, and directory-section removal. Called by
@@ -417,10 +441,10 @@ caption resolution, and directory-section removal. Called by
 
 `docpipe/preprocessing/columns.py` finds text-column gutters on a page and
 orders blocks column by column instead of by raw top-to-bottom position.
-Called by `stage3_structure.build_sections()`, and directly by
+Called by `sections.build_sections()`, and directly by
 `pipeline.report_columns()`.
 
-`docpipe/preprocessing/page_text_fallback.py` provides optional
+`docpipe/preprocessing/page_text_without_layer.py` provides optional
 vision-model transcription for pages with no usable PDF text layer, turning
 a markdown reply into synthesized, `bbox_approx` text blocks on the same
 `PageData`, and naming the pages it could not read, with the cause. It sizes the
@@ -430,7 +454,7 @@ is set.
 
 Two more modules define the shapes this stage produces without a chapter
 of their own: `models.py` (the dataclasses) and `config.py` (most tunable
-constants; `page_text_fallback.py` holds its own set outside it:
+constants; `page_text_without_layer.py` holds its own set outside it:
 `MIN_PAGE_CHARS`, `PAGE_WORKERS`, `PAGE_RENDER_WORKERS`, `TEXT_AREA` and
 `RENDER_DPI`). Three cross-cutting modules this stage calls into are
 documented on [The parts every stage uses](core.md): `docpipe/artifacts.py`,
@@ -455,9 +479,10 @@ Author: Felix Vossel
 </details>
 
 <details>
-<summary><code>docpipe/preprocessing/stage1_extract.py</code></summary>
+<summary><code>docpipe/preprocessing/page_text.py</code></summary>
 
-stage1_extract.py: Extracts text with PyMuPDF, as rawdict.
+page_text.py: Stage 1. Extracts the text of every page with PyMuPDF, as
+rawdict.
 
 Text blocks are extracted per page and returned as PageData. Paragraphs are
 deliberately not merged: Stage 2 suppression needs block boundaries precise
@@ -469,62 +494,148 @@ Author: Felix Vossel
 </details>
 
 <details>
-<summary><code>docpipe/preprocessing/stage2_layout.py</code></summary>
+<summary><code>docpipe/preprocessing/page_text_without_layer.py</code></summary>
 
-stage2_layout.py: Detects page layout with PP-DocLayoutV3 and turns
-detections into tables, images, section titles and text suppressions
-for Stage 3.
+page_text_without_layer.py: Synthesizes text blocks for pages that carry
+no usable PDF text layer.
 
-Renders the open fitz pages from Stage 1 in batches and runs object
-detection. Each surviving box becomes a text suppression, a saved
-table or image crop, or a title or caption Block; classes outside
-those sets are ignored, since the Stage 1 PyMuPDF text blocks already
-cover that content. A detection passes a global confidence filter,
-then a per-class threshold, then per-class non-maximum suppression
-and cross-class suppression among table and image boxes, so one
-region never yields two crops. The text in a footnote box leaves the
-page like a page number does, and the document's log says how many text
-blocks and characters that was.
+Stage 1 reads the PDF's own text layer. Some plans have none: the
+pages are vector graphics or images end to end, get_text returns
+nothing, and every section Stage 3 assembles from them is a body of
+bare [pNN_tbl0] markers. Eleven plans in the heat-plan corpus are
+like that, together holding 1270 tables and figures that Stage 2
+transcribed and that then had no text to explain them.
 
-Two passes run over the whole document afterward. Font-based heading
-promotion turns a plain text block into a section title when the
-layout model missed it, using the document's dominant body font size
-as the reference. Caption resolution attaches the nearest
-caption-like block to each table or image, first among the blocks
-the layout model labelled as captions, then, within a fixed distance,
-among plain text; the claimed block is removed from the page so it
-is not also read as section prose.
+This module fills the gap at the level where it opens: a page's text
+blocks. The page is rendered, one model call transcribes it, and the
+reply becomes Block(type="text") entries on the same PageData every
+other page carries. Stage 2, Stage 3, refinement, chunking and
+embedding then run unchanged and read nothing about where the text
+came from.
 
-A batch whose pages never reached the detection model is reported as
-LayoutDetectionFailed rather than left with text and no layout, so
-the caller drops the document for the next run to retry.
+Each call does one job. Transcription is not cleanup: the model is
+asked to read what is on the page and nothing else, and refinement
+does its own work afterward, in its own calls. Asking for both at
+once is how a model starts inventing the tidy version of a page it
+cannot quite read.
+
+The model call is an injected callable, so the loop, the thresholds
+and the block synthesis are testable without a GPU.
 
 Author: Felix Vossel
 
 </details>
 
 <details>
-<summary><code>docpipe/preprocessing/render_pool.py</code></summary>
+<summary><code>docpipe/preprocessing/rendering.py</code></summary>
 
-render_pool.py: Renders the pages of Stage 2 in worker processes.
+rendering.py: Renders the pages of a PDF as images, in this process or in
+worker processes.
 
-MuPDF is not thread-safe within a process, so Stage 2 renders behind one lock
-(`stage2_layout._FITZ_LOCK`) and the GPU waits for it: on 3,254 pages of the
-KWP corpus, one core took 0.125 s per page for Stage 1's text and Stage 2's
-two renders, 0.087 s of it the 300 dpi render for the crops, while a whole
-page through Stage 1-3 took 0.150 s. A worker here opens the PDF itself and
-renders whole pages exactly as `stage1_extract._render_page_to_pil` does, at
-the same resolutions, so the pages of a batch render side by side on as many
-cores as the job has.
+MuPDF is not thread-safe within a process: every fitz call that renders or
+reads a page goes through FITZ_LOCK, and a page rendered here waits for it.
+On 3,254 pages of the KWP corpus, one core took 0.125 s per page for Stage
+1's text and Stage 2's two renders, 0.087 s of it the 300 dpi render for the
+crops, while a whole page through Stage 1-3 took 0.150 s. A worker process
+opens the PDF itself and renders whole pages exactly as `render_page_to_pil`
+does, at the same resolutions, so the pages of a batch render side by side on
+as many cores as the job has.
 
-Only fitz is imported, so a worker loads in a moment.
+A worker imports only fitz and PIL, so it loads in a moment.
 
 </details>
 
 <details>
-<summary><code>docpipe/preprocessing/stage3_structure.py</code></summary>
+<summary><code>docpipe/preprocessing/layout.py</code></summary>
 
-stage3_structure.py: Assembles document sections deterministically
+layout.py: Stage 2. Detects the layout of every page with PP-DocLayoutV3 and
+turns it into tables, images, section titles and text suppressions for
+Stage 3.
+
+The open fitz pages from Stage 1 are rendered in batches, by the prefetch
+thread or by worker processes (`rendering.py`), and the model's inputs of a
+batch are built in that thread too, while the batch before it runs through
+the model. Each page then goes through `layout_blocks.process_page`, and its
+crops are encoded and written by a thread of their own (`crops.py`). Once
+every batch has run, `headings.py` and `layout_captions.py` pass over the
+whole document.
+
+A batch whose pages never reached the detection model is reported as
+LayoutDetectionFailed rather than left with text and no layout, so the
+caller drops the document for the next run to retry.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/preprocessing/layout_model.py</code></summary>
+
+layout_model.py: The PP-DocLayoutV3 model of Stage 2 and the boxes it
+detects.
+
+A detection passes a global confidence filter, then a per-class threshold,
+then per-class non-maximum suppression and cross-class suppression among
+table and image boxes, so one region never yields two crops.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/preprocessing/layout_blocks.py</code></summary>
+
+layout_blocks.py: Turns the detections of one page into blocks.
+
+Each surviving box becomes a text suppression, a saved table or image crop,
+or a title or caption Block; classes outside those sets are ignored, since
+the Stage 1 PyMuPDF text blocks already cover that content. The text in a
+footnote box leaves the page like a page number does, and the document's log
+says how many text blocks and characters that was.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/preprocessing/crops.py</code></summary>
+
+crops.py: Cuts a table or image out of its page and writes it as PNG.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/preprocessing/headings.py</code></summary>
+
+headings.py: Font-based heading promotion, a pass over the whole document
+after Stage 2's batches. A plain text block becomes a section title when the
+layout model missed it, using the document's dominant body font size as the
+reference.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/preprocessing/layout_captions.py</code></summary>
+
+layout_captions.py: Caption resolution, a pass over the whole document after
+Stage 2's batches. It attaches the nearest caption-like block to each table
+or image, first among the blocks the layout model labelled as captions,
+then, within a fixed distance, among plain text; the claimed block is removed
+from the page so it is not also read as section prose. What a caption looks
+like is `docpipe/captions.py`.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/preprocessing/sections.py</code></summary>
+
+sections.py: Stage 3. Assembles document sections deterministically
 from pages that carry the layout labels Stage 2 attached.
 
 Walks every block in reading order. A block labelled as a section
@@ -549,40 +660,6 @@ section text and its placeholder are both available: resolve_title
 by distance and a nearby sentence in the section text, for plans
 whose tables carry a rounding footnote that would otherwise be read
 as the caption.
-
-Author: Felix Vossel
-
-</details>
-
-<details>
-<summary><code>docpipe/preprocessing/page_text_fallback.py</code></summary>
-
-page_text_fallback.py: Synthesizes text blocks for pages that carry
-no usable PDF text layer.
-
-Stage 1 reads the PDF's own text layer. Some plans have none: the
-pages are vector graphics or images end to end, get_text returns
-nothing, and every section Stage 3 assembles from them is a body of
-bare [pNN_tbl0] markers. Eleven plans in the heat-plan corpus are
-like that, together holding 1270 tables and figures that Stage 2
-transcribed and that then had no text to explain them
-(tests/test_page_text_fallback.py).
-
-This module fills the gap at the level where it opens: a page's text
-blocks. The page is rendered, one model call transcribes it, and the
-reply becomes Block(type="text") entries on the same PageData every
-other page carries. Stage 2, Stage 3, refinement, chunking and
-embedding then run unchanged and read nothing about where the text
-came from.
-
-Each call does one job. Transcription is not cleanup: the model is
-asked to read what is on the page and nothing else, and refinement
-does its own work afterward, in its own calls. Asking for both at
-once is how a model starts inventing the tidy version of a page it
-cannot quite read.
-
-The model call is an injected callable, so the loop, the thresholds
-and the block synthesis are testable without a GPU.
 
 Author: Felix Vossel
 

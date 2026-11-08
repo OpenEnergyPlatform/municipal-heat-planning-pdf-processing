@@ -78,7 +78,7 @@ Full account: [stages/preprocessing.md](stages/preprocessing.md).
 Each page is rendered and passed through PP-DocLayoutV3, an object
 detector that classifies tables, figures, titles, captions, headers and
 footers, each with a bounding box and a confidence score
-(`docpipe/preprocessing/stage2_layout.py`). Detected tables and figures are
+(`docpipe/preprocessing/layout.py`). Detected tables and figures are
 cropped from the rendered page and saved as PNGs under the document's
 `images/` directory. A page with no PDF text layer can optionally be
 transcribed by a vision model instead, off unless the flag
@@ -98,7 +98,7 @@ Full account: [stages/preprocessing.md](stages/preprocessing.md).
 No model runs here. PyMuPDF's extracted text is combined with the stage 2
 layout into an ordered list of sections, each with a title, a page number
 and placeholder tokens such as `[p13_tbl0]` marking where a table or figure
-sits in the reading order (`docpipe/preprocessing/stage3_structure.py`). A
+sits in the reading order (`docpipe/preprocessing/sections.py`). A
 page with more than one text column has its blocks reordered column by
 column instead of by raw position (`docpipe/preprocessing/columns.py`),
 governed by the profile's `column_layout` setting. Repeated running headers
@@ -334,9 +334,9 @@ are written for an operator to read, in the log and on disk; none is read
 back by any stage. Stage 2's `--transcribe-missing-text` pass instead
 decides, per page and per document, at run time, which pages carry no
 usable text, through `needs_transcription`
-(`docpipe/preprocessing/page_text_fallback.py:78`), called from
+(`docpipe/preprocessing/page_text_without_layer.py:77`), called from
 `fill_missing_page_text`
-(`docpipe/preprocessing/page_text_fallback.py:163` to `196`), itself
+(`docpipe/preprocessing/page_text_without_layer.py:162` to `195`), itself
 called from `docpipe/preprocessing/pipeline.py:383` to `432`.
 
 **The per-document results directory.** Chunking's db step is the last

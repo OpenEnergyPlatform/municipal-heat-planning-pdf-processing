@@ -1,5 +1,5 @@
 """
-page_text_fallback.py: Synthesizes text blocks for pages that carry
+page_text_without_layer.py: Synthesizes text blocks for pages that carry
 no usable PDF text layer.
 
 Stage 1 reads the PDF's own text layer. Some plans have none: the
@@ -7,8 +7,7 @@ pages are vector graphics or images end to end, get_text returns
 nothing, and every section Stage 3 assembles from them is a body of
 bare [pNN_tbl0] markers. Eleven plans in the heat-plan corpus are
 like that, together holding 1270 tables and figures that Stage 2
-transcribed and that then had no text to explain them
-(tests/test_page_text_fallback.py).
+transcribed and that then had no text to explain them.
 
 This module fills the gap at the level where it opens: a page's text
 blocks. The page is rendered, one model call transcribes it, and the
@@ -318,7 +317,7 @@ def make_page_renderer(pdf_path, scratch_dir=None):
     import fitz
     from PIL import Image
 
-    from .stage1_extract import _render_page_to_pil
+    from .rendering import render_page_to_pil
 
     pdf_path = Path(pdf_path)
     if scratch_dir is None:
@@ -338,7 +337,7 @@ def make_page_renderer(pdf_path, scratch_dir=None):
     def render(page_number: int):
         out = pages_dir / f"p{page_number - 1}_page.png"
         if not out.exists():
-            image: Image.Image = _render_page_to_pil(_doc()[page_number - 1],
+            image: Image.Image = render_page_to_pil(_doc()[page_number - 1],
                                                      RENDER_DPI)
             image.save(out, format="PNG")
         return out

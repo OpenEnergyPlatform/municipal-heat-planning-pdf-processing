@@ -228,7 +228,7 @@ The result is None where it is no more than *asked*: the unit is a hole `cut_off
 then and nothing is sent. Where the window is not known, or the caller states no
 budget, the room is twice *asked*. Each stage's budget is one largest reply
 (`refinement.config.max_request_tokens`, `visuals.config.max_request_tokens`,
-`page_text_fallback.page_request_tokens`).
+`page_text_without_layer.page_request_tokens`).
 
 ### Reading a model's reply as one JSON object
 
@@ -349,8 +349,8 @@ As `build_sections` appends a table's or a figure's placeholder to the
 section text it is assembling, it calls `resolve_title(ref.caption,
 current_section.content, block.id)` before the next block, settling the
 caption the moment the section is written
-(`docpipe/preprocessing/stage3_structure.py:418-420` for a table,
-`:441-443` for a figure). What opens a caption is the profile's:
+(`docpipe/preprocessing/sections.py:438-440` for a table,
+`:461-463` for a figure). What opens a caption is the profile's:
 `captions.py` holds no pattern and reads the list `preprocessing.CAPTION_START`
 of the profile in force (the built-in `default` profile where none is named),
 joins it into one pattern and compiles it once per profile
@@ -550,7 +550,7 @@ the standalone `migrate_artifact_names.py`, which renames old filenames.
 and provides the `component()`/`require()`/`profile_value()` lookup the
 core uses to pull the Python objects a profile contributes. Imported
 throughout, including `prompts.py`, `refinement/config.py`,
-`preprocessing/stage3_structure.py` and `extraction/runner.py`
+`preprocessing/sections.py` and `extraction/runner.py`
 (Position in the pipeline, above, names the rest).
 
 `prompts.py` loads a profile's Markdown prompt files, splits optional
@@ -559,7 +559,7 @@ YAML front matter from the body, hashes the raw file, substitutes
 `per_profile` defers a stage's read of its prompts to first use. Called on
 first use by the refinement (`config.py`, `split.py`) and visuals
 (`config.py`) modules, at import time by `inference/llm_client.py`, and at
-request time by `preprocessing/page_text_fallback.py`,
+request time by `preprocessing/page_text_without_layer.py`,
 `extraction/runner.py` and `inference/kg_route.py`;
 `record()`/`check()` run from the refinement and visuals pipelines.
 

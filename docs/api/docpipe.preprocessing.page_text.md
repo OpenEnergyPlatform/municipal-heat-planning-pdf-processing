@@ -1,8 +1,9 @@
-# docpipe.preprocessing.stage1_extract
+# docpipe.preprocessing.page_text
 
-`docpipe/preprocessing/stage1_extract.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
+`docpipe/preprocessing/page_text.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-stage1_extract.py: Extracts text with PyMuPDF, as rawdict.
+page_text.py: Stage 1. Extracts the text of every page with PyMuPDF, as
+rawdict.
 
 Text blocks are extracted per page and returned as PageData. Paragraphs are
 deliberately not merged: Stage 2 suppression needs block boundaries precise

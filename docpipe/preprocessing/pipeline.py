@@ -31,7 +31,7 @@ from .config import (
     dump_json_atomic,
 )
 from .models import PageData
-from .stage3_structure import (build_sections, save_output, sections_to_dict,
+from .sections import (build_sections, save_output, sections_to_dict,
                                title_page_of)
 # Keep Stage 1/2 imports (fitz, torch, PP-DocLayout) lazy inside the functions
 # that need them: --rebuild-stage3 must run without pulling in the GPU stack.
@@ -110,8 +110,9 @@ def run_single(
         pages = _load_pages_cache(output_dir)
 
     if pages is None:
-        from .stage1_extract import extract_all_pages
-        from .stage2_layout import detect_layout_all_pages, load_model
+        from .page_text import extract_all_pages
+        from .layout import detect_layout_all_pages
+        from .layout_model import load_model
         if model_tuple is None:
             model_tuple = load_model()
 
@@ -249,7 +250,7 @@ def run_folder(
         for p in pdf_files
     )
     if needs_extraction:
-        from .stage2_layout import load_model
+        from .layout_model import load_model
         model_tuple = load_model()
     else:
         log.info("All PDFs have cached extractions – skipping layout model load")
@@ -399,7 +400,7 @@ def _fill_missing_page_text(pdf_path, output_dir, pages, *, profile=None,
     """
     import json as _json
 
-    from .page_text_fallback import (PAGE_WORKERS, fill_missing_page_text,
+    from .page_text_without_layer import (PAGE_WORKERS, fill_missing_page_text,
                                      make_page_renderer, make_transcriber)
 
     if profile is None:
@@ -473,7 +474,7 @@ def _assert_page_server(profile) -> None:
     from docpipe.visuals import replies
     from docpipe.visuals.config import VLM_API_KEY, VLM_BASE_URL, VLM_MODEL
 
-    from .page_text_fallback import page_request_tokens
+    from .page_text_without_layer import page_request_tokens
 
     if profile is None:
         from docpipe.profile import resolve_profile as _resolve

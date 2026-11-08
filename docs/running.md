@@ -260,8 +260,8 @@ PDF, ignoring both caches; `--rebuild-stage3` reruns only section
 assembly, from a cached `pages.json`, with no PDF and no layout model;
 `--transcribe-missing-text` turns on a vision fallback for pages with no
 text layer (lines 573 to 577), reusing the visuals stage's client at
-`VLM_BASE_URL` (`docpipe/preprocessing/page_text_fallback.py` lines 392
-to 393). The stage writes `pages.json`, then `sections.json`.
+`VLM_BASE_URL` (`docpipe/preprocessing/page_text_without_layer.py` lines 391
+to 392). The stage writes `pages.json`, then `sections.json`.
 It resumes on those two files existing and loading cleanly; a run that
 dies partway through a document leaves no cache for it and starts that
 document over.

@@ -7,7 +7,7 @@ file imports nothing from the project, which is why the docs build needs
 neither the GPU stack nor the corpus.
 
 `autodoc` is deliberately absent for the same reason: importing
-`docpipe.preprocessing.stage2_layout` to render its docstring would pull in
+`docpipe.preprocessing.layout_model` to render its docstring would pull in
 OpenCV, PyMuPDF and torch. The docstrings reach the site through the
 generator, which reads them with `ast`.
 """

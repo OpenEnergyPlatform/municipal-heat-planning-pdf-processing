@@ -1,16 +1,17 @@
 """
-render_pool.py: Renders the pages of Stage 2 in worker processes.
+rendering.py: Renders the pages of a PDF as images, in this process or in
+worker processes.
 
-MuPDF is not thread-safe within a process, so Stage 2 renders behind one lock
-(`stage2_layout._FITZ_LOCK`) and the GPU waits for it: on 3,254 pages of the
-KWP corpus, one core took 0.125 s per page for Stage 1's text and Stage 2's
-two renders, 0.087 s of it the 300 dpi render for the crops, while a whole
-page through Stage 1-3 took 0.150 s. A worker here opens the PDF itself and
-renders whole pages exactly as `stage1_extract._render_page_to_pil` does, at
-the same resolutions, so the pages of a batch render side by side on as many
-cores as the job has.
+MuPDF is not thread-safe within a process: every fitz call that renders or
+reads a page goes through FITZ_LOCK, and a page rendered here waits for it.
+On 3,254 pages of the KWP corpus, one core took 0.125 s per page for Stage
+1's text and Stage 2's two renders, 0.087 s of it the 300 dpi render for the
+crops, while a whole page through Stage 1-3 took 0.150 s. A worker process
+opens the PDF itself and renders whole pages exactly as `render_page_to_pil`
+does, at the same resolutions, so the pages of a batch render side by side on
+as many cores as the job has.
 
-Only fitz is imported, so a worker loads in a moment.
+A worker imports only fitz and PIL, so it loads in a moment.
 """
 from __future__ import annotations
 
@@ -18,9 +19,34 @@ import collections
 import concurrent.futures as cf
 import itertools
 import multiprocessing as mp
+import threading
 from typing import Iterable, Iterator, Optional
 
 import fitz
+from PIL import Image
+
+# PyMuPDF is not thread-safe: one MuPDF context per document, and Stage 2's
+# prefetch thread renders detection inputs from the same document its main
+# thread renders crops and reads text from. Every fitz call on a page that
+# another thread may use goes through this lock. It does not cost the overlap
+# Stage 2 is after: the main thread holds it only while rendering or reading,
+# never while a batch is on the GPU.
+FITZ_LOCK = threading.Lock()
+
+
+def render_page_to_pil(page: fitz.Page, dpi: int) -> Image.Image:
+    """Renders a fitz.Page to a PIL RGB image in memory without any disk I/O."""
+    zoom = dpi / 72.0
+    mat  = fitz.Matrix(zoom, zoom)
+    pix  = page.get_pixmap(matrix=mat, alpha=False)
+    return Image.frombytes("RGB", (pix.w, pix.h), pix.samples)
+
+
+def as_image(rendered: tuple) -> Image.Image:
+    """A page `render_page` rendered in a worker, as `render_page_to_pil`
+    returns it."""
+    width, height, samples = rendered
+    return Image.frombytes("RGB", (width, height), samples)
 
 # In a worker: the one document it has open, by path.
 _OPEN: dict = {}
