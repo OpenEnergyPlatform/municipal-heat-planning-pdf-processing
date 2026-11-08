@@ -24,7 +24,7 @@ from docpipe.extraction import combing, fields, reading, runner, survey
 from docpipe.extraction.pipeline import Source
 from docpipe.extraction.spec import SpecError, load as load_spec
 from profiles.scenarios import kg
-from test_graph_from_shapes import OEO, oekg
+from test_graph_from_shapes import OEO, empty_db, oekg
 
 SPEC_PATH = (Path(__file__).resolve().parent.parent / "profiles"
              / "scenarios" / "extraction_spec.json")
@@ -198,7 +198,7 @@ def harvest(other_year_kind):
 
 
 def graph_of(rows):
-    serializer = kg.make_serializer(Path("no-such.db"), model=oekg())
+    serializer = kg.make_serializer(empty_db(), model=oekg())
     text = serializer("doc", rows)
     graph = Graph().parse(data=text, format="turtle")
     years = {str(o)[:4] for o in graph.objects(

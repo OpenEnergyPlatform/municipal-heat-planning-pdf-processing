@@ -48,7 +48,8 @@ from docpipe.extraction.naming import SEVERAL
 from docpipe.extraction.shapemodel import (XSD, Model, SchemaError,
                                            snapshot_ancestors)
 from docpipe.extraction.spec import kg_name, load as load_spec
-from docpipe.extraction.trust import check_prose, render, trust
+from docpipe.extraction.trust import (check_prose, render, transcribed_documents,
+                                      trust)
 from docpipe.store.schema import readonly_uri
 from profiles.scenarios.front import FRONT_FIELDS, front_pages, in_order
 
@@ -597,11 +598,6 @@ def held_back(row: dict) -> Optional[str]:
                 if slot.keep and not fields.kept(slot, row))
     return f"{slot.name}:{row.get(slot.name) or row.get(f'{slot.name}_state')}"
 
-# This corpus has no transcribed pages to declare: its Documents table carries
-# no page_text_transcribed column, so `trust` is never told a page was itself
-# a reading. Named here so the missing argument is a fact and not an
-# oversight -- if that column ever arrives, this is where it is read.
-PAGE_TRANSCRIBED = False
 
 
 def _ttl_comment(text) -> str:
@@ -745,6 +741,11 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
         return held == value
 
     bound = bind(model if model is not None else default_model())
+    # The documents some of whose pages a model read because the PDF had no
+    # text there: every value of theirs is graded as a reading of a reading,
+    # as kwp grades its plans (`trust`, "page_transcribed"). None in a
+    # database whose pages nobody looked at.
+    transcribed = transcribed_documents(db_path)
 
     def build(name: str, rows: list, decided: Optional[dict] = None):
         # What people decided about this document's rows, by the name a row
@@ -884,7 +885,7 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
                 # mint one IRI. `_pick_one` already decided and counted the
                 # rivals; without this the winner is graded as if it had been
                 # the only reading.
-                verdict = trust(row, transcribed=PAGE_TRANSCRIBED,
+                verdict = trust(row, transcribed=name in transcribed,
                                 conflict=bool(contested.get(row.get("parameter"))),
                                 corroborated=confirmed)
                 lines.append(_ttl_comment(render(verdict, TRUST_PROSE,

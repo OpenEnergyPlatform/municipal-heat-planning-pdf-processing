@@ -28,11 +28,13 @@ one row per document with `doi`, `title`, `year`, `venue` and `is_oa`,
 filled from the crawl rather than from this profile's own extraction; the
 graph stage's cross-check against these columns is covered below.
 
-Trust computation for this profile also has to account for one
-corpus-wide fact: the corpus database carries no
-`page_text_transcribed` column, so `PAGE_TRANSCRIBED` is fixed `False`
-for every value this profile serializes, never read per document the
-way an axis coordinate is (`profiles/scenarios/kg.py`). The graph stage's
+Trust is graded per document as in kwp: a document whose
+`page_text_transcribed` in the database is above zero had pages a model
+read because the PDF had no text there, and every value of it gets the
+reason `page_transcribed` and at best level B
+(`trust.transcribed_documents`, read once per serialization in
+`profiles/scenarios/kg.py`). A database without the column, or a document
+whose pages nobody looked at, has none. The graph stage's
 account of scenario-scope tuples that could not be attached to any scenario
 is at [../stages/graph.md](../stages/graph.md).
 
