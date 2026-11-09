@@ -53,19 +53,43 @@ def kept_quantities() -> tuple:
 SLICE = {"quantity": kept_quantities(), "year": None}
 
 
-# What a plan says about itself: asked once more over the opening of the
-# document in a harvest field by field, and its passages ranked with a
-# sentence written for this plan (`runner.make_seek_probes`, owner decisions
-# 2026-11-05 and 2026-11-08). The spec asks for no such field of a heat
-# plan, so every parameter is ranked with a sentence written once per run.
-FRONT_PAGE_PARAMETERS: tuple = ()
+# Lines of a piece the plan is read in (owner decision 2026-11-08, f: eight;
+# twelve only measured where a probe loses values).
+CHUNK_UNITS = 8
 
-# Every reading request shows the line of the plan's title page that names
-# its municipality (`runner.make_title_page`, the name from
-# `document_context`), as a passage a quote may stand in: whether a number
-# holds for the whole municipality is the model's reading (owner decision
-# 2026-11-06).
-TITLE_PAGE_LINE = True
+# What a plan settles for all its values and its own years, each asked once
+# in the form of a document's field, with the title page and the pieces a
+# search finds best for its sentence (owner decision 2026-11-08,
+# `addressed.Reader.settled`): the settings' lines stand beside every
+# value's coordinates, the years are the plan's base and target years.
+PLAN_FIELDS = {
+    "settings": {
+        "name": "Festlegung des Plans für alle seine Werte",
+        "means": ("Eine Festlegung, die der Plan selbst für mehr als einen "
+                  "seiner Werte trifft: das Jahr seiner Bilanz, dass "
+                  "Emissionen in CO2-Äquivalenten angegeben sind, die "
+                  "Einheit aller Zahlen einer Tabelle, das Gebiet, für das "
+                  "seine Zahlen gelten. Keine einzelne Zahl und keine "
+                  "Vorgabe aus Gesetz, Förderrichtlinie oder einer anderen "
+                  "Studie, außer der Plan macht sie zu seiner eigenen."),
+        "sentence": ("Alle Werte dieses Wärmeplans beziehen sich auf das "
+                     "Bilanzjahr und sind in CO2-Äquivalenten angegeben.")},
+    "base_year": {
+        "name": "Basisjahr des Plans",
+        "means": ("Das Jahr, für das der Plan seinen eigenen Stand aufnimmt "
+                  "(Basisjahr, Bilanzjahr, Ist-Zustand). Nimmt er seinen "
+                  "Stand als Mittel mehrerer Jahre auf, sind es diese "
+                  "Jahre."),
+        "sentence": "Das Basisjahr der Wärmeplanung ist das Jahr 2021."},
+    "target_year": {
+        "name": "Zieljahr des Plans",
+        "means": ("Das Jahr, das der Plan selbst Zieljahr nennt oder in dem "
+                  "sein Ziel erreicht ist, kein Zwischenziel und kein "
+                  "Stützjahr; das Jahr eines Gesetzes, einer Förderung oder "
+                  "einer anderen Studie zählt nicht."),
+        "sentence": ("Das Zieljahr der Wärmeplanung ist 2040, dann ist die "
+                     "Wärmeversorgung klimaneutral.")},
+}
 
 
 def document_context(conn, document_id: int) -> dict:
@@ -180,17 +204,13 @@ PHRASES = {
     "kind_year": 'ein Kalenderjahr mit vier Ziffern',
     "kind_text": 'eine Angabe als Text',
     "not_an_option": (
-        'Dein "value" {given!r} ist keiner der Einträge aus "options". '
-        'Wähle genau einen Namen daraus, Zeichen für Zeichen '
-        'abgeschrieben, auch einen mit "out:". Passt keiner, obwohl die '
-        'Passage die Angabe nennt, dann lass "value" weg und gib die '
-        'Bezeichnung in "value_raw".'),
+        'Dein "entry" {given!r} ist keine Nummer aus "list". '
+        'Antworte mit einer Nummer aus "list", 0 wenn kein Eintrag '
+        'passt.'),
     "name_not_listed": (
-        'Unter {name!r} hast du {given} angegeben. Antworte mit einer '
-        'Liste von Nummern aus "names".'),
-    "groups_not_listed": (
-        'Unter {name!r} hast du {given} angegeben. Antworte mit Listen von '
-        'Nummern aus "names", einer Liste je Gruppe.'),
+        'Dein "entry" {given!r} ist keine Nummer aus "list". '
+        'Antworte mit einer Nummer aus "list" oder mit "new", wenn '
+        'der Name keiner ihrer Einträge ist.'),
     "wrong_type": (
         'Dein "value" {given!r} ist nicht {wrong}. Antworte mit {wrong}, '
         'genau wie die Passage es schreibt.'),
@@ -202,10 +222,6 @@ PHRASES = {
         'Dein "quote" steht weder in "source" noch in der Überschrift ihres '
         'Abschnitts noch in "around". Kopiere es Zeichen für Zeichen aus '
         'einem davon.'),
-    "quote_not_shown": (
-        'Dein "quote" steht in nichts, was diese Anfrage zeigt. Kopiere es '
-        'Zeichen für Zeichen aus "more", aus einem Titel oder einer Zeile '
-        'unter "hits", aus "passage" oder aus "row".'),
     "quote_too_short": (
         'Dein "quote" ist zu kurz, um eine Stelle zu benennen '
         '(mindestens {minimum} Zeichen). Zitier den ganzen Satz oder die '
@@ -225,21 +241,6 @@ PHRASES = {
         'dein Zitat sie druckt, Zeichen für Zeichen, oder zitier die Stelle, '
         'an der sie wirklich steht.'),
     "or_unstated": ' Steht sie nirgends, antworte mit "{unstated}".',
-    "or_leave_out": ' Steht sie nirgends, lass sie weg.',
-    "year_not_in_quote": (
-        'Das Jahr {given!r} steht nicht in seinem Zitat {quote!r}. Zitier '
-        'die Stelle, die es druckt.'),
-    # A find of the combing quoted from a passage other than the value's own
-    # that the check found does not speak about the value (owner decision
-    # 2026-11-07), and a check whose answer is neither "yes" nor "no".
-    "not_about_value": (
-        'Eine zweite Prüfung ergab: Die Stelle, die du für {answer!r} '
-        'zitiert hast, spricht nicht über diesen Wert und sagt deshalb nicht, '
-        'was zu ihm gehört. Antworte nur aus einer Stelle, die über diesen '
-        'Wert spricht; gibt es keine, lass die Angabe weg.'),
-    "verdict_not_an_option": (
-        'Dein "about" {given!r} ist weder "yes" noch "no". Antworte mit einem '
-        'von beiden.'),
     # The key of the frame request that holds the entries of a closed frame
     # coordinate. The frame prompt reads them there.
     "frame_options": "scenarios",
@@ -279,11 +280,6 @@ PHRASES = {
     "shorter_rows": (
         'Antworte mit weniger Tupeln und zitiere nur die kurze Stelle, '
         'an der die Zahl steht.'),
-    "value_outside_quote": (
-        'Diese Zahlen stehen nicht in dem "quote", unter dem du sie angegeben '
-        'hast: {values}. Gib nur diese Einträge noch einmal an, jede Zahl '
-        'unter dem Zitat der Zeile, die sie druckt, und lass eine Zahl weg, '
-        'die keine Zeile druckt.'),
     "compute_output": (
         'Ausgabe des Codes:\n{output}\n\nAntworte jetzt mit dem Ergebnis: '
         '{{"value":123.456,"used":["N1","N3"],"quote":"..."}}. "value" ist die '
@@ -317,26 +313,15 @@ PHRASES = {
         'Einträge noch einmal an, jeden mit genau der einen Zeile, in der '
         'er steht, als "quote".'),
     # die Werte einer Passage
-    "value_not_kept": (
-        'Gelesen ist dieser Wert "{given}" und kein Wert aus "parameter": '
-        'Er ist falsch gelesen.'),
-    "value_rejected": (
-        'Dieser Wert ist nicht übernommen: {reason}. Nenne ihn noch einmal, '
-        'mit einem "quote", das Zeichen für Zeichen aus der Passage '
-        'abgeschrieben ist, die ihn druckt. Bei einem Parameter mit Liste ist '
-        '"value" einer ihrer Einträge, oder "", wo keiner passt, und das Wort '
-        'der Passage dafür steht in "value_raw". Steht kein solcher Wert in '
-        'der Passage, lass ihn weg.'),
-    "quote_not_unique": (
-        'Dein "quote" {quote!r} steht mehr als einmal in dem, was du '
-        'bekommen hast, und sagt so nicht, welche Zahl du meinst. Nenne '
-        'diesen Wert noch einmal mit einem "quote", das dort nur einmal '
-        'steht und den Wert einmal enthält, etwa mit den Wörtern oder Zellen '
-        'daneben.'),
-    "value_not_once": (
-        'Dein "quote" {quote!r} enthält {value} mehr als einmal und sagt so '
-        'nicht, welche davon du meinst. Nenne diesen Wert noch einmal mit '
-        'einem "quote", das ihn genau einmal enthält.'),
+    "not_an_address": (
+        'Die Adresse {at!r} nennt keine Zeile und keine Zelle dessen, was '
+        'dir gezeigt wurde. Gib die Adresse an, wie sie vor der Zeile '
+        'steht: ihre Nummer, davor der Buchstabe des Blocks, wo er einen '
+        'hat, in einer Tabellenzeile ein Punkt und die Nummer der Zelle.'),
+    "words_not_in_line": (
+        'Die Worte {words!r} stehen nicht in der Zeile, die {at!r} nennt, '
+        'oder sie nennen mehr als eine Zahl. Gib die Adresse und die Worte '
+        'genau eines Werts an, wie die Zeile sie druckt.'),
     "shorter_field": (
         'Fasse Zeilen mit derselben Antwort in "groups" zusammen und '
         'zitiere nur die kurze Stelle, an der die Angabe steht.'),

@@ -40,8 +40,9 @@ coordinate after the harvest: a top-up that read it again, or the pass that
 appended its row (`--top-up-parameters`); the harvest writes none, so a
 missing key means the harvest read it (`docpipe/extraction/schema.py:212` to
 `293`). The rest belong to the row itself: `kind`, `quote`,
-`tier`, `flags`, `provenance`, `computed`, `compute`, `unit` and
-`unit_raw` (empty for a wording); only the value additionally carries `value_target` for a numeric parameter
+`tier`, `flags`, `provenance`, `at` (the address of the value's place: passage,
+line, cell), `head` (the words over its table column), `drawn` (a figure's value),
+`computed`, `compute`, `unit` and `unit_raw` (empty for a wording); only the value additionally carries `value_target` for a numeric parameter
 whose unit chose an entry (a printed unit that is no entry leaves `unit` and
 `value_target` empty and flags `unmapped:unit:<print>`), `reading` for a number
 read off a figure in place of a quote, or `value_raw` and `value_uri` for a

@@ -200,3 +200,15 @@ def matching(passages: list[Source], pattern: str, room: int) -> Matches:
         used += cost
         hits.append(hit)
     return Matches(hits, total)
+
+def two_pages(passages: list, pages: Optional[int], span: int = 2) -> int:
+    """The text of *span* pages of this plan, in characters: *span* times
+    its mean; two pages unless said otherwise. What the compute step cuts a
+    passage it fetches to. A figure's description is not counted: a figure
+    is never cut, whatever its description's length."""
+    chars = sum(len(p.text or "") for p in passages
+                if p.owner_kind != "figure")
+    if not pages:
+        pages = max([(p.provenance or {}).get("page") or 0
+                     for p in passages] or [0])
+    return max(1, round(span * chars / max(pages or 1, 1)))

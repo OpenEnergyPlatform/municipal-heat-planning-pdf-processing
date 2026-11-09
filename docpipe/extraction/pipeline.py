@@ -735,8 +735,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
     the plan's own word as the wording where the request asks one, else the
     answer as the quote prints it, then what else the request lets it
     answer, *not_in_quote*: "not stated" where it offers that
-    (`or_unstated`), else to leave the coordinate out (`or_leave_out`)
-    (owner decisions 2026-11-06); the reason stays `answer_not_in_quote`.
+    (`or_unstated`) (owner decisions 2026-11-06); the reason stays
+    `answer_not_in_quote`.
     """
     reply = reply if isinstance(reply, dict) else {}
     pairs: list = []
@@ -898,7 +898,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             continue
         row.claim[f"{slot.name}_state"] = READ
         # An entry beside the names is kept as what it is, its out: key,
-        # so nothing takes it for a name (`naming.read_name`, the graph).
+        # so nothing takes it for a name (`addressed.Reader.name_of`, the
+        # graph).
         row.claim[slot.name] = option.uri \
             if beside_names(slot) and option is not None else given
         if wording and not name_only:

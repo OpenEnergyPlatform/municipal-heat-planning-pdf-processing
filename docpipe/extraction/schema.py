@@ -145,7 +145,7 @@ REFUSAL_REASONS = [
 # writes that is not listed here is a check nobody agreed to.
 DROP_REASONS = ["quote_not_in_source", "quote_too_short",
                 "answer_not_in_quote", "not_an_option", "wrong_type",
-                "unbacked"]
+                "unbacked", "not_an_address", "words_not_in_line"]
 
 
 def _owner() -> dict:
@@ -216,15 +216,15 @@ def _value_uri(parameter) -> dict:
 
 
 def _means(name: str) -> dict:
-    """The things a name means, as the naming asked them once the document
-    was read (`naming.py`)."""
+    """The entries of the document's list of names an answer means, as
+    they were asked while it was read (`addressed.Names`)."""
     return {
         "type": "array", "items": {"type": "string", "minLength": 1},
-        "minItems": 1,
-        "description": f"The names of the things '{name}' means, among the "
-                       f"document's names for that kind of thing: its own "
-                       f"name or another name of the same thing, or several "
-                       f"names where it stands for several things. The "
+        "description": f"The entries of the document's list of names "
+                       f"(its scenarios, its works) '{name}' means: the "
+                       f"entry its name is, or the entry of each member "
+                       f"where its words name a group; empty where they "
+                       f"name a group the field takes no members for. The "
                        f"graph writes the row to each of them."}
 
 
@@ -275,11 +275,16 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                             {"type": "integer"}],
             "minItems": 2, "maxItems": 2,
             "description": f"[stage, index] of the window '{name}' was read "
-                           f"in. A coordinate read in window 1 and one read "
-                           f"in window 22 cost different amounts. `near`: "
-                           f"read by the second reading, which showed the "
-                           f"sections before and after the value's place. "
-                           f"`frame` is "
+                           f"in. `own`: at the value's own place, its row "
+                           f"with its table's title and head or its sentence "
+                           f"with the sentences beside it. `near`: in the "
+                           f"pieces right before and after it. `found`: in "
+                           f"the pieces a search found for the sentence of "
+                           f"how the plan would print it. `plan_years`: a "
+                           f"year none of these found, read from the plan's "
+                           f"base and target years in a request of its own. "
+                           f"The other stages are those of harvests made "
+                           f"before the reading in pieces: `frame` is "
                            f"the one that is not a window: the coordinate was "
                            f"read ONCE for the document and applied to this "
                            f"row, and the index is which of the document's "
@@ -288,18 +293,13 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"word, and the index is the pair whose quote "
                            f"prints the number. `target_year`: the same for "
                            f"the document's target. `table`: read once for "
-                           f"the row's table and taken by this row; the index "
-                           f"is 1 for the second reading and 2 for the "
-                           f"combing. `head`: the "
+                           f"the row's table and taken by this row. `head`: "
+                           f"the "
                            f"year the head of the row's column prints, one "
                            f"of the document's pairs, taken off the table "
                            f"and not asked; the index is the column. "
-                           f"`plan_years`: a year none of the windows before "
-                           f"found, read in the comb's one further message "
-                           f"that showed the plan's base and target years; "
-                           f"the index is 1. `frame`, `table`, `head`, "
-                           f"`places` and `rest` are windows of harvests "
-                           f"made before each value was asked for itself."},
+                           f"`retrieval`, `rest` and `places` are the "
+                           f"windows of the reading by passages."},
         f"{name}_link_quote": {
             "type": "string", "minLength": MIN_QUOTE_CHARS,
             "description": f"Only with window `base_year` or `target_year`: "
@@ -328,8 +328,9 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"deleted) means nobody can say. Recorded and "
                            f"never compared."},
     }
-    if getattr(slot, "merged", None):
-        out[f"{name}_means"] = _means(name)
+    # Any coordinate whose answer is an entry of the document's list of
+    # names, a scenario or a work (`addressed.Names`).
+    out[f"{name}_means"] = _means(name)
     return out
 
 
@@ -408,6 +409,18 @@ def _tuple_schema(spec, parameter) -> dict:
                                      "the read value it was looked up "
                                      "with; the flag catalogue goes with "
                                      "it."},
+        "at": {"type": "object",
+               "properties": {"owner": _owner(),
+                              "line": {"type": "integer", "minimum": 1},
+                              "cell": {"type": "integer", "minimum": 1},
+                              "last": {"type": "integer", "minimum": 1}},
+               "required": ["owner", "line"],
+               "additionalProperties": False,
+               "description": "Where the value stands (owner decisions "
+                              "2026-11-08): its passage, the number of its "
+                              "line there, the cell of a table row, and "
+                              "the last line of a value over several lines. "
+                              "The quote is that line."},
         "drawn": {"type": "boolean",
                   "description": "A figure's value only: whether its image "
                                  "only draws the number (a bar, a segment, an "
@@ -838,13 +851,16 @@ def stamp_schema() -> dict:
         },
         "patternProperties": {
             "^extraction/(harvest|queries|anchors|rows|field|phrase|frame"
-            "|survey|read_values|read_text|comb|match|settings|seek)$":
-                {**sha, "description": "sha256 of the prompt file; `harvest`, "
-                                       "`survey` and `seek` are in stamps "
-                                       "of an older release; `read_values`, "
-                                       "`read_text`, `comb`, `match` and "
-                                       "`settings` are the prompts of a "
-                                       "harvest passage by passage"},
+            "|survey|read_values|read_text|comb|match|settings|seek"
+            "|transcribe|find|docfield|coord|list|names|search|check"
+            "|follow)$":
+                {**sha, "description": "sha256 of the prompt file; "
+                                       "`transcribe`, `find`, `docfield`, "
+                                       "`coord`, `list`, `names`, `search`, "
+                                       "`check` and `follow` are the "
+                                       "prompts of a harvest piece by piece; "
+                                       "the others are in stamps of older "
+                                       "releases"},
             "^question_text/[^/]+$": {
                 "type": "array", "items": {"type": "string"},
                 "description": "The sentence THIS document was searched "
@@ -895,20 +911,20 @@ def stamp_schema() -> dict:
                                "with its spellings and its definitions. "
                                "Everything the model sees for this axis, and "
                                "nothing else."}},
-        "required": ["spec", "model", "anchors", "extraction/queries",
-                     "extraction/anchors", "extraction/rows",
-                     "extraction/field"],
+        # The prompts a stamp names are those of the flow it was harvested
+        # with, so none of them is required.
+        "required": ["spec", "model", "anchors"],
         "additionalProperties": False,
     }
 
 
 # The stages whose every request writes `<stage>_ask` to the trace: the
-# harvest's own (`runner.ask_in_grammar`), the naming among them, and the
-# search sentences, the frame, the review and the compute step
-# (`runner._asked`).
-ASK_STAGES = ("read_values", "read_text", "comb", "comb_check",
-              "naming", "naming_groups", "naming_several", "years",
-              "settings", "phrase", "frame", "review", "compute")
+# requests of the harvest piece by piece (`runner.ask_in_grammar`,
+# addressed.py), and the search sentences, the frame, the review and the
+# compute step (`runner._asked`).
+PIECE_ASKS = ("transcribe", "find", "docfield", "coord", "list", "names",
+              "search", "check", "follow")
+ASK_STAGES = PIECE_ASKS + ("phrase", "frame", "review", "compute")
 
 
 def trace_schema() -> dict:
@@ -1088,138 +1104,60 @@ def trace_schema() -> dict:
                   "parameters": {"type": "integer"},
                   "first": {"type": "object", "additionalProperties": {
                       "type": "array", "items": {"type": "array"}}}},
-        # One request that got a reply, per stage (`ASK_STAGES`); a
-        # `corrections` above zero is a second round. Which of `parameter`,
-        # `owner`, `kind`, `rows`, `passages`, `figure` it carries depends on
-        # the stage; a values request counts its `round`, a group request
-        # names its `group` and the `value` it asks for.
+        # One request that got a reply, per kind (`ASK_STAGES`). Which of
+        # `parameter`, `owner`, `kind` it carries depends on the kind; a
+        # coordinate's request names the `value` it asks for, the label of
+        # its row. The requests piece by piece (addressed.py, `PIECE_ASKS`)
+        # carry besides the piece of the passage, how many pieces a request
+        # showed, the coordinate asked, the step of a list asked in two, the
+        # kind of names and how many a list showed, and the request a
+        # follow-up follows.
         **{f"{stage}_ask": {"attempt": {"type": "integer"},
-                            "corrections": {"type": "integer"},
                             "parameter": {"type": ["string", "null"]},
-                            "owner": {}, "kind": {}, "rows": {},
-                            "passages": {}, "figure": {},
-                            "group": {"type": ["string", "null"]},
-                            "round": {"type": "integer"},
+                            "owner": {}, "kind": {},
                             "value": {"type": "string"},
+                            **({"chunk": {"type": "integer"},
+                                "chunks": {"type": "integer"},
+                                "coordinate": {"type": "string"},
+                                "step": {"enum": ["group", "plan_years"]},
+                                "names": {"type": "integer"},
+                                "asked": {"type": "string"}}
+                               if stage in PIECE_ASKS else {}),
                             "prompt_tokens": {"type": ["integer", "null"]},
                             "completion_tokens": {"type": ["integer", "null"]},
                             "ms": {"type": "integer"}}
            for stage in ASK_STAGES},
-        # The naming's request (naming.py) carries none of those but the
-        # `kind` of thing it names and how many `names` it shows in how many
-        # `places`; it replaces the declaration above.
-        "naming_ask": {"attempt": {"type": "integer"},
-                       "corrections": {"type": "integer"},
-                       "kind": {"type": "string"},
-                       "names": {"type": "integer"},
-                       "places": {"type": "integer"},
-                       "prompt_tokens": {"type": ["integer", "null"]},
-                       "completion_tokens": {"type": ["integer", "null"]},
-                       "ms": {"type": "integer"}},
-        # The naming's request over all names for the candidates: the `kind`
-        # of thing and how many `names` it shows.
-        "naming_groups_ask": {"attempt": {"type": "integer"},
-                              "corrections": {"type": "integer"},
-                              "kind": {"type": "string"},
-                              "names": {"type": "integer"},
-                              "prompt_tokens": {"type": ["integer", "null"]},
-                              "completion_tokens": {"type": ["integer",
-                                                            "null"]},
-                              "ms": {"type": "integer"}},
-        # The request about the words of several things (owner decision
-        # 2026-11-07): the `kind` of thing, how many `names` it shows and in
-        # how many `places` the words stand.
-        "naming_several_ask": {"attempt": {"type": "integer"},
-                               "corrections": {"type": "integer"},
-                               "kind": {"type": "string"},
-                               "names": {"type": "integer"},
-                               "places": {"type": "integer"},
-                               "prompt_tokens": {"type": ["integer", "null"]},
-                               "completion_tokens": {"type": ["integer",
-                                                             "null"]},
-                               "ms": {"type": "integer"}},
-        # What it came to for one kind: the distinct `wordings` asked and
-        # how many of them the answer `resolved` into things.
-        "naming_several": {"kind": {"type": "string"},
-                           "wordings": {"type": "integer"},
-                           "resolved": {"type": "integer"}},
-        # What the naming of one kind came to: the `names` read, the `things`
-        # they mean, how many names mean `several`, the `groups` the request
-        # over all names gave, and how many names were `asked` against their
-        # candidates. A request that did not fit and whose halves left
-        # nothing to ask is `why` cut_off, with no count but `names`.
-        "naming": {"kind": {"type": "string"},
-                   "names": {"type": "integer"},
-                   "things": {"type": "integer"},
-                   "several": {"type": "integer"},
-                   "groups": {"type": "integer"},
-                   "asked": {"type": "integer"},
-                   "why": {"enum": ["cut_off"]}},
-        # One passage read for one parameter (reading.py), its values one per
-        # round. A passage that came to no readable reply is `unread` with
-        # `why` and no values.
+        # One field read in one passage (addressed.py), its values found in
+        # its pieces. A passage that came to no readable reply is `unread`
+        # with `why` and no values.
         "read": {"parameter": {"type": "string"},
                  "kind": {"enum": ["section", "table", "figure"]},
                  "owner": {"type": "integer"},
                  "values": {"type": "integer"},
-                 "asked": {"type": "integer"},
-                 "corrected": {"type": "integer"}, "failed": by_field,
+                 "asked": {"type": "integer"}, "failed": by_field,
                  "unanswered": {"type": "integer"},
                  "unread": {"type": "boolean"},
                  "why": {"enum": ["cut_off", "no_answer"]}},
-        # The comb of what a reading left open (combing.py): per value and
-        # group, the coordinates open and how many the requests filled.
-        "comb": {"parameter": {"type": "string"},
-                 "group": {"type": ["string", "null"]},
-                 "kind": {"enum": ["section", "table", "figure"]},
-                 "owner": {"type": "integer"}, "rows": {"type": "integer"},
-                 "open": {"type": "integer"}, "filled": {"type": "integer"},
-                 "asked": {"type": "integer"}, "hits": {"type": "integer"},
-                 "fetched": {"type": "integer"},
-                 "searched": {"type": "integer"},
-                 "missed": {"type": "integer"},
-                 "corrected": {"type": "integer"},
-                 "exhausted": {"type": "integer"},
-                 # Lists of the next passages the run added to a request
-                 # whose round asked for nothing new while a coordinate was
-                 # unfound (owner decision 2026-11-06: the search runs empty).
-                 "listed": {"type": "integer"},
-                 # The second reading, with the sections before and after
-                 # the value's place (owner decisions 2026-11-07): its
-                 # messages and the coordinates they read; and how often the
-                 # conversation outgrew the model's window and began anew.
-                 "near": {"type": "integer"},
-                 "near_read": {"type": "integer"},
-                 "anew": {"type": "integer"},
-                 # Harvests before each value was asked for itself: the
-                 # other values of the table that took the answers combed
-                 # for this one.
-                 "table_rows": {"type": "integer"},
-                 # The messages that asked for a year nothing found with
-                 # the plan's base and target years (owner decision
-                 # 2026-11-07: only where no year was found).
-                 "plan_years": {"type": "integer"},
-                 # Requests that checked a find quoted from a passage other
-                 # than the value's own, and the finds they said do not
-                 # speak about the value (owner decision 2026-11-07).
-                 "judged": {"type": "integer"},
-                 "turned": {"type": "integer"}},
-        # The plan's base and target years, asked once per plan (years.py):
-        # the years each state took, the requests, the hits listed, the
-        # passages fetched and the years refused.
-        "years": {"base": {"type": "array", "items": {"type": "integer"}},
-                  "target": {"type": "array", "items": {"type": "integer"}},
-                  "asked": {"type": "integer"}, "hits": {"type": "integer"},
-                  "fetched": {"type": "integer"},
-                  "refused": {"type": "integer"}},
-        # What the plan settles for all its values, asked once per plan
-        # (settings.py): the settings taken, the requests, the hits listed,
-        # the passages fetched and the settings refused.
-        "settings": {"settings": {"type": "integer"},
-                     "asked": {"type": "integer"},
-                     "hits": {"type": "integer"},
-                     "fetched": {"type": "integer"},
-                     "refused": {"type": "integer"}},
+        # A field asked once of a document (addressed.py): the values it
+        # came to, and `why` where a request came to nothing.
+        "docfield": {"parameter": {"type": "string"},
+                     "values": {"type": "integer"},
+                     "why": {"enum": ["cut_off", "no_answer"]}},
+        # What a plan settles for all its values and its own years, asked
+        # once per plan: the settings' lines and the base and target years.
+        "settled": {"settings": {"type": "integer"},
+                    "base": {"type": "array", "items": {"type": "integer"}},
+                    "target": {"type": "array",
+                               "items": {"type": "integer"}}},
+        # The works a publication presents, compares or cites: the entries
+        # of its list and the new ones asked their details.
+        "works": {"works": {"type": "integer"}, "new": {"type": "integer"}},
+        # What the requests of one document came to: per kind, refusals per
+        # reason, the search sentences that were questions, its pieces.
+        "asked": {"requests": by_field, "refused": by_field,
+                  "question_queries": {"type": "integer"},
+                  "chunks": {"type": "integer"},
+                  "scope": {"type": ["string", "null"]}},
         # A sentence the passages are ranked with for a parameter, written
         # for the document or once per run (`per`).
         "seek_probe": {"parameter": {"type": "string"},
@@ -1258,29 +1196,18 @@ def trace_schema() -> dict:
             props.update(exchange)
     # Of the harvest's events, the fields only some of them carry.
     optional = {
-        "read_values_ask": {"corrections", "parameter", "owner", "kind",
-                            "rows", "passages", "figure", "group", "value"},
-        "read_text_ask": {"corrections", "parameter", "owner", "kind",
-                          "rows", "passages", "figure", "group", "round"},
-        "comb_ask": {"corrections", "parameter", "owner", "kind", "rows",
-                     "passages", "figure", "group", "round", "value"},
-        "comb_check_ask": {"corrections", "parameter", "owner", "kind",
-                           "rows", "passages", "figure", "group", "round",
-                           "value"},
-        "years_ask": {"corrections", "parameter", "owner", "kind", "rows",
-                      "passages", "figure", "group", "round", "value"},
-        "settings_ask": {"corrections", "parameter", "owner", "kind", "rows",
-                         "passages", "figure", "group", "round", "value"},
-        "naming": {"things", "several", "groups", "asked"},
+        # The requests piece by piece carry what their kind names.
+        **{f"{stage}_ask": {"parameter", "owner", "kind", "value", "chunk",
+                            "chunks", "coordinate", "step", "names",
+                            "asked"}
+           for stage in PIECE_ASKS},
         # A search sentence, the frame, the review and the compute step say
         # their attempt and what it cost; a parameter where they have one.
-        **{f"{stage}_ask": {"corrections", "parameter", "owner", "kind",
-                            "rows", "passages", "figure", "group", "round",
-                            "value"}
+        **{f"{stage}_ask": {"parameter", "owner", "kind", "value"}
            for stage in ("phrase", "frame", "review", "compute")},
-        "comb": {"group", "listed", "table_rows", "judged", "turned",
-                 "anew", "plan_years"},
-        "read": {"corrected", "failed", "unanswered", "unread", "why"},
+        "docfield": {"why"},
+        "asked": {"scope"},
+        "read": {"failed", "unanswered", "unread", "why"},
         "completion": {"filled", "id", "key", "matched"},
     }
     # Optional on every event: what the run could not always know. Requiring

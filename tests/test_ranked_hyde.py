@@ -1,10 +1,9 @@
-"""A parameter's passages are ranked with HyDE sentences and not with its
-label: one written for this document from what it says of itself for a field
-about the document itself, AND one written once per run from label,
-description and list names for any other, AND its label only where no
-sentence could be written; the sentence of a list parameter is written with
-the names of its list, AND both profiles declare which fields are about the
-document itself (owner decisions 2026-11-05 and 2026-11-08)."""
+"""A field's pieces are ordered with HyDE sentences and not with its
+label: one written for each document by the model, from the field's label,
+description and list names AND from what the document says of itself (its
+municipality or title), AND its label only where no sentence could be
+written; the sentence of a list parameter is written with the names of its
+list (owner decisions 2026-11-05, 2026-11-08 and 2026-11-09)."""
 import json
 import sqlite3
 from pathlib import Path
@@ -14,8 +13,8 @@ import pytest
 
 from docpipe.extraction import runner
 from docpipe.extraction.spec import load as load_spec
-from docpipe.extraction.survey import Ranking
-from profiles.kwp import extraction as kwp_extraction
+from docpipe.extraction.addressed import Orders, Plan
+from docpipe.extraction.pipeline import Source
 from profiles.scenarios import extraction as scenarios_extraction
 
 SPEC = load_spec(json.loads(
@@ -24,56 +23,61 @@ SPEC = load_spec(json.loads(
 BY_URI = {parameter.uri: parameter for parameter in SPEC.parameters}
 TITLE = BY_URI["publication_title"]
 DIVISION = BY_URI["study_sector_division"]
-PASSAGE = SimpleNamespace(owner_kind="section", owner_id=55052)
-OTHER = SimpleNamespace(owner_kind="table", owner_id=7)
+PLAN = Plan(151, [Source("table", 7, "| A | B |\n| --- | --- |\n| x | 1 |",
+                         {"document_id": 151, "page": 2}),
+                  Source("section", 55052, "Emissions by sector follow the CRF.",
+                         {"document_id": 151, "page": 3})], {}, 8)
 
 
-def ranking():
+def ordering():
+    """An order of the pieces that puts the section first, and the
+    sentences it was asked with."""
     asked = []
 
-    def rank(document_id, probes, exclude):
-        asked.append(list(probes))
-        return [PASSAGE]
-    return rank, asked
+    def order(document_id, sentences, chunks):
+        asked.append(list(sentences))
+        return sorted(chunks, key=lambda c: c.passage.kind != "section")
+    return order, asked
 
 
-def order_of(rank, probes=None) -> list:
-    found = Ranking(rank, lambda document: [OTHER, PASSAGE], [DIVISION],
-                    probes=probes)(151)
-    return found.passages_of(DIVISION.uri)
+def order_of(order, probes=None) -> list:
+    got = Orders(order, probes or (lambda parameter, document: []),
+                 None)(PLAN, [DIVISION], 8)
+    return got[DIVISION.uri]
 
 
-def test_the_passages_are_ranked_with_the_sentences_and_all_kept():
-    rank, asked = ranking()
+def test_the_pieces_are_ordered_with_the_sentences_and_all_kept():
+    order, asked = ordering()
     sentence = "Emissions are reported by sector following the CRF."
-    out = order_of(rank, lambda parameter, document: [sentence])
+    out = order_of(order, lambda parameter, document: [sentence])
     assert asked == [[sentence]]
-    # The passage the search found first, the one it did not after it.
-    assert out == [("section", 55052), ("table", 7)]
+    # The piece the order put first, the other after it, none left out.
+    assert [key[:2] for key in out] == [("section", 55052), ("table", 7)]
 
 
-def test_without_a_sentence_the_ranking_falls_back_to_the_label():
-    rank, asked = ranking()
-    order_of(rank, lambda parameter, document: [])
-    order_of(rank)
+def test_without_a_sentence_the_order_falls_back_to_the_label():
+    order, asked = ordering()
+    order_of(order, lambda parameter, document: [])
+    order_of(order)
     assert asked == [[DIVISION.label], [DIVISION.label]]
 
 
-def test_an_own_field_is_written_per_document_any_other_once_per_run():
+def test_every_field_is_written_per_document_with_what_it_says_of_itself():
     written = []
 
     def write(parameter, context):
         written.append((parameter.uri, context))
         return [f"{parameter.uri} {context}"]
     probes = runner.make_seek_probes(
-        ("publication_title",),
         lambda document: {"name": f"Paper {document}"}, write)
-    first, second = probes(TITLE, 4), probes(TITLE, 28)
-    assert first != second
-    assert probes(DIVISION, 4) == probes(DIVISION, 28)
+    assert probes(TITLE, 4) != probes(TITLE, 28)
+    # the failure by construction: a field about the values, not about the
+    # document, is written for each document all the same
+    assert probes(DIVISION, 4) != probes(DIVISION, 28)
     assert written == [("publication_title", {"name": "Paper 4"}),
                        ("publication_title", {"name": "Paper 28"}),
-                       ("study_sector_division", None)]
+                       ("study_sector_division", {"name": "Paper 4"}),
+                       ("study_sector_division", {"name": "Paper 28"})]
 
 
 def test_a_list_parameter_is_written_with_its_names_a_string_one_without():
@@ -82,13 +86,6 @@ def test_a_list_parameter_is_written_with_its_names_a_string_one_without():
     assert "names" not in runner.phrase_payload(TITLE)
     assert runner.phrase_payload(TITLE, {"name": "Paper 4"})["document"] == {
         "name": "Paper 4"}
-
-
-def test_both_profiles_declare_the_fields_about_the_document_itself():
-    own = set(scenarios_extraction.FRONT_PAGE_PARAMETERS)
-    assert {"publication_title", "publication_date", "publication_doi",
-            "publication_author"} <= own <= set(BY_URI)
-    assert tuple(kwp_extraction.FRONT_PAGE_PARAMETERS) == ()
 
 
 def test_a_publication_says_its_title_from_the_index():
@@ -129,8 +126,8 @@ def test_the_document_context_is_read_from_the_run_database_file(tmp_path):
 
 
 # Promise: the request that writes a search sentence goes into the trace of
-# the document that asked for it, as `phrase_ask` with its tokens, AND a
-# sentence kept for the run is asked once.
+# the document that asked for it, as `phrase_ask` with its tokens, AND each
+# document asks its own.
 def test_a_search_sentence_request_is_traced_for_its_document(monkeypatch):
     events = []
     monkeypatch.setattr(
@@ -148,4 +145,19 @@ def test_a_search_sentence_request_is_traced_for_its_document(monkeypatch):
     probes = runner.make_seek_probes()
     assert probes(DIVISION, 4) == probes(DIVISION, 28) == [said]
     assert [e for e in events if e[0].endswith("_ask")] == [
-        ("phrase_ask", 4, 11)]
+        ("phrase_ask", 4, 11), ("phrase_ask", 28, 11)]
+
+
+# Promise: an order is kept under what writes its sentences, AND one kept
+# from sentences written otherwise is made again.
+def test_an_order_kept_from_sentences_written_otherwise_is_made_again(
+        tmp_path):
+    order, asked = ordering()
+
+    def made(written):
+        Orders(order, lambda parameter, document: ["Sentence."], tmp_path,
+               written=written)(PLAN, [DIVISION], 8)
+        return len(asked)
+    assert made("document:a") == 1
+    assert made("document:a") == 1          # kept, not made again
+    assert made("document:b") == 2

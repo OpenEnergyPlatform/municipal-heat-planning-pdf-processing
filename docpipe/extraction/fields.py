@@ -100,7 +100,8 @@ BY_HARVEST, BY_PASS, BY_UNKNOWN = "harvest", "pass", "unknown"
 # Every key one coordinate owns on a claim (`schema._slot_properties`): its
 # answer and state, its wording, its quote and the passage that holds it,
 # where it was read, what the model saw where it found it unstated, its link,
-# the names of what it means (`naming.MEANS`) and the pass that read it.
+# the entries of the document's list it means (`addressed.Names`) and the
+# pass that read it.
 # Taking a coordinate off, or copying it whole, means all of them.
 COORDINATE_KEYS = ("", "_state", "_raw", "_raw_foreign", "_quote", "_source",
                    "_window", "_seen", "_link_quote", "_link_source",
@@ -136,6 +137,9 @@ class Option:
     # What the term means, as the request shows it: the spec's gloss where it
     # has one, else the definition (owner decision 2026-11-05, ticket 26).
     definition: str = ""
+    # The group the entry belongs to, by which a long list is asked first
+    # (`addressed.LIST_WITH_MEANS`, owner decision 2026-11-08).
+    group: str = ""
 
 
 @dataclass(frozen=True)
@@ -151,7 +155,7 @@ class Slot:
     # The kind of thing whose name the document gives here, such as
     # "scenario" (`spec.Axis.merged`): a value stated for several of them is
     # one row per name, and which of the document's names mean the same thing
-    # is asked once the document is read (`naming.py`).
+    # is asked while the document is read (`addressed.Names`).
     merged: Optional[str] = None
     # Whether an answer may be the print itself where the list has no entry
     # for it: the unit, which is never refused (owner decision 2026-11-07,
@@ -216,27 +220,6 @@ def wording_asked(slot: Slot) -> bool:
     return bool(slot.is_closed) or slot.kind == NUMBER or beside_names(slot)
 
 
-def value_schema(slot: Slot, unstated: bool = True) -> dict:
-    """The answers a coordinate can take in a grammar: one entry of its list,
-    UNSTATED included; for a number an integer or UNSTATED; else a wording.
-    UNSTATED is an answer of every kind: a grammar that takes only an integer
-    for a year leaves the model no way to say the passage prints none.
-    Without *unstated* it is none: the combing leaves a coordinate it did not
-    find out of its reply, and the run, not the model, says the plan does not
-    state it once every passage was listed (owner decision 2026-11-06)."""
-    if slot.is_closed:
-        # A unit may be left without an entry where none fits; its print
-        # is its answer then (`Slot.keeps_print`).
-        return {"enum": [label for label in slot.answerable()
-                         if unstated or label != UNSTATED]
-                + ([""] if slot.keeps_print else [])}
-    if slot.kind == NUMBER:
-        if not unstated:
-            return {"type": "integer"}
-        return {"anyOf": [{"type": "integer"}, {"enum": [UNSTATED]}]}
-    return {"type": "string"}
-
-
 # What an example reply writes for an answer (`value_example`): a placeholder
 # for an entry of a list or a wording, and one for a year, never a year of
 # its own the model could copy (owner decision 2026-11-07: "mach das
@@ -257,7 +240,8 @@ def value_example(slot: Slot):
 
 
 def _options(vocabulary: dict, definitions: Optional[dict] = None,
-             glosses: Optional[dict] = None) -> tuple:
+             glosses: Optional[dict] = None,
+             groups: Optional[dict] = None) -> tuple:
     """The closed list as options, first label canonical, rest synonyms.
 
     The spec writes a vocabulary as uri -> [labels] and the first label is the
@@ -278,7 +262,8 @@ def _options(vocabulary: dict, definitions: Optional[dict] = None,
         meaning = ((glosses or {}).get(uri)
                    or (definitions or {}).get(uri, ""))
         out.append(Option(label=labels[0], uri=uri, synonyms=tuple(labels[1:]),
-                          definition=meaning))
+                          definition=meaning,
+                          group=(groups or {}).get(uri, "")))
     return tuple(out)
 
 
@@ -571,7 +556,8 @@ def value_slot(parameter: Parameter) -> Slot:
                 question=parameter.description,
                 options=_options(parameter.vocabulary,
                                  getattr(parameter, "definitions", None),
-                                 getattr(parameter, "glosses", None)))
+                                 getattr(parameter, "glosses", None),
+                                 getattr(parameter, "groups", None)))
 
 
 def value_choice(parameter: Parameter) -> Slot:
@@ -590,7 +576,8 @@ def value_choice(parameter: Parameter) -> Slot:
                 question=parameter.description,
                 options=_options(parameter.vocabulary,
                                  getattr(parameter, "definitions", None),
-                                 getattr(parameter, "glosses", None)))
+                                 getattr(parameter, "glosses", None),
+                                 getattr(parameter, "groups", None)))
 
 
 def axis_slots(parameter: Parameter) -> list:
@@ -606,7 +593,8 @@ def axis_slots(parameter: Parameter) -> list:
             slot = Slot(name=name, kind=CHOICE, required=axis.required,
                         question=axis.question,
                         options=_options(axis.vocabulary, axis.definitions,
-                                         axis.glosses),
+                                         axis.glosses,
+                                         getattr(axis, "groups", None)),
                         derive=axis.derive, keep=axis.keep,
                         several=axis.several)
         elif axis.enum:

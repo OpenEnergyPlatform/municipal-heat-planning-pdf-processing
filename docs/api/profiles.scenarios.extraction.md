@@ -11,9 +11,10 @@ the same for every publication, so it cannot sit in the spec file:
   scenario_region            the 249 study regions the OEKG actually uses,
                              narrowed to those the document names at all.
 
-A scenario is read as the publication names it, and which of its names mean
-the same scenario is asked once the publication is read
-(`docpipe/extraction/naming.py`, owner decisions 2026-11-06).
+A scenario is read as the publication names it, and which entry of the
+publication's list of scenarios a name is, a new one or one read before, is
+asked while the publication is read (`docpipe/extraction/addressed.py`,
+owner decisions 2026-11-08).
 
 The narrowing is not a guess. Every claim has to quote its source verbatim, and
 the sources are exactly the section, table and figure texts scanned here, so a

@@ -262,14 +262,6 @@ def _times_alone(text: str, needle: str) -> int:
     return count
 
 
-def times_quoted(texts: list, quote: str) -> int:
-    """How often *quote* stands in the texts a request showed, each place
-    once where it stands for itself (owner decision 2026-11-07: a value's
-    quote pins it down, so it stands in what was shown exactly once)."""
-    wanted = flat(quote or "")
-    return sum(_times_alone(flat(text or ""), wanted) for text in texts)
-
-
 def _times_number(quote: str, value) -> int:
     """How often the number *value* stands in *quote* as a number of its
     own: each printed number once, a longer one ("11.109", "1.109,5") not

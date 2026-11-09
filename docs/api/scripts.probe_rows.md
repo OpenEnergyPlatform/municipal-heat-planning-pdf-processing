@@ -25,18 +25,17 @@ plans again. The plans' passages come from `--hits` or, with the database,
 from `--documents`. With the database and `--index` its search by a sentence ranks
 the plan as a run does; without them that search finds nothing.
 
-`--survey --read` runs the harvest's order of the passages and its reading
-of every passage for each parameter; `--comb` adds the search for what the
-reading left open. With `--index` the passages are ranked as a run ranks
-them: the global index it names and the embedding model, on the CPU when the
-machine has no GPU; without it they are read in the plan's order.
-
-`--survey` with `--documents` makes only the order of each whole plan's
-passages, the first step of the harvest, and keeps it in `<out>/survey`.
-With `--read` each parameter is then read in every passage, and the values
-are folded as the run folds them; after the fold, as in the run, the model
-is asked which names of a merged coordinate mean the same thing
-(`runner.make_namer`).
+`--survey` with `--documents` makes only the order of each field's pieces
+of each whole plan, the first step of the harvest, and keeps it in
+`<out>/survey`. With `--read` each plan is then read as the run reads it
+(`runner.make_harvest`): its figures transcribed once, every field in every
+piece, the fields a document has once asked once, each value's coordinates
+asked one by one and searched where its own place does not say them; the
+values are folded as the run folds them. With `--index` the search over the
+plan is the run's: the global index it names and the embedding model, on the
+CPU when the machine has no GPU; without it a search shows the pieces in the
+plan's order, and with RERANK_BASE_URL the reranker orders every field's
+pieces.
 
 A sandbox round needs CODE_EXEC_URL; `report.json` counts the rounds either way.
 
@@ -77,11 +76,10 @@ run ranks it, over the global index named by `--index`.
 def survey_over(passages: dict, spec, args, document_spec=None) -> list
 ```
 
-The order of each document's whole plan, as the run makes it, and
-with --read the reading of every passage for each parameter after it and
-with --comb the combing, through the run's own steps (`surveyed.SurveyedHarvest`). Each
-document is asked with the lists it closes (*document_spec*), made once
-per document, as the run makes them.
+Each document as the run harvests it (`runner.make_harvest`), with
+the lists it closes (*document_spec*), made once per document: without
+--read the order of each field's pieces, with it the whole reading and
+the fold.
 
 ### compute_over
 

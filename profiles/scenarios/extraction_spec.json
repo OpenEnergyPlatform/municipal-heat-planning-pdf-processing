@@ -28,9 +28,9 @@
     "A scenario is the name the publication prints, read with its quote: the",
     "value of scenario_label and the `scenario` axis of the other fields. Both",
     "are marked `merged` (owner decisions 2026-11-06): a value stated for several",
-    "scenarios is one tuple per scenario, and once a publication is read one",
-    "request asks which of its names mean the same scenario",
-    "(docpipe/extraction/naming.py). The axis is NOT required.",
+    "scenarios is one tuple per scenario, and while a publication is read each",
+    "name is asked against its list of scenarios, an entry or a new one",
+    "(docpipe/extraction/addressed.py). The axis is NOT required.",
     "",
     "The classes of the five corpus-wide lists carry the ontology's own definition, copied verbatim from the pinned release",
     "openenergyplatform.org/ontology/oeo/releases/2.14.0/oeo.owl, whose closure file has sha256",
@@ -79,7 +79,7 @@
             }
           },
           "keep": "work:this_publication",
-          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
         }
       },
       "example": {
@@ -100,7 +100,9 @@
           "label": "label"
         },
         "note": "Mints the study report. The title is also the bundle's label when no project name was read, and half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment."
-      }
+      },
+      "brief": "The title of this publication, as it prints it.",
+      "once_per_document": true
     },
     {
       "uri": "publication_author",
@@ -122,7 +124,7 @@
             }
           },
           "keep": "work:this_publication",
-          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
         }
       },
       "example": {
@@ -153,7 +155,9 @@
           "label": "has author"
         },
         "note": "One node per distinct name. Two spellings of one person are one node and keep both passages."
-      }
+      },
+      "brief": "A person who wrote this publication.",
+      "once_per_document": true
     },
     {
       "uri": "publication_date",
@@ -175,7 +179,7 @@
             }
           },
           "keep": "work:this_publication",
-          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
         }
       },
       "example": {
@@ -196,7 +200,9 @@
           "datatype": "xsd:dateTime"
         },
         "note": "A PDF states a year; the serializer pads it to YYYY-01-01T00:00:00, which the document does not say. The day and the month are the datatype's, not the paper's."
-      }
+      },
+      "brief": "The year this publication was published.",
+      "once_per_document": true
     },
     {
       "uri": "publication_doi",
@@ -218,7 +224,7 @@
             }
           },
           "keep": "work:this_publication",
-          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
         }
       },
       "example": {
@@ -237,7 +243,9 @@
           "predicate": "OEO_00390098",
           "label": "has doi"
         }
-      }
+      },
+      "brief": "The Digital Object Identifier of this publication.",
+      "once_per_document": true
     },
     {
       "uri": "publication_abstract",
@@ -259,7 +267,7 @@
             }
           },
           "keep": "work:this_publication",
-          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
         }
       },
       "example": {
@@ -278,7 +286,9 @@
           "predicate": "abstract"
         },
         "note": "On the bundle, not on the report: the shapes carry the study's abstract there."
-      }
+      },
+      "brief": "A summary of this publication and its study, as the publication prints it.",
+      "once_per_document": true
     },
     {
       "uri": "study_organisation",
@@ -300,7 +310,7 @@
             }
           },
           "keep": "work:this_publication",
-          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
         }
       },
       "example": {
@@ -330,7 +340,9 @@
           "predicate": "OEO_00000510",
           "label": "has organisation"
         }
-      }
+      },
+      "brief": "An organisation in which this publication was created.",
+      "once_per_document": true
     },
     {
       "uri": "study_funder",
@@ -352,7 +364,7 @@
             }
           },
           "keep": "work:this_publication",
-          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
         }
       },
       "example": {
@@ -378,7 +390,9 @@
           "predicate": "OEO_00000509",
           "label": "has funding source"
         }
-      }
+      },
+      "brief": "A body that supports the work of this publication by giving money.",
+      "once_per_document": true
     },
     {
       "uri": "study_project_name",
@@ -400,7 +414,7 @@
             }
           },
           "keep": "work:this_publication",
-          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
         }
       },
       "example": {
@@ -421,7 +435,9 @@
           "label": "label"
         },
         "note": "Mints the bundle and labels it. Falls back to the publication title where the document names no project."
-      }
+      },
+      "brief": "The name of the study this publication reports on; a study is a project with the goal to methodologically investigate something.",
+      "once_per_document": true
     },
     {
       "uri": "study_acronym",
@@ -443,7 +459,7 @@
             }
           },
           "keep": "work:this_publication",
-          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
         }
       },
       "example": {
@@ -461,7 +477,9 @@
           "prefix": "dc",
           "predicate": "acronym"
         }
-      }
+      },
+      "brief": "The short name or acronym of the study this publication reports on; not every study has one.",
+      "once_per_document": true
     },
     {
       "uri": "study_descriptor",
@@ -483,7 +501,7 @@
             }
           },
           "keep": "work:this_publication",
-          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
         }
       },
       "vocabulary": {
@@ -697,7 +715,8 @@
           "label": "has study descriptor tag"
         },
         "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
-      }
+      },
+      "brief": "A keyword that describes the study."
     },
     {
       "uri": "study_sector_division",
@@ -719,7 +738,7 @@
             }
           },
           "keep": "work:this_publication",
-          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
         }
       },
       "vocabulary": {
@@ -832,7 +851,8 @@
           "label": "based on sector division"
         },
         "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
-      }
+      },
+      "brief": "A sector division the study is based on: a specific way to subdivide a system, such as the CRF, an energy balance or the study's own list of sectors."
     },
     {
       "uri": "study_sector",
@@ -854,21 +874,23 @@
             }
           },
           "keep": "work:this_publication",
-          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
         }
       },
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000367": {
           "label": "sector",
           "spellings": [],
-          "definition": "A sector is generically dependent continuant that is a subdivision of a system."
+          "definition": "A sector is generically dependent continuant that is a subdivision of a system.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00000128": {
           "label": "energy demand sector",
           "spellings": [
             "final energy sector"
           ],
-          "definition": "An energy demand sector is a sector that covers energy consumers."
+          "definition": "An energy demand sector is a sector that covers energy consumers.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00000158": {
           "label": "energy transformation sector",
@@ -876,50 +898,58 @@
             "energy industry sector",
             "energy sector"
           ],
-          "definition": "An energy transformation sector is a sector that covers energy production, energy transformation from primary to secondary energy and transport of energy to the demand sector."
+          "definition": "An energy transformation sector is a sector that covers energy production, energy transformation from primary to secondary energy and transport of energy to the demand sector.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00000227": {
           "label": "industry sector",
           "spellings": [],
-          "definition": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation."
+          "definition": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010035": {
           "label": "agriculture, forestry and land use sector",
           "spellings": [
             "AFOLU sector"
           ],
-          "definition": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change."
+          "definition": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010036": {
           "label": "waste and wastewater sector",
           "spellings": [],
-          "definition": "A waste and wastewater sector is a sector that covers activities related the collection and treatment of waste and wastewater."
+          "definition": "A waste and wastewater sector is a sector that covers activities related the collection and treatment of waste and wastewater.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010360": {
           "label": "source category",
           "spellings": [
             "CRF sector"
           ],
-          "definition": "A source category is a sector that is defined by a common reporting format."
+          "definition": "A source category is a sector that is defined by a common reporting format.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010464": {
           "label": "subsector",
           "spellings": [],
-          "definition": "A subsector is a sector that is a part of an other sector."
+          "definition": "A subsector is a sector that is a part of an other sector.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00000213": {
           "label": "heating and cooling sector",
           "spellings": [
             "H&C sector"
           ],
-          "definition": "A heating and cooling sector is a sector that covers heating and cooling activities."
+          "definition": "A heating and cooling sector is a sector that covers heating and cooling activities.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00000214": {
           "label": "household sector",
           "spellings": [
             "private household sector"
           ],
-          "definition": "A household sector is a sector that covers households."
+          "definition": "A household sector is a sector that covers households.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00000405": {
           "label": "commercial sector",
@@ -928,742 +958,886 @@
             "service sector",
             "trading, commerce and service sector"
           ],
-          "definition": "A commercial sector is a sector that covers non-industrial commercial activities."
+          "definition": "A commercial sector is a sector that covers non-industrial commercial activities.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00000422": {
           "label": "transport sector",
           "spellings": [
             "traffic sector"
           ],
-          "definition": "A transport sector is a sector that covers transport of people and/or goods."
+          "definition": "A transport sector is a sector that covers transport of people and/or goods.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010034": {
           "label": "building sector",
           "spellings": [],
-          "definition": "A building sector is a sector that covers buildings."
+          "definition": "A building sector is a sector that covers buildings.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00000145": {
           "label": "electricity sector",
           "spellings": [],
-          "definition": "An electricity sector is a transformation sector that covers electricity generation and transport of electrical energy to consumers of electrical energy."
+          "definition": "An electricity sector is a transformation sector that covers electricity generation and transport of electrical energy to consumers of electrical energy.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010319": {
           "label": "mineral oil refining sector",
           "spellings": [],
-          "definition": "A mineral oil refining sector is an energy transformation sector that covers mineral oil refining."
+          "definition": "A mineral oil refining sector is an energy transformation sector that covers mineral oil refining.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010320": {
           "label": "international transport sector",
           "spellings": [],
-          "definition": "An international transport sector is a transport sector of international transport processes."
+          "definition": "An international transport sector is a transport sector of international transport processes.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010043": {
           "label": "CRF sector (IPCC 2006): fuel combustion - other sectors",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'fuel combustion - other sectors' is an energy demand sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from combustion activities as described below, including combustion for the generation of electricity and heat for own use in these sectors."
+          "definition": "The CRF sector (IPCC 2006) 'fuel combustion - other sectors' is an energy demand sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from combustion activities as described below, including combustion for the generation of electricity and heat for own use in these sectors.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010054": {
           "label": "CRF sector (IPCC 2006): agriculture, forestry and fishing",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'agriculture, forestry and fishing' is an energy demand sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from fuel combustion in agriculture, forestry, fishing and fishing industries such as fish farms."
+          "definition": "The CRF sector (IPCC 2006) 'agriculture, forestry and fishing' is an energy demand sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from fuel combustion in agriculture, forestry, fishing and fishing industries such as fish farms.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010040": {
           "label": "CRF sector (IPCC 2006): energy industry",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'energy industry' is an energy transformation sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nComprises emissions from fuels combusted by the fuel extraction or energy-producing industries."
+          "definition": "The CRF sector (IPCC 2006) 'energy industry' is an energy transformation sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nComprises emissions from fuels combusted by the fuel extraction or energy-producing industries.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010065": {
           "label": "KSG sector energy industry",
           "spellings": [],
-          "definition": "The KSG sector energy industry is an energy transformation sector defined by the KSG sector division. It is an aggregate of the following three sectors:\n- CRF sector (IPCC 2006): energy industry (CRF 1.A.1.a)\n- CRF sector (IPCC 2006): other transportation (CRF 1.A.3.e)\n- CRF sector (IPCC 2006): fugitive emissions from fuels (CRF 1.B)"
+          "definition": "The KSG sector energy industry is an energy transformation sector defined by the KSG sector division. It is an aggregate of the following three sectors:\n- CRF sector (IPCC 2006): energy industry (CRF 1.A.1.a)\n- CRF sector (IPCC 2006): other transportation (CRF 1.A.3.e)\n- CRF sector (IPCC 2006): fugitive emissions from fuels (CRF 1.B)",
+          "group": "KSG sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010158": {
           "label": "CRF sector (IPCC 2006): public electricity and heat production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'public electricity and heat production' is an energy transformation sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nSum of emissions from main activity producers of electricity generation, combined heat and power generation, and heat plants."
+          "definition": "The CRF sector (IPCC 2006) 'public electricity and heat production' is an energy transformation sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nSum of emissions from main activity producers of electricity generation, combined heat and power generation, and heat plants.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010160": {
           "label": "CRF sector (IPCC 2006): manufacture of solid fuels and other energy industries",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'manufacture of solid fuels and other energy industries' is an energy transformation sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCombustion emissions from fuel use during the manufacture of secondary and tertiary products from solid fuels including production of charcoal."
+          "definition": "The CRF sector (IPCC 2006) 'manufacture of solid fuels and other energy industries' is an energy transformation sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCombustion emissions from fuel use during the manufacture of secondary and tertiary products from solid fuels including production of charcoal.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00360042": {
           "label": "BSI-KritisV energy sector",
           "spellings": [],
-          "definition": "The BSI-KritisV energy sector is an energy transformation sector defined by the BSI-KritisV sector division (§ 2 BSI-KritisV)."
+          "definition": "The BSI-KritisV energy sector is an energy transformation sector defined by the BSI-KritisV sector division (§ 2 BSI-KritisV).",
+          "group": "BSI-KritisV sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010041": {
           "label": "CRF sector (IPCC 2006): manufacturing industries and construction",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'manufacturing industries and construction' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from combustion of fuels in industry. Also includes combustion for the generation of electricity and heat for own use in these industries."
+          "definition": "The CRF sector (IPCC 2006) 'manufacturing industries and construction' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from combustion of fuels in industry. Also includes combustion for the generation of electricity and heat for own use in these industries.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010046": {
           "label": "CRF sector (IPCC 2006): industrial processes and product use",
           "spellings": [
             "IPPU"
           ],
-          "definition": "The CRF sector (IPCC 2006) 'energy industrial processes and product use' (IPPU) is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nIt covers greenhouse gas emissions occurring from industrial processes, from the use of greenhouse gases in products, and from non-energy uses of fossil fuel carbon."
+          "definition": "The CRF sector (IPCC 2006) 'energy industrial processes and product use' (IPPU) is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nIt covers greenhouse gas emissions occurring from industrial processes, from the use of greenhouse gases in products, and from non-energy uses of fossil fuel carbon.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010066": {
           "label": "KSG sector industry",
           "spellings": [],
-          "definition": "The KSG sector industry is an industry sector defined by the KSG sector division. It is an aggregate of the following three sectors:\n- CRF sector (IPCC 2006): manufacturing industries and construction (CRF 1.A.2)\n- CRF sector (IPCC 2006): CO2 transport and storage (CRF 1.C)\n- CRF sector (IPCC 2006): industrial processes and product use (CRF 2)"
+          "definition": "The KSG sector industry is an industry sector defined by the KSG sector division. It is an aggregate of the following three sectors:\n- CRF sector (IPCC 2006): manufacturing industries and construction (CRF 1.A.2)\n- CRF sector (IPCC 2006): CO2 transport and storage (CRF 1.C)\n- CRF sector (IPCC 2006): industrial processes and product use (CRF 2)",
+          "group": "KSG sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010164": {
           "label": "CRF sector (IPCC 2006): mineral industry",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'mineral industry' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nProcess-related carbon dioxide (CO2) emissions resulting from the use of carbonate raw materials in the production and use of a variety of mineral industry products."
+          "definition": "The CRF sector (IPCC 2006) 'mineral industry' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nProcess-related carbon dioxide (CO2) emissions resulting from the use of carbonate raw materials in the production and use of a variety of mineral industry products.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010165": {
           "label": "CRF sector (IPCC 2006): cement production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'cement production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nProcess-related emissions from the production of various types of cement (ISIC: D2694)."
+          "definition": "The CRF sector (IPCC 2006) 'cement production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nProcess-related emissions from the production of various types of cement (ISIC: D2694).",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010166": {
           "label": "CRF sector (IPCC 2006): chemical industry",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'chemical industry' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nGreenhouse gas emissions that result from the production of various inorganic and organic chemicals."
+          "definition": "The CRF sector (IPCC 2006) 'chemical industry' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nGreenhouse gas emissions that result from the production of various inorganic and organic chemicals.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010167": {
           "label": "CRF sector (IPCC 2006): metal industry",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'metal industry' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nGreenhouse gas emissions that result from the production of metals."
+          "definition": "The CRF sector (IPCC 2006) 'metal industry' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nGreenhouse gas emissions that result from the production of metals.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010168": {
           "label": "CRF sector (IPCC 2006): iron and steel production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'iron and steel production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCarbon dioxide is the predominant gas emitted from the production of iron and steel. The sources of the carbon dioxide emissions include that from carbon-containing reducing agents such as coke and pulverized coal, and, from minerals such as limestone and dolomite added."
+          "definition": "The CRF sector (IPCC 2006) 'iron and steel production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCarbon dioxide is the predominant gas emitted from the production of iron and steel. The sources of the carbon dioxide emissions include that from carbon-containing reducing agents such as coke and pulverized coal, and, from minerals such as limestone and dolomite added.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010169": {
           "label": "CRF sector (IPCC 2006): non-energy products from fuels and solvent use",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'non-energy products from fuels and solvent use' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nThe use of oil products and coal-derived oils primarily intended for purposes other than combustion"
+          "definition": "The CRF sector (IPCC 2006) 'non-energy products from fuels and solvent use' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nThe use of oil products and coal-derived oils primarily intended for purposes other than combustion",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010170": {
           "label": "CRF sector (IPCC 2006): electronics industry",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'electronics industry' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nSeveral advanced electronics manufacturing processes utilise fluorinated compounds (FCs) for plasma etching intricate patterns, cleaning reactor chambers, and temperature control. The specific electronic industry sectors include semiconductor, thin-film-transistor flat panel display (TFT-FPD), and photovoltaic (PV) manufacturing (collectively termed ‘electronics industry’)."
+          "definition": "The CRF sector (IPCC 2006) 'electronics industry' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nSeveral advanced electronics manufacturing processes utilise fluorinated compounds (FCs) for plasma etching intricate patterns, cleaning reactor chambers, and temperature control. The specific electronic industry sectors include semiconductor, thin-film-transistor flat panel display (TFT-FPD), and photovoltaic (PV) manufacturing (collectively termed ‘electronics industry’).",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010171": {
           "label": "CRF sector (IPCC 2006): product uses as substitutes for ozone depleting substances",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'product uses as substitutes for ozone depleting substances' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nHydrofluorocarbons (HFCs) and, to a very limited extent, perfluorocarbons (PFCs), are serving as alternatives to ozone depleting substances (ODS) being phased out under the Montreal Protocol."
+          "definition": "The CRF sector (IPCC 2006) 'product uses as substitutes for ozone depleting substances' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nHydrofluorocarbons (HFCs) and, to a very limited extent, perfluorocarbons (PFCs), are serving as alternatives to ozone depleting substances (ODS) being phased out under the Montreal Protocol.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010172": {
           "label": "CRF sector (IPCC 2006): other product manufacture and use",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'other product manufacture and use' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions of sulphur hexafluoride (SF6) and perfluorocarbons\n(PFCs) from the manufacture and use of electrical equipment and a number of other products. It also includes emissions of nitrous oxide (N2O) from several products."
+          "definition": "The CRF sector (IPCC 2006) 'other product manufacture and use' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions of sulphur hexafluoride (SF6) and perfluorocarbons\n(PFCs) from the manufacture and use of electrical equipment and a number of other products. It also includes emissions of nitrous oxide (N2O) from several products.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010173": {
           "label": "CRF sector (IPCC 2006): industrial processes and product use - other",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'industrial processes and product use - other' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories"
+          "definition": "The CRF sector (IPCC 2006) 'industrial processes and product use - other' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010307": {
           "label": "NC/BR sector: industry/industrial processes and product use",
           "spellings": [],
-          "definition": "The NC/BR sector \"industry/industrial processes and product use\" is an industry sector defined by an NC/BR sector division. The sector includes:\n- CRF sector (IPCC 2006): manufacture of solid fuels and other energy industries\n- CRF sector (IPCC 2006): industrial processes and product use"
+          "definition": "The NC/BR sector \"industry/industrial processes and product use\" is an industry sector defined by an NC/BR sector division. The sector includes:\n- CRF sector (IPCC 2006): manufacture of solid fuels and other energy industries\n- CRF sector (IPCC 2006): industrial processes and product use",
+          "group": "NC/BR sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010341": {
           "label": "CRF sector (IPCC 2006): lime production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'lime production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nProcess-related emissions from the production of various types of lime (ISIC: D2694)."
+          "definition": "The CRF sector (IPCC 2006) 'lime production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nProcess-related emissions from the production of various types of lime (ISIC: D2694).",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010342": {
           "label": "CRF sector (IPCC 2006): glass production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'glass production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nProcess-related emissions from the production of various types of glass (ISIC: D2610)."
+          "definition": "The CRF sector (IPCC 2006) 'glass production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nProcess-related emissions from the production of various types of glass (ISIC: D2610).",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010343": {
           "label": "CRF sector (IPCC 2006): other process uses of carbonates",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'other process uses of carbonates' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nIncludes limestone, dolomite and other carbonates etc. Emissions from the use of limestone, dolomite and other carbonates should be included in the industrial source category where they are emitted. Therefore, for example, where a carbonate is used as a flux for iron and steel production, resultant emissions should be reported under 2C1 “Iron and Steel Production” rather than this\nsubcategory."
+          "definition": "The CRF sector (IPCC 2006) 'other process uses of carbonates' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nIncludes limestone, dolomite and other carbonates etc. Emissions from the use of limestone, dolomite and other carbonates should be included in the industrial source category where they are emitted. Therefore, for example, where a carbonate is used as a flux for iron and steel production, resultant emissions should be reported under 2C1 “Iron and Steel Production” rather than this\nsubcategory.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010344": {
           "label": "CRF sector (IPCC 2006): ammonia production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'ammonia' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAmmonia (NH3) is a major industrial chemical and the most important nitrogenous material produced. Ammonia gas is used directly as a fertilizer, in heat treating, paper pulping, nitric acid and nitrates manufacture, nitric acid ester and nitro compound manufacture, explosives of various types, and as a refrigerant. Amines, amides, and miscellaneous other organic compounds, such as urea, are made from ammonia. The main greenhouse gas emitted from NH3 production is CO2. CO2 used in the production of urea, a downstream process, should be subtracted from the CO2 generated and accounted for in the AFOLU Sector."
+          "definition": "The CRF sector (IPCC 2006) 'ammonia' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAmmonia (NH3) is a major industrial chemical and the most important nitrogenous material produced. Ammonia gas is used directly as a fertilizer, in heat treating, paper pulping, nitric acid and nitrates manufacture, nitric acid ester and nitro compound manufacture, explosives of various types, and as a refrigerant. Amines, amides, and miscellaneous other organic compounds, such as urea, are made from ammonia. The main greenhouse gas emitted from NH3 production is CO2. CO2 used in the production of urea, a downstream process, should be subtracted from the CO2 generated and accounted for in the AFOLU Sector.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010345": {
           "label": "CRF sector (IPCC 2006): nitric acid production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'nitric acid production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nNitric acid is used as a raw material mainly in the manufacture of nitrogenous-based fertiliser. Nitric acid may also be used in the production of adipic acid and explosives (e.g., dynamite), for metal etching and in the processing of ferrous metals. The main greenhouse gas emitted from HNO3 production is nitrous oxide"
+          "definition": "The CRF sector (IPCC 2006) 'nitric acid production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nNitric acid is used as a raw material mainly in the manufacture of nitrogenous-based fertiliser. Nitric acid may also be used in the production of adipic acid and explosives (e.g., dynamite), for metal etching and in the processing of ferrous metals. The main greenhouse gas emitted from HNO3 production is nitrous oxide",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010346": {
           "label": "CRF sector (IPCC 2006): adipic acid production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'adipic acid production is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAdipic acid is used in the manufacture of a large number of products including synthetic fibres, coatings, plastics, urethane foams, elastomers and synthetic lubricants. The production of Nylon 6.6 accounts for the bulk of adipic acid\nuse. The main greenhouse gas emitted from adipic acid production is nitrous oxide."
+          "definition": "The CRF sector (IPCC 2006) 'adipic acid production is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAdipic acid is used in the manufacture of a large number of products including synthetic fibres, coatings, plastics, urethane foams, elastomers and synthetic lubricants. The production of Nylon 6.6 accounts for the bulk of adipic acid\nuse. The main greenhouse gas emitted from adipic acid production is nitrous oxide.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010347": {
           "label": "CRF sector (IPCC 2006): caprolactam, gloxal and glyoxylic acid production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'caprolactam, glyoxal and glyoxylic acid production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMost of the annual production of caprolactam (NH(CH2)5CO) is consumed as the monomer for nylon-6 fibres and plastics, with a substantial proportion of the fibre used in carpet manufacturing. All commercial processes for the manufacture of caprolactam are based on either toluene or benzene. This subcategory also covers production of glyoxal (ethanedial) and glyoxylic acid production. The main greenhouse gas emitted from this subcategory is nitrous oxide."
+          "definition": "The CRF sector (IPCC 2006) 'caprolactam, glyoxal and glyoxylic acid production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMost of the annual production of caprolactam (NH(CH2)5CO) is consumed as the monomer for nylon-6 fibres and plastics, with a substantial proportion of the fibre used in carpet manufacturing. All commercial processes for the manufacture of caprolactam are based on either toluene or benzene. This subcategory also covers production of glyoxal (ethanedial) and glyoxylic acid production. The main greenhouse gas emitted from this subcategory is nitrous oxide.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010348": {
           "label": "CRF sector (IPCC 2006): carbide production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'carbide production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nThe production of carbide can result in emissions of CO2, CH4, CO and SO2. Silicon carbide is a significant artificial abrasive. It is produced from silica sand or quartz and petroleum coke. Calcium carbide is used in the production of acetylene, in the manufacture of cyanamide (a minor historical use), and as a reductant in electric arc steel furnaces. It is made from calcium carbonate (limestone) and carbon-containing reductant (petroleum coke)."
+          "definition": "The CRF sector (IPCC 2006) 'carbide production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nThe production of carbide can result in emissions of CO2, CH4, CO and SO2. Silicon carbide is a significant artificial abrasive. It is produced from silica sand or quartz and petroleum coke. Calcium carbide is used in the production of acetylene, in the manufacture of cyanamide (a minor historical use), and as a reductant in electric arc steel furnaces. It is made from calcium carbonate (limestone) and carbon-containing reductant (petroleum coke).",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010349": {
           "label": "CRF sector (IPCC 2006): titanium dioxide production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'titanium dioxide producion' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nTitanium dioxide (TiO2) is the most important white pigment. The main use is in paint manufacture followed by paper, plastics, rubber, ceramics, fabrics, floor covering, printing ink, and other miscellaneous uses. The main production process is the chloride route, giving rise to CO2 emissions that are likely to be significant. This category also includes synthetic rutile production using the Becher process, and titanium slag production, both of which are reduction processes using fossil fuels and resulting in CO2 emissions. Synthetic rutile is the major input to TiO2 production using the chloride route."
+          "definition": "The CRF sector (IPCC 2006) 'titanium dioxide producion' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nTitanium dioxide (TiO2) is the most important white pigment. The main use is in paint manufacture followed by paper, plastics, rubber, ceramics, fabrics, floor covering, printing ink, and other miscellaneous uses. The main production process is the chloride route, giving rise to CO2 emissions that are likely to be significant. This category also includes synthetic rutile production using the Becher process, and titanium slag production, both of which are reduction processes using fossil fuels and resulting in CO2 emissions. Synthetic rutile is the major input to TiO2 production using the chloride route.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010350": {
           "label": "CRF sector (IPCC 2006): soda ash production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'soda ash production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nSoda ash (sodium carbonate, Na2CO3) is a white crystalline solid that is used as a raw material in a large number of industries including glass manufacture, soap and detergents, pulp and paper production and water treatment. Emissions of CO2 from the production of soda ash vary dependent on the manufacturing process. Four different processes may be used to produce soda ash. Three of these processes, monohydrate, sodium sesquicarbonate (trona) and direct carbonation, are referred to as natural processes. The fourth, the Solvay process, is classified as a synthetic process."
+          "definition": "The CRF sector (IPCC 2006) 'soda ash production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nSoda ash (sodium carbonate, Na2CO3) is a white crystalline solid that is used as a raw material in a large number of industries including glass manufacture, soap and detergents, pulp and paper production and water treatment. Emissions of CO2 from the production of soda ash vary dependent on the manufacturing process. Four different processes may be used to produce soda ash. Three of these processes, monohydrate, sodium sesquicarbonate (trona) and direct carbonation, are referred to as natural processes. The fourth, the Solvay process, is classified as a synthetic process.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010351": {
           "label": "CRF sector (IPCC 2006): petrochemical and carbon black production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'petrochemical and carbon black production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:"
+          "definition": "The CRF sector (IPCC 2006) 'petrochemical and carbon black production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010352": {
           "label": "CRF sector (IPCC 2006): fluorochemical production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'fluorochemical production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:"
+          "definition": "The CRF sector (IPCC 2006) 'fluorochemical production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010353": {
           "label": "CRF sector (IPCC 2006): chemical industry - other",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'chemical industry - other' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nFor example, gases with global warming potential listed in IPCC assessment reports that do not fall within any categories above could be reported here, if they are estimated."
+          "definition": "The CRF sector (IPCC 2006) 'chemical industry - other' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nFor example, gases with global warming potential listed in IPCC assessment reports that do not fall within any categories above could be reported here, if they are estimated.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010354": {
           "label": "CRF sector (IPCC 2006): ferroalloys production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'ferroalloys' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nFerroalloys production covers emissions from primary metallurgical reduction production of the most common ferroalloys, i.e. ferro-silicon, silicon metal, ferro-manganese, silicon manganese, and ferro-chromium, excluding those\nemissions relating to fuel use. From the production of these alloys, carbon dioxide (CO2), nitrous oxide (N2O), and methane (CH4) originating from ore- and reductant raw materials, is emitted."
+          "definition": "The CRF sector (IPCC 2006) 'ferroalloys' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nFerroalloys production covers emissions from primary metallurgical reduction production of the most common ferroalloys, i.e. ferro-silicon, silicon metal, ferro-manganese, silicon manganese, and ferro-chromium, excluding those\nemissions relating to fuel use. From the production of these alloys, carbon dioxide (CO2), nitrous oxide (N2O), and methane (CH4) originating from ore- and reductant raw materials, is emitted.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010355": {
           "label": "CRF sector (IPCC 2006): aluminium production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'aluminium production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAluminium Production covers primary production of aluminium, except the emissions related to the use of fuel. Carbon dioxide emissions result from the electrochemical reduction reaction of alumina with a carbon-based anode.\nTetrafluoromethane (CF4) and hexafluoroethane (C2F6) are also produced intermittently. No greenhouse gases are produced in recycling of aluminium other than from the fuels uses for metal remelting. Sulphur hexafluoride (SF6)\nemissions are not associated with primary aluminium production; however, casting of some high magnesium containing alloys does result in SF6 emissions and these emissions are accounted for in Section 2C4, Magnesium\nProduction."
+          "definition": "The CRF sector (IPCC 2006) 'aluminium production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAluminium Production covers primary production of aluminium, except the emissions related to the use of fuel. Carbon dioxide emissions result from the electrochemical reduction reaction of alumina with a carbon-based anode.\nTetrafluoromethane (CF4) and hexafluoroethane (C2F6) are also produced intermittently. No greenhouse gases are produced in recycling of aluminium other than from the fuels uses for metal remelting. Sulphur hexafluoride (SF6)\nemissions are not associated with primary aluminium production; however, casting of some high magnesium containing alloys does result in SF6 emissions and these emissions are accounted for in Section 2C4, Magnesium\nProduction.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010356": {
           "label": "CRF sector (IPCC 2006): magnesium production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'magnesium production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMagnesium production covers GHG emissions related to both primary magnesium production as well as oxidation protection of magnesium metal during processing (recycling and casting), excluding those emissions relating to fuel use. In the primary production of magnesium, carbon dioxide (CO2) is emitted during calcination of dolomite and magnesite raw materials. Primary production of magnesium from non-carbonate raw materials does not emit carbon dioxide. In the processing of liquid magnesium, cover gases containing carbon dioxide (CO2), sulphur hexafluoride (SF6), the hydrofluorocarbon HFC 134a or the fluorinated ketone FK 5-1-12 ( C3F7C(O)C2F5) may be used. Partial\nthermal decomposition and/or reaction between these compounds and liquid magnesium generates secondary compounds such as perfluorocarbons (PFCs), which are emitted in addition to unreacted cover gas constituents."
+          "definition": "The CRF sector (IPCC 2006) 'magnesium production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMagnesium production covers GHG emissions related to both primary magnesium production as well as oxidation protection of magnesium metal during processing (recycling and casting), excluding those emissions relating to fuel use. In the primary production of magnesium, carbon dioxide (CO2) is emitted during calcination of dolomite and magnesite raw materials. Primary production of magnesium from non-carbonate raw materials does not emit carbon dioxide. In the processing of liquid magnesium, cover gases containing carbon dioxide (CO2), sulphur hexafluoride (SF6), the hydrofluorocarbon HFC 134a or the fluorinated ketone FK 5-1-12 ( C3F7C(O)C2F5) may be used. Partial\nthermal decomposition and/or reaction between these compounds and liquid magnesium generates secondary compounds such as perfluorocarbons (PFCs), which are emitted in addition to unreacted cover gas constituents.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010357": {
           "label": "CRF sector (IPCC 2006): lead production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'lead production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nLead production covers production by the sintering/smelting process as well as direct smelting. Carbon dioxide emissions result as a product of the use of a variety of carbon-based reducing agents in both production \nprocesses."
+          "definition": "The CRF sector (IPCC 2006) 'lead production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nLead production covers production by the sintering/smelting process as well as direct smelting. Carbon dioxide emissions result as a product of the use of a variety of carbon-based reducing agents in both production \nprocesses.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010358": {
           "label": "CRF sector (IPCC 2006): zinc production",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'zinc production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nZinc production covers emissions from both primary production of zinc from ore as well as recovery of zinc from scrap metals, excluding emissions related to fuel use. Following calcination, zinc metal is produced through one of three methods; 1-electro-thermic distillation, 2-pyrometallurgical smelting or 3-electrolysis. If method 1 or 2 is used, carbon dioxide (CO2) is emitted. Method 3 does not result in carbon dioxide emissions. Recovery of zinc from metal scrap often uses the same methods as primary production and may thus produce carbon dioxide emissions, which is included in this section."
+          "definition": "The CRF sector (IPCC 2006) 'zinc production' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nZinc production covers emissions from both primary production of zinc from ore as well as recovery of zinc from scrap metals, excluding emissions related to fuel use. Following calcination, zinc metal is produced through one of three methods; 1-electro-thermic distillation, 2-pyrometallurgical smelting or 3-electrolysis. If method 1 or 2 is used, carbon dioxide (CO2) is emitted. Method 3 does not result in carbon dioxide emissions. Recovery of zinc from metal scrap often uses the same methods as primary production and may thus produce carbon dioxide emissions, which is included in this section.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010359": {
           "label": "CRF sector (IPCC 2006): metal industry - other",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'metal industry - other' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:"
+          "definition": "The CRF sector (IPCC 2006) 'metal industry - other' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010363": {
           "label": "CRF sector (IPCC 2006): integrated circuit or semiconductor",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'integrated circuit or semiconductor' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions of CF4, C2F6, C3F8, c-C4F8, C4F6, C4F8O, C5F8, CHF3, CH2F2, NF3 and SF6 from uses of these gases in Integrated Circuit (IC) manufacturing in rapidly evolving ways and in varying amounts, which depend on product\n(e.g., memory or logic devices) and equipment manufacturer."
+          "definition": "The CRF sector (IPCC 2006) 'integrated circuit or semiconductor' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions of CF4, C2F6, C3F8, c-C4F8, C4F6, C4F8O, C5F8, CHF3, CH2F2, NF3 and SF6 from uses of these gases in Integrated Circuit (IC) manufacturing in rapidly evolving ways and in varying amounts, which depend on product\n(e.g., memory or logic devices) and equipment manufacturer.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010364": {
           "label": "CRF sector (IPCC 2006): TFT flat panel display",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'TFT flat panel display' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nUses and emissions of predominantly CF4, CHF3, NF3 and SF6 during the fabrication of thin-film transistors (TFTs) on glass substrates for flat panel display manufacture. In addition to these gases, C2F6, C3F8 and c-C4F8 may also be used and emitted during the manufacture of thin and smart displays."
+          "definition": "The CRF sector (IPCC 2006) 'TFT flat panel display' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nUses and emissions of predominantly CF4, CHF3, NF3 and SF6 during the fabrication of thin-film transistors (TFTs) on glass substrates for flat panel display manufacture. In addition to these gases, C2F6, C3F8 and c-C4F8 may also be used and emitted during the manufacture of thin and smart displays.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010365": {
           "label": "CRF sector (IPCC 2006): photovoltaics",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'photovoltaics' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nPhotovoltaic cell manufacture may use and emit CF4 and C2F6 among others."
+          "definition": "The CRF sector (IPCC 2006) 'photovoltaics' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nPhotovoltaic cell manufacture may use and emit CF4 and C2F6 among others.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010366": {
           "label": "CRF sector (IPCC 2006): heat transfer fluid",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'heat transfer fluid' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nHeat transfer fluids, which include several fully fluorinated carbon compounds (either in pure form or in mixtures) with six or more carbon atoms, used and emitted during IC manufacture, testing and assembly. They are used in chillers, temperature shock testers and vapour phase reflow soldering."
+          "definition": "The CRF sector (IPCC 2006) 'heat transfer fluid' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nHeat transfer fluids, which include several fully fluorinated carbon compounds (either in pure form or in mixtures) with six or more carbon atoms, used and emitted during IC manufacture, testing and assembly. They are used in chillers, temperature shock testers and vapour phase reflow soldering.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010367": {
           "label": "CRF sector (IPCC 2006): electronics industry - other",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'electronics industry - other' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories"
+          "definition": "The CRF sector (IPCC 2006) 'electronics industry - other' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010368": {
           "label": "CRF sector (IPCC 2006): refrigeration and air conditioning",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'refrigeration and air conditioning' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nRefrigeration and air-conditioning systems are usually classified in six application domains or categories. These categories utilise different technologies such as heat exchangers, expansion devices, pipings and compressors. The six application domains are domestic refrigeration, commercial refrigeration, industrial processes, transport refrigeration, stationary air conditioning, mobile airconditioning systems. For all these applications, various HFCs are selectively replacing CFCs and HCFCs. For example, in developed countries, HFC-134a has replaced CFC-12 in domestic refrigeration and mobile air conditioning systems, and blends of HFCs such as R-407C (HFC-32/HFC-125/HFC-134a) and R-410A (HFC-32/HFC-125) are replacing HCFC-22 mainly in stationary air conditioning. Other, non HFC substances are used to replace CFCs and HCFCs such as iso-butane in domestic refrigeration or ammonia in industrial refrigeration. HFC- 152a is also being considered for mobile air conditioning in several regions."
+          "definition": "The CRF sector (IPCC 2006) 'refrigeration and air conditioning' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nRefrigeration and air-conditioning systems are usually classified in six application domains or categories. These categories utilise different technologies such as heat exchangers, expansion devices, pipings and compressors. The six application domains are domestic refrigeration, commercial refrigeration, industrial processes, transport refrigeration, stationary air conditioning, mobile airconditioning systems. For all these applications, various HFCs are selectively replacing CFCs and HCFCs. For example, in developed countries, HFC-134a has replaced CFC-12 in domestic refrigeration and mobile air conditioning systems, and blends of HFCs such as R-407C (HFC-32/HFC-125/HFC-134a) and R-410A (HFC-32/HFC-125) are replacing HCFC-22 mainly in stationary air conditioning. Other, non HFC substances are used to replace CFCs and HCFCs such as iso-butane in domestic refrigeration or ammonia in industrial refrigeration. HFC- 152a is also being considered for mobile air conditioning in several regions.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010369": {
           "label": "CRF sector (IPCC 2006): foam blowing agents",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'foam blowing agents' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nHFCs are being used as replacements for CFCs and HCFCs in foams, particularly in closed-cell insulation applications. Compounds that are being used include HFC-245fa, HFC-365mfc, HFC-227ea, HFC-134a, and HFC-152a. The processes and applications for which these various HFCs are being used include insulation boards and panels, pipe sections, sprayed systems and onecomponent gap filling foams. For open-cell foams, such as integral skin products for automotive steering wheels and facias, emissions of HFCs used as blowing agents are likely to occur during the manufacturing process. In closedcell foam, emissions not only occur during the manufacturing phase, but usually extend into the in-use phase and often the majority of emission occurs at the endof-life (de-commissioning losses). Accordingly, emissions can occur over a period of up to 50 years or even longer."
+          "definition": "The CRF sector (IPCC 2006) 'foam blowing agents' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nHFCs are being used as replacements for CFCs and HCFCs in foams, particularly in closed-cell insulation applications. Compounds that are being used include HFC-245fa, HFC-365mfc, HFC-227ea, HFC-134a, and HFC-152a. The processes and applications for which these various HFCs are being used include insulation boards and panels, pipe sections, sprayed systems and onecomponent gap filling foams. For open-cell foams, such as integral skin products for automotive steering wheels and facias, emissions of HFCs used as blowing agents are likely to occur during the manufacturing process. In closedcell foam, emissions not only occur during the manufacturing phase, but usually extend into the in-use phase and often the majority of emission occurs at the endof-life (de-commissioning losses). Accordingly, emissions can occur over a period of up to 50 years or even longer.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010370": {
           "label": "CRF sector (IPCC 2006): fire protection",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'fire protection' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nThere are two general types of fire protection (fire suppression) equipment that use greenhouse gases as partial replacements for halons: portable (streaming) equipment, and fixed (flooding) equipment. The non-ozone depleting, industrial gases HFCs, PFCs and more recently a fluoroketone are mainly used as substitutes for halons, typically halon 1301, in flooding equipment. PFCs played an early role in halon 1301 replacement but current use is limited to replenishment of previously installed systems. HFCs in portable equipment, typically replacing halon 1211, are available but have achieved very limited market acceptance due primarily to their high cost. PFC use in new portable extinguishers is currently limited to a small amount (few percent) in an HCFC blend."
+          "definition": "The CRF sector (IPCC 2006) 'fire protection' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nThere are two general types of fire protection (fire suppression) equipment that use greenhouse gases as partial replacements for halons: portable (streaming) equipment, and fixed (flooding) equipment. The non-ozone depleting, industrial gases HFCs, PFCs and more recently a fluoroketone are mainly used as substitutes for halons, typically halon 1301, in flooding equipment. PFCs played an early role in halon 1301 replacement but current use is limited to replenishment of previously installed systems. HFCs in portable equipment, typically replacing halon 1211, are available but have achieved very limited market acceptance due primarily to their high cost. PFC use in new portable extinguishers is currently limited to a small amount (few percent) in an HCFC blend.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010371": {
           "label": "CRF sector (IPCC 2006): aerosols",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'aerosols' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMost aerosol packages now contain hydrocarbon (HC) as propellants but, in a small fraction of the total, HFCs and PFCs may be used as propellants or solvents. Emissions from aerosols usually occur shortly after production, on average six months after sale. During the use of aerosols, 100% of the chemical is emitted. The 5 main sources are metered dose inhalers (MDIs), personal care products (e.g. hair care, deodorant, shaving cream), household products (e.g. air-fresheners, oven and fabric cleaners), industrial products (e.g. special cleaning sprays such as those for operating electrical contact, lubricants, pipe-freezers) and other general products (e.g. silly string, tire inflators, claxons), although in some regions the use of such general products is restricted. The HFCs currently used as propellants are HFC 134a, HFC 227ea, and HFC 152a. The substance HFC 43 10mee and a PFC, perfluorohexane, are used as solvents in industrial aerosol products."
+          "definition": "The CRF sector (IPCC 2006) 'aerosols' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMost aerosol packages now contain hydrocarbon (HC) as propellants but, in a small fraction of the total, HFCs and PFCs may be used as propellants or solvents. Emissions from aerosols usually occur shortly after production, on average six months after sale. During the use of aerosols, 100% of the chemical is emitted. The 5 main sources are metered dose inhalers (MDIs), personal care products (e.g. hair care, deodorant, shaving cream), household products (e.g. air-fresheners, oven and fabric cleaners), industrial products (e.g. special cleaning sprays such as those for operating electrical contact, lubricants, pipe-freezers) and other general products (e.g. silly string, tire inflators, claxons), although in some regions the use of such general products is restricted. The HFCs currently used as propellants are HFC 134a, HFC 227ea, and HFC 152a. The substance HFC 43 10mee and a PFC, perfluorohexane, are used as solvents in industrial aerosol products.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010372": {
           "label": "CRF sector (IPCC 2006): solvents",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'solvents' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nHFCs and, to a much lesser extent PFCs, are being used as substitutes for ozone depleting substances (most notably CFC-113). Typical HFCs used are HFC-365mfc and HFC-43-10mee. Use of these fluorinated replacements is much less widespread than the ozone depleting substances they replace. Re-capture and re-use is also much more widely practiced The primary areas of use are precision cleaning, electronics cleaning, metal cleaning and deposition applications. Emissions from aerosols containing solvents should be reported undercategory 2F4 \"Aerosols\" rather than under this category."
+          "definition": "The CRF sector (IPCC 2006) 'solvents' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nHFCs and, to a much lesser extent PFCs, are being used as substitutes for ozone depleting substances (most notably CFC-113). Typical HFCs used are HFC-365mfc and HFC-43-10mee. Use of these fluorinated replacements is much less widespread than the ozone depleting substances they replace. Re-capture and re-use is also much more widely practiced The primary areas of use are precision cleaning, electronics cleaning, metal cleaning and deposition applications. Emissions from aerosols containing solvents should be reported undercategory 2F4 \"Aerosols\" rather than under this category.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010373": {
           "label": "CRF sector (IPCC 2006): other applications",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'other applications' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nThe properties of ozone depleting substances have made them attractive for a variety of niche applications not covered in other sub-source categories. These include electronics testing, heat transfer, dielectric fluid and medical applications. The properties of HFCs and PFCs are equally attractive in some of these sectors and they have been adopted as substitutes. There are also some historical uses of PFCs, as well as emerging use of HFCs, in these applications. These applications have leakage rates ranging from 100% emissive in year of application to around 1% per annum."
+          "definition": "The CRF sector (IPCC 2006) 'other applications' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nThe properties of ozone depleting substances have made them attractive for a variety of niche applications not covered in other sub-source categories. These include electronics testing, heat transfer, dielectric fluid and medical applications. The properties of HFCs and PFCs are equally attractive in some of these sectors and they have been adopted as substitutes. There are also some historical uses of PFCs, as well as emerging use of HFCs, in these applications. These applications have leakage rates ranging from 100% emissive in year of application to around 1% per annum.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010374": {
           "label": "CRF sector (IPCC 2006): electrical equipment",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'electrical equipment' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nElectrical equipment is used in the transmission and distribution of electricity above 1 kV. SF6 is used in gasinsulated switchgear (GIS), gas circuit breakers (GCB), gas-insulated transformers (GIT), gas-insulated lines (GIL), outdoor gas-insulated instrument transformers, reclosers, switches, ring main units and other equipment."
+          "definition": "The CRF sector (IPCC 2006) 'electrical equipment' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nElectrical equipment is used in the transmission and distribution of electricity above 1 kV. SF6 is used in gasinsulated switchgear (GIS), gas circuit breakers (GCB), gas-insulated transformers (GIT), gas-insulated lines (GIL), outdoor gas-insulated instrument transformers, reclosers, switches, ring main units and other equipment.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010375": {
           "label": "CRF sector (IPCC 2006): SF6 and PFCs from other product use",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'SF6 and PFCs from other product use' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nIdentified remaining applications in this source category include:\n- SF6 and PFCs used in military applications, particularly SF6 used in airborne radar systems, e.g., AWACS (Airborne Warning and Control System), and PFCs used as heat transfer fluids in high-powered electronic applications;\n- SF6 used in equipment in university and research particle accelerators;\n- SF6 used in equipment in industrial and medical particle accelerators;\n- ‘Adiabatic’ applications utilising the low permeability through rubber of SF6 and some PFCs, e.g., car tires and sport shoe soles;\n- SF6 used in sound-proof windows;\n- PFCs used as heat transfer fluids in commercial and consumer applications;\n- PFCs used in cosmetics and in medical applications;\n- Other uses e.g. gas-air tracer in research and leak detectors."
+          "definition": "The CRF sector (IPCC 2006) 'SF6 and PFCs from other product use' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nIdentified remaining applications in this source category include:\n- SF6 and PFCs used in military applications, particularly SF6 used in airborne radar systems, e.g., AWACS (Airborne Warning and Control System), and PFCs used as heat transfer fluids in high-powered electronic applications;\n- SF6 used in equipment in university and research particle accelerators;\n- SF6 used in equipment in industrial and medical particle accelerators;\n- ‘Adiabatic’ applications utilising the low permeability through rubber of SF6 and some PFCs, e.g., car tires and sport shoe soles;\n- SF6 used in sound-proof windows;\n- PFCs used as heat transfer fluids in commercial and consumer applications;\n- PFCs used in cosmetics and in medical applications;\n- Other uses e.g. gas-air tracer in research and leak detectors.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010376": {
           "label": "CRF sector (IPCC 2006): N2O from product use",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'N2O from product use' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEvaporative emissions of nitrous oxide (N2O) can arise from various types of product use, including:\n- Medical applications (anaesthetic use, analgesic use and veterinary use);\n- Use as a propellant in aerosol products, primarily in food industry (pressure-packaged whipped cream, etc);\n- Oxidising agent and etchant used in semiconductor manufacturing;\n- Oxidising agent used, with acetylene, in atomic absorption spectrometry;\n- Production of sodium azide, which is used to inflate airbags;\n- Fuel oxidant in auto racing; and\n- Oxidising agent in blowtorches used by jewelers and others."
+          "definition": "The CRF sector (IPCC 2006) 'N2O from product use' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEvaporative emissions of nitrous oxide (N2O) can arise from various types of product use, including:\n- Medical applications (anaesthetic use, analgesic use and veterinary use);\n- Use as a propellant in aerosol products, primarily in food industry (pressure-packaged whipped cream, etc);\n- Oxidising agent and etchant used in semiconductor manufacturing;\n- Oxidising agent used, with acetylene, in atomic absorption spectrometry;\n- Production of sodium azide, which is used to inflate airbags;\n- Fuel oxidant in auto racing; and\n- Oxidising agent in blowtorches used by jewelers and others.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010377": {
           "label": "CRF sector (IPCC 2006): other product manufacture and use - other",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'other product manufacture and use - other' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories"
+          "definition": "The CRF sector (IPCC 2006) 'other product manufacture and use - other' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010047": {
           "label": "CRF sector (IPCC 2006): agriculture",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'agriculture' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories."
+          "definition": "The CRF sector (IPCC 2006) 'agriculture' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010048": {
           "label": "CRF sector (IPCC 2006): land use, land-use change and forestry",
           "spellings": [
             "LULUCF"
           ],
-          "definition": "The CRF sector (IPCC 2006) 'land use, land-use change and forestry' (LULUCF) is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories"
+          "definition": "The CRF sector (IPCC 2006) 'land use, land-use change and forestry' (LULUCF) is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010069": {
           "label": "KSG sector agriculture",
           "spellings": [],
-          "definition": "The KSG sector agriculture is an agriculture, forestry and land use sector defined by the KSG sector division. It is an aggregate of the following two sectors:\n- CRF sector (IPCC 2006): agriculture, forestry and fishing (CRF 1.A.4.c)\n- CRF sector (IPCC 2006): agriculture (CRF 3)"
+          "definition": "The KSG sector agriculture is an agriculture, forestry and land use sector defined by the KSG sector division. It is an aggregate of the following two sectors:\n- CRF sector (IPCC 2006): agriculture, forestry and fishing (CRF 1.A.4.c)\n- CRF sector (IPCC 2006): agriculture (CRF 3)",
+          "group": "KSG sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010071": {
           "label": "KSG sector land use, land-use change and forestry",
           "spellings": [],
-          "definition": "The KSG sector land use, land-use change and forestry is an agriculture, forestry and land use sector defined by the KSG sector division.\nIt is equivalent to the CRF sector (IPCC 2006): land use, land-use change and forestry (CRF 4)."
+          "definition": "The KSG sector land use, land-use change and forestry is an agriculture, forestry and land use sector defined by the KSG sector division.\nIt is equivalent to the CRF sector (IPCC 2006): land use, land-use change and forestry (CRF 4).",
+          "group": "KSG sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010135": {
           "label": "EU emission sector: LULUCF",
           "spellings": [],
-          "definition": "The EU emission sector LULUCF is a sector defined by an EU emission sector division that covers greenhouse gas emissions regulated by the European Union Emissions Trading System and that are emitted by agriculture, forestry and land use."
+          "definition": "The EU emission sector LULUCF is a sector defined by an EU emission sector division that covers greenhouse gas emissions regulated by the European Union Emissions Trading System and that are emitted by agriculture, forestry and land use.",
+          "group": "EU legislation sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010179": {
           "label": "CRF sector (IPCC 2006): enteric fermentation",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'enteric fermentation' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMethane emissions from herbivores as a by-product of enteric fermentation (a digestive process by which carbohydrates are broken down by micro-organisms into simple molecules for absorption into the bloodstream). Ruminant animals (e.g., cattle, sheep) are major sources with moderate amounts produced from non-ruminant animals (e.g., pigs, horses)."
+          "definition": "The CRF sector (IPCC 2006) 'enteric fermentation' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMethane emissions from herbivores as a by-product of enteric fermentation (a digestive process by which carbohydrates are broken down by micro-organisms into simple molecules for absorption into the bloodstream). Ruminant animals (e.g., cattle, sheep) are major sources with moderate amounts produced from non-ruminant animals (e.g., pigs, horses).",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010180": {
           "label": "CRF sector (IPCC 2006): manure management",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'manure management' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMethane and nitrous oxide emissions from the decomposition of manure under low oxygen or anaerobic conditions."
+          "definition": "The CRF sector (IPCC 2006) 'manure management' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMethane and nitrous oxide emissions from the decomposition of manure under low oxygen or anaerobic conditions.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010181": {
           "label": "CRF sector (IPCC 2006): rice cultivation",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'rice cultivation' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMethane (CH4) emissions from anaerobic decomposition of organic material in flooded rice fields."
+          "definition": "The CRF sector (IPCC 2006) 'rice cultivation' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMethane (CH4) emissions from anaerobic decomposition of organic material in flooded rice fields.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010182": {
           "label": "CRF sector (IPCC 2006): agricultural soils",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'agricultural soils' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories"
+          "definition": "The CRF sector (IPCC 2006) 'agricultural soils' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010183": {
           "label": "CRF sector (IPCC 2006): prescribed burning of savannas",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'prescribed burning of savannas' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories"
+          "definition": "The CRF sector (IPCC 2006) 'prescribed burning of savannas' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010184": {
           "label": "CRF sector (IPCC 2006): field burning of agricultural residues",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'field burning of agricultural residues' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCO2 emissions from urea application"
+          "definition": "The CRF sector (IPCC 2006) 'field burning of agricultural residues' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCO2 emissions from urea application",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010185": {
           "label": "CRF sector (IPCC 2006): liming",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'liming' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCO2 emissions from the use of lime in agricultural soils, managed forest soils or lakes."
+          "definition": "The CRF sector (IPCC 2006) 'liming' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCO2 emissions from the use of lime in agricultural soils, managed forest soils or lakes.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010186": {
           "label": "CRF sector (IPCC 2006): urea application",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'urea application' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories"
+          "definition": "The CRF sector (IPCC 2006) 'urea application' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010187": {
           "label": "CRF sector (IPCC 2006): other carbon-containing fertilizers",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'other carbon-containing fertilizers' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories"
+          "definition": "The CRF sector (IPCC 2006) 'other carbon-containing fertilizers' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010188": {
           "label": "CRF sector (IPCC 2006): agriculture - other",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'agriculture - other' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories"
+          "definition": "The CRF sector (IPCC 2006) 'agriculture - other' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010189": {
           "label": "CRF sector (IPCC 2006): forest land",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'forest land' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions and removals from lands with woody vegetation consistent with thresholds used to define forest land in the national GHG inventory, sub-divided into managed and unmanaged, and possibly also by climatic region, soil type and vegetation type as appropriate. It also includes systems with vegetation that currently fall below, but are expected to later exceed, the threshold values used by a country to define the forest land category."
+          "definition": "The CRF sector (IPCC 2006) 'forest land' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions and removals from lands with woody vegetation consistent with thresholds used to define forest land in the national GHG inventory, sub-divided into managed and unmanaged, and possibly also by climatic region, soil type and vegetation type as appropriate. It also includes systems with vegetation that currently fall below, but are expected to later exceed, the threshold values used by a country to define the forest land category.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010190": {
           "label": "CRF sector (IPCC 2006): cropland",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'cropland' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions and removals from arable and tillage land, rice fields, and agro-forestry systems where vegetation falls below the thresholds used for the forest land category."
+          "definition": "The CRF sector (IPCC 2006) 'cropland' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions and removals from arable and tillage land, rice fields, and agro-forestry systems where vegetation falls below the thresholds used for the forest land category.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010191": {
           "label": "CRF sector (IPCC 2006): grassland",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'grassland' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions and removals from rangelands and pasture land that is not considered cropland. It also includes systems with woody vegetation that fall below the threshold values used in the forest land category and are not expected to exceed them, without human intervention. The category also includes all grassland from wild lands to recreational areas as well as agricultural and silvi-pastural systems, subdivided into managed and unmanaged, consistent with national definitions."
+          "definition": "The CRF sector (IPCC 2006) 'grassland' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions and removals from rangelands and pasture land that is not considered cropland. It also includes systems with woody vegetation that fall below the threshold values used in the forest land category and are not expected to exceed them, without human intervention. The category also includes all grassland from wild lands to recreational areas as well as agricultural and silvi-pastural systems, subdivided into managed and unmanaged, consistent with national definitions.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010192": {
           "label": "CRF sector (IPCC 2006): wetlands",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'wetlands' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from land that is covered or saturated by water for all or part of the year (e.g., peatland) and that does not fall into the forest land, cropland, grassland or settlements categories. The category can be subdivided into managed and unmanaged according to national definitions. It includes reservoirs as a managed sub-division and natural rivers and lakes as unmanaged sub-divisions."
+          "definition": "The CRF sector (IPCC 2006) 'wetlands' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from land that is covered or saturated by water for all or part of the year (e.g., peatland) and that does not fall into the forest land, cropland, grassland or settlements categories. The category can be subdivided into managed and unmanaged according to national definitions. It includes reservoirs as a managed sub-division and natural rivers and lakes as unmanaged sub-divisions.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010193": {
           "label": "CRF sector (IPCC 2006): settlements",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'settlements' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions and removals from all developed land, including transportation infrastructure and human settlements of any size, unless they are already included under other categories."
+          "definition": "The CRF sector (IPCC 2006) 'settlements' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions and removals from all developed land, including transportation infrastructure and human settlements of any size, unless they are already included under other categories.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010194": {
           "label": "CRF sector (IPCC 2006): other land",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'other land' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions and removals from bare soil, rock, ice, and all unmanaged land areas that do not fall into any of the other five categories."
+          "definition": "The CRF sector (IPCC 2006) 'other land' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions and removals from bare soil, rock, ice, and all unmanaged land areas that do not fall into any of the other five categories.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010195": {
           "label": "CRF sector (IPCC 2006): harvested wood products",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'harvested wood products' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories\nCO2 net emissions or removals resulting from Harvest Wood Products."
+          "definition": "The CRF sector (IPCC 2006) 'harvested wood products' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories\nCO2 net emissions or removals resulting from Harvest Wood Products.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010196": {
           "label": "CRF sector (IPCC 2006): land use, land-use change and forestry - other",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'land use, land-use change and forestry - other' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories"
+          "definition": "The CRF sector (IPCC 2006) 'land use, land-use change and forestry - other' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010308": {
           "label": "NC/BR sector: agriculture",
           "spellings": [],
-          "definition": "The NC/BR sector \"agriculture\" is an agriculture, forestry and land use sector defined by an NC/BR sector division. It aligns to the CRF sector (IPCC 2006): agriculture."
+          "definition": "The NC/BR sector \"agriculture\" is an agriculture, forestry and land use sector defined by an NC/BR sector division. It aligns to the CRF sector (IPCC 2006): agriculture.",
+          "group": "NC/BR sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010309": {
           "label": "NC/BR sector: forestry/LULUCF",
           "spellings": [],
-          "definition": "The NC/BR sector \"forestry/LULUCF\" is an agriculture, forestry and land use sector defined by an NC/BR sector division. It aligns to the CRF sector (IPCC 2006): land use, land-use change and forestry."
+          "definition": "The NC/BR sector \"forestry/LULUCF\" is an agriculture, forestry and land use sector defined by an NC/BR sector division. It aligns to the CRF sector (IPCC 2006): land use, land-use change and forestry.",
+          "group": "NC/BR sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010049": {
           "label": "CRF sector (IPCC 2006): waste",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'waste' is a waste and wastewater sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCarbon dioxide (CO2), methane (CH4) and nitrous oxide (N2O) emissions from following categories: Solid waste disposal, Biological treatment of solid waste,\nIncineration and open burning of waste, Wastewater treatment and discharge."
+          "definition": "The CRF sector (IPCC 2006) 'waste' is a waste and wastewater sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCarbon dioxide (CO2), methane (CH4) and nitrous oxide (N2O) emissions from following categories: Solid waste disposal, Biological treatment of solid waste,\nIncineration and open burning of waste, Wastewater treatment and discharge.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010070": {
           "label": "KSG sector waste management and other",
           "spellings": [],
-          "definition": "The KSG sector waste management and other is a sector defined by the KSG sector division. It is an aggregate of the following two sectors:\n- CRF sector (IPCC 2006): waste (CRF 5)\n- CRF sector (IPCC 2006): other (CRF 6)"
+          "definition": "The KSG sector waste management and other is a sector defined by the KSG sector division. It is an aggregate of the following two sectors:\n- CRF sector (IPCC 2006): waste (CRF 5)\n- CRF sector (IPCC 2006): other (CRF 6)",
+          "group": "KSG sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010174": {
           "label": "CRF sector (IPCC 2006): solid waste disposal",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'solid waste disposal' is a waste and wastewater sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMethane is produced from anaerobic microbial decomposition of organic matter in solid waste disposal sites."
+          "definition": "The CRF sector (IPCC 2006) 'solid waste disposal' is a waste and wastewater sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMethane is produced from anaerobic microbial decomposition of organic matter in solid waste disposal sites.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010175": {
           "label": "CRF sector (IPCC 2006): biological treatment of solid waste",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'biological treatment of solid waste' is a waste and wastewater sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nSolid waste composting and other biological treatment. Emissions from biogas facilities (anaerobic digestion) with energy production are reported in the Energy Sector (1A4)."
+          "definition": "The CRF sector (IPCC 2006) 'biological treatment of solid waste' is a waste and wastewater sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nSolid waste composting and other biological treatment. Emissions from biogas facilities (anaerobic digestion) with energy production are reported in the Energy Sector (1A4).",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010176": {
           "label": "CRF sector (IPCC 2006): incineration and open burning of waste",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'incineration and open burning of waste' is a waste and wastewater sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nIncineration of waste and open burning waste, not including waste-to-energy facilities."
+          "definition": "The CRF sector (IPCC 2006) 'incineration and open burning of waste' is a waste and wastewater sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nIncineration of waste and open burning waste, not including waste-to-energy facilities.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010177": {
           "label": "CRF sector (IPCC 2006): waste water treatment and discharge",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'waste water treatment and discharge' is a waste and wastewater sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMethane is produced from anaerobic decomposition of organic matter by bacteria in sewage facilities and from food processing and other industrial facilities during wastewater treatment. N2O is also produced by bacteria\n(denitrification and nitrification) in wastewater treatment and discharge."
+          "definition": "The CRF sector (IPCC 2006) 'waste water treatment and discharge' is a waste and wastewater sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nMethane is produced from anaerobic decomposition of organic matter by bacteria in sewage facilities and from food processing and other industrial facilities during wastewater treatment. N2O is also produced by bacteria\n(denitrification and nitrification) in wastewater treatment and discharge.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010178": {
           "label": "CRF sector (IPCC 2006): waste - other",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'waste - other' is a waste and wastewater sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories"
+          "definition": "The CRF sector (IPCC 2006) 'waste - other' is a waste and wastewater sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010310": {
           "label": "NC/BR sector: waste management/waste",
           "spellings": [],
-          "definition": "The NC/BR sector \"waste management/waste\" is a waste and wastewater sector defined by an NC/BR sector division. It aligns to the CRF sector (IPCC 2006): waste."
+          "definition": "The NC/BR sector \"waste management/waste\" is a waste and wastewater sector defined by an NC/BR sector division. It aligns to the CRF sector (IPCC 2006): waste.",
+          "group": "NC/BR sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010390": {
           "label": "RED sector: heating and cooling",
           "spellings": [],
-          "definition": "The RED sector heating and cooling is a heating and cooling sector defined by the Renewable Energy Directive sector division."
+          "definition": "The RED sector heating and cooling is a heating and cooling sector defined by the Renewable Energy Directive sector division.",
+          "group": "RED sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010053": {
           "label": "CRF sector (IPCC 2006): residential",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'residential' is a household sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAll emissions from fuel combustion in households."
+          "definition": "The CRF sector (IPCC 2006) 'residential' is a household sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAll emissions from fuel combustion in households.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010052": {
           "label": "CRF sector (IPCC 2006): commercial and institutional",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'commercial and institutional' is a commercial sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from fuel combustion in commercial and institutional buildings."
+          "definition": "The CRF sector (IPCC 2006) 'commercial and institutional' is a commercial sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from fuel combustion in commercial and institutional buildings.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010042": {
           "label": "CRF sector (IPCC 2006): transport",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'transport' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from the combustion and evaporation of fuel for all transport activity (excluding military transport), regardless of the sector, specified by sub-categories below. Emissions from fuel sold to any air or marine vessel engaged in international transport (1 A 3 a i and 1 A 3 d i) should as far as possible be excluded from the totals and subtotals in this category and should be reported separately."
+          "definition": "The CRF sector (IPCC 2006) 'transport' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from the combustion and evaporation of fuel for all transport activity (excluding military transport), regardless of the sector, specified by sub-categories below. Emissions from fuel sold to any air or marine vessel engaged in international transport (1 A 3 a i and 1 A 3 d i) should as far as possible be excluded from the totals and subtotals in this category and should be reported separately.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010059": {
           "label": "CRF sector (IPCC 2006): domestic aviation",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'domestic aviation' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from civil domestic passenger and freight traffic that departs and arrives in the same country (commercial, private, agriculture, etc.), including take-offs and landings for these flight stages. Note that this may include journeys of considerable length between two airports in a country (e.g. San Francisco to Honolulu). Exclude military, which should be reported under 1 A 5 b."
+          "definition": "The CRF sector (IPCC 2006) 'domestic aviation' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from civil domestic passenger and freight traffic that departs and arrives in the same country (commercial, private, agriculture, etc.), including take-offs and landings for these flight stages. Note that this may include journeys of considerable length between two airports in a country (e.g. San Francisco to Honolulu). Exclude military, which should be reported under 1 A 5 b.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010060": {
           "label": "CRF sector (IPCC 2006): road transportation",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'road transport' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAll combustion and evaporative emissions arising from fuel use in road vehicles, including the use of agricultural vehicles on paved roads."
+          "definition": "The CRF sector (IPCC 2006) 'road transport' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAll combustion and evaporative emissions arising from fuel use in road vehicles, including the use of agricultural vehicles on paved roads.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010061": {
           "label": "CRF sector (IPCC 2006): railways",
           "spellings": [],
-          "definition": "2006 IPCC Guidelines for National Greenhouse Gas Inventories, Volume 1, Chapter 8.5, https://www.ipcc-nggip.iges.or.jp/public/2006gl/"
+          "definition": "2006 IPCC Guidelines for National Greenhouse Gas Inventories, Volume 1, Chapter 8.5, https://www.ipcc-nggip.iges.or.jp/public/2006gl/",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010062": {
           "label": "CRF sector (IPCC 2006): domestic navigation",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'domestic navigation' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from fuels used by vessels of all flags that depart and arrive in the same country (exclude fishing, which should be reported under 1 A 4 c iii, and military, which should be reported under 1 A 5 b). Note that this may include journeys of considerable length between two ports in a country (e.g. San Francisco to Honolulu)."
+          "definition": "The CRF sector (IPCC 2006) 'domestic navigation' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from fuels used by vessels of all flags that depart and arrive in the same country (exclude fishing, which should be reported under 1 A 4 c iii, and military, which should be reported under 1 A 5 b). Note that this may include journeys of considerable length between two ports in a country (e.g. San Francisco to Honolulu).",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010063": {
           "label": "CRF sector (IPCC 2006): other transportation",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'other transportation' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCombustion emissions from all remaining transport activities including pipeline transportation, ground activities in airports and harbours, and off-road activities not otherwise reported under 1 A 4 c Agriculture or 1 A 2. Manufacturing Industries and Construction. Military transport should be reported under 1 A 5."
+          "definition": "The CRF sector (IPCC 2006) 'other transportation' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCombustion emissions from all remaining transport activities including pipeline transportation, ground activities in airports and harbours, and off-road activities not otherwise reported under 1 A 4 c Agriculture or 1 A 2. Manufacturing Industries and Construction. Military transport should be reported under 1 A 5.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010064": {
           "label": "CRF sector (IPCC 2006): pipeline transport",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'pipeline transport' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCombustion related emissions from the operation of pump stations and maintenance of pipelines. Transport via pipelines includes transport of gases  liquids, slurry and other commodities via pipelines. Distribution of natural or manufactured gas, water or steam from the distributor to final users is excluded and should be reported in 1 A 1 c ii or 1 A 4 a."
+          "definition": "The CRF sector (IPCC 2006) 'pipeline transport' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCombustion related emissions from the operation of pump stations and maintenance of pipelines. Transport via pipelines includes transport of gases  liquids, slurry and other commodities via pipelines. Distribution of natural or manufactured gas, water or steam from the distributor to final users is excluded and should be reported in 1 A 1 c ii or 1 A 4 a.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010068": {
           "label": "KSG sector transport",
           "spellings": [],
-          "definition": "The KSG sector transport is a transport sector defined by the KSG sector division. It is an aggregate of the following four sectors:\n- CRF sector (IPCC 2006): domestic aviation (CRF 1.A.3.a)\n- CRF sector (IPCC 2006): road transportation (CRF 1.A.3.b)\n- CRF sector (IPCC 2006): railways (CRF 1.A.3.c)\n- CRF sector (IPCC 2006): domestic navigation (CRF 1.A.3.d)"
+          "definition": "The KSG sector transport is a transport sector defined by the KSG sector division. It is an aggregate of the following four sectors:\n- CRF sector (IPCC 2006): domestic aviation (CRF 1.A.3.a)\n- CRF sector (IPCC 2006): road transportation (CRF 1.A.3.b)\n- CRF sector (IPCC 2006): railways (CRF 1.A.3.c)\n- CRF sector (IPCC 2006): domestic navigation (CRF 1.A.3.d)",
+          "group": "KSG sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010133": {
           "label": "EU emission sector: ETS aviation",
           "spellings": [],
-          "definition": "The EU emission sector ETS aviation is a transport sector defined by an EU emission sector division that covers greenhouse gas emissions regulated by the European Union Emissions Trading System and that are emitted by stationary installations."
+          "definition": "The EU emission sector ETS aviation is a transport sector defined by an EU emission sector division that covers greenhouse gas emissions regulated by the European Union Emissions Trading System and that are emitted by stationary installations.",
+          "group": "EU legislation sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010199": {
           "label": "CRF sector (IPCC 2006): international bunkers and multilateral operations",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) international bunkers is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories. It encompasses international bunkers and multilateral operation."
+          "definition": "The CRF sector (IPCC 2006) international bunkers is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories. It encompasses international bunkers and multilateral operation.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010203": {
           "label": "CRF sector (IPCC 2006): multilateral operations",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'multilateral operation' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from fuels used for aviation and waterborne navigation in multilateral operations pursuant to the Charter of the United Nations."
+          "definition": "The CRF sector (IPCC 2006) 'multilateral operation' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from fuels used for aviation and waterborne navigation in multilateral operations pursuant to the Charter of the United Nations.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010306": {
           "label": "NC/BR sector: transport",
           "spellings": [],
-          "definition": "The NC/BR sector \"transport\" is a transport sector defined by an NC/BR sector division. It aligns to the CRF sector (IPCC 2006): transport."
+          "definition": "The NC/BR sector \"transport\" is a transport sector defined by an NC/BR sector division. It aligns to the CRF sector (IPCC 2006): transport.",
+          "group": "NC/BR sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010391": {
           "label": "RED sector: transport",
           "spellings": [],
-          "definition": "The RED sector transport is a transport sector defined by the Renewable Energy Directive sector division."
+          "definition": "The RED sector transport is a transport sector defined by the Renewable Energy Directive sector division.",
+          "group": "RED sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00360043": {
           "label": "BSI-KritisV transport sector",
           "spellings": [],
-          "definition": "The BSI-KritisV transport sector is a transport sector defined by the BSI-KritisV sector division (§ 8 BSI-KritisV)."
+          "definition": "The BSI-KritisV transport sector is a transport sector defined by the BSI-KritisV sector division (§ 8 BSI-KritisV).",
+          "group": "BSI-KritisV sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010067": {
           "label": "KSG sector buildings",
           "spellings": [],
-          "definition": "The KSG sector buildings is a building sector defined by the KSG sector division. It is an aggregate of the following two sectors:\n- CRF sector (IPCC 2006): commercial and institutional (CRF 1.A.4.a)\n- CRF sector (IPCC 2006): residential (CRF 1.A.4.b)\n- CRF sector (IPCC 2006): fuel combustion - other"
+          "definition": "The KSG sector buildings is a building sector defined by the KSG sector division. It is an aggregate of the following two sectors:\n- CRF sector (IPCC 2006): commercial and institutional (CRF 1.A.4.a)\n- CRF sector (IPCC 2006): residential (CRF 1.A.4.b)\n- CRF sector (IPCC 2006): fuel combustion - other",
+          "group": "KSG sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010389": {
           "label": "RED sector: electricity",
           "spellings": [],
-          "definition": "The RED sector electricity is an electricity sector defined by the Renewable Energy Directive sector division."
+          "definition": "The RED sector electricity is an electricity sector defined by the Renewable Energy Directive sector division.",
+          "group": "RED sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010159": {
           "label": "CRF sector (IPCC 2006): petroleum refining",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'petroleum refining' is an energy transformation sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAll combustion activities supporting the refining of petroleum products including on-site combustion for the generation of electricity and heat for own use."
+          "definition": "The CRF sector (IPCC 2006) 'petroleum refining' is an energy transformation sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAll combustion activities supporting the refining of petroleum products including on-site combustion for the generation of electricity and heat for own use.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010200": {
           "label": "CRF sector (IPCC 2006): international bunkers",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'international bunkers' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories. It encompasses international aviation and maritime navigation."
+          "definition": "The CRF sector (IPCC 2006) 'international bunkers' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories. It encompasses international aviation and maritime navigation.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010201": {
           "label": "CRF sector (IPCC 2006): international aviation",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'international aviation' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories. It encompasses emissions from flights that depart in one country and arrive in a different country."
+          "definition": "The CRF sector (IPCC 2006) 'international aviation' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories. It encompasses emissions from flights that depart in one country and arrive in a different country.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010202": {
           "label": "CRF sector (IPCC 2006): maritime navigation",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'maritime navigation' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories. Emissions from fuels used by vessels of all flags that are engaged in international water-borne navigation. The international navigation may take place at sea, on inland lakes and waterways and in coastal waters. It includes emissions from journeys that depart in one country and arrive in a different country. It excludes consumption by fishing vessels."
+          "definition": "The CRF sector (IPCC 2006) 'maritime navigation' is a transport sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories. Emissions from fuels used by vessels of all flags that are engaged in international water-borne navigation. The international navigation may take place at sea, on inland lakes and waterways and in coastal waters. It includes emissions from journeys that depart in one country and arrive in a different country. It excludes consumption by fishing vessels.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010205": {
           "label": "MMR sector: M.International aviation in the EU ETS",
           "spellings": [],
-          "definition": "The MMR sector 'M.International aviation in the EU ETS' is a transport sector that encompasses that part of the international aviation that is regulated by the European Union Emissions Trading System."
+          "definition": "The MMR sector 'M.International aviation in the EU ETS' is a transport sector that encompasses that part of the international aviation that is regulated by the European Union Emissions Trading System.",
+          "group": "EU legislation sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010038": {
           "label": "CRF sector (IPCC 2006): energy",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) energy is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAll GHG emissions arising from combustion and fugitive releases of fuels. Emissions from the non-energy uses of fuels are generally not included here, but reported under Industrial Processes and Product Use."
+          "definition": "The CRF sector (IPCC 2006) energy is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAll GHG emissions arising from combustion and fugitive releases of fuels. Emissions from the non-energy uses of fuels are generally not included here, but reported under Industrial Processes and Product Use.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010039": {
           "label": "CRF sector (IPCC 2006): fuel combustion",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'fuel combustion' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from the intentional oxidation of materials within an apparatus that is designed to raise heat and provide it either as heat or as mechanical work to a process or for use away from the apparatus."
+          "definition": "The CRF sector (IPCC 2006) 'fuel combustion' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nEmissions from the intentional oxidation of materials within an apparatus that is designed to raise heat and provide it either as heat or as mechanical work to a process or for use away from the apparatus.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010044": {
           "label": "CRF sector (IPCC 2006): fuel combustion - other",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'fuel combustion' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAll remaining emissions from fuel combustion that are not specified elsewhere. Include emissions from fuel delivered to the military in the country and delivered to the military of other countries that are not engaged in multilateral operations."
+          "definition": "The CRF sector (IPCC 2006) 'fuel combustion' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAll remaining emissions from fuel combustion that are not specified elsewhere. Include emissions from fuel delivered to the military in the country and delivered to the military of other countries that are not engaged in multilateral operations.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010050": {
           "label": "CRF sector (IPCC 2006): other",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'other' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories"
+          "definition": "The CRF sector (IPCC 2006) 'other' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010057": {
           "label": "CRF sector (IPCC 2006): fugitive emissions from fuels",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'fugitive emissions from fuels' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nIncludes all intentional and unintentional emissions from the extraction, processing, storage and transport of solid fuel to the point of final use."
+          "definition": "The CRF sector (IPCC 2006) 'fugitive emissions from fuels' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nIncludes all intentional and unintentional emissions from the extraction, processing, storage and transport of solid fuel to the point of final use.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010058": {
           "label": "CRF sector (IPCC 2006): CO2 transport and storage",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'CO2 transport and storage' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCarbon dioxide (CO2) capture and storage (CCS) involves the capture of CO2 from anthropogenic sources, its transport to a storage location and its long-term isolation from the atmosphere. Emissions associated with CO2 transport, injection and storage are covered under category 1C. Emissions (and reductions) associated with CO2 capture should be reported under the IPCC Sector in which capture takes place (e.g. Fuel Combustion or Industrial Activities)."
+          "definition": "The CRF sector (IPCC 2006) 'CO2 transport and storage' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nCarbon dioxide (CO2) capture and storage (CCS) involves the capture of CO2 from anthropogenic sources, its transport to a storage location and its long-term isolation from the atmosphere. Emissions associated with CO2 transport, injection and storage are covered under category 1C. Emissions (and reductions) associated with CO2 capture should be reported under the IPCC Sector in which capture takes place (e.g. Fuel Combustion or Industrial Activities).",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010131": {
           "label": "EU emission sector: ETS",
           "spellings": [],
-          "definition": "The EU emission sector ETS is a sector defined by an EU emission sector division that covers greenhouse gas emissions that are regulated by the European Union Emissions Trading System."
+          "definition": "The EU emission sector ETS is a sector defined by an EU emission sector division that covers greenhouse gas emissions that are regulated by the European Union Emissions Trading System.",
+          "group": "EU legislation sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010132": {
           "label": "EU emission sector: ETS stationary",
           "spellings": [],
-          "definition": "The EU emission sector ETS stationary is a sector defined by an EU emission sector division that covers greenhouse gas emissions regulated by the European Union Emissions Trading System and that are emitted by stationary installations."
+          "definition": "The EU emission sector ETS stationary is a sector defined by an EU emission sector division that covers greenhouse gas emissions regulated by the European Union Emissions Trading System and that are emitted by stationary installations.",
+          "group": "EU legislation sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010134": {
           "label": "EU emission sector: effort sharing",
           "spellings": [],
-          "definition": "The EU emission sector effort sharing is a sector defined by the EU emission sector division that covers greenhouse gas emissions regulated by the Effort Sharing Decision and the Effort Sharing Regulation."
+          "definition": "The EU emission sector effort sharing is a sector defined by the EU emission sector division that covers greenhouse gas emissions regulated by the Effort Sharing Decision and the Effort Sharing Regulation.",
+          "group": "EU legislation sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010161": {
           "label": "CRF sector (IPCC 2006): solid fuels",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'solid fuels' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nIncludes all intentional and unintentional emissions from the extraction, processing, storage and transport of fuel to the point of final use."
+          "definition": "The CRF sector (IPCC 2006) 'solid fuels' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nIncludes all intentional and unintentional emissions from the extraction, processing, storage and transport of fuel to the point of final use.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010162": {
           "label": "CRF sector (IPCC 2006): oil and natural gas",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'oil and natural gas' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nComprises fugitive emissions from all oil and natural gas activities."
+          "definition": "The CRF sector (IPCC 2006) 'oil and natural gas' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nComprises fugitive emissions from all oil and natural gas activities.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010197": {
           "label": "CRF sector (IPCC 2006): total emissions excluding LULUCF",
           "spellings": [
             "Total emissions: (UNFCCC)"
           ],
-          "definition": "The CRF sector (IPCC 2006) 'total emissions excluding LULUCF' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories. It encompasses the following IPCC 2006 sectors: energy; industrial processes and product use; agriculture; waste; and other."
+          "definition": "The CRF sector (IPCC 2006) 'total emissions excluding LULUCF' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories. It encompasses the following IPCC 2006 sectors: energy; industrial processes and product use; agriculture; waste; and other.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010198": {
           "label": "CRF sector (IPCC 2006): total emissions including LULUCF",
           "spellings": [
             "Total net emissions (UNFCCC)"
           ],
-          "definition": "The CRF sector (IPCC 2006) 'total emissions including LULUCF' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories. It encompasses the following IPCC 2006 sectors: energy; industrial processes and product use; agriculture; land use, land-use change and forestry; waste; and other."
+          "definition": "The CRF sector (IPCC 2006) 'total emissions including LULUCF' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories. It encompasses the following IPCC 2006 sectors: energy; industrial processes and product use; agriculture; land use, land-use change and forestry; waste; and other.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010206": {
           "label": "total emissions excluding LULUCF and including international bunkers",
           "spellings": [
             "total emissions with international transport (EEA)"
           ],
-          "definition": "'Total emissions excluding LULUCF and including international aviation' is a sector that encompasses 'CRF sector (IPCC 2006): total emissions excluding LULUCF' and 'CRF sector (IPCC 2006): international bunkers'."
+          "definition": "'Total emissions excluding LULUCF and including international aviation' is a sector that encompasses 'CRF sector (IPCC 2006): total emissions excluding LULUCF' and 'CRF sector (IPCC 2006): international bunkers'.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010207": {
           "label": "total emissions including LULUCF and including international bunkers",
           "spellings": [
             "total net emissions with international transport (EEA)"
           ],
-          "definition": "'Total emissions excluding LULUCF and including international aviation' is a sector that 'CRF sector (IPCC 2006): total emissions including LULUCF' and 'CRF sector (IPCC 2006): international bunkers'."
+          "definition": "'Total emissions excluding LULUCF and including international aviation' is a sector that 'CRF sector (IPCC 2006): total emissions including LULUCF' and 'CRF sector (IPCC 2006): international bunkers'.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010208": {
           "label": "total emissions excluding LULUCF and including international aviation",
           "spellings": [
             "total emissions with international aviation (EU 2020)"
           ],
-          "definition": "'Total emissions excluding LULUCF and including international aviation' is a sector that encompasses 'CRF sector (IPCC 2006): total emissions excluding LULUCF' and 'CRF sector (IPCC 2006): international aviation'."
+          "definition": "'Total emissions excluding LULUCF and including international aviation' is a sector that encompasses 'CRF sector (IPCC 2006): total emissions excluding LULUCF' and 'CRF sector (IPCC 2006): international aviation'.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010209": {
           "label": "total emissions including LULUCF and including international aviation",
           "spellings": [
             "total net emissions with international aviation (NDC)"
           ],
-          "definition": "'Total emissions excluding LULUCF and including international aviation' is a sector that 'CRF sector (IPCC 2006): total emissions including LULUCF' and 'CRF sector (IPCC 2006): international aviation'."
+          "definition": "'Total emissions excluding LULUCF and including international aviation' is a sector that 'CRF sector (IPCC 2006): total emissions including LULUCF' and 'CRF sector (IPCC 2006): international aviation'.",
+          "group": "sectors of no particular division"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010228": {
           "label": "CRF sector (IPCC 2006): CO2 emissions from biomass",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006): 'CO2 emissions from biomass' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories: CO2 emissions from biomass combustion are not included in national totals, but are recorded as an information item for cross-checking purposes as well as avoiding double counting."
+          "definition": "The CRF sector (IPCC 2006): 'CO2 emissions from biomass' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories: CO2 emissions from biomass combustion are not included in national totals, but are recorded as an information item for cross-checking purposes as well as avoiding double counting.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010229": {
           "label": "CRF sector (IPCC 2006): CO2 captured",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006): 'CO2 captured' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories: It encompasses the total amount of CO2 captured for storage."
+          "definition": "The CRF sector (IPCC 2006): 'CO2 captured' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories: It encompasses the total amount of CO2 captured for storage.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010230": {
           "label": "CRF sector (IPCC 2006): indirect CO2",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006): 'indirect CO2' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories: It encompasses Methane, carbon monoxide (CO) or NMVOC emissions that will eventually be oxidised to CO2 in the atmosphere."
+          "definition": "The CRF sector (IPCC 2006): 'indirect CO2' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories: It encompasses Methane, carbon monoxide (CO) or NMVOC emissions that will eventually be oxidised to CO2 in the atmosphere.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010305": {
           "label": "NC/BR sector: energy",
           "spellings": [],
-          "definition": "The NC/BR sector \"energy\" is a sector defined by an NC/BR sector division that includes all energy use that is not related to transport or industry. The sector includes:\n- CRF sector (IPCC 2006): energy industry\n- CRF sector (IPCC 2006): fuel combustion - other sectors\n- CRF sector (IPCC 2006): fuel combustion - other\n- CRF sector (IPCC 2006): fugitive emissions from fuels\n- CRF sector (IPCC 2006): CO2 transport and storage"
+          "definition": "The NC/BR sector \"energy\" is a sector defined by an NC/BR sector division that includes all energy use that is not related to transport or industry. The sector includes:\n- CRF sector (IPCC 2006): energy industry\n- CRF sector (IPCC 2006): fuel combustion - other sectors\n- CRF sector (IPCC 2006): fuel combustion - other\n- CRF sector (IPCC 2006): fugitive emissions from fuels\n- CRF sector (IPCC 2006): CO2 transport and storage",
+          "group": "NC/BR sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010311": {
           "label": "NC/BR sector: other",
           "spellings": [],
-          "definition": "The NC/BR sector \"other\" is a sector defined by an NC/BR sector division that includes everything that is not included in the other NC/BR sectors. It aligns to the CRF sector (IPCC 2006): other."
+          "definition": "The NC/BR sector \"other\" is a sector defined by an NC/BR sector division that includes everything that is not included in the other NC/BR sectors. It aligns to the CRF sector (IPCC 2006): other.",
+          "group": "NC/BR sectors"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010338": {
           "label": "CRF sector (IPCC 2006): transport of CO2",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'transport of CO2' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nThis comprises fugitive emissions from the systems used to transport captured CO2 from the source to the injection site. These emissions may comprise losses due to fugitive equipment leaks, venting and releases due to pipeline\nruptures or other accidental releases (e.g., temporary storage)."
+          "definition": "The CRF sector (IPCC 2006) 'transport of CO2' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nThis comprises fugitive emissions from the systems used to transport captured CO2 from the source to the injection site. These emissions may comprise losses due to fugitive equipment leaks, venting and releases due to pipeline\nruptures or other accidental releases (e.g., temporary storage).",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010339": {
           "label": "CRF sector (IPCC 2006): injection and storage",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'pipelines' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nFugitive emissions from activities and equipment at the injection site and those from the end containment once the CO2 is placed in storage."
+          "definition": "The CRF sector (IPCC 2006) 'pipelines' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nFugitive emissions from activities and equipment at the injection site and those from the end containment once the CO2 is placed in storage.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "https://openenergyplatform.org/ontology/oeo/OEO_00010340": {
           "label": "CRF sector (IPCC 2006): CO2 transport and storage - other",
           "spellings": [],
-          "definition": "The CRF sector (IPCC 2006) 'CO2 transport and storage' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAny other emissions from CCS not reported elsewhere."
+          "definition": "The CRF sector (IPCC 2006) 'CO2 transport and storage' is a sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:\nAny other emissions from CCS not reported elsewhere.",
+          "group": "CRF sectors (IPCC 2006)"
         },
         "out:not_in_list": {
           "label": "none of these sectors",
           "spellings": [
             "the sector the text names is not in the list"
           ],
-          "definition": "The text names a sector that none of these classes matches. Not to be confused with the text naming no sector at all: that is the answer that these passages do not state it."
+          "definition": "The text names a sector that none of these classes matches. Not to be confused with the text naming no sector at all: that is the answer that these passages do not state it.",
+          "group": "sectors of no particular division"
         }
       },
       "example": {
@@ -1694,7 +1868,8 @@
           "label": "covers sector (shortcut)"
         },
         "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
-      }
+      },
+      "brief": "A sector the study covers."
     },
     {
       "uri": "study_technology",
@@ -1716,7 +1891,7 @@
             }
           },
           "keep": "work:this_publication",
-          "question": "Which work is this value a value of: this publication, or another work the publication presents, compares, reviews or cites? Give the words of the quote that show it as value_raw, such as the heading or the sentence that names the work."
+          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
         }
       },
       "vocabulary": {
@@ -1988,7 +2163,8 @@
           "label": "covers technology (shortcut)"
         },
         "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
-      }
+      },
+      "brief": "A technology the study covers."
     },
     {
       "uri": "scenario_label",
@@ -2025,7 +2201,25 @@
           "prefix": "dc",
           "predicate": "acronym"
         },
-        "note": "The name the publication prints labels the factsheet, and the acronym beside it carries the same string. Names of one scenario are one factsheet, labelled by the name the others mean (`value_means`, docpipe/extraction/naming.py)."
+        "note": "The name the publication prints labels the factsheet, and the acronym beside it carries the same string. A name is the entry of the publication's list of scenarios it was asked to be, and labels that entry's factsheet (`value_means`, docpipe/extraction/addressed.py)."
+      },
+      "brief": "A scenario of this publication by the name it prints: a scenario contains statements about a possible future development based on a coherent and internally consistent set of assumptions and their motivation.",
+      "axes": {
+        "work": {
+          "vocabulary": {
+            "work:this_publication": {
+              "label": "this publication",
+              "spellings": [],
+              "definition": "This document itself, the study it reports and the scenarios it presents."
+            },
+            "out:another_work": {
+              "label": "another work",
+              "spellings": [],
+              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
+            }
+          },
+          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
+        }
       }
     },
     {
@@ -2162,7 +2356,7 @@
           "type": "text",
           "merged": "scenario",
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". Where the document states the value for several scenarios, give their names where they stand in what you were shown; where they do not, as for a study with several scenarios, a figure, a table, a group the document describes or all of its scenarios, answer \"several scenarios\", with the words of the quote that name them as value_raw. A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
+          "question": "Which scenario of this publication does this value refer to, by its name as printed, by words for several of its scenarios such as “all scenarios”, or by words that the value is measured or balanced for a past or the current year?",
           "beside": {
             "out:status_quo": {
               "label": "status quo",
@@ -2189,7 +2383,7 @@
               "predicate": "BFO_0000051",
               "label": "has part"
             },
-            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py)."
+            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py)."
           }
         }
       },
@@ -2218,7 +2412,8 @@
           "label": "has scenario type"
         },
         "note": "The object is one of the classes the shapes accept, chosen from the list, never written. Every factsheet additionally carries OEO_00020517 IAM scenario, which is not behind a harvested value and stands in the serializer."
-      }
+      },
+      "brief": "The type of a scenario."
     },
     {
       "uri": "scenario_abstract",
@@ -2230,7 +2425,7 @@
           "type": "text",
           "merged": "scenario",
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". Where the document states the value for several scenarios, give their names where they stand in what you were shown; where they do not, as for a study with several scenarios, a figure, a table, a group the document describes or all of its scenarios, answer \"several scenarios\", with the words of the quote that name them as value_raw. A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
+          "question": "Which scenario of this publication does this value refer to, by its name as printed, by words for several of its scenarios such as “all scenarios”, or by words that the value is measured or balanced for a past or the current year?",
           "beside": {
             "out:status_quo": {
               "label": "status quo",
@@ -2257,7 +2452,7 @@
               "predicate": "BFO_0000051",
               "label": "has part"
             },
-            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py)."
+            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py)."
           }
         }
       },
@@ -2277,7 +2472,9 @@
           "prefix": "dc",
           "predicate": "abstract"
         }
-      }
+      },
+      "brief": "The description of what a single scenario assumes or depicts.",
+      "takes_group": false
     },
     {
       "uri": "scenario_region",
@@ -2289,7 +2486,7 @@
           "type": "text",
           "merged": "scenario",
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". Where the document states the value for several scenarios, give their names where they stand in what you were shown; where they do not, as for a study with several scenarios, a figure, a table, a group the document describes or all of its scenarios, answer \"several scenarios\", with the words of the quote that name them as value_raw. A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
+          "question": "Which scenario of this publication does this value refer to, by its name as printed, by words for several of its scenarios such as “all scenarios”, or by words that the value is measured or balanced for a past or the current year?",
           "beside": {
             "out:status_quo": {
               "label": "status quo",
@@ -2316,7 +2513,7 @@
               "predicate": "BFO_0000051",
               "label": "has part"
             },
-            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py)."
+            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py)."
           }
         }
       },
@@ -2359,7 +2556,8 @@
           "accepted": "the closed ScenarioShape names this path on the factsheet, and the shapes win over its declared domain scenario (owner decision 2026-10-22)"
         },
         "note": "The object is an OEKG region individual that already exists over there and is only referenced; a group of countries is written as its members. A region the list did not hold ('several regions', 'other region') is a study region node of its own, minted from and labelled with the words the document prints (owner decision 2026-11-07); the shapes ask only for a node of the class study region. The predicate is the one the closed ScenarioShape names. Its declared domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET; the shapes win over that mismatch (owner decision 2026-10-22), which is the ontology side's to settle."
-      }
+      },
+      "brief": "The region a scenario studies, the spatial focus of its investigation."
     },
     {
       "uri": "scenario_year",
@@ -2381,13 +2579,13 @@
             }
           },
           "keep": "https://openenergyplatform.org/ontology/oeo/OEO_00020097",
-          "question": "Is this year a scenario year, a year of the time a scenario of this publication investigates, or another year? Give the words of the quote that show it as value_raw."
+          "question": "Is this year part of the period a scenario of this publication investigates, or another year, by the words that show it?"
         },
         "scenario": {
           "type": "text",
           "merged": "scenario",
           "required": false,
-          "question": "Which scenario of this publication does the value refer to? Its name as the document prints it, such as \"Current Policies\" or \"the NDC scenario\". Where the document states the value for several scenarios, give their names where they stand in what you were shown; where they do not, as for a study with several scenarios, a figure, a table, a group the document describes or all of its scenarios, answer \"several scenarios\", with the words of the quote that name them as value_raw. A value its own passage reports for a past or the current year, measured, observed or balanced, such as \"in 2017 emissions were\", \"today\" or \"between 2005 and 2015\", belongs to no scenario: answer \"status quo\", with the words of its own quote that show it as value_raw.",
+          "question": "Which scenario of this publication does this value refer to, by its name as printed, by words for several of its scenarios such as “all scenarios”, or by words that the value is measured or balanced for a past or the current year?",
           "beside": {
             "out:status_quo": {
               "label": "status quo",
@@ -2414,7 +2612,7 @@
               "predicate": "BFO_0000051",
               "label": "has part"
             },
-            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/naming.py)."
+            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py)."
           }
         }
       },
@@ -2442,7 +2640,8 @@
           "datatype": "xsd:dateTime"
         },
         "note": "One triple per distinct four-digit year on the factsheet, padded to the first of January as the datatype demands."
-      }
+      },
+      "brief": "A year of the period a scenario investigates, its scenario horizon."
     }
   ]
 }

@@ -1,43 +1,40 @@
 """
-surveyed.py: One document harvested passage by passage.
+surveyed.py: One document harvested piece by piece, both profiles (owner
+decisions 2026-11-08 evening).
 
-Every passage of the plan for every parameter, best first (survey.py, owner
-decisions 2026-11-08), the plan's years and settings (years.py,
-settings.py), the reading of every parameter in every passage (reading.py)
-and the conversation for what the reading left open (combing.py). The run
-folds what they read, works out what the profile computes and writes the
-file with its stamp, as it writes every harvest.
-
-Since every passage is read for every parameter, nothing is searched for a
-parameter before it can count as not stated: the walk down a search's list
-for a parameter the survey named no passage for, the model's own search for
-it and the read of a publication's first pages for what it says of itself
-went with the survey (owner decisions 2026-11-08). What a passage leaves
-open of a value is still searched for in the rest of the plan (combing.py).
-Every passage a parameter was read in is one of its sources, so a request
-that came to nothing there leaves a hole and not a silent plan.
+The document's passages as numbered lines in pieces of at most eight, its
+figures transcribed once (`addressed.Transcripts`); what the plan settles
+for all its values and its own years asked once (`addressed.Reader.settled`);
+then every field read: a field the document has once asked once, every other
+field in every piece, the pieces best first for its sentences
+(`addressed.Orders`), and each value's coordinates asked one by one
+(`addressed.Reader`). The run folds what they read, works out what the
+profile computes and writes the file with its stamp, as it writes every
+harvest.
 
 What could not be read is a hole with its reason, never a plan that seems
-silent: a passage a parameter was to be read in that came to no readable
-reply goes to the fold as the harvest's sentinel (`_harvest_failed`, `_why`
-cut_off or no_answer). The fold keeps it as a refusal, and a parameter that
-has no row then ends `exhausted` and not `unstated`
-(`trust.parameter_states`). The hole of a reading names its parameter
-(`_parameter`), so a pass over the harvest knows what to read again.
+silent: a passage a field was to be read in that came to no readable reply
+goes to the fold as the harvest's sentinel (`_harvest_failed`, `_why`
+cut_off or no_answer). The fold keeps it as a refusal, and a field that has
+no row then ends `exhausted` and not `unstated` (`trust.parameter_states`).
+The hole of a reading names its field (`_parameter`), so a pass over the
+harvest knows what to read again.
 
 The passes over a stored harvest go through the same steps. `--start-at`
 reads the passages earlier harvests found something in (`take_found`);
-`--top-up-parameters` reads the whole plan for the parameters the spec
-gained (`append_parameters`); `--top-up-open` combs every coordinate left
-open (`comb_sweep` under `topup._sweep_one`) and then reads what nothing has
-read yet (`append_unread`); `--top-up` combs the coordinates whose question
-moved (`comb_sweep`). An order of part of a plan is kept under its own scope
-beside the whole one's.
+`--top-up-parameters` reads the whole plan for the fields the spec gained
+(`append_parameters`); `--top-up-open` asks every coordinate left open again
+(`SurveyedHarvest.sweep` under `topup._sweep_one`) and then reads what
+nothing has read yet (`append_unread`); `--top-up` asks the coordinates
+whose question moved (`SurveyedHarvest.sweep`). An order of part of a plan
+is kept under its own scope beside the whole one's.
 
 Author: Felix Vossel
 """
 from __future__ import annotations
 
+import collections
+import copy
 import json
 import logging
 import threading
@@ -48,17 +45,23 @@ from typing import Callable, Optional
 
 from .lookup import continued
 from . import fields
+from .addressed import Counts, Plan
 from .pipeline import (Batch, DocumentReport, Row, WorkItem, drop_repeats,
                        row_label)
-from .reading import NO_ANSWER
-from .survey import Answer, Found, budget_of, merge
+from .reading import NO_ANSWER, Read
+from .survey import Answer, Found
+from .units import CHUNK_UNITS
+from .verify import canonical_number, flat, quote_in
 
 log = logging.getLogger(__name__)
 
-# The stage a passage of a surveyed plan was read in (`DocumentReport.planned`).
+# The stage a passage of a plan read piece by piece was read in
+# (`DocumentReport.planned`).
 STAGE = "survey"
-# Where the frame of a parameter appended to a stored harvest came from.
+# Where the frame of a field appended to a stored harvest came from.
 FRAME_SURVEYED = "the survey of the new parameters"
+# Documents whose pieces a pass over a stored harvest keeps at once.
+PLANS_KEPT = 8
 
 
 def hole(document_id: int, source, why: str,
@@ -73,21 +76,11 @@ def hole(document_id: int, source, why: str,
     return batch, {"tuples": [claim]}
 
 
-def frame_pairs(found: Found) -> list:
-    """The frame tuples of a survey, each once, in the order of the plan."""
-    pairs: list = []
-    for answer in found.answers.values():
-        for one in answer.tuples.get("frame", ()):
-            if one not in pairs:
-                pairs.append(one)
-    return pairs
-
-
 def derive_left(reads: list) -> int:
     """What the spec derives from the unit, on every value no request read
-    it for once the reading and the combing are done (owner decision
-    2026-11-07: asked first, and only where no answer is read taken from the
-    unit, `fields.derives`). Returns how many coordinates."""
+    it for once its coordinates are asked (owner decision 2026-11-07: asked
+    first, and only where no answer is read taken from the unit,
+    `fields.derives`). Returns how many coordinates."""
     done = 0
     for read in reads:
         parameter = read.batch.parameter
@@ -103,31 +96,11 @@ def derive_left(reads: list) -> int:
     return done
 
 
-def joined(found: Found, also: Found) -> Found:
-    """One order of both: what *also* names is read beside what *found*
-    names, a passage both name with the parameters of both, each parameter
-    in the order its own ranking gave."""
-    out = Found(found.complete and also.complete)
-    merge(out, [Answer(a.owner, list(a.parameters),
-                       {k: list(v) for k, v in a.tuples.items()},
-                       list(a.dropped)) for a in found.answers.values()])
-    merge(out, [Answer(a.owner, list(a.parameters),
-                       {k: list(v) for k, v in a.tuples.items()},
-                       list(a.dropped)) for a in also.answers.values()])
-    for owner in found.unanswered + also.unanswered:
-        if owner not in out.answers and owner not in out.unanswered:
-            out.unanswered.append(owner)
-    out.order = {**found.order, **also.order}
-    return out
-
-
 @dataclass
 class Taken:
-    """What the reading and the combing of one document came to, in the
-    shape the fold and the stamp read."""
-    found: Found
+    """What the reading of one document came to, in the shape the fold and
+    the stamp read."""
     reads: list = field(default_factory=list)
-    combed: list = field(default_factory=list)
     # (batch, reply) for the fold: every reading's values and every hole.
     answered: list = field(default_factory=list)
     # Readings that came back with a reply: none of them means no reply at
@@ -138,220 +111,237 @@ class Taken:
     sources_of: dict = field(default_factory=dict)
 
 
-def taken_of(document_id: int, spec, found: Found, reads: list,
-             combed: list, shown: dict) -> Taken:
-    """The fold's view of one document's reading, holes included. A
-    parameter's sources are the passages it was read in."""
+def taken_of(document_id: int, spec, reads: list) -> Taken:
+    """The fold's view of one document's reading, holes included. A field's
+    sources are the passages it was read in."""
     answered: list = []
+    sources_of: dict = {p.uri: set() for p in spec.parameters}
     for read in reads:
         source = read.batch.items[0].source
+        uri = read.batch.parameter.uri
+        sources_of.setdefault(uri, set()).add((source.owner_kind,
+                                               source.owner_id))
         if read.unread:
             answered.append(hole(document_id, source, read.why or NO_ANSWER,
-                                 read.batch.parameter.uri))
-        else:
-            answered.append((read.batch, {"tuples": read.claims}))
-            # A part of a table no reply answered, the others read.
-            answered.extend(hole(document_id, source, why,
-                                 read.batch.parameter.uri)
-                            for why in read.lost)
-    sources_of = {parameter.uri: {tuple(owner) for owner
-                                  in found.passages_of(parameter.uri)}
-                  for parameter in spec.parameters}
+                                 uri))
+            continue
+        answered.append((read.batch, {"tuples": read.claims}))
+        # A piece of the passage no reply answered, the others read.
+        answered.extend(hole(document_id, source, why, uri)
+                        for why in read.lost)
     replies = sum(1 for read in reads if not read.unread)
-    return Taken(found, reads, combed, answered, replies, len(found.answers),
-                 sources_of)
+    passages = len({(r.batch.items[0].source.owner_kind,
+                     r.batch.items[0].source.owner_id) for r in reads})
+    return Taken(reads, answered, replies, passages, sources_of)
+
+
+def locate_value(plan: Plan, source, claim: dict) -> Optional[dict]:
+    """The address of a stored value in its passage (`at`): the line its
+    quote stands in, the cell of a table row that alone holds its number or
+    words; None where no line of the passage holds the quote. A value read
+    with its address keeps it."""
+    if isinstance(claim.get("at"), dict):
+        return claim["at"]
+    passage = plan.passages.get((source.owner_kind, source.owner_id))
+    quote = claim.get("quote")
+    if passage is None or not isinstance(quote, str):
+        return None
+    lines = [line for line in passage.lines
+             if quote_in(line.text, quote) or quote_in(quote, line.text)]
+    if not lines:
+        return None
+    line = lines[0]
+    at = {"owner": list(passage.owner), "line": line.number}
+    words = str(claim.get("value_raw") or claim.get("value") or "")
+    number = canonical_number(words)
+    if line.cells:
+        holding = [i for i, cell in enumerate(line.cells, start=1)
+                   if (number is not None and canonical_number(cell)
+                       == number) or (words and flat(words).casefold()
+                                      in flat(cell).casefold())]
+        if len(holding) == 1:
+            at["cell"] = holding[0]
+    return at
 
 
 class SurveyedHarvest:
     """document_id -> Taken, or None when the run was halted on the way.
 
-    *make_survey(spec, only, scope)* is the run's order of the passages
-    for the parameters *only* (all when empty) under *scope*
-    (`survey.Ranking`), *make_reader(spec)* and
-    *make_comber(spec)* its reading and combing (the comber None where
-    nothing is combed), each made once per spec. *spec_for(document_id)* is
-    the document's spec, its lists closed (`runner.closed_spec`),
-    *passages_of(document_id)* every passage of the document in its order,
-    *pages_of(document_id)* its page count, *halted()* whether the run stops.
-    *make_years(spec)* is the request for the plan's base
-    and target years (`years.PlanYears`), None where the spec dates nothing
-    by them; *title_page_of(document_id, passages)* the line of the title
-    page that names the plan's own place, None where the profile shows none
-    (owner decisions 2026-11-06). *make_settings(spec)* is the request for
-    what the plan settles for all its values (`settings.PlanSettings`),
-    None where the profile writes no prompt for it (owner decision
-    2026-11-07).
+    *make_reader(spec)* is the run's reading (`addressed.Reader`), made
+    once per spec; *spec_for(document_id)* the document's spec, its lists
+    closed (`runner.closed_spec`); *passages_of(document_id)* every passage
+    of the document in its order; *transcripts(document_id, figures, each)*
+    its figures' lines (`addressed.Transcripts`); *orders(plan, parameters,
+    chunk_units, scope, chunks)* the pieces of each field best first
+    (`addressed.Orders`); *halted()* whether the run stops. *chunk_units*
+    is how many lines a piece holds; *each(jobs, run)* runs jobs side by
+    side; *trace* writes what a document's requests came to.
     """
 
-    def __init__(self, spec, make_survey: Callable, make_reader: Callable,
-                 make_comber: Callable, passages_of: Callable,
-                 pages_of: Callable, *, spec_for: Optional[Callable] = None,
+    def __init__(self, spec, make_reader: Callable, passages_of: Callable,
+                 *, spec_for: Optional[Callable] = None,
                  halted: Optional[Callable] = None,
-                 make_years: Optional[Callable] = None,
-                 title_page_of: Optional[Callable] = None,
-                 make_settings: Optional[Callable] = None):
+                 transcripts: Optional[Callable] = None,
+                 orders: Optional[Callable] = None,
+                 chunk_units: int = CHUNK_UNITS,
+                 each: Optional[Callable] = None, trace=None):
         self.spec = spec
-        self.make_survey = make_survey
         self.make_reader = make_reader
-        self.make_comber = make_comber
         self.passages_of = passages_of
-        self.pages_of = pages_of
         self.spec_for = spec_for or (lambda document_id: spec)
         self.halted = halted or (lambda: False)
-        self.make_years = make_years or (lambda spec: None)
-        self.title_page_of = title_page_of or (lambda document_id, passages:
-                                               None)
-        self.make_settings = make_settings or (lambda spec: None)
+        self.transcripts = transcripts
+        self.orders = orders
+        self.chunk_units = int(chunk_units)
+        self.each = each
+        self.trace = trace
         self._made: dict = {}
+        self._plans: collections.OrderedDict = collections.OrderedDict()
         self._lock = threading.Lock()
 
-    def _once(self, key: tuple, spec, make: Callable):
-        # The spec is held with what was made of it, so its id is not
-        # given to another spec while the entry stands.
+    def reader_of(self, spec):
+        # The spec is held with what was made of it, so its id is not given
+        # to another spec while the entry stands.
         with self._lock:
+            key = id(spec)
             if key not in self._made:
-                self._made[key] = (spec, make())
+                self._made[key] = (spec, self.make_reader(spec))
             return self._made[key][1]
 
-    def survey_of(self, spec, only=(), scope: str = ""):
-        only = tuple(sorted(only))
-        return self._once(("survey", id(spec), only, scope), spec,
-                          lambda: self.make_survey(spec, only, scope))
+    def plan_of(self, document_id: int) -> tuple:
+        """(the document's Plan, its Counts): its pieces, its figures'
+        lines, what it settles and its years. A pass over a stored harvest
+        asks several batches of one document and finds it made."""
+        with self._lock:
+            if document_id in self._plans:
+                self._plans.move_to_end(document_id)
+                return self._plans[document_id]
+        spec = self.spec_for(document_id)
+        sources = continued(self.passages_of(document_id))
+        figures = [s for s in sources if s.owner_kind == "figure"]
+        lines, asked = {}, 0
+        if self.transcripts is not None and figures:
+            lines, asked = self.transcripts(document_id, figures, self.each)
+        plan = Plan(document_id, sources, lines, self.chunk_units)
+        counts = Counts()
+        if asked:
+            counts.ask("transcribe", asked)
+        reader = self.reader_of(spec)
+        reader.lists_of(plan)
+        reader.settled(plan, counts)
+        with self._lock:
+            self._plans[document_id] = (plan, counts)
+            while len(self._plans) > PLANS_KEPT:
+                self._plans.popitem(last=False)
+        return plan, counts
 
-    def reader_of(self, spec):
-        return self._once(("reader", id(spec)), spec,
-                          lambda: self.make_reader(spec))
-
-    def comber_of(self, spec):
-        return self._once(("comber", id(spec)), spec,
-                          lambda: self.make_comber(spec))
-
-    def years_of(self, spec):
-        return self._once(("years", id(spec)), spec,
-                          lambda: self.make_years(spec))
-
-    def settings_of(self, spec):
-        return self._once(("settings", id(spec)), spec,
-                          lambda: self.make_settings(spec))
+    def forget(self, document_id: int) -> None:
+        with self._lock:
+            self._plans.pop(document_id, None)
 
     def __call__(self, document_id: int, *, only=(), scope: str = "",
                  passages: Optional[list] = None,
                  also: Optional[Found] = None) -> Optional[Taken]:
-        """The whole plan, or part of it: for the parameters *only*, the
-        *passages* given, under *scope*. *also* is read with it: what another
-        order names (`take_found`, `append_unread`)."""
+        """The whole plan, or part of it: for the fields *only*, the
+        *passages* given, under *scope*. *also* names passages to read for
+        some fields besides (`take_found`, `append_unread`)."""
         spec = self.spec_for(document_id)
-        # A table shows the title and head of the table right before it,
-        # which it may continue (owner decisions 2026-11-06 and 2026-11-07).
-        sources = continued(self.passages_of(document_id))
-        shown = {(s.owner_kind, s.owner_id): s for s in sources}
-        budget = budget_of(sources, self.pages_of(document_id))
-        wanted = sources if passages is None else [
-            shown.get((s.owner_kind, s.owner_id), s) for s in passages]
-        found = (self.survey_of(spec, only, scope)(document_id, wanted)
-                 if wanted else Found(True))
+        plan, counts = self.plan_of(document_id)
+        self.forget(document_id)
+        if self.halted():
+            return None
+        wanted = set(only or ())
+        parameters = [p for p in spec.parameters
+                      if not wanted or p.uri in wanted]
+        chosen = None
+        if passages is not None:
+            owners = {(s.owner_kind, s.owner_id) for s in passages}
+            chosen = [c for c in plan.chunks if c.owner in owners]
+        chunks: dict = {p.uri: (list(chosen) if chosen is not None
+                                else None) for p in parameters}
         if also is not None:
-            found = joined(found, also)
+            for owner, answer in also.answers.items():
+                extra = [c for c in plan.chunks if c.owner == tuple(owner)]
+                for uri in answer.parameters:
+                    parameter = spec.by_uri.get(uri)
+                    if parameter is None:
+                        continue
+                    if uri not in chunks:
+                        parameters.append(parameter)
+                        chunks[uri] = []
+                    if chunks[uri] is not None:
+                        chunks[uri] += [c for c in extra
+                                        if c not in chunks[uri]]
+        located = [p for p in parameters
+                   if not getattr(p, "once_per_document", False)]
+        if any(got is None for got in chunks.values()):
+            read_in = list(plan.chunks)
+        else:
+            read_in = sorted({c for got in chunks.values() for c in got},
+                             key=lambda c: plan.position[c.key])
+        order_of = (self.orders(plan, located, self.chunk_units, scope,
+                                read_in)
+                    if self.orders is not None and located else {})
+        reads = self.reader_of(spec)(plan, parameters, chunks, counts,
+                                     order_of)
         if self.halted():
             return None
-        # Once per plan: its base and target years, each with its quote, the
-        # line of its title page that names its own place (owner decisions
-        # 2026-11-06), and what it settles for all its values (owner
-        # decision 2026-11-07).
-        asker = self.years_of(spec)
-        bases = (asker(document_id, shown, frame_pairs(found), budget)
-                 if asker is not None else None)
-        title_page = self.title_page_of(document_id, sources)
-        settler = self.settings_of(spec)
-        settings = (settler(document_id, shown, budget)
-                    if settler is not None else None)
-        if self.halted():
-            return None
-        # Only what this plan has: without them the reading dates by the
-        # survey's pairs and shows no title line, as before.
-        plan = {key: value for key, value in (("bases", bases),
-                                              ("title_page", title_page),
-                                              ("settings", settings))
-                if value is not None}
+        derive_left(reads)
+        if self.trace is not None:
+            self.trace("asked", document_id, requests=dict(counts.asked),
+                       refused=dict(counts.failed),
+                       question_queries=counts.questions,
+                       chunks=len(plan.chunks), scope=scope or None)
+        return taken_of(document_id, spec, reads)
 
-        comber = self.comber_of(spec)
-        # Each passage read is combed the moment its reading is done, while
-        # the rest of the plan is read (`combing.Session`, owner decision
-        # 2026-11-07: every place stays taken to the end); what has not
-        # begun when the document stops early is taken back.
-        session = (comber.session(document_id, shown, frame_pairs(found),
-                                  budget, bases, title_page=title_page,
-                                  settings=settings)
-                   if comber is not None else None)
-        hand_on = {} if session is None else {"on_read": session.add}
+    def sweep(self, batch, rows, slots, anchor=None) -> None:
+        """What a pass over a stored harvest asks a coordinate again with
+        (`topup._sweep_one`): each row's value at the line its quote stands
+        in, each coordinate of *slots* asked as the harvest asks it
+        (`addressed.Reader.coordinate`); what it leaves open is restored by
+        the pass as it restores any sweep's."""
+        document_id = batch.document_id
+        spec = self.spec_for(document_id)
+        reader = self.reader_of(spec)
+        plan, counts = self.plan_of(document_id)
+        read = Read(batch, [])
+        groups = {name: group for group in spec.groups.values()
+                  for name in group.coordinates}
+        made = {"n": 0}
 
-        def read(survey: Found) -> list:
-            return self.reader_of(spec)(document_id, survey, shown, budget,
-                                        **plan, **hand_on)
-        finished = False
-        try:
-            reads = read(found)
-            if self.halted():
-                return None
-            combed: list = []
-            if session is not None:
-                combed = session.finish(reads)
-                if self.halted():
-                    return None
-            derive_left(reads)
-            finished = True
-            return taken_of(document_id, spec, found, reads, combed, shown)
-        finally:
-            if session is not None and not finished:
-                session.cancel()
+        def clone(row: Row) -> Row:
+            made["n"] += 1
+            return Row(f"{row.label}.{made['n']}", row.item_index,
+                       copy.deepcopy(row.claim))
+        for row in rows:
+            source = batch.items[row.item_index].source
+            at = locate_value(plan, source, row.claim)
+            if at is None:
+                continue
+            row.claim["at"] = at
+            for slot in slots:
+                row.claim.pop(f"{slot.name}_state", None)
+                reader.coordinate(plan, read, row, groups.get(slot.name),
+                                  slot, counts, clone)
 
 
 def take_found(whole: SurveyedHarvest, document_id: int, kept: list,
                gained: list) -> Optional[Taken]:
-    """--start-at: the survey of the passages earlier harvests found
-    something in, and for a parameter none of them was asked (*gained*) the
-    survey of the rest of the plan as well, so that it is surveyed over the
-    whole plan as in any run (owner decision 2026-11-03)."""
+    """--start-at: the passages earlier harvests found something in, and
+    for a field none of them was asked (*gained*) the rest of the plan as
+    well, so that it is read over the whole plan as in any run (owner
+    decision 2026-11-03)."""
     also = None
     if gained:
         held = {(s.owner_kind, s.owner_id) for s in kept}
         rest = [s for s in whole.passages_of(document_id)
                 if (s.owner_kind, s.owner_id) not in held]
         if rest:
-            spec = whole.spec_for(document_id)
-            also = whole.survey_of(spec, gained, "gained")(document_id, rest)
+            also = Found(True)
+            for source in rest:
+                owner = (source.owner_kind, source.owner_id)
+                also.answers[owner] = Answer(owner, list(gained))
     return whole(document_id, scope="found", passages=kept, also=also)
-
-
-def comb_sweep(comber_of: Callable, spec_for: Callable, every: Callable,
-               pages_of: Callable) -> Callable:
-    """sweep(batch, rows, slots, anchor) of a pass over a stored harvest
-    (`topup._sweep_one`) in a run that harvests from the survey: the
-    coordinates the pass re-reads are combed per passage of the rows and
-    group of the spec (`combing.Comber.comb_groups`), their own passage
-    and its section shown first, since the reading that asked them there
-    ran under an older question, and with the years the stored rows give
-    (`batch.bases`). What it leaves open is restored by the pass as it
-    restores any sweep's."""
-    def sweep(batch, rows, slots, anchor=None) -> None:
-        document_id = batch.document_id
-        comber = comber_of(spec_for(document_id))
-        if comber is None:
-            return
-        sources = every(document_id, set())
-        shown = {(s.owner_kind, s.owner_id): s for s in sources}
-        budget = budget_of(sources, pages_of(document_id))
-        names = [slot.name for slot in slots]
-        by_item: dict = {}
-        for row in rows:
-            by_item.setdefault(row.item_index, []).append(row)
-        for index, group in by_item.items():
-            comber.comb_groups(document_id, batch.parameter,
-                               batch.items[index].source, list(slots),
-                               [row.claim for row in group], shown, [],
-                               budget, coordinates=names, own=True,
-                               bases=tuple(batch.bases or ()))
-    return sweep
 
 
 def _counted(log_label: str):
@@ -390,8 +380,9 @@ def append_parameters(document_id: int, filename: str, out_dir: Path,
     run: only the addition may have moved, the stored lines stay as they
     are, and nothing is written, neither file nor stamp, unless the new
     parameters were read. They are read by a survey of the whole plan for
-    them alone (*deps["take"](document_id, uris)*), their reading and their
-    combing; the frame of their rows comes from that survey.
+    them alone (*deps["take"](document_id, uris)*), read piece by piece
+    with their coordinates asked and searched for; the frame of their rows
+    comes from that survey.
 
     *deps* holds "document_spec" (id -> the document's spec, None when its
     lists cannot be closed), "take", "locate", "frame_names" and

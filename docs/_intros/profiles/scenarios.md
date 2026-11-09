@@ -48,94 +48,76 @@ table gives this profile's own answer.
 | Layout detection | `profile.py` | `column_layout` | `"auto"`, a two-column journal or report page read column by column |
 | Structure assembly | `preprocessing.py` | `HYPHEN_EXCEPTIONS`, `CAPTION_MAX_WORDS`, `CAPTION_START`, `TITLE_EXCLUDE_PREFIXES`, `DIRECTORY_FIGTAB_WORDS`, `DIRECTORY_TITLE_WORDS`, `BIBLIOGRAPHY_TITLE_WORDS` | English hyphenation, caption length, what opens a caption (a word, a number and a colon), heading and bibliography rules; `DIRECTORY_TITLE_WORDS` is the same four words as the other profiles ("inhalt", "verzeichnis", "contents", "directory"), so no verdict moved |
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 6 prompt ids of its own | page transcription, English artefact repair, table and figure captioning; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
-| Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object (`reading.REQUIRED`), in English, the language of the prompts of the first three; the extraction prompts are German and `extraction.PHRASES` is another table, the harvest's own |
+| Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object (`reading.REQUIRED`), in English, the language of the prompts of the first three; `extraction.PHRASES` is another table, the harvest's own |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and names (a name opens each line of the values index) and two filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `FRONT_PAGE_PARAMETERS`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 12 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document region list, the sentences the stage writes to the model, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
+| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, `CHUNK_UNITS`, `PLAN_FIELDS`, `WORKS`, 13 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document region list, the lines of a piece (8), what a publication settles for all its values, the field that finds other works, the sentences the stage writes to the model, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
 | The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 11 prompt ids of its own | the English chat wording and the answer loop's own prompts; the twelfth, `json_format`, is the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copy gave |
 
-A run harvests a publication passage by passage (owner decisions 2026-11-04,
-2026-11-08, see [extraction](../stages/extraction.md)): the spec names one
-group, `scenario`, read with the value, and English prompts serve it. Every
-passage is read for every parameter, the publication's own fields (title,
-authors, date) and its study or its own scenarios included, in the order the
-search ranks the passages for each parameter. `extraction/read_values` asks for
-all values of a parameter in a passage, in one conversation per passage, with
-`value`, `value_raw` (only for an entry of a list) and quote for each, and
-`extraction/read_text` answers for each value, in a conversation of
-its own, the scenario it refers to by the name the publication prints, with
-its quote; a correction follows the answer it is about, and what the check
-refuses on the rows one reply made is asked in one message after that reply
-(owner decisions 2026-11-07, see [extraction](../stages/extraction.md)). Both
-prompts, and `comb`, say after their first line "Before you answer, check what
-the definition excludes." (prompt only, no check). The value
-of `scenario_label` and the `scenario` axis are `merged: "scenario"` in the
-spec (owner decisions 2026-11-06, see [extraction](../stages/extraction.md)):
-a scenario is read as free text, the name as the publication prints it, and a
-value the publication states for several scenarios is one row per name. Where
-the names do not stand in what the model was shown, as for a study with several
-scenarios, a figure, a table, a group the publication describes or all of its
-scenarios, the answer is "several scenarios" beside the names (below), with the
-words of the quote that name them; the value then goes to no search, makes no
-row per scenario and reaches no scenario of the graph (owner decision
-2026-11-07). The reason is a wrong finding: on one paper 120 of 301 values
-ended "unstated", the publication's word that it does not say, and each of 25
-of them, drawn at random, is stated for such a group, while the search walked
-the whole publication for each and found no single scenario (at least 900
-requests, 11.3 M prompt tokens). Measured against the paper's own tables of its
-compared scenarios, naming the group's members instead would have added at most
-about 4 of 59 facts to the graph; KWP keeps one state per value. Names
-the publication gives in one place may share one quote,
-`{"value": [names], "quote": ...}`, which must hold each name and is spread
-into one answer per name at once, each checked on its own (`read_text` and
-`comb` show this form; owner decision 2026-11-07). Once
-the document is folded, `extraction/naming_groups` and `extraction/naming` put
-together the names read that mean the same scenario (below). `read_text`
-shows both forms of an answer, a scenario named and one the passage does not
-name with the sentence the combing searches with (`probe`). A
-value is what its field asks for and never the answer of a coordinate, so
-a scenario's description is what the publication says the scenario assumes,
-not the scenario's name (owner decision 2026-11-04), and an author value is
-one author's name: a person, or the institution where the publication names
-no person. `extraction/comb` looks for a scenario still open in the rest of
-the publication; it offers no "not stated" (owner decision 2026-11-06): the
-model gives what it found and leaves out the rest, `{}` is a valid reply, and a
-coordinate left out is not asked for again; its rounds are one conversation,
-each later message bringing only what is new. A find quoted from a passage
-other than the value's own and its section is checked first by
-`extraction/comb_check`, which asks whether the passage is about this value,
-once per coordinate and quote; the second reading's finds quoted from the
-section before or after the value's place are asked about the same way;
-on "no" the find is dropped: the search goes on and its next message says
-why once, and after the second reading the coordinate goes open to the
-combing (owner decisions 2026-11-07, see [extraction](../stages/extraction.md)). The comb request for a scenario
-shows under `names` every scenario name read in the publication so far, so
-the model can give all a value holds for; each still needs a quote that
-contains it. It ends `unstated` only after every
-passage of the publication was listed; a coordinate the reply gave in another
-form is told `wrong_shape`. No field of this profile holds numbers, so a table is read
-by `read_values` and `read_text` too, as a table is in every profile, and a
-field with a list is shown it and answers one entry, or `""` with its wording
-in `value_raw`.
+A run harvests a publication piece by piece (owner decisions 2026-11-04,
+2026-11-08, see [extraction](../stages/extraction.md)): the spec names three
+groups, `work`, `year_kind` and `scenario`, each a coordinate of its own, and
+English prompts serve it. The publication is cut into pieces of at most eight
+numbered lines, its figures are written into lines once per run
+(`extraction/transcribe`), and every piece is read for every parameter, the
+publication's own fields (title, authors, date) and its study or its own
+scenarios included, in the order a reranker gives the pieces for each
+parameter. `extraction/find` asks for all values of a parameter in a piece as
+addresses and words, what the publication states for itself and not what it
+attributes to other works unless the field asks for them;
+`extraction/docfield` asks the fields a publication has once, the nine spec
+parameters marked `once_per_document` (title, authors, date, DOI, abstract, the
+study's organisation, funder, project name and acronym), once per publication
+with its title page and the best pieces; and `extraction/coord` answers for each
+value, in a request of its own and with no history, each coordinate: the work it
+belongs to, the kind of year where it is one, and the scenario it refers to by
+the name the publication prints, each as the address of the line that says it and
+its words. What does not hold is asked once more in a request of its own
+(`extraction/follow`, owner decision 2026-11-08). The value of `scenario_label`
+and the `scenario` axis are `merged: "scenario"` in the spec (owner decisions
+2026-11-06, see [extraction](../stages/extraction.md)): a scenario is read as
+free text, the name as the publication prints it, and a value the publication
+states for several scenarios is one row per name. Where the words name a group
+without naming its scenarios, such as a study with several scenarios or all of
+them, the `names` request answers the numbers of the scenarios of the
+publication's list they stand for (below), and each is a row holding the words
+under the entry "several scenarios" beside the names, with its scenario under
+`scenario_means` (owner decision 2026-11-08, replacing that of 2026-11-07, by
+which such a value went to no search, made no row per scenario and reached no
+scenario of the graph). The reason of the first decision stays: on one paper 120
+of 301 values ended "unstated", the publication's word that it does not say, and
+each of 25 of them, drawn at random, was stated for such a group, while the
+search walked the whole publication for each and found no single scenario (at
+least 900 requests, 11.3 M prompt tokens). A field takes the members of a group
+unless its spec says `"takes_group": false`, as `scenario_abstract` does. A
+value is what its field asks for and never the answer of a coordinate, so a
+scenario's description is what the publication says the scenario assumes, not the
+scenario's name (owner decision 2026-11-04), and an author value is one author's
+name: a person, or the institution where the publication names no person.
+`extraction/search` looks for a coordinate the value's own place does not state,
+first in the pieces beside the value's and then in the pieces a search finds for
+a sentence as the publication would print the answer, which the `coord` answer
+wrote (`hyde`); it ends `unstated` only after every piece of the publication was
+shown. A find quoted from another passage than the value's own is checked first by
+`extraction/check`, which asks whether the line is about this value (owner
+decision 2026-11-07). No field of this profile holds numbers, so a table is read
+by `find` and `coord` too, as a table is in every profile, and a field with a list
+is asked in a list request of its own (`extraction/list`) and answers one entry,
+or `""` with its wording in `value_raw`.
 
-The profile has no number coordinates (no unit, `what`, `qualifier`
-and no conversion), so a value's first conversation asks its one
-group, `scenario`, one message per coordinate. Its naming step stays, and its `read_text` and `comb` prompts stay in their long
-form. As in kwp (see [extraction](../stages/extraction.md), owner decisions
-2026-11-07), `extraction/settings` reads once per publication what it settles
-for all its values and every request about a value shows it; a value's quote
-must stand exactly once in what the request showed and hold the value exactly
-once; a value only a figure's image shows is read off it, in place of a quote,
-trust level C.
+The profile has no number coordinates (no unit, `what`, `qualifier` and no
+conversion), so a value is asked three coordinates at most. As in kwp (see
+[extraction](../stages/extraction.md)), `PLAN_FIELDS` names what a publication
+settles for all its values (the settings only, no years), asked once per
+publication as a field a document has once, and every request about a value shows
+it under `F`; a value only a figure's image shows is read from the lines the
+figure was written into, trust level C. `WORKS` names the field that finds the
+works a publication presents, compares or cites beside itself (below).
 
-`FRONT_PAGE_PARAMETERS` in `extraction.py` names what a publication says
-about itself (title, authors, date, DOI, abstract). Each is read in every
-passage like any parameter. The search that orders the passages for one of them
-ranks with a sentence written for this publication from its title as the corpus index
-holds it (`document_context`, `DocumentMeta.title`), which finds the title
-page; the sentence for any other parameter is written once per run, since a
-publication's title pulls it toward the title page (owner decision
-2026-11-05, measured on six papers).
+The search that orders a publication's pieces for a parameter ranks with a
+sentence the model writes for this publication from the parameter and the
+publication's title as the corpus index holds it (`document_context`,
+`DocumentMeta.title`), for every parameter (owner decision 2026-11-09).
 The abstract was left out in 132 of 164 publications and the date in 60
 when they were only asked among all the other rows. Without a title the serializer writes no
 node for a publication: 17 of the 164 publications of the run of 2026-10-22
@@ -144,7 +126,7 @@ harvest (a heading with no body, or the heading of a section the model
 removed; see [refinement](../stages/refinement.md)), and one because the
 model left it out of a crowded request.
 
-Two of the 14 extraction prompts, `review` and `example`, are parts files (see
+Two of the 13 extraction prompts, `review` and `example`, are parts files (see
 [profiles](../profiles.md), The extraction prompts): each names its template of
 the core in its front matter, and `CONTRACT_LANGUAGE = "en"` in
 `profiles/scenarios/extraction.py` says that the templates are the English ones.
@@ -157,12 +139,11 @@ sentence for; the example prompt leaves out and words nothing. `python
 scripts/render_prompts.py --what-if` shows each block it leaves out put back (see
 [Running the pipeline](../running.md)).
 
-Extraction's `read_values` prompt holds a value's quote to the
-piece that carries it, a clause, a list entry, one table cell, not the
-whole paragraph: an author list gives one quote per name, and a
-title's quote is the title itself. Quoting the whole block for every
-author used to make the reply to a crowded title page grow past the
-token limit and lose the title, authors, DOI and date together.
+The `find` and `docfield` prompts hold a value's words to the piece that carries
+it, a clause, a list entry, one table cell, not the whole paragraph: an author
+list gives one entry per name, and a title's words are the title itself. Quoting
+the whole block for every author used to make the reply to a crowded title page
+grow past the token limit and lose the title, authors, DOI and date together.
 
 ## Per-document choice lists: dynamic axes and dynamic values
 
@@ -189,11 +170,11 @@ spelling "historical"), a value of a past or the current year,
 measured, observed or balanced, which belongs to no scenario, as KWP's closed
 list has "Bestand", and `out:several` (label "several scenarios", spelling "all
 scenarios"), a value stated for several scenarios that the text shown does not
-name one by one, which goes to the scenarios a request after the naming
-finds these words stand for, one request per wording and document, and to none
-where the publication does not say (owner decisions 2026-11-07,
-`naming.SEVERAL`); `read_text` and `comb` explain them and `value_raw`
-(`Axis.beside`, see [extraction](../stages/extraction.md)). The value of `scenario_label` and the
+name one by one, which goes to each scenario of the publication's list that the
+`names` request finds these words stand for, and to none where it finds none
+(owner decisions 2026-11-07 and 2026-11-08, `addressed.SEVERAL`); the `names`
+request shows them with what each means (`Axis.beside`, see
+[extraction](../stages/extraction.md)). The value of `scenario_label` and the
 `scenario` axis of the other four parameters (`scenario_type`,
 `scenario_abstract`, `scenario_region`, `scenario_year`, together
 `SCENARIO_FIELDS` in `kg.py`) are free text marked `merged: "scenario"`,
@@ -201,8 +182,8 @@ the name as the publication prints it, with its quote. `Axis.merged` and
 `Parameter.merged` are allowed on a free-text axis or a free-text value
 only (`spec.py`, `_validate_parameter` and the axis parser refuse them
 anywhere else), and which
-of a publication's names mean the same scenario is asked once the publication
-is read, by `docpipe/extraction/naming.py` (below).
+entry of the publication's list of scenarios a name is, is asked while the
+publication is read, by `addressed.Reader.name_of` (below).
 
 Two coordinates say whether a value is a value of its field at all (spec key
 `"keep"`, owner decisions 2026-11-07, see [extraction](../stages/extraction.md)):
@@ -211,11 +192,9 @@ scenario year and scenario horizon or "other year", and `work` of the
 thirteen `publication_*` and `study_*` fields, "this publication" or "another
 work" the publication presents, compares, reviews or cites. Each is asked
 first and backed by the words of its quote. A value read with the other entry
-is asked nothing further, is asked for once more in its passage's rounds as
-read wrongly, and stays out of the graph, as does one whose entry stayed open
-(`kg.held_back`). A row the catalogue fills (`completion.row_of`) is a copy of
-the row it was found with and carries its work. `read_text` has one section
-per group (`work`, `year_kind`, `scenario`).
+is asked nothing further, and stays out of the graph, as does one whose entry
+stayed open (`kg.held_back`). A row the catalogue fills (`completion.row_of`) is a
+copy of the row it was found with and carries its work.
 
 The list for one document is computed once, before the harvest starts,
 by `profiles/scenarios/extraction.py`'s `document_axes(conn, document_id)`,
@@ -334,74 +313,56 @@ lines 257 to 272). Every chosen sentinel, together with every
 that resolved no `value_uri`, is counted once into an `out_of_graph`
 tally, logged per document and never written as a triple (`kg.py`).
 
-## Naming: which names are one scenario
+## Names: which names are one scenario
 
 A publication calls one scenario by several names ("the Zero Carbon
 scenario" in a sentence, "LCEO Zero Carbon" in a table, an abbreviation in a
 figure), and one name can stand for several ("the EC LTS scenarios"). The
-reading takes each as printed (`merged`, above); `docpipe/extraction/naming.py`
-asks what they mean once the document is folded (`runner.verify`, right after
-the compute step, built by `runner.make_namer`), for the spec's `merged` names
-(here `scenario`; trace events `naming_groups_ask`, `naming_ask` and `naming`).
-It works in two steps (owner decision 2026-11-06). A probe on one paper asked
-each of 240 names against all 240: the answers were mostly right, but cost 4.4 M
-input tokens, growing with the square of the names, and an answer that lists the
-name itself plus its spellings was read as "stands for several scenarios", so
-that about 210 of 1,406 rows with a read scenario sat on a wrong one.
+reading takes each as printed (`merged`, above) and asks what it means while the
+publication is read (`addressed.Names`, `addressed.Reader.name_of`, prompt
+`extraction/names`, owner decisions 2026-11-08; trace event `names_ask`). The
+publication keeps a list of its scenarios built piece by piece, and a list of the
+works it presents beside itself whose first entry is the publication; an entry
+belongs to the work its value was read for. A name is asked against the list so far: the
+request shows the name, the lines it stands in, its work and the list, and answers
+the number of the entry or "new" where the list holds none for it. The entries
+beside the names (`out:status_quo`, `out:several`) stand first with what each
+means. A name is an entry where both name the same thing, a short and a long form
+of one scenario, the same work cited twice; the same name in another work is
+another entry, and nothing is merged by its spelling. Each name is asked once per
+document, work and wording, and the values whose own names build the list are asked
+first. This replaces the naming step of before 2026-11-08, which asked once the
+publication was folded, in two steps (a request over all names and one per name
+against its nearest by embedding): a probe on one paper had asked each of 240 names
+against all 240, 4.4 M input tokens growing with the square of the names, and an
+answer that listed the name itself plus its spellings was read as "stands for
+several scenarios", so that about 210 of 1,406 rows with a read scenario sat on a
+wrong one.
 
-Step 1, candidates from two sources. One request over all names (prompt
-`extraction/naming_groups`, `naming.groups_payload`) shows every name under its
-number with the quote it was read with and answers `{"groups": [[numbers]]}`,
-each group two or more numbers (`naming.groups_format`), generously, a name with
-no partner left out; its example is a group of the first two names
-(`naming.groups_example`). A wrong reply is asked once more (`key_missing`,
-`groups_not_listed`), wrong twice gives no groups; one that does not fit is
-asked for each half of the names, a group across the halves being left to the
-embedding (`Namer._grouped`). And every name is embedded with the run's
-embedding model together with 100 characters before and after it where it was
-first read (`naming.context_of`, `naming.EMBED_CONTEXT_CHARS`): its 15 nearest
-names by cosine (`naming.neighbours`, `naming.NEIGHBOURS`) are its candidates,
-and so is every name that has it among its nearest (`naming.candidates`).
+Where the field takes groups (the default) the words of several scenarios give the
+numbers of every scenario they stand for, and each is a row of its own. An
+answer that is one of the entries beside the names alone keeps that entry and no
+scenario. A number that is none of the list is asked once more (`name_not_listed`).
+Each row keeps the name it was read as and gets the entries of the list it means
+under `<coordinate>_means` (`scenario_means`), or `value_means` for its own value
+(`scenario_label`). The harvest schema declares `_means` only for merged slots, and
+the keys join the evidence and slot key lists that carry a coordinate with the row
+(`runner._EVIDENCE`, `topup.SLOT_KEYS`, and the keys `verify` drops with an
+unbacked coordinate). A top-up pass does not run the names again, as it does not
+run the compute step again. The harvest no longer writes `value_short`, which
+marked a short name of its scenario; the graph still reads it from older harvests.
 
-Step 2, each name with a candidate is asked on its own against its candidates
-alone (prompt `extraction/naming`), run in the run's thread pool. A request
-shows the one name under "name" with its number and the texts of its own places:
-its quote and 500 characters of the passage before and after it
-(`CONTEXT_CHARS`), overlapping stretches of one passage joined. Under "names" it
-shows only the name and its candidates, each under its number with the quote it
-was read with. The reply is `{"means": [numbers]}`: every name of the same
-scenario, its own number included, or, for a name that stands for several
-scenarios, the names of each of them without its own (`naming.response_format`);
-the prompt's example is the reply with the name meaning itself
-(`naming.example_of`). The prompt is strict: two names name one scenario only
-where either can stand for the other without losing anything the publication
-says. A name with no candidate asks nothing and means itself.
+## Works beside the publication
 
-Reading the answers (`naming.meanings`): an answer holding the name gives the
-other names of its scenario, and so does an answer of one other name alone; two
-names are one scenario only where each gives the other, and a scenario is called
-by its first name in the document's order. An answer of several names without
-the name itself stands for each of their scenarios and is never joined. Each
-answer also says whether the name is a short name of its scenario ("ENTSO-E DG"
-beside "Distributed Generation"); its rows are marked `value_short` (owner
-decision 2026-11-07). On the
-answers of the probe this reading gives 12 groups of names with no visible
-error. The `naming` event also carries `groups` (groups the request over all
-names gave) and `asked` (names asked against candidates).
-
-The answer quotes nothing: each name keeps its own quote. A reply without its
-key is asked again with `key_missing`; one with an empty list or a number not
-shown, with `name_not_listed`, in one correction round (`naming.means_of`). A
-name answered in neither means itself. A request about one name that does not
-fit is asked against each half of its candidates; a half that gives the name
-alone adds nothing (`Namer._halves`). Each row keeps the name it was read as and gets the names
-of what it means under `<coordinate>_means` (`scenario_means`), or
-`value_means` for its own value (`scenario_label`). The harvest schema declares
-`_means` only for merged slots, and the keys join the evidence and slot key
-lists that carry a coordinate with the row (`runner._EVIDENCE`,
-`topup.SLOT_KEYS`, and the keys `verify` drops with an unbacked coordinate). A
-top-up pass does not run the naming again, as it does not run the compute step
-again.
+A publication presents, compares, reviews or cites other works, and a value may be
+about one of them. `WORKS` in `extraction.py` names the field that finds them in
+every piece, and each name is asked against the list of works with the `names`
+request; each new work is then asked at its own line for its title, its
+organisation, its year and its short name, one `coord` request each (owner decision
+2026-11-08, h). Those values are values of that work, with `work` "another work"
+and the work's name under `work_means`; the harvest keeps them, the graph does not
+(`kg.held_back`, since the `work` coordinate keeps this publication only). A value
+of the publication itself is asked its `work` like any coordinate.
 
 ## The graph: one report, one bundle, a factsheet per scenario
 
@@ -532,9 +493,10 @@ graph by choice" and not under "no scenario to hang them on", and its year or
 region becomes no scenario's year or region. A name of several scenarios
 stands for each of them, so one row lands on several factsheets. A
 factsheet's `rdfs:label` is the name the scenario is called by; its
-`dc:acronym` is the short name the document prints for it, as the naming
-answered it (`value_short`, owner decision 2026-11-07), and that same name
-where the document prints none (`kg.py`, the factsheet block of
+`dc:acronym` is the short name the document prints for it, as a row marked
+`value_short` says it (written by the naming step of harvests before
+2026-11-08, none now, owner decision 2026-11-07), and the scenario's own name
+where there is none (`kg.py`, the factsheet block of
 `_make_builder`). Every factsheet
 also carries a fixed `OEO_00020517` annotation (`IAM_SCENARIO`; owner
 decision 2026-11-06: kept) on top of whatever `scenario_type` classes the
@@ -572,9 +534,9 @@ on a front page. A chapter that presents other studies prints their titles,
 authors, publishers and years, a reference list the DOIs it cites, and the
 field descriptions say that only the document's own count. The authors are
 those of the first of these that names any, each name a node whose evidence
-is every reading of it, wherever it stands. The value reading says the same of a
+is every reading of it, wherever it stands. The reading of values says the same of a
 passage that presents, reviews or compares another work, beside a reference
-list, a footnote and a citation (`read_values.md`). Runner-up spellings are counted `contested` rather
+list, a footnote and a citation (the `find` prompt). Runner-up spellings are counted `contested` rather
 than dropped from the log. A read-only connection then cross-checks the chosen title, date and
 DOI against `DocumentMeta`, filled in by the crawl, not this profile's
 own extraction; a disagreement is logged and the crawled value is never
@@ -792,7 +754,7 @@ A scenario name absent from its own quoted passage is refused as an
 identity for every scenario-scope parameter alike: `scenario_names()`
 returns no name, and the row contributes no factsheet, comment or number
 (`kg.py`); it used to mint a factsheet anyway, which this check exists to
-prevent. Rows whose names the naming step answered with one name land on that
+prevent. Rows whose names the `names` request answered with one name land on that
 scenario's factsheet, and a name of several scenarios on each of theirs, so
 two names the model took for one scenario are one factsheet and a wrong answer
 there is the model's, written under the names it was shown.

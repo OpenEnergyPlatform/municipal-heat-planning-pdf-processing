@@ -4,11 +4,13 @@
 
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
-A run reads each plan passage by passage (`surveyed_flow`, which stops the
-run where the spec names no groups or the profile lacks a prompt of the
-harvest): the order of its passages, the reading of every passage for every
-parameter and the combing per document (`surveyed.py`), then the fold, the
-compute step and the file with its stamp as below. The passes over a
+A run reads each plan in pieces of numbered lines (`surveyed_flow`, which
+stops the run where the spec names no groups or the profile lacks a prompt
+of the harvest): every piece asked for every field in the order a reranker
+gives it, each coordinate of each value found asked on its own, and a
+coordinate its place does not state searched for (`addressed.py`, run per
+document by `surveyed.py`), then the fold, the compute step and the file
+with its stamp as below. The passes over a
 stored harvest run on the same steps.
 
 This module supplies the loop's expensive dependencies from the real world:
@@ -262,6 +264,16 @@ Whether a failure is the server's: it never arrived, or was `unserved`.
 
 These wait on the long curve and count towards the dead-server streak. A
 429 retried after two seconds is the same 429.
+
+### search_rounds
+
+```python
+def search_rounds() -> int
+```
+
+How many rounds of pieces the search after an open coordinate may
+ask (`addressed.Reader.search`): the run's budget, at least
+`SEARCH_MIN_ROUNDS`.
 
 ### read_to_end
 
@@ -634,28 +646,26 @@ connection; {} where the profile has none.
 ### make_seek_probes
 
 ```python
-def make_seek_probes(own=(), context_of: Optional[Callable] = None,
+def make_seek_probes(context_of: Optional[Callable] = None,
                      write: Optional[Callable] = None) -> Callable
 ```
 
 probes(parameter, document_id) -> the sentences a plan's passages
-are ranked with for a parameter, which sets the order it reads them in
-(`survey.Ranking`, owner decisions 2026-11-05 and 2026-11-08).
+are ranked with for a parameter, which sets the order it reads them in,
+and the search after an open coordinate goes with where its answer
+wrote none (`addressed.Orders`, `addressed.Reader.search`).
 
-A parameter about the document itself (*own*, the profile's
-`FRONT_PAGE_PARAMETERS`: its title, authors, date, DOI and abstract) gets
-a sentence written for this document from what it says of itself
-(*context_of(document_id)*, the profile's `document_context`), since the
-document's own name finds its title page. Any other gets one sentence per
-run, written once from
-its label, description and list names and kept: the document's name
-pulls such a sentence toward the title page and away from the passage
-that states the value. *write(parameter, context)* writes the sentences,
-one phrase request (`document_anchor`) where not given. A parameter no
+Every parameter gets a sentence written for this document by the model,
+from the parameter's label, description and list names and from what
+the document says of itself (*context_of(document_id)*, the profile's
+`document_context`: the municipality of a plan, the title of a
+publication), as the chat turns a question into a sentence of the
+document before it searches (owner decisions 2026-11-05, 2026-11-08 and
+2026-11-09). *write(parameter, context)* writes the sentences, one
+phrase request (`document_anchor`) where not given. A parameter no
 sentence could be written for gets none, and the search falls back to
-its label. A document's own sentence is sent in that document's turn, the
-run's before every document, since every document waits on it
-(`document_anchor`, *shared*; owner decision 2026-11-07).
+its label. Each sentence is sent in its document's turn (owner decision
+2026-11-07).
 
 ### document_anchor
 
@@ -663,8 +673,7 @@ run's before every document, since every document waits on it
 def document_anchor(spec: Spec, context: Optional[dict] = None,
                     client=None, prompt=None,
                     frame: Optional[dict] = None,
-                    document_id: Optional[int] = None,
-                    shared: bool = False) -> dict
+                    document_id: Optional[int] = None) -> dict
 ```
 
 {parameter uri: [one sentence]} — the probe THIS document is searched with.
@@ -694,10 +703,7 @@ retrieval" this whole stage exists to end.
 Each request is sent for *document_id*, in that document's turn, with
 the ticket of the thread that asked (`_for`), although a thread of the
 pool below sends it: such a thread belongs to no document, and a request
-of none goes before every document. A *shared* sentence, the one the run
-keeps for every document (`make_seek_probes`), is sent for none, as
-everything every document waits on is; *document_id* still notes its
-failures and traces it (owner decision 2026-11-07).
+of none goes before every document (owner decision 2026-11-07).
 
 ### set_model_len
 
@@ -790,67 +796,29 @@ is (`prompts.Prompt.render`).
 
 ```python
 def ask_in_grammar(client, prompt, conversation: list, shape: dict,
-                   document_id: int, where: str, key: str,
+                   document_id: int, where: str, key: str, /,
                    example: Optional[dict] = None,
-                   thread: Optional[thread_map.Thread] = None, **noted)
+                   lacking: Optional[Callable] = None, **noted)
 ```
 
-One request of the rebuilt harvest: the reply as a dict, "cut_off"
-when it did not fit its room, or None when it could not be read. The
-prompt shows *example*, the reply this request asks for
-(`system_text`).
-
-With *thread* the request is one message of a conversation (owner
-decisions 2026-11-07): a follow-up is sent under the system prompt the
-conversation began with, and the answer that stands is kept in it with
-every message sent, so the next follow-up goes after it
-(`thread.Thread`).
+One request of the harvest: the reply as a dict, "cut_off" when it
+did not fit its room, or None when it could not be read. The prompt
+shows *example*, the reply this request asks for (`system_text`); the
+request is its prompt and *conversation*, one message (owner decisions
+2026-11-08: no request is a conversation).
 
 Asked again with the cause when the reply is no JSON object, or one
-without a key its schema requires (`_lacking`), as every request of the
-stage is; a reply cut off at its limit is not rescued. Each answer is
-traced as `<where>_ask` with *noted*.
+without a key its schema requires (`_lacking`) or one *lacking(answer)*
+names (a coordinate's sentence where it found nothing,
+`addressed.hyde_missing`), as every request of the stage is; a reply cut
+off at its limit is not rescued. Each answer is traced as
+`<where>_ask` with *noted*.
 
 A request whose last attempt ended on a 429, a 5xx or a timeout was
 never answered, so its document is noted (`UNSERVED`) and goes
 unstamped, as for every request of the run. One that timed out is asked
 again with the time a repeat gets (`_repeating`), whatever client it was
 handed, as every request of the harvest is.
-
-### parts_of
-
-```python
-def parts_of(prompt_id: str, spec: Optional[Spec] = None, profile=None)
-```
-
-The prompt *prompt_id* cut at its parts (`thread.cut`): with *spec*,
-the reading's groups must each have theirs, and every field its
-follow-ups carry (`FOLLOWS`) its words. LookupError where it does not
-fit.
-
-### threaded
-
-```python
-def threaded(parts, thread, payload: Optional[dict] = None,
-             follow: Optional[dict] = None, content=None,
-             example: Optional[dict] = None) -> tuple
-```
-
-(prompt, conversation) of one message of *thread* (owner decisions
-2026-11-07): a follow-up (*follow*) goes after the answer that stands,
-in the words of the parts its fields need, with the reply the request
-asks for (*example*) where they show one; a first message shows
-*payload* (as *content* where given, such as a figure with its crop)
-under the system prompt of what every request of its kind is told and
-the part of each field it carries.
-
-### told
-
-```python
-def told(follow: Optional[dict]) -> int
-```
-
-How many corrections a follow-up carries, for the trace.
 
 ### worded
 
@@ -860,81 +828,105 @@ def worded(words: str, payload: dict) -> str
 
 A message: its words, then what it shows as JSON.
 
-### answers_in
+### run_each
 
 ```python
-def answers_in(thread) -> int
+def run_each(jobs: list, run: Callable) -> list
 ```
 
-How many answers a conversation holds.
+*run(job)* for each of *jobs*, side by side on the run's threads
+(`AHEAD`) where it has them, the results in the order of the jobs. Only
+the caller waits: no job waits for another, so the threads never wait
+for themselves. A job that fails takes back every job not yet begun.
 
-### shows_in_full
+### request_prompt
 
 ```python
-def shows_in_full(thread, parameter) -> bool
+def request_prompt(parts, payload: dict)
 ```
 
-Has a message of this conversation shown *parameter* with its full
-definition? A coordinate that classifies is shown it once, with the
-first of them that is asked (owner decision 2026-11-07: one coordinate
-per message).
+The prompt of one request: what every request of its kind is told,
+and the part of each field its payload carries (`thread.Parts.system`,
+owner decision 2026-11-07: no request is told about a field it does not
+carry).
+
+### make_asks
+
+```python
+def make_asks(profile=None) -> Optional[addressed_map.Asks]
+```
+
+The requests of the harvest (`addressed.Asks`), each with a prompt of
+its own and its payload as one message, no conversation (owner decisions
+2026-11-08); None where the profile writes one of their prompts not,
+those of `addressed.OPTIONAL` aside. A coordinate's answer that says
+nothing shown states it and gives no sentence of how the plan would
+print it is asked again (`addressed.hyde_missing`). A request asked once
+more (`follow`) goes under the prompt of the request it follows, its
+words after the payload.
+
+### image_path_of
+
+```python
+def image_path_of(source, image_root: Optional[Path]) -> Optional[str]
+```
+
+Where a figure's crop is, None where the run sends no image or the
+figure has none.
+
+### make_transcribe
+
+```python
+def make_transcribe(profile, image_root: Optional[Path]) -> tuple
+```
+
+(ask(source, document_id), fingerprint): the request that writes a
+figure as lines once per run (`addressed.Transcripts`, owner decision
+2026-11-08, e), its crop and its description shown, and what names the
+prompt and model that wrote a kept transcription; (None, "") where the
+profile writes no prompt for it.
 
 ### make_reader
 
 ```python
-def make_reader(spec: Spec, image_root: Optional[Path] = None)
+def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
+                probes: Optional[Callable] = None)
 ```
 
-The reading of one parameter's passages (`reading.Reader`), or None
-when the profile writes no prompts for it or its spec names no groups.
-Two kinds of request, each with one task (owner decisions 2026-11-04
-and 2026-11-05), each a message of a conversation (owner decisions
-2026-11-07, `thread.py`): all values of a passage in one answer, what
-follows it asking for those not named yet (owner decisions 2026-11-08),
-and one value's coordinates, one coordinate per
-message with the words of its group (`thread.Parts.group`). A system
-prompt holds what its kind of request is told and the part of each
-field its first message carries. A figure goes with its crop, in the
-first message, and a value only the crop shows is read off it (owner
-decisions 2026-11-05 and 2026-11-07). Neither request has tools (owner
-decision 2026-11-05, ticket 26).
+The reading of a document piece by piece (`addressed.Reader`), or
+None where its spec names no groups or the profile writes no prompts
+for it. What the profile asks once of a plan beside its fields
+(`PLAN_FIELDS`) and the field that names other works (`WORKS`) come
+from the profile.
 
-### check_asker
+### make_chunk_reranker
 
 ```python
-def check_asker(client, parts=None) -> Optional[Callable]
+def make_chunk_reranker() -> Optional[Callable]
 ```
 
-The request that asks of a find whether the place it was quoted from
-speaks about its value (`reading.Judge`, owner decisions 2026-11-07),
-the same for a find of the second reading and one of the combing; None
-where the profile writes no prompt for it. *parts* is the prompt cut at
-its parts where the caller has it.
+() -> one thread's reranker of the pieces of a plan, which scores
+every piece it is given (`rerank.Reranker`), or None where the run is
+given no RERANK_BASE_URL.
 
-### make_namer
+### make_harvest
 
 ```python
-def make_namer(spec: Spec, passages_of: Callable) -> Optional[Callable]
+def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
+                 image_root: Optional[Path], profile, every: Callable,
+                 spec_for: Optional[Callable] = None,
+                 rank: Optional[Callable] = None,
+                 reranker: Optional[Callable] = None)
 ```
 
-The requests that ask which of a document's names mean the same
-thing once it is folded (`naming.Namer`, owner decisions 2026-11-06):
-`name(report)`, which marks the report's rows. None where the spec
-merges no names or the profile writes no prompt for it, which
-`surveyed_flow` refuses at the start of a run. *passages_of(document_id)*
-is the plan's passages in their order. The names are embedded with the
-run's embedding model (`COALESCED`).
-
-### make_comber
-
-```python
-def make_comber(spec: Spec, rank: Callable)
-```
-
-The search for what the reading left open (`combing.Comber`), or None
-when the profile writes no prompt for it or its spec names no groups.
-*rank(document_id, probes, exclude)* is the plan's passages best first
-for the search sentences, `make_more_sources` in a harvest.
+The harvest of a document piece by piece (`surveyed.SurveyedHarvest`)
+as a run and a probe make it: the order of the pieces by the reranker
+(*reranker*, `make_chunk_reranker`) and the search over passages
+(*rank*, `make_more_sources` with its reranker), a field's search
+sentences (`make_seek_probes`), the figures transcribed once and kept
+under *out* (`transcripts/`), the orders kept there too (`survey/`), and
+the size of the pieces the profile gives (`CHUNK_UNITS`). *every(
+document_id, exclude)* is the plan's passages in its order.
 
 ### frame_slots_of
 
@@ -954,67 +946,6 @@ def dates_by_plan(spec: Spec) -> bool
 
 Does the spec date a value by the plan's own years: has its frame a
 year?
-
-### make_years
-
-```python
-def make_years(spec: Spec, rank: Optional[Callable] = None)
-```
-
-The request for a plan's base and target years, once per plan
-(`years.PlanYears`, owner decision 2026-11-06), or None where the spec's
-frame has no year or the profile writes no prompt for it. *rank* is the
-plan best first for a sentence the model writes ("similar").
-
-### make_settings
-
-```python
-def make_settings(spec: Spec, rank: Optional[Callable] = None)
-```
-
-The request for what a plan settles for all its values, once per plan
-(`settings.PlanSettings`, owner decision 2026-11-07), or None where the
-profile writes no prompt for it. *rank* is the plan best first for a
-sentence the model writes ("similar").
-
-### title_line
-
-```python
-def title_line(passages: list, name: Optional[str],
-               pages: tuple = (1, 2)) -> Optional[Source]
-```
-
-The first line of the plan's first page, else its second, that names
-*name*, the place the plan is about, as a passage a quote may stand in
-(owner decision 2026-11-06: every reading request shows it). None where
-no such line stands there, or no name is known.
-
-### make_title_page
-
-```python
-def make_title_page(db_path: Optional[Path], profile) -> Optional[Callable]
-```
-
-title_page(document_id, passages): the line of the title page that
-names the plan's own place (`title_line`), its name from the profile's
-`document_context`; None where the profile does not show it
-(`TITLE_PAGE_LINE`).
-
-### make_survey
-
-```python
-def make_survey(spec: Spec, out: Path, rank: Optional[Callable],
-                every: Callable, probes: Optional[Callable] = None,
-                scope: str = "")
-```
-
-The order every passage of a plan is read in for each parameter
-(`survey.Ranking`, owner decisions 2026-11-08): *rank(document_id,
-sentences, exclude)* is the whole plan best first, `make_more_sources`
-with the run's reranker in a harvest; *probes(parameter, document_id)*
-the parameter's search sentences (`make_seek_probes`); *every* is
-(document, exclude) -> passages. *scope* names an order of part of a
-plan, kept beside the whole one's.
 
 ### frame_pairs
 
@@ -1070,8 +1001,9 @@ def shared_http(limit=None)
 
 The one connection pool every request of the run goes out through.
 
-Each kind of request has a client of its own (reading, combing, the
-check, the years, ...), and each client used to keep a pool of its own:
+Each kind of request has a client of its own (finding, coordinates,
+lists, the search, the check, ...), and each client used to keep a
+pool of its own:
 connections it had opened stayed open while it sent nothing, so a probe
 with 18 requests in flight held 40 connections to the proxy, and a server
 that takes about 20 at once refused the rest outright (one probe,
@@ -1181,7 +1113,7 @@ Two questions that come to one statement leave one row: the profile's
 a request has the reading's tools (`reading.Gathered`: the next or the
 previous section, a table or figure by its placeholder, a search by
 pattern or by a sentence), each passage cut to two pages of the plan
-(*pages_of*, `survey.budget_of`), and a question that takes a number
+(*pages_of*, `lookup.two_pages`), and a question that takes a number
 (`Question.take`) may take it from whatever the request showed: a
 passage, its title, a hit's line or title (owner decision 2026-11-05).
 *rank(document_id, probes, exclude)* is the plan ranked for a sentence,
@@ -1249,11 +1181,9 @@ tried too - bounded, because this opens the PDF each time.
 def survey_prompt_ids(profile=None) -> tuple
 ```
 
-The prompts of a harvest passage by passage: `SURVEY_PROMPT_IDS`, and
-the naming's and the plan's years' where the profile writes them, which
-a spec that merges names or dates a value by the plan's years sends
-(`naming.NAMING_PROMPT_IDS`, `years.YEARS_PROMPT_ID`, required by
-`surveyed_flow`).
+The prompts of a harvest piece by piece (`SURVEY_PROMPT_IDS`), and
+those of `addressed.OPTIONAL` the profile writes: the check of a find
+from another passage, the names request.
 
 ### surveyed_flow
 
@@ -1261,15 +1191,23 @@ a spec that merges names or dates a value by the plan's years sends
 def surveyed_flow(spec: Spec, profile=None) -> bool
 ```
 
-Whether a run can harvest passage by passage: its spec names groups.
-A spec without groups cannot be harvested (`main` stops on it).
+Whether a run can harvest piece by piece: its spec names groups. A
+spec without groups cannot be harvested (`main` stops on it).
 
 A spec with groups whose profile lacks a prompt of the harvest is a
-broken profile: the run stops and names the prompt, as `spec.load` stops at a
-broken group (owner decision 2026-11-04). So does a group prompt whose
-parts are not the spec's groups, or one whose file lacks the words of a
-field its follow-ups carry (`parts_of`), before a request is sent rather
-than at the first plan's reading.
+broken profile: the run stops and names the prompt, as `spec.load`
+stops at a broken group (owner decision 2026-11-04), before a request
+is sent rather than at the first plan's reading.
+
+### names_asked
+
+```python
+def names_asked(spec: Spec, profile=None) -> bool
+```
+
+Whether a run asks names against a document's lists: its spec
+merges a field or a coordinate into a list of names (a scenario), or
+the profile keeps a list of works (`WORKS`).
 
 ### producer
 
@@ -1572,9 +1510,9 @@ Tokens the largest request this run sends needs, per request.
 
 The window a server is started with has to hold every request kind of the
 run, so it follows the largest of them. Read off the prompts the run
-sends (`survey_prompt_ids`): the two reading requests, the combing and, where the profile writes it, the match. Never off one that
-no request carries, and not the review, which has a line of its own in
-the doctor.
+sends (`survey_prompt_ids`): one per kind of request of the reading
+(`addressed.KINDS`). Never off one that no request carries, and not the
+review, which has a line of its own in the doctor.
 
 ### select_documents
 

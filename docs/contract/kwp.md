@@ -44,8 +44,9 @@ coordinate after the harvest: a top-up that read it again, or the pass that
 appended its row (`--top-up-parameters`); the harvest writes none, so a
 missing key means the harvest read it (`docpipe/extraction/schema.py:212` to
 `293`). The rest belong to the row itself: `kind`, `quote`,
-`tier`, `flags`, `provenance`, `computed`, `compute`, `unit` and
-`unit_raw` (empty for a wording); only the value additionally carries `value_target` for a numeric parameter
+`tier`, `flags`, `provenance`, `at` (the address of the value's place: passage,
+line, cell), `head` (the words over its table column), `drawn` (a figure's value),
+`computed`, `compute`, `unit` and `unit_raw` (empty for a wording); only the value additionally carries `value_target` for a numeric parameter
 whose unit chose an entry (a printed unit that is no entry leaves `unit` and
 `value_target` empty and flags `unmapped:unit:<print>`), `reading` for a number
 read off a figure in place of a quote, or `value_raw` and `value_uri` for a
@@ -206,7 +207,7 @@ Axis 'aggregation' of Gebäudeanzahl. A closed list; an entry beginning 'out:' i
 
 The prompt's own wording:
 
-> Wie ist der Wert über Zeit oder Raum zusammengefasst? Wähle den Eintrag nach seiner Bedeutung ("means"), nicht nach einem Wort der Stelle. Der Normalfall ist "integral", eine Jahressumme.
+> Wie fasst diese Zahl Werte über Zeit oder Raum zusammen?
 
 <details><summary>What it may answer (5)</summary>
 
@@ -214,7 +215,7 @@ The prompt's own wording:
   - also written: Mittelwert, Durchschnitt
 - **instantaneous** → `OEO_00140069` — Wert, der exakt zu einem zeitlichen Nullpunkt gemessen oder modelliert wird.
   - also written: Momentanwert zu einem Zeitpunkt
-- **integral** → `OEO_00140070` — Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets.
+- **integral** → `OEO_00140070` — Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets, etwa eine Jahressumme, der Normalfall.
   - also written: Summe oder Integral über einen Zeitraum oder ein Gebiet, Jahreswert, Jahressumme
 - **maximum** → `OEO_00140073` — Höchster Wert innerhalb einer Menge von Datenwerten in einem Bereich.
   - also written: Maximum, Spitzenwert, Spitzenlast
@@ -240,6 +241,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `aggregation_link_source`
 
 Which source 'aggregation_link_quote' was found in.
+
+### `aggregation_means`
+
+The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `aggregation_producer`
 
@@ -271,7 +276,11 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'aggregation' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+### `at`
+
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `carrier`
 
@@ -279,10 +288,7 @@ Axis 'carrier' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a 
 
 The prompt's own wording:
 
-> Welcher Energieträger? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift.
-Beschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt "Summe", solange die Stelle nicht nach Energieträgern aufteilt.
-Ist die eigene Tabelle oder der eigene Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet), ist die Antwort "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
-"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Gebäudetyp".
+> Für welchen Energieträger gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Energieträgern aufteilt, wonach teilt die Stelle stattdessen auf?
 
 <details><summary>What it may answer (137)</summary>
 
@@ -383,7 +389,7 @@ The production of other coal gases (i.e. coke oven gas, blast furnace gas and ox
 - **Steinkohle** → `OEO_00000204` — Steinkohle: Kohle mit einem Brennwert über 23 865 kJ/kg und einer mittleren Vitrinitreflexion von mindestens 0,6.
 - **Strom** → `OEO_00000139` — Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
-- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+- **Summe** → `out:total` — Die Zahl gilt für alle Energieträger zusammen: ihre Zeile oder Spalte summiert ausdrücklich über die Energieträger, oder ihre eigene Tabelle oder ihr Satz ist gar nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet). Der Wärmebedarf der Gebäude eines Gebiets bleibt Summe, solange die Stelle nicht nach Energieträgern aufteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Synthesegas** → `OEO_00140160` — Syngas is a gas mixture consisting primarily of hydrogen, carbon monoxide, and very often carbon dioxide, that can be used as fuel.
 - **Thorium** → `OEO_00140092` — Thorium is a portion of matter with the chemical formula Th. It has a solid normal state of matter.
@@ -475,6 +481,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'carrier_link_quote' was found in.
 
+### `carrier_means`
+
+The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `carrier_producer`
 
 Who re-read 'carrier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -505,7 +515,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'carrier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `catalogue`
 
@@ -549,6 +559,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `parameter_producer`
 
 Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -579,7 +593,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
@@ -589,7 +603,7 @@ Axis 'qualifier' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is 
 
 The prompt's own wording:
 
-> Steht direkt bei dieser Zahl ein Wort, das sagt, wie genau sie gilt? „ca. 8,8 GWh“ ist ungefähr, „bis zu 6.200 MWh“ höchstens, „mehr als 4 %“ mindestens; in „zwischen 60 und 100 MWh“ ist 60 das untere und 100 das obere Ende einer Spanne. "value_raw" ist dieses Wort des Plans, Zeichen für Zeichen. Steht kein solches Wort bei der Zahl, ist die Antwort out:unstated.
+> Welches Wort direkt bei dieser Zahl sagt, wie genau sie gilt, etwa „ca.“, „bis zu“, „mehr als“ oder „zwischen“?
 
 <details><summary>What it may answer (5)</summary>
 
@@ -613,6 +627,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `qualifier_link_source`
 
 Which source 'qualifier_link_quote' was found in.
+
+### `qualifier_means`
+
+The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `qualifier_producer`
 
@@ -644,11 +662,15 @@ How the coordinate 'qualifier' ended. Always present: a missing key and a refuse
 
 ### `qualifier_window`
 
-[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'qualifier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quantity`
 
 Axis 'quantity' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless quantity_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Welche Größe ist diese Zahl?
 
 <details><summary>What it may answer (1)</summary>
 
@@ -672,6 +694,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `quantity_link_source`
 
 Which source 'quantity_link_quote' was found in.
+
+### `quantity_means`
+
+The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `quantity_producer`
 
@@ -703,7 +729,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'quantity' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quote`
 
@@ -727,15 +753,15 @@ Axis 'scenario' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a
 
 The prompt's own wording:
 
-> Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, "bislang", "derzeit", "wird verbraucht", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie "wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt ("bei erhöhter Energieeinsparung", "Umsetzungsszenario 2", "Transformationspfad"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das "out:unstated" und keine Schätzung.
+> Auf welchen Zustand des Plans bezieht sich diese Zahl, auf seinen Bestand, ein Trend- oder ein Zielszenario?
 
 <details><summary>What it may answer (3)</summary>
 
-- **Bestand** → `status_quo` — Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr.
+- **Bestand** → `status_quo` — Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr: Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, „bislang“, „derzeit“, „wird verbraucht“, oder ein Jahr vor der Erstellung des Plans im Titel.
   - also written: Ist-Zustand, Bilanzjahr, Status quo, Bestandsanalyse, Basisjahr, Ist-Zustandsanalyse, Ist-Analyse, Erstellungsjahr
 - **Trendszenario** → `trend` — Die Fortschreibung ohne zusätzliche Maßnahmen.
   - also written: Referenzszenario, Weiter-wie-bisher, Business as usual
-- **Zielszenario** → `target` — Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will.
+- **Zielszenario** → `target` — Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will, auch unter einem eigenen Namen des Plans („bei erhöhter Energieeinsparung“, „Umsetzungsszenario 2“, „Transformationspfad“).
   - also written: Zielbild, Zielwert, Zielpfad, Umsetzungsszenario, Transformationspfad
 
 </details>
@@ -757,6 +783,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_means`
+
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `scenario_producer`
 
@@ -788,7 +818,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `sector`
 
@@ -796,11 +826,7 @@ Axis 'sector' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is a d
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle.
-Ein Gebiet ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
-"Summe" gilt für alle Verbraucher zusammen: eine Zeile oder Spalte, die ausdrücklich über alle Sektoren summiert, ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"), oder eine Zahl, deren eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt ist, nur nach anderem (Energieträger, Gebiet); dann zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
-Die Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
-"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Energieträger".
+> Für welchen Verbrauchssektor gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Sektoren aufteilt, wonach teilt die Stelle stattdessen auf?
 
 <details><summary>What it may answer (17)</summary>
 
@@ -821,7 +847,7 @@ Die Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.7
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere
 - **Stromsektor** → `OEO_00000145` — An electricity sector is a transformation sector that covers electricity generation and transport of electrical energy to consumers of electrical energy.
-- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+- **Summe** → `out:total` — Die Zahl gilt für alle Verbraucher zusammen: ihre Zeile oder Spalte summiert ausdrücklich über die Sektoren, sie heißt ausdrücklich Gesamtverbrauch oder Gesamtbedarf aller Verbraucher, oder ihre eigene Tabelle oder ihr Satz ist gar nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet). Ein Gebiet („Gesamtstadt“, „Stadtgebiet“) und die Gesamtleistung von Anlagen sind keine Summe über Sektoren.
   - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
 - **Teilsektor** → `OEO_00010464` — A subsector is a sector that is a part of an other sector.
 - **Verkehr** → `OEO_00000422` — Sektor für den Transport von Personen und Gütern.
@@ -849,6 +875,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `sector_link_source`
 
 Which source 'sector_link_quote' was found in.
+
+### `sector_means`
+
+The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `sector_producer`
 
@@ -880,7 +910,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'sector' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `spatial_scope`
 
@@ -888,14 +918,13 @@ Axis 'spatial_scope' of Gebäudeanzahl. A closed list; an entry beginning 'out:'
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich die Zahl?
-Teilgebiet: sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.
+> Für welches Gebiet gilt diese Zahl, für die ganze Gemeinde oder für ein Teilgebiet mit seinem Namen?
 
 <details><summary>What it may answer (2)</summary>
 
 - **Gemeindegebiet** → `municipality` — Das ganze Gemeinde- oder Stadtgebiet des Plans.
   - also written: Gesamtstadt, Stadtgebiet, gesamtes Plangebiet, Gemeinde insgesamt
-- **Teilgebiet** → `sub_area` — Ein benannter Teil davon: ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet.
+- **Teilgebiet** → `sub_area` — Ein benannter Teil davon, ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet, mit seinem Namen.
   - also written: Fokusgebiet, Quartier, Stadtteil, Baublock, Wärmenetzgebiet, Ortsteil
 
 </details>
@@ -916,6 +945,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `spatial_scope_link_source`
 
 Which source 'spatial_scope_link_quote' was found in.
+
+### `spatial_scope_means`
+
+The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `spatial_scope_producer`
 
@@ -947,7 +980,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'spatial_scope' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `subject`
 
@@ -955,7 +988,7 @@ Axis 'subject' of Gebäudeanzahl. null unless subject_state is 'read' or 'derive
 
 The prompt's own wording:
 
-> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist der Eintrag ihrer eigenen Zeile oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit diesem Eintrag wörtlich. Der Name einer Spalte oder einer Zeilengruppe, etwa "Energieträger", "Sektor" oder "Name des Quartiers", sagt nur, was dort steht, und ist keine Antwort. Ein Energieträger, ein Sektor oder ein Gebiet gehört in sein eigenes Feld. Unterscheidet sie nichts davon, sagt der Plan es nicht.
+> Welcher Eintrag ihrer eigenen Zeile oder ihres Satzes unterscheidet diese Zahl von den Zahlen neben ihr, etwa eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe oder eine Variante, und ist weder Energieträger, Sektor, Jahr, Gebiet noch der Name einer Spalte?
 
 ### `subject_link_quote`
 
@@ -964,6 +997,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `subject_link_source`
 
 Which source 'subject_link_quote' was found in.
+
+### `subject_means`
+
+The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `subject_producer`
 
@@ -995,7 +1032,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'subject' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `technology`
 
@@ -1003,12 +1040,7 @@ Axis 'technology' of Gebäudeanzahl. A closed list; an entry beginning 'out:' is
 
 The prompt's own wording:
 
-> Welche Wärmeerzeugungstechnologie?
-Nur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa "Wärmepumpen", "Gaskessel", "Ölheizungen".
-Energieträger ist keine Technologie: "Erdgas" allein = Träger, "Gasheizung" = Technologie.
-Eigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
-"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.
-"known" unter der Zeile sagt, was die Zahl schon ist.
+> Welcher Wärmeerzeugungstechnologie ordnet der Plan diese Zahl ausdrücklich zu, oder, wo ihre Tabelle oder ihr Satz nicht nach Technologien aufteilt, wonach teilt die Stelle stattdessen auf?
 
 <details><summary>What it may answer (12)</summary>
 
@@ -1025,7 +1057,7 @@ Eigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: "Summe"; zi
   - also written: Solarthermieanlage, solarthermische Anlage
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Wärmeerzeuger
-- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+- **Summe** → `out:total` — Die Zahl gilt für alle Wärmeerzeuger zusammen: ihre Zeile oder Spalte summiert ausdrücklich über die Technologien, oder ihre eigene Tabelle oder ihr Satz ist gar nicht nach Heiztechniken aufgeteilt, nur nach anderem. Ein Energieträger allein („Erdgas“) ist keine Technologie, eine „Gasheizung“ schon.
   - also written: Gesamt, insgesamt, alle Technologien
 - **Verbrennungsbasierte Heizung** → `OEO_00020488` — A combustion based heating technology is a heat generation technology that describes how to combine combustion-based heaters, heat gain processes, combustion fuels and energy in a specific way.
 - **Wasserstoffheizung** → `OEO_00020492` — Wasserstoffheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Wasserstoff.
@@ -1054,6 +1086,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `technology_link_source`
 
 Which source 'technology_link_quote' was found in.
+
+### `technology_means`
+
+The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `technology_producer`
 
@@ -1085,7 +1121,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'technology' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -1097,7 +1133,7 @@ The unit: one entry of units_accepted (Gebäude), read as a coordinate with its 
 
 The prompt's own wording:
 
-> Welche Einheit hat diese Zahl? Schreib in "value_raw" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in "value" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: "Gigawattstunden" meint GWh, "t CO₂-Äq." t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" kWh und GWh, "1.700 kg CO2" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person) oder je Kilowattstunde (g CO2/kWh), ist "value" "", und "value_raw" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
+> Welche Einheit druckt der Plan für diese Zahl, und sagt die Stelle, dass die Menge je Jahr gilt?
 
 <details><summary>What it may answer (1)</summary>
 
@@ -1112,6 +1148,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `unit_link_source`
 
 Which source 'unit_link_quote' was found in.
+
+### `unit_means`
+
+The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `unit_producer`
 
@@ -1143,7 +1183,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'unit' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `value`
 
@@ -1159,7 +1199,7 @@ Axis 'what' of Gebäudeanzahl. null unless what_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Was ist diese Zahl? Antworte mit der Bezeichnung, die der Plan genau dieser Zahl gibt, Zeichen für Zeichen: in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz, etwa „Theoretische Geothermiepotenziale“ oder „Wärmebedarf“. Die Bezeichnung einer anderen Zahl derselben Stelle, etwa einer Summe darüber, ist keine Antwort. Nennt die Stelle keine Bezeichnung, sagt der Plan es nicht.
+> Welche Bezeichnung gibt der Plan genau dieser Zahl, in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz?
 
 ### `what_link_quote`
 
@@ -1168,6 +1208,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `what_link_source`
 
 Which source 'what_link_quote' was found in.
+
+### `what_means`
+
+The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `what_producer`
 
@@ -1199,7 +1243,7 @@ How the coordinate 'what' ended. Always present: a missing key and a refused rea
 
 ### `what_window`
 
-[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'what' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `year`
 
@@ -1207,7 +1251,7 @@ Axis 'year' of Gebäudeanzahl. null unless year_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Gilt sie für einen Zeitraum mehrerer Jahre („im Mittel der Jahre 2019 bis 2021“), ist "value" sein erstes Jahr und "until" sein letztes.
+> Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt diese Zahl?
 
 - `datatype`: `xsd:integer`
 - `label`: `has scenario year value`
@@ -1227,6 +1271,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `year_link_source`
 
 Which source 'year_link_quote' was found in.
+
+### `year_means`
+
+The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `year_producer`
 
@@ -1258,7 +1306,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'year' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -1277,7 +1325,7 @@ Axis 'aggregation' of Emissionen. A closed list; an entry beginning 'out:' is a 
 
 The prompt's own wording:
 
-> Wie ist der Wert über Zeit oder Raum zusammengefasst? Wähle den Eintrag nach seiner Bedeutung ("means"), nicht nach einem Wort der Stelle. Der Normalfall ist "integral", eine Jahressumme.
+> Wie fasst diese Zahl Werte über Zeit oder Raum zusammen?
 
 <details><summary>What it may answer (5)</summary>
 
@@ -1285,7 +1333,7 @@ The prompt's own wording:
   - also written: Mittelwert, Durchschnitt
 - **instantaneous** → `OEO_00140069` — Wert, der exakt zu einem zeitlichen Nullpunkt gemessen oder modelliert wird.
   - also written: Momentanwert zu einem Zeitpunkt
-- **integral** → `OEO_00140070` — Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets.
+- **integral** → `OEO_00140070` — Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets, etwa eine Jahressumme, der Normalfall.
   - also written: Summe oder Integral über einen Zeitraum oder ein Gebiet, Jahreswert, Jahressumme
 - **maximum** → `OEO_00140073` — Höchster Wert innerhalb einer Menge von Datenwerten in einem Bereich.
   - also written: Maximum, Spitzenwert, Spitzenlast
@@ -1311,6 +1359,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `aggregation_link_source`
 
 Which source 'aggregation_link_quote' was found in.
+
+### `aggregation_means`
+
+The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `aggregation_producer`
 
@@ -1342,7 +1394,11 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'aggregation' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+### `at`
+
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `carrier`
 
@@ -1350,10 +1406,7 @@ Axis 'carrier' of Emissionen. A closed list; an entry beginning 'out:' is a deli
 
 The prompt's own wording:
 
-> Welcher Energieträger? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift.
-Beschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt "Summe", solange die Stelle nicht nach Energieträgern aufteilt.
-Ist die eigene Tabelle oder der eigene Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet), ist die Antwort "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
-"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Gebäudetyp".
+> Für welchen Energieträger gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Energieträgern aufteilt, wonach teilt die Stelle stattdessen auf?
 
 <details><summary>What it may answer (137)</summary>
 
@@ -1454,7 +1507,7 @@ The production of other coal gases (i.e. coke oven gas, blast furnace gas and ox
 - **Steinkohle** → `OEO_00000204` — Steinkohle: Kohle mit einem Brennwert über 23 865 kJ/kg und einer mittleren Vitrinitreflexion von mindestens 0,6.
 - **Strom** → `OEO_00000139` — Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
-- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+- **Summe** → `out:total` — Die Zahl gilt für alle Energieträger zusammen: ihre Zeile oder Spalte summiert ausdrücklich über die Energieträger, oder ihre eigene Tabelle oder ihr Satz ist gar nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet). Der Wärmebedarf der Gebäude eines Gebiets bleibt Summe, solange die Stelle nicht nach Energieträgern aufteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Synthesegas** → `OEO_00140160` — Syngas is a gas mixture consisting primarily of hydrogen, carbon monoxide, and very often carbon dioxide, that can be used as fuel.
 - **Thorium** → `OEO_00140092` — Thorium is a portion of matter with the chemical formula Th. It has a solid normal state of matter.
@@ -1546,6 +1599,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'carrier_link_quote' was found in.
 
+### `carrier_means`
+
+The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `carrier_producer`
 
 Who re-read 'carrier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -1576,7 +1633,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'carrier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `catalogue`
 
@@ -1620,6 +1677,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `parameter_producer`
 
 Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -1650,7 +1711,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
@@ -1660,7 +1721,7 @@ Axis 'qualifier' of Emissionen. A closed list; an entry beginning 'out:' is a de
 
 The prompt's own wording:
 
-> Steht direkt bei dieser Zahl ein Wort, das sagt, wie genau sie gilt? „ca. 8,8 GWh“ ist ungefähr, „bis zu 6.200 MWh“ höchstens, „mehr als 4 %“ mindestens; in „zwischen 60 und 100 MWh“ ist 60 das untere und 100 das obere Ende einer Spanne. "value_raw" ist dieses Wort des Plans, Zeichen für Zeichen. Steht kein solches Wort bei der Zahl, ist die Antwort out:unstated.
+> Welches Wort direkt bei dieser Zahl sagt, wie genau sie gilt, etwa „ca.“, „bis zu“, „mehr als“ oder „zwischen“?
 
 <details><summary>What it may answer (5)</summary>
 
@@ -1684,6 +1745,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `qualifier_link_source`
 
 Which source 'qualifier_link_quote' was found in.
+
+### `qualifier_means`
+
+The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `qualifier_producer`
 
@@ -1715,7 +1780,7 @@ How the coordinate 'qualifier' ended. Always present: a missing key and a refuse
 
 ### `qualifier_window`
 
-[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'qualifier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quantity`
 
@@ -1723,18 +1788,13 @@ Axis 'quantity' of Emissionen. A closed list; an entry beginning 'out:' is a del
 
 The prompt's own wording:
 
-> Welche Größe ist diese Zahl? Wichtigste Entscheidung: bestimmt die Klasse im Graphen.
-Nach der Definition der Klasse entscheiden, nicht nach Wortähnlichkeit.
-"CO2 emission value" = reines Kohlendioxid; "carbon dioxide equivalent quantity value" = alle Treibhausgase in CO2-Äquivalenten.
-Einheit verrät es meist: t CO2 gegen t CO2-Äq.
-Sagt der Plan anderswo, Emissionen seien in CO2-Äquivalenten angegeben ("Die zugehörigen Treibhausgasemissionen - angegeben in Tonnen CO2-Äquivalenten - sind gesondert aufgeführt"), gilt das auch für eine Tabelle mit Kopfzeile nur "CO2-Emissionen": Methodiksatz schlägt Kopfzeile.
-Kumulierte Emission über mehrere Jahre, vermiedene oder eingesparte Emission, abgeschiedene Menge: Gegenteil einer im Bilanzjahr ausgestoßenen, eigene Einträge.
+> Welche Größe ist diese Zahl?
 
 <details><summary>What it may answer (11)</summary>
 
 - **Anteil in Prozent** → `out:share` — Ein Anteil in Prozent, keine Menge.
   - also written: Anteil an den Gesamtemissionen, EE-Anteil, Anteil erneuerbarer Energien
-- **CO2 emission value** → `OEO_00340066` — CO2-Emissionswert: Quantifiziert eine CO2-Emissionsrate mit Masseneinheit.
+- **CO2 emission value** → `OEO_00340066` — CO2-Emissionswert: Quantifiziert eine CO2-Emissionsrate mit Masseneinheit, nur Kohlendioxid, etwa in t CO2.
   - also written: CO2-Emissionen, Kohlendioxidemissionen, CO2-Ausstoß
 - **Emission je Kopf oder je Einwohner** → `out:specific` — Ein Wert je Fläche, Kopf oder Gebäude, keine Gesamtmenge.
 - **Emissionsfaktor** → `OEO_00340063` — An emission factor value is a fraction value that quantifies an emission factor as quotient of the emissions or removals of a gas per unit activity.
@@ -1742,7 +1802,7 @@ Kumulierte Emission über mehrere Jahre, vermiedene oder eingesparte Emission, a
 - **Treibhausgasemissionswert** → `OEO_00340065` — A greenhouse gas emission value is an emission value that quantifies a greenhouse gas emission rate and has a mass unit.
 - **abgeschiedene oder gespeicherte Emission** → `out:captured` — Eine abgeschiedene oder gespeicherte Menge, das Gegenteil einer ausgestoßenen.
   - also written: CO2-Abscheidung, CCS, CCU, Senke
-- **carbon dioxide equivalent quantity value** → `OEO_00140083` — CO2-Äquivalent: Quantifiziert die kombinierte Wirkung aller Treibhausgase als CO2-Äquivalent.
+- **carbon dioxide equivalent quantity value** → `OEO_00140083` — CO2-Äquivalent: Quantifiziert die kombinierte Wirkung aller Treibhausgase als CO2-Äquivalent, etwa in t CO2-Äq., auch wo eine Festlegung des Plans seine Emissionen in CO2-Äquivalenten angibt und die Kopfzeile nur CO2 nennt.
   - also written: Treibhausgasemissionen, THG-Emissionen, CO2-Äquivalente, CO2e-Emissionen, THG, CO2e, Treibhausgas
 - **etwas anderes** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
 - **kumulierte Emission über mehrere Jahre** → `out:cumulative` — Über mehrere Jahre aufsummiert, keine Jahresmenge.
@@ -1767,6 +1827,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `quantity_link_source`
 
 Which source 'quantity_link_quote' was found in.
+
+### `quantity_means`
+
+The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `quantity_producer`
 
@@ -1798,7 +1862,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'quantity' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quote`
 
@@ -1822,15 +1886,15 @@ Axis 'scenario' of Emissionen. A closed list; an entry beginning 'out:' is a del
 
 The prompt's own wording:
 
-> Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, "bislang", "derzeit", "wird verbraucht", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie "wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt ("bei erhöhter Energieeinsparung", "Umsetzungsszenario 2", "Transformationspfad"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das "out:unstated" und keine Schätzung.
+> Auf welchen Zustand des Plans bezieht sich diese Zahl, auf seinen Bestand, ein Trend- oder ein Zielszenario?
 
 <details><summary>What it may answer (3)</summary>
 
-- **Bestand** → `status_quo` — Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr.
+- **Bestand** → `status_quo` — Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr: Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, „bislang“, „derzeit“, „wird verbraucht“, oder ein Jahr vor der Erstellung des Plans im Titel.
   - also written: Ist-Zustand, Bilanzjahr, Status quo, Bestandsanalyse, Basisjahr, Ist-Zustandsanalyse, Ist-Analyse, Erstellungsjahr
 - **Trendszenario** → `trend` — Die Fortschreibung ohne zusätzliche Maßnahmen.
   - also written: Referenzszenario, Weiter-wie-bisher, Business as usual
-- **Zielszenario** → `target` — Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will.
+- **Zielszenario** → `target` — Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will, auch unter einem eigenen Namen des Plans („bei erhöhter Energieeinsparung“, „Umsetzungsszenario 2“, „Transformationspfad“).
   - also written: Zielbild, Zielwert, Zielpfad, Umsetzungsszenario, Transformationspfad
 
 </details>
@@ -1852,6 +1916,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_means`
+
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `scenario_producer`
 
@@ -1883,7 +1951,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `sector`
 
@@ -1891,11 +1959,7 @@ Axis 'sector' of Emissionen. A closed list; an entry beginning 'out:' is a delib
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle.
-Ein Gebiet ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
-"Summe" gilt für alle Verbraucher zusammen: eine Zeile oder Spalte, die ausdrücklich über alle Sektoren summiert, ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"), oder eine Zahl, deren eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt ist, nur nach anderem (Energieträger, Gebiet); dann zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
-Die Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
-"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Energieträger".
+> Für welchen Verbrauchssektor gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Sektoren aufteilt, wonach teilt die Stelle stattdessen auf?
 
 <details><summary>What it may answer (17)</summary>
 
@@ -1916,7 +1980,7 @@ Die Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.7
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere
 - **Stromsektor** → `OEO_00000145` — An electricity sector is a transformation sector that covers electricity generation and transport of electrical energy to consumers of electrical energy.
-- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+- **Summe** → `out:total` — Die Zahl gilt für alle Verbraucher zusammen: ihre Zeile oder Spalte summiert ausdrücklich über die Sektoren, sie heißt ausdrücklich Gesamtverbrauch oder Gesamtbedarf aller Verbraucher, oder ihre eigene Tabelle oder ihr Satz ist gar nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet). Ein Gebiet („Gesamtstadt“, „Stadtgebiet“) und die Gesamtleistung von Anlagen sind keine Summe über Sektoren.
   - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
 - **Teilsektor** → `OEO_00010464` — A subsector is a sector that is a part of an other sector.
 - **Verkehr** → `OEO_00000422` — Sektor für den Transport von Personen und Gütern.
@@ -1944,6 +2008,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `sector_link_source`
 
 Which source 'sector_link_quote' was found in.
+
+### `sector_means`
+
+The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `sector_producer`
 
@@ -1975,7 +2043,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'sector' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `spatial_scope`
 
@@ -1983,14 +2051,13 @@ Axis 'spatial_scope' of Emissionen. A closed list; an entry beginning 'out:' is 
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich die Zahl?
-Teilgebiet: sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.
+> Für welches Gebiet gilt diese Zahl, für die ganze Gemeinde oder für ein Teilgebiet mit seinem Namen?
 
 <details><summary>What it may answer (2)</summary>
 
 - **Gemeindegebiet** → `municipality` — Das ganze Gemeinde- oder Stadtgebiet des Plans.
   - also written: Gesamtstadt, Stadtgebiet, gesamtes Plangebiet, Gemeinde insgesamt
-- **Teilgebiet** → `sub_area` — Ein benannter Teil davon: ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet.
+- **Teilgebiet** → `sub_area` — Ein benannter Teil davon, ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet, mit seinem Namen.
   - also written: Fokusgebiet, Quartier, Stadtteil, Baublock, Wärmenetzgebiet, Ortsteil
 
 </details>
@@ -2011,6 +2078,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `spatial_scope_link_source`
 
 Which source 'spatial_scope_link_quote' was found in.
+
+### `spatial_scope_means`
+
+The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `spatial_scope_producer`
 
@@ -2042,7 +2113,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'spatial_scope' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `subject`
 
@@ -2050,7 +2121,7 @@ Axis 'subject' of Emissionen. null unless subject_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist der Eintrag ihrer eigenen Zeile oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit diesem Eintrag wörtlich. Der Name einer Spalte oder einer Zeilengruppe, etwa "Energieträger", "Sektor" oder "Name des Quartiers", sagt nur, was dort steht, und ist keine Antwort. Ein Energieträger, ein Sektor oder ein Gebiet gehört in sein eigenes Feld. Unterscheidet sie nichts davon, sagt der Plan es nicht.
+> Welcher Eintrag ihrer eigenen Zeile oder ihres Satzes unterscheidet diese Zahl von den Zahlen neben ihr, etwa eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe oder eine Variante, und ist weder Energieträger, Sektor, Jahr, Gebiet noch der Name einer Spalte?
 
 ### `subject_link_quote`
 
@@ -2059,6 +2130,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `subject_link_source`
 
 Which source 'subject_link_quote' was found in.
+
+### `subject_means`
+
+The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `subject_producer`
 
@@ -2090,7 +2165,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'subject' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `technology`
 
@@ -2098,12 +2173,7 @@ Axis 'technology' of Emissionen. A closed list; an entry beginning 'out:' is a d
 
 The prompt's own wording:
 
-> Welche Wärmeerzeugungstechnologie?
-Nur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa "Wärmepumpen", "Gaskessel", "Ölheizungen".
-Energieträger ist keine Technologie: "Erdgas" allein = Träger, "Gasheizung" = Technologie.
-Eigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
-"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.
-"known" unter der Zeile sagt, was die Zahl schon ist.
+> Welcher Wärmeerzeugungstechnologie ordnet der Plan diese Zahl ausdrücklich zu, oder, wo ihre Tabelle oder ihr Satz nicht nach Technologien aufteilt, wonach teilt die Stelle stattdessen auf?
 
 <details><summary>What it may answer (12)</summary>
 
@@ -2120,7 +2190,7 @@ Eigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: "Summe"; zi
   - also written: Solarthermieanlage, solarthermische Anlage
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Wärmeerzeuger
-- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+- **Summe** → `out:total` — Die Zahl gilt für alle Wärmeerzeuger zusammen: ihre Zeile oder Spalte summiert ausdrücklich über die Technologien, oder ihre eigene Tabelle oder ihr Satz ist gar nicht nach Heiztechniken aufgeteilt, nur nach anderem. Ein Energieträger allein („Erdgas“) ist keine Technologie, eine „Gasheizung“ schon.
   - also written: Gesamt, insgesamt, alle Technologien
 - **Verbrennungsbasierte Heizung** → `OEO_00020488` — A combustion based heating technology is a heat generation technology that describes how to combine combustion-based heaters, heat gain processes, combustion fuels and energy in a specific way.
 - **Wasserstoffheizung** → `OEO_00020492` — Wasserstoffheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Wasserstoff.
@@ -2149,6 +2219,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `technology_link_source`
 
 Which source 'technology_link_quote' was found in.
+
+### `technology_means`
+
+The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `technology_producer`
 
@@ -2180,7 +2254,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'technology' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -2192,7 +2266,7 @@ The unit: one entry of units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/
 
 The prompt's own wording:
 
-> Welche Einheit hat diese Zahl? Schreib in "value_raw" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in "value" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: "Gigawattstunden" meint GWh, "t CO₂-Äq." t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" kWh und GWh, "1.700 kg CO2" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person) oder je Kilowattstunde (g CO2/kWh), ist "value" "", und "value_raw" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
+> Welche Einheit druckt der Plan für diese Zahl, und sagt die Stelle, dass die Menge je Jahr gilt?
 
 <details><summary>What it may answer (68)</summary>
 
@@ -2275,6 +2349,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'unit_link_quote' was found in.
 
+### `unit_means`
+
+The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `unit_producer`
 
 Who re-read 'unit': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -2305,7 +2383,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'unit' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `value`
 
@@ -2321,7 +2399,7 @@ Axis 'what' of Emissionen. null unless what_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Was ist diese Zahl? Antworte mit der Bezeichnung, die der Plan genau dieser Zahl gibt, Zeichen für Zeichen: in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz, etwa „Theoretische Geothermiepotenziale“ oder „Wärmebedarf“. Die Bezeichnung einer anderen Zahl derselben Stelle, etwa einer Summe darüber, ist keine Antwort. Nennt die Stelle keine Bezeichnung, sagt der Plan es nicht.
+> Welche Bezeichnung gibt der Plan genau dieser Zahl, in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz?
 
 ### `what_link_quote`
 
@@ -2330,6 +2408,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `what_link_source`
 
 Which source 'what_link_quote' was found in.
+
+### `what_means`
+
+The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `what_producer`
 
@@ -2361,7 +2443,7 @@ How the coordinate 'what' ended. Always present: a missing key and a refused rea
 
 ### `what_window`
 
-[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'what' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `year`
 
@@ -2369,7 +2451,7 @@ Axis 'year' of Emissionen. null unless year_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Gilt sie für einen Zeitraum mehrerer Jahre („im Mittel der Jahre 2019 bis 2021“), ist "value" sein erstes Jahr und "until" sein letztes.
+> Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt diese Zahl?
 
 - `datatype`: `xsd:integer`
 - `label`: `has scenario year value`
@@ -2389,6 +2471,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `year_link_source`
 
 Which source 'year_link_quote' was found in.
+
+### `year_means`
+
+The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `year_producer`
 
@@ -2420,7 +2506,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'year' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -2439,7 +2525,7 @@ Axis 'aggregation' of Energieverbrauch. A closed list; an entry beginning 'out:'
 
 The prompt's own wording:
 
-> Wie ist der Wert über Zeit oder Raum zusammengefasst? Wähle den Eintrag nach seiner Bedeutung ("means"), nicht nach einem Wort der Stelle. Der Normalfall ist "integral", eine Jahressumme.
+> Wie fasst diese Zahl Werte über Zeit oder Raum zusammen?
 
 <details><summary>What it may answer (5)</summary>
 
@@ -2447,7 +2533,7 @@ The prompt's own wording:
   - also written: Mittelwert, Durchschnitt
 - **instantaneous** → `OEO_00140069` — Wert, der exakt zu einem zeitlichen Nullpunkt gemessen oder modelliert wird.
   - also written: Momentanwert zu einem Zeitpunkt
-- **integral** → `OEO_00140070` — Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets.
+- **integral** → `OEO_00140070` — Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets, etwa eine Jahressumme, der Normalfall.
   - also written: Summe oder Integral über einen Zeitraum oder ein Gebiet, Jahreswert, Jahressumme
 - **maximum** → `OEO_00140073` — Höchster Wert innerhalb einer Menge von Datenwerten in einem Bereich.
   - also written: Maximum, Spitzenwert, Spitzenlast
@@ -2473,6 +2559,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `aggregation_link_source`
 
 Which source 'aggregation_link_quote' was found in.
+
+### `aggregation_means`
+
+The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `aggregation_producer`
 
@@ -2504,7 +2594,11 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'aggregation' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+### `at`
+
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `carrier`
 
@@ -2512,10 +2606,7 @@ Axis 'carrier' of Energieverbrauch. A closed list; an entry beginning 'out:' is 
 
 The prompt's own wording:
 
-> Welcher Energieträger? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift.
-Beschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt "Summe", solange die Stelle nicht nach Energieträgern aufteilt.
-Ist die eigene Tabelle oder der eigene Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet), ist die Antwort "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
-"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Gebäudetyp".
+> Für welchen Energieträger gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Energieträgern aufteilt, wonach teilt die Stelle stattdessen auf?
 
 <details><summary>What it may answer (137)</summary>
 
@@ -2616,7 +2707,7 @@ The production of other coal gases (i.e. coke oven gas, blast furnace gas and ox
 - **Steinkohle** → `OEO_00000204` — Steinkohle: Kohle mit einem Brennwert über 23 865 kJ/kg und einer mittleren Vitrinitreflexion von mindestens 0,6.
 - **Strom** → `OEO_00000139` — Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
-- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+- **Summe** → `out:total` — Die Zahl gilt für alle Energieträger zusammen: ihre Zeile oder Spalte summiert ausdrücklich über die Energieträger, oder ihre eigene Tabelle oder ihr Satz ist gar nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet). Der Wärmebedarf der Gebäude eines Gebiets bleibt Summe, solange die Stelle nicht nach Energieträgern aufteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Synthesegas** → `OEO_00140160` — Syngas is a gas mixture consisting primarily of hydrogen, carbon monoxide, and very often carbon dioxide, that can be used as fuel.
 - **Thorium** → `OEO_00140092` — Thorium is a portion of matter with the chemical formula Th. It has a solid normal state of matter.
@@ -2708,6 +2799,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'carrier_link_quote' was found in.
 
+### `carrier_means`
+
+The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `carrier_producer`
 
 Who re-read 'carrier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -2738,7 +2833,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'carrier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `catalogue`
 
@@ -2782,6 +2877,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `parameter_producer`
 
 Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -2812,7 +2911,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
@@ -2822,7 +2921,7 @@ Axis 'qualifier' of Energieverbrauch. A closed list; an entry beginning 'out:' i
 
 The prompt's own wording:
 
-> Steht direkt bei dieser Zahl ein Wort, das sagt, wie genau sie gilt? „ca. 8,8 GWh“ ist ungefähr, „bis zu 6.200 MWh“ höchstens, „mehr als 4 %“ mindestens; in „zwischen 60 und 100 MWh“ ist 60 das untere und 100 das obere Ende einer Spanne. "value_raw" ist dieses Wort des Plans, Zeichen für Zeichen. Steht kein solches Wort bei der Zahl, ist die Antwort out:unstated.
+> Welches Wort direkt bei dieser Zahl sagt, wie genau sie gilt, etwa „ca.“, „bis zu“, „mehr als“ oder „zwischen“?
 
 <details><summary>What it may answer (5)</summary>
 
@@ -2846,6 +2945,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `qualifier_link_source`
 
 Which source 'qualifier_link_quote' was found in.
+
+### `qualifier_means`
+
+The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `qualifier_producer`
 
@@ -2877,7 +2980,7 @@ How the coordinate 'qualifier' ended. Always present: a missing key and a refuse
 
 ### `qualifier_window`
 
-[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'qualifier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quantity`
 
@@ -2885,11 +2988,7 @@ Axis 'quantity' of Energieverbrauch. A closed list; an entry beginning 'out:' is
 
 The prompt's own wording:
 
-> Welche Größe ist diese Zahl? Wichtigste Entscheidung: bestimmt die Klasse im Graphen.
-Nach der Definition der Klasse entscheiden, nicht nach Wortähnlichkeit; Bezeichnung in Zeile, Spaltenkopf, Blocküberschrift oder Titel der eigenen Tabelle.
-"final energy consumption value" = an Endverbraucher gelieferte, dort verbrauchte Energie; BEIDES, Verbrauch und Bedarf (im Szenario ist alles gerechnet, die Definition spricht nicht von Messung): Endenergieverbrauch, Endenergiebedarf, Wärmebedarf, zu deckender Wärmebedarf.
-"primary energy consumption value" = Bilanz vor der Umwandlung.
-Jede Zahl mit einer Energieeinheit ist mindestens "energy value"; wähle die genaueste Klasse, deren Definition die Stelle für diese Zahl trifft.
+> Welche Größe ist diese Zahl?
 
 <details><summary>What it may answer (29)</summary>
 
@@ -2913,12 +3012,12 @@ Jede Zahl mit einer Energieeinheit ist mindestens "energy value"; wähle die gen
 - **economic stock potential** → `OEO_00140065` — Wirtschaftliches Bestandspotenzial: Der Anteil des technologischen Potenzials, der wirtschaftlich nutzbar ist.
 - **elektrische Energiemenge** → `OEO_00020204` — An electrical energy amount value is an energy amount value that measures a quantity of electrical energy.
 - **etwas anderes** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
-- **final energy consumption value** → `OEO_00050016` — Endenergieverbrauch: Menge der an Endverbraucher gelieferten und von ihnen verbrauchten Energie.
+- **final energy consumption value** → `OEO_00050016` — Endenergieverbrauch oder Endenergiebedarf: Menge der an Endverbraucher gelieferten und von ihnen verbrauchten Energie, gemessen oder gerechnet, auch ein Wärmebedarf.
   - also written: Endenergieverbrauch, Endenergie, Endenergiebedarf, Wärmeverbrauch, Wärmebedarf, Fernwärmeverbrauch, Stromverbrauch, Erdgasverbrauch, zu deckender Wärmebedarf, Jahresendenergiebedarf, Endenergiebedarf für Wärme
 - **flow potential** → `OEO_00140056` — Flusspotenzial: Potenzial eines Prozessinputs oder -outputs pro Zeiteinheit.
 - **potential** → `OEO_00290000` — Potenzial: Ein Maximalwert, der eine Obergrenze in einem Referenzgebiet beschreibt.
   - also written: Potenzial, Ausbaupotenzial, Gesamtpotenzial
-- **primary energy consumption value** → `OEO_00050018` — Primärenergieverbrauch: Gesamter Energieverbrauch in einer Region ohne nicht-energetische Nutzung.
+- **primary energy consumption value** → `OEO_00050018` — Primärenergieverbrauch: Gesamter Energieverbrauch in einer Region ohne nicht-energetische Nutzung, die Bilanz vor der Umwandlung.
   - also written: Primärenergieverbrauch, Primärenergie
 - **spezifischer Wert je Kopf, Einwohner oder Gebäude** → `out:specific` — Ein Wert je Kopf, Einwohner oder Gebäude, keine Gesamtmenge.
 - **stock potential** → `OEO_00140062` — Bestandspotenzial: Potenzial des Bestands einer Quelle oder Senke.
@@ -2950,6 +3049,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'quantity_link_quote' was found in.
 
+### `quantity_means`
+
+The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `quantity_producer`
 
 Who re-read 'quantity': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -2980,7 +3083,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'quantity' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quote`
 
@@ -3004,15 +3107,15 @@ Axis 'scenario' of Energieverbrauch. A closed list; an entry beginning 'out:' is
 
 The prompt's own wording:
 
-> Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, "bislang", "derzeit", "wird verbraucht", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie "wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt ("bei erhöhter Energieeinsparung", "Umsetzungsszenario 2", "Transformationspfad"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das "out:unstated" und keine Schätzung.
+> Auf welchen Zustand des Plans bezieht sich diese Zahl, auf seinen Bestand, ein Trend- oder ein Zielszenario?
 
 <details><summary>What it may answer (3)</summary>
 
-- **Bestand** → `status_quo` — Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr.
+- **Bestand** → `status_quo` — Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr: Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, „bislang“, „derzeit“, „wird verbraucht“, oder ein Jahr vor der Erstellung des Plans im Titel.
   - also written: Ist-Zustand, Bilanzjahr, Status quo, Bestandsanalyse, Basisjahr, Ist-Zustandsanalyse, Ist-Analyse, Erstellungsjahr
 - **Trendszenario** → `trend` — Die Fortschreibung ohne zusätzliche Maßnahmen.
   - also written: Referenzszenario, Weiter-wie-bisher, Business as usual
-- **Zielszenario** → `target` — Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will.
+- **Zielszenario** → `target` — Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will, auch unter einem eigenen Namen des Plans („bei erhöhter Energieeinsparung“, „Umsetzungsszenario 2“, „Transformationspfad“).
   - also written: Zielbild, Zielwert, Zielpfad, Umsetzungsszenario, Transformationspfad
 
 </details>
@@ -3034,6 +3137,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_means`
+
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `scenario_producer`
 
@@ -3065,7 +3172,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `sector`
 
@@ -3073,11 +3180,7 @@ Axis 'sector' of Energieverbrauch. A closed list; an entry beginning 'out:' is a
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle.
-Ein Gebiet ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
-"Summe" gilt für alle Verbraucher zusammen: eine Zeile oder Spalte, die ausdrücklich über alle Sektoren summiert, ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"), oder eine Zahl, deren eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt ist, nur nach anderem (Energieträger, Gebiet); dann zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
-Die Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
-"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Energieträger".
+> Für welchen Verbrauchssektor gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Sektoren aufteilt, wonach teilt die Stelle stattdessen auf?
 
 <details><summary>What it may answer (17)</summary>
 
@@ -3098,7 +3201,7 @@ Die Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.7
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere
 - **Stromsektor** → `OEO_00000145` — An electricity sector is a transformation sector that covers electricity generation and transport of electrical energy to consumers of electrical energy.
-- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+- **Summe** → `out:total` — Die Zahl gilt für alle Verbraucher zusammen: ihre Zeile oder Spalte summiert ausdrücklich über die Sektoren, sie heißt ausdrücklich Gesamtverbrauch oder Gesamtbedarf aller Verbraucher, oder ihre eigene Tabelle oder ihr Satz ist gar nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet). Ein Gebiet („Gesamtstadt“, „Stadtgebiet“) und die Gesamtleistung von Anlagen sind keine Summe über Sektoren.
   - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
 - **Teilsektor** → `OEO_00010464` — A subsector is a sector that is a part of an other sector.
 - **Verkehr** → `OEO_00000422` — Sektor für den Transport von Personen und Gütern.
@@ -3126,6 +3229,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `sector_link_source`
 
 Which source 'sector_link_quote' was found in.
+
+### `sector_means`
+
+The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `sector_producer`
 
@@ -3157,7 +3264,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'sector' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `spatial_scope`
 
@@ -3165,14 +3272,13 @@ Axis 'spatial_scope' of Energieverbrauch. A closed list; an entry beginning 'out
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich die Zahl?
-Teilgebiet: sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.
+> Für welches Gebiet gilt diese Zahl, für die ganze Gemeinde oder für ein Teilgebiet mit seinem Namen?
 
 <details><summary>What it may answer (2)</summary>
 
 - **Gemeindegebiet** → `municipality` — Das ganze Gemeinde- oder Stadtgebiet des Plans.
   - also written: Gesamtstadt, Stadtgebiet, gesamtes Plangebiet, Gemeinde insgesamt
-- **Teilgebiet** → `sub_area` — Ein benannter Teil davon: ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet.
+- **Teilgebiet** → `sub_area` — Ein benannter Teil davon, ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet, mit seinem Namen.
   - also written: Fokusgebiet, Quartier, Stadtteil, Baublock, Wärmenetzgebiet, Ortsteil
 
 </details>
@@ -3193,6 +3299,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `spatial_scope_link_source`
 
 Which source 'spatial_scope_link_quote' was found in.
+
+### `spatial_scope_means`
+
+The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `spatial_scope_producer`
 
@@ -3224,7 +3334,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'spatial_scope' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `subject`
 
@@ -3232,7 +3342,7 @@ Axis 'subject' of Energieverbrauch. null unless subject_state is 'read' or 'deri
 
 The prompt's own wording:
 
-> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist der Eintrag ihrer eigenen Zeile oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit diesem Eintrag wörtlich. Der Name einer Spalte oder einer Zeilengruppe, etwa "Energieträger", "Sektor" oder "Name des Quartiers", sagt nur, was dort steht, und ist keine Antwort. Ein Energieträger, ein Sektor oder ein Gebiet gehört in sein eigenes Feld. Unterscheidet sie nichts davon, sagt der Plan es nicht.
+> Welcher Eintrag ihrer eigenen Zeile oder ihres Satzes unterscheidet diese Zahl von den Zahlen neben ihr, etwa eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe oder eine Variante, und ist weder Energieträger, Sektor, Jahr, Gebiet noch der Name einer Spalte?
 
 ### `subject_link_quote`
 
@@ -3241,6 +3351,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `subject_link_source`
 
 Which source 'subject_link_quote' was found in.
+
+### `subject_means`
+
+The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `subject_producer`
 
@@ -3272,7 +3386,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'subject' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `technology`
 
@@ -3280,12 +3394,7 @@ Axis 'technology' of Energieverbrauch. A closed list; an entry beginning 'out:' 
 
 The prompt's own wording:
 
-> Welche Wärmeerzeugungstechnologie?
-Nur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa "Wärmepumpen", "Gaskessel", "Ölheizungen".
-Energieträger ist keine Technologie: "Erdgas" allein = Träger, "Gasheizung" = Technologie.
-Eigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
-"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.
-"known" unter der Zeile sagt, was die Zahl schon ist.
+> Welcher Wärmeerzeugungstechnologie ordnet der Plan diese Zahl ausdrücklich zu, oder, wo ihre Tabelle oder ihr Satz nicht nach Technologien aufteilt, wonach teilt die Stelle stattdessen auf?
 
 <details><summary>What it may answer (12)</summary>
 
@@ -3302,7 +3411,7 @@ Eigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: "Summe"; zi
   - also written: Solarthermieanlage, solarthermische Anlage
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Wärmeerzeuger
-- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+- **Summe** → `out:total` — Die Zahl gilt für alle Wärmeerzeuger zusammen: ihre Zeile oder Spalte summiert ausdrücklich über die Technologien, oder ihre eigene Tabelle oder ihr Satz ist gar nicht nach Heiztechniken aufgeteilt, nur nach anderem. Ein Energieträger allein („Erdgas“) ist keine Technologie, eine „Gasheizung“ schon.
   - also written: Gesamt, insgesamt, alle Technologien
 - **Verbrennungsbasierte Heizung** → `OEO_00020488` — A combustion based heating technology is a heat generation technology that describes how to combine combustion-based heaters, heat gain processes, combustion fuels and energy in a specific way.
 - **Wasserstoffheizung** → `OEO_00020492` — Wasserstoffheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Wasserstoff.
@@ -3331,6 +3440,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `technology_link_source`
 
 Which source 'technology_link_quote' was found in.
+
+### `technology_means`
+
+The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `technology_producer`
 
@@ -3362,7 +3475,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'technology' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -3374,7 +3487,7 @@ The unit: one entry of units_accepted (GJ, GJ/a, GWh, GWh/a, MJ, MJ/a, MWh, MWh/
 
 The prompt's own wording:
 
-> Welche Einheit hat diese Zahl? Schreib in "value_raw" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in "value" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: "Gigawattstunden" meint GWh, "t CO₂-Äq." t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" kWh und GWh, "1.700 kg CO2" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person) oder je Kilowattstunde (g CO2/kWh), ist "value" "", und "value_raw" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
+> Welche Einheit druckt der Plan für diese Zahl, und sagt die Stelle, dass die Menge je Jahr gilt?
 
 <details><summary>What it may answer (22)</summary>
 
@@ -3411,6 +3524,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'unit_link_quote' was found in.
 
+### `unit_means`
+
+The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `unit_producer`
 
 Who re-read 'unit': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -3441,7 +3558,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'unit' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `value`
 
@@ -3457,7 +3574,7 @@ Axis 'what' of Energieverbrauch. null unless what_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Was ist diese Zahl? Antworte mit der Bezeichnung, die der Plan genau dieser Zahl gibt, Zeichen für Zeichen: in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz, etwa „Theoretische Geothermiepotenziale“ oder „Wärmebedarf“. Die Bezeichnung einer anderen Zahl derselben Stelle, etwa einer Summe darüber, ist keine Antwort. Nennt die Stelle keine Bezeichnung, sagt der Plan es nicht.
+> Welche Bezeichnung gibt der Plan genau dieser Zahl, in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz?
 
 ### `what_link_quote`
 
@@ -3466,6 +3583,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `what_link_source`
 
 Which source 'what_link_quote' was found in.
+
+### `what_means`
+
+The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `what_producer`
 
@@ -3497,7 +3618,7 @@ How the coordinate 'what' ended. Always present: a missing key and a refused rea
 
 ### `what_window`
 
-[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'what' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `year`
 
@@ -3505,7 +3626,7 @@ Axis 'year' of Energieverbrauch. null unless year_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Gilt sie für einen Zeitraum mehrerer Jahre („im Mittel der Jahre 2019 bis 2021“), ist "value" sein erstes Jahr und "until" sein letztes.
+> Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt diese Zahl?
 
 - `datatype`: `xsd:integer`
 - `label`: `has scenario year value`
@@ -3525,6 +3646,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `year_link_source`
 
 Which source 'year_link_quote' was found in.
+
+### `year_means`
+
+The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `year_producer`
 
@@ -3556,7 +3681,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'year' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -3575,17 +3700,17 @@ Axis 'aggregation' of Leistung. A closed list; an entry beginning 'out:' is a de
 
 The prompt's own wording:
 
-> Wie ist der Wert über Zeit oder Raum zusammengefasst? Bei Leistung eine echte Frage, keine Formsache. Wähle den Eintrag nach seiner Bedeutung ("means"), nicht nach einem Wort der Stelle: eine Spitzenlast oder ein Auslegungsfall ist ein Höchstwert, die Leistung mehrerer Anlagen oder eines Gebiets zusammen eine Summe, eine mittlere Leistung ein Mittel.
+> Wie fasst diese Leistung Werte über Zeit oder Raum zusammen?
 
 <details><summary>What it may answer (5)</summary>
 
-- **arithmetic mean** → `OEO_00140071` — Durchschnittswert, berechnet als arithmetisches Mittel über Datensätze.
+- **arithmetic mean** → `OEO_00140071` — Durchschnittswert, berechnet als arithmetisches Mittel über Datensätze, etwa eine mittlere Leistung.
   - also written: Mittelwert, Durchschnitt
 - **instantaneous** → `OEO_00140069` — Wert, der exakt zu einem zeitlichen Nullpunkt gemessen oder modelliert wird.
   - also written: Momentanwert zu einem Zeitpunkt
-- **integral** → `OEO_00140070` — Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets.
+- **integral** → `OEO_00140070` — Summe oder Integral von Werten innerhalb eines Zeitraums oder Gebiets, etwa die Leistung mehrerer Anlagen oder eines Gebiets zusammen.
   - also written: Summe, Gesamt, insgesamt
-- **maximum** → `OEO_00140073` — Höchster Wert innerhalb einer Menge von Datenwerten in einem Bereich.
+- **maximum** → `OEO_00140073` — Höchster Wert innerhalb einer Menge von Datenwerten in einem Bereich, etwa eine Spitzenlast oder ein Auslegungsfall.
   - also written: Maximum, Spitzenwert, Spitzenlast
 - **minimum** → `OEO_00140072` — Niedrigster Wert innerhalb einer Menge von Datenwerten in einem Bereich.
   - also written: Minimum, Tiefstwert
@@ -3609,6 +3734,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `aggregation_link_source`
 
 Which source 'aggregation_link_quote' was found in.
+
+### `aggregation_means`
+
+The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `aggregation_producer`
 
@@ -3640,7 +3769,11 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'aggregation' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+### `at`
+
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `carrier`
 
@@ -3648,10 +3781,7 @@ Axis 'carrier' of Leistung. A closed list; an entry beginning 'out:' is a delibe
 
 The prompt's own wording:
 
-> Welcher Energieträger? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift.
-Beschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt "Summe", solange die Stelle nicht nach Energieträgern aufteilt.
-Ist die eigene Tabelle oder der eigene Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet), ist die Antwort "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
-"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Gebäudetyp".
+> Für welchen Energieträger gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Energieträgern aufteilt, wonach teilt die Stelle stattdessen auf?
 
 <details><summary>What it may answer (137)</summary>
 
@@ -3752,7 +3882,7 @@ The production of other coal gases (i.e. coke oven gas, blast furnace gas and ox
 - **Steinkohle** → `OEO_00000204` — Steinkohle: Kohle mit einem Brennwert über 23 865 kJ/kg und einer mittleren Vitrinitreflexion von mindestens 0,6.
 - **Strom** → `OEO_00000139` — Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
-- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+- **Summe** → `out:total` — Die Zahl gilt für alle Energieträger zusammen: ihre Zeile oder Spalte summiert ausdrücklich über die Energieträger, oder ihre eigene Tabelle oder ihr Satz ist gar nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet). Der Wärmebedarf der Gebäude eines Gebiets bleibt Summe, solange die Stelle nicht nach Energieträgern aufteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Synthesegas** → `OEO_00140160` — Syngas is a gas mixture consisting primarily of hydrogen, carbon monoxide, and very often carbon dioxide, that can be used as fuel.
 - **Thorium** → `OEO_00140092` — Thorium is a portion of matter with the chemical formula Th. It has a solid normal state of matter.
@@ -3844,6 +3974,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'carrier_link_quote' was found in.
 
+### `carrier_means`
+
+The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `carrier_producer`
 
 Who re-read 'carrier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -3874,7 +4008,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'carrier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `catalogue`
 
@@ -3918,6 +4052,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `parameter_producer`
 
 Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -3948,7 +4086,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
@@ -3958,7 +4096,7 @@ Axis 'qualifier' of Leistung. A closed list; an entry beginning 'out:' is a deli
 
 The prompt's own wording:
 
-> Steht direkt bei dieser Zahl ein Wort, das sagt, wie genau sie gilt? „ca. 8,8 GWh“ ist ungefähr, „bis zu 6.200 MWh“ höchstens, „mehr als 4 %“ mindestens; in „zwischen 60 und 100 MWh“ ist 60 das untere und 100 das obere Ende einer Spanne. "value_raw" ist dieses Wort des Plans, Zeichen für Zeichen. Steht kein solches Wort bei der Zahl, ist die Antwort out:unstated.
+> Welches Wort direkt bei dieser Zahl sagt, wie genau sie gilt, etwa „ca.“, „bis zu“, „mehr als“ oder „zwischen“?
 
 <details><summary>What it may answer (5)</summary>
 
@@ -3982,6 +4120,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `qualifier_link_source`
 
 Which source 'qualifier_link_quote' was found in.
+
+### `qualifier_means`
+
+The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `qualifier_producer`
 
@@ -4013,7 +4155,7 @@ How the coordinate 'qualifier' ended. Always present: a missing key and a refuse
 
 ### `qualifier_window`
 
-[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'qualifier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quantity`
 
@@ -4021,9 +4163,7 @@ Axis 'quantity' of Leistung. A closed list; an entry beginning 'out:' is a delib
 
 The prompt's own wording:
 
-> Welche Größe ist diese Zahl? Wichtigste Entscheidung: bestimmt die Klasse im Graphen.
-"power value" = quantity value mit Leistungseinheit: Heizlast, Anschlussleistung, Nennwärmeleistung, Netz- oder Erzeugerleistung.
-Jede Zahl mit einer Leistungseinheit ist mindestens "power value", auch eine elektrische Leistung; wähle die genaueste Klasse, deren Definition die Stelle für diese Zahl trifft.
+> Welche Größe ist diese Zahl?
 
 <details><summary>What it may answer (24)</summary>
 
@@ -4045,7 +4185,7 @@ Jede Zahl mit einer Leistungseinheit ist mindestens "power value", auch eine ele
 - **flow potential** → `OEO_00140056` — Flusspotenzial: Potenzial eines Prozessinputs oder -outputs pro Zeiteinheit.
 - **potential** → `OEO_00290000` — Potenzial: Ein Maximalwert, der eine Obergrenze in einem Referenzgebiet beschreibt.
   - also written: Leistungspotenzial, Ausbaupotenzial
-- **power value** → `OEO_00010157` — Leistungswert: Eine Größe mit einer Leistungseinheit.
+- **power value** → `OEO_00010157` — Leistungswert: Eine Größe mit einer Leistungseinheit, etwa Heizlast, Anschlussleistung, Nennwärmeleistung, Netz- oder Erzeugerleistung.
   - also written: Wärmeleistung, Heizlast, Anschlussleistung, Leistungsbedarf, Netzleistung, thermische Leistung, Thermische Nutzleistung, Nennwärmeleistung, installierte Leistung, Entzugsleistung, Feuerungswärmeleistung
 - **spezifischer Wert je Kopf, Gebäude oder Meter** → `out:specific` — Ein Wert je Kopf, Gebäude oder Meter, keine Gesamtleistung.
 - **stock potential** → `OEO_00140062` — Bestandspotenzial: Potenzial des Bestands einer Quelle oder Senke.
@@ -4077,6 +4217,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'quantity_link_quote' was found in.
 
+### `quantity_means`
+
+The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `quantity_producer`
 
 Who re-read 'quantity': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -4107,7 +4251,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'quantity' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quote`
 
@@ -4131,15 +4275,15 @@ Axis 'scenario' of Leistung. A closed list; an entry beginning 'out:' is a delib
 
 The prompt's own wording:
 
-> Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, "bislang", "derzeit", "wird verbraucht", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie "wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt ("bei erhöhter Energieeinsparung", "Umsetzungsszenario 2", "Transformationspfad"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das "out:unstated" und keine Schätzung.
+> Auf welchen Zustand des Plans bezieht sich diese Zahl, auf seinen Bestand, ein Trend- oder ein Zielszenario?
 
 <details><summary>What it may answer (3)</summary>
 
-- **Bestand** → `status_quo` — Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr.
+- **Bestand** → `status_quo` — Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr: Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, „bislang“, „derzeit“, „wird verbraucht“, oder ein Jahr vor der Erstellung des Plans im Titel.
   - also written: Ist-Zustand, Bilanzjahr, Status quo, Bestandsanalyse, Basisjahr, Ist-Zustandsanalyse, Ist-Analyse, Erstellungsjahr
 - **Trendszenario** → `trend` — Die Fortschreibung ohne zusätzliche Maßnahmen.
   - also written: Referenzszenario, Weiter-wie-bisher, Business as usual
-- **Zielszenario** → `target` — Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will.
+- **Zielszenario** → `target` — Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will, auch unter einem eigenen Namen des Plans („bei erhöhter Energieeinsparung“, „Umsetzungsszenario 2“, „Transformationspfad“).
   - also written: Zielbild, Zielwert, Zielpfad, Umsetzungsszenario, Transformationspfad
 
 </details>
@@ -4161,6 +4305,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_means`
+
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `scenario_producer`
 
@@ -4192,7 +4340,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `sector`
 
@@ -4200,11 +4348,7 @@ Axis 'sector' of Leistung. A closed list; an entry beginning 'out:' is a deliber
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle.
-Ein Gebiet ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
-"Summe" gilt für alle Verbraucher zusammen: eine Zeile oder Spalte, die ausdrücklich über alle Sektoren summiert, ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"), oder eine Zahl, deren eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt ist, nur nach anderem (Energieträger, Gebiet); dann zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
-Die Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
-"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Energieträger".
+> Für welchen Verbrauchssektor gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Sektoren aufteilt, wonach teilt die Stelle stattdessen auf?
 
 <details><summary>What it may answer (17)</summary>
 
@@ -4225,7 +4369,7 @@ Die Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.7
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere
 - **Stromsektor** → `OEO_00000145` — An electricity sector is a transformation sector that covers electricity generation and transport of electrical energy to consumers of electrical energy.
-- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+- **Summe** → `out:total` — Die Zahl gilt für alle Verbraucher zusammen: ihre Zeile oder Spalte summiert ausdrücklich über die Sektoren, sie heißt ausdrücklich Gesamtverbrauch oder Gesamtbedarf aller Verbraucher, oder ihre eigene Tabelle oder ihr Satz ist gar nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet). Ein Gebiet („Gesamtstadt“, „Stadtgebiet“) und die Gesamtleistung von Anlagen sind keine Summe über Sektoren.
   - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
 - **Teilsektor** → `OEO_00010464` — A subsector is a sector that is a part of an other sector.
 - **Verkehr** → `OEO_00000422` — Sektor für den Transport von Personen und Gütern.
@@ -4253,6 +4397,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `sector_link_source`
 
 Which source 'sector_link_quote' was found in.
+
+### `sector_means`
+
+The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `sector_producer`
 
@@ -4284,7 +4432,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'sector' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `spatial_scope`
 
@@ -4292,14 +4440,13 @@ Axis 'spatial_scope' of Leistung. A closed list; an entry beginning 'out:' is a 
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich die Zahl?
-Teilgebiet: sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.
+> Für welches Gebiet gilt diese Zahl, für die ganze Gemeinde oder für ein Teilgebiet mit seinem Namen?
 
 <details><summary>What it may answer (2)</summary>
 
 - **Gemeindegebiet** → `municipality` — Das ganze Gemeinde- oder Stadtgebiet des Plans.
   - also written: Gesamtstadt, Stadtgebiet, gesamtes Plangebiet, Gemeinde insgesamt
-- **Teilgebiet** → `sub_area` — Ein benannter Teil davon: ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet.
+- **Teilgebiet** → `sub_area` — Ein benannter Teil davon, ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet, mit seinem Namen.
   - also written: Fokusgebiet, Quartier, Stadtteil, Baublock, Wärmenetzgebiet, Ortsteil
 
 </details>
@@ -4320,6 +4467,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `spatial_scope_link_source`
 
 Which source 'spatial_scope_link_quote' was found in.
+
+### `spatial_scope_means`
+
+The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `spatial_scope_producer`
 
@@ -4351,7 +4502,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'spatial_scope' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `subject`
 
@@ -4359,7 +4510,7 @@ Axis 'subject' of Leistung. null unless subject_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist der Eintrag ihrer eigenen Zeile oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit diesem Eintrag wörtlich. Der Name einer Spalte oder einer Zeilengruppe, etwa "Energieträger", "Sektor" oder "Name des Quartiers", sagt nur, was dort steht, und ist keine Antwort. Ein Energieträger, ein Sektor oder ein Gebiet gehört in sein eigenes Feld. Unterscheidet sie nichts davon, sagt der Plan es nicht.
+> Welcher Eintrag ihrer eigenen Zeile oder ihres Satzes unterscheidet diese Zahl von den Zahlen neben ihr, etwa eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe oder eine Variante, und ist weder Energieträger, Sektor, Jahr, Gebiet noch der Name einer Spalte?
 
 ### `subject_link_quote`
 
@@ -4368,6 +4519,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `subject_link_source`
 
 Which source 'subject_link_quote' was found in.
+
+### `subject_means`
+
+The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `subject_producer`
 
@@ -4399,7 +4554,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'subject' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `technology`
 
@@ -4407,12 +4562,7 @@ Axis 'technology' of Leistung. A closed list; an entry beginning 'out:' is a del
 
 The prompt's own wording:
 
-> Welche Wärmeerzeugungstechnologie?
-Nur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa "Wärmepumpen", "Gaskessel", "Ölheizungen".
-Energieträger ist keine Technologie: "Erdgas" allein = Träger, "Gasheizung" = Technologie.
-Eigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
-"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.
-"known" unter der Zeile sagt, was die Zahl schon ist.
+> Welcher Wärmeerzeugungstechnologie ordnet der Plan diese Zahl ausdrücklich zu, oder, wo ihre Tabelle oder ihr Satz nicht nach Technologien aufteilt, wonach teilt die Stelle stattdessen auf?
 
 <details><summary>What it may answer (12)</summary>
 
@@ -4429,7 +4579,7 @@ Eigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: "Summe"; zi
   - also written: Solarthermieanlage, solarthermische Anlage
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Wärmeerzeuger
-- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+- **Summe** → `out:total` — Die Zahl gilt für alle Wärmeerzeuger zusammen: ihre Zeile oder Spalte summiert ausdrücklich über die Technologien, oder ihre eigene Tabelle oder ihr Satz ist gar nicht nach Heiztechniken aufgeteilt, nur nach anderem. Ein Energieträger allein („Erdgas“) ist keine Technologie, eine „Gasheizung“ schon.
   - also written: Gesamt, insgesamt, alle Technologien
 - **Verbrennungsbasierte Heizung** → `OEO_00020488` — A combustion based heating technology is a heat generation technology that describes how to combine combustion-based heaters, heat gain processes, combustion fuels and energy in a specific way.
 - **Wasserstoffheizung** → `OEO_00020492` — Wasserstoffheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Wasserstoff.
@@ -4458,6 +4608,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `technology_link_source`
 
 Which source 'technology_link_quote' was found in.
+
+### `technology_means`
+
+The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `technology_producer`
 
@@ -4489,7 +4643,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'technology' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -4501,7 +4655,7 @@ The unit: one entry of units_accepted (GW, MW, MWel, MWp, MWth, kW, kWel, kWp, k
 
 The prompt's own wording:
 
-> Welche Einheit hat diese Zahl? Schreib in "value_raw" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in "value" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: "Gigawattstunden" meint GWh, "t CO₂-Äq." t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" kWh und GWh, "1.700 kg CO2" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person) oder je Kilowattstunde (g CO2/kWh), ist "value" "", und "value_raw" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
+> Welche Einheit druckt der Plan für diese Zahl, und sagt die Stelle, dass die Menge je Jahr gilt?
 
 <details><summary>What it may answer (9)</summary>
 
@@ -4524,6 +4678,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `unit_link_source`
 
 Which source 'unit_link_quote' was found in.
+
+### `unit_means`
+
+The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `unit_producer`
 
@@ -4555,7 +4713,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'unit' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `value`
 
@@ -4571,7 +4729,7 @@ Axis 'what' of Leistung. null unless what_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Was ist diese Zahl? Antworte mit der Bezeichnung, die der Plan genau dieser Zahl gibt, Zeichen für Zeichen: in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz, etwa „Theoretische Geothermiepotenziale“ oder „Wärmebedarf“. Die Bezeichnung einer anderen Zahl derselben Stelle, etwa einer Summe darüber, ist keine Antwort. Nennt die Stelle keine Bezeichnung, sagt der Plan es nicht.
+> Welche Bezeichnung gibt der Plan genau dieser Zahl, in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz?
 
 ### `what_link_quote`
 
@@ -4580,6 +4738,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `what_link_source`
 
 Which source 'what_link_quote' was found in.
+
+### `what_means`
+
+The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `what_producer`
 
@@ -4611,7 +4773,7 @@ How the coordinate 'what' ended. Always present: a missing key and a refused rea
 
 ### `what_window`
 
-[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'what' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `year`
 
@@ -4619,7 +4781,7 @@ Axis 'year' of Leistung. null unless year_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Für welches Kalenderjahr gilt diese Leistung? Vierstellig. Gilt sie für einen Zeitraum mehrerer Jahre („im Mittel der Jahre 2019 bis 2021“), ist "value" sein erstes Jahr und "until" sein letztes. Eine Bestandsanlage trägt das Jahr der Bestandsaufnahme, nicht ihr Baujahr.
+> Für welches Kalenderjahr gilt diese Leistung, bei einer Bestandsanlage das Jahr der Bestandsaufnahme und nicht ihr Baujahr?
 
 - `datatype`: `xsd:integer`
 - `label`: `has scenario year value`
@@ -4639,6 +4801,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `year_link_source`
 
 Which source 'year_link_quote' was found in.
+
+### `year_means`
+
+The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `year_producer`
 
@@ -4670,7 +4836,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'year' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -4682,6 +4848,10 @@ How the row becomes a node:
 - `label`: `rdfs:label, legal form stripped`
 - `node`: `organisation`
 - `schema_class`: `Organisation`
+
+### `at`
+
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -4725,6 +4895,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `parameter_producer`
 
 Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -4755,7 +4929,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
@@ -4806,6 +4980,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'role_link_quote' was found in.
 
+### `role_means`
+
+The entries of the document's list of names (its scenarios, its works) 'role' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `role_producer`
 
 Who re-read 'role': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -4836,7 +5014,7 @@ How the coordinate 'role' ended. Always present: a missing key and a refused rea
 
 ### `role_window`
 
-[stage, index] of the window 'role' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'role' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -4873,16 +5051,17 @@ How the row becomes a node:
 - `number`: `{'datatype': 'xsd:float', 'from': 'value_target', 'label': 'has number', 'schema_slot': 'has_number'}`
 - `unit`: `{'from': 'unit_target', 'label': 'has unit', 'schema_slot': 'has_unit'}`
 
+### `at`
+
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+
 ### `carrier`
 
 Axis 'carrier' of Anteil. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless carrier_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Welcher Energieträger? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift.
-Beschreibt die Zahl nach ihrem Zusammenhang ein Fernwärmenetz, etwa die Anschlussleistung der Gebäude an ein geplantes Netz, ist der Energieträger Fernwärme; der Wärmebedarf der Gebäude eines Gebiets bleibt "Summe", solange die Stelle nicht nach Energieträgern aufteilt.
-Ist die eigene Tabelle oder der eigene Satz nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet), ist die Antwort "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
-"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Gebäudetyp".
+> Für welchen Energieträger gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Energieträgern aufteilt, wonach teilt die Stelle stattdessen auf?
 
 <details><summary>What it may answer (137)</summary>
 
@@ -4983,7 +5162,7 @@ The production of other coal gases (i.e. coke oven gas, blast furnace gas and ox
 - **Steinkohle** → `OEO_00000204` — Steinkohle: Kohle mit einem Brennwert über 23 865 kJ/kg und einer mittleren Vitrinitreflexion von mindestens 0,6.
 - **Strom** → `OEO_00000139` — Elektrische Energie aus geladenen Teilchen, unterscheidet sich als nicht-materieller Energieträger.
   - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
-- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+- **Summe** → `out:total` — Die Zahl gilt für alle Energieträger zusammen: ihre Zeile oder Spalte summiert ausdrücklich über die Energieträger, oder ihre eigene Tabelle oder ihr Satz ist gar nicht nach Energieträgern aufgeteilt, nur nach anderem (Gebäudetyp, Sektor, Gebiet). Der Wärmebedarf der Gebäude eines Gebiets bleibt Summe, solange die Stelle nicht nach Energieträgern aufteilt.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Synthesegas** → `OEO_00140160` — Syngas is a gas mixture consisting primarily of hydrogen, carbon monoxide, and very often carbon dioxide, that can be used as fuel.
 - **Thorium** → `OEO_00140092` — Thorium is a portion of matter with the chemical formula Th. It has a solid normal state of matter.
@@ -5075,6 +5254,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'carrier_link_quote' was found in.
 
+### `carrier_means`
+
+The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `carrier_producer`
 
 Who re-read 'carrier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -5105,7 +5288,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'carrier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `catalogue`
 
@@ -5149,6 +5332,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+
 ### `parameter_producer`
 
 Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
@@ -5179,7 +5366,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
@@ -5189,7 +5376,7 @@ Axis 'qualifier' of Anteil. A closed list; an entry beginning 'out:' is a delibe
 
 The prompt's own wording:
 
-> Steht direkt bei dieser Zahl ein Wort, das sagt, wie genau sie gilt? „ca. 8,8 GWh“ ist ungefähr, „bis zu 6.200 MWh“ höchstens, „mehr als 4 %“ mindestens; in „zwischen 60 und 100 MWh“ ist 60 das untere und 100 das obere Ende einer Spanne. "value_raw" ist dieses Wort des Plans, Zeichen für Zeichen. Steht kein solches Wort bei der Zahl, ist die Antwort out:unstated.
+> Welches Wort direkt bei dieser Zahl sagt, wie genau sie gilt, etwa „ca.“, „bis zu“, „mehr als“ oder „zwischen“?
 
 <details><summary>What it may answer (5)</summary>
 
@@ -5213,6 +5400,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `qualifier_link_source`
 
 Which source 'qualifier_link_quote' was found in.
+
+### `qualifier_means`
+
+The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `qualifier_producer`
 
@@ -5244,7 +5435,7 @@ How the coordinate 'qualifier' ended. Always present: a missing key and a refuse
 
 ### `qualifier_window`
 
-[stage, index] of the window 'qualifier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'qualifier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quantity`
 
@@ -5253,7 +5444,6 @@ Axis 'quantity' of Anteil. A closed list; an entry beginning 'out:' is a deliber
 The prompt's own wording:
 
 > Welche Größe ist diese Zahl?
-"fraction value" = Anteil eines Ganzen: welcher Teil eines Ganzen auf etwas entfällt ("davon Wärmenetz 41 %", "Anteil der Gebäude mit Gasheizung 62 %"). Die übrigen Klassen sind genauere Arten eines Anteils oder einer Quote; wähle die genaueste, deren Definition die Stelle für diese Zahl trifft.
 
 <details><summary>What it may answer (16)</summary>
 
@@ -5272,7 +5462,7 @@ The prompt's own wording:
 - **Wechselkurs** → `OEO_00020114` — The exchange rate is an economic value representing the ratio at which one currency can be exchanged for another.
 - **Wirkungsgrad** → `OEO_00140050` — An efficiency value is a quantity value stating the ratio between a process's inputs and the outputs that are used.
 - **etwas anderes** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
-- **fraction value** → `OEO_00140127` — Bruchwert: Eine relationale Größe mit einem Bruch als Einheit.
+- **fraction value** → `OEO_00140127` — Bruchwert: Eine relationale Größe mit einem Bruch als Einheit, der Teil eines Ganzen, der auf etwas entfällt, etwa „davon Wärmenetz 41 %“.
   - also written: Anteil, Prozentanteil, davon, %
 
 </details>
@@ -5292,6 +5482,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `quantity_link_source`
 
 Which source 'quantity_link_quote' was found in.
+
+### `quantity_means`
+
+The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `quantity_producer`
 
@@ -5323,7 +5517,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'quantity' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quote`
 
@@ -5347,15 +5541,15 @@ Axis 'scenario' of Anteil. A closed list; an entry beginning 'out:' is a deliber
 
 The prompt's own wording:
 
-> Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, "bislang", "derzeit", "wird verbraucht", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie "wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt ("bei erhöhter Energieeinsparung", "Umsetzungsszenario 2", "Transformationspfad"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das "out:unstated" und keine Schätzung.
+> Auf welchen Zustand des Plans bezieht sich diese Zahl, auf seinen Bestand, ein Trend- oder ein Zielszenario?
 
 <details><summary>What it may answer (3)</summary>
 
-- **Bestand** → `status_quo` — Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr.
+- **Bestand** → `status_quo` — Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr: Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, „bislang“, „derzeit“, „wird verbraucht“, oder ein Jahr vor der Erstellung des Plans im Titel.
   - also written: Ist-Zustand, Bilanzjahr, Status quo, Bestandsanalyse, Basisjahr, Ist-Zustandsanalyse, Ist-Analyse, Erstellungsjahr
 - **Trendszenario** → `trend` — Die Fortschreibung ohne zusätzliche Maßnahmen.
   - also written: Referenzszenario, Weiter-wie-bisher, Business as usual
-- **Zielszenario** → `target` — Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will.
+- **Zielszenario** → `target` — Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will, auch unter einem eigenen Namen des Plans („bei erhöhter Energieeinsparung“, „Umsetzungsszenario 2“, „Transformationspfad“).
   - also written: Zielbild, Zielwert, Zielpfad, Umsetzungsszenario, Transformationspfad
 
 </details>
@@ -5377,6 +5571,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_means`
+
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `scenario_producer`
 
@@ -5408,7 +5606,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `sector`
 
@@ -5416,11 +5614,7 @@ Axis 'sector' of Anteil. A closed list; an entry beginning 'out:' is a deliberat
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Wähle den Eintrag, den die Bezeichnung des Plans für diese Zahl bedeutet, nach seiner Bedeutung ("means") und nicht nach der Schreibweise; die Bezeichnung steht meist in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift DERSELBEN Tabelle.
-Ein Gebiet ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde", "Plangebiet" sagen WO, nicht für welchen Verbraucher, und sind keine Summe über Sektoren.
-"Summe" gilt für alle Verbraucher zusammen: eine Zeile oder Spalte, die ausdrücklich über alle Sektoren summiert, ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"), oder eine Zahl, deren eigene Tabelle oder eigener Satz nicht nach Sektoren aufgeteilt ist, nur nach anderem (Energieträger, Gebiet); dann zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
-Die Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist keine Summe über Sektoren.
-"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt, etwa "Energieträger".
+> Für welchen Verbrauchssektor gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Sektoren aufteilt, wonach teilt die Stelle stattdessen auf?
 
 <details><summary>What it may answer (17)</summary>
 
@@ -5441,7 +5635,7 @@ Die Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.7
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere
 - **Stromsektor** → `OEO_00000145` — An electricity sector is a transformation sector that covers electricity generation and transport of electrical energy to consumers of electrical energy.
-- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+- **Summe** → `out:total` — Die Zahl gilt für alle Verbraucher zusammen: ihre Zeile oder Spalte summiert ausdrücklich über die Sektoren, sie heißt ausdrücklich Gesamtverbrauch oder Gesamtbedarf aller Verbraucher, oder ihre eigene Tabelle oder ihr Satz ist gar nicht nach Sektoren aufgeteilt, nur nach anderem (Energieträger, Gebiet). Ein Gebiet („Gesamtstadt“, „Stadtgebiet“) und die Gesamtleistung von Anlagen sind keine Summe über Sektoren.
   - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
 - **Teilsektor** → `OEO_00010464` — A subsector is a sector that is a part of an other sector.
 - **Verkehr** → `OEO_00000422` — Sektor für den Transport von Personen und Gütern.
@@ -5469,6 +5663,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `sector_link_source`
 
 Which source 'sector_link_quote' was found in.
+
+### `sector_means`
+
+The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `sector_producer`
 
@@ -5500,7 +5698,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'sector' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `spatial_scope`
 
@@ -5508,14 +5706,13 @@ Axis 'spatial_scope' of Anteil. A closed list; an entry beginning 'out:' is a de
 
 The prompt's own wording:
 
-> Auf welches Gebiet bezieht sich die Zahl?
-Teilgebiet: sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), sonst sind zwei Teilgebiete im Graphen nicht zu unterscheiden.
+> Für welches Gebiet gilt diese Zahl, für die ganze Gemeinde oder für ein Teilgebiet mit seinem Namen?
 
 <details><summary>What it may answer (2)</summary>
 
 - **Gemeindegebiet** → `municipality` — Das ganze Gemeinde- oder Stadtgebiet des Plans.
   - also written: Gesamtstadt, Stadtgebiet, gesamtes Plangebiet, Gemeinde insgesamt
-- **Teilgebiet** → `sub_area` — Ein benannter Teil davon: ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet.
+- **Teilgebiet** → `sub_area` — Ein benannter Teil davon, ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet, mit seinem Namen.
   - also written: Fokusgebiet, Quartier, Stadtteil, Baublock, Wärmenetzgebiet, Ortsteil
 
 </details>
@@ -5536,6 +5733,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `spatial_scope_link_source`
 
 Which source 'spatial_scope_link_quote' was found in.
+
+### `spatial_scope_means`
+
+The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `spatial_scope_producer`
 
@@ -5567,7 +5768,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'spatial_scope' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `subject`
 
@@ -5575,7 +5776,7 @@ Axis 'subject' of Anteil. null unless subject_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Was unterscheidet diese Zahl von den Zahlen neben ihr, über Größe, Energieträger, Sektor, Jahr und Gebiet hinaus? Gemeint ist der Eintrag ihrer eigenen Zeile oder ihres eigenen Satzes: eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe, eine Variante. Antworte mit diesem Eintrag wörtlich. Der Name einer Spalte oder einer Zeilengruppe, etwa "Energieträger", "Sektor" oder "Name des Quartiers", sagt nur, was dort steht, und ist keine Antwort. Ein Energieträger, ein Sektor oder ein Gebiet gehört in sein eigenes Feld. Unterscheidet sie nichts davon, sagt der Plan es nicht.
+> Welcher Eintrag ihrer eigenen Zeile oder ihres Satzes unterscheidet diese Zahl von den Zahlen neben ihr, etwa eine Baualtersklasse, ein Gebäudetyp, eine Zone, ein Netz, eine Ausbaustufe oder eine Variante, und ist weder Energieträger, Sektor, Jahr, Gebiet noch der Name einer Spalte?
 
 ### `subject_link_quote`
 
@@ -5584,6 +5785,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `subject_link_source`
 
 Which source 'subject_link_quote' was found in.
+
+### `subject_means`
+
+The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `subject_producer`
 
@@ -5615,7 +5820,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'subject' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `technology`
 
@@ -5623,12 +5828,7 @@ Axis 'technology' of Anteil. A closed list; an entry beginning 'out:' is a delib
 
 The prompt's own wording:
 
-> Welche Wärmeerzeugungstechnologie?
-Nur bei ausdrücklicher Zuordnung zu einer Heiztechnik in Zeilenbeschriftung, Spaltenkopf oder Blocküberschrift, etwa "Wärmepumpen", "Gaskessel", "Ölheizungen".
-Energieträger ist keine Technologie: "Erdgas" allein = Träger, "Gasheizung" = Technologie.
-Eigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: "Summe"; zitiere Kopfzeile oder Titel der eigenen Tabelle, bei einem Satz den Satz selbst.
-"value_raw" = Wort aus diesem Zitat, nach dem stattdessen aufgeteilt ist oder das die Zahl benennt.
-"known" unter der Zeile sagt, was die Zahl schon ist.
+> Welcher Wärmeerzeugungstechnologie ordnet der Plan diese Zahl ausdrücklich zu, oder, wo ihre Tabelle oder ihr Satz nicht nach Technologien aufteilt, wonach teilt die Stelle stattdessen auf?
 
 <details><summary>What it may answer (12)</summary>
 
@@ -5645,7 +5845,7 @@ Eigene Tabelle oder eigener Satz nicht nach Technologien aufgeteilt: "Summe"; zi
   - also written: Solarthermieanlage, solarthermische Anlage
 - **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
   - also written: Andere, sonstige Wärmeerzeuger
-- **Summe** → `out:total` — Eine Zahl, die für alle Einträge zusammen gilt: ausdrücklich summiert, oder in ihrer eigenen Tabelle oder ihrem Satz gar nicht nach dieser Liste aufgeteilt.
+- **Summe** → `out:total` — Die Zahl gilt für alle Wärmeerzeuger zusammen: ihre Zeile oder Spalte summiert ausdrücklich über die Technologien, oder ihre eigene Tabelle oder ihr Satz ist gar nicht nach Heiztechniken aufgeteilt, nur nach anderem. Ein Energieträger allein („Erdgas“) ist keine Technologie, eine „Gasheizung“ schon.
   - also written: Gesamt, insgesamt, alle Technologien
 - **Verbrennungsbasierte Heizung** → `OEO_00020488` — A combustion based heating technology is a heat generation technology that describes how to combine combustion-based heaters, heat gain processes, combustion fuels and energy in a specific way.
 - **Wasserstoffheizung** → `OEO_00020492` — Wasserstoffheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Wasserstoff.
@@ -5674,6 +5874,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `technology_link_source`
 
 Which source 'technology_link_quote' was found in.
+
+### `technology_means`
+
+The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `technology_producer`
 
@@ -5705,7 +5909,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'technology' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -5717,7 +5921,7 @@ The unit: one entry of units_accepted (%, Prozent), read as a coordinate with it
 
 The prompt's own wording:
 
-> Welche Einheit hat diese Zahl? Schreib in "value_raw" die Einheit ab, wie der Plan sie für diese Zahl druckt, Zeichen für Zeichen, und wähle in "value" den Eintrag der Liste, den sie MEINT, nicht den, der ähnlich aussieht: "Gigawattstunden" meint GWh, "t CO₂-Äq." t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" kWh und GWh, "1.700 kg CO2" kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh den Eintrag kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie. Meint die Einheit keinen Eintrag der Liste, etwa eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person) oder je Kilowattstunde (g CO2/kWh), ist "value" "", und "value_raw" bleibt die gedruckte Einheit. Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht. Eine Zahl von Gebäuden ("Anzahl Gebäude", "Wohngebäude") hat die Einheit Gebäude.
+> Welche Einheit druckt der Plan für diese Zahl, und sagt die Stelle, dass die Menge je Jahr gilt?
 
 <details><summary>What it may answer (2)</summary>
 
@@ -5733,6 +5937,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `unit_link_source`
 
 Which source 'unit_link_quote' was found in.
+
+### `unit_means`
+
+The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `unit_producer`
 
@@ -5764,7 +5972,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'unit' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `value`
 
@@ -5780,7 +5988,7 @@ Axis 'what' of Anteil. null unless what_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Was ist diese Zahl? Antworte mit der Bezeichnung, die der Plan genau dieser Zahl gibt, Zeichen für Zeichen: in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz, etwa „Theoretische Geothermiepotenziale“ oder „Wärmebedarf“. Die Bezeichnung einer anderen Zahl derselben Stelle, etwa einer Summe darüber, ist keine Antwort. Nennt die Stelle keine Bezeichnung, sagt der Plan es nicht.
+> Welche Bezeichnung gibt der Plan genau dieser Zahl, in ihrer Zeile, ihrem Spaltenkopf, dem Titel ihrer Tabelle oder Abbildung oder ihrem Satz?
 
 ### `what_link_quote`
 
@@ -5789,6 +5997,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `what_link_source`
 
 Which source 'what_link_quote' was found in.
+
+### `what_means`
+
+The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `what_producer`
 
@@ -5820,7 +6032,7 @@ How the coordinate 'what' ended. Always present: a missing key and a refused rea
 
 ### `what_window`
 
-[stage, index] of the window 'what' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'what' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `whole`
 
@@ -5828,9 +6040,7 @@ Axis 'whole' of Anteil. null unless whole_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Wovon ist diese Zahl ein Anteil? Das Ganze, das die Stelle selbst nennt: Wärmebedarf, Endenergieverbrauch, Emissionen, Gebäude, Fläche.
-Antworte mit dem Wort des Plans.
-Nennt die Stelle das Ganze nicht, sagt der Plan es nicht.
+> Wovon ist diese Zahl ein Anteil, mit dem Wort, das die Stelle für das Ganze druckt?
 
 ### `whole_link_quote`
 
@@ -5839,6 +6049,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `whole_link_source`
 
 Which source 'whole_link_quote' was found in.
+
+### `whole_means`
+
+The entries of the document's list of names (its scenarios, its works) 'whole' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `whole_producer`
 
@@ -5870,7 +6084,7 @@ How the coordinate 'whole' ended. Always present: a missing key and a refused re
 
 ### `whole_window`
 
-[stage, index] of the window 'whole' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'whole' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `year`
 
@@ -5878,7 +6092,7 @@ Axis 'year' of Anteil. null unless year_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Für welches Kalenderjahr gilt dieser Anteil? Vierstellig. Gilt sie für einen Zeitraum mehrerer Jahre („im Mittel der Jahre 2019 bis 2021“), ist "value" sein erstes Jahr und "until" sein letztes.
+> Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt dieser Anteil?
 
 - `datatype`: `xsd:integer`
 - `label`: `has scenario year value`
@@ -5898,6 +6112,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `year_link_source`
 
 Which source 'year_link_quote' was found in.
+
+### `year_means`
+
+The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
 
 ### `year_producer`
 
@@ -5929,7 +6147,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `near`: read by the second reading, which showed the sections before and after the value's place. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row; the index is 1 for the second reading and 2 for the combing. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `plan_years`: a year none of the windows before found, read in the comb's one further message that showed the plan's base and target years; the index is 1. `frame`, `table`, `head`, `places` and `rest` are windows of harvests made before each value was asked for itself.
+[stage, index] of the window 'year' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -5949,7 +6167,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 | `producers` | Every pass that wrote into this harvest, in order: the harvest, then each top-up that rewrote the file, each pass that appended a new parameter, each remap that carried a key forward and each review that changed a row. Entries are only ever added, so a position is stable: a coordinate a top-up re-read points at its entry with `<axis>_producer`. `model` above names the first only. Recorded and never compared. |
 | `spec` | sha256 of extraction_spec.json. A record, not a verdict: it moves on a comment, an indent or a graph annotation, none of which any question is asked through. Compared, it would outvote every key below it. |
 | `^axis/[^/]+/[^/]+$` | What this coordinate asks and what it may answer: the question and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else. |
-| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame\|survey\|read_values\|read_text\|comb\|match\|settings\|seek)$` | sha256 of the prompt file; `harvest`, `survey` and `seek` are in stamps of an older release; `read_values`, `read_text`, `comb`, `match` and `settings` are the prompts of a harvest passage by passage |
+| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame\|survey\|read_values\|read_text\|comb\|match\|settings\|seek\|transcribe\|find\|docfield\|coord\|list\|names\|search\|check\|follow)$` | sha256 of the prompt file; `transcribe`, `find`, `docfield`, `coord`, `list`, `names`, `search`, `check` and `follow` are the prompts of a harvest piece by piece; the others are in stamps of older releases |
 | `^parameter/[^/]+$` | What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale. Those have keys of their own. |
 | `^question_text/[^/]+$` | The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here: the generator prompt, the model, and the annotation inside parameter/. |
 | `^review/(prompt\|model)$` | What read this document a second time. Recorded and never compared: the review does not decide whether the harvest is current, and comparing it would report every reviewed document stale the day the review prompt changes. |
@@ -5960,7 +6178,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 
 One event per line; `t` names it and `doc` the document. An event that reports a model request carries it as sent (`input`) and what came back (`output`); a text the requests repeat is a `piece` they refer to. Read by scripts/trace_report.py.
 
-37 record kinds, told apart by `t`:
+36 record kinds, told apart by `t`:
 
 - `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
 - `anchor`: `doc`, `parameter`, `text`
@@ -5977,25 +6195,24 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `places`: `by_axis`, `by_parameter`, `complete`, `doc`, `dropped`, `passages`, `places`, `unread`, `windows`
 - `invalid`: `detail`, `doc`, `kind`, `where`, `why`
 - `order`: `doc`, `first`, `parameters`, `passages`, `scope`
-- `read_values_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
-- `read_text_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
-- `comb_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
-- `comb_check_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
-- `naming_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `places`, `prompt_tokens`, `sent_at`
-- `naming_groups_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `prompt_tokens`, `sent_at`
-- `naming_several_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `places`, `prompt_tokens`, `sent_at`
-- `years_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
-- `settings_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
-- `phrase_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
-- `frame_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
-- `review_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
-- `compute_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `corrections`, `doc`, `figure`, `group`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `passages`, `prompt_tokens`, `round`, `rows`, `sent_at`, `value`
-- `naming_several`: `doc`, `kind`, `resolved`, `wordings`
-- `naming`: `asked`, `doc`, `groups`, `kind`, `names`, `several`, `things`, `why`
-- `read`: `asked`, `corrected`, `doc`, `failed`, `kind`, `owner`, `parameter`, `unanswered`, `unread`, `values`, `why`
-- `comb`: `anew`, `asked`, `corrected`, `doc`, `exhausted`, `fetched`, `filled`, `group`, `hits`, `judged`, `kind`, `listed`, `missed`, `near`, `near_read`, `open`, `owner`, `parameter`, `plan_years`, `rows`, `searched`, `table_rows`, `turned`
-- `years`: `asked`, `base`, `doc`, `fetched`, `hits`, `refused`, `target`
-- `settings`: `asked`, `doc`, `fetched`, `hits`, `refused`, `settings`
+- `transcribe_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `step`, `value`
+- `find_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `step`, `value`
+- `docfield_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `step`, `value`
+- `coord_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `step`, `value`
+- `list_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `step`, `value`
+- `names_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `step`, `value`
+- `search_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `step`, `value`
+- `check_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `step`, `value`
+- `follow_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `step`, `value`
+- `phrase_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
+- `frame_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
+- `review_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
+- `compute_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
+- `read`: `asked`, `doc`, `failed`, `kind`, `owner`, `parameter`, `unanswered`, `unread`, `values`, `why`
+- `docfield`: `doc`, `parameter`, `values`, `why`
+- `settled`: `base`, `doc`, `settings`, `target`
+- `works`: `doc`, `new`, `works`
+- `asked`: `chunks`, `doc`, `question_queries`, `refused`, `requests`, `scope`
 - `seek_probe`: `doc`, `parameter`, `per`, `text`
 - `completion`: `detail`, `doc`, `filled`, `id`, `key`, `matched`, `open`, `outcome`
 - `piece`: `doc`, `id`, `text`

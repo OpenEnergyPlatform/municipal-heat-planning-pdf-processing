@@ -58,13 +58,14 @@ Fields:
 - `enum: Optional[tuple] = None`
 - `required: bool = False`
 - `dynamic: bool = False`
-- `merged: Optional[str] = None`: A free-text coordinate whose answer is the name the document gives a thing, the kind of thing named here ("scenario", owner decisions 2026-11-06): a value stated for several of them is one row per name, and which of the document's names of that kind mean the same thing is asked once it is read (`naming.py`).
+- `merged: Optional[str] = None`: A free-text coordinate whose answer is the name the document gives a thing, the kind of thing named here ("scenario", owner decisions 2026-11-06): a value stated for several of them is one row per name, and which of the document's names of that kind mean the same thing is asked while it is read (`addressed.Names`).
 - `beside: Optional[dict] = None`: What such an axis answers instead of a name, uri -> labels like a vocabulary, each an out: entry with its meaning in `definitions` (owner decision 2026-11-07): "status quo" for a value of a past or the current year, which belongs to no scenario, as KWP's closed list has "Bestand". Read with its wording like an entry of a list, and never a name.
 - `question: Optional[str] = None`: The one line the field request asks. It lives on the axis because the harvest asks per field: a rule buried in a prompt that covers sixteen fields at once is a rule the model can skip, and skipping is what cost the corpus run 63.5% of its years.
 - `derive: Optional[dict] = None`: A coordinate the SPEC already decides, so no request asks for it: {"from": "unit", "value": "\<a key of this axis' vocabulary>"}.  Principle one, applied one step further. The structure of a tuple is deterministic, and so is a coordinate every accepted unit of the parameter fixes: measured over Kassel, all 452 aggregations the model answered were `integral`, every one of them evidenced by the unit string it had just been handed. Asking cost a fifth of the reply of every five-field request for a coordinate the spec knew. What the unit does NOT fix stays a question — the profile decides which is which.
 - `kg: Optional[dict] = None`: What this coordinate becomes in the graph: {"role": "type"|"edge"| "parent"|"comment", ...}. The serializer reads the predicate from here and the JSON schema publishes it, so the two cannot drift: a predicate changed in one place used to leave the other describing a graph nobody was writing.
 - `keep: Optional[str] = None`: The entry of this coordinate's list a value must have to be a value of its parameter at all (owner decisions 2026-11-07): "scenario year" for a year, "this publication" for an author. Asked before the coordinates after it; a value read with another entry is asked for its parameter once more, told it was read wrongly, is asked nothing further, and stays out of the graph, as does one whose entry stays open (`fields.kept`).
 - `several: bool = False`: Whether a value the plan states for several entries of this list is one row per entry (owner decision 2026-11-07: "Fernwärme + Gas-NT" is the value once with Fernwärme and once with Gas), as a value stated for several names is (`merged`).
+- `groups: dict = field(default_factory=dict)`: uri -> the group an entry belongs to ("group" of an entry object, owner decision 2026-11-08): a list longer than a request shows with what each entry means is asked group first (`addressed.LIST_WITH_MEANS`).
 
 #### Axis.label_to_uri
 
@@ -101,6 +102,9 @@ Fields:
 - `vocabulary_dynamic: bool = False`: A category whose closed list is real but per document, filled in by the profile before the harvest. Same rule as a dynamic axis, one level up.
 - `merged: Optional[str] = None`: A free-text value that is the name the document gives a thing, merged with the document's other names for it as on an axis.
 - `kg: Optional[dict] = None`: What a row of this parameter becomes in the graph: which node, which class, which predicate carries the number and which the unit. Read by the serializer and published by the JSON schema, so neither can drift from the other.
+- `once_per_document: bool = False`: Asked once per document, with its title page and the pieces a search finds best, never in every piece (owner decision 2026-11-08): a field the document has once, its title, its authors, its organisation.
+- `takes_group: bool = True`: Whether a value whose scenario is the words of a group of scenarios ("all scenarios") takes the members the document names, one row each (owner decision 2026-11-08, i): years, regions, types do, a description does not.
+- `groups: dict = field(default_factory=dict)`: uri -> the group an entry of the value's list belongs to, as on an axis.
 
 #### Parameter.is_numeric
 
@@ -175,7 +179,7 @@ Fields:
 - `full_definition: bool = False`: Whether its requests show a parameter's full definition rather than its `brief` (spec: "definition": "full"): the group that classifies a value needs every distinction the definition draws, the others only what a value of the parameter is (owner decision 2026-11-05, ticket 26).
 - `own_passage: tuple = ()`: Coordinates only the value's own passage states, such as what the number counts: asked again with the passages around it, never searched for in the rest of the plan (spec: "own_passage", owner decision 2026-11-06).
 - `own_value: tuple = ()`: Coordinates printed with the number itself, such as "ca." or "bis zu": read once with the value, its "not stated" an answer that nothing qualifies the number, never asked again (spec: "own_value", owner decision 2026-11-06).
-- `pair: tuple = ()`: The plan's frame (spec: "pair"): the scenario and the year, which the plan's base and target years date a value by (`years.PlanYears`). The reading asks them per value (owner decision 2026-11-07: each value is asked its own scenario and year, none takes its passage's).
+- `pair: tuple = ()`: The plan's frame (spec: "pair"): the scenario and the year, which the plan's base and target years date a value by (`addressed.Plan`). The reading asks them per value (owner decision 2026-11-07: each value is asked its own scenario and year, none takes its passage's).
 
 #### Group.paired
 
@@ -195,15 +199,6 @@ def asked_near(self, slots: list) -> list
 
 The slots the second reading asks again with the passages around
 a value: all but those printed with the number itself.
-
-#### Group.combed
-
-```python
-def combed(self, slots: list) -> list
-```
-
-The slots the combing looks for in the rest of the plan: all but
-those only the value's own passage or the number itself states.
 
 ### Spec
 

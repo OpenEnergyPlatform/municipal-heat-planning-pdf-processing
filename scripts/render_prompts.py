@@ -305,14 +305,19 @@ def _numbers(profile, prompts, spec_path) -> dict:
         spec, profile.component("extraction", "FRAME") or ()))
     budgets = {}
     # The naming's prompts, where the tree has them: a profile without them
-    # gets None. A tree from before the two steps names one.
+    # gets None. A tree from before the two steps names one, a tree that
+    # reads in pieces none (its names request is one of its own prompts).
     naming_map = getattr(runner, "naming_map", None)
     naming_ids = getattr(naming_map, "NAMING_PROMPT_IDS", None) or tuple(
         one for one in (getattr(naming_map, "NAMING_PROMPT_ID", None),) if one)
-    for pid in (*getattr(runner, "PROMPT_IDS", ()),
-                *getattr(runner, "SURVEY_PROMPT_IDS", ()),
-                *naming_ids,
-                runner.REVIEW_PROMPT_ID):
+    # Every prompt the tree's harvest sends, the profile's optional ones
+    # included where the tree says which it writes.
+    sent = getattr(runner, "survey_prompt_ids", None)
+    survey_ids = tuple(sent(profile)) if sent is not None \
+        else getattr(runner, "SURVEY_PROMPT_IDS", ())
+    for pid in dict.fromkeys((*getattr(runner, "PROMPT_IDS", ()),
+                              *survey_ids, *naming_ids,
+                              runner.REVIEW_PROMPT_ID)):
         if pid == getattr(runner, "QUERIES_PROMPT_ID", None):
             # search templates, no request
             continue

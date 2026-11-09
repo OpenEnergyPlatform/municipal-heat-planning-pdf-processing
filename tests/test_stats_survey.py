@@ -1,7 +1,8 @@
 """The stats count what the harvest wrote to the trace: requests and tokens
-per stage with their second rounds, the passages ordered and the readings
-that order planned, passages read and not read, the coordinates the combing
-found open and filled; and the stamp schema takes the flow's prompts and the
+per kind of request, the passages ordered and the readings that order
+planned, passages read and not read, the pieces of the documents and the
+search sentences that were questions, the fields asked once, the works a
+publication names; and the stamp schema takes the flow's prompts and the
 producer's flow.
 
 Each promise has a case that breaks it by construction beside the one that
@@ -29,33 +30,26 @@ def ask(t, **fields):
             "completion_tokens": 10, **fields}
 
 
-def test_requests_and_tokens_are_counted_per_stage(tmp_path):
-    out = traced(tmp_path, ask("settings_ask"),
-                 ask("read_values_ask", round=1),
-                 ask("read_values_ask", round=2, prompt_tokens=50))[
-        "requests_by_stage"]
-    assert out["read_values"]["requests"] == 2
-    assert out["read_values"]["prompt_tokens"] == 150
-    assert out["settings"]["requests"] == 1
-    # By construction: a stage that asked nothing counts nothing.
-    assert out["comb"] == {"requests": 0, "prompt_tokens": 0,
-                           "completion_tokens": 0, "second_rounds": 0,
-                           "answered_once": 0}
-
-
-def test_only_an_event_with_corrections_is_a_second_round(tmp_path):
-    out = traced(tmp_path, ask("read_text_ask"),
-                 ask("read_text_ask", corrections=0),
-                 ask("read_text_ask", corrections=3))["requests_by_stage"]
-    assert out["read_text"]["requests"] == 3
-    assert out["read_text"]["second_rounds"] == 1
+# Promise: the requests and tokens of every kind are counted under it, a
+# follow-up under its own kind, AND a kind that asked nothing counts zero.
+def test_requests_and_tokens_are_counted_per_kind(tmp_path):
+    out = traced(tmp_path, ask("find_ask", chunk=0),
+                 ask("coord_ask", coordinate="year"),
+                 ask("coord_ask", coordinate="unit", prompt_tokens=50),
+                 ask("follow_ask", asked="coord"))["requests_by_stage"]
+    assert out["coord"]["requests"] == 2
+    assert out["coord"]["prompt_tokens"] == 150
+    assert out["find"]["requests"] == 1 and out["follow"]["requests"] == 1
+    # By construction: a kind that asked nothing counts nothing.
+    assert out["names"] == {"requests": 0, "prompt_tokens": 0,
+                            "completion_tokens": 0, "answered_once": 0}
 
 
 def test_a_missing_token_count_adds_nothing(tmp_path):
-    out = traced(tmp_path, ask("comb_ask", prompt_tokens=None,
+    out = traced(tmp_path, ask("list_ask", prompt_tokens=None,
                                completion_tokens=None))["requests_by_stage"]
-    assert out["comb"]["requests"] == 1
-    assert out["comb"]["prompt_tokens"] == 0
+    assert out["list"]["requests"] == 1
+    assert out["list"]["prompt_tokens"] == 0
 
 
 def test_an_unread_reading_counts_under_its_reason_and_adds_no_values(
@@ -66,44 +60,44 @@ def test_an_unread_reading_counts_under_its_reason_and_adds_no_values(
                  {**base, "values": 0, "unread": True, "why": "cut_off"},
                  {**base, "values": 0, "unread": True, "why": "cut_off"},
                  {**base, "values": 0, "unread": True, "why": "no_answer"},
-                 {**base, "values": 5, "failed": {"unquoted": 1},
+                 {**base, "values": 5, "failed": {"not_an_address": 1},
                   "unanswered": 1})["reading"]
     assert out["readings"] == 4
     assert out["unread_by_reason"] == {"cut_off": 2, "no_answer": 1}
     assert out["values"] == 5
-    assert out["refused_first_by_reason"] == {"unquoted": 1}
+    assert out["refused_first_by_reason"] == {"not_an_address": 1}
     # By construction: a passage read counts its values and no reason.
     read = traced(tmp_path, {**base, "values": 3})["reading"]
     assert read["values"] == 3 and read["unread_by_reason"] == {}
 
 
-def test_comb_events_add_up_open_filled_and_exhausted_coordinates(tmp_path):
-    base = {"t": "comb", "parameter": "p", "kind": "section", "owner": 2,
-            "rows": 3, "asked": 1, "hits": 4, "fetched": 1, "searched": 1,
-            "missed": 0, "corrected": 0}
-    out = traced(tmp_path,
-                 {**base, "open": 5, "filled": 3, "exhausted": 0,
-                  "judged": 3, "turned": 1},
-                 {**base, "open": 4, "filled": 0, "exhausted": 4,
-                  "listed": 2})["combing"]
-    assert out["passages"] == 2
-    assert out["coordinates_open"] == 9
-    assert out["coordinates_filled"] == 3
-    assert out["coordinates_exhausted"] == 4
-    assert out["hits_shown"] == 8
-    # The lists of the next passages the run added (owner decision
-    # 2026-11-06), none in an event written before them.
-    assert out["lists_added"] == 2
-    # The checks of finds quoted from another passage and the finds they
-    # turned (owner decision 2026-11-07), none in an event without them.
-    assert (out["check_requests"], out["finds_turned"]) == (3, 1)
-    # By construction: no comb event, no combed coordinate.
-    empty = traced(tmp_path, ask("comb_ask"))["combing"]
-    assert empty["passages"] == 0 and empty["coordinates_open"] == 0
+# Promise: the pieces of each document and the search sentences that were
+# questions are counted (owner decision 2026-11-08), AND the fields asked
+# once with their values, AND the works a publication names; by
+# construction, a trace without such events counts none.
+def test_pieces_questions_fields_asked_once_and_works_add_up(tmp_path):
+    out = traced(
+        tmp_path,
+        {"t": "asked", "requests": {"find": 4}, "refused": {},
+         "question_queries": 2, "chunks": 30, "scope": None},
+        {"t": "asked", "requests": {"find": 1}, "refused": {},
+         "question_queries": 0, "chunks": 12, "scope": "found"},
+        {"t": "docfield", "parameter": "publication_title", "values": 1},
+        {"t": "docfield", "parameter": "publication_doi", "values": 0,
+         "why": "no_answer"},
+        {"t": "works", "works": 4, "new": 3})
+    assert out["pieces"] == {"documents": 2, "chunks": 42,
+                             "question_queries": 2}
+    assert out["asked_once"] == {"fields": 2, "values": 1, "unread": 1}
+    assert out["works"] == {"documents": 1, "works": 4,
+                            "asked_their_details": 3}
+    empty = traced(tmp_path, ask("find_ask"))
+    assert empty["pieces"]["documents"] == 0
+    assert empty["asked_once"]["fields"] == 0
 
 
 def test_the_order_events_add_up(tmp_path):
-    # Owner decisions 2026-11-08: every passage for every parameter.
+    # Owner decisions 2026-11-08: every piece for every field.
     out = traced(tmp_path,
                  {"t": "order", "scope": None, "passages": 10,
                   "parameters": 6, "first": {}},
@@ -117,19 +111,15 @@ def test_the_order_events_add_up(tmp_path):
 
 
 def stamp(**more):
-    body = {"spec": SHA, "model": "m", "anchors": "",
-            "extraction/queries": SHA, "extraction/anchors": SHA,
-            "extraction/rows": SHA, "extraction/field": SHA}
-    return {**body, **more}
+    return {"spec": SHA, "model": "m", "anchors": "", **more}
 
 
 def producer(**more):
     return {"pass": "harvest", "model": "m", **more}
 
 
-def test_a_stamp_of_the_survey_flow_validates():
-    flow = {"extraction/survey": SHA, "extraction/read_values": SHA,
-            "extraction/read_text": SHA, "extraction/comb": SHA}
+def test_a_stamp_of_the_flow_piece_by_piece_validates():
+    flow = {f"extraction/{kind}": SHA for kind in schema.PIECE_ASKS}
     jsonschema.validate(
         stamp(**flow, producers=[producer(flow="survey")]),
         schema.stamp_schema())
@@ -147,28 +137,35 @@ def test_a_producer_flow_off_the_list_is_refused():
                             schema.stamp_schema())
 
 
-def test_the_trace_schema_takes_the_new_kinds_and_refuses_a_broken_one():
+# Promise: the trace schema takes the events of the requests piece by piece
+# with what each carries, AND refuses one that breaks their shape.
+def test_the_trace_schema_takes_the_requests_piece_by_piece():
     trace = schema.trace_schema()
-    jsonschema.validate({"t": "comb", "doc": 1, "parameter": "p",
-                         "kind": "table", "owner": 2, "rows": 1, "open": 1,
-                         "filled": 0, "asked": 1, "hits": 0, "fetched": 0,
-                         "searched": 0, "missed": 0, "corrected": 0,
-                         "exhausted": 1, "near": 1, "near_read": 0}, trace)
     read = {"t": "read", "doc": 1, "parameter": "p", "kind": "table",
             "owner": 2, "values": 0, "unread": True, "why": "cut_off",
             "asked": 1}
-    jsonschema.validate(read, trace)
-    jsonschema.validate({"t": "comb_ask", "doc": 1, "attempt": 1}, trace)
-    # A values request counts its round, a group request names its value.
-    jsonschema.validate({"t": "read_values_ask", "doc": 1, "attempt": 1,
-                         "round": 2}, trace)
-    jsonschema.validate({"t": "read_text_ask", "doc": 1, "attempt": 1,
-                         "group": "frame", "value": "R1"}, trace)
+    for event in (
+            read,
+            {"t": "find_ask", "doc": 1, "attempt": 1, "parameter": "p",
+             "kind": "table", "owner": 2, "chunk": 0},
+            {"t": "list_ask", "doc": 1, "attempt": 1, "parameter": "p",
+             "coordinate": "sector", "step": "group"},
+            {"t": "follow_ask", "doc": 1, "attempt": 1, "asked": "coord",
+             "coordinate": "year", "value": "R1"},
+            {"t": "names_ask", "doc": 1, "attempt": 1, "kind": "scenario",
+             "names": 12},
+            {"t": "asked", "doc": 1, "requests": {"find": 3},
+             "refused": {}, "question_queries": 1, "chunks": 9},
+            {"t": "settled", "doc": 1, "settings": 2, "base": [2021],
+             "target": [2040]},
+            {"t": "works", "doc": 1, "works": 2, "new": 1}):
+        jsonschema.validate(event, trace)
     for broken in (dict(read, why="bored"), dict(read, skipped=2),
-                   dict(read, table=True),
+                   {"t": "list_ask", "doc": 1, "attempt": 1,
+                    "step": "third"},
                    {"t": "read_values_ask", "doc": 1, "attempt": 1},
-                   {"t": "read_text_ask", "doc": 1, "attempt": 1},
-                   {"t": "read_table_ask", "doc": 1, "attempt": 1}):
+                   {"t": "phrase_ask", "doc": 1, "attempt": 1, "chunk": 2},
+                   {"t": "comb", "doc": 1, "parameter": "p"}):
         with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(broken, trace)
 
@@ -184,8 +181,7 @@ def test_every_ask_kind_is_counted_under_its_stage(tmp_path):
         "requests_by_stage"]
     assert out["phrase"]["requests"] == 1
     assert out["compute"] == {"requests": 2, "prompt_tokens": 107,
-                              "completion_tokens": 20, "second_rounds": 0,
-                              "answered_once": 0}
+                              "completion_tokens": 20, "answered_once": 0}
     assert out["novel"]["requests"] == 1
     assert out["review"]["requests"] == 0
     assert "rows" not in out and "" not in out
@@ -193,7 +189,7 @@ def test_every_ask_kind_is_counted_under_its_stage(tmp_path):
 
 def test_the_trace_schema_takes_the_ask_of_every_stage():
     trace = schema.trace_schema()
-    for stage in ("phrase", "frame", "review", "compute", "comb_check"):
+    for stage in schema.ASK_STAGES:
         jsonschema.validate({"t": f"{stage}_ask", "doc": 1, "attempt": 1,
                              "ms": 3, "prompt_tokens": 10,
                              "completion_tokens": 2}, trace)
@@ -202,25 +198,23 @@ def test_the_trace_schema_takes_the_ask_of_every_stage():
         jsonschema.validate({"t": "novel_ask", "doc": 1, "attempt": 1}, trace)
 
 
-# Promise: the cost estimate counts every answered request kind, the search
-# sentences, the review, the compute step, the naming's request over all
-# names, the plan's years and the comb's check too, AND a frame request once,
-# by its frame event and not again by its ask.
+# Promise: the cost estimate counts every answered request kind, the
+# requests piece by piece, the search sentences, the review and the compute
+# step, AND a frame request once, by its frame event and not again by its
+# ask.
 def test_the_estimate_counts_every_request_kind_once(tmp_path):
     from docpipe import estimate
     (tmp_path / estimate.TRACE_DIR).mkdir()
+    kinds = ("phrase_ask", "review_ask", "compute_ask", "frame", "frame_ask",
+             *(f"{kind}_ask" for kind in schema.PIECE_ASKS))
     (tmp_path / estimate.TRACE_DIR / "plan.trace.jsonl").write_text("\n".join(
-        json.dumps({"doc": 1, **ask(kind)}) for kind in (
-            "phrase_ask", "review_ask", "compute_ask", "frame", "frame_ask",
-            "settings_ask", "naming_groups_ask", "years_ask",
-            "comb_check_ask")), encoding="utf-8")
+        json.dumps({"doc": 1, **ask(kind)}) for kind in kinds),
+        encoding="utf-8")
     documents, sections, counted = estimate._trace_of(
         tmp_path, [("plan", 1)], {1: 10})
     assert (documents, sections) == (1, 10)
     assert {k: n[0] for k, n in counted.items() if n[0]} == {
-        "phrase_ask": 1, "review_ask": 1, "compute_ask": 1, "frame": 1,
-        "settings_ask": 1, "naming_groups_ask": 1, "years_ask": 1,
-        "comb_check_ask": 1}
+        kind: 1 for kind in kinds if kind != "frame_ask"}
 
 
 # Promise: the trace schema takes the order of a document, the sentences it
@@ -254,15 +248,15 @@ def test_the_trace_schema_takes_the_order_and_the_completion():
 def test_requests_at_once_are_their_mean_and_their_most(tmp_path):
     overlap = traced(
         tmp_path,
-        ask("comb_ask", asked_at=0.0, sent_at=0.0, answered_at=10.0),
-        ask("comb_ask", asked_at=5.0, sent_at=5.0, answered_at=15.0))[
+        ask("coord_ask", asked_at=0.0, sent_at=0.0, answered_at=10.0),
+        ask("coord_ask", asked_at=5.0, sent_at=5.0, answered_at=15.0))[
         "requests_at_once"]
     assert overlap["most"] == 2
     assert overlap["mean"] == round(20 / 15, 2)
     follow = traced(
         tmp_path,
-        ask("comb_ask", asked_at=0.0, sent_at=0.0, answered_at=10.0),
-        ask("comb_ask", asked_at=10.0, sent_at=10.0, answered_at=20.0))[
+        ask("coord_ask", asked_at=0.0, sent_at=0.0, answered_at=10.0),
+        ask("coord_ask", asked_at=10.0, sent_at=10.0, answered_at=20.0))[
         "requests_at_once"]
     assert follow["most"] == 1 and follow["mean"] == 1.0
 
@@ -274,41 +268,20 @@ def test_requests_at_once_are_their_mean_and_their_most(tmp_path):
 def test_waiting_and_serving_are_counted_per_stage(tmp_path):
     out = traced(
         tmp_path,
-        ask("read_values_ask", asked_at=0.0, sent_at=4.0, answered_at=10.0),
-        ask("survey_ask", asked_at=0.0, answered_at=3.0),
-        {"t": "error", "where": "comb", "kind": "exception", "attempt": 1,
+        ask("find_ask", asked_at=0.0, sent_at=4.0, answered_at=10.0),
+        ask("list_ask", asked_at=0.0, answered_at=3.0),
+        {"t": "error", "where": "search", "kind": "exception", "attempt": 1,
          "asked_at": 1.0, "sent_at": 1.0, "answered_at": 2.0},
-        ask("read_values_ask"))["requests_at_once"]
-    assert out["by_stage"]["read_values"] == {
+        ask("find_ask"))["requests_at_once"]
+    assert out["by_stage"]["find"] == {
         "seconds_with_the_server": 6.0, "seconds_waiting_for_a_place": 4.0}
-    assert out["by_stage"]["survey"] == {
+    assert out["by_stage"]["list"] == {
         "seconds_with_the_server": 3.0, "seconds_waiting_for_a_place": 0.0}
-    assert out["by_stage"]["comb"]["seconds_with_the_server"] == 1.0
+    assert out["by_stage"]["search"]["seconds_with_the_server"] == 1.0
     assert out["seconds_waiting_for_a_place"] == 4.0
-    untimed = traced(tmp_path, ask("read_values_ask"))["requests_at_once"]
+    untimed = traced(tmp_path, ask("find_ask"))["requests_at_once"]
     assert untimed == {"mean": 0.0, "most": 0, "seconds_with_the_server": 0.0,
                        "seconds_waiting_for_a_place": 0.0, "by_stage": {}}
-
-
-# Promise: every event that reports a request with its times counts, whatever
-# its kind, under its stage: `<stage>_ask` names it, an error says where it
-# was, any other is its own; by construction, requests of the frame, the
-# rows and a field beside one of the comb, all four out at one moment.
-def test_every_request_with_its_times_counts_whatever_its_kind(tmp_path):
-    out = traced(
-        tmp_path,
-        ask("comb_ask", asked_at=0.0, sent_at=0.0, answered_at=10.0),
-        {"t": "frame", "attempt": 1, "prompt_tokens": 9, "asked_at": 0.0,
-         "sent_at": 2.0, "answered_at": 6.0},
-        {"t": "rows", "attempt": 1, "prompt_tokens": 9, "asked_at": 1.0,
-         "sent_at": 1.0, "answered_at": 4.0},
-        {"t": "field", "slot": "year", "stage": "own", "attempt": 1,
-         "prompt_tokens": 9, "asked_at": 3.0, "answered_at": 5.0})[
-        "requests_at_once"]
-    assert set(out["by_stage"]) == {"comb", "frame", "rows", "field"}
-    assert out["by_stage"]["frame"] == {
-        "seconds_with_the_server": 4.0, "seconds_waiting_for_a_place": 2.0}
-    assert out["most"] == 4
 
 
 # Promise: an answer given again (`once`) is no request, adds no tokens AND
@@ -317,12 +290,12 @@ def test_an_answer_given_again_is_no_request_and_not_with_the_server(
         tmp_path):
     out = traced(
         tmp_path,
-        ask("comb_ask", asked_at=0.0, sent_at=0.0, answered_at=10.0),
-        ask("comb_ask", once=True, prompt_tokens=None,
+        ask("list_ask", asked_at=0.0, sent_at=0.0, answered_at=10.0),
+        ask("list_ask", once=True, prompt_tokens=None,
             completion_tokens=None, asked_at=1.0, answered_at=9.0))
-    assert out["requests_by_stage"]["comb"]["requests"] == 1
-    assert out["requests_by_stage"]["comb"]["answered_once"] == 1
-    assert out["requests_by_stage"]["comb"]["prompt_tokens"] == 100
+    assert out["requests_by_stage"]["list"]["requests"] == 1
+    assert out["requests_by_stage"]["list"]["answered_once"] == 1
+    assert out["requests_by_stage"]["list"]["prompt_tokens"] == 100
     assert out["requests_at_once"]["most"] == 1
     assert out["requests_at_once"]["seconds_with_the_server"] == 10.0
 
@@ -330,37 +303,15 @@ def test_an_answer_given_again_is_no_request_and_not_with_the_server(
 # Promise: the trace record takes a request's times and `once`; by
 # construction, a time that is no number is refused.
 def test_the_trace_schema_takes_the_times_and_once_of_a_request():
-    record = {"t": "comb_ask", "doc": 1, "attempt": 1, "ms": 3,
+    record = {"t": "coord_ask", "doc": 1, "attempt": 1, "ms": 3,
               "prompt_tokens": None, "completion_tokens": None,
               "input": {}, "output": {}, "asked_at": 1.5, "sent_at": 1.6,
               "answered_at": 2.0, "once": True}
     record_schema = schema.trace_schema()
     jsonschema.validate(record, record_schema)
-    jsonschema.validate({"t": "error", "doc": 1, "where": "comb",
+    jsonschema.validate({"t": "error", "doc": 1, "where": "coord",
                          "kind": "exception", "attempt": 1, "head": "",
                          "tail": "", "asked_at": 1.5, "answered_at": 2.0},
                         record_schema)
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate({**record, "asked_at": "soon"}, record_schema)
-
-
-# Promise: the second reading is the second conversation's (owner decisions
-# 2026-11-07): the comb event takes its messages and the coordinates they
-# read, AND the stats count them; the read event takes no check any more;
-# by construction, a read event with a check and a count that is no number.
-def test_the_second_reading_is_traced_and_counted_with_the_combing(tmp_path):
-    record = {"t": "comb", "doc": 1, "parameter": "p", "kind": "section",
-              "owner": 6, "rows": 1, "open": 2, "filled": 1, "asked": 3,
-              "hits": 0, "fetched": 0, "searched": 0, "missed": 0,
-              "corrected": 0, "exhausted": 0, "near": 2, "near_read": 1}
-    jsonschema.validate(record, schema.trace_schema())
-    with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate({**record, "near": "two"}, schema.trace_schema())
-    with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate({"t": "read", "doc": 1, "parameter": "p",
-                             "kind": "section", "owner": 6, "values": 1,
-                             "asked": 3, "judged": 2}, schema.trace_schema())
-    out = traced(tmp_path, record, {**record, "owner": 7, "near": 1,
-                                    "near_read": 0})["combing"]
-    assert (out["second_reading_messages"],
-            out["second_reading_read"]) == (3, 1)

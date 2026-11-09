@@ -1,11 +1,13 @@
 """
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
-A run reads each plan passage by passage (`surveyed_flow`, which stops the
-run where the spec names no groups or the profile lacks a prompt of the
-harvest): the order of its passages, the reading of every passage for every
-parameter and the combing per document (`surveyed.py`), then the fold, the
-compute step and the file with its stamp as below. The passes over a
+A run reads each plan in pieces of numbered lines (`surveyed_flow`, which
+stops the run where the spec names no groups or the profile lacks a prompt
+of the harvest): every piece asked for every field in the order a reranker
+gives it, each coordinate of each value found asked on its own, and a
+coordinate its place does not state searched for (`addressed.py`, run per
+document by `surveyed.py`), then the fold, the compute step and the file
+with its stamp as below. The passes over a
 stored harvest run on the same steps.
 
 This module supplies the loop's expensive dependencies from the real world:
@@ -63,28 +65,25 @@ from docpipe.llm_preflight import assert_serving, request_extras
 from docpipe.profile import add_profile_argument, program, require_profile
 from docpipe.store.schema import readonly_uri
 
+from . import addressed as addressed_map
 from . import archive
-from . import combing as combing_map
 from . import compute as computing
 from . import fields
 from . import found as found_places
-from . import naming as naming_map
 from . import reading as reading_map
 from . import replies
-from . import settings as settings_map
-from . import survey as survey_map
 from . import surveyed as surveyed_map
 from . import thread as thread_map
-from . import years as years_map
 from . import scheduler
 from . import scratch
+from . import lookup as lookup_map
 from . import trace
+from . import units as units_map
 from .wording import say
 from .pipeline import (YEAR_STATES, DocumentReport, Source,
                        cell_index as pipeline_cell_index, column_head,
-                       drop_repeats, fold_batch, fold_claims, named_years,
+                       drop_repeats, fold_batch, fold_claims,
                        option_named, window_around, write_report)
-from .verify import flat as flat_text
 from .trust import document_summary, parameter_states
 from .spec import Spec, fingerprints, load as load_spec
 
@@ -321,12 +320,14 @@ LOCATE_CACHE_PAGES = int(os.environ.get("EXTRACT_LOCATE_CACHE_PAGES", "512"))
 ANCHORS_PROMPT_ID = "extraction/anchors"
 # The one sentence a document is searched with, written for THAT document.
 PHRASE_PROMPT_ID = "extraction/phrase"
-# The prompts of a harvest passage by passage (reading.py, combing.py,
-# settings.py), the run's own wherever the profile writes them and its spec
-# names groups (`surveyed_flow`).
-SURVEY_PROMPT_IDS = (*reading_map.PROMPT_IDS,
-                     combing_map.COMB_PROMPT_ID, reading_map.CHECK_PROMPT_ID,
-                     settings_map.SETTINGS_PROMPT_ID)
+# The prompts of a harvest piece by piece (addressed.py), the run's own
+# wherever the profile writes them and its spec names groups
+# (`surveyed_flow`); the check of a find from another passage is the
+# profile's choice, and the names request is asked only by a run that
+# builds a list of names (`addressed.OPTIONAL`, `names_asked`).
+SURVEY_PROMPT_IDS = tuple(prompt_id for kind, prompt_id
+                          in addressed_map.PROMPT_IDS.items()
+                          if kind not in addressed_map.OPTIONAL)
 # The flow this run harvests with, under the name stamps and producers have
 # recorded since the survey began it: every harvest reads passage by
 # passage. Nothing compares it; older harvests say "fieldwise" (`schema.py`),
@@ -361,6 +362,16 @@ REST_MAX_WINDOWS = int(os.environ.get("EXTRACT_REST_MAX_WINDOWS", "12"))
 # A rest stage that only the end of the document stops: the budget is
 # compared, never counted down window by window, so no plan comes near it.
 REST_TO_END = 1_000_000
+# The rounds the search after an open coordinate has at least, whatever a
+# run sets (owner decision 2026-11-09: "min 100").
+SEARCH_MIN_ROUNDS = 100
+
+
+def search_rounds() -> int:
+    """How many rounds of pieces the search after an open coordinate may
+    ask (`addressed.Reader.search`): the run's budget, at least
+    `SEARCH_MIN_ROUNDS`."""
+    return max(SEARCH_MIN_ROUNDS, REST_MAX_WINDOWS)
 
 
 def read_to_end() -> None:
@@ -1178,53 +1189,38 @@ def document_context_of(db_path: Optional[Path],
     return context_of
 
 
-def make_seek_probes(own=(), context_of: Optional[Callable] = None,
+def make_seek_probes(context_of: Optional[Callable] = None,
                      write: Optional[Callable] = None) -> Callable:
     """probes(parameter, document_id) -> the sentences a plan's passages
-    are ranked with for a parameter, which sets the order it reads them in
-    (`survey.Ranking`, owner decisions 2026-11-05 and 2026-11-08).
+    are ranked with for a parameter, which sets the order it reads them in,
+    and the search after an open coordinate goes with where its answer
+    wrote none (`addressed.Orders`, `addressed.Reader.search`).
 
-    A parameter about the document itself (*own*, the profile's
-    `FRONT_PAGE_PARAMETERS`: its title, authors, date, DOI and abstract) gets
-    a sentence written for this document from what it says of itself
-    (*context_of(document_id)*, the profile's `document_context`), since the
-    document's own name finds its title page. Any other gets one sentence per
-    run, written once from
-    its label, description and list names and kept: the document's name
-    pulls such a sentence toward the title page and away from the passage
-    that states the value. *write(parameter, context)* writes the sentences,
-    one phrase request (`document_anchor`) where not given. A parameter no
+    Every parameter gets a sentence written for this document by the model,
+    from the parameter's label, description and list names and from what
+    the document says of itself (*context_of(document_id)*, the profile's
+    `document_context`: the municipality of a plan, the title of a
+    publication), as the chat turns a question into a sentence of the
+    document before it searches (owner decisions 2026-11-05, 2026-11-08 and
+    2026-11-09). *write(parameter, context)* writes the sentences, one
+    phrase request (`document_anchor`) where not given. A parameter no
     sentence could be written for gets none, and the search falls back to
-    its label. A document's own sentence is sent in that document's turn, the
-    run's before every document, since every document waits on it
-    (`document_anchor`, *shared*; owner decision 2026-11-07).
+    its label. Each sentence is sent in its document's turn (owner decision
+    2026-11-07).
     """
-    own = set(own or ())
-    lock = threading.Lock()
-    made: dict = {}
-
-    def phrase(parameter, context, document_id, shared=False):
+    def phrase(parameter, context, document_id):
         if write is not None:
             return list(write(parameter, context) or [])
         return document_anchor(SimpleNamespace(parameters=[parameter]),
-                               context, document_id=document_id,
-                               shared=shared).get(parameter.uri, [])
+                               context, document_id=document_id
+                               ).get(parameter.uri, [])
 
     def probes(parameter, document_id) -> list:
-        if parameter.uri in own:
-            context = dict(context_of(document_id) if context_of else {})
-            sentences = phrase(parameter, context, document_id)
-            per = "document"
-        else:
-            with lock:
-                if parameter.uri not in made:
-                    made[parameter.uri] = phrase(parameter, None, document_id,
-                                                 shared=True)
-                sentences = made[parameter.uri]
-            per = "run"
+        context = dict(context_of(document_id) if context_of else {})
+        sentences = phrase(parameter, context, document_id)
         for text in sentences:
             trace.event("seek_probe", document_id, parameter=parameter.uri,
-                        per=per, text=text)
+                        per="document", text=text)
         return list(sentences)
     return probes
 
@@ -1232,8 +1228,7 @@ def make_seek_probes(own=(), context_of: Optional[Callable] = None,
 def document_anchor(spec: Spec, context: Optional[dict] = None,
                     client=None, prompt=None,
                     frame: Optional[dict] = None,
-                    document_id: Optional[int] = None,
-                    shared: bool = False) -> dict:
+                    document_id: Optional[int] = None) -> dict:
     """{parameter uri: [one sentence]} — the probe THIS document is searched with.
 
     The QA app turns a question into one short statement before it searches,
@@ -1261,17 +1256,13 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
     Each request is sent for *document_id*, in that document's turn, with
     the ticket of the thread that asked (`_for`), although a thread of the
     pool below sends it: such a thread belongs to no document, and a request
-    of none goes before every document. A *shared* sentence, the one the run
-    keeps for every document (`make_seek_probes`), is sent for none, as
-    everything every document waits on is; *document_id* still notes its
-    failures and traces it (owner decision 2026-11-07).
+    of none goes before every document (owner decision 2026-11-07).
     """
     prompt = prompt if prompt is not None else prompts.load(PHRASE_PROMPT_ID)
     client = _repeating(client or _client())
     context = {k: v for k, v in (context or {}).items()
                if isinstance(v, str) and v.strip()}
-    behalf = (None, None) if shared else (document_id,
-                                          scheduler.current()[1])
+    behalf = (document_id, scheduler.current()[1])
 
     def one(parameter):
         payload = json.dumps(phrase_payload(parameter, context, frame),
@@ -1550,24 +1541,21 @@ def system_text(prompt, example: Optional[dict]) -> str:
 
 
 def ask_in_grammar(client, prompt, conversation: list, shape: dict,
-                   document_id: int, where: str, key: str,
+                   document_id: int, where: str, key: str, /,
                    example: Optional[dict] = None,
-                   thread: Optional[thread_map.Thread] = None, **noted):
-    """One request of the rebuilt harvest: the reply as a dict, "cut_off"
-    when it did not fit its room, or None when it could not be read. The
-    prompt shows *example*, the reply this request asks for
-    (`system_text`).
-
-    With *thread* the request is one message of a conversation (owner
-    decisions 2026-11-07): a follow-up is sent under the system prompt the
-    conversation began with, and the answer that stands is kept in it with
-    every message sent, so the next follow-up goes after it
-    (`thread.Thread`).
+                   lacking: Optional[Callable] = None, **noted):
+    """One request of the harvest: the reply as a dict, "cut_off" when it
+    did not fit its room, or None when it could not be read. The prompt
+    shows *example*, the reply this request asks for (`system_text`); the
+    request is its prompt and *conversation*, one message (owner decisions
+    2026-11-08: no request is a conversation).
 
     Asked again with the cause when the reply is no JSON object, or one
-    without a key its schema requires (`_lacking`), as every request of the
-    stage is; a reply cut off at its limit is not rescued. Each answer is
-    traced as `<where>_ask` with *noted*.
+    without a key its schema requires (`_lacking`) or one *lacking(answer)*
+    names (a coordinate's sentence where it found nothing,
+    `addressed.hyde_missing`), as every request of the stage is; a reply cut
+    off at its limit is not rescued. Each answer is traced as
+    `<where>_ask` with *noted*.
 
     A request whose last attempt ended on a 429, a 5xx or a timeout was
     never answered, so its document is noted (`UNSERVED`) and goes
@@ -1578,8 +1566,7 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
     client = _repeating(client)
     temperature = float(prompt.meta.get("temperature", 0))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
-    text = (thread.system if thread is not None and thread.begun
-            else system_text(prompt, example))
+    text = system_text(prompt, example)
     failures = Failures(document_id)
     faults = 0
     for attempt in range(1, MAX_RETRIES + 1):
@@ -1607,18 +1594,15 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
                         completion_tokens=getattr(usage, "completion_tokens",
                                                   None), **noted)
             answer = _loads_object(reply.message.content)
-            lacking = _lacking(answer, shape)
-            if isinstance(answer, dict) and lacking is None:
-                if thread is not None:
-                    thread.system = text
-                    thread.messages = [
-                        *conversation,
-                        {"role": "assistant",
-                         "content": reply.message.content or ""}]
+            missing = _lacking(answer, shape)
+            if missing is None and lacking is not None \
+                    and isinstance(answer, dict):
+                missing = lacking(answer)
+            if isinstance(answer, dict) and missing is None:
                 return answer
             faults += 1
             cause, correction = _reply_fault(reply, limit,
-                                             key=lacking or key)
+                                             key=missing or key)
             trace.event("error", document_id, where=where,
                         kind="unreadable", cause=cause, attempt=attempt)
             if cause == "cut_off":
@@ -1639,344 +1623,213 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
     return None
 
 
-# The fields each prompt's follow-ups carry, whose words its file must hold
-# (`thread.cut`, owner decisions 2026-11-07): a run whose prompt lacks them
-# stops at its start (`surveyed_flow`).
-FOLLOWS = {
-    reading_map.READ_VALUES_PROMPT_ID: reading_map.VALUE_FOLLOWS,
-    reading_map.READ_TEXT_PROMPT_ID: reading_map.TEXT_FOLLOWS,
-    combing_map.COMB_PROMPT_ID: combing_map.FOLLOWS,
-    reading_map.CHECK_PROMPT_ID: reading_map.CHECK_FOLLOWS,
-    years_map.YEARS_PROMPT_ID: years_map.FOLLOWS,
-    settings_map.SETTINGS_PROMPT_ID: settings_map.FOLLOWS,
-    naming_map.NAMING_PROMPT_ID: naming_map.FOLLOWS,
-    naming_map.GROUPS_PROMPT_ID: naming_map.FOLLOWS,
-    naming_map.SEVERAL_PROMPT_ID: naming_map.FOLLOWS,
-    computing.COMPUTE_PROMPT_ID: computing.FOLLOWS,
-}
-
-
-def parts_of(prompt_id: str, spec: Optional[Spec] = None, profile=None):
-    """The prompt *prompt_id* cut at its parts (`thread.cut`): with *spec*,
-    the reading's groups must each have theirs, and every field its
-    follow-ups carry (`FOLLOWS`) its words. LookupError where it does not
-    fit."""
-    prompt = prompts.load(prompt_id, profile)
-    groups = (spec.groups.values() if spec is not None
-              and prompt_id == reading_map.READ_TEXT_PROMPT_ID else None)
-    return thread_map.cut(prompt, groups, follows=FOLLOWS.get(prompt_id, ()))
-
-
-def threaded(parts, thread, payload: Optional[dict] = None,
-             follow: Optional[dict] = None, content=None,
-             example: Optional[dict] = None) -> tuple:
-    """(prompt, conversation) of one message of *thread* (owner decisions
-    2026-11-07): a follow-up (*follow*) goes after the answer that stands,
-    in the words of the parts its fields need, with the reply the request
-    asks for (*example*) where they show one; a first message shows
-    *payload* (as *content* where given, such as a figure with its crop)
-    under the system prompt of what every request of its kind is told and
-    the part of each field it carries."""
-    if follow is not None:
-        return parts.prompt, thread.then(parts.follow_up(follow, example))
-    thread.first = payload
-    if content is None:
-        content = json.dumps(payload, ensure_ascii=False, indent=2)
-    return parts.system(payload), [{"role": "user", "content": content}]
-
-
-def told(follow: Optional[dict]) -> int:
-    """How many corrections a follow-up carries, for the trace."""
-    return len((follow or {}).get(thread_map.CORRECTIONS) or ())
-
-
 def worded(words: str, payload: dict) -> str:
     """A message: its words, then what it shows as JSON."""
     data = json.dumps(payload, ensure_ascii=False, indent=2)
     return f"{words}\n\n{data}" if words else data
 
 
-def answers_in(thread) -> int:
-    """How many answers a conversation holds."""
-    return sum(1 for message in thread.messages
-               if message.get("role") == "assistant")
+def run_each(jobs: list, run: Callable) -> list:
+    """*run(job)* for each of *jobs*, side by side on the run's threads
+    (`AHEAD`) where it has them, the results in the order of the jobs. Only
+    the caller waits: no job waits for another, so the threads never wait
+    for themselves. A job that fails takes back every job not yet begun."""
+    jobs = list(jobs)
+    if AHEAD is None or len(jobs) < 2:
+        return [run(job) for job in jobs]
+    futures = [AHEAD.submit(run, job) for job in jobs]
+    try:
+        return [future.result() for future in futures]
+    except BaseException:
+        for future in futures:
+            future.cancel()
+        raise
 
 
-def shows_in_full(thread, parameter) -> bool:
-    """Has a message of this conversation shown *parameter* with its full
-    definition? A coordinate that classifies is shown it once, with the
-    first of them that is asked (owner decision 2026-11-07: one coordinate
-    per message)."""
-    wanted = json.dumps(parameter.description, ensure_ascii=False)[1:-1]
-    for message in thread.messages:
-        if message.get("role") != "user":
+# What a request of the harvest names its reply's list or answer by, for the
+# sentence that tells the model what was missing (`_reply_fault`).
+ASK_KEYS = {"transcribe": "lines", "find": "found", "docfield": "found",
+            "coord": "at", "search": "at", "list": "entry",
+            "names": "entry", "check": "about"}
+
+
+def request_prompt(parts, payload: dict):
+    """The prompt of one request: what every request of its kind is told,
+    and the part of each field its payload carries (`thread.Parts.system`,
+    owner decision 2026-11-07: no request is told about a field it does not
+    carry)."""
+    return parts.system(payload.keys())
+
+
+def make_asks(profile=None) -> Optional[addressed_map.Asks]:
+    """The requests of the harvest (`addressed.Asks`), each with a prompt of
+    its own and its payload as one message, no conversation (owner decisions
+    2026-11-08); None where the profile writes one of their prompts not,
+    those of `addressed.OPTIONAL` aside. A coordinate's answer that says
+    nothing shown states it and gives no sentence of how the plan would
+    print it is asked again (`addressed.hyde_missing`). A request asked once
+    more (`follow`) goes under the prompt of the request it follows, its
+    words after the payload."""
+    loaded: dict = {}
+    for kind, prompt_id in addressed_map.PROMPT_IDS.items():
+        if kind == "transcribe":
             continue
-        content = message.get("content")
-        texts = [content] if isinstance(content, str) else [
-            part.get("text", "") for part in content or ()
-            if isinstance(part, dict)]
-        if any(wanted in (text or "") for text in texts):
-            return True
-    return False
-
-
-def make_reader(spec: Spec, image_root: Optional[Path] = None):
-    """The reading of one parameter's passages (`reading.Reader`), or None
-    when the profile writes no prompts for it or its spec names no groups.
-    Two kinds of request, each with one task (owner decisions 2026-11-04
-    and 2026-11-05), each a message of a conversation (owner decisions
-    2026-11-07, `thread.py`): all values of a passage in one answer, what
-    follows it asking for those not named yet (owner decisions 2026-11-08),
-    and one value's coordinates, one coordinate per
-    message with the words of its group (`thread.Parts.group`). A system
-    prompt holds what its kind of request is told and the part of each
-    field its first message carries. A figure goes with its crop, in the
-    first message, and a value only the crop shows is read off it (owner
-    decisions 2026-11-05 and 2026-11-07). Neither request has tools (owner
-    decision 2026-11-05, ticket 26)."""
-    if not spec.groups:
-        return None
-    try:
-        values_parts = parts_of(reading_map.READ_VALUES_PROMPT_ID)
-        text_parts = parts_of(reading_map.READ_TEXT_PROMPT_ID, spec)
-    except (FileNotFoundError, LookupError):
-        return None
-    client = _client()
-    frame_slots = frame_slots_of(spec)
-    from docpipe.profile import active_profile
-    states = year_states_of(active_profile())
-
-    def document_of(source) -> int:
-        return int((source.provenance or {}).get("document_id") or 0)
-
-    def image_of(source) -> Optional[dict]:
-        """The crop that goes with a request about *source*: a figure's, or
-        None."""
-        if source.owner_kind == "figure" and source.image_path \
-                and ATTACH_IMAGES:
-            return _image_part(str(image_root / source.image_path)
-                               if image_root else source.image_path)
-        return None
-
-    def drawn(source) -> bool:
-        """Does a request about *source* send a figure's image, so a value
-        only the image shows is read off it?"""
-        return image_of(source) is not None
-
-    def content_of(source, text: str):
-        """The user message of a request about *source*: its payload, and a
-        figure's crop beside it."""
-        part = image_of(source)
-        if part is not None:
-            return [{"type": "text", "text": text}, part]
-        return text
-
-    def ask_values(source, parameter, context, read, thread, follow=None,
-                   drawn=False):
-        # The first message shows the passage; what follows an answer is the
-        # ask for the values not named yet or a correction (owner decisions
-        # 2026-11-07 and 2026-11-08).
-        example = reading_map.values_example(parameter, drawn)
-        if thread.begun:
-            prompt = values_parts.prompt
-            conversation = thread.then(values_parts.follow_up(follow,
-                                                              example))
-        else:
-            payload = reading_map.values_payload(source, parameter, context,
-                                                 read, drawn)
-            prompt = values_parts.system(payload)
-            conversation = [{"role": "user", "content": content_of(
-                source, json.dumps(payload, ensure_ascii=False, indent=2))}]
-        return ask_in_grammar(
-            client, prompt, conversation,
-            reading_map.values_response_format(parameter, drawn),
-            document_of(source), "read_values", "values", example=example,
-            thread=thread, parameter=parameter.uri, kind=source.owner_kind,
-            owner=source.owner_id, round=answers_in(thread) + 1,
-            corrections=told(follow))
-
-    def ask_text(source, parameter, group, slots, row, context, thread,
-                 follow=None):
-        # The first message of a value's conversation shows the passage and
-        # the value with its first coordinate in the words of its group;
-        # each next coordinate is a message of its own; a correction follows
-        # the answer it is about (owner decisions 2026-11-07).
-        example = reading_map.text_example(slots)
-        if follow is not None:
-            prompt = text_parts.prompt
-            conversation = thread.then(text_parts.follow_up(follow, example))
-        elif thread.begun:
-            payload = reading_map.group_payload(
-                parameter, slots, group.where, context,
-                full=group.full_definition and not shows_in_full(
-                    thread, parameter))
-            prompt = text_parts.prompt
-            conversation = thread.then(worded(
-                text_parts.group(group.name, example), payload))
-        else:
-            payload = reading_map.text_payload(
-                source, parameter, slots, row, group.where, context,
-                full=group.full_definition)
-            thread.first = payload
-            prompt = text_parts.system(payload)
-            conversation = [{"role": "user", "content": content_of(
-                source, worded(text_parts.group(group.name, example),
-                               payload))}]
-        return ask_in_grammar(
-            client, prompt, conversation,
-            reading_map.text_response_format(slots), document_of(source),
-            "read_text", slots[0].name, example=example, thread=thread,
-            parameter=parameter.uri, kind=source.owner_kind,
-            owner=source.owner_id,
-            group=group.name if group is not None else None,
-            value=row.label, corrections=told(follow))
-
-    return reading_map.Reader(
-        spec, ask_values, ask_text,
-        shown_with=reading_map.heading_of,
-        bases=lambda pairs: named_years(pairs, frame_slots, states),
-        known=row_context, drawn=drawn, span_marks=span_marks_of(),
-        pool=AHEAD, trace=trace.event)
-
-
-def check_asker(client, parts=None) -> Optional[Callable]:
-    """The request that asks of a find whether the place it was quoted from
-    speaks about its value (`reading.Judge`, owner decisions 2026-11-07),
-    the same for a find of the second reading and one of the combing; None
-    where the profile writes no prompt for it. *parts* is the prompt cut at
-    its parts where the caller has it."""
-    if parts is None:
         try:
-            parts = parts_of(reading_map.CHECK_PROMPT_ID)
+            loaded[kind] = thread_map.cut(prompts.load(prompt_id, profile))
         except (FileNotFoundError, LookupError):
-            return None
-
-    def check(payload, shape, document_id, source, group=None, example=None,
-              thread=None, follow=None):
-        # A find quoted from a passage the value's own request did not show:
-        # does that place speak about the value?
-        thread = thread if thread is not None else thread_map.Thread()
-        prompt, conversation = threaded(parts, thread, payload, follow,
-                                        example=example)
-        return ask_in_grammar(
-            client, prompt, conversation, shape, document_id, "comb_check",
-            "about", example=example, thread=thread,
-            parameter=thread.first["parameter"]["key"],
-            kind=source.owner_kind, owner=source.owner_id, group=group,
-            corrections=told(follow))
-    return check
-
-
-def make_namer(spec: Spec, passages_of: Callable) -> Optional[Callable]:
-    """The requests that ask which of a document's names mean the same
-    thing once it is folded (`naming.Namer`, owner decisions 2026-11-06):
-    `name(report)`, which marks the report's rows. None where the spec
-    merges no names or the profile writes no prompt for it, which
-    `surveyed_flow` refuses at the start of a run. *passages_of(document_id)*
-    is the plan's passages in their order. The names are embedded with the
-    run's embedding model (`COALESCED`)."""
-    if not naming_map.merges(spec):
-        return None
-    try:
-        groups_parts, parts, several_parts = (
-            parts_of(prompt_id) for prompt_id in naming_map.NAMING_PROMPT_IDS)
-    except (FileNotFoundError, LookupError):
-        return None
+            if kind not in addressed_map.OPTIONAL:
+                return None
     client = _client()
+    follow_words = loaded["follow"].common.strip()
 
-    def ask_groups(payload, shape, document_id, kind, example=None,
-                   thread=None, follow=None):
-        # The candidates (owner decision 2026-11-06): every name with its
-        # quote, the groups that may name one thing; what was wrong follows
-        # the answer (owner decisions 2026-11-07).
-        thread = thread if thread is not None else thread_map.Thread()
-        prompt, conversation = threaded(groups_parts, thread, payload,
-                                        follow, example=example)
+    def lacking_of(kind: str) -> Optional[Callable]:
+        return addressed_map.hyde_missing if kind == "coord" else None
+
+    def message(payload: dict) -> str:
+        return json.dumps(payload, ensure_ascii=False, indent=1)
+
+    def asker(kind: str) -> Callable:
+        parts = loaded[kind]
+
+        def ask(payload, document_id, /, shape, example, **noted):
+            return ask_in_grammar(
+                client, request_prompt(parts, payload),
+                [{"role": "user", "content": message(payload)}],
+                shape, document_id, kind, ASK_KEYS[kind], example,
+                lacking_of(kind), **noted)
+        return ask
+
+    def follow(kind, payload, document_id, /, shape, example, **noted):
+        content = f"{message(payload)}\n\n{follow_words}"
         return ask_in_grammar(
-            client, prompt, conversation, shape, document_id,
-            "naming_groups", naming_map.GROUPS, example=example,
-            thread=thread, kind=kind, names=len(payload["names"]),
-            corrections=told(follow))
+            client, request_prompt(loaded[kind], payload),
+            [{"role": "user", "content": content}],
+            shape, document_id, "follow", ASK_KEYS[kind], example,
+            lacking_of(kind), **{**noted, "asked": kind})
+    return addressed_map.Asks(
+        find=asker("find"), docfield=asker("docfield"), coord=asker("coord"),
+        list=asker("list"),
+        names=asker("names") if "names" in loaded else None,
+        search=asker("search"), follow=follow,
+        check=asker("check") if "check" in loaded else None)
 
-    def ask(payload, shape, document_id, kind, example=None, thread=None,
-            follow=None):
-        # One request per name (owner decision 2026-11-06): the name asked
-        # with its places, its candidates with their quotes.
-        thread = thread if thread is not None else thread_map.Thread()
-        prompt, conversation = threaded(parts, thread, payload, follow,
-                                        example=example)
+
+def image_path_of(source, image_root: Optional[Path]) -> Optional[str]:
+    """Where a figure's crop is, None where the run sends no image or the
+    figure has none."""
+    if source.owner_kind != "figure" or not source.image_path \
+            or not ATTACH_IMAGES:
+        return None
+    return str(Path(image_root) / source.image_path) if image_root \
+        else source.image_path
+
+
+def make_transcribe(profile, image_root: Optional[Path]) -> tuple:
+    """(ask(source, document_id), fingerprint): the request that writes a
+    figure as lines once per run (`addressed.Transcripts`, owner decision
+    2026-11-08, e), its crop and its description shown, and what names the
+    prompt and model that wrote a kept transcription; (None, "") where the
+    profile writes no prompt for it."""
+    try:
+        prompt = prompts.load(addressed_map.PROMPT_IDS["transcribe"], profile)
+    except (FileNotFoundError, LookupError):
+        return None, ""
+    client = _client()
+    fingerprint = hashlib.sha256(
+        f"{prompt.sha256}|{LLM_MODEL}".encode("utf-8")).hexdigest()[:16]
+
+    def ask(source, document_id):
+        path = image_path_of(source, image_root)
+        part = _image_part(path) if path else None
+        if part is None:
+            return None
+        lines = (source.text or "").strip().splitlines()
+        payload = {"figure": {"title": lines[0] if lines else "",
+                              "description": "\n".join(lines[1:])}}
+        content = [{"type": "text", "text": json.dumps(
+            payload, ensure_ascii=False, indent=1)}, part]
         return ask_in_grammar(
-            client, prompt, conversation, shape, document_id, "naming",
-            naming_map.MEANT, example=example, thread=thread, kind=kind,
-            names=len(payload["names"]),
-            places=len(payload["name"]["places"]), corrections=told(follow))
-
-    def ask_several(payload, shape, document_id, kind, example=None,
-                    thread=None, follow=None):
-        # One request per wording of several things and document (owner
-        # decision 2026-11-07): the words with their places, every thing of
-        # the document with its quote.
-        thread = thread if thread is not None else thread_map.Thread()
-        prompt, conversation = threaded(several_parts, thread, payload,
-                                        follow, example=example)
-        return ask_in_grammar(
-            client, prompt, conversation, shape, document_id,
-            "naming_several", naming_map.MEANT, example=example,
-            thread=thread, kind=kind, names=len(payload["names"]),
-            places=len(payload["group"]["places"]), corrections=told(follow))
-
-    def embed(texts: list) -> list:
-        return COALESCED.embed([{"text": text} for text in texts])
-    namer = naming_map.Namer(spec, ask, trace=trace.event, pool=AHEAD,
-                             ask_groups=ask_groups, embed=embed,
-                             ask_several=ask_several)
-
-    def name(report) -> None:
-        passages = {(s.owner_kind, s.owner_id): s
-                    for s in passages_of(report.document_id)}
-        namer(report.document_id, report.tuples, passages)
-    return name
+            client, prompt, [{"role": "user", "content": content}],
+            addressed_map.lines_format(), document_id, "transcribe", "lines",
+            example={"lines": [payload["figure"]["title"] or fields.SAID,
+                               fields.SAID]},
+            kind="figure", owner=source.owner_id)
+    return ask, fingerprint
 
 
-def make_comber(spec: Spec, rank: Callable):
-    """The search for what the reading left open (`combing.Comber`), or None
-    when the profile writes no prompt for it or its spec names no groups.
-    *rank(document_id, probes, exclude)* is the plan's passages best first
-    for the search sentences, `make_more_sources` in a harvest."""
+def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
+                probes: Optional[Callable] = None):
+    """The reading of a document piece by piece (`addressed.Reader`), or
+    None where its spec names no groups or the profile writes no prompts
+    for it. What the profile asks once of a plan beside its fields
+    (`PLAN_FIELDS`) and the field that names other works (`WORKS`) come
+    from the profile."""
     if not spec.groups:
         return None
-    try:
-        comb_parts, check_parts = (parts_of(prompt_id) for prompt_id in
-                                   (combing_map.COMB_PROMPT_ID,
-                                    reading_map.CHECK_PROMPT_ID))
-    except (FileNotFoundError, LookupError):
+    asks = make_asks(profile)
+    if asks is None:
         return None
-    client = _client()
-    frame_slots = frame_slots_of(spec)
-    from docpipe.profile import active_profile
-    states = year_states_of(active_profile())
+    component = (profile.component if profile is not None
+                 else (lambda stage, name: None))
+    return addressed_map.Reader(
+        spec, asks, order, search_order=search_order, probes=probes,
+        known=row_context, span_marks=span_marks_of(),
+        plan_fields=component("extraction", "PLAN_FIELDS") or {},
+        works=component("extraction", "WORKS"),
+        frame_slots=frame_slots_of(spec), each=run_each, trace=trace.event,
+        budget=search_rounds())
 
-    def ask(payload, shape, document_id, source, group=None, example=None,
-            thread=None, follow=None):
-        # The rounds of one value's search are one conversation, each later
-        # message what is new since the answer before (owner decisions
-        # 2026-11-07).
-        thread = thread if thread is not None else thread_map.Thread()
-        prompt, conversation = threaded(comb_parts, thread, payload, follow,
-                                        example=example)
-        return ask_in_grammar(
-            client, prompt, conversation, shape, document_id, "comb", "rows",
-            example=example, thread=thread,
-            parameter=thread.first["parameter"]["key"],
-            kind=source.owner_kind, owner=source.owner_id, group=group,
-            round=answers_in(thread) + 1, corrections=told(follow))
 
-    comber = combing_map.Comber(
-        spec, ask, rank, row_context,
-        bases=lambda pairs: named_years(pairs, frame_slots, states),
-        pool=AHEAD, trace=trace.event,
-        check=check_asker(client, check_parts), span_marks=span_marks_of())
-    return comber
+def make_chunk_reranker() -> Optional[Callable]:
+    """() -> one thread's reranker of the pieces of a plan, which scores
+    every piece it is given (`rerank.Reranker`), or None where the run is
+    given no RERANK_BASE_URL."""
+    from docpipe.inference import rerank as rerank_map
+    if not rerank_map.RERANK_BASE_URL:
+        return None
+    return lambda: rerank_map.Reranker(pool=1_000_000)
+
+
+def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
+                 image_root: Optional[Path], profile, every: Callable,
+                 spec_for: Optional[Callable] = None,
+                 rank: Optional[Callable] = None,
+                 reranker: Optional[Callable] = None):
+    """The harvest of a document piece by piece (`surveyed.SurveyedHarvest`)
+    as a run and a probe make it: the order of the pieces by the reranker
+    (*reranker*, `make_chunk_reranker`) and the search over passages
+    (*rank*, `make_more_sources` with its reranker), a field's search
+    sentences (`make_seek_probes`), the figures transcribed once and kept
+    under *out* (`transcripts/`), the orders kept there too (`survey/`), and
+    the size of the pieces the profile gives (`CHUNK_UNITS`). *every(
+    document_id, exclude)* is the plan's passages in its order."""
+    order, search_order = addressed_map.make_order(reranker, rank)
+    component = (profile.component if profile is not None
+                 else (lambda stage, name: None))
+    seek = make_seek_probes(document_context_of(
+        db_path, component("extraction", "document_context")))
+    transcribe, fingerprint = make_transcribe(profile, image_root)
+    transcripts = addressed_map.Transcripts(
+        transcribe, Path(out) / "transcripts", fingerprint,
+        lambda source: addressed_map.image_key(image_path_of(source,
+                                                             image_root)))
+    # What writes the sentences the orders are made with: an order kept
+    # from sentences written otherwise is made again.
+    written = f"document:{prompts.load(PHRASE_PROMPT_ID, profile).sha256}"
+    orders = addressed_map.Orders(order, seek, Path(out) / "survey",
+                                  trace=trace.event, written=written)
+    chunk_units = int(component("extraction", "CHUNK_UNITS")
+                      or units_map.CHUNK_UNITS)
+    log.info("harvest: pieces of %d lines, figures transcribed once under "
+             "%s, orders kept in %s", chunk_units, Path(out) / "transcripts",
+             Path(out) / "survey")
+    return surveyed_map.SurveyedHarvest(
+        spec,
+        lambda doc_spec: make_reader(doc_spec, profile, order, search_order,
+                                     seek),
+        lambda document_id: every(document_id, set()),
+        spec_for=spec_for, transcripts=transcripts, orders=orders,
+        chunk_units=chunk_units, each=run_each, trace=trace.event)
 
 
 def frame_slots_of(spec: Spec) -> list:
@@ -1991,117 +1844,6 @@ def dates_by_plan(spec: Spec) -> bool:
     """Does the spec date a value by the plan's own years: has its frame a
     year?"""
     return any(slot.kind == fields.NUMBER for slot in frame_slots_of(spec))
-
-
-def make_years(spec: Spec, rank: Optional[Callable] = None):
-    """The request for a plan's base and target years, once per plan
-    (`years.PlanYears`, owner decision 2026-11-06), or None where the spec's
-    frame has no year or the profile writes no prompt for it. *rank* is the
-    plan best first for a sentence the model writes ("similar")."""
-    if not dates_by_plan(spec):
-        return None
-    try:
-        parts = parts_of(years_map.YEARS_PROMPT_ID)
-    except (FileNotFoundError, LookupError):
-        return None
-    client = _client()
-    from docpipe.profile import active_profile
-    states = year_states_of(active_profile())
-
-    def ask(payload, document_id, thread=None, follow=None):
-        # The rounds are one conversation, each later message what is new
-        # since the answer before (owner decisions 2026-11-07).
-        thread = thread if thread is not None else thread_map.Thread()
-        example = years_map.example()
-        prompt, conversation = threaded(parts, thread, payload, follow,
-                                        example=example)
-        return ask_in_grammar(
-            client, prompt, conversation, years_map.response_format(),
-            document_id, "years", "base_years", example=example,
-            thread=thread, round=answers_in(thread) + 1,
-            corrections=told(follow))
-    return years_map.PlanYears(ask, frame_slots_of(spec), states, rank=rank,
-                               trace=trace.event)
-
-
-def make_settings(spec: Spec, rank: Optional[Callable] = None):
-    """The request for what a plan settles for all its values, once per plan
-    (`settings.PlanSettings`, owner decision 2026-11-07), or None where the
-    profile writes no prompt for it. *rank* is the plan best first for a
-    sentence the model writes ("similar")."""
-    try:
-        parts = parts_of(settings_map.SETTINGS_PROMPT_ID)
-    except (FileNotFoundError, LookupError):
-        return None
-    client = _client()
-
-    def ask(payload, document_id, thread=None, follow=None):
-        # The rounds are one conversation, each later message what is new
-        # since the answer before (owner decisions 2026-11-07).
-        thread = thread if thread is not None else thread_map.Thread()
-        example = settings_map.example()
-        prompt, conversation = threaded(parts, thread, payload, follow,
-                                        example=example)
-        return ask_in_grammar(
-            client, prompt, conversation, settings_map.response_format(),
-            document_id, "settings", "settings", example=example,
-            thread=thread, round=answers_in(thread) + 1,
-            corrections=told(follow))
-    return settings_map.PlanSettings(ask, rank=rank, trace=trace.event)
-
-
-def title_line(passages: list, name: Optional[str],
-               pages: tuple = (1, 2)) -> Optional[Source]:
-    """The first line of the plan's first page, else its second, that names
-    *name*, the place the plan is about, as a passage a quote may stand in
-    (owner decision 2026-11-06: every reading request shows it). None where
-    no such line stands there, or no name is known."""
-    if not name or not name.strip():
-        return None
-    wanted = flat_text(name).casefold()
-    for page in pages:
-        for source in passages:
-            if (source.provenance or {}).get("page") != page:
-                continue
-            for line in (source.text or "").splitlines():
-                if wanted in flat_text(line).casefold():
-                    return replace(source, text=line.strip(), body=None)
-    return None
-
-
-def make_title_page(db_path: Optional[Path], profile) -> Optional[Callable]:
-    """title_page(document_id, passages): the line of the title page that
-    names the plan's own place (`title_line`), its name from the profile's
-    `document_context`; None where the profile does not show it
-    (`TITLE_PAGE_LINE`)."""
-    if profile is None or not profile.component("extraction",
-                                                "TITLE_PAGE_LINE"):
-        return None
-    context_of = document_context_of(db_path, profile.component(
-        "extraction", "document_context"))
-
-    def title_page(document_id: int, passages: list) -> Optional[Source]:
-        return title_line(passages, context_of(document_id).get("name"))
-    return title_page
-
-
-def make_survey(spec: Spec, out: Path, rank: Optional[Callable],
-                every: Callable, probes: Optional[Callable] = None,
-                scope: str = ""):
-    """The order every passage of a plan is read in for each parameter
-    (`survey.Ranking`, owner decisions 2026-11-08): *rank(document_id,
-    sentences, exclude)* is the whole plan best first, `make_more_sources`
-    with the run's reranker in a harvest; *probes(parameter, document_id)*
-    the parameter's search sentences (`make_seek_probes`); *every* is
-    (document, exclude) -> passages. *scope* names an order of part of a
-    plan, kept beside the whole one's."""
-    log.info("order%s: every passage for each of %d parameter(s), kept in "
-             "%s", f" ({scope})" if scope else "", len(spec.parameters),
-             Path(out) / "survey")
-    return survey_map.Ranking(
-        rank, lambda document_id: every(document_id, set()),
-        list(spec.parameters), probes=probes, store=Path(out) / "survey",
-        scope=scope, trace=trace.event)
 
 
 def frame_pairs(reply: Optional[dict], slots: list, sources: list,
@@ -2272,8 +2014,9 @@ _SHARED_HTTP_LOCK = threading.Lock()
 def shared_http(limit=None):
     """The one connection pool every request of the run goes out through.
 
-    Each kind of request has a client of its own (reading, combing, the
-    check, the years, ...), and each client used to keep a pool of its own:
+    Each kind of request has a client of its own (finding, coordinates,
+    lists, the search, the check, ...), and each client used to keep a
+    pool of its own:
     connections it had opened stayed open while it sent nothing, so a probe
     with 18 requests in flight held 40 connections to the proxy, and a server
     that takes about 20 at once refused the rest outright (one probe,
@@ -2474,7 +2217,8 @@ def _reply_fault(reply, limit: int, *, key: str = "",
         return "not_an_object", say(
             "not_an_object", kind=type(data).__name__) + shape
     if key and not isinstance(data.get(key), list):
-        which = "key_missing" if key not in data else "key_not_a_list"
+        which = ("key_missing" if data.get(key) in (None, "")
+                 or key not in data else "key_not_a_list")
         return "missing_key", say(which, key=key) + shape
     return "wrong_shape", say("wrong_shape") + shape
 
@@ -2890,7 +2634,7 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
     a request has the reading's tools (`reading.Gathered`: the next or the
     previous section, a table or figure by its placeholder, a search by
     pattern or by a sentence), each passage cut to two pages of the plan
-    (*pages_of*, `survey.budget_of`), and a question that takes a number
+    (*pages_of*, `lookup.two_pages`), and a question that takes a number
     (`Question.take`) may take it from whatever the request showed: a
     passage, its title, a hit's line or title (owner decision 2026-11-05).
     *rank(document_id, probes, exclude)* is the plan ranked for a sentence,
@@ -2932,7 +2676,7 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
             cursor={"next": anchor, "previous": anchor},
             rank=(functools.partial(rank, document_id)
                   if rank is not None else None))
-        budget = (survey_map.budget_of(order, pages_of(document_id)
+        budget = (lookup_map.two_pages(order, pages_of(document_id)
                                        if pages_of else None)
                   if order else None)
         runs: list = []
@@ -3030,7 +2774,7 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
             if isinstance(answer, dict) and order and gathered.fetch(
                     answer.get("more"), order, passages, budget):
                 # What it fetched follows the answer that asked for it, as in
-                # the combing: a round that brings something new is no
+                # the search: a round that brings something new is no
                 # attempt, and the window bounds how many there are.
                 attempt -= 1
                 told(said, parts.follow_up(gathered.since(fetched["mark"])))
@@ -3406,51 +3150,54 @@ def _stamp_current(spec_sha: str, anchors_sha: str = "",
 
 
 def survey_prompt_ids(profile=None) -> tuple:
-    """The prompts of a harvest passage by passage: `SURVEY_PROMPT_IDS`, and
-    the naming's and the plan's years' where the profile writes them, which
-    a spec that merges names or dates a value by the plan's years sends
-    (`naming.NAMING_PROMPT_IDS`, `years.YEARS_PROMPT_ID`, required by
-    `surveyed_flow`)."""
-    out = SURVEY_PROMPT_IDS
-    for prompt_ids in (naming_map.NAMING_PROMPT_IDS,
-                       (years_map.YEARS_PROMPT_ID,)):
+    """The prompts of a harvest piece by piece (`SURVEY_PROMPT_IDS`), and
+    those of `addressed.OPTIONAL` the profile writes: the check of a find
+    from another passage, the names request."""
+    out = list(SURVEY_PROMPT_IDS)
+    for kind in addressed_map.OPTIONAL:
         try:
-            for prompt_id in prompt_ids:
-                prompts.load(prompt_id, profile)
+            prompts.load(addressed_map.PROMPT_IDS[kind], profile)
         except (FileNotFoundError, LookupError):
             continue
-        out = (*out, *prompt_ids)
-    return out
+        out.append(addressed_map.PROMPT_IDS[kind])
+    return tuple(out)
 
 
 def surveyed_flow(spec: Spec, profile=None) -> bool:
-    """Whether a run can harvest passage by passage: its spec names groups.
-    A spec without groups cannot be harvested (`main` stops on it).
+    """Whether a run can harvest piece by piece: its spec names groups. A
+    spec without groups cannot be harvested (`main` stops on it).
 
     A spec with groups whose profile lacks a prompt of the harvest is a
-    broken profile: the run stops and names the prompt, as `spec.load` stops at a
-    broken group (owner decision 2026-11-04). So does a group prompt whose
-    parts are not the spec's groups, or one whose file lacks the words of a
-    field its follow-ups carry (`parts_of`), before a request is sent rather
-    than at the first plan's reading."""
+    broken profile: the run stops and names the prompt, as `spec.load`
+    stops at a broken group (owner decision 2026-11-04), before a request
+    is sent rather than at the first plan's reading."""
     if not spec.groups:
         return False
-    # The naming only where the spec merges names (`naming.py`), the plan's
-    # years only where its frame has a year (`years.py`).
-    needed = (*SURVEY_PROMPT_IDS,
-              *(naming_map.NAMING_PROMPT_IDS
-                if naming_map.merges(spec) else ()),
-              *((years_map.YEARS_PROMPT_ID,) if dates_by_plan(spec) else ()))
-    for prompt_id in needed:
+    wanted = list(SURVEY_PROMPT_IDS)
+    if names_asked(spec, profile):
+        wanted.append(addressed_map.PROMPT_IDS["names"])
+    for prompt_id in wanted:
         try:
-            parts_of(prompt_id, spec, profile)
+            prompts.load(prompt_id, profile)
         except (FileNotFoundError, LookupError) as exc:
             raise LookupError(
                 f"the spec names groups, so the profile "
                 f"{getattr(profile, 'name', None) or 'in use'!r} must write "
-                f"every prompt of the harvest, and {prompt_id!r} is missing "
-                f"or does not fit the groups: {exc}") from exc
+                f"every prompt of the harvest, and {prompt_id!r} is missing: "
+                f"{exc}") from exc
     return True
+
+
+def names_asked(spec: Spec, profile=None) -> bool:
+    """Whether a run asks names against a document's lists: its spec
+    merges a field or a coordinate into a list of names (a scenario), or
+    the profile keeps a list of works (`WORKS`)."""
+    merged = any(getattr(p, "merged", None)
+                 or any(getattr(a, "merged", None) for a in p.axes.values())
+                 for p in spec.parameters)
+    works = profile.component("extraction", "WORKS") \
+        if profile is not None else None
+    return bool(merged or works)
 
 
 def producer(kind: str, model: Optional[str] = None) -> dict:
@@ -4042,9 +3789,9 @@ def request_budget(spec, profile=None) -> int:
 
     The window a server is started with has to hold every request kind of the
     run, so it follows the largest of them. Read off the prompts the run
-    sends (`survey_prompt_ids`): the two reading requests, the combing and, where the profile writes it, the match. Never off one that
-    no request carries, and not the review, which has a line of its own in
-    the doctor.
+    sends (`survey_prompt_ids`): one per kind of request of the reading
+    (`addressed.KINDS`). Never off one that no request carries, and not the
+    review, which has a line of its own in the doctor.
     """
     return max(context_budget(prompts.load(prompt_id, profile), spec)
                for prompt_id in survey_prompt_ids())
@@ -4531,8 +4278,8 @@ def main(argv: Optional[list] = None) -> int:
                                                             "FRAME") or ())
     year_states = year_states_of(profile)
 
-    log.info("extraction: each plan passage by passage: order, reading, "
-             "combing")
+    log.info("extraction: each plan in pieces: find, coordinates, lists, "
+             "search")
     # The largest request of the run, over the prompts it sends: what the
     # server is started with, what the doctor checks and what it is asked for.
     required = request_budget(spec)
@@ -4624,9 +4371,8 @@ def main(argv: Optional[list] = None) -> int:
     more_sources = make_more_sources(
         args.db, faiss_index, id_to_pos, cache_path, content=content,
         reranker=make_search_reranker(args.image_root))
-    # The combing of a harvest passage by passage, which the passes over a
-    # stored harvest re-read a coordinate with as well, and what it reads the
-    # plan with.
+    # What the reading searches the plan with, which the passes over a
+    # stored harvest re-read a coordinate with as well.
     pages_of = make_page_count(args.db)
     every = make_rest_of_document(args.db, content=content)
     specs: dict = {}
@@ -4650,30 +4396,18 @@ def main(argv: Optional[list] = None) -> int:
             return specs.setdefault(document_id, made)
 
     def rank(document_id: int, probes: list, exclude: set) -> list:
-        """The whole plan, best first for the combing's search sentences."""
+        """The whole plan, best first for a search's sentences."""
         return more_sources(document_id, probes, set(exclude), limit=0)
 
-    own = profile.component("extraction", "FRONT_PAGE_PARAMETERS") or ()
-    seek = make_seek_probes(own, document_context_of(args.db,
-                                                     document_context))
-    whole = surveyed_map.SurveyedHarvest(
-        spec,
-        lambda doc_spec, only, scope: make_survey(
-            narrow_spec(doc_spec, only), args.out, rank, every, seek,
-            scope=scope),
-        lambda doc_spec: make_reader(doc_spec, args.image_root),
-        lambda doc_spec: make_comber(doc_spec, rank),
-        lambda document_id: every(document_id, set()), pages_of,
-        spec_for=spec_for,
-        make_years=lambda doc_spec: make_years(doc_spec, rank),
-        title_page_of=make_title_page(args.db, profile),
-        make_settings=lambda doc_spec: make_settings(doc_spec, rank))
+    whole = make_harvest(spec, db_path=args.db, out=args.out,
+                         image_root=args.image_root, profile=profile,
+                         every=every, spec_for=spec_for, rank=rank,
+                         reranker=make_chunk_reranker())
 
     def pass_sweep():
-        """What a pass over a stored harvest re-reads a coordinate with: the
-        combing."""
-        return surveyed_map.comb_sweep(whole.comber_of, spec_for, every,
-                                       pages_of)
+        """What a pass over a stored harvest asks a coordinate again with:
+        the harvest's own questions (`surveyed.SurveyedHarvest.sweep`)."""
+        return whole.sweep
 
     if args.top_up:
         from . import topup
@@ -4751,7 +4485,6 @@ def main(argv: Optional[list] = None) -> int:
                              lambda document_id: every(document_id, set()),
                              pages_of, rank)
     completer = make_completer(profile, args.db)
-    namer = make_namer(spec, lambda document_id: every(document_id, set()))
 
     def verify(entry: tuple, replies: Optional[int] = None) -> bool:
         """Fold, work out, complete and write one document. *replies* is how
@@ -4765,11 +4498,6 @@ def main(argv: Optional[list] = None) -> int:
         if computer is not None and not computer(
                 answered, report, locate=locate, spec=spec, stop=Halted):
             return False
-        # Which names of the document mean the same thing, over every row
-        # it now holds, worked-out ones included (owner decisions
-        # 2026-11-06).
-        if namer is not None:
-            namer(report)
         if completer is not None:
             completer(report, spec)
         stamped = finish_document(report, name, args.out, spec_sha,

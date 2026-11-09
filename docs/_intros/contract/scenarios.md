@@ -31,9 +31,9 @@ the same `scenario` axis, `scenario_type`, `scenario_abstract`,
 publication's scenarios the row belongs to, by the name the publication
 prints. A coordinate or value the spec marks `merged` (the `scenario` axis
 and the value of `scenario_label`) also carries `<name>_means` (`value_means`
-for the value): the names of the scenarios that name means, written once the
-document is folded (`docpipe/extraction/naming.py`), absent from a row read
-before that or by a top-up pass.
+for the value): the entries of the document's list of names that name means, chosen while
+the document is read (`addressed.Reader.name_of`, the `names` request), absent from
+a row read before that or by a top-up pass.
 
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` always present, the rest, page and

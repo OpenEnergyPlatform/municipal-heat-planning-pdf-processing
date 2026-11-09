@@ -35,7 +35,7 @@ Two states are written without a question to a model. `apply_derived`
 kwp's `aggregation` coordinate on `energy_consumption` and `emission`. It is
 asked first, like any other, and the unit's entry is taken, as `derived`, only
 where no request read the coordinate (`fields.derives`, `surveyed.derive_left`
-after the reading and the combing, owner decision 2026-11-07); a coordinate
+once the coordinates were asked, owner decision 2026-11-07); a coordinate
 asked and left open loses its answer, quote and state to it. The years between
 the first and the last year of a span the plan states are `derived` too, from the
 span (`reading.span_rows`). Which parameter a row belongs to is a separate
@@ -48,23 +48,26 @@ number with no unit, or with one no parameter accepts): the coordinates after it
 are never asked about. Where a spec has no numeric parameter nothing is
 measured: a bare year or a dotted date is a wording there
 (`fields.is_wording`). Everything else a reply decides: `merge_field` writes
-`read` when the row's cited quote sits in a shown source and carries the answer;
-`unstated` when the model names the closed list's own `out:unstated` entry,
-since no passage can prove a document does not say something; and `unbacked`
-when a quote is offered but fails one of those checks, or a closed-list answer
-names none of its entries (`not_an_option`). Only `read` is final: a later
-reply for a coordinate already `read` is discarded, and the row keeps its first
-reading.
+`read` when the row's cited quote, the line the answer's address names, sits in a
+shown source and carries the answer; `unstated` when no shown line states it, which
+the code writes (a reply of 0, where the search has nothing left to show, or where
+only the value's own place could state the coordinate); and `unbacked` when an
+address and words are offered but fail one of those checks, or a closed-list answer
+names none of its entries (`not_an_option`), and still fail after their follow-up.
+Only `read` is final: a later reply for a coordinate already `read` is discarded,
+and the row keeps its first reading.
 
-A coordinate the reading leaves open is combed, one conversation per value: the
-second reading, then the search of the rest of the plan, which goes on until
-every passage of the plan was listed. `unstated` becomes permanent only once the
-search has nothing left to read; if a request no longer fits the model's window
-first, what is still open is written `exhausted`, and what no reply mentioned
-across every round that did run becomes `unanswered`, written once at the end by
-`mark_unanswered`. A pass over a stored harvest (`--top-up`,
-`--top-up-parameters`, `--top-up-open`) combs the same way. See
-[extraction](../stages/extraction.md) for the rounds.
+A coordinate whose own place does not state it, and which is not one only that
+place can state, is searched for: the pieces beside the value's, then the pieces a
+search finds for a sentence as the plan would print the answer, five at a time. It
+goes on until a find holds or every piece of the plan was shown. `unstated` becomes
+permanent only once the search has nothing left to show; if the search has asked its
+budget of requests first, it is written `exhausted`; a coordinate whose own request
+came to no reply, and what no request mentioned, becomes `unanswered`, written once
+at the end by `mark_unanswered`. A pass over a stored harvest (`--top-up`,
+`--top-up-parameters`, `--top-up-open`) asks the same way. See
+[extraction](../stages/extraction.md) (Asking a coordinate of a value and Searching
+for what a value's place does not say) for the requests.
 
 ## Why seven, not fewer
 

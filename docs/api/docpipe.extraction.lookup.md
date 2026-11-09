@@ -120,4 +120,15 @@ in `room` characters of JSON; `total` counts every matching passage. An
 invalid pattern and a pattern that times out come back as `fault` with
 no hits, never as an exception.
 
+### two_pages
+
+```python
+def two_pages(passages: list, pages: Optional[int], span: int = 2) -> int
+```
+
+The text of *span* pages of this plan, in characters: *span* times
+its mean; two pages unless said otherwise. What the compute step cuts a
+passage it fetches to. A figure's description is not counted: a figure
+is never cut, whatever its description's length.
+
 [Back to the index](../README.md)

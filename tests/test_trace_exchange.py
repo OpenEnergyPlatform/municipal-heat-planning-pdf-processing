@@ -19,7 +19,7 @@ FORMAT = {"type": "json_schema", "json_schema": {
     "name": "values_reply",
     "schema": {"type": "object",
                "properties": {"next": {"type": ["object", "null"]}}}}}
-ASKED = {"attempt": 1, "round": 1, "prompt_tokens": 10,
+ASKED = {"attempt": 1, "chunk": 0, "prompt_tokens": 10,
          "completion_tokens": 2}
 
 
@@ -87,11 +87,11 @@ def test_a_reported_request_comes_back_as_it_was_sent(traced):
     client = client_answering(*(reply('{"next": null}') for _ in asked))
     for one in asked:
         client.chat.completions.create(**one)
-        trace.event("read_values_ask", 7, **ASKED)
+        trace.event("find_ask", 7, **ASKED)
     trace.close()
     events = events_of(traced, "plan7")
     pieces = trace.pieces_of(events)
-    asks = [e for e in events if e["t"] == "read_values_ask"]
+    asks = [e for e in events if e["t"] == "find_ask"]
     assert [trace.sent(e, pieces) for e in asks] == asked
     assert all(e["output"] == {"content": '{"next": null}', "finish": "stop"}
                for e in asks)
@@ -103,7 +103,7 @@ def test_a_repeated_text_stands_once_in_each_document(traced):
     client = client_answering(*(reply("{}") for _ in range(5)))
     for document in (7, 7, 7, 8, 8):
         client.chat.completions.create(**request(payload))
-        trace.event("read_values_ask", document, **ASKED)
+        trace.event("find_ask", document, **ASKED)
     trace.close()
     for name, asks in (("plan7", 3), ("plan8", 2)):
         events = events_of(traced, name)
@@ -111,26 +111,26 @@ def test_a_repeated_text_stands_once_in_each_document(traced):
         assert len(texts) == len(set(texts))
         assert SYSTEM in texts
         assert json.dumps(PASSAGE, ensure_ascii=False) in texts
-        assert sum(e["t"] == "read_values_ask" for e in events) == asks
+        assert sum(e["t"] == "find_ask" for e in events) == asks
         # Every request of the document is still whole.
         pieces = trace.pieces_of(events)
         assert all(trace.sent(e, pieces)["messages"][1]["content"] == payload
-                   for e in events if e["t"] == "read_values_ask")
+                   for e in events if e["t"] == "find_ask")
 
 
 def test_the_request_goes_to_the_report_of_its_own_thread(traced):
     client = client_answering(reply("{}"))
     client.chat.completions.create(**request(PASSAGE))
     other = threading.Thread(target=trace.event,
-                             args=("read_values_ask", 7), kwargs=ASKED)
+                             args=("find_ask", 7), kwargs=ASKED)
     other.start()
     other.join()
     trace.event("read", 7, parameter="energy", values=1)
-    trace.event("read_values_ask", 7, **ASKED)
+    trace.event("find_ask", 7, **ASKED)
     trace.close()
     events = [e for e in events_of(traced, "plan7") if e["t"] != trace.PIECE]
-    assert [e["t"] for e in events] == ["read_values_ask", "read",
-                                        "read_values_ask"]
+    assert [e["t"] for e in events] == ["find_ask", "read",
+                                        "find_ask"]
     assert ["input" in e for e in events] == [False, False, True]
 
 
@@ -152,11 +152,11 @@ def test_a_request_no_event_reported_goes_to_none_after_it(traced):
     client = client_answering(reply("first"), reply("second"))
     client.chat.completions.create(**request("one " * 20))
     client.chat.completions.create(**request("two " * 20))
-    trace.event("read_values_ask", 7, **ASKED)
-    trace.event("read_values_ask", 7, **{**ASKED, "attempt": 2})
+    trace.event("find_ask", 7, **ASKED)
+    trace.event("find_ask", 7, **{**ASKED, "attempt": 2})
     trace.close()
     asks = [e for e in events_of(traced, "plan7")
-            if e["t"] == "read_values_ask"]
+            if e["t"] == "find_ask"]
     assert [e.get("output", {}).get("content") for e in asks] == ["second",
                                                                   None]
 
@@ -219,10 +219,10 @@ def test_the_schema_takes_a_request_with_what_came_back_and_a_piece(traced):
     client = client_answering(reply("{}"))
     client.chat.completions.create(**request(json.dumps({"source": PASSAGE},
                                                         indent=2)))
-    trace.event("read_values_ask", 7, **ASKED)
+    trace.event("find_ask", 7, **ASKED)
     trace.close()
     events = events_of(traced, "plan7")
-    assert {e["t"] for e in events} == {trace.PIECE, "read_values_ask"}
+    assert {e["t"] for e in events} == {trace.PIECE, "find_ask"}
     for event in events:
         jsonschema.validate(event, schema.trace_schema())
     with pytest.raises(jsonschema.ValidationError):

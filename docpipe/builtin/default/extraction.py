@@ -45,17 +45,12 @@ PHRASES = {
     "kind_year": 'a calendar year with four digits',
     "kind_text": 'a piece of text',
     "not_an_option": (
-        'Your "value" {given!r} is none of the entries of "options". '
-        'Choose exactly one name from it, copied character for '
-        'character, including one that starts with "out:". If none fits '
-        'although the passage states the field, leave "value" out and '
-        'give the wording in "value_raw".'),
+        'Your "entry" {given!r} is no number of "list". Answer '
+        'with a number from "list", 0 if no entry fits.'),
     "name_not_listed": (
-        'Under {name!r} you gave {given}. Answer with a list of numbers '
-        'from "names".'),
-    "groups_not_listed": (
-        'Under {name!r} you gave {given}. Answer with lists of numbers '
-        'from "names", one list per group.'),
+        'Your "entry" {given!r} is no number of "list". Answer '
+        'with a number from "list", or "new" if the name is none '
+        'of its entries.'),
     "wrong_type": (
         'Your "value" {given!r} is not {wrong}. Answer with {wrong}, '
         'exactly as the passage writes it.'),
@@ -67,10 +62,6 @@ PHRASES = {
         'Your "quote" stands neither in "source", nor in the heading of its '
         'section, nor in "around". Copy it character for character from '
         'one of them.'),
-    "quote_not_shown": (
-        'Your "quote" stands in nothing this request shows. Copy it '
-        'character for character from "more", from a title or line under '
-        '"hits", from "passage" or from "row".'),
     "quote_too_short": (
         'Your "quote" is too short to name a place (at least {minimum} '
         'characters). Quote the whole sentence or the whole line the '
@@ -90,21 +81,6 @@ PHRASES = {
         'quote prints it, character for character, or quote the place where '
         'it really stands.'),
     "or_unstated": ' If it stands nowhere, answer with "{unstated}".',
-    "or_leave_out": ' If it stands nowhere, leave it out.',
-    "year_not_in_quote": (
-        'The year {given!r} does not stand in its quote {quote!r}. Quote the '
-        'place that prints it.'),
-    # A find of the combing quoted from a passage other than the value's own
-    # that the check found does not speak about the value (owner decision
-    # 2026-11-07), and a check whose answer is neither "yes" nor "no".
-    "not_about_value": (
-        'A second look found that the place you quoted for {answer!r} does '
-        'not speak about this value, so it does not say what belongs to it. '
-        'Answer only from a place that speaks about this value; if none '
-        'does, leave it out.'),
-    "verdict_not_an_option": (
-        'Your "about" {given!r} is neither "yes" nor "no". Answer with one '
-        'of the two.'),
     # The key of the frame request that holds the entries of a closed frame
     # coordinate, one list per coordinate. The frame prompt of this profile
     # names no key of its own ("the list the request gives for ..."), and
@@ -147,10 +123,6 @@ PHRASES = {
     "shorter_rows": (
         'Answer with fewer tuples and quote only the short place where '
         'the value stands.'),
-    "value_outside_quote": (
-        'These numbers are not printed in the "quote" you gave them under: '
-        '{values}. Give only these entries again, each under the quote of '
-        'the row that prints it, and leave out a number no row prints.'),
     "compute_output": (
         'Output of the code:\n{output}\n\nAnswer now with the result: '
         '{{"value":123.456,"used":["N1","N3"],"quote":"..."}}. "value" is the '
@@ -184,24 +156,15 @@ PHRASES = {
         'these entries again, each with the one row it stands in as its '
         '"quote".'),
     # a round of the values of a passage, one value each
-    "value_not_kept": (
-        'By its reading this value is "{given}" and no value of '
-        '"parameter": it was read wrongly.'),
-    "value_rejected": (
-        'This value was not taken: {reason}. Name it again with a "quote" '
-        'copied character for character from the passage that prints it. '
-        'For a parameter with a list, "value" is one of its entries, or "" '
-        'where none fits, and the passage\'s own words for it go under '
-        '"value_raw". If the passage holds no such value, leave it out.'),
-    "quote_not_unique": (
-        'Your "quote" {quote!r} stands more than once in what you were '
-        'shown, so it does not say which number you mean. Name this value '
-        'again with a "quote" that stands there only once and prints the '
-        'value once, for instance with the words or cells beside it.'),
-    "value_not_once": (
-        'Your "quote" {quote!r} prints {value} more than once, so it does '
-        'not say which of them you mean. Name this value again with a '
-        '"quote" that prints it exactly once.'),
+    "not_an_address": (
+        'The address {at!r} names no line or cell of what you were shown. '
+        'Give the address as it stands before the line: its number, a '
+        'letter before it where the block has one, a point and the number '
+        'of the cell in a table row.'),
+    "words_not_in_line": (
+        'The words {words!r} do not stand in the line {at!r} names, or they '
+        'name more than one number. Give the address and the words of '
+        'exactly one value as that line prints them.'),
     "shorter_field": (
         'Put rows with the same answer together in "groups" and quote '
         'only the short place where the field stands.'),

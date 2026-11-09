@@ -241,7 +241,7 @@ shipped profile provides.
 | Reading the values out | `extraction.SPEC_PATH` | required in practice; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:5433-5436`) | `extraction_spec.json` | `extraction_spec.json` |
 | Reading the values out | `extraction.SLICE` | optional (`component`); no step reads it since 2026-11-08, the harvest has no slice gate | declared, `{"quantity": ..., "year": None}`, and not read | not provided |
 | Reading the values out | `extraction.FRAME` | optional (`component`, `runner.main`): the frame coordinates, the ones the plan's base and target years date a value by | `("scenario", "year")`; each value is asked them for itself | not provided |
-| Reading the values out | `extraction.BASE_YEAR`, `extraction.TARGET_YEAR` | optional (`component`): which frame pairs are the plan's own state and its target; they only say where the request for the plan's years starts to look. A year answer naming only the plan's word for one of them ("Basisjahr", "Zieljahr") is read, in the combing's message for a year nothing found, when its number is one of the plan's years | `{"scenario": "status_quo"}` and `{"scenario": "target"}` | not provided; no state has years |
+| Reading the values out | `extraction.BASE_YEAR`, `extraction.TARGET_YEAR` | optional (`component`): which frame pairs are the plan's own state and its target; they only say where the plan's own years are looked for. A year answer naming only the plan's word for one of them ("Basisjahr", "Zieljahr") is read, in the last question of a year nothing found, when its number is one of the plan's years | `{"scenario": "status_quo"}` and `{"scenario": "target"}` | not provided; no state has years |
 | Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:5505`) | not provided | the study regions this publication names, out of 249 (`profiles/scenarios/regions.json`) |
 | Reading the values out | `extraction.document_context` | optional (`component`, `docpipe/extraction/runner.py:5510`) | the plan's own municipality name | not provided |
 | The knowledge graph | `kg.make_serializer` | optional for `--serialize` (`component`, `docpipe/extraction/runner.py:5371`); without one the generic writer built from the spec's `graph` block is used, and a profile with neither is refused with `SystemExit` (`docpipe/extraction/runner.py:5379-5383`) | tuples to MHPKG Turtle | tuples to OEKG Turtle |
@@ -298,9 +298,9 @@ A file that names a template in its front matter, `template: review`, is a parts
 file, and `docpipe/prompts.py` puts it together with the template of the
 profile's language when the prompt is loaded. A request, a stamp and
 `scripts/render_prompts.py` see the composed prompt and never the two halves.
-The other extraction prompts (the readings, the combing and its
-check, the settings, the years, the naming, the compute, `phrase` and
-`anchors`) and every prompt of the other stages are plain files, read as they are
+The other extraction prompts (the requests of the harvest, `transcribe`, `find`,
+`docfield`, `coord`, `search`, `list`, `check`, `follow` and `names`, the compute,
+`phrase` and `anchors`) and every prompt of the other stages are plain files, read as they are
 written.
 
 A parts file is a front matter and sections that each start with a line

@@ -35,7 +35,9 @@ not a warning (`trust.py:44-46`).
 
 A value falls below `B` in one of two ways. It is a `C` when a coordinate was not read, `exhausted` or `unanswered`, or
 when the number is one only a figure's image shows, read off it with no quote
-(`read_off`, owner decision 2026-11-07; it was a `D`), and nothing speaks
+(`read_off`, owner decision 2026-11-07; it was a `D`), or a value read from the
+lines a model wrote a figure into, which the harvest flags `drawn` and so `read_off`
+(owner decision 2026-11-08), and nothing speaks
 against what was read: a gap to fill. It is a `D` when something speaks against the
 reading: an `unbacked` coordinate, a computed number, a
 second reading that came to something else, or a contested identity

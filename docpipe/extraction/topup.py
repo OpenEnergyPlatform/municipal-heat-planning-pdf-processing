@@ -9,9 +9,9 @@ next run harvests it again from the first passage. For one axis of one
 parameter, that is a full corpus run spent answering a question nothing else
 asked.
 
-This module instead takes the coordinate off the rows that carry it, walks the
-same combing the harvest walks (`surveyed.comb_sweep`, so there is one search
-and one set of numbers), and writes the answer back. It then carries that one stamp
+This module instead takes the coordinate off the rows that carry it, asks it
+as the harvest asks it (`surveyed.SurveyedHarvest.sweep`, so there is one
+question and one set of numbers), and writes the answer back. It then carries that one stamp
 key forward and leaves every other key exactly as it was, so a later run still
 sees what it has to redo. Who read is recorded apart from that: the pass enters
 the stamp's `producers` list whether or not it earned a key, and each

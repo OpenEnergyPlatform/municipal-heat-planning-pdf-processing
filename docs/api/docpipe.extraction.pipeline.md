@@ -477,8 +477,8 @@ its quote does not hold is told every way that passes in its request:
 the plan's own word as the wording where the request asks one, else the
 answer as the quote prints it, then what else the request lets it
 answer, *not_in_quote*: "not stated" where it offers that
-(`or_unstated`), else to leave the coordinate out (`or_leave_out`)
-(owner decisions 2026-11-06); the reason stays `answer_not_in_quote`.
+(`or_unstated`) (owner decisions 2026-11-06); the reason stays
+`answer_not_in_quote`.
 
 ### mark_unanswered
 

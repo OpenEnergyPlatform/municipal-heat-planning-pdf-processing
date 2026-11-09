@@ -72,8 +72,8 @@ table gives kwp's own answer.
 | Visuals | `prompts/visuals/*.md` | six prompt ids of its own | table transcription, figure description and captions, in German; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object, in English like the prompts of the first three (`reading.REQUIRED`), laid over the built-in profile's |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | plan-centric labels and names (a name opens each line of the values index), convoy membership, three filters |
-| Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `BASE_YEAR`, `TARGET_YEAR`, `SPAN_MARKS`, `document_context`, `FRONT_PAGE_PARAMETERS` (empty), `PHRASES`, `PROMPT_CHECKS` (empty), `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE` | the spec, the slice constant (read by no step now), the frame axes, the pairs that are the plan's own state and its target, the marks a value stated for a span of years takes on each of its rows (`out:approximate`), the German sentences the stage writes to the model (the list of a closed coordinate in a refused pair stands under `"scenarios"`), and the language (`"de"`) of the core's templates its parts files are put together with |
-| Extraction | `prompts/extraction/*.md` | 11 prompt ids | phrase and anchors as plain files; review and example as parts files that name a template of the core; `compute` and `years`; and the five prompts of the harvest, `read_values`, `read_text`, `comb`, `comb_check` and `settings` (see The prompts) |
+| Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `BASE_YEAR`, `TARGET_YEAR`, `SPAN_MARKS`, `document_context`, `PHRASES`, `PROMPT_CHECKS` (empty), `CHUNK_UNITS`, `PLAN_FIELDS`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE` | the spec, the slice constant (read by no step now), the frame axes, the pairs that are the plan's own state and its target, the marks a value stated for a span of years takes on each of its rows (`out:approximate`), the lines of a piece a plan is read in (8), what a plan settles for all its values and its own years (its settings, base year and target year, each a name, a meaning and a search sentence), the German sentences the stage writes to the model (the list of a closed coordinate in a refused pair stands under `"scenarios"`), and the language (`"de"`) of the core's templates its parts files are put together with |
+| Extraction | `prompts/extraction/*.md` | 13 prompt ids | phrase and anchors as plain files; review and example as parts files that name a template of the core; `compute`; and the eight prompts of the harvest, `transcribe`, `find`, `docfield`, `coord`, `search`, `list`, `check` and `follow` (see The prompts) |
 | The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
 | The answer app | `inference.py` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |
 | The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 12 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
@@ -209,7 +209,7 @@ parameter's own unit names a span, so the closed list's integral entry is the
 fallback. It is asked first, like every coordinate (owner decision 2026-11-07:
 asked, and derived only as the fallback), and the unit's entry is written only
 where nothing read it (`Axis.derive`, `fields.derives`, `fields.apply_derived`;
-the run does it after the reading and the combing): a plan that names a span
+the run does it once the coordinates were asked): a plan that names a span
 states a mean over years, and a mean is a mean (owner decision 2026-11-07), which
 the model reads. For the 20 emission-factor units ("g CO2/kWh", "kg CO2/MWh",
 "kg CO2/GJ", ...) it is never derived: an entry of `units_accepted` may name its
@@ -229,9 +229,9 @@ The frame is the pair of coordinates that dates a value, `FRAME = ("scenario",
 and its reference years in headings and column headers, not inside every cell,
 and since 2026-11-08 no step reads that pair once for a document, a table or a
 section and projects it onto rows: each value is asked its scenario and its
-year for itself, in the messages of the `frame` group, with the titles of the
-sections up to its place beside the passage (owner decision 2026-11-07), and a
-year no step found is asked once more with the plan's base and target years (see
+year for itself, in a request of its own for each, with the headings up to its place
+and the title page beside its place (owner decision 2026-11-07), and a
+year no step found is asked last with the plan's base and target years (see
 [extraction](../stages/extraction.md)). Before the frame existed, the year axis
 alone produced 1,849 refusals against zero readings, because every retrieval
 window after the first excluded the one source that could carry the year.
@@ -265,9 +265,9 @@ graph serializes all three plan parts the ontology names, scenario included (see
 
 Five parameters carry a `brief`, one paragraph on what a value of them is
 (`energy_consumption`, `emission`, `heat_load`, `share`, `building_count`); the
-rounds of the reading and every group but `context` show it, and `context`, the
-group that classifies, shows the full description (`"definition": "full"` in
-`groups`). `planning_organisation` keeps its description. The entries of the
+requests of the harvest show it, and a field asked once of a document is shown by its full description
+(`"definition": "full"` on the `context` group in `groups` is still in the spec,
+and no request of the flow consults it). `planning_organisation` keeps its description. The entries of the
 closed lists carry their English ontology definition, and a `gloss`, one German
 line written once from it, which a request shows as the entry's meaning instead;
 the entries that already have a short German definition keep it (owner decision
@@ -297,16 +297,18 @@ wording of each spec question:
 | id | loaded | asks for |
 |---|---|---|
 | `extraction/phrase` | once per document, before any row | the one sentence this document is searched with |
-| `extraction/years` | once per plan, where the spec dates a value by the plan's years | the plan's `base_years` and `target_years`, each year with a quote that prints it and names it the plan's state or target, read with the combing's tools, its rounds one conversation, each later message only the passages listed since; an empty list is an answer |
 | `extraction/anchors` | no request of the run; its text still enters the stamp's `anchors` key and the preflight reads it | six hypothetical sentences a passage stating this coordinate could read, written for the field-by-field flow |
 | `extraction/review` | only under `--review`; excluded from the extraction stamp | a second reading of one value, over a window narrowed to its own passage and the section it stands in |
 | `extraction/example` | only under `docpipe compile examples` | which values of one parameter a passage states, to propose the example a spec parameter still lacks |
-| `extraction/compute` | once per question the compute step asks | one number the plan does not print, written as Python over the numbers already read; it may read on in the plan with the reading's tools, and for a share take its whole from a passage and quote what the chosen whole is; one conversation per question, what it fetched, a number it took and its code's output each following the answer that asked for them |
-| `extraction/read_values` | once per passage and parameter, one conversation per passage, without tools | every value of the parameter in the passage, as `{"values": [...], "incomplete": false}`: each value has `value`, `value_raw` (only for a number or an entry of a list), `quote` (it stands once in what the request showed and holds the value once; no column head), and, where a figure's image goes with the request, `drawn` and a `reading` in place of the quote for a number only the image shows (trust level C); the follow-ups are `go_on` after an answer marked incomplete, `nothing_new` when a continuation brought nothing, `remaining` (at most twice for a passage with a value), `corrections` (the values the check refused of one answer, in one message) and `wrong`; a value is what the field asks for and the year of a number is a coordinate, not a value; after its first line the prompt says "Prüfe vor der Antwort, was die Definition ausschließt." (prompt only, no check; owner decision 2026-11-07) |
-| `extraction/read_text` | once per value and coordinate, one conversation per value, without tools | one coordinate for the one value, in the order unit, what, subject, qualifier, scenario, year, quantity, aggregation, carrier, sector, technology, whole, spatial_scope, role (the unit is copied as printed and never refused; every coordinate is asked for this value alone, with the titles of the last sections up to its place under `sections`; a year may come with `until`, the last year of a span); one file whose common text is the system prompt and whose three `group` parts, `number`, `frame` and `context` (the order they are asked in), each stand in the message that asks the first coordinate of that group, beside `with` and `follow-up` parts (see [extraction](../stages/extraction.md), Reading a parameter in its passages); it opens with the same exclusion sentence, and what the check refuses on the rows one reply made is asked once in a follow-up after that reply (owner decision 2026-11-07) |
-| `extraction/comb` | once per value and coordinate, in a new conversation per value: first a second reading with the sections before and after the value's place, then a search, whose first message lists hits only | the open coordinate of the one row the request shows, searched for in the rest of the plan with the tools (`reading.Gathered`); the coordinate it finds stands at the top of the reply with `more` beside it; no "not stated" is offered, what it leaves out is not asked again, and `{}` is valid; the rounds of a value's search are one conversation, each later message only what is new, and its corrections are asked in one message after the reply; it opens with the same exclusion sentence; a year nothing found is asked once more in the follow-up `plan_years`, which shows the plan's base and target years (owner decision 2026-11-07) |
-| `extraction/comb_check` | once per coordinate and quote of a find of the combing quoted from a passage other than the value's own and its section, and of a find of the second reading quoted from the section before or after the value's place (`reading.Judge`) | whether that passage is about this value, as `{"about": "yes"\|"no"}`; on "no" the find is dropped: the search goes on and its next message says why once, and after the second reading the coordinate goes open to the combing; worded for a find of either (owner decision 2026-11-07) |
-| `extraction/settings` | once per plan, before the values | what the plan settles for all its values, free settings in its words, each `{about, value, quote}`, read with the combing's tools, its rounds one conversation; shown with every request about a value's coordinates (owner decision 2026-11-07) |
+| `extraction/compute` | once per question the compute step asks | one number the plan does not print, written as Python over the numbers already read; it may read on in the plan with the tools of the plan's text, and for a share take its whole from a passage and quote what the chosen whole is; one conversation per question, what it fetched, a number it took and its code's output each following the answer that asked for them |
+| `extraction/transcribe` | once per figure and run where the figure has an image, kept under the harvest | the figure written as lines that can be read without the image: its title, then a line for each axis with its unit, each legend entry and each number with what it stands for, copied as printed; a number the image only draws is marked as read off; a figure's lines are what a value read from it is checked against (trust level C) |
+| `extraction/find` | once per field and piece, no history, without tools | every value of the field in the piece (at most eight lines, a table's title and head with every piece), as `{"found": [{"at", "words"}]}`: each value its address, the cell in a table row, else the line, and its words character for character; an empty list says the piece holds none; the field is shown by its `brief` |
+| `extraction/docfield` | once per field a document has once (`planning_organisation`), and for the plan's settings and years | the field's values in the title page and the five pieces a search finds best for the field's sentence, then the next five, as the same list of finds |
+| `extraction/coord` | once per value and coordinate, no history | one coordinate for the one value, in the order of the spec's groups (`number`, `frame`, `context`): the address of the line that says it and its words, or 0 and a sentence as the plan would print the answer (`hyde`); the request shows the value's own place (a table row with its title and head, else the sentences beside it), the headings up to it under `H`, the title page under `T` and the plan's settings under `F`; a coordinate that may name several things answers a list `found` |
+| `extraction/search` | once per round of the search for a coordinate the value's own place does not state | the same answer for the pieces a search finds (the pieces beside the value's first, then five at a time), each under a letter, with `more` to fetch the next or previous piece, a table or figure, the pieces a pattern stands in or those closest to a sentence |
+| `extraction/list` | once per document, field, coordinate and wording | the number of the entry of a closed list the words mean, 0 for none; the list shows what each entry means (`gloss`) and how this plan named it before; a list of more than 24 entries is asked group first; the plan's years are chosen with it too |
+| `extraction/check` | once per find of the search from another passage than the value's own | whether the line is about this value, as `{"about": "yes"\|"no"}`; on "no" the find is dropped |
+| `extraction/follow` | once per answer that did not hold | the words that follow the request the answer was for, with the answer and what did not hold under `what`: answer once more in the same form, leave out what no shown line supports |
 | `kg/coordinate` | once per chat turn the graph route tries | one closed answer to one coordinate axis, for the SPARQL query |
 
 Two of these ids, `extraction/review` and `example`, are parts files (see
@@ -319,9 +321,12 @@ review prompt, which it never had a sentence for; the example prompt leaves out
 and words nothing. `python scripts/render_prompts.py --what-if` shows each block
 it leaves out put back (see [Running the pipeline](../running.md)).
 
-`extraction/read_values` and `read_text` are the two every value is read with:
-`read_values` finds the values of a parameter in a passage, and `read_text` asks
-each coordinate of one as its own question. `extraction/review` is deliberately outside the set the extraction
+`extraction/find` and `extraction/coord` are the two every value is read with:
+`find` finds the values of a parameter in a piece, and `coord` asks each
+coordinate of one as its own question; every request is its own prompt and one
+message, no conversation, and the marked `with` parts of a prompt are told only to
+a request whose message carries the key (see [extraction](../stages/extraction.md),
+What a request shows). `extraction/review` is deliberately outside the set the extraction
 stamp hashes, because a review only ever
 adds a flag and never changes a value, so folding its prompt into the
 stamp would report an entire corpus stale the day it is edited.

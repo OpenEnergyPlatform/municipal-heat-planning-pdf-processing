@@ -1,27 +1,33 @@
 """A reply that parses but lacks a key its schema requires at the top is not
 the object that was asked for: it is asked again as missing_key, the retry
-naming the key, in every request of the stage that goes out with a schema
-(the two reading requests). A
-reply that has every key the top requires is taken as it is, whatever it
-leaves out below. The combing requires no key: a coordinate it did not find
-is left out, so `{}` is its reply that found nothing and asks for nothing
-(owner decision 2026-11-06). Each promise has a case that breaks it by
-construction beside the one that keeps it."""
+naming the key, in every kind of request of the harvest piece by piece
+(addressed.py). A reply that has every key the top requires is taken as it
+is. A coordinate's answer that says nothing shown states it (at 0) without
+the sentence of how the plan would print it is asked again naming "hyde"
+(owner decision 2026-11-08, test 6). Each promise has a case that breaks it
+by construction beside the one that keeps it."""
 import json
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from docpipe.extraction import combing, reading, runner
-from docpipe.extraction.spec import load as load_spec
+from docpipe.extraction import addressed, runner
 
-SPEC = load_spec(json.loads(
-    (Path(__file__).resolve().parent.parent / "profiles" / "kwp"
-     / "extraction_spec.json").read_text(encoding="utf-8")))
-EMISSION = SPEC.by_uri["emission"]
-SLOTS = reading.slots_of(SPEC, EMISSION)
-PROMPT = SimpleNamespace(meta={}, text="x")
+PROMPT = SimpleNamespace(meta={}, text="x", placeholders=frozenset())
+# (grammar, kind, the key a fault names, a whole reply)
+REQUESTS = (
+    (addressed.found_format(), "find", "found",
+     {"found": [{"at": "3.2", "words": "750.940"}]}),
+    (addressed.coord_format(False), "coord", "at",
+     {"at": "3", "words": "2019"}),
+    (addressed.coord_format(True), "coord", "found",
+     {"found": [{"at": "3", "words": "Erdgas"}]}),
+    (addressed.entry_format(), "list", "entry", {"entry": 2}),
+    (addressed.entry_format(several=True, new=True), "names", "entry",
+     {"entry": ["new"]}),
+    (addressed.lines_format(), "transcribe", "lines", {"lines": ["Titel"]}),
+    (addressed.about_format(), "check", "about", {"about": "no"}),
+)
 
 
 def replying(*said):
@@ -53,13 +59,6 @@ def told(conversation) -> str:
     return conversation[-1]["content"]
 
 
-REQUESTS = ((reading.values_response_format(EMISSION, True), "read_values",
-             "values", {"values": [], "incomplete": False}),
-            (reading.text_response_format(SLOTS), "read_text", SLOTS[0].name,
-             {slot.name: {"value": "out:unstated"} for slot in SLOTS}))
-COMB = combing.comb_response_format(SLOTS)
-
-
 def test_a_reply_without_its_keys_is_asked_again_naming_the_key(faults):
     for shape, where, key, whole in REQUESTS:
         faults.clear()
@@ -70,34 +69,28 @@ def test_a_reply_without_its_keys_is_asked_again_naming_the_key(faults):
         assert f'"{key}"' in told(sent[1])
 
 
-def test_a_reply_in_a_wrapper_the_reply_lost_is_asked_again(faults):
-    # Owner decision 2026-11-06: no wrapper. The values of a passage inside
-    # "passages" lack the keys their top requires.
-    for shape, where, key, wrapped, whole in (
-            (REQUESTS[0][0], "read_values", "values",
-             {"passages": {"P1": {"values": [], "incomplete": False}}},
-             {"values": [], "incomplete": False}),):
-        faults.clear()
-        client, sent = replying(json.dumps(wrapped), json.dumps(whole))
-        assert runner.ask_in_grammar(client, PROMPT, [], shape, 7, where,
-                                     key) == whole
-        assert faults == ["missing_key"] and f'"{key}"' in told(sent[1])
-
-
 def test_a_reply_with_every_key_the_top_requires_is_taken_as_it_is(faults):
-    # Below the top it may leave out what the schema asks there: the
-    # reading asks for that by name, the request does not.
     for shape, where, key, whole in REQUESTS:
         client, sent = replying(json.dumps(whole))
         assert runner.ask_in_grammar(client, PROMPT, [], shape, 7, where,
                                      key) == whole
         assert len(sent) == 1 and faults == [], where
-    # The combing requires no key: {} found nothing and asks for nothing.
-    assert "required" not in COMB["json_schema"]["schema"]
-    for whole in ({}, {"year": {"value": 2030, "quote": "für 2030"}}):
+
+
+def test_a_coordinate_found_nowhere_without_its_sentence_is_asked_again(
+        faults):
+    shape = addressed.coord_format(False)
+    hyde = {"at": 0, "hyde": "Die Werte gelten für das Jahr 2019."}
+    client, sent = replying(json.dumps({"at": 0}), json.dumps(hyde))
+    assert runner.ask_in_grammar(client, PROMPT, [], shape, 7, "coord", "at",
+                                 lacking=addressed.hyde_missing) == hyde
+    assert faults == ["missing_key"] and '"hyde"' in told(sent[1])
+    # One that found its answer, or fetches more, needs no sentence.
+    for whole in ({"at": "3", "words": "2019"},
+                  {"at": 0, "more": [{"get": "next"}]}):
+        faults.clear()
         client, sent = replying(json.dumps(whole))
-        assert runner.ask_in_grammar(client, PROMPT, [], COMB, 7, "comb",
-                                     "year") == whole
+        assert runner.ask_in_grammar(
+            client, PROMPT, [], addressed.coord_format(False, more=True), 7,
+            "search", "at", lacking=addressed.hyde_missing) == whole
         assert len(sent) == 1 and faults == []
-
-

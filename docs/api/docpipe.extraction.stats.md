@@ -22,10 +22,12 @@ numbers a report and the ontology side can act on:
   filled, which is what a coordinate costs;
 - the reasons answers were dropped, per axis;
 - the open questions of the compute step, per kind and how they ended;
-- the harvest passage by passage: requests, tokens and second rounds per
-  stage, the passages each document was read in and for how many
-  parameters, the readings per reason unread, and the combing's coordinates
-  open, filled and exhausted;
+- the harvest piece by piece: requests and tokens per kind of request,
+  the pieces each document was cut into, the passages it was read in and
+  for how many fields, the readings per reason unread, the fields a
+  document has once and the values read of them, the works a document
+  presents beside itself, and the search sentences that were questions
+  (owner decisions 2026-11-08);
 - how many requests were with the server at once, on average and at most,
   and the seconds they spent with it and waiting for a place, all and per
   stage; and per stage the requests answered with the answer of the same

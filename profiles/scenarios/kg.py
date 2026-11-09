@@ -44,7 +44,7 @@ from docpipe.extraction import fields, graphkit
 from docpipe.extraction.compute import owner_of
 from docpipe.extraction.graphkit import NOT_IN_GRAPH, ttl_comment, ttl_literal
 from docpipe.extraction.identity import tuple_ids
-from docpipe.extraction.naming import SEVERAL
+from docpipe.extraction.addressed import SEVERAL
 from docpipe.extraction.shapemodel import (XSD, Model, SchemaError,
                                            snapshot_ancestors)
 from docpipe.extraction.spec import kg_name, load as load_spec
@@ -465,12 +465,12 @@ def scenario_names(row: dict) -> list:
     """The names of the scenarios a row belongs to.
 
     A scenario_label row names one by its value, any other row by its
-    `scenario` coordinate, both as the publication prints them. Which of a
-    publication's names mean the same scenario was asked once it was read
-    (`value_means`, `scenario_means`, docpipe/extraction/naming.py): a name
-    of one scenario means the name that scenario is called by, a name of
-    several scenarios means each of theirs (owner decisions 2026-11-06). A
-    row read before that was asked belongs to the scenario of its own name.
+    `scenario` coordinate, both as the publication prints them. Which entry
+    of the publication's list of scenarios a name is was asked while it was
+    read (`value_means`, `scenario_means`, docpipe/extraction/addressed.py,
+    owner decisions 2026-11-08): a name means the entry it is, the words of a
+    group of scenarios each member, one row each. A row read before that was
+    asked belongs to the scenario of its own name.
     """
     if row.get("parameter") == "scenario_label":
         name, quote, means = (row.get("value"), row.get("quote"),
@@ -481,7 +481,7 @@ def scenario_names(row: dict) -> list:
                               row.get("scenario_means"))
     # The words of several scenarios belong to the scenarios the naming
     # found they stand for, and to none where it found none (owner decision
-    # 2026-11-07, `naming.SEVERAL`).
+    # 2026-11-07, `addressed.SEVERAL`).
     if name == SEVERAL:
         return list(dict.fromkeys(
             one for one in means if isinstance(one, str) and one.strip())) \

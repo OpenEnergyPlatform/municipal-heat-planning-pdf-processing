@@ -271,9 +271,10 @@ connection cross checks the chosen fields against the crawl's
 `DocumentMeta`, logging disagreement, not substituting it.
 Every scenario scope row belongs to the scenarios its name means
 (`scenario_names`): `value_means` for a `scenario_label` row,
-`scenario_means` for any other, written by the naming step
-(`docpipe/extraction/naming.py`), else the scenario of its own name as the
-publication prints it; a name of several scenarios stands for each of them;
+`scenario_means` for any other, written while the document was read
+(`addressed.Reader.name_of`, the `names` request), else the scenario of its own
+name as the publication prints it; the words of several scenarios stand for each
+of its member scenarios;
 a name absent from its own quoted passage mints nothing.
 
 The study report IRI is minted from the title, the bundle IRI from

@@ -131,16 +131,6 @@ def quote_in(source: str, quote: str) -> bool
 
 Whitespace-collapsed literal containment — corrections.py semantics.
 
-### times_quoted
-
-```python
-def times_quoted(texts: list, quote: str) -> int
-```
-
-How often *quote* stands in the texts a request showed, each place
-once where it stands for itself (owner decision 2026-11-07: a value's
-quote pins it down, so it stands in what was shown exactly once).
-
 ### times_stated
 
 ```python

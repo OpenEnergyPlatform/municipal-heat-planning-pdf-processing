@@ -104,7 +104,7 @@ class Axis:
     # thing, the kind of thing named here ("scenario", owner decisions
     # 2026-11-06): a value stated for several of them is one row per name, and
     # which of the document's names of that kind mean the same thing is asked
-    # once it is read (`naming.py`).
+    # while it is read (`addressed.Names`).
     merged: Optional[str] = None
     # What such an axis answers instead of a name, uri -> labels like a
     # vocabulary, each an out: entry with its meaning in `definitions` (owner
@@ -147,6 +147,10 @@ class Axis:
     # the value once with Fernwärme and once with Gas), as a value stated for
     # several names is (`merged`).
     several: bool = False
+    # uri -> the group an entry belongs to ("group" of an entry object, owner
+    # decision 2026-11-08): a list longer than a request shows with what
+    # each entry means is asked group first (`addressed.LIST_WITH_MEANS`).
+    groups: dict = field(default_factory=dict)
 
     def label_to_uri(self) -> dict:
         """Corpus label (folded) -> URI. Built once, used per tuple."""
@@ -209,6 +213,18 @@ class Parameter:
     # the serializer and published by the JSON schema, so neither can drift
     # from the other.
     kg: Optional[dict] = None
+    # Asked once per document, with its title page and the pieces a search
+    # finds best, never in every piece (owner decision 2026-11-08): a field
+    # the document has once, its title, its authors, its organisation.
+    once_per_document: bool = False
+    # Whether a value whose scenario is the words of a group of scenarios
+    # ("all scenarios") takes the members the document names, one row each
+    # (owner decision 2026-11-08, i): years, regions, types do, a
+    # description does not.
+    takes_group: bool = True
+    # uri -> the group an entry of the value's list belongs to, as on an
+    # axis.
+    groups: dict = field(default_factory=dict)
 
     @property
     def is_numeric(self) -> bool:
@@ -285,7 +301,7 @@ class Group:
     # decision 2026-11-06).
     own_value: tuple = ()
     # The plan's frame (spec: "pair"): the scenario and the year, which the
-    # plan's base and target years date a value by (`years.PlanYears`). The
+    # plan's base and target years date a value by (`addressed.Plan`). The
     # reading asks them per value (owner decision 2026-11-07: each value is
     # asked its own scenario and year, none takes its passage's).
     pair: tuple = ()
@@ -300,13 +316,6 @@ class Group:
         """The slots the second reading asks again with the passages around
         a value: all but those printed with the number itself."""
         return [slot for slot in slots if slot.name not in self.own_value]
-
-    def combed(self, slots: list) -> list:
-        """The slots the combing looks for in the rest of the plan: all but
-        those only the value's own passage or the number itself states."""
-        return [slot for slot in slots
-                if slot.name not in self.own_passage + self.own_value]
-
 
 @dataclass
 class Spec:
@@ -376,6 +385,20 @@ def _vocabulary(path: str, raw):
         else:
             spellings[uri] = entry
     return spellings, definitions, glosses
+
+
+def _entry_groups(path: str, raw) -> dict:
+    """uri -> the group of an entry, from entry objects that name one
+    ("group"); {} where none does."""
+    groups: dict = {}
+    for uri, entry in (raw or {}).items() if isinstance(raw, dict) else ():
+        if not isinstance(entry, dict) or entry.get("group") is None:
+            continue
+        group = entry["group"]
+        if not isinstance(group, str) or not group.strip():
+            _fail(f"{path}.{uri}.group", "a group is a non-empty string")
+        groups[uri] = group.strip()
+    return groups
 
 
 def _validate_axis(path: str, name: str, raw) -> Axis:
@@ -490,7 +513,9 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
                 dynamic=dynamic, merged=merged, beside=beside,
                 question=question, derive=derive,
                 kg=kg, definitions=definitions, glosses=glosses, keep=keep,
-                several=several)
+                several=several,
+                groups=_entry_groups(f"{path}.vocabulary",
+                                     raw.get("vocabulary")))
 
 
 def _validate_example(path: str, raw, value_type: str,
@@ -667,6 +692,9 @@ def _validate_parameter(path: str, raw) -> Parameter:
                   f"unless_read {unless!r} is not an axis of this parameter")
     example = _validate_example(f"{path}.example", raw.get("example"),
                                 value_type, units)
+    for key in ("once_per_document", "takes_group"):
+        if key in raw and not isinstance(raw[key], bool):
+            _fail(f"{path}.{key}", "true or false")
     if raw.get("kg") is not None:
         # The parameter's block used to be passed through unvalidated, which
         # is the hole "OEO_00030022 organisation" came through.
@@ -682,7 +710,12 @@ def _validate_parameter(path: str, raw) -> Parameter:
                      brief=brief.strip() if brief else None,
                      vocabulary_dynamic=vocabulary_dynamic,
                      merged=merged,
-                     axes=axes, example=example, kg=raw.get("kg"))
+                     axes=axes, example=example, kg=raw.get("kg"),
+                     once_per_document=bool(raw.get("once_per_document",
+                                                    False)),
+                     takes_group=bool(raw.get("takes_group", True)),
+                     groups=_entry_groups(f"{path}.vocabulary",
+                                          raw.get("vocabulary")))
 
 
 def load(source: Union[Path, str, dict]) -> Spec:
@@ -825,6 +858,7 @@ def axis_fingerprint(axis: "Axis") -> str:
            if axis.beside else {}),
         "derive": axis.derive,
         **({"keep": axis.keep} if axis.keep else {}),
+        **({"groups": axis.groups} if axis.groups else {}),
         # The offered list: identifier, the spellings a plan may use, and the
         # sentence saying what the term means. All three reach the model, so
         # all three decide whether an answer is still the answer to this
@@ -856,6 +890,10 @@ def parameter_fingerprint(parameter: "Parameter") -> str:
         "unit_target": parameter.unit_target,
         "units": sorted(parameter.units_accepted or {}),
         "example": parameter.example,
+        # Only where set, so no other field's key moves.
+        **({"once_per_document": True}
+           if parameter.once_per_document else {}),
+        **({"takes_group": False} if not parameter.takes_group else {}),
     })
 
 
@@ -883,6 +921,7 @@ def value_fingerprint(parameter: "Parameter") -> str:
         "dynamic": parameter.vocabulary_dynamic,
         "options": {uri: {"spellings": sorted(map(str, labels or []))}
                     for uri, labels in (parameter.vocabulary or {}).items()},
+        **({"groups": parameter.groups} if parameter.groups else {}),
     })
 
 

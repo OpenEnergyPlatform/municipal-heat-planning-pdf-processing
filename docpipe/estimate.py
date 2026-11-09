@@ -58,10 +58,10 @@ COMMANDS = ("ingest", "preprocess", "refine", "visuals", "chunk", "extract")
 # The events of the harvest's trace that are one answered request each.
 # runner.py writes them; a frame event without tokens is the summary of a
 # frame search and no request.
-# The answered requests of either flow: field by field, and every stage that
-# writes `<stage>_ask` (`schema.ASK_STAGES`: the readings, the
-# combing and its check, the naming, the plan's years, the search sentences,
-# the review and the compute step), so a stage added there is counted here.
+# The answered requests of either flow: field by field, and every kind that
+# writes `<stage>_ask` (`schema.ASK_STAGES`: the requests of the harvest
+# piece by piece, the search sentences, the review and the compute step), so
+# a kind added there is counted here.
 # `frame_ask` is not here: the frame event counts the same requests, and a
 # trace written before `frame_ask` alike.
 TRACED = ("frame", "rows", "field",

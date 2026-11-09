@@ -7,9 +7,10 @@ the same for every publication, so it cannot sit in the spec file:
   scenario_region            the 249 study regions the OEKG actually uses,
                              narrowed to those the document names at all.
 
-A scenario is read as the publication names it, and which of its names mean
-the same scenario is asked once the publication is read
-(`docpipe/extraction/naming.py`, owner decisions 2026-11-06).
+A scenario is read as the publication names it, and which entry of the
+publication's list of scenarios a name is, a new one or one read before, is
+asked while the publication is read (`docpipe/extraction/addressed.py`,
+owner decisions 2026-11-08).
 
 The narrowing is not a guess. Every claim has to quote its source verbatim, and
 the sources are exactly the section, table and figure texts scanned here, so a
@@ -260,18 +261,55 @@ def document_axes(conn: sqlite3.Connection, document_id: int) -> dict:
 # open: "3,251" is 3251 here, and "1.234" is 1.234.
 DECIMAL_MARK = "."
 
-# What a publication says about itself, asked once more on its own over the
-# opening of the document, besides wherever else it is read. Asked among
-# forty other rows it was left out: the title in 17 documents, the abstract
-# in 132 of 164, the date in 60, though nearly every one prints them there.
-# Every passage is read for each of them (owner decisions 2026-11-08); the
-# passages of one of them are ranked with a sentence written for this
-# publication from its title, which puts the title page first, those of any
-# other parameter with a sentence written once per run
-# (`runner.make_seek_probes`, owner decisions 2026-11-05 and 2026-11-08).
-FRONT_PAGE_PARAMETERS = ("publication_title", "publication_author",
-                         "publication_date", "publication_doi",
-                         "publication_abstract")
+# Lines of a piece a publication is read in (owner decision 2026-11-08, f:
+# eight; twelve only measured where a probe loses values).
+CHUNK_UNITS = 8
+
+# What a publication settles for all its values, asked once in the form of
+# a document's field (owner decision 2026-11-08, `addressed.Reader.settled`):
+# its lines stand beside every value's coordinates.
+PLAN_FIELDS = {
+    "settings": {
+        "name": "Setting of this publication for all its values",
+        "means": ("Something this publication itself settles for more than "
+                  "one of its values: the region all its scenarios cover, "
+                  "the model they are run with, that every emission is "
+                  "given in CO2 equivalents. No single value, nothing "
+                  "attributed to other works."),
+        "sentence": ("All scenarios of this study cover the EU27 and are run "
+                     "with the same energy system model; emissions are given "
+                     "in CO2 equivalents.")},
+}
+
+# The works a publication presents, compares, reviews or cites beside
+# itself (owner decision 2026-11-08, h): each name of one found in every
+# piece is asked against the publication's list of works, entry 1 the
+# publication itself, and each new work is asked at its line for its title,
+# its organisation, its year and its short name, values of that work, which
+# the graph does not take (`work` keeps this publication only).
+WORKS = {
+    "name": "Other study or publication",
+    "means": ("A study, report, article, model comparison or scenario set "
+              "other than this publication that the publication presents, "
+              "compares, reviews or cites, by the name, title, short name "
+              "or reference it prints for it."),
+    "fields": {
+        "publication_title": ("Which shown line gives the title of this "
+                              "work? Answer with its address and the words "
+                              "of the title, 0 if no line gives it."),
+        "study_organisation": ("Which shown line names the organisation or "
+                               "publisher of this work? Answer with its "
+                               "address and the words of the name, 0 if no "
+                               "line names one."),
+        "publication_date": ("Which shown line gives the year this work was "
+                             "published? Answer with its address and the "
+                             "year, 0 if no line gives it."),
+        "study_acronym": ("Which shown line gives the short name or acronym "
+                          "of this work? Not every work has one. Answer "
+                          "with its address and the words, 0 if it has "
+                          "none."),
+    },
+}
 
 # The language tag of the ontology's alternative labels that the vocabulary
 # snapshot keeps for this profile, the words its spec is held against. The
@@ -387,17 +425,12 @@ PHRASES = {
     "kind_year": 'a calendar year with four digits',
     "kind_text": 'a piece of text',
     "not_an_option": (
-        'Your "value" {given!r} is none of the entries of "options". '
-        'Choose exactly one name from it, copied character for '
-        'character, including one that starts with "out:". If none fits '
-        'although the passage states the field, leave "value" out and '
-        'give the wording in "value_raw".'),
+        'Your "entry" {given!r} is no number of "list". Answer '
+        'with a number from "list", 0 if no entry fits.'),
     "name_not_listed": (
-        'Under {name!r} you gave {given}. Answer with a list of numbers '
-        'from "names".'),
-    "groups_not_listed": (
-        'Under {name!r} you gave {given}. Answer with lists of numbers '
-        'from "names", one list per group.'),
+        'Your "entry" {given!r} is no number of "list". Answer '
+        'with a number from "list", or "new" if the name is none '
+        'of its entries.'),
     "wrong_type": (
         'Your "value" {given!r} is not {wrong}. Answer with {wrong}, '
         'exactly as the passage writes it.'),
@@ -409,10 +442,6 @@ PHRASES = {
         'Your "quote" stands neither in "source", nor in the heading of its '
         'section, nor in "around". Copy it character for character from '
         'one of them.'),
-    "quote_not_shown": (
-        'Your "quote" stands in nothing this request shows. Copy it '
-        'character for character from "more", from a title or line under '
-        '"hits", from "passage" or from "row".'),
     "quote_too_short": (
         'Your "quote" is too short to name a place (at least {minimum} '
         'characters). Quote the whole sentence or the whole line the '
@@ -432,21 +461,6 @@ PHRASES = {
         'quote prints it, character for character, or quote the place where '
         'it really stands.'),
     "or_unstated": ' If it stands nowhere, answer with "{unstated}".',
-    "or_leave_out": ' If it stands nowhere, leave it out.',
-    "year_not_in_quote": (
-        'The year {given!r} does not stand in its quote {quote!r}. Quote the '
-        'place that prints it.'),
-    # A find of the combing quoted from a passage other than the value's own
-    # that the check found does not speak about the value (owner decision
-    # 2026-11-07), and a check whose answer is neither "yes" nor "no".
-    "not_about_value": (
-        'A second look found that the place you quoted for {answer!r} does '
-        'not speak about this value, so it does not say what belongs to it. '
-        'Answer only from a place that speaks about this value; if none '
-        'does, leave it out.'),
-    "verdict_not_an_option": (
-        'Your "about" {given!r} is neither "yes" nor "no". Answer with one '
-        'of the two.'),
     # The key of the frame request that holds the entries of a closed frame
     # coordinate. The frame prompt reads them there.
     "frame_options": "scenarios",

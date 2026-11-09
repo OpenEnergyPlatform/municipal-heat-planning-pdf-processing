@@ -19,10 +19,12 @@ numbers a report and the ontology side can act on:
   filled, which is what a coordinate costs;
 - the reasons answers were dropped, per axis;
 - the open questions of the compute step, per kind and how they ended;
-- the harvest passage by passage: requests, tokens and second rounds per
-  stage, the passages each document was read in and for how many
-  parameters, the readings per reason unread, and the combing's coordinates
-  open, filled and exhausted;
+- the harvest piece by piece: requests and tokens per kind of request,
+  the pieces each document was cut into, the passages it was read in and
+  for how many fields, the readings per reason unread, the fields a
+  document has once and the values read of them, the works a document
+  presents beside itself, and the search sentences that were questions
+  (owner decisions 2026-11-08);
 - how many requests were with the server at once, on average and at most,
   and the seconds they spent with it and waiting for a place, all and per
   stage; and per stage the requests answered with the answer of the same
@@ -207,7 +209,9 @@ def from_traces(trace_dirs: Iterable[Path],
     readings: Counter = Counter()
     unread_why: Counter = Counter()
     refused_first: Counter = Counter()
-    combed: Counter = Counter()
+    pieces: Counter = Counter()
+    once: Counter = Counter()
+    works: Counter = Counter()
     timed: list = []
     for directory in trace_dirs:
         for path in trace.files(directory):
@@ -262,8 +266,6 @@ def from_traces(trace_dirs: Iterable[Path],
                                                            "prompt_tokens")
                     stages[stage]["completion_tokens"] += _int(
                         event, "completion_tokens")
-                    stages[stage]["second_rounds"] += (
-                        _int(event, "corrections") > 0)
                 elif kind == "order":
                     ordered["documents"] += 1
                     ordered["passages"] += _int(event, "passages")
@@ -279,13 +281,19 @@ def from_traces(trace_dirs: Iterable[Path],
                         {str(w): n for w, n in
                          (event.get("failed") or {}).items()
                          if isinstance(n, int)})
-                elif kind == "comb":
-                    combed["passages"] += 1
-                    for key in ("open", "filled", "exhausted", "hits",
-                                "fetched", "searched", "missed", "listed",
-                                "judged", "turned", "near", "near_read",
-                                "anew"):
-                        combed[key] += _int(event, key)
+                elif kind == "asked":
+                    pieces["documents"] += 1
+                    pieces["chunks"] += _int(event, "chunks")
+                    pieces["question_queries"] += _int(event,
+                                                       "question_queries")
+                elif kind == "docfield":
+                    once["fields"] += 1
+                    once["values"] += _int(event, "values")
+                    once["unread"] += bool(event.get("why"))
+                elif kind == "works":
+                    works["documents"] += 1
+                    works["works"] += _int(event, "works")
+                    works["new"] += _int(event, "new")
     return {
         # The maps of places: documents mapped and how many completely,
         # passages, requests, places taken and not, requests unread, and
@@ -314,63 +322,55 @@ def from_traces(trace_dirs: Iterable[Path],
             axis: [{"given": g, "wording": w, "answers": n}
                    for (g, w), n in c.most_common()]
             for axis, c in outside.items()},
-        # Per stage: requests that got a reply, their tokens, those that
-        # were a second round (corrections sent), and those answered with the
-        # answer of the same request sent before in the document, which were
-        # not sent (owner decision 2026-11-07).
+        # Per kind of request: requests that got a reply, their tokens, and
+        # those answered with the answer of the same request sent before in
+        # the document, which were not sent (owner decision 2026-11-07). A
+        # request asked once more with what did not hold is a kind of its
+        # own ("follow").
         "requests_by_stage": {
             stage: {k: stages[stage][k] for k in (
                 "requests", "prompt_tokens", "completion_tokens",
-                "second_rounds", "answered_once")}
+                "answered_once")}
             for stage in dict.fromkeys((*ASK_STAGES, *sorted(stages)))},
         # Requests with the server at once, and the seconds with it and
         # waiting for a place (`at_once`).
         "requests_at_once": at_once(timed),
-        # Documents ordered (survey.py), their passages, and the readings
-        # that order planned: each passage for each parameter (passages x
-        # parameters).
+        # Documents ordered (`addressed.Orders`), their passages, and the
+        # readings that order planned: each passage for each field
+        # (passages x fields).
         "order": {
             "documents": ordered["documents"],
             "passages": ordered["passages"],
             "readings_planned": ordered["readings"]},
-        # Readings (one passage for one parameter), the readings that came to
+        # Readings (one passage for one field), the readings that came to
         # no reply per reason, values read, coordinates left unanswered and
-        # the check's refusals of the first answer per reason. A reading has
-        # no tools (ticket 26), so it fetches and searches nothing, and it
-        # checks no find: the second reading is the second conversation's
-        # (owner decisions 2026-11-07).
+        # the refusals of a first answer per reason.
         "reading": {
             "readings": readings["readings"],
             "unread_by_reason": dict(unread_why),
             "values": readings["values"],
             "coordinates_unanswered": readings["unanswered"],
             "refused_first_by_reason": dict(refused_first)},
-        # Combed passages (one passage for one parameter), coordinates open
-        # when combed, filled and left exhausted, hits shown, passages
-        # fetched, hit lists the model asked for, lists of the next
-        # passages the run added (owner decision 2026-11-06: the search runs
-        # empty), asks not found, requests that checked a find quoted from
-        # another passage and the finds they turned (owner decision
-        # 2026-11-07).
-        "combing": {
-            "passages": combed["passages"],
-            "coordinates_open": combed["open"],
-            "coordinates_filled": combed["filled"],
-            "coordinates_exhausted": combed["exhausted"],
-            "hits_shown": combed["hits"],
-            "passages_fetched": combed["fetched"],
-            "hit_lists": combed["searched"],
-            "lists_added": combed["listed"],
-            "asks_not_found": combed["missed"],
-            "check_requests": combed["judged"],
-            "finds_turned": combed["turned"],
-            # Its second reading with the sections around the value's place:
-            # the messages, the coordinates they read, and the conversations
-            # begun anew where one outgrew the model's window (owner
-            # decisions 2026-11-07).
-            "second_reading_messages": combed["near"],
-            "second_reading_read": combed["near_read"],
-            "begun_anew": combed["anew"]},
+        # Documents read piece by piece, the pieces they were cut into, and
+        # the search sentences that were questions, which a search takes
+        # and the run counts (owner decision 2026-11-08: "So pingelig wäre
+        # ich da nicht").
+        "pieces": {
+            "documents": pieces["documents"],
+            "chunks": pieces["chunks"],
+            "question_queries": pieces["question_queries"]},
+        # The fields a document has once, asked once per document: fields
+        # asked, values read, and fields a request came to nothing for.
+        "asked_once": {
+            "fields": once["fields"],
+            "values": once["values"],
+            "unread": once["unread"]},
+        # The works documents present, compare or cite beside themselves,
+        # their own entry included, and the new ones asked their details.
+        "works": {
+            "documents": works["documents"],
+            "works": works["works"],
+            "asked_their_details": works["new"]},
     }
 
 

@@ -40,6 +40,7 @@ Fields:
 - `uri: str`: what the label resolves to
 - `synonyms: tuple = ()`: the other spellings the spec knows
 - `definition: str = ""`: What the term means, as the request shows it: the spec's gloss where it has one, else the definition (owner decision 2026-11-05, ticket 26).
+- `group: str = ""`: The group the entry belongs to, by which a long list is asked first (`addressed.LIST_WITH_MEANS`, owner decision 2026-11-08).
 
 ### Slot
 
@@ -58,7 +59,7 @@ Fields:
 - `question: Optional[str] = None`
 - `options: tuple = ()`
 - `derive: Optional[dict] = None`: {"from": "unit", "value": uri} when the spec decides this coordinate.
-- `merged: Optional[str] = None`: The kind of thing whose name the document gives here, such as "scenario" (`spec.Axis.merged`): a value stated for several of them is one row per name, and which of the document's names mean the same thing is asked once the document is read (`naming.py`).
+- `merged: Optional[str] = None`: The kind of thing whose name the document gives here, such as "scenario" (`spec.Axis.merged`): a value stated for several of them is one row per name, and which of the document's names mean the same thing is asked while the document is read (`addressed.Names`).
 - `keeps_print: bool = False`: Whether an answer may be the print itself where the list has no entry for it: the unit, which is never refused (owner decision 2026-11-07, `pipeline.printed_only`).
 - `keep: Optional[str] = None`: The entry a value must have here to be a value of its parameter (`spec.Axis.keep`, owner decisions 2026-11-07, `kept`).
 - `several: bool = False`: Whether a value stated for several entries of the list is one row per entry (`spec.Axis.several`).
@@ -122,20 +123,6 @@ list or a number, and a coordinate of names that takes entries beside
 them, whose entry the wording backs. A free text answer is its own
 wording; the request does not ask it twice, and the row keeps it as its
 wording (`pipeline.merge_field`, owner decision 2026-11-06).
-
-### value_schema
-
-```python
-def value_schema(slot: Slot, unstated: bool = True) -> dict
-```
-
-The answers a coordinate can take in a grammar: one entry of its list,
-UNSTATED included; for a number an integer or UNSTATED; else a wording.
-UNSTATED is an answer of every kind: a grammar that takes only an integer
-for a year leaves the model no way to say the passage prints none.
-Without *unstated* it is none: the combing leaves a coordinate it did not
-find out of its reply, and the run, not the model, says the plan does not
-state it once every passage was listed (owner decision 2026-11-06).
 
 ### value_example
 

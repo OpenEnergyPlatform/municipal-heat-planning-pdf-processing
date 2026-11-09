@@ -1,30 +1,22 @@
 """
-thread.py: Each request with exactly the words of its own task, and what
-asks again about an answer in the same conversation (owner decisions
-2026-11-07).
+thread.py: Each request with exactly the words of its own task (owner
+decisions 2026-11-07).
 
 A prompt file holds what every request of its kind is told and parts only
 some are told, each opened by a marker line and running to the next one:
 
-- "<!-- group: <name> -->": the words of one group of the spec's
-  coordinates, the message that asks that group;
 - "<!-- with: <key> ... -->": what a field means that only some requests
-  carry, such as the table right before a passage; part of the system
-  prompt of a conversation whose first message carries one of these fields;
+  carry, such as the headings up to a value or the plan's settings; part of
+  the system prompt of a request whose message carries one of these fields
+  (`Parts.system`);
 - "<!-- follow-up: <key> ... -->": the words of a message that follows an
-  answer and carries one of these fields, such as a correction or what a
-  search fetched; never part of a system prompt.
+  answer in the compute step's conversation and carries one of these
+  fields, such as what a search fetched; never part of a system prompt
+  (`Parts.follow_up`).
 
-What asks again about an answer goes after it in the same conversation
-(`Thread`): a correction, the next value of a passage, the next group of a
-value, the second reading of a value beside its passage, the next round of
-a search. Its message brings only what is new, in the words of the parts
-its fields need: the model sees what it answered, and no request is told
-what another one may bring (owner decisions 2026-11-07: "Jede Anfrage
-sollte genau die Prompt bekommen, die beschreibt, was sie tun soll", and the
-model should see its last answer "anstatt das da endlos Kontext
-reingeballert wird"). A call still sends the whole conversation; a server
-that keeps what it has read reads its beginning once.
+No request is told what another one may bring (owner decision 2026-11-07:
+"Jede Anfrage sollte genau die Prompt bekommen, die beschreibt, was sie tun
+soll").
 
 Author: Felix Vossel
 """
@@ -32,15 +24,12 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from typing import Iterable, Optional
 
-GROUP, WITH, FOLLOW_UP = "group", "with", "follow-up"
-# What a follow-up carries that tells the model what was wrong with the
-# answer it follows.
-CORRECTIONS = "corrections"
+WITH, FOLLOW_UP = "with", "follow-up"
 # A part's marker: its kind and the names after it, on a line of its own.
-MARK = re.compile(r"^<!-- (group|with|follow-up): ([A-Za-z_][A-Za-z_ ]*?)"
+MARK = re.compile(r"^<!-- (with|follow-up): ([A-Za-z_][A-Za-z_ ]*?)"
                   r" *-->[ \t]*$", re.MULTILINE)
 # The reply a part shows (`runner.system_text`).
 EXAMPLE = "{{example}}"
@@ -48,8 +37,8 @@ EXAMPLE = "{{example}}"
 
 @dataclass(frozen=True)
 class Part:
-    """One marked part of a prompt file: its kind, the group or the fields
-    it is about, and its words."""
+    """One marked part of a prompt file: its kind, the fields it is about,
+    and its words."""
     kind: str
     keys: tuple
     text: str
@@ -66,35 +55,17 @@ class Parts:
     def of(self, kind: str) -> list:
         return [part for part in self.parts if part.kind == kind]
 
-    @property
-    def groups(self) -> tuple:
-        return tuple(part.keys[0] for part in self.of(GROUP))
-
     def system(self, carried: Iterable = ()):
-        """The system prompt of a conversation whose first message carries
-        the fields *carried*: what every request is told, then the part of
-        each field it carries, in the order of the file. A field no part
-        names is told nothing beyond what every request is told."""
+        """The system prompt of a request whose message carries the fields
+        *carried*: what every request is told, then the part of each field
+        it carries, in the order of the file. A field no part names is told
+        nothing beyond what every request is told."""
         carried = set(carried)
         pieces = [self.common.strip()] + [
             part.text.strip() for part in self.of(WITH)
             if carried & set(part.keys)]
         return replace(self.prompt,
                        text="\n\n".join(p for p in pieces if p) + "\n")
-
-    def group(self, name: str, example: Optional[dict] = None) -> str:
-        """The words of the message that asks the group *name*, with the
-        reply it asks for where they show one (*example*); "" where the
-        prompt has no group parts, whose every request is told the same.
-        LookupError where it has group parts and none for that group."""
-        if not self.groups:
-            return ""
-        for part in self.of(GROUP):
-            if part.keys[0] == name:
-                return shown_with(part.text.strip(), example,
-                                  self.prompt.id)
-        raise LookupError(f"{self.prompt.id}: no part for the group "
-                          f"{name!r}")
 
     def words(self, carried: Iterable) -> str:
         """The words of a follow-up that carries the fields *carried*: the
@@ -145,15 +116,11 @@ def shown_with(text: str, example: Optional[dict], where: str) -> str:
                                             separators=(",", ":")))
 
 
-def cut(prompt, groups: Optional[Iterable] = None,
-        follows: Iterable = ()) -> Parts:
-    """*prompt* cut at its markers. With *groups*, a prompt that has group
-    parts has one for each of them and none for another group; *follows*
-    are the fields the code sends follow-ups with, each of which needs a
-    follow-up part. A part marked twice, a group without its part or a part
-    without its group, or a follow-up field without its words raises
-    LookupError, which the run raises at its start
-    (`runner.surveyed_flow`)."""
+def cut(prompt, follows: Iterable = ()) -> Parts:
+    """*prompt* cut at its markers. *follows* are the fields the code sends
+    follow-ups with, each of which needs a follow-up part. A part marked
+    twice or a follow-up field without its words raises LookupError, which
+    the run raises at its start."""
     text = prompt.text
     marks = list(MARK.finditer(text))
     common = text[:marks[0].start()] if marks else text
@@ -168,47 +135,8 @@ def cut(prompt, groups: Optional[Iterable] = None,
                 raise LookupError(f"{prompt.id}: two {kind} parts for "
                                   f"{key!r}")
             seen.add((kind, key))
-        if kind == GROUP and len(keys) != 1:
-            raise LookupError(f"{prompt.id}: a group part names one group, "
-                              f"not {list(keys)}")
         parts.append(Part(kind, keys, text[mark.end():end]))
     out = Parts(prompt, common, tuple(parts))
-    if groups is not None and out.groups:
-        names = [getattr(group, "name", group) for group in groups]
-        missing = [name for name in names if name not in out.groups]
-        extra = sorted(set(out.groups) - set(names))
-        if missing or extra:
-            raise LookupError(
-                f"{prompt.id}: the spec's groups and the prompt's parts "
-                f"differ: no part for {missing}, a part for no group "
-                f"{extra}")
     for key in follows:
         out.words([key])
     return out
-
-
-@dataclass
-class Thread:
-    """One conversation with the model: the system prompt it began with,
-    every message sent and the answer that stands last
-    (`runner.ask_in_grammar` keeps it), and what its first message carried.
-    """
-    system: Optional[str] = None
-    messages: list = field(default_factory=list)
-    first: dict = field(default_factory=dict)
-
-    @property
-    def begun(self) -> bool:
-        return bool(self.messages)
-
-    def then(self, content) -> list:
-        """The conversation with *content* as the next message: a follow-up
-        after the answer that stands."""
-        if not self.begun:
-            raise ValueError("a follow-up needs an answer to follow")
-        return [*self.messages, {"role": "user", "content": content}]
-
-    def branch(self) -> "Thread":
-        """A conversation that goes on from here without changing this one:
-        a second row a reply made of one value asks on in its own."""
-        return Thread(self.system, list(self.messages), dict(self.first))

@@ -163,12 +163,12 @@ def scenario_names(row: dict) -> list
 The names of the scenarios a row belongs to.
 
 A scenario_label row names one by its value, any other row by its
-`scenario` coordinate, both as the publication prints them. Which of a
-publication's names mean the same scenario was asked once it was read
-(`value_means`, `scenario_means`, docpipe/extraction/naming.py): a name
-of one scenario means the name that scenario is called by, a name of
-several scenarios means each of theirs (owner decisions 2026-11-06). A
-row read before that was asked belongs to the scenario of its own name.
+`scenario` coordinate, both as the publication prints them. Which entry
+of the publication's list of scenarios a name is was asked while it was
+read (`value_means`, `scenario_means`, docpipe/extraction/addressed.py,
+owner decisions 2026-11-08): a name means the entry it is, the words of a
+group of scenarios each member, one row each. A row read before that was
+asked belongs to the scenario of its own name.
 
 ### held_back
 
